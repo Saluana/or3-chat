@@ -1,0 +1,67 @@
+name: Dependency upkeep temp
+
+on:
+  push:
+    branches:
+      - chore/dependency-upkeep-2026-09-11
+
+permissions:
+  contents: write
+
+jobs:
+  update-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: chore/dependency-upkeep-2026-09-11
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Show outdated dependencies
+        run: bun outdated || true
+
+      - name: Update compatible dependencies
+        run: |
+          bun update
+          bun add --exact streamdown-vue@1.0.30
+
+      - name: Show dependency diff
+        run: git diff -- package.json bun.lock
+
+      - name: Commit dependency updates
+        id: commit
+        shell: bash
+        run: |
+          if git diff --quiet -- package.json bun.lock; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json bun.lock
+          git commit -m "chore: refresh compatible dependencies"
+          git push origin HEAD:chore/dependency-upkeep-2026-09-11
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Frozen install verification
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run type-check
+
+      - name: Lint
+        run: bunx eslint .
+
+      - name: Test
+        run: bun run test
+
+      - name: Build
+        run: bun run build
