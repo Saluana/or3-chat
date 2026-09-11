@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  update-and-verify:
+  verify:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -25,43 +25,57 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Show outdated dependencies
-        run: bun outdated || true
-
-      - name: Update compatible dependencies
-        run: |
-          bun update
-          bun add --exact streamdown-vue@1.0.30
-
-      - name: Show dependency diff
-        run: git diff -- package.json bun.lock
-
-      - name: Commit dependency updates
-        id: commit
+      - name: Verify and capture diagnostics
         shell: bash
         run: |
-          if git diff --quiet -- package.json bun.lock; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          set +e
+          bun outdated > /tmp/outdated.log 2>&1
+          outdated_status=$?
+          bun install --frozen-lockfile > /tmp/install.log 2>&1
+          install_status=$?
+          bun run type-check > /tmp/typecheck.log 2>&1
+          typecheck_status=$?
+          bunx eslint . > /tmp/lint.log 2>&1
+          lint_status=$?
+          bun run test > /tmp/test.log 2>&1
+          test_status=$?
+          bun run build > /tmp/build.log 2>&1
+          build_status=$?
+
+          {
+            echo "DEPENDENCY UPKEEP DIAGNOSTICS"
+            echo "install=$install_status"
+            echo "typecheck=$typecheck_status"
+            echo "lint=$lint_status"
+            echo "test=$test_status"
+            echo "build=$build_status"
+            echo "outdated_exit=$outdated_status"
+            echo
+            echo "===== OUTDATED ====="
+            cat /tmp/outdated.log
+            echo
+            echo "===== INSTALL ====="
+            cat /tmp/install.log
+            echo
+            echo "===== TYPECHECK ====="
+            cat /tmp/typecheck.log
+            echo
+            echo "===== LINT ====="
+            cat /tmp/lint.log
+            echo
+            echo "===== TEST ====="
+            tail -n 250 /tmp/test.log
+            echo
+            echo "===== BUILD ====="
+            tail -n 250 /tmp/build.log
+          } > dependency-upkeep-diagnostics.txt
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json bun.lock
-          git commit -m "chore: refresh compatible dependencies"
+          git add dependency-upkeep-diagnostics.txt
+          git commit -m "chore: capture dependency verification diagnostics"
           git push origin HEAD:chore/dependency-upkeep-2026-09-11
-          echo "changed=true" >> "$GITHUB_OUTPUT"
 
-      - name: Frozen install verification
-        run: bun install --frozen-lockfile
-
-      - name: Typecheck
-        run: bun run type-check
-
-      - name: Lint
-        run: bunx eslint .
-
-      - name: Test
-        run: bun run test
-
-      - name: Build
-        run: bun run build
+          if [ "$install_status" -ne 0 ] || [ "$typecheck_status" -ne 0 ] || [ "$lint_status" -ne 0 ] || [ "$test_status" -ne 0 ] || [ "$build_status" -ne 0 ]; then
+            exit 1
+          fi
