@@ -87,7 +87,6 @@ error: script "type-check" exited with code 1
 
 
 ===== TEST TAIL =====
-If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
   at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
   at <VTUROOT>
 [Vue warn]: Failed to resolve component: LazyChatModelSelect
@@ -167,8 +166,9 @@ If this is a native custom element, make sure to exclude it from component resol
   at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
   at <VTUROOT>
 
- [32m✓[39m app/components/chat/__tests__/ChatInputDropper.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 103[2mms[22m[39m
- [32m✓[39m app/db/__tests__/files-attach-filter.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 25[2mms[22m[39m
+ [32m✓[39m app/components/chat/__tests__/ChatInputDropper.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 67[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/streamAccumulator.test.ts [2m([22m[2m13 tests[22m[2m)[22m[90m 279[2mms[22m[39m
+ [32m✓[39m app/db/__tests__/files-attach-filter.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 16[2mms[22m[39m
 [90mstdout[2m | scripts/__tests__/cli-commands.test.ts[2m > [22m[2mCLI Commands[2m > [22m[2mThemeCompiler Integration[2m > [22m[2mshould compile all themes without errors
 [22m[39m[theme-compiler] Generated types at /home/runner/work/or3-chat/or3-chat/types/theme-generated.d.ts
 [theme-compiler] - 2 themes
@@ -199,26 +199,26 @@ If this is a native custom element, make sure to exclude it from component resol
 [theme-compiler] - 45 identifiers
 [theme-compiler] - 15 contexts
 
- [32m✓[39m scripts/__tests__/cli-commands.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 121[2mms[22m[39m
- [32m✓[39m app/composables/core/__tests__/useWorkspaceBackup.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 115[2mms[22m[39m
- [32m✓[39m app/composables/documents/__tests__/useDocumentsStore.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 9[2mms[22m[39m
- [32m✓[39m app/composables/chat/__tests__/useWorkflowStreamAccumulator.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 23[2mms[22m[39m
- [32m✓[39m app/components/chat/__tests__/ChatContainer.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 162[2mms[22m[39m
- [32m✓[39m app/composables/sidebar/__tests__/registerSidebarPage.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 12[2mms[22m[39m
- [32m✓[39m app/utils/__tests__/workspace-backup-stream.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 95[2mms[22m[39m
- [32m✓[39m app/db/__tests__/files-select.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 13[2mms[22m[39m
- [32m✓[39m app/composables/__tests__/chromeRegistries.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 30[2mms[22m[39m
- [32m✓[39m app/composables/__tests__/previewCache.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 10[2mms[22m[39m
- [32m✓[39m app/composables/__tests__/hookOrder.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 25[2mms[22m[39m
- [32m✓[39m app/composables/__tests__/editorToolbar.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 23[2mms[22m[39m
- [32m✓[39m app/plugins/__tests__/pane-plugin-api.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 17[2mms[22m[39m
- [32m✓[39m app/composables/__tests__/useWorkspaceBackup.stream.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 65[2mms[22m[39m
- [32m✓[39m app/pages/images/__tests__/image-viewer.cache.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 213[2mms[22m[39m
- [32m✓[39m app/composables/__tests__/chatAbort.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 30[2mms[22m[39m
+ [32m✓[39m scripts/__tests__/cli-commands.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 113[2mms[22m[39m
+ [32m✓[39m app/composables/core/__tests__/useWorkspaceBackup.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 113[2mms[22m[39m
+ [32m✓[39m app/composables/documents/__tests__/useDocumentsStore.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m app/composables/chat/__tests__/useWorkflowStreamAccumulator.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32m✓[39m app/components/chat/__tests__/ChatContainer.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 106[2mms[22m[39m
+ [32m✓[39m app/composables/sidebar/__tests__/registerSidebarPage.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32m✓[39m app/utils/__tests__/workspace-backup-stream.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 84[2mms[22m[39m
+ [32m✓[39m app/db/__tests__/files-select.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/chromeRegistries.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 14[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/previewCache.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/hookOrder.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 21[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/editorToolbar.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 15[2mms[22m[39m
+ [32m✓[39m app/plugins/__tests__/pane-plugin-api.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 10[2mms[22m[39m
+ [32m✓[39m app/pages/images/__tests__/image-viewer.cache.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 132[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/useWorkspaceBackup.stream.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 45[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/chatAbort.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 27[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/threadHistoryActions.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 5[2mms[22m[39m
  [32m✓[39m app/composables/__tests__/documentHistoryActions.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 7[2mms[22m[39m
- [32m✓[39m app/composables/__tests__/threadHistoryActions.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 10[2mms[22m[39m
- [32m✓[39m app/composables/__tests__/useThemeResolver.cache.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 17[2mms[22m[39m
- [32m✓[39m app/composables/__tests__/uiMessages.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/useThemeResolver.cache.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 14[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/uiMessages.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 6[2mms[22m[39m
  [32m✓[39m app/theme/_shared/__tests__/runtime-resolver-cache.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 5[2mms[22m[39m
 [90mstderr[2m | app/composables/__tests__/multiPaneHooks.test.ts[2m > [22m[2mmulti-pane new hooks[2m > [22m[2memits blur->switch->active order
 [22m[39m[Vue warn] onScopeDispose() is called when there is no active effect scope to be associated with.
@@ -226,9 +226,10 @@ If this is a native custom element, make sure to exclude it from component resol
 [90mstderr[2m | app/composables/__tests__/multiPaneHooks.test.ts[2m > [22m[2mmulti-pane new hooks[2m > [22m[2mthread filter can transform and changed fires
 [22m[39m[Vue warn] onScopeDispose() is called when there is no active effect scope to be associated with.
 
- [32m✓[39m app/composables/__tests__/multiPaneHooks.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 15[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/multiPaneHooks.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 10[2mms[22m[39m
  [32m✓[39m app/composables/__tests__/chatTags.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 4[2mms[22m[39m
- [32m✓[39m app/composables/core/__tests__/useResponsiveState.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 91[2mms[22m[39m
+ [32m✓[39m app/composables/core/__tests__/useResponsiveState.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 87[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/useAiSettings.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 4[2mms[22m[39m
 [90mstderr[2m | app/components/documents/__tests__/SearchPanelRoot.test.ts[2m > [22m[2mSearchPanelRoot - memory leaks[2m > [22m[2mclears search timeout on unmount
 [22m[39m[Vue warn]: Failed to resolve component: UCard
 If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
@@ -263,14 +264,13 @@ If this is a native custom element, make sure to exclude it from component resol
   at <SearchPanelRoot docmap= { sections: [] } searchQuery="test query" ref="VTU_COMPONENT" > 
   at <VTUROOT>
 
- [32m✓[39m app/components/documents/__tests__/SearchPanelRoot.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 49[2mms[22m[39m
- [32m✓[39m app/composables/__tests__/useAiSettings.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 4[2mms[22m[39m
- [32m✓[39m app/composables/__tests__/editorNodes.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 22[2mms[22m[39m
- [32m✓[39m app/theme/_shared/__tests__/icon-registry.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 7[2mms[22m[39m
- [32m✓[39m app/components/chat/__tests__/fileValidation.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 1123[2mms[22m[39m
-   [33m[2m✓[22m[39m file validation & persistence[2m > [22mrejects oversize file [33m1115[2mms[22m[39m
- [32m✓[39m app/pages/images/__tests__/gallery-grid.error.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 45[2mms[22m[39m
- [32m✓[39m app/composables/documents/__tests__/useDocumentsList.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 108[2mms[22m[39m
+ [32m✓[39m app/components/documents/__tests__/SearchPanelRoot.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 35[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/editorNodes.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 15[2mms[22m[39m
+ [32m✓[39m app/components/chat/__tests__/fileValidation.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 759[2mms[22m[39m
+   [33m[2m✓[22m[39m file validation & persistence[2m > [22mrejects oversize file [33m754[2mms[22m[39m
+ [32m✓[39m app/theme/_shared/__tests__/icon-registry.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m app/pages/images/__tests__/gallery-grid.error.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 33[2mms[22m[39m
+ [32m✓[39m app/composables/documents/__tests__/useDocumentsList.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 105[2mms[22m[39m
 [90mstdout[2m | app/components/documents/__tests__/LazyEditorHost.test.ts[2m > [22m[2mLazyEditorHost - memory leaks[2m > [22m[2mclears error timeout on unmount
 [22m[39m<Suspense> is an experimental feature and its API will likely change.
 
@@ -302,13 +302,13 @@ If this is a native custom element, make sure to exclude it from component resol
   at <LazyEditorHost documentId="doc1" ref="VTU_COMPONENT" > 
   at <VTUROOT>
 
- [32m✓[39m app/components/documents/__tests__/LazyEditorHost.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 75[2mms[22m[39m
- [32m✓[39m app/utils/sidebar/__tests__/sidebarTimeUtils.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 35[2mms[22m[39m
- [32m✓[39m app/utils/__tests__/ai-settings-utils.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 6[2mms[22m[39m
- [32m✓[39m app/components/chat/__tests__/StreamMarkdownXmlRender.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 103[2mms[22m[39m
- [32m✓[39m app/composables/__tests__/useTypedHooks.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 6[2mms[22m[39m
- [32m✓[39m app/pages/images/__tests__/image-viewer.error.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 34[2mms[22m[39m
- [32m✓[39m tests/unit/nuxt-config-cache.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 33[2mms[22m[39m
+ [32m✓[39m app/components/documents/__tests__/LazyEditorHost.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 47[2mms[22m[39m
+ [32m✓[39m app/utils/sidebar/__tests__/sidebarTimeUtils.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 24[2mms[22m[39m
+ [32m✓[39m app/utils/__tests__/ai-settings-utils.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m app/components/chat/__tests__/StreamMarkdownXmlRender.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 72[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/useTypedHooks.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m tests/unit/nuxt-config-cache.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 25[2mms[22m[39m
+ [32m✓[39m app/pages/images/__tests__/image-viewer.error.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 25[2mms[22m[39m
 [90mstderr[2m | app/composables/posts/__tests__/usePostsList.test.ts[2m > [22m[2musePostsList[2m > [22m[2mshould initialize with correct default options
 [22m[39m[Vue warn] onScopeDispose() is called when there is no active effect scope to be associated with.
 
@@ -318,37 +318,37 @@ If this is a native custom element, make sure to exclude it from component resol
 [Vue warn] onScopeDispose() is called when there is no active effect scope to be associated with.
 [Vue warn] onScopeDispose() is called when there is no active effect scope to be associated with.
 
- [32m✓[39m app/composables/posts/__tests__/usePostsList.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 42[2mms[22m[39m
- [32m✓[39m app/theme/_shared/__tests__/theme-app-config.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 19[2mms[22m[39m
- [32m✓[39m app/db/__tests__/dbTry.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 5[2mms[22m[39m
- [32m✓[39m tests/unit/useScrollLock.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 16[2mms[22m[39m
- [32m✓[39m app/composables/__tests__/attachmentsUtils.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 8[2mms[22m[39m
- [32m✓[39m app/theme/_shared/__tests__/generate-css-variables.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 6[2mms[22m[39m
- [32m✓[39m app/composables/sidebar/__tests__/useSidebarPageControls.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m app/composables/posts/__tests__/usePostsList.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 30[2mms[22m[39m
+ [32m✓[39m app/theme/_shared/__tests__/theme-app-config.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 11[2mms[22m[39m
+ [32m✓[39m app/db/__tests__/dbTry.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m tests/unit/useScrollLock.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 10[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/attachmentsUtils.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m app/theme/_shared/__tests__/generate-css-variables.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m app/composables/sidebar/__tests__/useSidebarPageControls.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 3[2mms[22m[39m
  [32m✓[39m app/composables/__tests__/useIcon.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 5[2mms[22m[39m
- [32m✓[39m tests/unit/assets-size.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 5[2mms[22m[39m
- [32m✓[39m app/utils/__tests__/typed-hooks-runtime.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 5[2mms[22m[39m
- [32m✓[39m app/utils/__tests__/hook-types.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 4[2mms[22m[39m
- [32m✓[39m app/composables/core/__tests__/useScrollLock.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/assets-size.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m app/utils/__tests__/typed-hooks-runtime.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m app/utils/__tests__/hook-types.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m app/composables/core/__tests__/useScrollLock.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 6[2mms[22m[39m
  [2m[90m↓[39m[22m app/composables/sidebar/__tests__/page-activation-hooks.test.ts [2m([22m[2m1 test[22m[2m | [22m[33m1 skipped[39m[2m)[22m
 
 [2m Test Files [22m [1m[32m82 passed[39m[22m[2m | [22m[33m4 skipped[39m[90m (86)[39m
 [2m      Tests [22m [1m[32m652 passed[39m[22m[2m | [22m[33m52 skipped[39m[90m (704)[39m
-[2m   Start at [22m 17:20:34
-[2m   Duration [22m 31.44s[2m (transform 3.61s, setup 11.01s, collect 7.71s, tests 5.48s, environment 46.56s, prepare 7.28s)[22m
+[2m   Start at [22m 17:23:49
+[2m   Duration [22m 23.79s[2m (transform 3.02s, setup 8.07s, collect 6.16s, tests 4.12s, environment 35.31s, prepare 5.35s)[22m
 
 
 ===== BUILD TAIL =====
-node_modules/.cache/nuxt/.nuxt/dist/server/_nuxt/ChatInputDropper-wQklzGCr.js                      69.67 kB │ map:   170.19 kB
+node_modules/.cache/nuxt/.nuxt/dist/server/_nuxt/db-CcZDj5MA.js                                    33.09 kB │ map:    85.25 kB
+node_modules/.cache/nuxt/.nuxt/dist/server/_nuxt/DocumentationShell-BvY-E0ip.js                    38.20 kB │ map:   169.71 kB
+node_modules/.cache/nuxt/.nuxt/dist/server/_nuxt/WorkspaceBackupApp-BCd8O8tw.js                    65.76 kB │ map:   132.56 kB
+node_modules/.cache/nuxt/.nuxt/dist/server/_nuxt/ChatInputDropper-TjUdSVKk.js                      69.67 kB │ map:   170.19 kB
 node_modules/.cache/nuxt/.nuxt/dist/server/_nuxt/ThemePage-apdnZbRC.js                             88.75 kB │ map:   215.42 kB
 node_modules/.cache/nuxt/.nuxt/dist/server/server.mjs                                             188.78 kB │ map:   363.36 kB
-node_modules/.cache/nuxt/.nuxt/dist/server/_nuxt/PageShell-B8KA87Q_.js                            414.08 kB │ map: 1,024.97 kB
+node_modules/.cache/nuxt/.nuxt/dist/server/_nuxt/PageShell-CUBbayGq.js                            414.08 kB │ map: 1,024.97 kB
 
-[info] [32m✓ built in 5.07s[39m
-[warn] [33m[33m[PLUGIN_TIMINGS] [0mPlugin hooks ran for 4.9s of this 5.1s build (98%).
-The slowest hooks, timed inside each callback (the wait before a callback starts is excluded, the time it awaits is included):
-  - vite:vue transform (21%, 1.1s, 196 calls)
-Additional hook time came from the hooks below and from hooks under 1s.
+[info] [32m✓ built in 3.70s[39m
+[warn] [33m[33m[PLUGIN_TIMINGS] [0mPlugin hooks ran for 3.6s of this 3.7s build (98%).
 6 hooks are listed without a time. Their calls overlapped, so the time inside one call includes work from other calls. To find their cost, profile the build with `node --cpu-prof`:
   - nuxt:ssr-styles:ssr resolveId (270 calls)
   - nuxt:resolve-externals:external resolveId (33 calls)
@@ -356,15 +356,15 @@ Additional hook time came from the hooks below and from hooks under 1s.
   … and 3 more
 See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
 [39m
-[success] Server built in 5118ms
+[success] Server built in 3741ms
 [info] [nitro] Initializing prerenderer
 [warn] "H3Error", "H3Event", "deleteCookie", "getCookie" and "setCookie" are imported from external module "file:///home/runner/work/or3-chat/or3-chat/node_modules/h3/dist/index.mjs" but never used in "node_modules/@nuxt/nitro-server/dist/h3.mjs".
 [info] [nitro] Prerendering 2 routes
-[log] [nitro] [90m  ├─ /openrouter-callback (655ms)[39m
-[log] [nitro] [90m  ├─ /openrouter-callback/_payload.json (2ms)[39m
-[log] [nitro] [90m  ├─ /documentation (672ms)[39m
+[log] [nitro] [90m  ├─ /openrouter-callback (469ms)[39m
+[log] [nitro] [90m  ├─ /openrouter-callback/_payload.json (1ms)[39m
+[log] [nitro] [90m  ├─ /documentation (510ms)[39m
 [log] [nitro] [90m  ├─ /documentation/_payload.json (1ms)[39m
-[info] [nitro] Prerendered 4 routes in 6.825 seconds
+[info] [nitro] Prerendered 4 routes in 5.65 seconds
 [info] [@nuxt/fonts] Downloading fonts...
 [log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxTKYbSB4ZhRNU.woff2[39m
 [log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxaKYbSB4ZhRNU.woff2[39m
@@ -405,56 +405,54 @@ files generated
 [90m  ├─ .output/server/chunks/_/icons2.mjs.map (4.28 kB)[39m[90m (100 B gzip)[39m
 [90m  ├─ .output/server/chunks/_/icons3.mjs (2.09 MB)[39m[90m (336 kB gzip)[39m
 [90m  ├─ .output/server/chunks/_/icons3.mjs.map (19.4 kB)[39m[90m (117 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/_...slug_-CTsvN1_A.mjs (1.92 kB)[39m[90m (791 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/_...slug_-CTsvN1_A.mjs.map (136 B)[39m[90m (99 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/_id_-uMvzwWCH.mjs (2.34 kB)[39m[90m (1.01 kB gzip)[39m
-[90m  ├─ .output/server/chunks/build/_id_-uMvzwWCH.mjs.map (590 B)[39m[90m (284 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/_id_-zx9pBb7O.mjs (2.34 kB)[39m[90m (1.01 kB gzip)[39m
-[90m  ├─ .output/server/chunks/build/_id_-zx9pBb7O.mjs.map (590 B)[39m[90m (285 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/_...slug_-h4YZ3ADQ.mjs (1.92 kB)[39m[90m (792 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/_...slug_-h4YZ3ADQ.mjs.map (136 B)[39m[90m (99 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/_id_-Bd9BStQV.mjs (2.34 kB)[39m[90m (1.01 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/_id_-Bd9BStQV.mjs.map (590 B)[39m[90m (283 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/_id_-D_wnMn5Y.mjs (2.34 kB)[39m[90m (1.01 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/_id_-D_wnMn5Y.mjs.map (590 B)[39m[90m (285 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/_plugin-vue_export-helper-BOaGB7Aw.mjs (320 B)[39m[90m (227 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/_plugin-vue_export-helper-BOaGB7Aw.mjs.map (225 B)[39m[90m (172 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/AccessibilitySection-styles.DlQtWDYo.mjs (418 B)[39m[90m (232 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/AccessibilitySection-styles.DlQtWDYo.mjs.map (239 B)[39m[90m (175 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/AiPage-C9qNXkt4.mjs (13.8 kB)[39m[90m (3.67 kB gzip)[39m
-[90m  ├─ .output/server/chunks/build/AiPage-C9qNXkt4.mjs.map (7.49 kB)[39m[90m (1.77 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/AiPage-CbI_Ott3.mjs (13.8 kB)[39m[90m (3.67 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/AiPage-CbI_Ott3.mjs.map (7.49 kB)[39m[90m (1.77 kB gzip)[39m
 [90m  ├─ .output/server/chunks/build/AiPage-styles.DRJMPytd.mjs (921 B)[39m[90m (479 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/AiPage-styles.DRJMPytd.mjs.map (211 B)[39m[90m (166 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/BaseResizeHandle-styles.D8HMR_aG.mjs (455 B)[39m[90m (244 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/BaseResizeHandle-styles.D8HMR_aG.mjs.map (231 B)[39m[90m (173 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/chat-CqZGbvj2.mjs (2 kB)[39m[90m (851 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/chat-CqZGbvj2.mjs.map (290 B)[39m[90m (172 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/chat-Btgolvy6.mjs (2 kB)[39m[90m (847 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/chat-Btgolvy6.mjs.map (290 B)[39m[90m (172 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/ChatContainer-styles.CwIT0aRe.mjs (708 B)[39m[90m (362 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/ChatContainer-styles.CwIT0aRe.mjs.map (225 B)[39m[90m (170 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/ChatInputDropper-styles.CO9J-m7h.mjs (2.48 kB)[39m[90m (947 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/ChatInputDropper-styles.CO9J-m7h.mjs.map (231 B)[39m[90m (174 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/ChatInputDropper-wQklzGCr.mjs (71 kB)[39m[90m (14.9 kB gzip)[39m
-[90m  ├─ .output/server/chunks/build/ChatInputDropper-wQklzGCr.mjs.map (924 B)[39m[90m (391 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ChatInputDropper-TjUdSVKk.mjs (71 kB)[39m[90m (14.9 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/ChatInputDropper-TjUdSVKk.mjs.map (924 B)[39m[90m (392 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/ColorPaletteSection-styles.i2QdrqiZ.mjs (413 B)[39m[90m (228 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/ColorPaletteSection-styles.i2QdrqiZ.mjs.map (237 B)[39m[90m (173 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/ColorPicker-styles.DoMvAl8u.mjs (373 B)[39m[90m (228 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/ColorPicker-styles.DoMvAl8u.mjs.map (221 B)[39m[90m (169 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/composables-BuRmHqX0.mjs (10.7 kB)[39m[90m (2.71 kB gzip)[39m
-[90m  ├─ .output/server/chunks/build/composables-BuRmHqX0.mjs.map (11.6 kB)[39m[90m (2.81 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/composables-lKWa7sSU.mjs (10.7 kB)[39m[90m (2.71 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/composables-lKWa7sSU.mjs.map (11.6 kB)[39m[90m (2.81 kB gzip)[39m
 [90m  ├─ .output/server/chunks/build/CustomBackgroundToggle-styles.CBFehILI.mjs (428 B)[39m[90m (233 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/CustomBackgroundToggle-styles.CBFehILI.mjs.map (243 B)[39m[90m (177 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/Dashboard-CwVmb_zr.mjs (19.5 kB)[39m[90m (4.86 kB gzip)[39m
-[90m  ├─ .output/server/chunks/build/Dashboard-CwVmb_zr.mjs.map (12 kB)[39m[90m (2.8 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/Dashboard-nd-bYkz6.mjs (19.5 kB)[39m[90m (4.86 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/Dashboard-nd-bYkz6.mjs.map (12 kB)[39m[90m (2.8 kB gzip)[39m
 [90m  ├─ .output/server/chunks/build/Dashboard-styles.CEPKciNx.mjs (989 B)[39m[90m (442 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/Dashboard-styles.CEPKciNx.mjs.map (217 B)[39m[90m (167 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/define-theme-BLqFJHjv.mjs (1.06 kB)[39m[90m (566 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/define-theme-BLqFJHjv.mjs.map (218 B)[39m[90m (168 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/docs-Ch53wCYc.mjs (1.06 kB)[39m[90m (505 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/docs-Ch53wCYc.mjs.map (103 B)[39m[90m (94 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/docs-l4Ha2lto.mjs (2 kB)[39m[90m (848 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/docs-l4Ha2lto.mjs.map (290 B)[39m[90m (172 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/documentation-BSNKsr-6.mjs (1.9 kB)[39m[90m (783 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/documentation-BSNKsr-6.mjs.map (140 B)[39m[90m (103 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/DocumentationShell-Bu0GSJWy.mjs (38.2 kB)[39m[90m (9.08 kB gzip)[39m
-[90m  ├─ .output/server/chunks/build/DocumentationShell-Bu0GSJWy.mjs.map (23.5 kB)[39m[90m (5.86 kB gzip)[39m
-[90m  ├─ .output/server/chunks/build/DocumentationShell-styles.DebGn66M.mjs (20.3 kB)[39m[90m (4.07 kB gzip)[39m
-[90m  ├─ .output/server/chunks/build/DocumentationShell-styles.DebGn66M.mjs.map (235 B)[39m[90m (174 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/DocumentEditor-CUulvhpr.mjs (21.6 kB)[39m[90m (5.2 kB gzip)[39m
-[90m  ├─ .output/server/chunks/build/DocumentEditor-CUulvhpr.mjs.map (12.3 kB)[39m[90m (2.87 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/docs-K_GnZ6qa.mjs (2 kB)[39m[90m (850 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/docs-K_GnZ6qa.mjs.map (290 B)[39m[90m (173 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/documentation-CffFnrUZ.mjs (1.9 kB)[39m[90m (782 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/documentation-CffFnrUZ.mjs.map (140 B)[39m[90m (103 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentationShell-BvY-E0ip.mjs (38.2 kB)[39m[90m (9.07 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentationShell-BvY-E0ip.mjs.map (23.5 kB)[39m[90m (5.86 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentationShell-styles.DQe5ni-u.mjs (20.3 kB)[39m[90m (4.06 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentationShell-styles.DQe5ni-u.mjs.map (235 B)[39m[90m (172 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/DocumentEditor-styles-1.mjs-Bgyg5-g9.mjs (415 B)[39m[90m (262 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/DocumentEditor-styles-1.mjs-Bgyg5-g9.mjs.map (104 B)[39m[90m (111 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/DocumentEditor-styles-2.mjs-CRBvEa2r.mjs (11.6 kB)[39m[90m (2.22 kB gzip)[39m
@@ -463,6 +461,8 @@ files generated
 [90m  ├─ .output/server/chunks/build/DocumentEditor-styles-3.mjs-ZwiXqAKS.mjs.map (104 B)[39m[90m (115 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/DocumentEditor-styles.QMn8JIqH.mjs (871 B)[39m[90m (312 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/DocumentEditor-styles.QMn8JIqH.mjs.map (247 B)[39m[90m (179 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentEditor-Z_nNg68q.mjs (21.6 kB)[39m[90m (5.21 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentEditor-Z_nNg68q.mjs.map (12.3 kB)[39m[90m (2.87 kB gzip)[39m
 [90m  ├─ .output/server/chunks/build/DocumentEditorRoot-styles.Cfsj9ZL8.mjs (413 B)[39m[90m (227 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/DocumentEditorRoot-styles.Cfsj9ZL8.mjs.map (235 B)[39m[90m (174 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/entry-styles.B9EymisQ.mjs (2.14 kB)[39m[90m (751 B gzip)[39m
@@ -479,10 +479,10 @@ files generated
 [90m  ├─ .output/server/chunks/build/files-BAFoqxgu.mjs.map (322 B)[39m[90m (196 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/GalleryGrid-0_Y0o_6v.mjs (10.5 kB)[39m[90m (3.44 kB gzip)[39m
 [90m  ├─ .output/server/chunks/build/GalleryGrid-0_Y0o_6v.mjs.map (7.15 kB)[39m[90m (1.94 kB gzip)[39m
-[90m  ├─ .output/server/chunks/build/HelpChat-styles.DJ9e7IaP.mjs (19.5 kB)[39m[90m (3.85 kB gzip)[39m
-[90m  ├─ .output/server/chunks/build/HelpChat-styles.DJ9e7IaP.mjs.map (215 B)[39m[90m (168 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/history-D8gap9fZ.mjs (2.33 kB)[39m[90m (984 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/history-D8gap9fZ.mjs.map (1.55 kB)[39m[90m (587 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/HelpChat-styles.BuqC10Y6.mjs (19.5 kB)[39m[90m (3.84 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/HelpChat-styles.BuqC10Y6.mjs.map (215 B)[39m[90m (169 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/history-DE1l2jAI.mjs (2.33 kB)[39m[90m (984 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/history-DE1l2jAI.mjs.map (1.55 kB)[39m[90m (587 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/icons.config-CQIS60el.mjs (4.34 kB)[39m[90m (1.19 kB gzip)[39m
 [90m  ├─ .output/server/chunks/build/icons.config-CQIS60el.mjs.map (2.51 kB)[39m[90m (612 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/images-CvyNAVL2.mjs (26.6 kB)[39m[90m (5.35 kB gzip)[39m
@@ -495,20 +495,20 @@ files generated
 [90m  ├─ .output/server/chunks/build/Modal-BJbwmLYp.mjs.map (269 B)[39m[90m (212 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/ModelCatalog-zw_9bTiK.mjs (23 kB)[39m[90m (5.04 kB gzip)[39m
 [90m  ├─ .output/server/chunks/build/ModelCatalog-zw_9bTiK.mjs.map (13.9 kB)[39m[90m (3.1 kB gzip)[39m
-[90m  ├─ .output/server/chunks/build/ModelSelect-D2-hmwtC.mjs (4.54 kB)[39m[90m (1.76 kB gzip)[39m
-[90m  ├─ .output/server/chunks/build/ModelSelect-D2-hmwtC.mjs.map (2.17 kB)[39m[90m (835 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/openrouter-build-fNpdsukm.mjs (9.32 kB)[39m[90m (2.87 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/ModelSelect-BVhYjAXU.mjs (4.54 kB)[39m[90m (1.76 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/ModelSelect-BVhYjAXU.mjs.map (2.17 kB)[39m[90m (834 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/openrouter-build-fNpdsukm.mjs (9.32 kB)[39m[90m (2.86 kB gzip)[39m
 [90m  ├─ .output/server/chunks/build/openrouter-build-fNpdsukm.mjs.map (9.3 kB)[39m[90m (2.48 kB gzip)[39m
 [90m  ├─ .output/server/chunks/build/openrouter-callback-DGQR0gAc.mjs (3.43 kB)[39m[90m (1.33 kB gzip)[39m
 [90m  ├─ .output/server/chunks/build/openrouter-callback-DGQR0gAc.mjs.map (1.04 kB)[39m[90m (411 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/pages-DL_F_6jE.mjs (1.94 kB)[39m[90m (819 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/pages-DL_F_6jE.mjs.map (137 B)[39m[90m (95 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/PageShell-B8KA87Q_.mjs (477 kB)[39m[90m (88.2 kB gzip)[39m
-[90m  ├─ .output/server/chunks/build/PageShell-B8KA87Q_.mjs.map (4.45 kB)[39m[90m (998 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/pages-3YRNNFPC.mjs (1.94 kB)[39m[90m (818 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/pages-3YRNNFPC.mjs.map (137 B)[39m[90m (95 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/PageShell-CUBbayGq.mjs (477 kB)[39m[90m (88.2 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/PageShell-CUBbayGq.mjs.map (4.45 kB)[39m[90m (998 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/PageShell-styles.DsPZGanX.mjs (711 B)[39m[90m (411 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/PageShell-styles.DsPZGanX.mjs.map (217 B)[39m[90m (168 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/PromptEditor-DtAheJFy.mjs (8.34 kB)[39m[90m (2.77 kB gzip)[39m
-[90m  ├─ .output/server/chunks/build/PromptEditor-DtAheJFy.mjs.map (4.71 kB)[39m[90m (1.39 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/PromptEditor-BkLx-r3e.mjs (8.34 kB)[39m[90m (2.77 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/PromptEditor-BkLx-r3e.mjs.map (4.71 kB)[39m[90m (1.39 kB gzip)[39m
 [90m  ├─ .output/server/chunks/build/PromptEditor-styles.DReP3n6F.mjs (3.18 kB)[39m[90m (1.45 kB gzip)[39m
 [90m  ├─ .output/server/chunks/build/PromptEditor-styles.DReP3n6F.mjs.map (223 B)[39m[90m (170 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/ResetSection-styles.CKEFUnNW.mjs (378 B)[39m[90m (229 B gzip)[39m
@@ -523,8 +523,8 @@ files generated
 [90m  ├─ .output/server/chunks/build/SidebarHeader-styles.Ch9xiRXd.mjs.map (225 B)[39m[90m (171 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/styles-CWSmn517.mjs (192 B)[39m[90m (172 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/styles-CWSmn517.mjs.map (174 B)[39m[90m (154 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/SystemPromptsModal-CZFdzHjM.mjs (34.9 kB)[39m[90m (7.11 kB gzip)[39m
-[90m  ├─ .output/server/chunks/build/SystemPromptsModal-CZFdzHjM.mjs.map (24.9 kB)[39m[90m (5.17 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/SystemPromptsModal-l325lVbZ.mjs (34.9 kB)[39m[90m (7.11 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/SystemPromptsModal-l325lVbZ.mjs.map (24.9 kB)[39m[90m (5.17 kB gzip)[39m
 [90m  ├─ .output/server/chunks/build/SystemPromptsModal-styles.DYvu65dQ.mjs (786 B)[39m[90m (374 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/SystemPromptsModal-styles.DYvu65dQ.mjs.map (235 B)[39m[90m (175 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/theme-DsRvtxe9.mjs (17.7 kB)[39m[90m (3.98 kB gzip)[39m
@@ -563,8 +563,8 @@ files generated
 [90m  ├─ .output/server/chunks/build/usePreviewCache-BlCoRFsu.mjs.map (4 kB)[39m[90m (1.17 kB gzip)[39m
 [90m  ├─ .output/server/chunks/build/useResponsiveState-UsYHTceV.mjs (26.9 kB)[39m[90m (6.57 kB gzip)[39m
 [90m  ├─ .output/server/chunks/build/useResponsiveState-UsYHTceV.mjs.map (554 B)[39m[90m (321 B gzip)[39m
-[90m  ├─ .output/server/chunks/build/WorkspaceBackupApp-DorCfqDK.mjs (66.4 kB)[39m[90m (11.3 kB gzip)[39m
-[90m  ├─ .output/server/chunks/build/WorkspaceBackupApp-DorCfqDK.mjs.map (701 B)[39m[90m (297 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/WorkspaceBackupApp-BCd8O8tw.mjs (66.4 kB)[39m[90m (11.3 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/WorkspaceBackupApp-BCd8O8tw.mjs.map (701 B)[39m[90m (297 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/WorkspaceBackupApp-styles.CgseyX9b.mjs (877 B)[39m[90m (441 B gzip)[39m
 [90m  ├─ .output/server/chunks/build/WorkspaceBackupApp-styles.CgseyX9b.mjs.map (235 B)[39m[90m (174 B gzip)[39m
 [90m  ├─ .output/server/chunks/nitro/nitro.mjs (295 kB)[39m[90m (69.8 kB gzip)[39m
@@ -581,7 +581,7 @@ files generated
 [90m  ├─ .output/server/chunks/virtual/entry.mjs.map (10.2 kB)[39m[90m (2.35 kB gzip)[39m
 [90m  ├─ .output/server/chunks/virtual/precomputed.mjs (196 kB)[39m[90m (18.4 kB gzip)[39m
 [90m  ├─ .output/server/chunks/virtual/precomputed.mjs.map (181 B)[39m[90m (150 B gzip)[39m
-[90m  ├─ .output/server/chunks/virtual/styles.mjs (3.86 kB)[39m[90m (899 B gzip)[39m
+[90m  ├─ .output/server/chunks/virtual/styles.mjs (3.86 kB)[39m[90m (900 B gzip)[39m
 [90m  ├─ .output/server/chunks/virtual/styles.mjs.map (164 B)[39m[90m (142 B gzip)[39m
 [90m  ├─ .output/server/index.mjs (396 B)[39m[90m (226 B gzip)[39m
 [90m  └─ .output/server/package.json (8.35 kB)[39m[90m (2.29 kB gzip)[39m
