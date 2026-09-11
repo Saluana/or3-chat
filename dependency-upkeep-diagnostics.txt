@@ -1,0 +1,591 @@
+DEPENDENCY UPKEEP DIAGNOSTICS
+install=0
+typecheck=1
+lint=0
+test=0
+build=0
+outdated_exit=0
+
+===== OUTDATED =====
+bun outdated v1.4.2 (744846f84)
+|--------------------------------------------------------|
+| Package                   | Current | Update | Latest  |
+|---------------------------|---------|--------|---------|
+| @nuxt/ui                  | 3.3.7   | 3.3.7  | 4.11.1  |
+|---------------------------|---------|--------|---------|
+| @openrouter/sdk           | 0.3.16  | 0.3.16 | 1.2.119 |
+|---------------------------|---------|--------|---------|
+| @vueuse/core              | 13.9.0  | 13.9.0 | 14.4.0  |
+|---------------------------|---------|--------|---------|
+| gpt-tokenizer             | 3.4.0   | 3.4.0  | 4.0.0   |
+|---------------------------|---------|--------|---------|
+| or3-scroll                | 0.0.3   | 0.0.3  | 0.1.1   |
+|---------------------------|---------|--------|---------|
+| streamdown-vue            | 1.0.30  | 1.0.30 | 1.0.32  |
+|---------------------------|---------|--------|---------|
+| tiptap-markdown           | 0.8.10  | 0.8.10 | 0.9.0   |
+|---------------------------|---------|--------|---------|
+| typescript                | 5.9.3   | 5.9.3  | 7.0.2   |
+|---------------------------|---------|--------|---------|
+| virtua                    | 0.41.5  | 0.41.5 | 0.51.3  |
+|---------------------------|---------|--------|---------|
+| vue-router                | 4.6.4   | 4.6.4  | 5.3.1   |
+|---------------------------|---------|--------|---------|
+| @eslint/js (dev)          | 9.39.5  | 9.39.5 | 10.0.1  |
+|---------------------------|---------|--------|---------|
+| @vitejs/plugin-vue (dev)  | 5.2.4   | 5.2.4  | 6.0.8   |
+|---------------------------|---------|--------|---------|
+| @vitest/coverage-v8 (dev) | 2.1.9   | 2.1.9  | 5.0.0   |
+|---------------------------|---------|--------|---------|
+| @vitest/ui (dev)          | 2.1.9   | 2.1.9  | 5.0.0   |
+|---------------------------|---------|--------|---------|
+| eslint (dev)              | 9.39.5  | 9.39.5 | 10.10.0 |
+|---------------------------|---------|--------|---------|
+| jsdom (dev)               | 25.0.1  | 25.0.1 | 30.0.1  |
+|---------------------------|---------|--------|---------|
+| vite (dev)                | 7.3.6   | 7.3.6  | 8.3.0   |
+|---------------------------|---------|--------|---------|
+| vitest (dev)              | 2.1.9   | 2.1.9  | 5.0.0   |
+|--------------------------------------------------------|
+
+===== TYPECHECK =====
+$ nuxt typecheck
+│
+■  A type checker is required for [36mnuxt typecheck[39m. Install one of the following:
+│
+│
+●  [36mvue-tsc[39m:
+│
+│    [1mbun add -d typescript vue-tsc[22m
+│
+│
+●  [36mGolar[39m (see [36mhttps://golar.dev/languages/vue/[39m):
+│
+│    [1mbun add -d golar @golar/vue[22m
+│
+│
+●  Golar also requires a [36mgolar.config.ts[39m file. One will be created automatically the first time Golar is used.
+│
+[info] Nuxt Icon server bundle mode is set to `local`
+[success] Nuxt Icon discovered local-installed 3 collections: carbon, pixelarticons, tabler
+error: script "type-check" exited with code 1
+
+===== LINT =====
+
+/home/runner/work/or3-chat/or3-chat/app/composables/dashboard/useDashboardPlugins.ts
+  161:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  304:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/runner/work/or3-chat/or3-chat/app/composables/sidebar/usePaginatedSidebarItems.ts
+  57:41  warning  Unnecessary optional chain on a non-nullish value  @typescript-eslint/no-unnecessary-condition
+  88:38  warning  Unnecessary optional chain on a non-nullish value  @typescript-eslint/no-unnecessary-condition
+
+/home/runner/work/or3-chat/or3-chat/app/composables/useThemeResolver.ts
+  112:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 5 problems (0 errors, 5 warnings)
+
+
+===== TEST TAIL =====
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: LazyChatModelSelect
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: lazy-modal-model-catalog
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: LazyChatSystemPromptsModal
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: UIcon
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: UButton
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: ChatSettingsPopover
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: UPopover
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: UTooltip
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: LazyChatModelSelect
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: lazy-modal-model-catalog
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: LazyChatSystemPromptsModal
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: UIcon
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: UButton
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: ChatSettingsPopover
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: UPopover
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: UTooltip
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: LazyChatModelSelect
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: lazy-modal-model-catalog
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: LazyChatSystemPromptsModal
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <ChatInputDropper loading=false ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+ [32m✓[39m app/components/chat/__tests__/ChatInputDropper.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 89[2mms[22m[39m
+ [32m✓[39m app/db/__tests__/files-attach-filter.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 19[2mms[22m[39m
+[90mstdout[2m | scripts/__tests__/cli-commands.test.ts[2m > [22m[2mCLI Commands[2m > [22m[2mThemeCompiler Integration[2m > [22m[2mshould compile all themes without errors
+[22m[39m[theme-compiler] Generated types at /home/runner/work/or3-chat/or3-chat/types/theme-generated.d.ts
+[theme-compiler] - 2 themes
+[theme-compiler] - 45 identifiers
+[theme-compiler] - 15 contexts
+
+[90mstdout[2m | scripts/__tests__/cli-commands.test.ts[2m > [22m[2mCLI Commands[2m > [22m[2mThemeCompiler Integration[2m > [22m[2mshould validate retro theme
+[22m[39m[theme-compiler] Generated types at /home/runner/work/or3-chat/or3-chat/types/theme-generated.d.ts
+[theme-compiler] - 2 themes
+[theme-compiler] - 45 identifiers
+[theme-compiler] - 15 contexts
+
+[90mstdout[2m | scripts/__tests__/cli-commands.test.ts[2m > [22m[2mCLI Commands[2m > [22m[2mThemeCompiler Integration[2m > [22m[2mshould generate types for all themes
+[22m[39m[theme-compiler] Generated types at /home/runner/work/or3-chat/or3-chat/types/theme-generated.d.ts
+[theme-compiler] - 2 themes
+[theme-compiler] - 45 identifiers
+[theme-compiler] - 15 contexts
+
+ [32m✓[39m app/composables/core/__tests__/useWorkspaceBackup.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 113[2mms[22m[39m
+[90mstdout[2m | scripts/__tests__/cli-commands.test.ts[2m > [22m[2mCLI Commands[2m > [22m[2mError Handling[2m > [22m[2mshould report validation errors with helpful messages
+[22m[39m[theme-compiler] Generated types at /home/runner/work/or3-chat/or3-chat/types/theme-generated.d.ts
+[theme-compiler] - 2 themes
+[theme-compiler] - 45 identifiers
+[theme-compiler] - 15 contexts
+
+[90mstdout[2m | scripts/__tests__/cli-commands.test.ts[2m > [22m[2mCLI Commands[2m > [22m[2mPerformance[2m > [22m[2mshould compile all themes in under 2 seconds
+[22m[39m[theme-compiler] Generated types at /home/runner/work/or3-chat/or3-chat/types/theme-generated.d.ts
+[theme-compiler] - 2 themes
+[theme-compiler] - 45 identifiers
+[theme-compiler] - 15 contexts
+
+ [32m✓[39m scripts/__tests__/cli-commands.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 117[2mms[22m[39m
+ [32m✓[39m app/composables/documents/__tests__/useDocumentsStore.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 11[2mms[22m[39m
+ [32m✓[39m app/composables/chat/__tests__/useWorkflowStreamAccumulator.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 17[2mms[22m[39m
+ [32m✓[39m app/components/chat/__tests__/ChatContainer.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 134[2mms[22m[39m
+ [32m✓[39m app/composables/sidebar/__tests__/registerSidebarPage.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m app/utils/__tests__/workspace-backup-stream.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 115[2mms[22m[39m
+ [32m✓[39m app/db/__tests__/files-select.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/chromeRegistries.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 19[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/previewCache.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/hookOrder.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 22[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/editorToolbar.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 19[2mms[22m[39m
+ [32m✓[39m app/plugins/__tests__/pane-plugin-api.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 13[2mms[22m[39m
+ [32m✓[39m app/pages/images/__tests__/image-viewer.cache.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 189[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/useWorkspaceBackup.stream.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 59[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/chatAbort.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 30[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/documentHistoryActions.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/threadHistoryActions.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/useThemeResolver.cache.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 19[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/uiMessages.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m app/theme/_shared/__tests__/runtime-resolver-cache.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+[90mstderr[2m | app/composables/__tests__/multiPaneHooks.test.ts[2m > [22m[2mmulti-pane new hooks[2m > [22m[2memits blur->switch->active order
+[22m[39m[Vue warn] onScopeDispose() is called when there is no active effect scope to be associated with.
+
+[90mstderr[2m | app/composables/__tests__/multiPaneHooks.test.ts[2m > [22m[2mmulti-pane new hooks[2m > [22m[2mthread filter can transform and changed fires
+[22m[39m[Vue warn] onScopeDispose() is called when there is no active effect scope to be associated with.
+
+ [32m✓[39m app/composables/__tests__/multiPaneHooks.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 10[2mms[22m[39m
+ [32m✓[39m app/composables/core/__tests__/useResponsiveState.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 96[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/chatTags.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/useAiSettings.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+[90mstderr[2m | app/components/documents/__tests__/SearchPanelRoot.test.ts[2m > [22m[2mSearchPanelRoot - memory leaks[2m > [22m[2mclears search timeout on unmount
+[22m[39m[Vue warn]: Failed to resolve component: UCard
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SearchPanelRoot docmap= { sections: [ { title: [32m'Section 1'[39m, files: [36m[Array][39m } ] } searchQuery="test" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: UCard
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SearchPanelRoot docmap= { sections: [ { title: [32m'Section 1'[39m, files: [36m[Array][39m } ] } searchQuery="new query" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+[90mstderr[2m | app/components/documents/__tests__/SearchPanelRoot.test.ts[2m > [22m[2mSearchPanelRoot - memory leaks[2m > [22m[2mclears previous timeout when new search is triggered
+[22m[39m[Vue warn]: Failed to resolve component: UCard
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SearchPanelRoot docmap= { sections: [ { title: [32m'Section 1'[39m, files: [36m[Array][39m } ] } searchQuery="test" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: UCard
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SearchPanelRoot docmap= { sections: [ { title: [32m'Section 1'[39m, files: [36m[Array][39m } ] } searchQuery="query1" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: UCard
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SearchPanelRoot docmap= { sections: [ { title: [32m'Section 1'[39m, files: [36m[Array][39m } ] } searchQuery="query2" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: UCard
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SearchPanelRoot docmap= { sections: [ { title: [32m'Section 1'[39m, files: [36m[Array][39m } ] } searchQuery="query3" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+[90mstderr[2m | app/components/documents/__tests__/SearchPanelRoot.test.ts[2m > [22m[2mSearchPanelRoot - memory leaks[2m > [22m[2mnullifies timeout after search completes
+[22m[39m[Vue warn]: Failed to resolve component: UCard
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SearchPanelRoot docmap= { sections: [] } searchQuery="test query" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+ [32m✓[39m app/components/documents/__tests__/SearchPanelRoot.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 49[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/editorNodes.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 19[2mms[22m[39m
+ [32m✓[39m app/theme/_shared/__tests__/icon-registry.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32m✓[39m app/components/chat/__tests__/fileValidation.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 1015[2mms[22m[39m
+   [33m[2m✓[22m[39m file validation & persistence[2m > [22mrejects oversize file [33m1007[2mms[22m[39m
+ [32m✓[39m app/pages/images/__tests__/gallery-grid.error.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 37[2mms[22m[39m
+ [32m✓[39m app/composables/documents/__tests__/useDocumentsList.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 106[2mms[22m[39m
+[90mstdout[2m | app/components/documents/__tests__/LazyEditorHost.test.ts[2m > [22m[2mLazyEditorHost - memory leaks[2m > [22m[2mclears error timeout on unmount
+[22m[39m<Suspense> is an experimental feature and its API will likely change.
+
+[90mstderr[2m | app/components/documents/__tests__/LazyEditorHost.test.ts[2m > [22m[2mLazyEditorHost - memory leaks[2m > [22m[2mclears error timeout on unmount
+[22m[39m[Vue warn]: Failed to resolve component: UButton
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <LazyEditorHost documentId="doc1" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+[90mstderr[2m | app/components/documents/__tests__/LazyEditorHost.test.ts[2m > [22m[2mLazyEditorHost - memory leaks[2m > [22m[2mclears error timeout when editor loads successfully
+[22m[39m[Vue warn]: Failed to resolve component: UButton
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <LazyEditorHost documentId="doc1" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+[90mstderr[2m | app/components/documents/__tests__/LazyEditorHost.test.ts[2m > [22m[2mLazyEditorHost - memory leaks[2m > [22m[2mresets error timeout when documentId changes
+[22m[39m[Vue warn]: Failed to resolve component: UButton
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <LazyEditorHost documentId="doc1" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+[Vue warn]: Failed to resolve component: UButton
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <LazyEditorHost documentId="doc2" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+[90mstderr[2m | app/components/documents/__tests__/LazyEditorHost.test.ts[2m > [22m[2mLazyEditorHost - memory leaks[2m > [22m[2mhandles isMounted flag correctly
+[22m[39m[Vue warn]: Failed to resolve component: UButton
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <LazyEditorHost documentId="doc1" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+ [32m✓[39m app/components/documents/__tests__/LazyEditorHost.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 56[2mms[22m[39m
+ [32m✓[39m app/utils/sidebar/__tests__/sidebarTimeUtils.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 31[2mms[22m[39m
+ [32m✓[39m app/utils/__tests__/ai-settings-utils.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m app/components/chat/__tests__/StreamMarkdownXmlRender.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 97[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/useTypedHooks.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m app/pages/images/__tests__/image-viewer.error.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 39[2mms[22m[39m
+ [32m✓[39m tests/unit/nuxt-config-cache.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 27[2mms[22m[39m
+[90mstderr[2m | app/composables/posts/__tests__/usePostsList.test.ts[2m > [22m[2musePostsList[2m > [22m[2mshould initialize with correct default options
+[22m[39m[Vue warn] onScopeDispose() is called when there is no active effect scope to be associated with.
+
+[90mstderr[2m | app/composables/posts/__tests__/usePostsList.test.ts[2m > [22m[2musePostsList[2m > [22m[2mshould accept options with limit and sort parameters
+[22m[39m[Vue warn] onScopeDispose() is called when there is no active effect scope to be associated with.
+[Vue warn] onScopeDispose() is called when there is no active effect scope to be associated with.
+[Vue warn] onScopeDispose() is called when there is no active effect scope to be associated with.
+[Vue warn] onScopeDispose() is called when there is no active effect scope to be associated with.
+
+ [32m✓[39m app/composables/posts/__tests__/usePostsList.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 34[2mms[22m[39m
+ [32m✓[39m app/theme/_shared/__tests__/theme-app-config.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 14[2mms[22m[39m
+ [32m✓[39m app/db/__tests__/dbTry.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m tests/unit/useScrollLock.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 13[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/attachmentsUtils.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 14[2mms[22m[39m
+ [32m✓[39m app/theme/_shared/__tests__/generate-css-variables.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m app/composables/sidebar/__tests__/useSidebarPageControls.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m app/composables/__tests__/useIcon.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/assets-size.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m app/utils/__tests__/typed-hooks-runtime.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m app/utils/__tests__/hook-types.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m app/composables/core/__tests__/useScrollLock.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 10[2mms[22m[39m
+ [2m[90m↓[39m[22m app/composables/sidebar/__tests__/page-activation-hooks.test.ts [2m([22m[2m1 test[22m[2m | [22m[33m1 skipped[39m[2m)[22m
+
+[2m Test Files [22m [1m[32m82 passed[39m[22m[2m | [22m[33m4 skipped[39m[90m (86)[39m
+[2m      Tests [22m [1m[32m652 passed[39m[22m[2m | [22m[33m52 skipped[39m[90m (704)[39m
+[2m   Start at [22m 17:14:31
+[2m   Duration [22m 30.41s[2m (transform 3.57s, setup 10.34s, collect 7.44s, tests 5.11s, environment 44.96s, prepare 7.14s)[22m
+
+
+===== BUILD TAIL =====
+node_modules/.cache/nuxt/.nuxt/dist/server/_nuxt/ChatInputDropper-CsKbVcoJ.js                      69.67 kB │ map:   170.19 kB
+node_modules/.cache/nuxt/.nuxt/dist/server/_nuxt/ThemePage-apdnZbRC.js                             88.75 kB │ map:   215.42 kB
+node_modules/.cache/nuxt/.nuxt/dist/server/server.mjs                                             188.78 kB │ map:   363.36 kB
+node_modules/.cache/nuxt/.nuxt/dist/server/_nuxt/PageShell--EmUvL2G.js                            414.08 kB │ map: 1,024.97 kB
+
+[info] [32m✓ built in 5.00s[39m
+[warn] [33m[33m[PLUGIN_TIMINGS] [0mPlugin hooks ran for 4.9s of this 5.0s build (98%).
+The slowest hooks, timed inside each callback (the wait before a callback starts is excluded, the time it awaits is included):
+  - vite:vue transform (25%, 1.3s, 196 calls)
+Additional hook time came from the hooks below and from hooks under 1s.
+6 hooks are listed without a time. Their calls overlapped, so the time inside one call includes work from other calls. To find their cost, profile the build with `node --cpu-prof`:
+  - nuxt:ssr-styles:ssr resolveId (270 calls)
+  - nuxt:resolve-externals:external resolveId (33 calls)
+  - nuxt:ssr-styles:ssr transform (475 calls)
+  … and 3 more
+See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
+[39m
+[success] Server built in 5041ms
+[info] [nitro] Initializing prerenderer
+[warn] "H3Error", "H3Event", "deleteCookie", "getCookie" and "setCookie" are imported from external module "file:///home/runner/work/or3-chat/or3-chat/node_modules/h3/dist/index.mjs" but never used in "node_modules/@nuxt/nitro-server/dist/h3.mjs".
+[info] [nitro] Prerendering 2 routes
+[log] [nitro] [90m  ├─ /openrouter-callback (582ms)[39m
+[log] [nitro] [90m  ├─ /openrouter-callback/_payload.json (1ms)[39m
+[log] [nitro] [90m  ├─ /documentation (628ms)[39m
+[log] [nitro] [90m  ├─ /documentation/_payload.json (1ms)[39m
+[info] [nitro] Prerendered 4 routes in 6.97 seconds
+[info] [@nuxt/fonts] Downloading fonts...
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxTKYbSB4ZhRNU.woff2[39m
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxaKYbSB4ZhRNU.woff2[39m
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxdKYbSB4ZhRNU.woff2[39m
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxRKYbSB4ZhRNU.woff2[39m
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxQKYbSB4ZhRNU.woff2[39m
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxeKYbSB4Zh.woff2[39m
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/ibmplexsans/v23/zYXGKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1swZSAXcomDVmadSD6llzAw.woff[39m
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/ibmplexsans/v23/zYXGKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1swZSAXcomDVmadSD2FlzAw.woff[39m
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/ibmplexsans/v23/zYXGKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1swZSAXcomDVmadSDNF5zAw.woff[39m
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/ibmplexsans/v23/zYXGKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1swZSAXcomDVmadSDDV5zAw.woff[39m
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/pressstart2p/v16/e3t4euO8T-267oIAQAu6jDQyK3nYivNm4I81PZQ.woff2[39m
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/pressstart2p/v16/e3t4euO8T-267oIAQAu6jDQyK3nRivNm4I81PZQ.woff2[39m
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/pressstart2p/v16/e3t4euO8T-267oIAQAu6jDQyK3nWivNm4I81PZQ.woff2[39m
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/pressstart2p/v16/e3t4euO8T-267oIAQAu6jDQyK3nbivNm4I81PZQ.woff2[39m
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/pressstart2p/v16/e3t4euO8T-267oIAQAu6jDQyK3nVivNm4I81.woff2[39m
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/pressstart2p/v16/e3t4euO8T-267oIAQAu6jDQyK0nR.woff[39m
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/vt323/v18/pxiKyp0ihIEF2isQFJXUdVNFKPY.woff2[39m
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/vt323/v18/pxiKyp0ihIEF2isRFJXUdVNFKPY.woff2[39m
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/vt323/v18/pxiKyp0ihIEF2isfFJXUdVNF.woff2[39m
+[log] [@nuxt/fonts] [90m  ├─ https://fonts.gstatic.com/s/vt323/v18/pxiKyp0ihIEF2hsb.woff[39m
+[success] [@nuxt/fonts] Fonts downloaded and cached.
+[success] [nitro] Generated public [36m.output/public[39m
+
+[36mPWA v1.3.0[39m
+mode      [35mgenerateSW[39m
+precache  [32m263 entries[39m [2m(17004.29 KiB)[22m
+files generated
+  [2m../.output/public/sw.js[22m
+  [2m../.output/public/workbox-77d36791.js[22m
+[info] [nitro] Building Nuxt Nitro server (preset: `node-server`, compatibility date: `2025-07-15`)
+[success] [nitro] Nuxt Nitro server built
+[90m  ├─ .output/server/chunks/_/error-500.mjs (5.05 kB)[39m[90m (2.07 kB gzip)[39m
+[90m  ├─ .output/server/chunks/_/error-500.mjs.map (182 B)[39m[90m (154 B gzip)[39m
+[90m  ├─ .output/server/chunks/_/icons.mjs (1.17 MB)[39m[90m (311 kB gzip)[39m
+[90m  ├─ .output/server/chunks/_/icons.mjs.map (8.57 kB)[39m[90m (104 B gzip)[39m
+[90m  ├─ .output/server/chunks/_/icons2.mjs (264 kB)[39m[90m (46 kB gzip)[39m
+[90m  ├─ .output/server/chunks/_/icons2.mjs.map (4.28 kB)[39m[90m (100 B gzip)[39m
+[90m  ├─ .output/server/chunks/_/icons3.mjs (2.09 MB)[39m[90m (336 kB gzip)[39m
+[90m  ├─ .output/server/chunks/_/icons3.mjs.map (19.4 kB)[39m[90m (117 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/_...slug_-CuPdvaAY.mjs (1.92 kB)[39m[90m (793 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/_...slug_-CuPdvaAY.mjs.map (136 B)[39m[90m (99 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/_id_-cL4S6dhs.mjs (2.34 kB)[39m[90m (1.01 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/_id_-cL4S6dhs.mjs.map (590 B)[39m[90m (284 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/_id_-DARYFUZJ.mjs (2.34 kB)[39m[90m (1.01 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/_id_-DARYFUZJ.mjs.map (590 B)[39m[90m (285 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/_plugin-vue_export-helper-BOaGB7Aw.mjs (320 B)[39m[90m (227 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/_plugin-vue_export-helper-BOaGB7Aw.mjs.map (225 B)[39m[90m (172 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/AccessibilitySection-styles.DlQtWDYo.mjs (418 B)[39m[90m (232 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/AccessibilitySection-styles.DlQtWDYo.mjs.map (239 B)[39m[90m (175 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/AiPage-clrZuh4-.mjs (13.8 kB)[39m[90m (3.67 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/AiPage-clrZuh4-.mjs.map (7.49 kB)[39m[90m (1.77 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/AiPage-styles.DRJMPytd.mjs (921 B)[39m[90m (479 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/AiPage-styles.DRJMPytd.mjs.map (211 B)[39m[90m (166 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/BaseResizeHandle-styles.D8HMR_aG.mjs (455 B)[39m[90m (244 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/BaseResizeHandle-styles.D8HMR_aG.mjs.map (231 B)[39m[90m (173 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/chat-CkUsSh7M.mjs (2 kB)[39m[90m (849 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/chat-CkUsSh7M.mjs.map (290 B)[39m[90m (172 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ChatContainer-styles.CwIT0aRe.mjs (708 B)[39m[90m (362 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ChatContainer-styles.CwIT0aRe.mjs.map (225 B)[39m[90m (170 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ChatInputDropper-CsKbVcoJ.mjs (71 kB)[39m[90m (14.9 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/ChatInputDropper-CsKbVcoJ.mjs.map (924 B)[39m[90m (391 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ChatInputDropper-styles.CO9J-m7h.mjs (2.48 kB)[39m[90m (947 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ChatInputDropper-styles.CO9J-m7h.mjs.map (231 B)[39m[90m (174 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ColorPaletteSection-styles.i2QdrqiZ.mjs (413 B)[39m[90m (228 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ColorPaletteSection-styles.i2QdrqiZ.mjs.map (237 B)[39m[90m (173 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ColorPicker-styles.DoMvAl8u.mjs (373 B)[39m[90m (228 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ColorPicker-styles.DoMvAl8u.mjs.map (221 B)[39m[90m (169 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/composables-jW_LLdeC.mjs (10.7 kB)[39m[90m (2.7 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/composables-jW_LLdeC.mjs.map (11.6 kB)[39m[90m (2.81 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/CustomBackgroundToggle-styles.CBFehILI.mjs (428 B)[39m[90m (233 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/CustomBackgroundToggle-styles.CBFehILI.mjs.map (243 B)[39m[90m (177 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/Dashboard-DKcXfKeb.mjs (19.5 kB)[39m[90m (4.86 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/Dashboard-DKcXfKeb.mjs.map (12 kB)[39m[90m (2.8 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/Dashboard-styles.CEPKciNx.mjs (989 B)[39m[90m (442 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/Dashboard-styles.CEPKciNx.mjs.map (217 B)[39m[90m (167 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/define-theme-BLqFJHjv.mjs (1.06 kB)[39m[90m (566 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/define-theme-BLqFJHjv.mjs.map (218 B)[39m[90m (168 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/docs-3yQoLUa4.mjs (2 kB)[39m[90m (850 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/docs-3yQoLUa4.mjs.map (290 B)[39m[90m (173 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/docs-Ch53wCYc.mjs (1.06 kB)[39m[90m (505 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/docs-Ch53wCYc.mjs.map (103 B)[39m[90m (94 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/documentation-BhEfueU1.mjs (1.9 kB)[39m[90m (783 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/documentation-BhEfueU1.mjs.map (140 B)[39m[90m (103 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentationShell-ChNQ0FOG.mjs (38.2 kB)[39m[90m (9.08 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentationShell-ChNQ0FOG.mjs.map (23.5 kB)[39m[90m (5.86 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentationShell-styles.DQe5ni-u.mjs (20.3 kB)[39m[90m (4.06 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentationShell-styles.DQe5ni-u.mjs.map (235 B)[39m[90m (172 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentEditor-CkDFtrd0.mjs (21.6 kB)[39m[90m (5.21 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentEditor-CkDFtrd0.mjs.map (12.3 kB)[39m[90m (2.87 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentEditor-styles-1.mjs-Bgyg5-g9.mjs (415 B)[39m[90m (262 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentEditor-styles-1.mjs-Bgyg5-g9.mjs.map (104 B)[39m[90m (111 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentEditor-styles-2.mjs-CfJt6fsH.mjs (11.6 kB)[39m[90m (2.22 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentEditor-styles-2.mjs-CfJt6fsH.mjs.map (104 B)[39m[90m (113 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentEditor-styles-3.mjs-ZwiXqAKS.mjs (374 B)[39m[90m (235 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentEditor-styles-3.mjs-ZwiXqAKS.mjs.map (104 B)[39m[90m (115 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentEditor-styles.DaHuT7UD.mjs (871 B)[39m[90m (311 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentEditor-styles.DaHuT7UD.mjs.map (247 B)[39m[90m (179 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentEditorRoot-styles.B5XhtQhF.mjs (413 B)[39m[90m (229 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/DocumentEditorRoot-styles.B5XhtQhF.mjs.map (235 B)[39m[90m (175 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/entry-styles.B9EymisQ.mjs (2.14 kB)[39m[90m (751 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/entry-styles.B9EymisQ.mjs.map (209 B)[39m[90m (163 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/error-404-BkcKUDDT.mjs (5.61 kB)[39m[90m (2.33 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/error-404-BkcKUDDT.mjs.map (183 B)[39m[90m (163 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/error-404-styles.CbLQIMfl.mjs (2.88 kB)[39m[90m (1.07 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/error-404-styles.CbLQIMfl.mjs.map (217 B)[39m[90m (168 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/error-500-CYkeg6ZV.mjs (4.94 kB)[39m[90m (2.09 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/error-500-CYkeg6ZV.mjs.map (183 B)[39m[90m (162 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/error-500-styles.CB5z51D_.mjs (2.35 kB)[39m[90m (949 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/error-500-styles.CB5z51D_.mjs.map (217 B)[39m[90m (167 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/files-BAFoqxgu.mjs (17.6 kB)[39m[90m (4.89 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/files-BAFoqxgu.mjs.map (322 B)[39m[90m (196 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/GalleryGrid-0_Y0o_6v.mjs (10.5 kB)[39m[90m (3.44 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/GalleryGrid-0_Y0o_6v.mjs.map (7.15 kB)[39m[90m (1.94 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/HelpChat-styles.B2KYZQyK.mjs (19.5 kB)[39m[90m (3.85 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/HelpChat-styles.B2KYZQyK.mjs.map (215 B)[39m[90m (169 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/history-B8hJCRvm.mjs (2.33 kB)[39m[90m (984 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/history-B8hJCRvm.mjs.map (1.55 kB)[39m[90m (587 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/icons.config-CQIS60el.mjs (4.34 kB)[39m[90m (1.19 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/icons.config-CQIS60el.mjs.map (2.51 kB)[39m[90m (612 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/images-CvyNAVL2.mjs (26.6 kB)[39m[90m (5.35 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/images-CvyNAVL2.mjs.map (23.4 kB)[39m[90m (4.05 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/ImageViewer-1ppYBGRM.mjs (20.1 kB)[39m[90m (4.23 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/ImageViewer-1ppYBGRM.mjs.map (322 B)[39m[90m (232 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/LazyEditorHost-styles.C7JmpE2w.mjs (393 B)[39m[90m (233 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/LazyEditorHost-styles.C7JmpE2w.mjs.map (227 B)[39m[90m (172 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/Modal-BJbwmLYp.mjs (25.5 kB)[39m[90m (3.58 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/Modal-BJbwmLYp.mjs.map (269 B)[39m[90m (212 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ModelCatalog-zw_9bTiK.mjs (23 kB)[39m[90m (5.04 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/ModelCatalog-zw_9bTiK.mjs.map (13.9 kB)[39m[90m (3.1 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/ModelSelect-BQvwIza4.mjs (4.54 kB)[39m[90m (1.76 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/ModelSelect-BQvwIza4.mjs.map (2.17 kB)[39m[90m (835 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/openrouter-build-fNpdsukm.mjs (9.32 kB)[39m[90m (2.86 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/openrouter-build-fNpdsukm.mjs.map (9.3 kB)[39m[90m (2.48 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/openrouter-callback-DGQR0gAc.mjs (3.43 kB)[39m[90m (1.33 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/openrouter-callback-DGQR0gAc.mjs.map (1.04 kB)[39m[90m (411 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/pages-CzYaJcem.mjs (1.94 kB)[39m[90m (817 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/pages-CzYaJcem.mjs.map (137 B)[39m[90m (95 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/PageShell--EmUvL2G.mjs (477 kB)[39m[90m (88.2 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/PageShell--EmUvL2G.mjs.map (4.45 kB)[39m[90m (997 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/PageShell-styles.DsPZGanX.mjs (711 B)[39m[90m (411 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/PageShell-styles.DsPZGanX.mjs.map (217 B)[39m[90m (168 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/PromptEditor-styles.DReP3n6F.mjs (3.18 kB)[39m[90m (1.45 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/PromptEditor-styles.DReP3n6F.mjs.map (223 B)[39m[90m (170 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/PromptEditor-z4SFK0Id.mjs (8.34 kB)[39m[90m (2.77 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/PromptEditor-z4SFK0Id.mjs.map (4.71 kB)[39m[90m (1.39 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/ResetSection-styles.CKEFUnNW.mjs (378 B)[39m[90m (229 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ResetSection-styles.CKEFUnNW.mjs.map (223 B)[39m[90m (171 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ResizableSidebarLayout-styles.Jw3ZTQ9G.mjs (2.83 kB)[39m[90m (741 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ResizableSidebarLayout-styles.Jw3ZTQ9G.mjs.map (243 B)[39m[90m (180 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ResizeHandle-styles.CiAU1HqL.mjs (436 B)[39m[90m (246 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ResizeHandle-styles.CiAU1HqL.mjs.map (223 B)[39m[90m (171 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/SearchPanelRoot-BZkdjRTF.mjs (8.68 kB)[39m[90m (2.66 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/SearchPanelRoot-BZkdjRTF.mjs.map (323 B)[39m[90m (226 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/SidebarHeader-styles.Ch9xiRXd.mjs (3.06 kB)[39m[90m (1.39 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/SidebarHeader-styles.Ch9xiRXd.mjs.map (225 B)[39m[90m (171 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/styles-CWSmn517.mjs (192 B)[39m[90m (172 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/styles-CWSmn517.mjs.map (174 B)[39m[90m (154 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/SystemPromptsModal-C-3R2_MI.mjs (34.9 kB)[39m[90m (7.11 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/SystemPromptsModal-C-3R2_MI.mjs.map (24.9 kB)[39m[90m (5.17 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/SystemPromptsModal-styles.DYvu65dQ.mjs (786 B)[39m[90m (374 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/SystemPromptsModal-styles.DYvu65dQ.mjs.map (235 B)[39m[90m (175 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/theme-DsRvtxe9.mjs (17.7 kB)[39m[90m (3.98 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/theme-DsRvtxe9.mjs.map (9.01 kB)[39m[90m (1.96 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/theme-DZtCYKe5.mjs (20 kB)[39m[90m (4.46 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/theme-DZtCYKe5.mjs.map (10 kB)[39m[90m (2.15 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemeModeToggle-styles.C0W2xqrT.mjs (393 B)[39m[90m (226 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemeModeToggle-styles.C0W2xqrT.mjs.map (229 B)[39m[90m (171 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemePage-apdnZbRC.mjs (76 kB)[39m[90m (14.4 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemePage-apdnZbRC.mjs.map (1.16 kB)[39m[90m (395 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemePage-styles-1.mjs-BvG6alxk.mjs (450 B)[39m[90m (283 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemePage-styles-1.mjs-BvG6alxk.mjs.map (99 B)[39m[90m (109 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemePage-styles-2.mjs-BGa0YOIR.mjs (647 B)[39m[90m (362 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemePage-styles-2.mjs-BGa0YOIR.mjs.map (99 B)[39m[90m (110 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemePage-styles-3.mjs-baQ2NdfT.mjs (609 B)[39m[90m (372 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemePage-styles-3.mjs-baQ2NdfT.mjs.map (99 B)[39m[90m (108 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemePage-styles-4.mjs-CTEPZxKg.mjs (471 B)[39m[90m (290 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemePage-styles-4.mjs-CTEPZxKg.mjs.map (99 B)[39m[90m (109 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemePage-styles-5.mjs-CDMOcg5Q.mjs (456 B)[39m[90m (288 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemePage-styles-5.mjs-CDMOcg5Q.mjs.map (99 B)[39m[90m (109 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemePage-styles-6.mjs-fQwvL7zJ.mjs (465 B)[39m[90m (290 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemePage-styles-6.mjs-fQwvL7zJ.mjs.map (99 B)[39m[90m (110 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemePage-styles-7.mjs-BA2DhGIM.mjs (441 B)[39m[90m (285 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemePage-styles-7.mjs-BA2DhGIM.mjs.map (99 B)[39m[90m (110 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemePage-styles.Dw3kAOgo.mjs (2.65 kB)[39m[90m (790 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ThemePage-styles.Dw3kAOgo.mjs.map (287 B)[39m[90m (189 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ToolbarButton-styles.CLi-2OYk.mjs (386 B)[39m[90m (232 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/ToolbarButton-styles.CLi-2OYk.mjs.map (225 B)[39m[90m (171 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/TypographySection-styles.DwPLGaJr.mjs (403 B)[39m[90m (231 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/TypographySection-styles.DwPLGaJr.mjs.map (233 B)[39m[90m (175 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/useIcon-CK8bORgH.mjs (818 B)[39m[90m (474 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/useIcon-CK8bORgH.mjs.map (355 B)[39m[90m (240 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/useModelSearch-ZCg0oDEH.mjs (706 B)[39m[90m (355 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/useModelSearch-ZCg0oDEH.mjs.map (846 B)[39m[90m (384 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/usePreviewCache-BlCoRFsu.mjs (3.09 kB)[39m[90m (1.11 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/usePreviewCache-BlCoRFsu.mjs.map (4 kB)[39m[90m (1.17 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/useResponsiveState-UsYHTceV.mjs (26.9 kB)[39m[90m (6.57 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/useResponsiveState-UsYHTceV.mjs.map (554 B)[39m[90m (321 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/WorkspaceBackupApp-styles.CgseyX9b.mjs (877 B)[39m[90m (441 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/WorkspaceBackupApp-styles.CgseyX9b.mjs.map (235 B)[39m[90m (174 B gzip)[39m
+[90m  ├─ .output/server/chunks/build/WorkspaceBackupApp-ZZuk74Vv.mjs (66.4 kB)[39m[90m (11.3 kB gzip)[39m
+[90m  ├─ .output/server/chunks/build/WorkspaceBackupApp-ZZuk74Vv.mjs.map (701 B)[39m[90m (297 B gzip)[39m
+[90m  ├─ .output/server/chunks/nitro/nitro.mjs (295 kB)[39m[90m (69.8 kB gzip)[39m
+[90m  ├─ .output/server/chunks/nitro/nitro.mjs.map (4 kB)[39m[90m (976 B gzip)[39m
+[90m  ├─ .output/server/chunks/routes/api/coingecko/price.get.mjs (4.22 kB)[39m[90m (1.52 kB gzip)[39m
+[90m  ├─ .output/server/chunks/routes/api/coingecko/price.get.mjs.map (4.45 kB)[39m[90m (1.28 kB gzip)[39m
+[90m  ├─ .output/server/chunks/routes/api/openrouter/stream.post.mjs (2.49 kB)[39m[90m (1.08 kB gzip)[39m
+[90m  ├─ .output/server/chunks/routes/api/openrouter/stream.post.mjs.map (2.27 kB)[39m[90m (746 B gzip)[39m
+[90m  ├─ .output/server/chunks/routes/renderer.mjs (19.1 kB)[39m[90m (6.42 kB gzip)[39m
+[90m  ├─ .output/server/chunks/routes/renderer.mjs.map (1.18 kB)[39m[90m (322 B gzip)[39m
+[90m  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs (94 B)[39m[90m (100 B gzip)[39m
+[90m  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs.map (88 B)[39m[90m (97 B gzip)[39m
+[90m  ├─ .output/server/chunks/virtual/entry.mjs (293 kB)[39m[90m (66.2 kB gzip)[39m
+[90m  ├─ .output/server/chunks/virtual/entry.mjs.map (10.2 kB)[39m[90m (2.35 kB gzip)[39m
+[90m  ├─ .output/server/chunks/virtual/precomputed.mjs (196 kB)[39m[90m (18.4 kB gzip)[39m
+[90m  ├─ .output/server/chunks/virtual/precomputed.mjs.map (181 B)[39m[90m (150 B gzip)[39m
+[90m  ├─ .output/server/chunks/virtual/styles.mjs (3.86 kB)[39m[90m (897 B gzip)[39m
+[90m  ├─ .output/server/chunks/virtual/styles.mjs.map (164 B)[39m[90m (142 B gzip)[39m
+[90m  ├─ .output/server/index.mjs (396 B)[39m[90m (226 B gzip)[39m
+[90m  └─ .output/server/package.json (8.35 kB)[39m[90m (2.29 kB gzip)[39m
+[36mΣ Total size:[39m 31.1 MB (8.24 MB gzip)
+[success] [nitro] You can preview this build using `node .output/server/index.mjs`
+[log] │
+└  ✨ Build complete!
