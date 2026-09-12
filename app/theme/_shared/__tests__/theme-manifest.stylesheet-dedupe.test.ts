@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import {
+    __resetThemeStylesheetCachesForTests,
     deactivateThemeStylesheets,
     loadThemeStylesheets,
     type ThemeManifestEntry,
@@ -8,6 +9,7 @@ import {
 describe('loadThemeStylesheets dedupe', () => {
     beforeEach(() => {
         document.head.innerHTML = '';
+        __resetThemeStylesheetCachesForTests();
     });
 
     it('dedupes concurrent stylesheet loads for same theme and href', async () => {
@@ -77,5 +79,84 @@ describe('loadThemeStylesheets dedupe', () => {
                 'link[data-theme-stylesheet="retro"]'
             )
         ).toHaveLength(1);
+    });
+
+    it('rejects required stylesheet failures and removes the failed link', async () => {
+        const entry: ThemeManifestEntry = {
+            name: 'broken',
+            dirName: 'broken',
+            loader: async () => ({
+                default: {
+                    name: 'broken',
+                    colors: { primary: '#000', secondary: '#111', surface: '#fff' },
+                },
+            }),
+            stylesheets: ['/themes/broken.css'],
+            isDefault: false,
+            hasCssSelectorStyles: false,
+        };
+
+        const pending = loadThemeStylesheets(entry, ['/themes/broken.css']);
+        await Promise.resolve();
+        const link = document.head.querySelector(
+            'link[data-theme-stylesheet="broken"]'
+        ) as HTMLLinkElement;
+        expect(link).toBeTruthy();
+        link.dispatchEvent(new Event('error'));
+
+        await expect(pending).rejects.toThrow('Failed to load stylesheet');
+        expect(
+            document.head.querySelector(
+                'link[data-theme-stylesheet="broken"]'
+            )
+        ).toBeNull();
+    });
+
+    it('retries with a fresh request after a failure instead of trusting link existence', async () => {
+        const entry: ThemeManifestEntry = {
+            name: 'flaky',
+            dirName: 'flaky',
+            loader: async () => ({
+                default: {
+                    name: 'flaky',
+                    colors: { primary: '#000', secondary: '#111', surface: '#fff' },
+                },
+            }),
+            stylesheets: ['/themes/flaky.css'],
+            isDefault: false,
+            hasCssSelectorStyles: false,
+        };
+
+        const first = loadThemeStylesheets(entry, ['/themes/flaky.css']);
+        await Promise.resolve();
+        const failedLink = document.head.querySelector(
+            'link[data-theme-stylesheet="flaky"]'
+        ) as HTMLLinkElement;
+        failedLink.dispatchEvent(new Event('error'));
+        await expect(first).rejects.toThrow('Failed to load stylesheet');
+
+        // A stale failed tag left behind (e.g. by an older version) must not
+        // be treated as a successful load.
+        const stale = document.createElement('link');
+        stale.rel = 'stylesheet';
+        stale.setAttribute('href', '/themes/flaky.css');
+        stale.setAttribute('data-theme-stylesheet', 'flaky');
+        document.head.appendChild(stale);
+
+        const appendSpy = vi.spyOn(document.head, 'appendChild');
+        const second = loadThemeStylesheets(entry, ['/themes/flaky.css']);
+        await Promise.resolve();
+        expect(
+            document.head.querySelectorAll(
+                'link[data-theme-stylesheet="flaky"]'
+            )
+        ).toHaveLength(1);
+        expect(appendSpy).toHaveBeenCalled();
+        const retryLink = document.head.querySelector(
+            'link[data-theme-stylesheet="flaky"]'
+        ) as HTMLLinkElement;
+        expect(retryLink).not.toBe(stale);
+        retryLink.dispatchEvent(new Event('load'));
+        await expect(second).resolves.toBeUndefined();
     });
 });

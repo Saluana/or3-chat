@@ -145,6 +145,12 @@ export async function upsertMessage(value: Message): Promise<void> {
 
 /**
  * Upsert a message in an explicitly captured workspace database.
+ *
+ * Transaction safety:
+ * Arbitrary plugin hooks run outside the write transaction. Awaiting timers,
+ * network requests, or other non-IndexedDB work between two Dexie operations
+ * lets IndexedDB auto-commit the idle transaction, so the later `put` would
+ * fail with an inactive transaction. Only the re-read + `put` run inside.
  */
 export async function upsertMessageInDb(
     db: Or3DB,
@@ -156,30 +162,201 @@ export async function upsertMessageInDb(
         value
     );
     const validated = parseOrThrow(MessageSchema, filtered);
-    await db.transaction('rw', getWriteTxTableNames(db, 'messages'), async () => {
-        const existing = await dbTry(() => db.messages.get(validated.id), {
+    // Best-effort clock for the pre-commit notification; the authoritative
+    // bump is recomputed from a fresh read inside the transaction.
+    const previewExisting = await dbTry(
+        () => db.messages.get(validated.id),
+        { op: 'read', entity: 'messages', action: 'get' }
+    );
+    const preview = {
+        ...validated,
+        clock: nextClock(previewExisting?.clock ?? validated.clock),
+        hlc: validated.hlc ?? generateHLC(),
+    };
+    await hooks.doAction('db.messages.upsert:action:before', {
+        entity: toMessageEntity(preview),
+        tableName: 'messages',
+    });
+    const next = await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'messages'),
+        async () => {
+            const existing = await dbTry(
+                () => db.messages.get(validated.id),
+                { op: 'read', entity: 'messages', action: 'get' }
+            );
+            const fresh = {
+                ...validated,
+                clock: nextClock(existing?.clock ?? validated.clock),
+                hlc: validated.hlc ?? generateHLC(),
+            };
+            await dbTry(
+                () => db.messages.put(fresh),
+                { op: 'write', entity: 'messages', action: 'upsert' },
+                { rethrow: true }
+            );
+            return fresh;
+        }
+    );
+    await hooks.doAction('db.messages.upsert:action:after', {
+        entity: toMessageEntity(next),
+        tableName: 'messages',
+    });
+}
+
+function dataRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object'
+        ? (value as Record<string, unknown>)
+        : {};
+}
+
+function jsonEqual(left: unknown, right: unknown): boolean {
+    if (Object.is(left, right)) return true;
+    try {
+        return JSON.stringify(left) === JSON.stringify(right);
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Purpose:
+ * Atomically merge a partial patch against the current row inside a single
+ * write transaction.
+ *
+ * Behavior:
+ * Reads the latest row, deep-merges `data`, applies top-level fields, bumps
+ * clocks, and writes — all inside one Dexie transaction so concurrent writers
+ * cannot interleave between the read and the write. Callers must pass only
+ * the delta they own; untouched keys are preserved from the latest row.
+ *
+ * Constraints:
+ * - No-op when the row does not exist and no fallback is supplied.
+ *
+ * Non-Goals:
+ * - Does not replace `upsertMessageInDb` for full-row replaces.
+ */
+export async function patchMessageInDb(
+    db: Or3DB,
+    id: string,
+    patch: Partial<Message> & {
+        data?: Record<string, unknown> | null;
+    },
+    fallback?: Message | null
+): Promise<void> {
+    const hooks = useHooks();
+    // Preparation hooks run outside the write transaction (see upsertMessageInDb:
+    // awaiting arbitrary plugin code between Dexie operations can idle-commit it).
+    const baseOutside =
+        (await dbTry(() => db.messages.get(id), {
             op: 'read',
             entity: 'messages',
             action: 'get',
-        });
-        const next = {
-            ...validated,
-            clock: nextClock(existing?.clock ?? validated.clock),
-            hlc: validated.hlc ?? generateHLC(),
-        };
-        await hooks.doAction('db.messages.upsert:action:before', {
-            entity: toMessageEntity(next),
-            tableName: 'messages',
-        });
-        await dbTry(
-            () => db.messages.put(next),
-            { op: 'write', entity: 'messages', action: 'upsert' },
-            { rethrow: true }
-        );
-        await hooks.doAction('db.messages.upsert:action:after', {
-            entity: toMessageEntity(next),
-            tableName: 'messages',
-        });
+        })) ?? fallback;
+    if (!baseOutside) return;
+
+    const baseOutsideData = dataRecord(baseOutside.data);
+    const patchData = dataRecord(patch.data);
+    const { data: _droppedData, ...topPatch } = patch as Record<string, unknown>;
+    const candidateOutside = {
+        ...baseOutside,
+        ...topPatch,
+        id: baseOutside.id,
+        data: {
+            ...baseOutsideData,
+            ...patchData,
+            ...('error' in patch
+                ? { error: (patch as { error?: unknown }).error }
+                : {}),
+        },
+        updated_at:
+            typeof (patch as { updated_at?: unknown }).updated_at === 'number'
+                ? (patch as { updated_at: number }).updated_at
+                : nowSec(),
+    };
+    const filteredOutside: unknown = await hooks.applyFilters(
+        'db.messages.upsert:filter:input',
+        candidateOutside
+    );
+    const validatedOutside = parseOrThrow(MessageSchema, filteredOutside);
+    await hooks.doAction('db.messages.upsert:action:before', {
+        entity: toMessageEntity(validatedOutside),
+        tableName: 'messages',
+    });
+
+    // Diff the filtered preparation result against the outside read so the
+    // inner transaction can re-apply only owned/filter-touched keys onto the
+    // fresh row. Untouched keys stay excluded and survive concurrent writes.
+    const validatedOutsideData = dataRecord(validatedOutside.data);
+    const dataDelta: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(validatedOutsideData)) {
+        if (!jsonEqual(baseOutsideData[key], value)) dataDelta[key] = value;
+    }
+    // Deletions are not representable via JSON diff of missing keys; carry an
+    // explicit null-clear for owned data keys the caller set to null.
+    for (const [key, value] of Object.entries(patchData)) {
+        if (value === null) dataDelta[key] = null;
+    }
+    const topDelta: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(
+        validatedOutside as Record<string, unknown>
+    )) {
+        if (key === 'id' || key === 'data' || key === 'clock' || key === 'hlc') {
+            continue;
+        }
+        if (
+            !jsonEqual(
+                (baseOutside as Record<string, unknown>)[key],
+                value
+            )
+        ) {
+            topDelta[key] = value;
+        }
+    }
+
+    const next = await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'messages'),
+        async () => {
+            const stored = await dbTry(() => db.messages.get(id), {
+                op: 'read',
+                entity: 'messages',
+                action: 'get',
+            });
+            const base = stored ?? fallback;
+            if (!base) return undefined;
+            const baseData = dataRecord(base.data);
+            const candidate = {
+                ...base,
+                ...topDelta,
+                id: base.id,
+                data: { ...baseData, ...dataDelta },
+                updated_at:
+                    typeof topDelta.updated_at === 'number'
+                        ? (topDelta.updated_at as number)
+                        : nowSec(),
+            };
+            const validated = parseOrThrow(MessageSchema, candidate);
+            const fresh = {
+                ...validated,
+                clock: nextClock(base.clock ?? validated.clock),
+                hlc:
+                    (validated as { hlc?: string }).hlc ??
+                    (base as { hlc?: string }).hlc ??
+                    generateHLC(),
+            };
+            await dbTry(
+                () => db.messages.put(fresh),
+                { op: 'write', entity: 'messages', action: 'upsert' },
+                { rethrow: true }
+            );
+            return fresh;
+        }
+    );
+    if (!next) return;
+    await hooks.doAction('db.messages.upsert:action:after', {
+        entity: toMessageEntity(next),
+        tableName: 'messages',
     });
 }
 
@@ -577,7 +754,12 @@ export async function insertMessageAfter(
         if (!after) throw new Error('after message not found');
         const next = await db.messages
             .where('[thread_id+index]')
-            .above([after.thread_id, after.index])
+            .between(
+                [after.thread_id, after.index],
+                [after.thread_id, Dexie.maxKey],
+                false,
+                true
+            )
             .first();
         let newIndex: number;
         if (!next) {
@@ -591,7 +773,12 @@ export async function insertMessageAfter(
             if (!normalizedAfter) throw new Error('after message disappeared');
             const normalizedNext = await db.messages
                 .where('[thread_id+index]')
-                .above([normalizedAfter.thread_id, normalizedAfter.index])
+                .between(
+                    [normalizedAfter.thread_id, normalizedAfter.index],
+                    [normalizedAfter.thread_id, Dexie.maxKey],
+                    false,
+                    true
+                )
                 .first();
             newIndex = normalizedNext
                 ? normalizedAfter.index +

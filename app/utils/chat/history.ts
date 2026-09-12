@@ -16,6 +16,7 @@ import { compareMessageOrder } from '~/db/messages';
 import {
     projectTranscriptForOpenRouter,
     storedMessagesToCanonicalTranscript,
+    withoutSupersededMessages,
 } from './transcript';
 
 /**
@@ -47,8 +48,12 @@ export async function ensureThreadHistoryLoaded(
 
         all.sort(compareMessageOrder);
 
+        // Retry-superseded turns stay in storage but leave the branch: later
+        // sends and reloads reconstruct only the selected branch.
+        const visible = withoutSupersededMessages(all);
+
         const nextMessages = projectTranscriptForOpenRouter(
-            storedMessagesToCanonicalTranscript(all)
+            storedMessagesToCanonicalTranscript(visible)
         );
 
         // The database read can complete after navigation selects another

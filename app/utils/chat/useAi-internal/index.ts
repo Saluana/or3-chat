@@ -40,6 +40,9 @@ export {
     updateMessageRecord,
 } from './persistence';
 
+// Turn writeback
+export { reloadTurnIntoRawMessages } from './turnWriteback';
+
 // Retry functionality
 export { retryMessageImpl } from './retry';
 export type { RetryMessageContext } from './retry';

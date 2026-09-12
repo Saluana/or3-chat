@@ -32,6 +32,7 @@ import {
     messagesByThread,
     moveMessage,
     normalizeThreadIndexes,
+    patchMessageInDb,
 } from '../messages';
 
 let databaseSequence = 0;
@@ -259,6 +260,28 @@ describe('message transaction and ordering contracts', () => {
         });
     });
 
+    it('insertMessageAfter ignores other threads when the anchor is last', async () => {
+        const db = testState.db!;
+        // Dexie compound-index order interleaves thread b between thread a rows
+        // unless the neighbor query is bounded to the anchor thread.
+        await db.threads.bulkPut([makeThread('thread-a'), makeThread('thread-b')]);
+        await db.messages.bulkPut([
+            makeMessage('a-1', 'thread-a', 1000),
+            makeMessage('a-2', 'thread-a', 2000),
+            makeMessage('a-3', 'thread-a', 3000),
+            makeMessage('b-1', 'thread-b', 1000),
+        ]);
+        const inserted = await insertMessageAfter('a-3', {
+            id: 'a-4',
+            thread_id: 'thread-a',
+            role: 'assistant',
+        } as any);
+
+        expect(inserted.thread_id).toBe('thread-a');
+        expect(inserted.index).toBe(4000);
+        expect(inserted.index).toBeGreaterThan(3000);
+    });
+
     it('orders index collisions deterministically by order key and then id', async () => {
         const db = testState.db!;
         await db.messages.bulkPut([
@@ -278,6 +301,40 @@ describe('message transaction and ordering contracts', () => {
             'middle',
             'last-index',
         ]);
+    });
+
+    it('patchMessageInDb merges deltas atomically without dropping concurrent keys', async () => {
+        const db = testState.db!;
+        await db.threads.put(makeThread('thread-1'));
+        await db.messages.put(
+            makeMessage('msg-1', 'thread-1', 1000, {
+                data: {
+                    content: 'concurrent edit',
+                    plugin_initial: true,
+                    plugin_concurrent: { keep: true },
+                },
+                file_hashes: '["concurrent-file"]',
+                clock: 5,
+            })
+        );
+
+        // Delta built from stale state (no concurrent keys) must not erase them.
+        await patchMessageInDb(db, 'msg-1', {
+            data: { reasoning_text: 'new reasoning', tool_calls: [] },
+        } as any);
+
+        const row = await db.messages.get('msg-1');
+        expect(row).toMatchObject({
+            clock: 6,
+            file_hashes: '["concurrent-file"]',
+            data: {
+                content: 'concurrent edit',
+                plugin_initial: true,
+                plugin_concurrent: { keep: true },
+                reasoning_text: 'new reasoning',
+                tool_calls: [],
+            },
+        });
     });
 
     it('rolls back both message and thread writes when an in-transaction hook fails', async () => {

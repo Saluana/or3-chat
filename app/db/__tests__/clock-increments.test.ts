@@ -78,7 +78,7 @@ vi.mock('../client', () => {
         async transaction(_mode: string, ...args: Array<unknown>) {
             const fn = args[args.length - 1];
             if (typeof fn === 'function') {
-                await (fn as () => Promise<void>)();
+                return await (fn as () => Promise<unknown>)();
             }
         },
     };

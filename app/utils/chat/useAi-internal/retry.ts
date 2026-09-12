@@ -31,6 +31,9 @@
 
 import type { Ref } from 'vue';
 import type { ChatMessage, ContentPart, SendMessageParams, SendResult } from '~/utils/chat/types';
+import { hasDurableSendAcceptance } from '~/utils/chat/types';
+import { SUPERSEDED_BY_KEY } from '~/utils/chat/transcript';
+import { updateMessageRecord } from './persistence';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { getDb } from '~/db/client';
 import { compareMessageOrder, messagesByThread } from '~/db/messages';
@@ -83,6 +86,31 @@ export type RetryMessageContext = {
     sendMessage: (text: string, params: SendMessageParams) => Promise<SendResult>;
     defaultModelId: string;
     suppressNextTailFlush: (assistantId: string) => void;
+};
+
+/**
+ * Internal helper. Stable turn identity for pairing without numeric indexes.
+ * New rows carry `data.turn_id`; legacy rows fall back to the message id.
+ */
+const turnIdOf = (message: StoredMessage): string => {
+    const data =
+        message.data && typeof message.data === 'object'
+            ? (message.data as Record<string, unknown>)
+            : null;
+    const turnId = data?.turn_id;
+    return typeof turnId === 'string' && turnId ? turnId : message.id;
+};
+
+/**
+ * Internal helper. Owning user turn for assistant/tool rows, when recorded.
+ */
+const parentTurnIdOf = (message: StoredMessage): string | undefined => {
+    const data =
+        message.data && typeof message.data === 'object'
+            ? (message.data as Record<string, unknown>)
+            : null;
+    const parent = data?.parent_turn_id;
+    return typeof parent === 'string' && parent ? parent : undefined;
 };
 
 /**
@@ -193,31 +221,62 @@ export async function retryMessageImpl(
             .filter((message) => !message.deleted)
             .sort(compareMessageOrder);
 
+        // Pair turns by persisted turn relationship first; fall back to
+        // canonical position. Numeric `index` comparisons are wrong when rows
+        // share an index — the real order is index, then order_key, then id,
+        // which `ordered` already reflects.
+        const positionById = new Map(ordered.map((message, position) => [message.id, position]));
+        const targetPos = positionById.get(target.id) ?? -1;
+
         let userMsg = target.role === 'user' ? target : undefined;
         if (!userMsg && target.role === 'assistant') {
-            userMsg = [...ordered]
-                .reverse()
-                .find(
-                    (message) =>
-                        message.role === 'user' &&
-                        (Number(message.index) || 0) < (Number(target.index) || 0)
-                );
+            const parentTurnId = parentTurnIdOf(target as StoredMessage);
+            userMsg =
+                (parentTurnId
+                    ? ordered.find(
+                          (message) =>
+                              message.role === 'user' &&
+                              turnIdOf(message as StoredMessage) === parentTurnId
+                      )
+                    : undefined) ??
+                [...ordered]
+                    .reverse()
+                    .find(
+                        (message) =>
+                            message.role === 'user' &&
+                            (positionById.get(message.id) ?? -1) < targetPos
+                    );
         }
         if (!userMsg) return undefined;
 
-        const userIndex = Number(userMsg.index) || 0;
-        const nextUserIndex = ordered.find(
+        const userPos = positionById.get(userMsg.id) ?? -1;
+        const userTurnId = turnIdOf(userMsg as StoredMessage);
+        const nextUserPos = ordered.find(
             (message) =>
                 message.role === 'user' &&
-                (Number(message.index) || 0) > userIndex
-        )?.index;
-        const assistant = ordered.find(
-            (message) =>
-                message.role === 'assistant' &&
-                (Number(message.index) || 0) > userIndex &&
-                (nextUserIndex == null ||
-                    (Number(message.index) || 0) < (Number(nextUserIndex) || 0))
-        );
+                (positionById.get(message.id) ?? -1) > userPos
+        )?.id;
+        const nextUserPosition =
+            nextUserPos !== undefined ? positionById.get(nextUserPos) : undefined;
+        const inTurn = (message: StoredMessage) => {
+            const pos = positionById.get(message.id) ?? -1;
+            return (
+                pos > userPos &&
+                (nextUserPosition === undefined || pos < nextUserPosition)
+            );
+        };
+        const assistant =
+            ordered.find(
+                (message) =>
+                    message.role === 'assistant' &&
+                    inTurn(message as StoredMessage) &&
+                    parentTurnIdOf(message as StoredMessage) === userTurnId
+            ) ??
+            ordered.find(
+                (message) =>
+                    message.role === 'assistant' &&
+                    inTurn(message as StoredMessage)
+            );
 
         await ctx.hooks.doAction('ai.chat.retry:action:before', {
             threadId: ctx.threadIdRef.value,
@@ -281,9 +340,10 @@ export async function retryMessageImpl(
 
         // Build a branch prefix ending immediately before the selected user turn.
         // This retains complete earlier tool rows while excluding the selected
-        // response and every later turn from provider context.
+        // response and every later turn from provider context. Positions in the
+        // canonically ordered array define the boundary, not numeric indexes.
         const retryHistory = ordered
-            .filter((message) => (Number(message.index) || 0) < userIndex)
+            .filter((message) => (positionById.get(message.id) ?? -1) < userPos)
             .map(toChatMessage);
 
         ctx.rawMessages.value = ordered.map(toChatMessage);
@@ -329,6 +389,76 @@ export async function retryMessageImpl(
             historyOverride: retryHistory,
         });
 
+        // Durable branch boundary: the resend replaces the selected turn and
+        // every later turn. Mark those rows superseded so later sends and
+        // reloads reconstruct only the selected branch; the rows themselves
+        // are preserved. The transient historyOverride only shaped this send.
+        let supersededIds: string[] = [];
+        if (
+            hasDurableSendAcceptance(result) &&
+            'userMessageId' in result &&
+            result.userMessageId
+        ) {
+            const newAssistantId =
+                'assistantMessageId' in result
+                    ? result.assistantMessageId
+                    : undefined;
+            const newIds = new Set(
+                [result.userMessageId, newAssistantId].filter(
+                    (id): id is string => typeof id === 'string'
+                )
+            );
+            const replaced = ordered.filter(
+                (message) =>
+                    (positionById.get(message.id) ?? -1) >= userPos &&
+                    !newIds.has(message.id)
+            );
+            const db = getDb();
+            for (const row of replaced) {
+                try {
+                    await updateMessageRecord(
+                        db,
+                        row.id,
+                        {
+                            data: {
+                                [SUPERSEDED_BY_KEY]: result.userMessageId,
+                                generation_state: 'superseded',
+                            },
+                        },
+                        row as StoredMessage
+                    );
+                    supersededIds.push(row.id);
+                } catch (markError) {
+                    reportError(
+                        markError instanceof Error
+                            ? markError
+                            : err('ERR_INTERNAL', '[retryMessage] supersede failed', {
+                                    tags: { domain: 'chat', op: 'retryMessage' },
+                                }),
+                        {
+                            code: 'ERR_INTERNAL',
+                            tags: { domain: 'chat', op: 'retryMessage' },
+                        }
+                    );
+                }
+            }
+            if (supersededIds.length > 0) {
+                const superseded = new Set(supersededIds);
+                ctx.rawMessages.value = ctx.rawMessages.value.filter(
+                    (message) => !message.id || !superseded.has(message.id)
+                );
+                ctx.messages.value = ctx.messages.value.filter(
+                    (message) => !superseded.has(message.id)
+                );
+                if (
+                    ctx.tailAssistant.value &&
+                    superseded.has(ctx.tailAssistant.value.id)
+                ) {
+                    ctx.tailAssistant.value = null;
+                }
+            }
+        }
+
         if ('userMessageId' in result && result.userMessageId) {
             await ctx.hooks.doAction('ai.chat.retry:action:after', {
                 threadId: ctx.threadIdRef.value,
@@ -339,6 +469,7 @@ export async function retryMessageImpl(
                     'assistantMessageId' in result
                         ? result.assistantMessageId
                         : undefined,
+                supersededIds,
             });
         }
         return result;

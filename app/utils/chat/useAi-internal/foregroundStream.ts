@@ -35,6 +35,7 @@
  */
 
 import { createOrRefFile } from '~/db/files';
+import type { Or3DB } from '~/db/client';
 import type { ChatMessage, ToolCall, ToolDefinition } from '~/utils/chat/types';
 import { dataUrlToBlob, fetchImageBlob } from '~/utils/chat/files';
 import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
@@ -206,6 +207,8 @@ export type ForegroundStreamContext = {
     streamId: string;
     threadId: string;
     workspaceId?: string;
+    /** Captured workspace DB from request admission; owns all transcript writes. */
+    originDb?: Or3DB;
     streamAcc: StreamAccumulatorLike;
     hooks: HooksLike;
     toolRegistry: ToolRegistryLike;
@@ -519,6 +522,7 @@ export async function runForegroundStreamLoop(
                             status: 'error',
                             durableResult: projectedError.durable,
                             error,
+                            ...(ctx.originDb ? { db: ctx.originDb } : {}),
                         });
                         await ctx.persistAssistant({
                             content: current.text,
@@ -626,6 +630,7 @@ export async function runForegroundStreamLoop(
                         status: toolStatus,
                         durableResult: projectedResult.durable,
                         error: execution.error,
+                        ...(ctx.originDb ? { db: ctx.originDb } : {}),
                     });
 
                     // The next provider request is not issued until both the

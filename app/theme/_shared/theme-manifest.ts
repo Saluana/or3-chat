@@ -188,6 +188,14 @@ export async function loadThemeManifest(): Promise<ThemeManifestResult> {
 }
 
 const stylesheetInFlight = new Map<string, Promise<void>>();
+/** Hrefs that have fully loaded at least once; link existence alone is not proof. */
+const stylesheetLoaded = new Set<string>();
+
+/** Test-only reset for the module-level stylesheet caches. */
+export function __resetThemeStylesheetCachesForTests(): void {
+    stylesheetInFlight.clear();
+    stylesheetLoaded.clear();
+}
 
 /**
  * `loadThemeStylesheets`
@@ -229,25 +237,36 @@ export async function loadThemeStylesheets(
             `link[data-theme-stylesheet="${entry.name}"][href="${href}"]`
         );
 
-        if (existingLink) {
+        if (existingLink && stylesheetLoaded.has(dedupeKey)) {
             existingLink.disabled = false;
             return;
         }
+        if (existingLink && !stylesheetLoaded.has(dedupeKey)) {
+            // A previous attempt left a failed (or unverified) tag behind.
+            // Existence is not proof of loading; drop it and retry fresh.
+            existingLink.remove();
+        }
 
-        const inFlight = new Promise<void>((resolve) => {
+        const inFlight = new Promise<void>((resolve, reject) => {
             const link = doc.createElement('link');
             link.rel = 'stylesheet';
             link.href = href;
             link.setAttribute('data-theme-stylesheet', entry.name);
 
-            link.onload = () => resolve();
-            link.onerror = () => {
-                if (import.meta.dev) {
-                    console.warn(
-                        `[theme] Failed to load stylesheet "${stylesheet}" (resolved to "${href}") for theme "${entry.name}".`
-                    );
-                }
+            link.onload = () => {
+                stylesheetLoaded.add(dedupeKey);
                 resolve();
+            };
+            link.onerror = () => {
+                link.remove();
+                stylesheetLoaded.delete(dedupeKey);
+                const error = new Error(
+                    `[theme] Failed to load stylesheet "${stylesheet}" (resolved to "${href}") for theme "${entry.name}".`
+                );
+                if (import.meta.dev) {
+                    console.warn(error.message);
+                }
+                reject(error);
             };
 
             doc.head.appendChild(link);

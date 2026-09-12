@@ -14,7 +14,7 @@
 
 import { nowSec } from '~/db/util';
 import type { Or3DB } from '~/db/client';
-import { upsertMessageInDb } from '~/db/messages';
+import { patchMessageInDb } from '~/db/messages';
 import { serializeFileHashes } from '~/db/files-util';
 import type { StoredMessage, AssistantPersister } from './types';
 import type { ToolCallInfo } from '~/utils/chat/uiMessages';
@@ -46,51 +46,68 @@ export function makeAssistantPersister(
         toolCalls?: ToolCallInfo[] | null;
         finalize?: boolean;
     }): Promise<string | null> {
-        // Always merge against the latest row. Streaming writes must not erase
-        // concurrent plugin metadata, synced edits, or file references.
-        const latest =
-            ((await db.messages.get(assistantDbMsg.id)) as
-                | StoredMessage
-                | undefined) ?? assistantDbMsg;
-        const baseData = latest.data && typeof latest.data === 'object'
-            ? (latest.data as Record<string, unknown>)
-            : {};
-        const serialized = assistantFileHashes.length
+        // Build only the owned delta. The merge against the latest row happens
+        // atomically inside patchMessageInDb's write transaction, so concurrent
+        // plugin metadata, synced edits, or file references cannot be
+        // overwritten by a stale read. `undefined` means "not supplied";
+        // `null` explicitly clears reasoning/tool calls.
+        const hasContent = content !== undefined;
+        const hasReasoning = reasoning !== undefined;
+        const hasToolCalls = toolCalls !== undefined;
+        const ownedSerialized = assistantFileHashes.length
             ? serializeFileHashes(assistantFileHashes)
-            : latest.file_hashes ?? lastSerialized;
+            : undefined;
+        const fileChanged =
+            ownedSerialized !== undefined &&
+            ownedSerialized !== lastSerialized;
         if (
-            serialized !== lastSerialized ||
-            content != null ||
-            reasoning != null ||
-            toolCalls != null ||
-            finalize
+            !hasContent &&
+            !hasReasoning &&
+            !hasToolCalls &&
+            !finalize &&
+            !fileChanged
         ) {
-            const payload: StoredMessage = {
-                ...latest,
-                pending: finalize ? false : latest.pending,
-                data: {
-                    ...baseData,
-                    ...(content !== undefined ? { content } : {}),
-                    ...(reasoning !== undefined
-                        ? { reasoning_text: reasoning }
-                        : {}),
-                    ...(toolCalls !== undefined
-                        ? {
-                              tool_calls: (toolCalls ?? []).map((t) => ({ ...t })),
-                          }
-                        : {}),
-                    ...(finalize ? { generation_state: 'complete' } : {}),
-                    ...(generationLeaseId && !finalize
-                        ? createForegroundGenerationLease(generationLeaseId)
-                        : {}),
-                },
-                file_hashes: serialized,
-                updated_at: nowSec(),
-            };
-            await upsertMessageInDb(db, payload);
-            lastSerialized = serialized ?? null;
+            return lastSerialized;
         }
-        return lastSerialized;
+        const dataPatch: Record<string, unknown> = {
+            ...(hasContent ? { content } : {}),
+            ...(hasReasoning ? { reasoning_text: reasoning } : {}),
+            ...(hasToolCalls
+                ? { tool_calls: (toolCalls ?? []).map((t) => ({ ...t })) }
+                : {}),
+            ...(finalize ? { generation_state: 'complete' } : {}),
+            ...(generationLeaseId && !finalize
+                ? createForegroundGenerationLease(generationLeaseId)
+                : {}),
+        };
+        const patch: Partial<StoredMessage> = {
+            data: dataPatch,
+            ...(ownedSerialized !== undefined
+                ? { file_hashes: ownedSerialized }
+                : {}),
+            ...(finalize ? { pending: false } : {}),
+            updated_at: nowSec(),
+        };
+        await patchMessageInDb(
+            db,
+            assistantDbMsg.id,
+            patch as Partial<StoredMessage>,
+            assistantDbMsg
+        );
+        if (ownedSerialized !== undefined) {
+            lastSerialized = ownedSerialized ?? null;
+            return lastSerialized;
+        }
+        // Best-effort freshness for the return value only; the write itself
+        // did not depend on this read.
+        try {
+            const current = (await db.messages.get(assistantDbMsg.id)) as
+                | StoredMessage
+                | undefined;
+            return current?.file_hashes ?? lastSerialized;
+        } catch {
+            return lastSerialized;
+        }
     };
 }
 
@@ -106,32 +123,20 @@ export async function updateMessageRecord(
     patch: Partial<StoredMessage>,
     existing?: StoredMessage | null
 ): Promise<void> {
-    const base =
-        ((await db.messages.get(id)) as StoredMessage | undefined) ??
-        existing;
-    if (!base) return;
-
-    // If error is being updated, also update data.error for reliable sync
-    // (data uses v.any() and syncs reliably; top-level error may not)
-    let finalPatch = patch;
-    const baseData = base.data && typeof base.data === 'object'
-        ? (base.data as Record<string, unknown>)
-        : {};
-    const patchData = patch.data && typeof patch.data === 'object'
-        ? (patch.data as Record<string, unknown>)
-        : {};
-    finalPatch = {
-        ...patch,
-        data: {
-            ...baseData,
-            ...patchData,
-            ...('error' in patch ? { error: patch.error } : {}),
-        },
-    };
-
-    await upsertMessageInDb(db, {
-        ...base,
-        ...finalPatch,
-        updated_at: finalPatch.updated_at ?? nowSec(),
-    });
+    // Merge the caller's delta against the latest row inside a single write
+    // transaction (see patchMessageInDb). Never read-then-write across two
+    // transactions here: a concurrent writer could commit between the read
+    // and the write and lose its update.
+    // If error is being updated, patchMessageInDb also mirrors it into
+    // data.error for reliable sync (data uses v.any() and syncs reliably;
+    // top-level error may not).
+    await patchMessageInDb(
+        db,
+        id,
+        {
+            ...patch,
+            updated_at: patch.updated_at ?? nowSec(),
+        } as Partial<StoredMessage>,
+        existing ?? null
+    );
 }

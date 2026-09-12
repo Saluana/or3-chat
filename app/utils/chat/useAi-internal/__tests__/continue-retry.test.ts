@@ -458,6 +458,74 @@ describe('continue/retry regressions', () => {
         expect(reportErrorSpy).toHaveBeenCalled();
     });
 
+    it('continue abandons setup quietly when the thread changes mid-setup', async () => {
+        const target = {
+            id: 'a1',
+            thread_id: 't1',
+            role: 'assistant',
+            index: 2,
+            content: 'Hello',
+            data: { content: 'Hello' },
+            file_hashes: null,
+            stream_id: null,
+            error: null,
+            created_at: 1,
+            updated_at: 1,
+            deleted: false,
+            clock: 1,
+        };
+        dbState.messagesGet.mockResolvedValue(target);
+        const threadIdRef = ref('t1');
+        const whereChain = {
+            between: vi.fn().mockReturnThis(),
+            filter: vi.fn().mockReturnThis(),
+            // Navigation lands during the history read.
+            toArray: vi.fn(async () => {
+                threadIdRef.value = 't2';
+                return [target];
+            }),
+        };
+        dbState.where.mockReturnValue(whereChain);
+        makeAssistantPersisterSpy.mockReturnValue(vi.fn(async () => null));
+
+        const tailAssistant = ref(null) as any;
+        await continueMessageImpl(
+            {
+                loading: ref(false),
+                aborted: ref(false),
+                abortController: ref(null),
+                threadIdRef,
+                tailAssistant,
+                rawMessages: ref([]) as any,
+                messages: ref([]) as any,
+                streamId: ref<string | undefined>(undefined),
+                streamAcc: {
+                    reset: vi.fn(),
+                    append: vi.fn(),
+                    finalize: vi.fn(),
+                    state: { finalized: false },
+                },
+                streamState: { finalized: false },
+                hooks: {
+                    applyFilters: vi.fn(async (_name, value) => value),
+                },
+                effectiveApiKey: ref('k'),
+                hasInstanceKey: ref(false),
+                defaultModelId: 'model-a',
+                getSystemPromptContent: async () => null,
+                useAiSettings: () => ({ settings: ref(undefined) }),
+                resetStream: vi.fn(),
+            },
+            'a1'
+        );
+
+        expect(openRouterStreamSpy).not.toHaveBeenCalled();
+        expect(updateMessageRecordSpy).not.toHaveBeenCalled();
+        expect(makeAssistantPersisterSpy).not.toHaveBeenCalled();
+        expect(tailAssistant.value).toBeNull();
+        expect(reportErrorSpy).not.toHaveBeenCalled();
+    });
+
     it('retry preserves the source branch and resends with the prior turn boundary', async () => {
         const userMsg = {
             id: 'u1',
@@ -652,6 +720,141 @@ describe('continue/retry regressions', () => {
             online: false,
             historyOverride: [],
         });
+    });
+
+    it('pairs turns by position when rows share a numeric index', async () => {
+        const userMsg = {
+            id: 'u1',
+            role: 'user',
+            thread_id: 't1',
+            index: 1,
+            order_key: 'a',
+            content: 'hello',
+            data: { content: 'hello' },
+            file_hashes: null,
+            deleted: false,
+        };
+        const assistantMsg = {
+            id: 'a1',
+            role: 'assistant',
+            thread_id: 't1',
+            index: 1,
+            order_key: 'b',
+            content: 'old answer',
+            data: { content: 'old answer' },
+            deleted: false,
+        };
+        dbState.messagesGet.mockResolvedValue(assistantMsg);
+        messagesByThreadSpy.mockResolvedValue([userMsg, assistantMsg]);
+        parseFileHashesSpy.mockReturnValue([]);
+        const sendMessageSpy = vi.fn(async () => ({ status: 'accepted' as const, requestId: 'retry-5' }));
+        const hooksSpy = { doAction: vi.fn(async () => {}) };
+
+        await retryMessageImpl(
+            {
+                loading: ref(false),
+                threadIdRef: ref('t1'),
+                tailAssistant: ref(null),
+                rawMessages: ref([]),
+                messages: ref([]),
+                hooks: hooksSpy,
+                sendMessage: sendMessageSpy,
+                defaultModelId: 'model',
+                suppressNextTailFlush: vi.fn(),
+            },
+            'a1'
+        );
+
+        // Numeric index comparison would find no preceding user (1 < 1 is
+        // false) and silently abort the retry.
+        expect(sendMessageSpy).toHaveBeenCalledWith('hello', expect.objectContaining({
+            historyOverride: [],
+        }));
+        expect(hooksSpy.doAction).toHaveBeenCalledWith(
+            'ai.chat.retry:action:before',
+            expect.objectContaining({ originalUserId: 'u1', originalAssistantId: 'a1' })
+        );
+    });
+
+    it('prefers the persisted turn relationship over the nearest user', async () => {
+        const rows = [
+            { id: 'u1', role: 'user', thread_id: 't1', index: 1, data: { content: 'first', turn_id: 'u1' }, deleted: false },
+            { id: 'u2', role: 'user', thread_id: 't1', index: 2, data: { content: 'second' }, deleted: false },
+            { id: 'a1', role: 'assistant', thread_id: 't1', index: 3, data: { content: 'old', parent_turn_id: 'u1' }, deleted: false },
+        ];
+        dbState.messagesGet.mockResolvedValue(rows[2]);
+        messagesByThreadSpy.mockResolvedValue(rows);
+        parseFileHashesSpy.mockReturnValue([]);
+        const sendMessageSpy = vi.fn(async () => ({ status: 'accepted' as const, requestId: 'retry-6' }));
+        const hooksSpy = { doAction: vi.fn(async () => {}) };
+
+        await retryMessageImpl(
+            {
+                loading: ref(false),
+                threadIdRef: ref('t1'),
+                tailAssistant: ref(null),
+                rawMessages: ref([]),
+                messages: ref([]),
+                hooks: hooksSpy,
+                sendMessage: sendMessageSpy,
+                defaultModelId: 'model',
+                suppressNextTailFlush: vi.fn(),
+            },
+            'a1'
+        );
+
+        expect(sendMessageSpy).toHaveBeenCalledWith('first', expect.objectContaining({
+            historyOverride: [],
+        }));
+        expect(hooksSpy.doAction).toHaveBeenCalledWith(
+            'ai.chat.retry:action:before',
+            expect.objectContaining({ originalUserId: 'u1' })
+        );
+    });
+
+    it('marks the replaced turn and future turns superseded after a durable resend', async () => {
+        const rows = [
+            { id: 'u0', role: 'user', thread_id: 't1', index: 1, data: { content: 'first' }, deleted: false },
+            { id: 'a0', role: 'assistant', thread_id: 't1', index: 2, data: { content: 'answering' }, deleted: false },
+            { id: 'u1', role: 'user', thread_id: 't1', index: 3, data: { content: 'retry me' }, deleted: false },
+            { id: 'a1', role: 'assistant', thread_id: 't1', index: 4, data: { content: 'old' }, deleted: false },
+            { id: 'u2', role: 'user', thread_id: 't1', index: 5, data: { content: 'future' }, deleted: false },
+        ];
+        dbState.messagesGet.mockResolvedValue(rows[2]);
+        messagesByThreadSpy.mockResolvedValue(rows);
+        parseFileHashesSpy.mockReturnValue([]);
+        const sendMessageSpy = vi.fn(async () => ({
+            status: 'complete' as const, requestId: 'retry-7',
+            userMessageId: 'u1-new', assistantMessageId: 'a1-new',
+        }));
+        const hooksSpy = { doAction: vi.fn(async () => {}) };
+        const rawMessages = ref([]) as any;
+        const messages = ref([]) as any;
+
+        await retryMessageImpl(
+            {
+                loading: ref(false), threadIdRef: ref('t1'), tailAssistant: ref(null),
+                rawMessages, messages,
+                hooks: hooksSpy,
+                sendMessage: sendMessageSpy, defaultModelId: 'model',
+                suppressNextTailFlush: vi.fn(),
+            },
+            'u1'
+        );
+
+        const markedIds = updateMessageRecordSpy.mock.calls.map((call) => call[1] as string).sort();
+        expect(markedIds).toEqual(['a1', 'u1', 'u2']);
+        for (const call of updateMessageRecordSpy.mock.calls) {
+            expect(call[2]).toMatchObject({
+                data: expect.objectContaining({ superseded_by: 'u1-new' }),
+            });
+        }
+        // In-memory projections drop the replaced branch; the prefix survives.
+        expect(rawMessages.value.map((m: { id: string }) => m.id).sort()).toEqual(['a0', 'u0']);
+        expect(hooksSpy.doAction).toHaveBeenCalledWith(
+            'ai.chat.retry:action:after',
+            expect.objectContaining({ supersededIds: ['u1', 'a1', 'u2'] })
+        );
     });
 
     it('keeps earlier tool rows and excludes the selected and future turns', async () => {

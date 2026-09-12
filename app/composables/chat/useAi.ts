@@ -112,6 +112,7 @@ import {
     continueMessageImpl,
     makeAssistantPersister,
     updateMessageRecord,
+    reloadTurnIntoRawMessages,
 } from '~/utils/chat/useAi-internal';
 import {
     assistantTranscriptData,
@@ -696,6 +697,16 @@ export function useChat(
             });
             return;
         }
+        if (
+            threadIdRef.value &&
+            historyLoadedFor.value === threadIdRef.value
+        ) {
+            // History was provided by the parent (or already synced): generation
+            // reconciliation still has to run, otherwise a refresh mid-stream
+            // leaves the abandoned assistant pending forever.
+            await reconcileForegroundGenerations();
+            return;
+        }
         if (threadIdRef.value && historyLoadedFor.value !== threadIdRef.value) {
             const targetThreadId = threadIdRef.value;
             logBgStream('history-sync-start', {
@@ -1181,11 +1192,18 @@ export function useChat(
      * Constraints:
      * - No-op when background streaming is disabled
      */
+    const reconcileTimersScheduled = new Set<string>();
     async function reconcileForegroundGenerations(): Promise<void> {
-        if (!threadIdRef.value) return;
-        const persisted = (await messagesByThread(threadIdRef.value)) as
+        const reconcileThreadId = threadIdRef.value;
+        if (!reconcileThreadId) return;
+        // Capture the workspace at admission: recovery must finalize rows in
+        // the thread's own database even if the user navigates mid-reconcile.
+        const reconcileDb = getDb();
+        const persisted = (await messagesByThread(reconcileThreadId)) as
             | StoredMessage[]
             | undefined;
+        // Stale query results must never touch a newer thread's view.
+        if (threadIdRef.value !== reconcileThreadId) return;
         for (const row of persisted ?? []) {
             const rowData = row.data as Record<string, unknown> | null;
             if (
@@ -1195,34 +1213,55 @@ export function useChat(
             ) continue;
 
             const interrupt = async () => {
-                const db = getDb();
-                const latest = (await db.messages.get(row.id)) as
+                reconcileTimersScheduled.delete(row.id);
+                const latest = (await reconcileDb.messages.get(row.id)) as
                     | StoredMessage
                     | undefined;
-                if (!latest || !isStaleForegroundGeneration(latest)) return;
-                await updateMessageRecord(
-                    db,
-                    row.id,
-                    {
-                        pending: false,
-                        error: 'stream_interrupted',
-                        data: { generation_state: 'interrupted' },
-                    },
-                    latest
-                );
+                if (!latest) return;
+                let finalizedHere = false;
+                if (isStaleForegroundGeneration(latest)) {
+                    await updateMessageRecord(
+                        reconcileDb,
+                        row.id,
+                        {
+                            pending: false,
+                            error: 'stream_interrupted',
+                            data: { generation_state: 'interrupted' },
+                        },
+                        latest
+                    );
+                    finalizedHere = true;
+                }
+                // Only mutate the live view while it still shows this thread.
+                // Project the durable terminal state even when a concurrent
+                // recovery already finalized the row, so an older pending
+                // projection (e.g. seeded history) never strands the UI.
+                if (threadIdRef.value !== reconcileThreadId) return;
+                const terminalError =
+                    latest.error ?? (finalizedHere ? 'stream_interrupted' : undefined);
+                if (terminalError === undefined) return;
+                // finalizedHere means the durable row just left pending behind;
+                // otherwise mirror the durable row's own pending flag.
+                const leftPending =
+                    !finalizedHere && latest.pending === true;
                 const raw = rawMessages.value.find((message) => message.id === row.id);
-                if (raw) raw.error = 'stream_interrupted';
+                if (raw) {
+                    raw.error = terminalError;
+                    if (!leftPending) raw.pending = false;
+                }
                 const ui = messages.value.find((message) => message.id === row.id);
                 if (ui) {
-                    ui.pending = false;
-                    ui.error = 'stream_interrupted';
+                    if (!leftPending) ui.pending = false;
+                    ui.error = terminalError;
                 }
             };
 
             const remaining = remainingForegroundLeaseMs(row);
             if (remaining === 0 || isStaleForegroundGeneration(row)) {
                 await interrupt();
-            } else {
+                if (threadIdRef.value !== reconcileThreadId) return;
+            } else if (!reconcileTimersScheduled.has(row.id)) {
+                reconcileTimersScheduled.add(row.id);
                 const timer = setTimeout(() => void interrupt(), remaining);
                 cleanupFns.push(() => clearTimeout(timer));
             }
@@ -2355,6 +2394,7 @@ export function useChat(
                 parentTurnId: userDbMsg.id,
                 streamId: newStreamId,
                 threadId: requestThreadId,
+                originDb: requestScope.originDb,
                 streamAcc: requestScope.accumulator,
                 workspaceId: requestScope.workspaceId,
                 hooks,
@@ -2388,6 +2428,25 @@ export function useChat(
                 toolCalls: current.toolCalls ?? null,
                 finalize: true, // Clear pending flag to trigger sync
             });
+            // Write the finished turn (assistant + tool rows) back into the
+            // canonical history. Without this, rawMessages keeps the empty
+            // placeholder and the next request loses the answer and tools.
+            try {
+                await reloadTurnIntoRawMessages(
+                    requestScope.originDb,
+                    requestThreadId,
+                    assistantDbMsg.id,
+                    rawMessages,
+                    threadIdRef
+                );
+            } catch (writebackError) {
+                if (import.meta.dev) {
+                    console.warn(
+                        '[useChat] turn writeback failed',
+                        writebackError
+                    );
+                }
+            }
             const finalized: StoredMessage = {
                 ...assistantDbMsg,
                 file_hashes: assistantFileHashes.length
@@ -2757,46 +2816,64 @@ export function useChat(
      * Constraints:
      * - Requires an existing assistant message id
      */
+    let activeContinuationScope: {
+        requestId: string;
+        settled: Promise<void>;
+        resolveSettled: () => void;
+    } | null = null;
     async function continueMessage(messageId: string, modelOverride?: string) {
-        await continueMessageImpl(
-            {
-                loading,
-                aborted,
-                abortController,
-                threadIdRef,
-                tailAssistant,
-                rawMessages,
-                messages,
-                streamId,
-                streamAcc,
-                streamState,
-                hooks,
-                effectiveApiKey,
-                hasInstanceKey,
-                defaultModelId: DEFAULT_AI_MODEL,
-                getSystemPromptContent,
-                useAiSettings,
-                resolveInputTokenBudget: (selectedModelId: string) => {
-                    const normalizedId = stripThinkingSuffix(
-                        selectedModelId
-                    ).replace(/:online$/, '');
-                    const { catalog, favoriteModels } = useModelStore();
-                    const metadata =
-                        catalog.value.find(
-                            (candidate: ModelInfo) =>
-                                candidate.id === normalizedId
-                        ) ||
-                        favoriteModels.value.find(
-                            (candidate: ModelInfo) =>
-                                candidate.id === normalizedId
-                        );
-                    return resolveChatInputTokenBudget(metadata);
+        const requestId = newId();
+        let resolveSettled!: () => void;
+        const settled = new Promise<void>((resolve) => {
+            resolveSettled = resolve;
+        });
+        activeContinuationScope = { requestId, settled, resolveSettled };
+        try {
+            await continueMessageImpl(
+                {
+                    loading,
+                    aborted,
+                    abortController,
+                    threadIdRef,
+                    tailAssistant,
+                    rawMessages,
+                    messages,
+                    streamId,
+                    streamAcc,
+                    streamState,
+                    hooks,
+                    effectiveApiKey,
+                    hasInstanceKey,
+                    defaultModelId: DEFAULT_AI_MODEL,
+                    getSystemPromptContent,
+                    useAiSettings,
+                    resolveInputTokenBudget: (selectedModelId: string) => {
+                        const normalizedId = stripThinkingSuffix(
+                            selectedModelId
+                        ).replace(/:online$/, '');
+                        const { catalog, favoriteModels } = useModelStore();
+                        const metadata =
+                            catalog.value.find(
+                                (candidate: ModelInfo) =>
+                                    candidate.id === normalizedId
+                            ) ||
+                            favoriteModels.value.find(
+                                (candidate: ModelInfo) =>
+                                    candidate.id === normalizedId
+                            );
+                        return resolveChatInputTokenBudget(metadata);
+                    },
+                    resetStream,
                 },
-                resetStream,
-            },
-            messageId,
-            modelOverride
-        );
+                messageId,
+                modelOverride
+            );
+        } finally {
+            if (activeContinuationScope?.requestId === requestId) {
+                activeContinuationScope = null;
+            }
+            resolveSettled();
+        }
     }
 
     /**
@@ -2894,13 +2971,17 @@ export function useChat(
             // Abort and fully settle a foreground stream before changing the
             // reactive thread. Its streaming callbacks share these refs, so
             // swapping first could append an old response to the new chat.
+            // Continuations own the shared controller the same way but have no
+            // send-message scope; await their settlement too.
             const foregroundScope = activeRequestScope;
+            const continuationScope = activeContinuationScope;
             try {
                 abortController.value?.abort();
             } catch {
                 /* intentionally empty */
             }
             if (foregroundScope) await foregroundScope.settled;
+            if (continuationScope) await continuationScope.settled;
         } else if (abortController.value) {
             aborted.value = true;
             try {
@@ -2914,8 +2995,12 @@ export function useChat(
         } else {
             // An admission can still be awaiting a filter, file hydration, or
             // new-thread creation before it has an AbortController. Fence it
-            // so it cannot resume into the newly selected thread.
+            // so it cannot resume into the newly selected thread. A setup-phase
+            // continuation has no shared controller yet either; its ownership
+            // checks stop it, but await settlement before swapping refs.
             if (activeRequestScope) activeRequestScope.cancelled = true;
+            const continuationScope = activeContinuationScope;
+            if (continuationScope) await continuationScope.settled;
             clearBackgroundJobSubscriptions({ keepTracking: false });
         }
 
@@ -3055,6 +3140,15 @@ export function useChat(
     }
 
     void reattachBackgroundJobs();
+    // Seeded histories skip ensureHistorySynced, so recover abandoned
+    // foreground generations on attach (e.g. refresh mid-stream).
+    if (threadIdRef.value) {
+        void reconcileForegroundGenerations().catch((error) => {
+            if (import.meta.dev) {
+                console.warn('[useChat] attach-time recovery failed', error);
+            }
+        });
+    }
 
     if (getCurrentScope()) {
         onScopeDispose(() => {

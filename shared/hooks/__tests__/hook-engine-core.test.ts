@@ -169,7 +169,7 @@ describe.each([
         ]);
     });
 
-    it('preserves the V1 acceptedArgs behavior of forwarding every argument', async () => {
+    it('applies acceptedArgs by limiting the arguments per callback', async () => {
         const engine = createHookEngine();
         const action = vi.fn();
         const filter = vi.fn((value, ...args) => [value, ...args].join(':'));
@@ -184,9 +184,122 @@ describe.each([
             'b',
         );
 
-        expect(action).toHaveBeenCalledWith('a', 'b', 'c');
-        expect(filter).toHaveBeenCalledWith('start', 'a', 'b');
-        expect(filtered).toBe('start:a:b');
+        expect(action).toHaveBeenCalledWith('a');
+        expect(filter).toHaveBeenCalledWith('start');
+        expect(filtered).toBe('start');
+    });
+
+    it('forwards every argument when acceptedArgs is omitted and slices to zero when zero', async () => {
+        const engine = createHookEngine();
+        const actionAll = vi.fn();
+        const actionNone = vi.fn();
+        engine.addAction('demo:action:all', actionAll, 10);
+        engine.addAction('demo:action:none', actionNone, 10, 0);
+
+        await engine.doAction('demo:action:all', 'a', 'b');
+        await engine.doAction('demo:action:none', 'a', 'b');
+
+        expect(actionAll).toHaveBeenCalledWith('a', 'b');
+        expect(actionNone).toHaveBeenCalledWith();
+    });
+
+    it('forwards acceptedArgs through on() for both kinds', async () => {
+        const engine = createHookEngine();
+        const action = vi.fn();
+        const filter = vi.fn((value, ...args) => [value, ...args].join(':'));
+        engine.on('demo:action:on', action, { kind: 'action', acceptedArgs: 1 });
+        engine.on('demo:filter:on', filter, { kind: 'filter', acceptedArgs: 2 });
+
+        await engine.doAction('demo:action:on', 'a', 'b');
+        const filtered = await engine.applyFilters(
+            'demo:filter:on',
+            'start',
+            'a',
+            'b',
+        );
+
+        expect(action).toHaveBeenCalledWith('a');
+        expect(filter).toHaveBeenCalledWith('start', 'a');
+        expect(filtered).toBe('start:a');
+    });
+
+    it('consumes late rejections from sync callbacks without unhandled failures', async () => {
+        const engine = createHookEngine({
+            logCallbackError: () => {},
+        });
+        let rejectAction!: (error: unknown) => void;
+        let rejectFilter!: (error: unknown) => void;
+        engine.addAction(
+            'demo:action:sync-reject',
+            () =>
+                new Promise<void>((_resolve, reject) => {
+                    rejectAction = reject;
+                })
+        );
+        engine.addFilter(
+            'demo:filter:sync-reject',
+            (value) =>
+                new Promise<string>((_resolve, reject) => {
+                    rejectFilter = reject;
+                    return undefined as never;
+                }) as unknown as string
+        );
+
+        engine.doActionSync('demo:action:sync-reject');
+        const filtered = engine.applyFiltersSync(
+            'demo:filter:sync-reject',
+            'keep'
+        );
+        expect(filtered).toBe('keep');
+
+        rejectAction(new Error('late action failure'));
+        rejectFilter(new Error('late filter failure'));
+        await Promise.resolve();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(engine._diagnostics.errors['demo:action:sync-reject']).toBe(2);
+        expect(engine._diagnostics.errors['demo:filter:sync-reject']).toBe(2);
+    });
+
+    it('isolates currentPriority across concurrent async dispatches', async () => {
+        const engine = createHookEngine();
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        const observed: Record<string, Array<number | false>> = {
+            a: [],
+            b: [],
+        };
+        engine.addAction(
+            'demo:action:iso-a',
+            async () => {
+                observed.a!.push(engine.currentPriority());
+                await gate;
+                observed.a!.push(engine.currentPriority());
+            },
+            10
+        );
+        engine.addAction(
+            'demo:action:iso-b',
+            async () => {
+                observed.b!.push(engine.currentPriority());
+                await gate;
+                observed.b!.push(engine.currentPriority());
+            },
+            20
+        );
+
+        const first = engine.doAction('demo:action:iso-a');
+        const second = engine.doAction('demo:action:iso-b');
+        await Promise.resolve();
+        await Promise.resolve();
+        release();
+        await Promise.all([first, second]);
+
+        expect(observed.a).toEqual([10, 10]);
+        expect(observed.b).toEqual([20, 20]);
+        expect(engine.currentPriority()).toBe(false);
     });
 
     it('freezes hasAction and hasFilter boolean and priority return values', () => {

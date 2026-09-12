@@ -10,6 +10,35 @@ import {
 
 export const TRANSCRIPT_VERSION = 1 as const;
 
+/**
+ * Data key marking a row as replaced by a retry. Rows carrying a
+ * `superseded_by` message id are excluded from provider context, history
+ * reloads, and future sends — the durable branch boundary for in-thread
+ * retries. The rows themselves are preserved for audit and reload stability.
+ */
+export const SUPERSEDED_BY_KEY = 'superseded_by' as const;
+
+/** True when a stored row was replaced by a later retry turn. */
+export function isSupersededMessage(message: { data?: unknown }): boolean {
+    const data =
+        message.data && typeof message.data === 'object'
+            ? (message.data as Record<string, unknown>)
+            : null;
+    return (
+        typeof data?.[SUPERSEDED_BY_KEY] === 'string' &&
+        (data[SUPERSEDED_BY_KEY] as string).length > 0
+    );
+}
+
+/** Drops retry-superseded rows; returns the input array when none match. */
+export function withoutSupersededMessages<T extends { data?: unknown }>(
+    rows: T[]
+): T[] {
+    return rows.some(isSupersededMessage)
+        ? rows.filter((row) => !isSupersededMessage(row))
+        : rows;
+}
+
 export type TranscriptKind = 'user' | 'assistant' | 'tool_result' | 'system';
 export type TranscriptTerminalState =
     | 'pending'

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 const openRouterStreamMock = vi.fn();
-const appendMessageMock = vi.hoisted(() => vi.fn());
+const appendToolResultMock = vi.hoisted(() => vi.fn(async () => ({ id: 'tool-msg' })));
 
 function deferred<T>() {
     let resolve!: (value: T | PromiseLike<T>) => void;
@@ -22,10 +22,9 @@ vi.mock('~/db/files', () => ({
     createOrRefFile: vi.fn(),
 }));
 
-vi.mock('~/db', () => ({
-    tx: {
-        appendMessage: appendMessageMock,
-    },
+vi.mock('~/utils/chat/transcript-repository', () => ({
+    appendForegroundToolResult: (...args: unknown[]) =>
+        appendToolResultMock(...args),
 }));
 
 vi.mock('~/utils/chat/files', () => ({
@@ -203,7 +202,7 @@ describe('runForegroundStreamLoop', () => {
     });
 
     it('does not execute a model-returned tool outside the request snapshot', async () => {
-        appendMessageMock.mockClear();
+        appendToolResultMock.mockClear();
         let iteration = 0;
         openRouterStreamMock.mockImplementation(async function* () {
             iteration += 1;
@@ -246,13 +245,11 @@ describe('runForegroundStreamLoop', () => {
 
         expect(executeTool).not.toHaveBeenCalled();
         expect(ctx.activeToolCalls.get('call-unauthorized')).toMatchObject({ status: 'error' });
-        expect(appendMessageMock).toHaveBeenCalledWith(expect.objectContaining({
-            role: 'tool',
-            data: expect.objectContaining({
-                transcript_kind: 'tool_result',
-                tool_call_id: 'call-unauthorized',
-                tool_status: 'error',
-            }),
+        expect(appendToolResultMock).toHaveBeenCalledWith(expect.objectContaining({
+            threadId: 'thread-1',
+            parentAssistantId: 'assistant-2',
+            call: expect.objectContaining({ id: 'call-unauthorized' }),
+            status: 'error',
         }));
         expect(ctx.persistAssistant).toHaveBeenCalledWith(expect.objectContaining({
             toolCalls: [expect.objectContaining({
@@ -352,6 +349,52 @@ describe('runForegroundStreamLoop', () => {
         ).toEqual(['first', 'second']);
     });
 
+    it('routes tool-result persistence to the captured origin database', async () => {
+        appendToolResultMock.mockClear();
+        let originIteration = 0;
+        openRouterStreamMock.mockImplementation(async function* () {
+            originIteration += 1;
+            if (originIteration === 1) {
+                yield {
+                    type: 'tool_call',
+                    tool_call: {
+                        id: 'call-origin', type: 'function',
+                        function: { name: 'echo', arguments: '{}' },
+                    },
+                };
+            } else {
+                yield { type: 'text', text: 'done' };
+            }
+        });
+        const { runForegroundStreamLoop } = await import(
+            '~/utils/chat/useAi-internal/foregroundStream'
+        );
+        const originDb = { name: 'or3-db-workspace-a' } as any;
+        await runForegroundStreamLoop({
+            apiKey: 'key', modelId: 'model',
+            orMessages: [{ role: 'user' as const, content: [{ type: 'text' as const, text: 'go' }] }],
+            modalities: ['text'],
+            tools: [{ type: 'function' as const, function: {
+                name: 'echo', description: 'echo',
+                parameters: { type: 'object' as const, properties: {} },
+            } }],
+            abortSignal: new AbortController().signal,
+            assistantId: 'assistant-origin', streamId: 'stream-origin',
+            threadId: 'thread-a', originDb,
+            streamAcc: { append: vi.fn() }, hooks: { doAction: vi.fn(async () => {}) },
+            toolRegistry: { executeTool: vi.fn(async () => ({
+                result: 'ok', toolName: 'echo', timedOut: false,
+            })) },
+            persistAssistant: vi.fn(async () => null), assistantFileHashes: [],
+            activeToolCalls: new Map(), tailAssistant: { value: null as any },
+            rawMessages: { value: [] as any[] },
+        });
+
+        expect(appendToolResultMock).toHaveBeenCalledWith(
+            expect.objectContaining({ db: originDb, threadId: 'thread-a' })
+        );
+    });
+
     it('fails with a typed terminal error when the final iteration requests another tool', async () => {
         let iteration = 0;
         openRouterStreamMock.mockImplementation(async function* () {
@@ -397,7 +440,7 @@ describe('runForegroundStreamLoop', () => {
     });
 
     it('does not issue the follow-up request until completed tool state is durable', async () => {
-        appendMessageMock.mockClear();
+        appendToolResultMock.mockClear();
         let iteration = 0;
         openRouterStreamMock.mockImplementation(async function* () {
             iteration += 1;
@@ -443,15 +486,12 @@ describe('runForegroundStreamLoop', () => {
             tailAssistant: { value: null }, rawMessages: { value: [] },
         })).rejects.toThrow('simulated persistence crash');
 
-        expect(appendMessageMock).toHaveBeenCalledWith(expect.objectContaining({
-            role: 'tool',
-            data: expect.objectContaining({
-                transcript_kind: 'tool_result',
-                parent_assistant_id: 'assistant-crash',
-                tool_call_id: 'crash-call',
-                tool_status: 'complete',
-                content: 'durable result',
-            }),
+        expect(appendToolResultMock).toHaveBeenCalledWith(expect.objectContaining({
+            threadId: 'thread-1',
+            parentAssistantId: 'assistant-crash',
+            call: expect.objectContaining({ id: 'crash-call' }),
+            status: 'complete',
+            durableResult: 'durable result',
         }));
         expect(iteration).toBe(1);
     });

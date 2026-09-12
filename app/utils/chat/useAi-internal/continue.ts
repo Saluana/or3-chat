@@ -182,6 +182,14 @@ const buildContinuationText = (tailSnippet: string): string => {
  * - `ERR_INTERNAL`: Unexpected failure during continue operation
  * - `ERR_STREAM_FAILURE`: Stream interrupted during continuation
  */
+/** Thrown when the chat navigates away mid-continuation; handled quietly. */
+export class ContinuationOwnershipLost extends Error {
+    constructor() {
+        super('Continuation superseded by thread navigation');
+        this.name = 'ContinuationOwnershipLost';
+    }
+}
+
 export async function continueMessageImpl(
     ctx: ContinueMessageContext,
     messageId: string,
@@ -190,7 +198,12 @@ export async function continueMessageImpl(
     if (ctx.loading.value || !ctx.threadIdRef.value) return;
     const hasKey = Boolean(ctx.effectiveApiKey.value) || ctx.hasInstanceKey.value;
     if (!hasKey) return;
+    // Request scoping: capture ownership before the first await. Every later
+    // stage re-verifies it so a thread switch during setup cannot resume the
+    // continuation in the wrong chat.
     const originDb = getDb();
+    const originThreadId = ctx.threadIdRef.value;
+    const ownsThread = () => ctx.threadIdRef.value === originThreadId;
     let activeTarget: StoredMessage | undefined;
     let activeCurrent: UiChatMessage | null = null;
     let activePersister: ReturnType<typeof makeAssistantPersister> | null = null;
@@ -201,9 +214,10 @@ export async function continueMessageImpl(
 
     try {
         const target = (await originDb.messages.get(messageId)) as StoredMessage | undefined;
+        if (!ownsThread()) return;
         if (
             !target ||
-            target.thread_id !== ctx.threadIdRef.value ||
+            target.thread_id !== originThreadId ||
             target.role !== 'assistant'
         ) {
             return;
@@ -229,6 +243,7 @@ export async function continueMessageImpl(
             .filter((m: Message) => !m.deleted)
             .toArray();
         all.sort(compareMessageOrder);
+        if (!ownsThread()) return;
 
         const toContent = (m: StoredMessage): string => {
             if (m.id === target.id) return existingText;
@@ -371,11 +386,14 @@ export async function continueMessageImpl(
             (typeof modelCandidate === 'string' && modelCandidate) ||
             modelOverride ||
             ctx.defaultModelId;
+        if (!ownsThread()) return;
         orMessages = await enforceOpenRouterMessageTokenBudget(
             orMessages,
             ctx.resolveInputTokenBudget?.(modelId) ??
                 DEFAULT_MAX_INPUT_TOKENS
         );
+        // Last setup gate: never publish stream state into a new chat.
+        if (!ownsThread()) return;
         // modalities controls OUTPUT format, not input capability
         const modalities = getChatModalities(modelId);
 
@@ -490,6 +508,7 @@ export async function continueMessageImpl(
         innerStreamLifecycleStarted = true;
         try {
             for await (const ev of stream) {
+                if (!ownsThread()) throw new ContinuationOwnershipLost();
                 if (ev.type === 'reasoning') {
                     if (current.reasoning_text === null) current.reasoning_text = ev.text;
                     else current.reasoning_text += ev.text;
@@ -548,52 +567,68 @@ export async function continueMessageImpl(
             });
             await updateMessageRecord(originDb, messageId, { error: null });
             current.error = null;
-            const rawIdx = ctx.rawMessages.value.findIndex((m) => m.id === messageId);
-            if (rawIdx >= 0) {
-                const existingRaw = ctx.rawMessages.value[rawIdx];
-                if (existingRaw) {
-                    ctx.rawMessages.value[rawIdx] = {
-                        ...existingRaw,
-                        role: existingRaw.role,
-                        content: current.text,
-                        reasoning_text: current.reasoning_text ?? null,
-                        error: null,
-                    };
+            // Never publish this request's results into another thread's view.
+            if (ownsThread()) {
+                const rawIdx = ctx.rawMessages.value.findIndex((m) => m.id === messageId);
+                if (rawIdx >= 0) {
+                    const existingRaw = ctx.rawMessages.value[rawIdx];
+                    if (existingRaw) {
+                        ctx.rawMessages.value[rawIdx] = {
+                            ...existingRaw,
+                            role: existingRaw.role,
+                            content: current.text,
+                            reasoning_text: current.reasoning_text ?? null,
+                            error: null,
+                        };
+                    }
                 }
             }
             ctx.streamAcc.finalize();
         } catch (streamError) {
-            const e = streamError instanceof Error ? streamError : new Error(String(streamError));
-            ctx.streamAcc.finalize({ error: e });
+            const ownershipLost = streamError instanceof ContinuationOwnershipLost;
+            const e = ownershipLost
+                ? streamError
+                : streamError instanceof Error
+                  ? streamError
+                  : new Error(String(streamError));
+            if (!ownershipLost) ctx.streamAcc.finalize({ error: e });
 
             // Stream interrupted - aborted.value would be true for user stops but those don't throw
             const errorType = 'stream_interrupted';
 
-            const tail = ctx.tailAssistant.value;
-            const tailText = tail.text;
-            const tailReasoning = tail.reasoning_text ?? null;
-            const tailToolCalls = tail.toolCalls ?? null;
-            tail.error = errorType;
+            // Durable content always comes from the request-local object. The
+            // shared tail may already belong to another thread — only touch
+            // shared UI refs while this request still owns its thread.
+            const tailText = current.text;
+            const tailReasoning = current.reasoning_text ?? null;
+            const tailToolCalls = current.toolCalls ?? null;
+            if (ownsThread()) {
+                const tail = ctx.tailAssistant.value;
+                if (tail) tail.error = errorType;
+            }
             await persistAssistant({
                 content: tailText,
                 reasoning: tailReasoning,
                 toolCalls: tailToolCalls,
                 finalize: true, // Clear pending so sync captures this
             });
-            const rawIdx = ctx.rawMessages.value.findIndex((m) => m.id === messageId);
-            if (rawIdx >= 0) {
-                const existingRaw = ctx.rawMessages.value[rawIdx];
-                if (existingRaw) {
-                    ctx.rawMessages.value[rawIdx] = {
-                        ...existingRaw,
-                        role: existingRaw.role,
-                        content: tailText || existingRaw.content,
-                        reasoning_text: tailReasoning ?? existingRaw.reasoning_text,
-                        error: errorType,
-                    };
+            if (ownsThread()) {
+                const rawIdx = ctx.rawMessages.value.findIndex((m) => m.id === messageId);
+                if (rawIdx >= 0) {
+                    const existingRaw = ctx.rawMessages.value[rawIdx];
+                    if (existingRaw) {
+                        ctx.rawMessages.value[rawIdx] = {
+                            ...existingRaw,
+                            role: existingRaw.role,
+                            content: tailText || existingRaw.content,
+                            reasoning_text: tailReasoning ?? existingRaw.reasoning_text,
+                            error: errorType,
+                        };
+                    }
                 }
             }
             await updateMessageRecord(originDb, messageId, { error: errorType });
+            if (ownershipLost) return;
 
             // Show error toast for stream interruptions
             reportError(e, {
@@ -609,10 +644,16 @@ export async function continueMessageImpl(
             });
         } finally {
             ctx.loading.value = false;
-            const tailRef = ctx.tailAssistant.value;
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- tailRef may be null if stream setup failed
-            if (tailRef) tailRef.pending = false;
-            ctx.abortController.value = null;
+            // Only settle shared refs this request still owns; a navigation
+            // may have rebound them to another thread already.
+            if (ownsThread()) {
+                const tailRef = ctx.tailAssistant.value;
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- tailRef may be null if stream setup failed
+                if (tailRef) tailRef.pending = false;
+            }
+            if (ctx.abortController.value === continuationAbortController) {
+                ctx.abortController.value = null;
+            }
             setTimeout(() => {
                 if (!ctx.loading.value && ctx.streamState.finalized) ctx.resetStream();
             }, 0);
@@ -644,7 +685,10 @@ export async function continueMessageImpl(
         if (current) {
             current.pending = false;
             current.error = errorType;
-            if (ctx.tailAssistant.value?.id !== current.id) {
+            if (
+                ownsThread() &&
+                ctx.tailAssistant.value?.id !== current.id
+            ) {
                 ctx.messages.value = [...ctx.messages.value];
             }
         }
@@ -685,18 +729,20 @@ export async function continueMessageImpl(
                 persistenceError ??= error;
             }
 
-            const rawIdx = ctx.rawMessages.value.findIndex(
-                (message) => message.id === activeTarget?.id
-            );
-            if (rawIdx >= 0) {
-                const existingRaw = ctx.rawMessages.value[rawIdx];
-                if (existingRaw) {
-                    ctx.rawMessages.value[rawIdx] = {
-                        ...existingRaw,
-                        content: content || existingRaw.content,
-                        reasoning_text: reasoning ?? existingRaw.reasoning_text,
-                        error: errorType,
-                    };
+            if (ownsThread()) {
+                const rawIdx = ctx.rawMessages.value.findIndex(
+                    (message) => message.id === activeTarget?.id
+                );
+                if (rawIdx >= 0) {
+                    const existingRaw = ctx.rawMessages.value[rawIdx];
+                    if (existingRaw) {
+                        ctx.rawMessages.value[rawIdx] = {
+                            ...existingRaw,
+                            content: content || existingRaw.content,
+                            reasoning_text: reasoning ?? existingRaw.reasoning_text,
+                            error: errorType,
+                        };
+                    }
                 }
             }
         }

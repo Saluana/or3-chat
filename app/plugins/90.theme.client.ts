@@ -551,12 +551,25 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         const theme = themeRegistry.get(target);
         const manifest = themeManifest.get(target);
         if (theme && manifest) {
-            await Promise.all([
-                loadThemeStylesheets(manifest),
-                theme.hasStyleSelectors
-                    ? loadThemeCSS(target)
-                    : Promise.resolve(),
-            ]);
+            try {
+                await Promise.all([
+                    loadThemeStylesheets(manifest),
+                    theme.hasStyleSelectors
+                        ? loadThemeCSS(target)
+                        : Promise.resolve(),
+                ]);
+            } catch (error) {
+                // Keep the previous theme active: a missing required stylesheet
+                // must not commit a half-styled activation. The failed link was
+                // removed by the loader so a later retry issues a fresh request.
+                if (import.meta.dev) {
+                    console.warn(
+                        `[theme] Keeping "${previousThemeName}" active; required resources for "${target}" failed to load.`,
+                        error
+                    );
+                }
+                return;
+            }
         }
         if (!transaction.isCurrent()) return;
 

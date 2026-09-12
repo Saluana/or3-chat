@@ -1084,6 +1084,40 @@ describe('useChat background detach race', () => {
         });
     });
 
+    it('reconciles a stale foreground row even when history was already loaded', async () => {
+        const stale = {
+            id: 'assistant-seeded', role: 'assistant', thread_id: 'thread-1',
+            content: 'partial', pending: true, error: null, index: 1,
+            data: {
+                content: 'partial', generation_lease_id: 'old-request',
+                generation_heartbeat_at: 0,
+            },
+            created_at: 1, updated_at: 1, clock: 1,
+        };
+        messageStore.set(stale.id, stale);
+        messagesByThreadMock.mockResolvedValue([stale]);
+        vi.resetModules();
+        const { useChat } = await import('~/composables/chat/useAi');
+        const chat = useChat([
+            {
+                id: stale.id, role: 'assistant', content: 'partial', pending: true,
+                data: stale.data,
+            },
+        ], 'thread-1', undefined, { historyAlreadyLoaded: true });
+
+        await chat.ensureHistorySynced();
+
+        expect(messageStore.get(stale.id)).toMatchObject({
+            pending: false,
+            error: 'stream_interrupted',
+            data: expect.objectContaining({ generation_state: 'interrupted' }),
+        });
+        expect(chat.messages.value[0]).toMatchObject({
+            pending: false,
+            error: 'stream_interrupted',
+        });
+    });
+
     it('disposes hook listeners when its Vue scope stops during background tracking', async () => {
         vi.resetModules();
         const { useChat } = await import('~/composables/chat/useAi');

@@ -19,8 +19,69 @@ export interface OnOptions extends RegisterOptions {
 interface CallbackEntry<F extends HookFn = HookFn> {
     fn: F;
     priority: number;
+    acceptedArgs?: number;
     id: number;
     name: string;
+}
+
+function normalizeAcceptedArgs(value: unknown): number | undefined {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+        return undefined;
+    }
+    if (value <= 0) return 0;
+    return Math.floor(value);
+}
+
+function sliceActionArgs(
+    args: unknown[],
+    acceptedArgs: number | undefined
+): unknown[] {
+    if (acceptedArgs === undefined) return args;
+    return args.slice(0, acceptedArgs);
+}
+
+function sliceFilterCallArgs(
+    value: unknown,
+    args: unknown[],
+    acceptedArgs: number | undefined
+): unknown[] {
+    if (acceptedArgs === undefined) return [value, ...args];
+    return [value, ...args].slice(0, acceptedArgs);
+}
+
+type PriorityAlsStore = number[];
+interface PriorityAls {
+    getStore(): PriorityAlsStore | undefined;
+    run<T>(store: PriorityAlsStore, fn: () => T): T;
+}
+
+function createPriorityAls(): PriorityAls | null {
+    try {
+        const proc = (globalThis as { process?: unknown })?.process as
+            | { getBuiltinModule?: (name: string) => unknown }
+            | undefined;
+        const ctor = (proc?.getBuiltinModule?.('async_hooks') as
+            | { AsyncLocalStorage?: new () => PriorityAls }
+            | undefined)?.AsyncLocalStorage;
+        if (typeof ctor === 'function') return new ctor();
+        const globalCtor = (globalThis as Record<string, unknown>)
+            .AsyncLocalStorage as new () => PriorityAls;
+        if (typeof globalCtor === 'function') return new globalCtor();
+    } catch {
+        // Async isolation unavailable; callers fall back to the shared stack.
+    }
+    return null;
+}
+
+function consumeThenableRejection(
+    thenable: unknown,
+    onRejection: (error: unknown) => void
+): void {
+    try {
+        Promise.resolve(thenable).catch(onRejection);
+    } catch {
+        // Never let rejection tracking break dispatch.
+    }
 }
 
 interface CompiledPattern {
@@ -132,6 +193,7 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
             explicitKind ?? 'action');
     let counter = 0;
     const currentPriorityStack: number[] = [];
+    const priorityAls = createPriorityAls();
 
     const actions = new Map<string, CallbackEntry[]>();
     const filters = new Map<string, CallbackEntry[]>();
@@ -167,13 +229,15 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
         wildcards: { pattern: CompiledPattern; entry: CallbackEntry }[],
         name: string,
         fn: HookFn,
-        priority?: number
+        priority?: number,
+        acceptedArgs?: number
     ) {
         const nextPriority =
             typeof priority === 'number' ? priority : DEFAULT_PRIORITY;
         const entry: CallbackEntry = {
             fn,
             priority: nextPriority,
+            acceptedArgs: normalizeAcceptedArgs(acceptedArgs),
             id: ++counter,
             name,
         };
@@ -369,6 +433,71 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
         }
     }
 
+    function reportSyncThenable(
+        thenable: unknown,
+        name: string,
+        isFilter: boolean
+    ): void {
+        recordError(name);
+        logCallbackError(
+            new Error(
+                `Synchronous ${isFilter ? 'filter' : 'action'} callback returned a Promise`
+            ),
+            name,
+            isFilter
+        );
+        // The surrounding try/catch cannot observe a later rejection, so
+        // consume it here and route it through the same error reporting.
+        consumeThenableRejection(thenable, (error) => {
+            recordError(name);
+            logCallbackError(error, name, isFilter);
+        });
+    }
+
+    async function runAsyncBody(
+        callbacks: CallbackEntry[],
+        name: string,
+        args: unknown[],
+        isFilter: boolean,
+        initialValue?: unknown
+    ) {
+        let value = initialValue;
+        for (const { fn, priority, acceptedArgs } of callbacks) {
+            if (priorityAls) {
+                const store = priorityAls.getStore();
+                if (store && store.length > 0) {
+                    store[store.length - 1] = priority;
+                }
+            } else {
+                currentPriorityStack[currentPriorityStack.length - 1] =
+                    priority;
+            }
+            const start = performance.now();
+            try {
+                if (isFilter) {
+                    const callArgs = sliceFilterCallArgs(
+                        value,
+                        args,
+                        acceptedArgs
+                    );
+                    value = await (fn as (...a: unknown[]) => unknown)(
+                        ...callArgs
+                    );
+                } else {
+                    await (fn as (...a: unknown[]) => unknown)(
+                        ...sliceActionArgs(args, acceptedArgs)
+                    );
+                }
+            } catch (error) {
+                recordError(name);
+                logCallbackError(error, name, isFilter);
+            } finally {
+                recordTiming(name, performance.now() - start);
+            }
+        }
+        return value;
+    }
+
     async function callAsync(
         callbacks: CallbackEntry[],
         name: string,
@@ -378,30 +507,82 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
     ) {
         const firstPriority =
             callbacks.length > 0 ? callbacks[0]!.priority : DEFAULT_PRIORITY;
+        if (priorityAls) {
+            const parent = priorityAls.getStore();
+            const seed =
+                parent && parent.length > 0
+                    ? [...parent, firstPriority]
+                    : [firstPriority];
+            return priorityAls.run(seed, () =>
+                runAsyncBody(callbacks, name, args, isFilter, initialValue)
+            );
+        }
         currentPriorityStack.push(firstPriority);
 
         try {
-            let value = initialValue;
-            for (const { fn, priority } of callbacks) {
-                currentPriorityStack[currentPriorityStack.length - 1] = priority;
-                const start = performance.now();
-                try {
-                    if (isFilter) {
-                        value = await fn(value, ...args);
-                    } else {
-                        await fn(...args);
-                    }
-                } catch (error) {
-                    recordError(name);
-                    logCallbackError(error, name, isFilter);
-                } finally {
-                    recordTiming(name, performance.now() - start);
-                }
-            }
-            return value;
+            return await runAsyncBody(
+                callbacks,
+                name,
+                args,
+                isFilter,
+                initialValue
+            );
         } finally {
             currentPriorityStack.pop();
         }
+    }
+
+    function runSyncBody(
+        callbacks: CallbackEntry[],
+        name: string,
+        args: unknown[],
+        isFilter: boolean,
+        initialValue?: unknown
+    ) {
+        let value = initialValue;
+        for (const { fn, priority, acceptedArgs } of callbacks) {
+            if (priorityAls) {
+                const store = priorityAls.getStore();
+                if (store && store.length > 0) {
+                    store[store.length - 1] = priority;
+                }
+            } else {
+                currentPriorityStack[currentPriorityStack.length - 1] =
+                    priority;
+            }
+            const start = performance.now();
+            try {
+                if (isFilter) {
+                    const callArgs = sliceFilterCallArgs(
+                        value,
+                        args,
+                        acceptedArgs
+                    );
+                    const next = (fn as (...a: unknown[]) => unknown)(
+                        ...callArgs
+                    );
+                    if (isThenable(next)) {
+                        reportSyncThenable(next, name, true);
+                        // Keep previous value; sync APIs must not accept thenables.
+                    } else {
+                        value = next;
+                    }
+                } else {
+                    const result = (fn as (...a: unknown[]) => unknown)(
+                        ...sliceActionArgs(args, acceptedArgs)
+                    );
+                    if (isThenable(result)) {
+                        reportSyncThenable(result, name, false);
+                    }
+                }
+            } catch (error) {
+                recordError(name);
+                logCallbackError(error, name, isFilter);
+            } finally {
+                recordTiming(name, performance.now() - start);
+            }
+        }
+        return value;
     }
 
     function callSync(
@@ -413,58 +594,28 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
     ) {
         const firstPriority =
             callbacks.length > 0 ? callbacks[0]!.priority : DEFAULT_PRIORITY;
+        if (priorityAls) {
+            const parent = priorityAls.getStore();
+            const seed =
+                parent && parent.length > 0
+                    ? [...parent, firstPriority]
+                    : [firstPriority];
+            return priorityAls.run(seed, () =>
+                runSyncBody(callbacks, name, args, isFilter, initialValue)
+            );
+        }
         currentPriorityStack.push(firstPriority);
 
         try {
-            let value = initialValue;
-            for (const { fn, priority } of callbacks) {
-                currentPriorityStack[currentPriorityStack.length - 1] = priority;
-                const start = performance.now();
-                try {
-                    if (isFilter) {
-                        const next = fn(value, ...args);
-                        if (isThenable(next)) {
-                            recordError(name);
-                            logCallbackError(
-                                new Error(
-                                    'Synchronous filter callback returned a Promise'
-                                ),
-                                name,
-                                true
-                            );
-                            // Keep previous value; sync APIs must not accept thenables.
-                        } else {
-                            value = next;
-                        }
-                    } else {
-                        const result = fn(...args);
-                        if (isThenable(result)) {
-                            recordError(name);
-                            logCallbackError(
-                                new Error(
-                                    'Synchronous action callback returned a Promise'
-                                ),
-                                name,
-                                false
-                            );
-                        }
-                    }
-                } catch (error) {
-                    recordError(name);
-                    logCallbackError(error, name, isFilter);
-                } finally {
-                    recordTiming(name, performance.now() - start);
-                }
-            }
-            return value;
+            return runSyncBody(callbacks, name, args, isFilter, initialValue);
         } finally {
             currentPriorityStack.pop();
         }
     }
 
     const engine: HookEngine = {
-        addFilter(name, fn, priority, _acceptedArgs?) {
-            add(filters, filterWildcards, name, fn, priority);
+        addFilter(name, fn, priority, acceptedArgs?) {
+            add(filters, filterWildcards, name, fn, priority, acceptedArgs);
         },
         removeFilter(name, fn, priority) {
             remove(filters, filterWildcards, name, fn, priority);
@@ -491,8 +642,8 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
 
             return callSync(callbacks, name, args, true, value) as typeof value;
         },
-        addAction(name, fn, priority, _acceptedArgs?) {
-            add(actions, actionWildcards, name, fn, priority);
+        addAction(name, fn, priority, acceptedArgs?) {
+            add(actions, actionWildcards, name, fn, priority, acceptedArgs);
         },
         removeAction(name, fn, priority) {
             remove(actions, actionWildcards, name, fn, priority);
@@ -524,6 +675,10 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
             removeAll(filters, filterWildcards, priority);
         },
         currentPriority() {
+            const store = priorityAls?.getStore();
+            if (store && store.length > 0) {
+                return store[store.length - 1]!;
+            }
             return currentPriorityStack.length > 0
                 ? currentPriorityStack[currentPriorityStack.length - 1]!
                 : false;
@@ -552,13 +707,14 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
         on(name, fn, opts) {
             const kind = resolveOnKind(name, opts?.kind);
             const priority = opts?.priority;
+            const acceptedArgs = opts?.acceptedArgs;
 
             if (kind === 'filter') {
-                engine.addFilter(name, fn, priority);
+                engine.addFilter(name, fn, priority, acceptedArgs);
                 return () => engine.removeFilter(name, fn, priority);
             }
 
-            engine.addAction(name, fn, priority);
+            engine.addAction(name, fn, priority, acceptedArgs);
             return () => engine.removeAction(name, fn, priority);
         },
         off(disposer) {
