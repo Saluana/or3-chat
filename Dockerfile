@@ -98,7 +98,7 @@ RUN mkdir -p /tmp/or3-build/storage /tmp/or3-runtime-data/admin /tmp/or3-runtime
 # The distroless runtime keeps only Node, its required libraries, and the
 # pinned static multicall tool above. Both bases are pinned multi-arch
 # OCI indexes and the resulting architectures are scanned during release.
-FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:fbbdda866ea71aef98c4abece17e3d61fbf820cc2ef3961522caa2478716171a AS runtime
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:7781e8b4fccf59240bd539af6738cccf8dad4be303165c3a1fa065c48699b937 AS runtime
 
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
