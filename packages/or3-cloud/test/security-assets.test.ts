@@ -401,6 +401,10 @@ test('npm publication identifies the qualified tarball as a local file', () => {
   expect(publishJob.indexOf('docker/login-action@v3')).toBeLessThan(
     publishJob.indexOf('Re-verify promoted image and exact package'),
   );
+  expect(publishJob).toContain('for attempt in $(seq 1 60)');
+  expect(publishJob).toContain('actual="$(resolve_digest "ghcr.io/saluana/or3-chat:$VERSION")"');
+  expect(publishJob).toContain('actual_operator="$(resolve_digest "ghcr.io/saluana/or3-chat:$VERSION-operator")"');
+  expect(publishJob).not.toMatch(/imagetools inspect .*\| awk/);
 });
 
 test('candidate evidence is source-qualified and cannot publish a release', () => {

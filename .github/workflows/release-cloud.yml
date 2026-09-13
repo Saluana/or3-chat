@@ -178,16 +178,36 @@ jobs:
           EXPECTED_OPERATOR_DIGEST: ${{ needs.promote.outputs.operator_digest }}
         run: |
           set -euo pipefail
+          resolve_digest() {
+            local image="$1"
+            local inspect=""
+            local digest=""
+            for attempt in $(seq 1 60); do
+              if inspect="$(docker buildx imagetools inspect "$image" 2>&1)"; then
+                digest="$(awk '$1 == "Digest:" { print $2; exit }' <<<"$inspect")"
+                if [ -n "$digest" ]; then
+                  printf '%s\n' "$digest"
+                  return 0
+                fi
+              fi
+              if [ "$attempt" -eq 60 ]; then
+                echo "$inspect" >&2
+                echo "$image did not propagate with a readable digest." >&2
+                return 1
+              fi
+              sleep 2
+            done
+          }
           test "$GITHUB_REF_NAME" = "v$VERSION"
           recorded="$(tr -d '[:space:]' < release-artifact/digest.txt)"
           test "$recorded" = "$EXPECTED_DIGEST"
           receipt_digest="$(node -p 'require("./release-artifact/candidate-receipt.json").candidateDigest')"
           test "$receipt_digest" = "$EXPECTED_DIGEST"
-          actual="$(docker buildx imagetools inspect "ghcr.io/saluana/or3-chat:$VERSION" | awk '$1 == "Digest:" { print $2; exit }')"
+          actual="$(resolve_digest "ghcr.io/saluana/or3-chat:$VERSION")"
           test "$actual" = "$EXPECTED_DIGEST"
           recorded_operator="$(tr -d '[:space:]' < release-artifact/operator-digest.txt)"
           test "$recorded_operator" = "$EXPECTED_OPERATOR_DIGEST"
-          actual_operator="$(docker buildx imagetools inspect "ghcr.io/saluana/or3-chat:$VERSION-operator" | awk '$1 == "Digest:" { print $2; exit }')"
+          actual_operator="$(resolve_digest "ghcr.io/saluana/or3-chat:$VERSION-operator")"
           test "$actual_operator" = "$EXPECTED_OPERATOR_DIGEST"
           tarball="release-artifact/or3-cloud-$VERSION.tgz"
           expected_sha="$(node -p 'require("./release-artifact/candidate-receipt.json").tarballSha256')"
