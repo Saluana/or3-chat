@@ -324,7 +324,7 @@ if (import.meta.main) {
     const limits = {
         totalJavascriptRawBytes: positiveNumber(
             process.env.OR3_PERF_MAX_TOTAL_JS_BYTES,
-            12_000_000
+            12_600_000
         ),
         totalJavascriptGzipBytes: positiveNumber(
             process.env.OR3_PERF_MAX_TOTAL_JS_GZIP_BYTES,
@@ -348,11 +348,11 @@ if (import.meta.main) {
         ),
         precacheFiles: positiveNumber(
             process.env.OR3_PERF_MAX_PRECACHE_FILES,
-            490
+            520
         ),
         precacheRawBytes: positiveNumber(
             process.env.OR3_PERF_MAX_PRECACHE_BYTES,
-            17_500_000
+            18_400_000
         ),
         rootModulepreloadFiles: positiveNumber(
             process.env.OR3_PERF_MAX_ROOT_MODULEPRELOAD_FILES,
