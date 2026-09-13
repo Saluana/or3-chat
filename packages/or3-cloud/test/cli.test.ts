@@ -25,6 +25,7 @@ import {
   redact,
   requiredArchiveSpace,
   restoreManagedAssets,
+  restoreRequiresVolumeRecreation,
   selectPruneTargets,
   sameOriginVerificationUrl,
   serializeInitialCredentials,
@@ -64,6 +65,15 @@ test('recreates only legacy data volumes when adding deployment identity labels'
   delete env.OR3_DEPLOYMENT_ID;
   delete state.deploymentId;
   expect(updateRequiresVolumeRecreation(state, env)).toBe(true);
+});
+
+test('recreates data volumes when restoring across deployment identity boundaries', () => {
+  const legacy = { OR3_VERSION: '0.1.38' };
+  const managed = { OR3_VERSION: '0.1.45', OR3_DEPLOYMENT_ID: 'deployment-1' };
+  expect(restoreRequiresVolumeRecreation(managed, legacy)).toBe(true);
+  expect(restoreRequiresVolumeRecreation(legacy, managed)).toBe(true);
+  expect(restoreRequiresVolumeRecreation(managed, { ...managed })).toBe(false);
+  expect(restoreRequiresVolumeRecreation(legacy, { ...legacy })).toBe(false);
 });
 
 test('provisioned passwords are removed from persistent deployment metadata', () => {

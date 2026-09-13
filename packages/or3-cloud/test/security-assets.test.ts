@@ -257,6 +257,19 @@ test('container-side CLI probes support current and legacy explicit Node paths',
   expect(cli).not.toContain("'or3', CONTAINER_NODE, '-e'");
 });
 
+test('public verification syncs canonical file metadata before downloading the storage probe', () => {
+  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  const verify = cli.slice(cli.indexOf('async function verifyPublicApplication'), cli.indexOf('function responseCookie'));
+  expect(verify).toContain("'/api/storage/commit'");
+  expect(verify).toContain("'/api/sync/push'");
+  expect(verify).toContain("tableName: 'file_meta'");
+  expect(verify).toContain("operation: 'put'");
+  expect(verify).toContain('pushed.results?.[0]?.success !== true');
+  expect(verify.indexOf("operation: 'put'")).toBeLessThan(verify.indexOf("'/api/storage/presign-download'"));
+  expect(verify).toContain("operation: 'delete'");
+  expect(verify).toContain('deleted.results?.[0]?.success !== true');
+});
+
 test('updates rebuild legacy-owned data from the checksummed backup without recursive chown', () => {
   const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
   expect(cli).toContain('const MANAGED_RUNTIME_UID = 65532;');

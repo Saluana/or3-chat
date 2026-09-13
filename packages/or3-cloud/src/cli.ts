@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { execFile as execFileCallback, spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { lookup } from 'node:dns/promises';
@@ -31,7 +31,7 @@ import { createGunzip } from 'node:zlib';
 const execFile = promisify(execFileCallback);
 const PACKAGE_ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
 
-export const PACKAGE_VERSION = '0.1.44';
+export const PACKAGE_VERSION = '0.1.45';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 const STATE_SCHEMA_VERSION = 1;
@@ -1138,6 +1138,10 @@ async function setManagedVolumeRootOwnership(image: string, volume: string, owne
 
 export function updateRequiresVolumeRecreation(state: ManagedState, env: Record<string, string>) {
   return !state.deploymentId && !env.OR3_DEPLOYMENT_ID;
+}
+
+export function restoreRequiresVolumeRecreation(currentEnv: Record<string, string>, targetEnv: Record<string, string>) {
+  return currentEnv.OR3_DEPLOYMENT_ID !== targetEnv.OR3_DEPLOYMENT_ID;
 }
 
 /**
@@ -3382,6 +3386,7 @@ async function restoreCommand(directory: string, flags: Flags, positionals: stri
     throw new Error(`Backup ${manifest.backupId} configuration does not match its manifest.`);
   }
   assertBackupMatchesDeployment(manifest, backupEnv, loaded.state, loaded.env);
+  const recreateDataVolume = restoreRequiresVolumeRecreation(loaded.env, backupEnv);
   if (manifest.imageDigest) await pullAndRequireImage(manifest.image, manifest.imageDigest, `Backup ${manifest.backupId}`);
   await assertSupportedHostArchitecture(manifest.image);
   // Do this before recording a recovery operation: a capacity refusal has not
@@ -3399,6 +3404,7 @@ async function restoreCommand(directory: string, flags: Flags, positionals: stri
     targetVersion: manifest.appVersion,
     targetImage: manifest.image,
     targetImageDigest: manifest.imageDigest,
+    recreateDataVolume,
     phase: 'prepared',
   };
   await markPending(loaded.directory, loaded.state, pending);
@@ -3415,7 +3421,7 @@ async function restoreCommand(directory: string, flags: Flags, positionals: stri
       phase: 'snapshot-created',
     });
     await updatePending(loaded.directory, loaded.state, { phase: 'target-mutating' });
-    await restoreBackupData(loaded.directory, loaded.state, loaded.env, backupPath);
+    await restoreBackupData(loaded.directory, loaded.state, loaded.env, backupPath, { recreateDataVolume });
     const restoredEnv = parseEnv(await readText(deploymentPaths(loaded.directory).env));
     const digest = await imageDigest(restoredEnv.OR3_IMAGE);
     const nextState = stateFromEnv(loaded.directory, restoredEnv, loaded.state.mode, 'restore', digest);
@@ -3476,6 +3482,7 @@ async function rollbackCommand(directory: string, flags: Flags) {
     throw new Error(`Backup ${manifest.backupId} configuration does not match its manifest.`);
   }
   assertBackupMatchesDeployment(manifest, backupEnv, loaded.state, loaded.env);
+  const recreateDataVolume = restoreRequiresVolumeRecreation(loaded.env, backupEnv);
   await pullAndRequireImage(point.image, point.imageDigest, 'Rollback');
   await assertSupportedHostArchitecture(point.image);
   await assertRestoreFreeSpace(loaded.directory, loaded.state, loaded.env, manifest, backupPath);
@@ -3491,6 +3498,7 @@ async function rollbackCommand(directory: string, flags: Flags) {
     targetVersion: point.appVersion,
     targetImage: point.image,
     targetImageDigest: point.imageDigest,
+    recreateDataVolume,
     phase: 'prepared',
   };
   await markPending(loaded.directory, loaded.state, pending);
@@ -3507,7 +3515,7 @@ async function rollbackCommand(directory: string, flags: Flags) {
       phase: 'snapshot-created',
     });
     await updatePending(loaded.directory, loaded.state, { phase: 'target-mutating' });
-    await restoreBackupData(loaded.directory, loaded.state, loaded.env, backupPath);
+    await restoreBackupData(loaded.directory, loaded.state, loaded.env, backupPath, { recreateDataVolume });
     const restoredEnv = parseEnv(await readText(deploymentPaths(loaded.directory).env));
     const nextState = stateFromEnv(loaded.directory, restoredEnv, loaded.state.mode, 'restore', await imageDigest(restoredEnv.OR3_IMAGE));
     nextState.rollback = undefined;
@@ -3849,6 +3857,7 @@ async function verifyPublicApplication(baseUrl: URL, credentials: { email: strin
     ]);
     const hash = `sha256:${createHash('sha256').update(probeBytes).digest('hex')}`;
     let storageId: string | undefined;
+    let metadataAttempted = false;
     try {
       const presign = await verificationJson(baseUrl, '/api/storage/presign-upload', {
         cookie,
@@ -3882,6 +3891,45 @@ async function verifyPublicApplication(baseUrl: URL, credentials: { email: strin
           kind: 'image',
         },
       });
+      const metadataCreatedAt = Date.now();
+      const metadataOpId = randomUUID();
+      metadataAttempted = true;
+      const pushed = await verificationJson(baseUrl, '/api/sync/push', {
+        cookie,
+        body: {
+          scope: { workspaceId },
+          ops: [{
+            id: `or3-verification-${metadataOpId}`,
+            tableName: 'file_meta',
+            operation: 'put',
+            pk: hash,
+            payload: {
+              hash,
+              kind: 'image',
+              mime_type: 'image/png',
+              size_bytes: probeBytes.length,
+              storage_id: storageId,
+              name: 'or3-production-verification.png',
+              deleted: false,
+              created_at: metadataCreatedAt,
+              updated_at: metadataCreatedAt,
+              clock: metadataCreatedAt,
+            },
+            stamp: {
+              deviceId: 'or3-cloud-verification',
+              opId: metadataOpId,
+              hlc: `${String(metadataCreatedAt).padStart(13, '0')}:0000:or3-cloud-verification`,
+              clock: metadataCreatedAt,
+            },
+            createdAt: metadataCreatedAt,
+            attempts: 0,
+            status: 'pending',
+          }],
+        },
+      });
+      if (pushed.results?.[0]?.success !== true) {
+        throw new Error(`Filesystem verification metadata sync failed: ${JSON.stringify(pushed)}`);
+      }
       const downloadGrant = await verificationJson(baseUrl, '/api/storage/presign-download', {
         cookie,
         body: { workspace_id: workspaceId, hash, storage_id: storageId, disposition: 'attachment' },
@@ -3893,10 +3941,42 @@ async function verifyPublicApplication(baseUrl: URL, credentials: { email: strin
       }
     } finally {
       if (storageId) {
-        await verificationJson(baseUrl, '/api/storage/delete', {
-          cookie,
-          body: { workspace_id: workspaceId, hash, storage_id: storageId },
-        });
+        try {
+          await verificationJson(baseUrl, '/api/storage/delete', {
+            cookie,
+            body: { workspace_id: workspaceId, hash, storage_id: storageId },
+          });
+        } finally {
+          if (metadataAttempted) {
+            const metadataDeleteAt = Date.now();
+            const metadataDeleteOpId = randomUUID();
+            const deleted = await verificationJson(baseUrl, '/api/sync/push', {
+              cookie,
+              body: {
+                scope: { workspaceId },
+                ops: [{
+                  id: `or3-verification-${metadataDeleteOpId}`,
+                  tableName: 'file_meta',
+                  operation: 'delete',
+                  pk: hash,
+                  payload: { hash },
+                  stamp: {
+                    deviceId: 'or3-cloud-verification',
+                    opId: metadataDeleteOpId,
+                    hlc: `${String(metadataDeleteAt).padStart(13, '0')}:0000:or3-cloud-verification`,
+                    clock: metadataDeleteAt,
+                  },
+                  createdAt: metadataDeleteAt,
+                  attempts: 0,
+                  status: 'pending',
+                }],
+              },
+            });
+            if (deleted.results?.[0]?.success !== true) {
+              throw new Error(`Filesystem verification metadata cleanup failed: ${JSON.stringify(deleted)}`);
+            }
+          }
+        }
       }
     }
     return health;
