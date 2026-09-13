@@ -14,6 +14,7 @@ const CANDIDATE_WORKFLOW = resolve(import.meta.dir, '../../../.github/workflows/
 const CANDIDATE_RECEIPT = resolve(import.meta.dir, '../../../scripts/release/candidate-receipt.mjs');
 const ROOT_MANIFEST = resolve(import.meta.dir, '../../../package.json');
 const BROWSER_SMOKE = resolve(import.meta.dir, '../../../scripts/release/smoke-browser.mjs');
+const DOCKER_SMOKE = resolve(import.meta.dir, '../../../scripts/release/smoke-create-docker.mjs');
 const DASHBOARD_UPDATE_CARD = resolve(import.meta.dir, '../../../app/components/admin/system/AdminSystemUpdateCard.vue');
 
 function asset(name: string): string {
@@ -418,6 +419,26 @@ test('candidate qualification runs against the final digest-bound manifest', () 
   expect(qualification).toBeGreaterThan(binding);
   expect(packing).toBeGreaterThan(qualification);
   expect(candidate).toContain("tar -tzf \"$tarball\" | grep -qx 'package/LICENSE'");
+});
+
+test('candidate qualification installs Chromium before the full preflight', () => {
+  const candidate = readFileSync(CANDIDATE_WORKFLOW, 'utf8');
+  const browserInstall = candidate.indexOf('bunx playwright install --with-deps chromium');
+  const preflight = candidate.indexOf('bun run release:prepare -- --version "$VERSION" --registry --full');
+  expect(browserInstall).toBeGreaterThan(-1);
+  expect(preflight).toBeGreaterThan(browserInstall);
+});
+
+test('release storage smokes persist canonical metadata before download', () => {
+  for (const smokePath of [DOCKER_SMOKE, BROWSER_SMOKE]) {
+    const smoke = readFileSync(smokePath, 'utf8');
+    const commit = smoke.indexOf("'/api/storage/commit'");
+    const sync = smoke.indexOf("'/api/sync/push'", commit);
+    const download = smoke.indexOf("'/api/storage/presign-download'", sync);
+    expect(commit).toBeGreaterThan(-1);
+    expect(sync).toBeGreaterThan(commit);
+    expect(download).toBeGreaterThan(sync);
+  }
 });
 
 test('compose.yaml hardens the or3 container', () => {

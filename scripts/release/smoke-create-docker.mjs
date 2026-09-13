@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
@@ -232,6 +232,44 @@ async function writeFixture(cookie, workspaceId) {
             kind: 'image',
         },
     });
+    const now = Date.now();
+    const opId = randomUUID();
+    const pushed = await jsonRequest('/api/sync/push', {
+        cookie,
+        body: {
+            scope: { workspaceId },
+            ops: [{
+                id: `release-smoke-${opId}`,
+                tableName: 'file_meta',
+                operation: 'put',
+                pk: qualifiedHash,
+                payload: {
+                    hash: qualifiedHash,
+                    kind: 'image',
+                    mime_type: 'image/png',
+                    size_bytes: uploadBytes.length,
+                    storage_id: presign.storageId,
+                    name: 'or3-docker-smoke.png',
+                    deleted: false,
+                    created_at: now,
+                    updated_at: now,
+                    clock: now,
+                },
+                stamp: {
+                    deviceId: 'release-smoke',
+                    opId,
+                    hlc: `${String(now).padStart(13, '0')}:0000:release-smoke`,
+                    clock: now,
+                },
+                createdAt: now,
+                attempts: 0,
+                status: 'pending',
+            }],
+        },
+    });
+    if (pushed.results?.[0]?.success !== true) {
+        throw new Error(`File metadata sync failed: ${JSON.stringify(pushed)}`);
+    }
     await writeFile(
         statePath,
         `${JSON.stringify(

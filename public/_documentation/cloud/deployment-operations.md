@@ -112,7 +112,7 @@ forwarding headers); otherwise proxy-supplied client identity is untrusted.
   Assetless legacy restores fail with historical-release recovery guidance;
   failed asset rollback retains any recovery copies that could not be restored.
   An exact-version update must use the same package and image version, such as
-  `npx --yes @or3/cloud@0.1.39 update --to 0.1.39`.
+  `npx --yes @or3/cloud@0.1.41 update --to 0.1.41`.
 - The backup authentication key is not included in an exported archive. Escrow
   an owner-only copy of `.or3-cloud/backup-auth.key` separately in an encrypted
   secret store and restore it before using an off-host archive.

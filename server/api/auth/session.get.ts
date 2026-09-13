@@ -39,6 +39,9 @@ import { enforceRateLimit } from '../../utils/rate-limit/enforce';
  * - Rate limited.
  */
 export default defineEventHandler(async (event) => {
+    // Session responses must never be cached, including the auth-disabled path.
+    setResponseHeader(event, 'Cache-Control', 'no-store');
+
     // If SSR auth is disabled, always return null session
     if (!isSsrAuthEnabled(event)) {
         return { session: null, appAccessAllowed: false };
@@ -74,10 +77,6 @@ export default defineEventHandler(async (event) => {
               entitlements,
           }
         : null;
-
-    // Session responses must never be cached.
-    // Caching here causes stale workspace selection after switching workspaces.
-    setResponseHeader(event, 'Cache-Control', 'no-store');
 
     // Record successful request for rate limiting
     recordSyncRequest(clientIP, 'auth:session');

@@ -21,7 +21,7 @@
  *
  * Exits non-zero with a clear message on any failed assertion.
  */
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { chromium } from 'playwright';
@@ -263,6 +263,45 @@ async function verifyStorageRoundTrip(page, workspaceId) {
             kind: 'image',
         },
     });
+
+    const now = Date.now();
+    const opId = randomUUID();
+    const pushed = await browserJsonRequest(page, '/api/sync/push', {
+        body: {
+            scope: { workspaceId },
+            ops: [{
+                id: `release-smoke-${opId}`,
+                tableName: 'file_meta',
+                operation: 'put',
+                pk: hash,
+                payload: {
+                    hash,
+                    kind: 'image',
+                    mime_type: 'image/png',
+                    size_bytes: uploadBytes.length,
+                    storage_id: presign.storageId,
+                    name: 'or3-browser-smoke.png',
+                    deleted: false,
+                    created_at: now,
+                    updated_at: now,
+                    clock: now,
+                },
+                stamp: {
+                    deviceId: 'release-smoke',
+                    opId,
+                    hlc: `${String(now).padStart(13, '0')}:0000:release-smoke`,
+                    clock: now,
+                },
+                createdAt: now,
+                attempts: 0,
+                status: 'pending',
+            }],
+        },
+    });
+    assert(
+        pushed.results?.[0]?.success === true,
+        `file metadata sync failed: ${JSON.stringify(pushed)}`
+    );
 
     const downloadPresign = await browserJsonRequest(page, '/api/storage/presign-download', {
         body: {

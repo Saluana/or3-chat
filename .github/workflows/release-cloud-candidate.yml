@@ -42,6 +42,7 @@ jobs:
           bun-version: 1.3.14
       - run: npm install --global npm@11.6.2
       - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
       - name: Prove clean source and run the complete preflight
         env:
           VERSION: ${{ inputs.version }}
@@ -268,7 +269,6 @@ jobs:
           (cd "$managed" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
           (cd "$managed" && docker compose --env-file .env -f compose.yaml restart or3)
           (cd "$managed" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
-          npx playwright install --with-deps chromium
           (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-browser.mjs")
       - uses: docker/setup-qemu-action@v3
         with:

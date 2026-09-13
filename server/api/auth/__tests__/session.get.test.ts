@@ -112,6 +112,11 @@ describe('GET /api/auth/session', () => {
             session: null,
             appAccessAllowed: false,
         });
+        expect(setResponseHeaderMock).toHaveBeenCalledWith(
+            expect.anything(),
+            'Cache-Control',
+            'no-store'
+        );
     });
 
     it('includes workspace.read access in the session payload', async () => {

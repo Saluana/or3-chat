@@ -107,6 +107,9 @@ const fixedProfile = {
     NUXT_PUBLIC_STORAGE_PROVIDER: 'fs',
 };
 
+if (full) {
+    await requireCommand('Populated workspace performance gate', 'bun', ['run', 'performance:workspace:check'], fixedProfile);
+}
 await requireCommand('Registry-clean lock contract', 'bun', ['run', 'scripts/release/check-lock-drift.mjs']);
 await requireCommand(
     'Cloud version and provider contract',
@@ -126,7 +129,6 @@ if (full) {
     await requireCommand('Complete host test suite', 'bun', ['run', 'test:full'], fixedProfile);
     await requireCommand('OR3 skills package tests', 'bun', ['run', '--cwd', 'packages/or3-skills', 'test:all'], fixedProfile);
     await requireCommand('Cloud browser harnesses', 'bun', ['run', 'test:e2e:cloud'], fixedProfile);
-    await requireCommand('Populated workspace performance gate', 'bun', ['run', 'performance:workspace:check'], fixedProfile);
     await requireCommand('Fixed-profile SSR production build', 'bun', ['run', 'build'], fixedProfile);
     await requireCommand('SSR production artifact budgets', 'bun', ['run', 'performance:production-build:check'], fixedProfile);
 }
