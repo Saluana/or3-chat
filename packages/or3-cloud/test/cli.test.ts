@@ -69,7 +69,7 @@ test('recreates only legacy data volumes when adding deployment identity labels'
 
 test('recreates data volumes when restoring across deployment identity boundaries', () => {
   const legacy = { OR3_VERSION: '0.1.38' };
-  const managed = { OR3_VERSION: '0.1.45', OR3_DEPLOYMENT_ID: 'deployment-1' };
+  const managed = { OR3_VERSION: '0.1.46', OR3_DEPLOYMENT_ID: 'deployment-1' };
   expect(restoreRequiresVolumeRecreation(managed, legacy)).toBe(true);
   expect(restoreRequiresVolumeRecreation(legacy, managed)).toBe(true);
   expect(restoreRequiresVolumeRecreation(managed, { ...managed })).toBe(false);
