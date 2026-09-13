@@ -434,7 +434,7 @@ test('candidate qualification runs against the final digest-bound manifest', () 
   expect(binding).toBeGreaterThan(-1);
   expect(qualification).toBeGreaterThan(binding);
   expect(packing).toBeGreaterThan(qualification);
-  expect(candidate).toContain("tar -tzf \"$tarball\" | grep -qx 'package/LICENSE'");
+  expect(candidate).toContain("tar -tzf \"$tarball\" | grep -x 'package/LICENSE' >/dev/null");
 });
 
 test('candidate qualification installs Chromium before the full preflight', () => {

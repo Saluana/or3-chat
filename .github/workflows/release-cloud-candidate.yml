@@ -176,7 +176,7 @@ jobs:
           npm pack --ignore-scripts --pack-destination "$GITHUB_WORKSPACE/release-artifact"
           tarball="$GITHUB_WORKSPACE/release-artifact/or3-cloud-$VERSION.tgz"
           test -f "$tarball"
-          tar -tzf "$tarball" | grep -qx 'package/LICENSE'
+          tar -tzf "$tarball" | grep -x 'package/LICENSE' >/dev/null
           packed_digest="$(tar -xOf "$tarball" package/package.json | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>process.stdout.write(JSON.parse(s).or3Cloud?.imageDigest||""))')"
           test "$packed_digest" = "$IMAGE_DIGEST"
           packed_operator_digest="$(tar -xOf "$tarball" package/package.json | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>process.stdout.write(JSON.parse(s).or3Cloud?.operatorImageDigest||""))')"
