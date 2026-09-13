@@ -671,9 +671,6 @@ export default defineNuxtConfig({
             legal: legalConfig,
             backgroundStreaming: {
                 enabled: or3CloudConfig.backgroundStreaming?.enabled ?? false,
-                startMode:
-                    or3CloudConfig.backgroundStreaming?.startMode ??
-                    'foreground',
             },
             admin: {
                 basePath: adminConfig.basePath,

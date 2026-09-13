@@ -20,6 +20,7 @@
                 :overscan="5500"
                 :prefetch-overscan="5500"
                 :content-key="props.tabId ?? props.threadId ?? 'new-thread'"
+                :row-content-revision="rowContentRevision"
                 mutation-mode="append-prepend"
                 :maintain-bottom="!anyEditing"
                 :bottom-threshold="5"
@@ -569,6 +570,7 @@ const stableMessageIdentities = computed(() => {
     return identities;
 });
 const allMessages = shallowRef<UiChatMessage[]>([]);
+const rowContentRevision = ref(0);
 let renderedStableSnapshot: UiChatMessage[] | null = null;
 
 watch(
@@ -588,17 +590,30 @@ watch(
         }
 
         const mergedTail = mergeWorkflowState(tail);
+        const tailKey = mergedTail.id || mergedTail.stream_id || '';
+        const currentTail =
+            allMessages.value.length === stable.length + 1
+                ? allMessages.value[stable.length]
+                : null;
+        const currentTailKey = currentTail
+            ? currentTail.id || currentTail.stream_id || ''
+            : null;
         if (
             renderedStableSnapshot === stable &&
-            allMessages.value.length === stable.length + 1
+            allMessages.value.length === stable.length + 1 &&
+            currentTailKey !== null &&
+            currentTailKey === tailKey
         ) {
-            // Or3Scroll memoizes rows from the items array identity. Replacing
-            // only the tail slot (even with triggerRef) leaves its rendered row
-            // stale while tokens are streaming.
-            allMessages.value = [...stable, mergedTail];
+            // Same stable snapshot, length, and tail key: patch the tail slot in
+            // place and bump the revision so Or3Scroll re-reads mounted rows
+            // without replacing the combined array or scanning history.
+            allMessages.value[stable.length] = mergedTail;
+            rowContentRevision.value++;
             return;
         }
 
+        // Everything else (initial load, insertion/removal, changed tail key,
+        // stable/workflow replacement, deduplication) replaces the array.
         allMessages.value = [...stable, mergedTail];
         renderedStableSnapshot = stable;
     },

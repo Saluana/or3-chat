@@ -2,7 +2,7 @@ import type {
     PaletteCommandDefinition,
     PalettePostSourceDefinition,
 } from './types';
-import { isInternalPostType, INTERNAL_POST_TYPES } from '../../../../shared/posts/visibility';
+import { isInternalPostType, INTERNAL_POST_TYPES } from '~~/shared/posts/visibility';
 
 /** Mirrors `INTERNAL_POST_TYPES` from `app/db/posts` without importing Dexie. */
 export const PALETTE_EXCLUDED_POST_TYPES = INTERNAL_POST_TYPES;

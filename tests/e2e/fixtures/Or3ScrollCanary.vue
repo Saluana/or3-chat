@@ -17,7 +17,8 @@
             :overscan="renderOverscan"
             :prefetch-overscan="prefetchOverscan"
             :content-key="threadId"
-            mutation-mode="arbitrary"
+            :mutation-mode="mutationMode"
+            :row-content-revision="rowContentRevision"
             :maintain-bottom="maintainBottom"
             :bottom-threshold="5"
             :padding-top="28"
@@ -42,8 +43,8 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
-import { Or3Scroll } from 'or3-scroll';
+import { nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue';
+import { Or3Scroll, type Or3ScrollViewState } from 'or3-scroll';
 import 'or3-scroll/style.css';
 import ChatMessage from '~/components/chat/ChatMessage.vue';
 import { createOrRefFile, derefFile } from '~/db/files';
@@ -57,6 +58,8 @@ type ScrollApi = {
         index: number,
         options?: { align?: 'start' | 'center' | 'end' }
     ) => void;
+    captureScrollState?: () => Or3ScrollViewState;
+    restoreScrollState?: (state?: Or3ScrollViewState) => Promise<void>;
 };
 
 type Snapshot = {
@@ -70,6 +73,8 @@ type Snapshot = {
     bottomDistance: number;
     hasScrollApi: boolean;
     hasVisibleRows: boolean;
+    tailRevision: number;
+    retainedArray: boolean;
 };
 
 const scroller = ref<ScrollApi | null>(null);
@@ -77,11 +82,15 @@ const threadId = ref('canary-thread-a');
 const renderOverscan = ref(5500);
 const prefetchOverscan = ref(5500);
 const maintainBottom = ref(true);
+const mutationMode = ref<'append-prepend' | 'arbitrary'>('arbitrary');
+const rowContentRevision = ref(0);
 const ready = ref(false);
-const messages = ref<UiChatMessage[]>([]);
+const messages = shallowRef<UiChatMessage[]>([]);
 const imageHashes = ref<string[]>([]);
 const mediaPrefetch = createMessageMediaPrefetchController({ concurrency: 4 });
 let streamTimer: ReturnType<typeof setInterval> | null = null;
+let streamArray: UiChatMessage[] | null = null;
+let streamRetainedArray = true;
 
 const snapshot = ref<Snapshot>({
     renderedRows: 0,
@@ -94,6 +103,8 @@ const snapshot = ref<Snapshot>({
     bottomDistance: 0,
     hasScrollApi: false,
     hasVisibleRows: false,
+    tailRevision: 0,
+    retainedArray: true,
 });
 
 function buildMessages(prefix: string, hashes: readonly string[]) {
@@ -117,11 +128,23 @@ function buildMessages(prefix: string, hashes: readonly string[]) {
 async function createStoredImages() {
     const hashes: string[] = [];
     for (let index = 0; index < 10; index++) {
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="hsl(${index * 36} 70% 45%)"/><text x="32" y="190" font-size="72" fill="white">${index}</text></svg>`;
-        const meta = await createOrRefFile(
-            new Blob([svg], { type: 'image/svg+xml' }),
-            `canary-${index}.svg`
+        // The prefetch pipeline only decodes supported raster formats, so
+        // encode real PNG bytes instead of SVG.
+        const canvas = document.createElement('canvas');
+        canvas.width = 640;
+        canvas.height = 360;
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Canvas 2D context unavailable');
+        context.fillStyle = `hsl(${index * 36} 70% 45%)`;
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.fillStyle = 'white';
+        context.font = '72px sans-serif';
+        context.fillText(String(index), 32, 190);
+        const blob = await new Promise<Blob | null>((resolve) =>
+            canvas.toBlob(resolve, 'image/png')
         );
+        if (!blob) throw new Error('PNG encoding failed');
+        const meta = await createOrRefFile(blob, `canary-${index}.png`);
         hashes.push(meta.hash);
     }
     return hashes;
@@ -168,6 +191,8 @@ function sample() {
             typeof scroller.value?.scrollToIndex === 'function' &&
             typeof scroller.value?.scrollToBottom === 'function',
         hasVisibleRows: Boolean(visible),
+        tailRevision: rowContentRevision.value,
+        retainedArray: streamRetainedArray,
     };
 }
 
@@ -210,7 +235,36 @@ function switchThread() {
         : 'canary-thread-a';
     mediaPrefetch.reset();
     messages.value = buildMessages(threadId.value, imageHashes.value);
+    streamArray = messages.value;
+    streamRetainedArray = true;
+    rowContentRevision.value++;
     void nextTick(sample);
+}
+
+function appendStreamingRow() {
+    const index = messages.value.length;
+    const key = `${threadId.value}-stream-${index}`;
+    messages.value = [
+        ...messages.value,
+        { id: key, role: 'assistant', text: '' },
+    ];
+    streamArray = messages.value;
+    streamRetainedArray = true;
+    return { key, index };
+}
+
+function updateTailText(text: string) {
+    const list = messages.value;
+    const tailIndex = list.length - 1;
+    const tail = list[tailIndex];
+    if (!tail) return null;
+    if (streamArray !== null && list !== streamArray) {
+        streamRetainedArray = false;
+    }
+    list[tailIndex] = { ...tail, text };
+    rowContentRevision.value++;
+    void nextTick(sample);
+    return text;
 }
 
 function toggleStreaming() {
@@ -219,13 +273,17 @@ function toggleStreaming() {
         streamTimer = null;
         return;
     }
-    appendMessage();
+    if (!messages.value.length) appendStreamingRow();
+    streamArray = messages.value;
+    streamRetainedArray = true;
     streamTimer = setInterval(() => {
-        const next = messages.value.slice();
-        const tail = next[next.length - 1];
+        const list = messages.value;
+        const tailIndex = list.length - 1;
+        const tail = list[tailIndex];
         if (!tail) return;
-        next[next.length - 1] = { ...tail, text: `${tail.text} chunk` };
-        messages.value = next;
+        list[tailIndex] = { ...tail, text: `${tail.text} chunk` };
+        rowContentRevision.value++;
+        void nextTick(sample);
     }, 30);
 }
 
@@ -288,6 +346,49 @@ const api = {
     },
     setBrowsing: (value: boolean) => {
         maintainBottom.value = !value;
+    },
+    captureScrollState: () => scroller.value?.captureScrollState?.() ?? null,
+    restoreScrollState: async (state: Or3ScrollViewState) => {
+        await scroller.value?.restoreScrollState?.(state);
+        await nextTick();
+        sample();
+    },
+    setMutationMode: (mode: 'append-prepend' | 'arbitrary') => {
+        mutationMode.value = mode;
+        streamArray = messages.value;
+        streamRetainedArray = true;
+    },
+    appendStreamingTail: async () => {
+        const result = appendStreamingRow();
+        await nextTick();
+        sample();
+        return result;
+    },
+    updateTailText: async (text: string) => {
+        const result = updateTailText(text);
+        await nextTick();
+        sample();
+        return result;
+    },
+    updateRow: async (index: number, text: string) => {
+        const list = messages.value;
+        const row = list[index];
+        if (!row) return null;
+        list[index] = { ...row, text };
+        rowContentRevision.value++;
+        await nextTick();
+        sample();
+        return text;
+    },
+    getRenderedText: (index: number) => {
+        const row = document.querySelector<HTMLElement>(
+            `.or3-scroll-slice [data-canary-index="${index}"]`
+        );
+        if (!row) return null;
+        const body = row.querySelector<HTMLElement>(
+            '.cm-text-user, .cm-markdown-assistant'
+        );
+        return body?.textContent?.trim() ?? '';
     },
     imageReadyAt: (index: number) => {
         const hash = messages.value[index]?.file_hashes?.[0];

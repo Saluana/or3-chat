@@ -1,6 +1,6 @@
 import { promptJsonToString } from '~/utils/chat/prompt-utils';
 import { deriveMessageContent } from '~/utils/chat/messages';
-import { isInternalPostType } from '../../../../shared/posts/visibility';
+import { isInternalPostType } from '~~/shared/posts/visibility';
 
 /**
  * Convert TipTap JSON (object or string) into plain text.

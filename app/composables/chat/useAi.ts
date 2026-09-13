@@ -346,13 +346,9 @@ export function useChat(
                 runtimeConfig.public as {
                     backgroundStreaming?: {
                         enabled?: boolean;
-                        startMode?: 'foreground' | 'background';
                     };
                 }
             ).backgroundStreaming
-    );
-    const backgroundStreamStartMode = computed(
-        () => backgroundStreamingConfig.value?.startMode ?? 'foreground'
     );
     const backgroundStreamingAllowed = computed(
         () => {
@@ -2149,14 +2145,12 @@ export function useChat(
 
             const allowBackgroundStreaming =
                 backgroundStreamingAllowed.value &&
-                backgroundStreamStartMode.value === 'background' &&
                 modalities.length === 1 &&
                 modalities[0] === 'text';
             logBgStream('send-message-stream-mode-decision', {
                 threadId: requestThreadId,
                 allowBackgroundStreaming,
                 backgroundStreamingAllowed: backgroundStreamingAllowed.value,
-                backgroundStreamStartMode: backgroundStreamStartMode.value,
                 enabledToolCount: enabledToolDefs.length,
                 modalities,
             });

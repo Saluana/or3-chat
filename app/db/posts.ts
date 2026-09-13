@@ -25,8 +25,8 @@ import {
 import type { PostEntity } from '../core/hooks/hook-types';
 import { changeRefCount } from './files';
 import { parseFileHashes } from './files-util';
-import { isInternalPostType } from '../../shared/posts/visibility';
-export { INTERNAL_POST_TYPES } from '../../shared/posts/visibility';
+import { isInternalPostType } from '~~/shared/posts/visibility';
+export { INTERNAL_POST_TYPES } from '~~/shared/posts/visibility';
 
 /** Prepared plugin records and their captured sync operations share one local commit.
  * This provides local atomicity only; remote record delivery is still LWW.

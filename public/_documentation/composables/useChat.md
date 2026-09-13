@@ -254,6 +254,26 @@ If anything fails, the error is caught and you can retry.
 
 ---
 
+## Streaming display contract
+
+`useChat` keeps the live tail (`tailAssistant`) out of `messages` until the
+stream finalizes. UIs that render both, such as `ChatContainer`, must project
+them into one list without copying history on every token:
+
+- While the stable projection, combined list length, and effective tail key
+  (`id || stream_id || ''`) are unchanged, replace only the tail slot in the
+  combined array and bump the scroller's `rowContentRevision`. Mounted rows
+  re-read the new object; offscreen rows show it when they next mount.
+- Any structural change replaces the combined array as before: tail
+  insertion/removal, a changed tail key, id/stream_id deduplication against
+  stable history, history edits/prepends, workflow projection changes, and
+  thread/tab switches.
+- Reassigning `items` does not require a revision bump. The revision exists for
+  same-array, same-key replacements; it never triggers keyed reconciliation,
+  measurement resets, or a history scan.
+
+---
+
 ## Common patterns
 
 ### Check if chat is ready

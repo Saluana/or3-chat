@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 const openRouterStreamMock = vi.fn();
-const appendToolResultMock = vi.hoisted(() => vi.fn(async () => ({ id: 'tool-msg' })));
+const appendToolResultMock = vi.hoisted(() =>
+    vi.fn(async (..._args: unknown[]) => ({ id: 'tool-msg' }))
+);
 
 function deferred<T>() {
     let resolve!: (value: T | PromiseLike<T>) => void;

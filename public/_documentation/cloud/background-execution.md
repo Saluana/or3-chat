@@ -35,9 +35,11 @@ If the server route is unavailable (static build, stale route cache, or wrong de
 Eligibility on the client requires all of the following:
 
 - `runtimeConfig.public.backgroundStreaming.enabled` is true (config flag)
-- Start mode is `background` (not `foreground`)
 - Model modality is text-only (`modalities === ['text']`)
 - An authenticated SSR session with an active workspace exists
+
+Eligible chat turns start as server-side background jobs whenever background
+streaming is enabled. There is no separate start-mode setting.
 
 Tools do not block background mode; when tools are present, the server executes
 them in the background tool loop described below.

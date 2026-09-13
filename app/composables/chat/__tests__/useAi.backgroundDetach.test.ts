@@ -28,7 +28,6 @@ const runtimeConfigRef = {
             },
             backgroundStreaming: {
                 enabled: true,
-                startMode: 'background' as 'foreground' | 'background',
             },
             openRouter: {
                 allowUserOverride: true,
@@ -336,7 +335,6 @@ describe('useChat background detach race', () => {
                 },
                 backgroundStreaming: {
                     enabled: true,
-                    startMode: 'background',
                 },
                 openRouter: {
                     allowUserOverride: true,
@@ -741,17 +739,16 @@ describe('useChat background detach race', () => {
         });
     });
 
-    it('defaults to foreground streaming when background start mode is not set to background', async () => {
+    it('starts background streaming when the feature is enabled', async () => {
         runtimeConfigRef.value.public.backgroundStreaming = {
             enabled: true,
-            startMode: 'foreground',
         };
 
         vi.resetModules();
         const { useChat } = await import('~/composables/chat/useAi');
 
         const chat = useChat([], 'thread-1');
-        await chat.sendMessage('foreground please', {
+        const sendPromise = chat.sendMessage('background please', {
             files: [],
             model: 'test-model',
             file_hashes: [],
@@ -759,14 +756,20 @@ describe('useChat background detach race', () => {
             context_hashes: [],
         } as any);
 
-        expect(startBackgroundStreamMock).not.toHaveBeenCalled();
-        expect(runForegroundStreamLoopMock).toHaveBeenCalledTimes(1);
+        await waitForCall(startBackgroundStreamMock);
+        if (!resolveBackgroundStart) {
+            throw new Error('Background start resolver was not initialized');
+        }
+        resolveBackgroundStart({ jobId: 'job-enabled-1' });
+        await sendPromise;
+
+        expect(startBackgroundStreamMock).toHaveBeenCalledTimes(1);
+        expect(runForegroundStreamLoopMock).not.toHaveBeenCalled();
     });
 
     it('settles a foreground stream before switching threads', async () => {
         runtimeConfigRef.value.public.backgroundStreaming = {
-            enabled: true,
-            startMode: 'foreground',
+            enabled: false,
         };
         const foregroundAbort = {
             reject: null as ((reason: unknown) => void) | null,

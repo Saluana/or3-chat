@@ -265,13 +265,6 @@ export interface Or3CloudConfig {
          */
         enabled?: boolean;
         /**
-         * Stream start mode.
-         * - `foreground`: start in client foreground stream (default)
-         * - `background`: start as server background job immediately
-         * @default 'foreground'
-         */
-        startMode?: 'foreground' | 'background';
-        /**
          * Storage provider for background jobs.
          * @default 'memory'
          */

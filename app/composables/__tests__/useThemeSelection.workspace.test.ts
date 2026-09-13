@@ -4,7 +4,11 @@ const state = vi.hoisted(() => ({
     activeDbName: 'or3-db-a',
     kvByDb: new Map([['or3-db-b', 'theme-b']]),
     resolvers: new Map(),
-    setCalls: [],
+    setCalls: [] as Array<{
+        key: string;
+        value: string | null;
+        dbName: string;
+    }>,
 }));
 
 vi.mock('~/db/client', () => ({

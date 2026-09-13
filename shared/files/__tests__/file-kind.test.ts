@@ -6,7 +6,7 @@ import {
   hasSupportedRasterSignature,
 } from "../file-kind";
 
-function bytes(...values: number[]): Uint8Array {
+function bytes(...values: number[]): Uint8Array<ArrayBuffer> {
   return new Uint8Array(values);
 }
 
