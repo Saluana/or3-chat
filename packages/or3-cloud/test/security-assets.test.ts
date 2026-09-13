@@ -389,10 +389,18 @@ test('release digest verification uses buildx-compatible manifest output', () =>
 
 test('npm publication identifies the qualified tarball as a local file', () => {
   const workflow = readFileSync(RELEASE_WORKFLOW, 'utf8');
+  const publishJob = workflow.slice(
+    workflow.indexOf('  publish-npm:'),
+    workflow.indexOf('  dashboard-lifecycle:'),
+  );
   expect(workflow).toContain(
     'npm publish "./release-artifact/or3-cloud-$VERSION.tgz" --access public',
   );
   expect(workflow).toContain('already published with the qualified immutable tarball; continuing verification.');
+  expect(publishJob).toContain('packages: read');
+  expect(publishJob.indexOf('docker/login-action@v3')).toBeLessThan(
+    publishJob.indexOf('Re-verify promoted image and exact package'),
+  );
 });
 
 test('candidate evidence is source-qualified and cannot publish a release', () => {
