@@ -3307,6 +3307,7 @@ import type { ORMessage } from '~/core/auth/openrouter-build';
 import type { WorkflowStreamingState } from '~/composables/chat/useWorkflowStreamAccumulator';
 import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
 import type { AccessDecision, AttachmentEntity, DbCreatePayload, DbDeletePayload, DbUpdatePayload, DocumentEntity, FileEntity, KvEntry, MessageCreateEntity, MessageEntity, NotificationAction, NotificationCreatePayload, NotificationEntity, PostCreateEntity, PostEntity, ProjectEntity, PromptEntity, SessionContext, StorageFileDownloadAfterPayload, StorageFileDownloadBeforePayload, StorageFileGcPayload, StorageFileUploadAfterPayload, StorageFileUploadBeforePayload, StorageFileUploadPolicyPayload, StorageFileUrlOptionsPayload, SyncPendingOpPayload, SyncScopePayload, ThreadCreateEntity, ThreadEntity } from '~~/shared/hooks/hook-domain-types';
+import type { FileKind } from '~~/shared/files/file-kind';
 export type { AccessDecision, AttachmentEntity, DbCreatePayload, DbDeletePayload, DbUpdatePayload, DocumentEntity, FileEntity, KvEntry, MessageCreateEntity, MessageEntity, NotificationAction, NotificationCreatePayload, NotificationEntity, Permission, PostCreateEntity, PostEntity, ProjectEntity, PromptEntity, SessionContext, StorageFileDownloadAfterPayload, StorageFileDownloadBeforePayload, StorageFileGcPayload, StorageFileUploadAfterPayload, StorageFileUploadBeforePayload, StorageFileUploadPolicyPayload, StorageFileUrlOptionsPayload, SyncPendingOpPayload, SyncScopePayload, ThreadCreateEntity, ThreadEntity, WorkspaceRole, } from '~~/shared/hooks/hook-domain-types';
 export interface EditorInstance {
     commands: Record<string, unknown>;
@@ -3506,7 +3507,7 @@ export interface FilesAttachInputPayload {
     name: string;
     mime: string;
     size: number;
-    kind: 'image' | 'pdf';
+    kind: FileKind;
 }
 export type BranchMode = 'reference' | 'copy';
 export interface BranchForkOptions {
@@ -4076,16 +4077,23 @@ export interface RegisteredTool {
     enabled: Ref<boolean>;
     lastError: Ref<string | null>;
     runtime: ToolRuntime;
+    available?: (context: ToolAvailabilityContext) => boolean;
     workflowPolicy?: WorkflowToolRegistrationPolicy;
     /** Removes this exact registration; returns false after replacement/disposal. */
     dispose: () => boolean;
     _owner: symbol;
     _stopWatcher: () => void;
 }
+export interface ToolAvailabilityContext {
+    workspaceId: string | null;
+    threadId: string | null;
+}
 interface RegisterOptions {
     override?: boolean;
     enabled?: boolean;
     runtime?: ToolRuntime;
+    /** Optional origin gate, checked both before advertising and before execution. */
+    available?: (context: ToolAvailabilityContext) => boolean;
     workflowPolicy?: WorkflowToolRegistrationPolicy;
 }
 /**
@@ -4112,7 +4120,7 @@ export declare function useToolRegistry(): {
     getTool: (name: string) => RegisteredTool | undefined;
     setEnabled: (name: string, enabled: boolean) => void;
     hydrate: (states: Record<string, boolean>) => void;
-    getEnabledDefinitions: () => ToolDefinition[];
+    getEnabledDefinitions: (context?: ToolAvailabilityContext) => ToolDefinition[];
     executeTool: (toolName: string, argumentsJson: string, context?: ToolExecutionContext, admission?: ToolExecutionAdmission) => Promise<{
         result: string | null;
         toolName: string;
