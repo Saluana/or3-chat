@@ -11,7 +11,8 @@ This document covers the implementation currently wired in:
 
 ## Enablement and Boundaries
 
-Background execution is available only when SSR auth/server routes are active.
+Background chat execution is available only when SSR auth, canonical sync, and
+server routes are active.
 
 - Runtime gate: `runtimeConfig.public.backgroundStreaming.enabled === true`
 - Server gate: `runtimeConfig.backgroundJobs.enabled === true`
@@ -35,6 +36,7 @@ If the server route is unavailable (static build, stale route cache, or wrong de
 Eligibility on the client requires all of the following:
 
 - `runtimeConfig.public.backgroundStreaming.enabled` is true (config flag)
+- `runtimeConfig.public.sync.enabled` is true
 - Model modality is text-only (`modalities === ['text']`)
 - An authenticated SSR session with an active workspace exists
 
@@ -51,13 +53,20 @@ them in the background tool loop described below.
    - `_background: true`
    - `_threadId`
    - `_messageId`
+   - `_backgroundAdmissionId` (stable per user-initiated send; transport retries reuse it)
+   - `_history` (version 1 immutable thread/message admission envelope)
    - optional `_toolRuntime` map (`toolName -> runtime`)
 3. `POST /api/openrouter/stream` validates auth/session and background params.
-4. Server creates a job (`kind: 'chat'`) via the configured `BackgroundJobProvider`.
+4. The selected sync gateway atomically writes the admission rows, contiguous
+   change-log versions, and an idempotent generation receipt. Only then can the
+   server claim the job and contact OpenRouter.
 5. `server/utils/background-jobs/stream-handler.ts` runs the stream loop and writes:
    - content deltas
+   - reasoning deltas (reasoning-only progress counts and streams independently)
    - `chunksReceived`
    - optional `tool_calls` metadata
+   - a single terminal snapshot (`content`, `reasoning`, `tool_calls`, `error`) that
+     moves the job's durable `history_phase` to `finalization_pending`
 6. Viewers receive live updates through SSE (`/api/jobs/:id/stream`) and/or polling (`/api/jobs/:id/status?offset=N`).
 7. On terminal state (`complete|error|aborted`), status is persisted and notifications are emitted when no viewers are attached.
 
@@ -67,6 +76,66 @@ limits are checked before the row is inserted. Concurrent requests therefore
 cannot oversubscribe the configured caps or launch the same paid generation twice.
 Transport retries reuse the admission id even after a terminal result; an
 explicit user retry creates a fresh id.
+
+A request that asked for background execution never silently falls through to a
+client-bound foreground stream. If the server has background execution disabled
+it returns `503 { code: 'background_streaming_disabled' }` before contacting
+OpenRouter, and the client caches that capability rejection for the session.
+The server response also carries `historyVersion: 1`. A missing/mismatched
+version or a gateway without `backgroundGenerationHistory: 'v1'` fails closed
+with `background_history_unsupported` before model execution.
+
+### Cancelling before the job ID exists
+
+`POST /api/jobs/admission-abort` accepts `{ admissionId }`. Providers implement
+the durable `cancelAdmission` contract: a committed streaming job is aborted
+immediately; otherwise a cancellation marker is recorded in the job store
+(memory, SQLite `background_admission_cancels`, Convex
+`background_admission_cancels`) and `createJob` observes the same record inside
+its admission transaction, rejecting creation with `AdmissionCancelledError`.
+A Stop therefore cannot be lost to a crash or a second worker, and a late
+admission can never launch work. Providers that predate the contract fall back
+to the in-process marker, which is best-effort and logged.
+
+### Terminal retention and transport errors
+
+Terminal jobs are retained for 24 hours (`completedJobRetentionMs`) as the
+durable buffer the browser uses to persist completed output after navigation or
+disconnect. Deleting them earlier risks losing a completed answer when no client
+was attached at completion time.
+
+Transport, protocol, and auth failures while polling or watching a job never
+rewrite the assistant message as a failed generation. The server closes an SSE
+viewer instead of emitting a synthetic terminal `error`, and the client
+classifies retryable failures (network, timeout, 429, 5xx), pauses on auth, and
+stops reconnection on malformed protocol responses. A job confirmed missing via
+bounded 404s is projected as `stream_interrupted` so Continue is offered.
+
+### Output limits
+
+Canonical sync history has a per-operation ceiling (`MAX_SYNC_PAYLOAD_BYTES`,
+256 KiB). When canonical sync is enabled, generated output is bounded
+*before it is accepted* by `MAX_CANONICAL_MESSAGE_OUTPUT_BYTES` (224 KiB),
+counting text, reasoning, tool arguments/results, and terminal fields. Exceeding
+the budget stops the stream with an explicit `OutputLimitExceededError`; the
+accepted prefix is preserved and the message is finalized as failed, never
+silently truncated. Local-only workspaces do not have canonical history and keep
+the larger in-memory stream cap (4 MiB).
+
+### Generation history phases
+
+Jobs carry a durable `history_phase` (`ready`, `admission_pending`,
+`finalization_pending`, `committed`, `superseded`, `blocked`). Reasoning and the
+terminal snapshot persist independently of the client, and recovery resets both
+text and reasoning to their checkpoints together. Retention cleanup only deletes
+terminal jobs whose history phase is settled (`ready`/`committed`/`superseded`),
+so a completed generation whose canonical write is still pending is never lost
+to retention. The recovery scan delivers both pending phases without rerunning
+model work. Admission and finalization each use a
+`(workspace, generation, stage)` receipt, so a process crash can replay either
+transaction safely. Finalization commits only while the assistant row still has
+the admitted generation and clock; deletion, editing, or a newer generation
+records `superseded` instead of overwriting newer history.
 
 ## Process Restart Recovery
 
@@ -100,6 +169,11 @@ than silently degrading to process memory.
 When using Convex, deploy the provider version and its bundled Convex
 schema/functions together; background admission fails closed if the selected
 adapter does not provide the durable claim contract.
+
+Continue uses this same path for eligible text models. The job starts with the
+existing answer and reasoning as its durable base, and the shared continuation
+normalizer removes the `>>` marker and replay overlap on the server. Switching
+threads during admission or generation detaches the UI while the job continues.
 
 ## Background Tool Execution
 
@@ -156,7 +230,9 @@ Client tracking is handled by `app/utils/chat/useAi-internal/backgroundJobs.ts`:
 
 - Prefers SSE (`/api/jobs/:id/stream?offset=N`)
 - Falls back to polling (`/api/jobs/:id/status?offset=N`)
-- Persists incremental updates into Dexie assistant message records
+- Persists incremental updates into Dexie assistant message records as local
+  projections; version-1 canonical jobs suppress client outbox capture because
+  the sync gateway owns admission and terminal history
 - Restores `tool_calls` and `workflow_state` into message `data`
 - Emits workflow hooks:
   - `workflow.execution:action:state_update`

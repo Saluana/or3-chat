@@ -11,7 +11,8 @@ import {
 
 const streamingJob = (): BackgroundJob => ({
     id: 'job-1', userId: 'user-1', threadId: 'thread-1', messageId: 'message-1',
-    model: 'model', status: 'streaming', content: '', chunksReceived: 0,
+    model: 'model', status: 'streaming', content: '', reasoning: '',
+    chunksReceived: 0,
     startedAt: 1,
 });
 

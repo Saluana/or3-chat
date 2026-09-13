@@ -103,6 +103,7 @@ function createProvider(
                 model: 'test-model',
                 status: statusRef.status,
                 content: '',
+                reasoning: '',
                 chunksReceived: 0,
                 startedAt: Date.now(),
                 tool_calls: initialToolCalls,

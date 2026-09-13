@@ -22,7 +22,11 @@ import type {
     BackgroundJobExecution,
     CreateJobParams,
     JobUpdate,
+    AdmissionCancellationResult,
+    GenerationHistoryPhase,
+    TerminalGenerationSnapshot,
 } from '../types';
+import { AdmissionCancelledError } from '../types';
 import { getJobConfig } from '../store';
 
 /**
@@ -36,6 +40,39 @@ interface MemoryJob extends BackgroundJob {
 /** In-memory job storage */
 const jobs = new Map<string, MemoryJob>();
 
+/**
+ * Admission cancellation markers. Process-local, like the jobs they guard,
+ * but shared by creation and cancellation so a late commit cannot launch work.
+ * Value is the marker expiry timestamp.
+ */
+const cancelledAdmissions = new Map<string, number>();
+const ADMISSION_CANCEL_TTL_MS = 10 * 60 * 1000;
+
+function admissionKey(userId: string, admissionId: string): string {
+    return `${userId}:${admissionId}`;
+}
+
+function hasActiveAdmissionCancel(
+    userId: string,
+    admissionId: string
+): boolean {
+    const key = admissionKey(userId, admissionId);
+    const expiresAt = cancelledAdmissions.get(key);
+    if (expiresAt === undefined) return false;
+    if (expiresAt <= Date.now()) {
+        cancelledAdmissions.delete(key);
+        return false;
+    }
+    return true;
+}
+
+function pruneAdmissionCancels(): void {
+    const now = Date.now();
+    for (const [key, expiresAt] of cancelledAdmissions) {
+        if (expiresAt <= now) cancelledAdmissions.delete(key);
+    }
+}
+
 /** Cleanup interval handle */
 let cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -46,6 +83,7 @@ async function cleanupExpiredJobs(): Promise<number> {
     const config = getJobConfig();
     const now = Date.now();
     let cleaned = 0;
+    pruneAdmissionCancels();
 
     for (const [id, job] of jobs) {
         const isStreaming = job.status === 'streaming';
@@ -54,7 +92,17 @@ async function cleanupExpiredJobs(): Promise<number> {
 
         const isTerminal = ['complete', 'error', 'aborted'].includes(job.status);
         const completedAge = now - (job.completedAt ?? job.startedAt);
-        const isStale = isTerminal && completedAge > config.completedJobRetentionMs;
+        // Durable history owns deletion: a terminal job whose canonical write
+        // is still pending must never be reclaimed by retention.
+        const historySettled =
+            !job.historyPhase ||
+            job.historyPhase === 'ready' ||
+            job.historyPhase === 'committed' ||
+            job.historyPhase === 'superseded';
+        const isStale =
+            isTerminal &&
+            historySettled &&
+            completedAge > config.completedJobRetentionMs;
 
         if (isTimedOut) {
             // This is an inactivity watchdog, never a total runtime limit. A
@@ -63,6 +111,9 @@ async function cleanupExpiredJobs(): Promise<number> {
             job.status = 'error';
             job.error = 'Job timed out';
             job.completedAt = now;
+            if (job.execution?.history && job.historyPhase !== 'admission_pending') {
+                job.historyPhase = 'finalization_pending';
+            }
             cleaned++;
         } else if (isStale) {
             // Remove old completed jobs
@@ -123,13 +174,21 @@ function toPublicJob(job: MemoryJob): BackgroundJob {
     return result;
 }
 
+function cloneJob(job: MemoryJob): BackgroundJob {
+    return structuredClone(toPublicJob(job));
+}
+
 function claimJobRecord(
     job: MemoryJob,
     leaseOwner: string,
     now: number,
     leaseExpiresAt: number
 ): BackgroundJob | null {
-    if (job.status !== 'streaming' || !job.execution) return null;
+    if (
+        job.status !== 'streaming' ||
+        !job.execution ||
+        (job.historyPhase ?? 'ready') !== 'ready'
+    ) return null;
     if (job.leaseOwner && (job.leaseExpiresAt ?? 0) > now) {
         return null;
     }
@@ -141,6 +200,7 @@ function claimJobRecord(
     job.abortController = new AbortController();
     if (recovering) {
         job.content = job.execution.contentBase ?? '';
+        job.reasoning = job.execution.reasoningBase ?? '';
         job.chunksReceived = 0;
     }
     return toPublicJob(job);
@@ -169,6 +229,9 @@ export const memoryJobProvider: BackgroundJobProvider = {
                     job.idempotencyKey === params.idempotencyKey
             );
             if (existing) return existing.id;
+            if (hasActiveAdmissionCancel(params.userId, params.idempotencyKey)) {
+                throw new AdmissionCancelledError(params.idempotencyKey);
+            }
         }
 
         // Enforce max concurrent jobs
@@ -191,6 +254,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
         }
 
         const id = generateJobId();
+        const now = Date.now();
         const job: MemoryJob = {
             id,
             userId: params.userId,
@@ -198,10 +262,14 @@ export const memoryJobProvider: BackgroundJobProvider = {
             messageId: params.messageId,
             model: params.model,
             status: 'streaming',
-            content: '',
+            content: params.initialContent ?? '',
+            reasoning: params.initialReasoning ?? '',
+            generationId: params.generationId,
+            historyPhase: params.historyPhase ?? 'ready',
+            syncProviderId: params.syncProviderId,
             chunksReceived: 0,
-            startedAt: Date.now(),
-            lastActivityAt: Date.now(),
+            startedAt: now,
+            lastActivityAt: now,
             abortController: new AbortController(),
             kind: params.kind ?? 'chat',
             tool_calls: params.tool_calls ?? undefined,
@@ -227,6 +295,53 @@ export const memoryJobProvider: BackgroundJobProvider = {
         return toPublicJob(job);
     },
 
+    async findJobByIdempotencyKey(
+        idempotencyKey: string,
+        userId: string
+    ): Promise<BackgroundJob | null> {
+        const job = Array.from(jobs.values()).find(
+            (candidate) =>
+                candidate.userId === userId &&
+                candidate.idempotencyKey === idempotencyKey
+        );
+        return job ? toPublicJob(job) : null;
+    },
+
+    async cancelAdmission(
+        userId: string,
+        admissionId: string
+    ): Promise<AdmissionCancellationResult> {
+        pruneAdmissionCancels();
+        const job = Array.from(jobs.values()).find(
+            (candidate) =>
+                candidate.userId === userId &&
+                candidate.idempotencyKey === admissionId
+        );
+        if (job) {
+            if (job.status === 'streaming') {
+                job.abortController.abort();
+                job.status = 'aborted';
+                job.error = 'Cancelled by user';
+                job.completedAt = Date.now();
+                if (job.execution?.history && job.historyPhase !== 'admission_pending') {
+                    job.historyPhase = 'finalization_pending';
+                }
+                cancelledAdmissions.set(
+                    admissionKey(userId, admissionId),
+                    Date.now() + ADMISSION_CANCEL_TTL_MS
+                );
+                return { aborted: true, jobId: job.id, pending: false };
+            }
+            return { aborted: false, jobId: job.id, pending: false };
+        }
+        // No committed job: a marker guarantees a late createJob cannot launch.
+        cancelledAdmissions.set(
+            admissionKey(userId, admissionId),
+            Date.now() + ADMISSION_CANCEL_TTL_MS
+        );
+        return { aborted: false, pending: true };
+    },
+
     async updateJob(jobId: string, update: JobUpdate): Promise<void> {
         const job = jobs.get(jobId);
         if (
@@ -240,6 +355,9 @@ export const memoryJobProvider: BackgroundJobProvider = {
 
         if (update.contentChunk !== undefined) {
             job.content += update.contentChunk;
+        }
+        if (update.reasoningChunk !== undefined) {
+            job.reasoning += update.reasoningChunk;
         }
         if (update.chunksReceived !== undefined) {
             job.chunksReceived = update.chunksReceived;
@@ -311,6 +429,9 @@ export const memoryJobProvider: BackgroundJobProvider = {
         job.abortController.abort();
         job.status = 'aborted';
         job.completedAt = Date.now();
+        if (job.execution?.history && job.historyPhase !== 'admission_pending') {
+            job.historyPhase = 'finalization_pending';
+        }
         return true;
     },
 
@@ -371,6 +492,58 @@ export const memoryJobProvider: BackgroundJobProvider = {
         }
         job.execution = execution;
         return true;
+    },
+
+    async saveTerminalSnapshot(
+        jobId: string,
+        snapshot: TerminalGenerationSnapshot,
+        leaseOwner?: string
+    ): Promise<boolean> {
+        const job = jobs.get(jobId);
+        if (!job || job.status !== 'streaming' || !ownsLease(job, leaseOwner)) {
+            return false;
+        }
+        job.status = snapshot.status;
+        job.content = snapshot.content;
+        job.reasoning = snapshot.reasoning;
+        if (snapshot.toolCalls !== undefined) {
+            job.tool_calls = snapshot.toolCalls;
+        }
+        job.error = snapshot.error;
+        job.completedAt = snapshot.completedAt;
+        job.historyPhase = 'finalization_pending';
+        job.leaseOwner = undefined;
+        job.leaseExpiresAt = undefined;
+        return true;
+    },
+
+    async setHistoryPhase(
+        jobId: string,
+        phase: GenerationHistoryPhase,
+        options?: { from?: GenerationHistoryPhase[] }
+    ): Promise<boolean> {
+        const job = jobs.get(jobId);
+        if (!job) return false;
+        if (
+            options?.from &&
+            !options.from.includes(job.historyPhase ?? 'ready')
+        ) {
+            return false;
+        }
+        job.historyPhase = phase;
+        return true;
+    },
+
+    async getPendingHistoryJobs(limit: number): Promise<BackgroundJob[]> {
+        return Array.from(jobs.values())
+            .filter(
+                (job) =>
+                    job.historyPhase === 'admission_pending' ||
+                    job.historyPhase === 'finalization_pending'
+            )
+            .sort((left, right) => left.startedAt - right.startedAt)
+            .slice(0, Math.max(1, limit))
+            .map(cloneJob);
     },
 
     async cleanupExpired(): Promise<number> {

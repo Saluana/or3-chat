@@ -31,7 +31,7 @@ import { createGunzip } from 'node:zlib';
 const execFile = promisify(execFileCallback);
 const PACKAGE_ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
 
-export const PACKAGE_VERSION = '0.1.39';
+export const PACKAGE_VERSION = '0.1.40';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 const STATE_SCHEMA_VERSION = 1;
@@ -1166,7 +1166,7 @@ async function waitForDeepHealth(directory: string, mode: Mode, secrets: string[
 function packagedImageDigest(version: string) {
   let manifest: { version?: unknown; or3Cloud?: { imageDigest?: unknown } };
   try {
-    manifest = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8'));
+    manifest = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')) as typeof manifest;
   } catch {
     return undefined;
   }
@@ -1181,7 +1181,7 @@ function packagedImageDigest(version: string) {
 function packagedOperatorImageDigest(version: string) {
   let manifest: { version?: unknown; or3Cloud?: { operatorImageDigest?: unknown } };
   try {
-    manifest = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8'));
+    manifest = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')) as typeof manifest;
   } catch {
     return undefined;
   }
@@ -1196,7 +1196,7 @@ function packagedOperatorImageDigest(version: string) {
 function packagedSourceRevision(version: string) {
   let manifest: { version?: unknown; or3Cloud?: { sourceRevision?: unknown } };
   try {
-    manifest = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8'));
+    manifest = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')) as typeof manifest;
   } catch {
     return undefined;
   }

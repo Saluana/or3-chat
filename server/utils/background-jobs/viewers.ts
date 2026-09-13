@@ -31,6 +31,7 @@ const LIVE_JOB_RETENTION_MS = 30_000;
 
 type LiveJobState = {
     content: string;
+    reasoning: string;
     status: BackgroundJob['status'];
     chunksReceived: number;
     completedAt?: number;
@@ -47,6 +48,8 @@ type LiveJobEvent =
           type: 'delta';
           content_delta: string;
           content_length: number;
+          reasoning_delta?: string;
+          reasoning_length?: number;
           chunksReceived: number;
           tool_calls?: BackgroundJob['tool_calls'];
           workflow_state?: BackgroundJob['workflow_state'];
@@ -57,6 +60,8 @@ type LiveJobEvent =
           status: BackgroundJob['status'];
           content: string;
           content_length: number;
+          reasoning?: string;
+          reasoning_length?: number;
           chunksReceived: number;
           completedAt?: number;
           error?: string;
@@ -249,8 +254,17 @@ export function registerJobStream(
  * Purpose:
  * Ensure a live job state exists and cancel pending cleanup.
  */
-export function initJobLiveState(jobId: string): void {
+export function initJobLiveState(
+    jobId: string,
+    options?: { contentBase?: string; reasoningBase?: string }
+): void {
     const state = ensureJobLiveState(jobId);
+    if (options?.contentBase !== undefined) {
+        state.content = options.contentBase;
+    }
+    if (options?.reasoningBase !== undefined) {
+        state.reasoning = options.reasoningBase;
+    }
     if (state.cleanupTimer) {
         clearTimeout(state.cleanupTimer);
         state.cleanupTimer = null;
@@ -273,6 +287,7 @@ export function emitJobDelta(
     meta: {
         contentLength: number;
         chunksReceived: number;
+        reasoningLength?: number;
         tool_calls?: BackgroundJob['tool_calls'];
         workflow_state?: BackgroundJob['workflow_state'];
         attempt?: number;
@@ -294,9 +309,44 @@ export function emitJobDelta(
         type: 'delta',
         content_delta: delta,
         content_length: meta.contentLength,
+        reasoning_length: meta.reasoningLength ?? state.reasoning.length,
         chunksReceived: meta.chunksReceived,
         tool_calls: meta.tool_calls,
         workflow_state: meta.workflow_state,
+        attempt: meta.attempt ?? state.attempt,
+    };
+    for (const listener of state.listeners) {
+        listener(event);
+    }
+}
+
+/**
+ * Purpose:
+ * Emit a reasoning-only delta. Reasoning must count as progress and be
+ * broadcast even when no visible answer text exists.
+ */
+export function emitJobReasoningDelta(
+    jobId: string,
+    delta: string,
+    meta: {
+        reasoningLength: number;
+        chunksReceived: number;
+        attempt?: number;
+    }
+): void {
+    if (!delta) return;
+    const state = ensureJobLiveState(jobId);
+    state.reasoning += delta;
+    state.chunksReceived = meta.chunksReceived;
+    state.status = 'streaming';
+    if (meta.attempt !== undefined) state.attempt = meta.attempt;
+    const event: LiveJobEvent = {
+        type: 'delta',
+        content_delta: '',
+        content_length: state.content.length,
+        reasoning_delta: delta,
+        reasoning_length: meta.reasoningLength,
+        chunksReceived: meta.chunksReceived,
         attempt: meta.attempt ?? state.attempt,
     };
     for (const listener of state.listeners) {
@@ -314,6 +364,8 @@ export function emitJobStatus(
     meta: {
         content: string;
         contentLength: number;
+        reasoning?: string;
+        reasoningLength?: number;
         chunksReceived: number;
         completedAt?: number;
         error?: string;
@@ -325,6 +377,9 @@ export function emitJobStatus(
 ): void {
     const state = ensureJobLiveState(jobId);
     state.content = meta.content;
+    if (meta.reasoning !== undefined) {
+        state.reasoning = meta.reasoning;
+    }
     state.status = status;
     state.chunksReceived = meta.chunksReceived;
     state.completedAt = meta.completedAt;
@@ -337,6 +392,8 @@ export function emitJobStatus(
         status,
         content: meta.content,
         content_length: meta.contentLength,
+        reasoning: meta.reasoning ?? state.reasoning,
+        reasoning_length: meta.reasoningLength ?? state.reasoning.length,
         chunksReceived: meta.chunksReceived,
         completedAt: meta.completedAt,
         error: meta.error,
@@ -366,6 +423,7 @@ function ensureJobLiveState(jobId: string): LiveJobState {
     if (!state) {
         state = {
             content: '',
+            reasoning: '',
             status: 'streaming',
             chunksReceived: 0,
             listeners: new Set(),

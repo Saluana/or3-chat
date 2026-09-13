@@ -611,7 +611,11 @@ export default defineNuxtConfig({
             jobTimeoutMs:
                 (or3CloudConfig.backgroundStreaming?.jobTimeoutSeconds ?? 300) *
                 1000,
-            completedJobRetentionMs: 5 * 60 * 1000, // 5 minutes
+            // Terminal jobs are the durable buffer the browser uses to persist
+            // completed output after navigation/disconnect. Keep them
+            // retrievable for a full day instead of minutes so returning
+            // clients and reattachment can still recover the result.
+            completedJobRetentionMs: 24 * 60 * 60 * 1000,
             encryptionKey:
                 or3CloudConfig.backgroundStreaming?.encryptionKey ?? '',
         },

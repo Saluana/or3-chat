@@ -45,6 +45,7 @@ import {
     startBackgroundStream,
     isBackgroundStreamingAvailable,
 } from '../../utils/background-jobs/stream-handler';
+import { isAdmissionCancelledError } from '../../utils/background-jobs/types';
 import {
     monitorForegroundStreamForClient,
 } from '../../utils/webhooks/foreground-stream-monitor';
@@ -356,6 +357,35 @@ export default defineEventHandler(async (event) => {
                 messageId: validation.messageId!,
                 error: err instanceof Error ? err.message : String(err),
             });
+            if (isAdmissionCancelledError(err)) {
+                // The client cancelled before the job ID returned. This is a
+                // deliberate Stop, not a server failure.
+                setResponseStatus(event, 409);
+                return {
+                    error: 'Admission cancelled',
+                    code: 'admission_cancelled',
+                };
+            }
+            if (
+                err instanceof Error &&
+                err.name === 'BackgroundHistoryUnsupportedError'
+            ) {
+                setResponseStatus(event, 503);
+                return {
+                    error: err.message,
+                    code: 'background_history_unsupported',
+                };
+            }
+            if (
+                err instanceof Error &&
+                err.name === 'BackgroundHistoryAdmissionError'
+            ) {
+                setResponseStatus(event, 409);
+                return {
+                    error: err.message,
+                    code: 'background_history_conflict',
+                };
+            }
             if (err instanceof Error && err.message.includes('Max concurrent')) {
                 setResponseStatus(event, 503);
                 return { error: 'Server busy, try again later' };
@@ -365,7 +395,17 @@ export default defineEventHandler(async (event) => {
         }
     }
     if (backgroundRequested && !isBackgroundStreamingAvailable()) {
+        // A request that asked for durable background execution must never
+        // silently fall through to a client-bound foreground SSE response: the
+        // client would retry admission and the foreground requests would bypass
+        // background admission deduplication. Return a structured, non-retryable
+        // capability error instead.
         warnBgStream('api-stream-background-requested-but-unavailable', {});
+        setResponseStatus(event, 503);
+        return {
+            error: 'Background streaming is not enabled on this server',
+            code: 'background_streaming_disabled',
+        };
     }
 
     // =============================
@@ -383,6 +423,7 @@ export default defineEventHandler(async (event) => {
         _backgroundMode: _backgroundMode,
         _toolRuntime: _toolRuntime,
         _streamedFieldMode: _streamedFieldMode,
+        _history: _history,
         ...providerBody
     } = body;
 

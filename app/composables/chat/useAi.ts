@@ -43,6 +43,8 @@ import type {
     ChatRequestState,
 } from '~/utils/chat/types';
 import { ToolIterationLimitError } from '~~/shared/chat/stream-errors';
+import { MAX_CANONICAL_MESSAGE_OUTPUT_BYTES } from '~~/shared/chat/tool-limits';
+import { redactDiagnosticDetails } from '~~/shared/logging/sensitive-metadata';
 import type { ToolLedgerEntry } from '~~/shared/chat/tool-ledger';
 import {
     isStaleForegroundGeneration,
@@ -63,6 +65,8 @@ import {
 import {
     startBackgroundStream,
     abortBackgroundJob,
+    abortBackgroundAdmission,
+    pollJobStatus,
     isBackgroundStreamingEnabled,
     type BackgroundJobStatus,
     type OpenRouterReasoningConfig,
@@ -112,13 +116,13 @@ import {
     continueMessageImpl,
     makeAssistantPersister,
     updateMessageRecord,
+    projectCanonicalBackgroundMessage,
     reloadTurnIntoRawMessages,
 } from '~/utils/chat/useAi-internal';
 import {
     assistantTranscriptData,
     userTranscriptData,
 } from '~/utils/chat/transcript';
-
 
 const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
 
@@ -208,6 +212,16 @@ export function useChat(
     };
     const openRouterAuth = useOpenRouterAuth();
     const syncConfig = runtimeConfig.public.sync;
+    /**
+     * When canonical sync history exists, generated output is bounded before
+     * emission so a completed answer can always be committed. Local-only
+     * workspaces keep the larger in-memory stream cap.
+     */
+    const canonicalOutputLimitBytes =
+        runtimeConfig.public.ssrAuthEnabled === true &&
+        syncConfig.enabled === true
+            ? MAX_CANONICAL_MESSAGE_OUTPUT_BYTES
+            : undefined;
     const serverNotificationsEnabled = computed(
         () =>
             runtimeConfig.public.ssrAuthEnabled === true &&
@@ -216,7 +230,9 @@ export function useChat(
             Boolean(syncConfig.convexUrl)
     );
     const sessionContext =
-        runtimeConfig.public.ssrAuthEnabled === true ? useSessionContext() : null;
+        runtimeConfig.public.ssrAuthEnabled === true
+            ? useSessionContext()
+            : null;
     const notificationUserId = computed(() =>
         resolveNotificationUserId(sessionContext?.data.value?.session)
     );
@@ -247,19 +263,34 @@ export function useChat(
     // Mutable so ChatContainer can update without re-calling useChat() outside setup.
     const pendingPromptIdRef = ref<string | undefined>(pendingPromptId);
     const historyLoadedFor = ref<string | null>(
-        options.historyAlreadyLoaded && initialThreadId
-            ? initialThreadId
-            : null
+        options.historyAlreadyLoaded && initialThreadId ? initialThreadId : null
     );
     const cleanupFns: Array<() => void> = [];
+    const backgroundStreamDebugEnabled = (): boolean => {
+        if (import.meta.dev) return true;
+        if (typeof localStorage === 'undefined') return false;
+        try {
+            return (
+                localStorage.getItem('or3:debug:background-stream') === 'true'
+            );
+        } catch {
+            return false;
+        }
+    };
     const logBgStream = (
-        _stage: string,
-        _details?: Record<string, unknown>
-    ): void => {};
+        stage: string,
+        details?: Record<string, unknown>
+    ): void => {
+        if (!backgroundStreamDebugEnabled()) return;
+        console.debug('[bg-stream]', stage, redactDiagnosticDetails(details));
+    };
     const warnBgStream = (
-        _stage: string,
-        _details?: Record<string, unknown>
-    ): void => {};
+        stage: string,
+        details?: Record<string, unknown>
+    ): void => {
+        if (!backgroundStreamDebugEnabled()) return;
+        console.warn('[bg-stream]', stage, redactDiagnosticDetails(details));
+    };
 
     watch(
         () => notificationUserId.value,
@@ -293,6 +324,10 @@ export function useChat(
         accumulator: typeof streamAcc;
         /** Thread selected when the request was admitted (or created for it). */
         threadId?: string;
+        /** Assistant row this request owns (for cancellation before job ID). */
+        assistantMessageId?: string;
+        /** Stable admission identity persisted before the start request. */
+        backgroundAdmissionId?: string;
         /** Set when navigation supersedes an admission before it can stream. */
         cancelled: boolean;
         settled: Promise<void>;
@@ -305,6 +340,28 @@ export function useChat(
         persistAssistant?: ReturnType<typeof makeAssistantPersister>;
     };
     let activeRequestScope: ChatRequestScope | null = null;
+    /**
+     * Monotonic navigation counter. Long-running async work (reattachment,
+     * recovery) snapshots this before awaiting and validates it afterwards so
+     * an A -> B -> A switch cannot be mistaken for "still on the same thread".
+     */
+    let navigationRevision = 0;
+    function bumpNavigationRevision(): void {
+        navigationRevision += 1;
+    }
+    /**
+     * True only while this request still owns the visible conversation. Used to
+     * guard every asynchronous mutation of shared UI state (loading, tail,
+     * background controls, accumulator presentation).
+     */
+    function ownsCurrentView(scope: ChatRequestScope): boolean {
+        return (
+            !scope.cancelled &&
+            activeRequestScope === scope &&
+            Boolean(scope.threadId) &&
+            threadIdRef.value === scope.threadId
+        );
+    }
     type WorkflowMessageScope = Pick<
         ChatRequestScope,
         'originDb' | 'workspaceId' | 'threadId'
@@ -350,23 +407,22 @@ export function useChat(
                 }
             ).backgroundStreaming
     );
-    const backgroundStreamingAllowed = computed(
-        () => {
-            if (runtimeConfig.public.ssrAuthEnabled !== true) return false;
-            if (backgroundStreamingConfig.value?.enabled !== true) return false;
-            if (
-                !isBackgroundStreamingEnabled(
-                    backgroundStreamingConfig.value?.enabled
-                )
+    const backgroundStreamingAllowed = computed(() => {
+        if (runtimeConfig.public.ssrAuthEnabled !== true) return false;
+        if (syncConfig.enabled !== true) return false;
+        if (backgroundStreamingConfig.value?.enabled !== true) return false;
+        if (
+            !isBackgroundStreamingEnabled(
+                backgroundStreamingConfig.value?.enabled
             )
-                return false;
-            const session = sessionContext
-                ? sessionContext.data.value?.session ?? null
-                : null;
-            if (!session) return false;
-            return Boolean(session.authenticated && session.workspace?.id);
-        }
-    );
+        )
+            return false;
+        const session = sessionContext
+            ? (sessionContext.data.value?.session ?? null)
+            : null;
+        if (!session) return false;
+        return Boolean(session.authenticated && session.workspace?.id);
+    });
 
     /**
      * Purpose:
@@ -389,8 +445,8 @@ export function useChat(
                 ? limits.maxConversations
                 : 0;
         if (isNewThread && maxConversations > 0) {
-            const threadCount = await getDb().threads
-                .filter((thread) => thread.deleted !== true)
+            const threadCount = await getDb()
+                .threads.filter((thread) => thread.deleted !== true)
                 .count();
             if (threadCount >= maxConversations) {
                 toast.add({
@@ -412,8 +468,8 @@ export function useChat(
             const startOfDay = new Date();
             startOfDay.setHours(0, 0, 0, 0);
             const startOfDaySec = Math.floor(startOfDay.getTime() / 1000);
-            const messageCount = await getDb().messages
-                .where('created_at')
+            const messageCount = await getDb()
+                .messages.where('created_at')
                 .aboveOrEqual(startOfDaySec)
                 .and((msg) => msg.deleted !== true)
                 .count();
@@ -514,9 +570,9 @@ export function useChat(
         // message placeholder was rendered.
         let persistedRow: StoredMessage | null = null;
         try {
-            const row = (await originDb.messages.get(
-                messageId
-            )) as StoredMessage | undefined;
+            const row = (await originDb.messages.get(messageId)) as
+                | StoredMessage
+                | undefined;
             if (row && row.thread_id !== originThreadId) return;
             persistedRow = row ?? null;
         } catch {
@@ -539,8 +595,7 @@ export function useChat(
                 ...existingRaw,
                 role: existingRaw.role,
                 content: finalOutput,
-                file_hashes:
-                    persistedFileHashes ?? existingRaw.file_hashes,
+                file_hashes: persistedFileHashes ?? existingRaw.file_hashes,
             };
             rawMessages.value.splice(rawIdx, 1, next);
             updated = true;
@@ -597,8 +652,8 @@ export function useChat(
                             typeof row.index === 'number'
                                 ? row.index
                                 : typeof row.index === 'string'
-                                ? Number(row.index) || null
-                                : null,
+                                  ? Number(row.index) || null
+                                  : null,
                         created_at:
                             typeof row.created_at === 'number'
                                 ? row.created_at
@@ -693,10 +748,7 @@ export function useChat(
             });
             return;
         }
-        if (
-            threadIdRef.value &&
-            historyLoadedFor.value === threadIdRef.value
-        ) {
+        if (threadIdRef.value && historyLoadedFor.value === threadIdRef.value) {
             // History was provided by the parent (or already synced): generation
             // reconciliation still has to run, otherwise a refresh mid-stream
             // leaves the abandoned assistant pending forever.
@@ -866,7 +918,10 @@ export function useChat(
                 stopBackgroundJobTracking(tracker);
             }
         }
-        for (const dispose of backgroundJobDisposers.splice(0, backgroundJobDisposers.length)) {
+        for (const dispose of backgroundJobDisposers.splice(
+            0,
+            backgroundJobDisposers.length
+        )) {
             try {
                 dispose();
             } catch {
@@ -897,7 +952,13 @@ export function useChat(
         userId: string;
         messageId: string;
         threadId: string;
+        /** Workspace database captured before admission; never re-resolved late. */
+        originDb?: Or3DB;
+        workspaceId?: string;
+        canonicalHistory?: boolean;
+        generationId?: string;
         initialContent?: string;
+        initialReasoning?: string;
         initialAttempt?: number;
         isReattach?: boolean;
         useSse?: boolean;
@@ -923,9 +984,14 @@ export function useChat(
             userId: params.userId,
             threadId: params.threadId,
             messageId: params.messageId,
+            originDb: params.originDb,
+            workspaceId: params.workspaceId,
+            canonicalHistory: params.canonicalHistory,
+            generationId: params.generationId,
             preferServerNotifications: serverNotificationsEnabled.value,
             // Seed with DB content - server must have MORE to update
             initialContent: params.initialContent,
+            initialReasoning: params.initialReasoning,
             initialAttempt: params.initialAttempt,
             useSse: params.useSse,
         });
@@ -956,12 +1022,20 @@ export function useChat(
                         );
                     }
                 }
+                if (
+                    typeof params.initialReasoning === 'string' &&
+                    params.initialReasoning.length > 0 &&
+                    !isStaleAttempt
+                ) {
+                    target.reasoning_text = params.initialReasoning;
+                }
             }
             logBgStream('attach-bg-job-reattach-seed', {
                 jobId: params.jobId,
                 messageId: params.messageId,
                 trackerContentLength: tracker.lastContent.length,
-                targetLength: resolveUiMessage(params.messageId)?.text.length ?? 0,
+                targetLength:
+                    resolveUiMessage(params.messageId)?.text.length ?? 0,
             });
         }
         if (params.isReattach && tailAssistant.value?.id === params.messageId) {
@@ -973,9 +1047,20 @@ export function useChat(
             ) {
                 streamAcc.append(params.initialContent, { kind: 'text' });
             }
+            if (
+                typeof params.initialReasoning === 'string' &&
+                params.initialReasoning.length > 0
+            ) {
+                streamAcc.append(params.initialReasoning, {
+                    kind: 'reasoning',
+                });
+            }
         }
         const shouldBindUiSubscriber = !detached.value;
-        if (shouldBindUiSubscriber && !attachedBackgroundJobs.has(params.jobId)) {
+        if (
+            shouldBindUiSubscriber &&
+            !attachedBackgroundJobs.has(params.jobId)
+        ) {
             logBgStream('attach-bg-job-bind-subscriber', {
                 jobId: params.jobId,
                 messageId: params.messageId,
@@ -984,13 +1069,21 @@ export function useChat(
                 attachedAlready: attachedBackgroundJobs.has(params.jobId),
             });
             const subscriber: BackgroundJobSubscriber = {
-                onUpdate: ({ content, delta, replace, status }) => {
+                onUpdate: ({ content, delta, replace, reasoning, status }) => {
                     if (detached.value) {
                         return;
                     }
                     const target = resolveUiMessage(params.messageId);
                     if (!target) return;
                     const previousText = target.text;
+
+                    if (
+                        typeof reasoning === 'string' &&
+                        reasoning.length > 0 &&
+                        reasoning !== target.reasoning_text
+                    ) {
+                        target.reasoning_text = reasoning;
+                    }
 
                     const nextToolCalls = normalizeBackgroundToolCalls(
                         status.tool_calls
@@ -1009,7 +1102,10 @@ export function useChat(
                         target.text = content;
                     }
 
-                    if (target.pending && (delta || hasToolUpdate || contentChanged)) {
+                    if (
+                        target.pending &&
+                        (delta || hasToolUpdate || contentChanged)
+                    ) {
                         target.pending = false;
                     }
 
@@ -1019,7 +1115,8 @@ export function useChat(
                         if (
                             contentChanged &&
                             delta.length > 0 &&
-                            content.length === previousText.length + delta.length &&
+                            content.length ===
+                                previousText.length + delta.length &&
                             content.startsWith(previousText)
                         ) {
                             return;
@@ -1027,12 +1124,15 @@ export function useChat(
                         messages.value = [...messages.value];
                     }
                 },
-                onComplete: ({ content, status }) => {
+                onComplete: ({ content, reasoning, status }) => {
                     if (detached.value) {
-                        logBgStream('attach-bg-job-on-complete-skipped-detached', {
-                            jobId: params.jobId,
-                            messageId: params.messageId,
-                        });
+                        logBgStream(
+                            'attach-bg-job-on-complete-skipped-detached',
+                            {
+                                jobId: params.jobId,
+                                messageId: params.messageId,
+                            }
+                        );
                         return;
                     }
                     const target = resolveUiMessage(params.messageId);
@@ -1047,6 +1147,9 @@ export function useChat(
                             : 0,
                     });
                     target.text = content;
+                    if (typeof reasoning === 'string' && reasoning.length > 0) {
+                        target.reasoning_text = reasoning;
+                    }
                     const nextToolCalls = normalizeBackgroundToolCalls(
                         status.tool_calls
                     );
@@ -1054,7 +1157,9 @@ export function useChat(
                         target.toolCalls = nextToolCalls;
                     }
                     target.pending = false;
-                    if (syncTailAccumulator(params.messageId, content, content)) {
+                    if (
+                        syncTailAccumulator(params.messageId, content, content)
+                    ) {
                         streamAcc.finalize();
                     } else {
                         messages.value = [...messages.value];
@@ -1066,7 +1171,7 @@ export function useChat(
                         backgroundJobInfo.value = null;
                     }
                 },
-                onError: ({ status }) => {
+                onError: ({ reasoning, status }) => {
                     if (detached.value) {
                         logBgStream('attach-bg-job-on-error-skipped-detached', {
                             jobId: params.jobId,
@@ -1076,6 +1181,9 @@ export function useChat(
                     }
                     const target = resolveUiMessage(params.messageId);
                     if (!target) return;
+                    if (typeof reasoning === 'string' && reasoning.length > 0) {
+                        target.reasoning_text = reasoning;
+                    }
                     logBgStream('attach-bg-job-on-error', {
                         jobId: params.jobId,
                         messageId: params.messageId,
@@ -1094,7 +1202,9 @@ export function useChat(
                         messages.value = [...messages.value];
                     }
                     streamAcc.finalize({
-                        error: new Error(target.error || 'Background response failed'),
+                        error: new Error(
+                            target.error || 'Background response failed'
+                        ),
                     });
                     if (backgroundJobId.value === params.jobId) {
                         loading.value = false;
@@ -1103,7 +1213,7 @@ export function useChat(
                         backgroundJobInfo.value = null;
                     }
                 },
-                onAbort: ({ status }) => {
+                onAbort: ({ reasoning, status }) => {
                     if (detached.value) {
                         logBgStream('attach-bg-job-on-abort-skipped-detached', {
                             jobId: params.jobId,
@@ -1113,6 +1223,9 @@ export function useChat(
                     }
                     const target = resolveUiMessage(params.messageId);
                     if (!target) return;
+                    if (typeof reasoning === 'string' && reasoning.length > 0) {
+                        target.reasoning_text = reasoning;
+                    }
                     logBgStream('attach-bg-job-on-abort', {
                         jobId: params.jobId,
                         messageId: params.messageId,
@@ -1138,6 +1251,35 @@ export function useChat(
                             error: 'stopped',
                         }
                     );
+                    if (backgroundJobId.value === params.jobId) {
+                        loading.value = false;
+                        backgroundJobId.value = null;
+                        backgroundJobMode.value = 'none';
+                        backgroundJobInfo.value = null;
+                    }
+                },
+                onTransportError: ({ status }) => {
+                    logBgStream('attach-bg-job-on-transport-error', {
+                        jobId: params.jobId,
+                        messageId: params.messageId,
+                        kind: status.trackingInterruptedKind ?? 'unknown',
+                        detached: detached.value,
+                    });
+                    // Connection/protocol/auth problems are not generation
+                    // failures. Only project the durable interrupted state when
+                    // the server job was confirmed missing; otherwise leave the
+                    // row pending so reattachment can retry.
+                    if (
+                        !detached.value &&
+                        status.trackingInterruptedKind === 'missing'
+                    ) {
+                        const target = resolveUiMessage(params.messageId);
+                        if (target) {
+                            target.pending = false;
+                            target.error = 'stream_interrupted';
+                            messages.value = [...messages.value];
+                        }
+                    }
                     if (backgroundJobId.value === params.jobId) {
                         loading.value = false;
                         backgroundJobId.value = null;
@@ -1206,7 +1348,8 @@ export function useChat(
                 row.role !== 'assistant' ||
                 row.pending !== true ||
                 typeof rowData?.background_job_id === 'string'
-            ) continue;
+            )
+                continue;
 
             const interrupt = async () => {
                 reconcileTimersScheduled.delete(row.id);
@@ -1234,18 +1377,22 @@ export function useChat(
                 // projection (e.g. seeded history) never strands the UI.
                 if (threadIdRef.value !== reconcileThreadId) return;
                 const terminalError =
-                    latest.error ?? (finalizedHere ? 'stream_interrupted' : undefined);
+                    latest.error ??
+                    (finalizedHere ? 'stream_interrupted' : undefined);
                 if (terminalError === undefined) return;
                 // finalizedHere means the durable row just left pending behind;
                 // otherwise mirror the durable row's own pending flag.
-                const leftPending =
-                    !finalizedHere && latest.pending === true;
-                const raw = rawMessages.value.find((message) => message.id === row.id);
+                const leftPending = !finalizedHere && latest.pending === true;
+                const raw = rawMessages.value.find(
+                    (message) => message.id === row.id
+                );
                 if (raw) {
                     raw.error = terminalError;
                     if (!leftPending) raw.pending = false;
                 }
-                const ui = messages.value.find((message) => message.id === row.id);
+                const ui = messages.value.find(
+                    (message) => message.id === row.id
+                );
                 if (ui) {
                     if (!leftPending) ui.pending = false;
                     ui.error = terminalError;
@@ -1272,23 +1419,45 @@ export function useChat(
             });
             return;
         }
+        // Capture navigation ownership before the first await. The query and
+        // every attachment below must target the thread/workspace that was
+        // current when reattachment started, not whatever is current after an
+        // await resolves.
+        const reattachThreadId = threadIdRef.value;
+        const reattachDb = getDb();
+        const reattachWorkspaceId = getActiveWorkspaceId() ?? 'local';
+        const reattachRevision = navigationRevision;
+        const ownsReattach = () =>
+            navigationRevision === reattachRevision &&
+            threadIdRef.value === reattachThreadId;
         logBgStream('reattach-start', {
-            threadId: threadIdRef.value,
+            threadId: reattachThreadId,
+            workspaceId: reattachWorkspaceId,
+            revision: reattachRevision,
             detached: detached.value,
             activeBackgroundJobId: backgroundJobId.value,
         });
 
         try {
-            const dbMessages = (await messagesByThread(threadIdRef.value)) as
-                | StoredMessage[]
-                | undefined;
+            const dbMessages = (await messagesByThread(
+                reattachThreadId,
+                reattachDb
+            )) as StoredMessage[] | undefined;
+            if (!ownsReattach()) {
+                logBgStream('reattach-abandoned-stale-navigation', {
+                    threadId: reattachThreadId,
+                    revision: reattachRevision,
+                });
+                return;
+            }
             const list = Array.isArray(dbMessages) ? dbMessages : [];
             logBgStream('reattach-scan', {
-                threadId: threadIdRef.value,
+                threadId: reattachThreadId,
                 messageCount: list.length,
             });
             for (const msg of list) {
-                if (msg.role !== 'assistant' || !msg.pending || !msg.data) continue;
+                if (msg.role !== 'assistant' || !msg.pending || !msg.data)
+                    continue;
                 const data = msg.data as Record<string, unknown>;
                 const jobId =
                     typeof data.background_job_id === 'string'
@@ -1299,20 +1468,39 @@ export function useChat(
                         ? data.background_job_status
                         : 'streaming';
                 if (!jobId || status !== 'streaming') continue;
+                if (!ownsReattach()) {
+                    logBgStream('reattach-abandoned-stale-navigation', {
+                        threadId: reattachThreadId,
+                        revision: reattachRevision,
+                    });
+                    return;
+                }
 
                 const initialContent =
                     typeof data.content === 'string'
                         ? data.content
                         : typeof msg.content === 'string'
-                        ? msg.content
+                          ? msg.content
+                          : '';
+                const initialReasoning =
+                    typeof data.reasoning_text === 'string'
+                        ? data.reasoning_text
                         : '';
 
                 attachBackgroundJobToUi({
                     jobId,
                     userId: notificationUserId.value,
                     messageId: msg.id,
-                    threadId: threadIdRef.value,
+                    threadId: reattachThreadId,
+                    originDb: reattachDb,
+                    workspaceId: reattachWorkspaceId,
+                    canonicalHistory: data.background_history_version === 1,
+                    generationId:
+                        typeof data.generation_id === 'string'
+                            ? data.generation_id
+                            : undefined,
                     initialContent,
+                    initialReasoning,
                     initialAttempt:
                         typeof data.background_job_attempt === 'number'
                             ? data.background_job_attempt
@@ -1321,18 +1509,19 @@ export function useChat(
                     useSse: backgroundStreamingAllowed.value,
                 });
                 logBgStream('reattach-job-bound', {
-                    threadId: threadIdRef.value,
+                    threadId: reattachThreadId,
                     messageId: msg.id,
                     jobId,
                     status,
                     initialContentLength: initialContent.length,
                 });
 
+                if (!ownsReattach()) return;
                 if (!backgroundJobId.value) {
                     backgroundJobId.value = jobId;
                     backgroundJobInfo.value = {
                         jobId,
-                        threadId: threadIdRef.value,
+                        threadId: reattachThreadId,
                         messageId: msg.id,
                     };
                 }
@@ -1340,15 +1529,16 @@ export function useChat(
                     backgroundJobMode.value = 'background';
                 }
             }
+            if (!ownsReattach()) return;
             logBgStream('reattach-complete', {
-                threadId: threadIdRef.value,
+                threadId: reattachThreadId,
                 attachedJobs: attachedBackgroundJobs.size,
                 backgroundJobId: backgroundJobId.value,
                 backgroundJobMode: backgroundJobMode.value,
             });
         } catch (error) {
             warnBgStream('reattach-failed', {
-                threadId: threadIdRef.value || null,
+                threadId: reattachThreadId,
                 error: error instanceof Error ? error.message : String(error),
             });
         }
@@ -1409,10 +1599,12 @@ export function useChat(
             const message =
                 error instanceof Error ? error.message : String(error);
             result = {
-                status: 'failed', requestId,
-                reason: error instanceof ToolIterationLimitError
-                    ? 'tool_iteration_limit'
-                    : 'stream_error',
+                status: 'failed',
+                requestId,
+                reason:
+                    error instanceof ToolIterationLimitError
+                        ? 'tool_iteration_limit'
+                        : 'stream_error',
                 error: message,
             };
             if (import.meta.dev) {
@@ -1467,8 +1659,7 @@ export function useChat(
             sendMessagesParams = contentOrParams;
         }
 
-        const hasKey =
-            Boolean(effectiveApiKey.value) || hasInstanceKey.value;
+        const hasKey = Boolean(effectiveApiKey.value) || hasInstanceKey.value;
         if (!hasKey) {
             if (allowUserOverride.value && guestAccessEnabled.value) {
                 // Guest access enabled - trigger OpenRouter login
@@ -1485,8 +1676,7 @@ export function useChat(
                 // SSR mode: user must authenticate via the auth provider first
                 toast.add({
                     title: 'Sign in required',
-                    description:
-                        'Please sign in to continue chatting.',
+                    description: 'Please sign in to continue chatting.',
                     color: 'info',
                     duration: 4000,
                 });
@@ -1496,25 +1686,29 @@ export function useChat(
                 // connect/paste actions; this is only a backstop.
                 toast.add({
                     title: 'Connect to OpenRouter',
-                    description:
-                        'Add an OpenRouter API key to start chatting.',
+                    description: 'Add an OpenRouter API key to start chatting.',
                     color: 'info',
                     duration: 4000,
                 });
             }
-            return { status: 'rejected', requestId, reason: 'missing_credentials' };
+            return {
+                status: 'rejected',
+                requestId,
+                reason: 'missing_credentials',
+            };
         }
 
         // Extract extra text parts early so we can account for them in validation.
         // Large pastes (>600 words) are captured into extraTextParts while the
         // editor text field (content) is left empty — the send button and model
         // must still accept the message.
-        const earlyExtraTextParts: string[] =
-            Array.isArray(sendMessagesParams.extraTextParts)
-                ? sendMessagesParams.extraTextParts.filter(
-                      (t): t is string => typeof t === 'string' && t.trim() !== ''
-                  )
-                : [];
+        const earlyExtraTextParts: string[] = Array.isArray(
+            sendMessagesParams.extraTextParts
+        )
+            ? sendMessagesParams.extraTextParts.filter(
+                  (t): t is string => typeof t === 'string' && t.trim() !== ''
+              )
+            : [];
 
         const outgoing = await hooks.applyFilters(
             'ui.chat.message:filter:outgoing',
@@ -1522,7 +1716,9 @@ export function useChat(
         );
 
         if (
-            (!outgoing || typeof outgoing !== 'string' || outgoing.trim() === '') &&
+            (!outgoing ||
+                typeof outgoing !== 'string' ||
+                outgoing.trim() === '') &&
             earlyExtraTextParts.length === 0
         ) {
             toast.add({
@@ -1545,7 +1741,8 @@ export function useChat(
         }
 
         const canSend = await enforceClientLimits(!requestScope.threadId);
-        if (!canSend) return { status: 'rejected', requestId, reason: 'client_limit' };
+        if (!canSend)
+            return { status: 'rejected', requestId, reason: 'client_limit' };
 
         if (!requestScope.threadId) {
             let effectivePromptId: string | null =
@@ -1749,10 +1946,7 @@ export function useChat(
         const hydratedFiles = await Promise.all(
             Array.isArray(files) ? files.map(normalizeFileUrl) : []
         );
-        if (
-            requestScope.cancelled ||
-            threadIdRef.value !== requestThreadId
-        ) {
+        if (requestScope.cancelled || threadIdRef.value !== requestThreadId) {
             return { status: 'aborted', requestId, reason: 'aborted' };
         }
 
@@ -1784,7 +1978,9 @@ export function useChat(
                 : undefined,
         });
         requestState.value = {
-            status: 'persisted', requestId, userMessageId: userDbMsg.id,
+            status: 'persisted',
+            requestId,
+            userMessageId: userDbMsg.id,
         };
         const rawUser: ChatMessage = {
             role: 'user',
@@ -1857,7 +2053,9 @@ export function useChat(
                 threadIdRef.value !== requestThreadId
             ) {
                 return {
-                    status: 'aborted', requestId, reason: 'aborted',
+                    status: 'aborted',
+                    requestId,
+                    reason: 'aborted',
                     userMessageId: userDbMsg.id,
                 };
             }
@@ -1891,8 +2089,7 @@ export function useChat(
                     (candidate: ModelInfo) => candidate.id === budgetModelId
                 ) ||
                 modelMeta;
-            const maxInputTokens =
-                resolveChatInputTokenBudget(budgetModelMeta);
+            const maxInputTokens = resolveChatInputTokenBudget(budgetModelMeta);
 
             let orMessages = await buildOpenRouterMessagesForSend({
                 effectiveMessages: sanitizedEffectiveMessages,
@@ -1909,13 +2106,17 @@ export function useChat(
                 threadIdRef.value !== requestThreadId
             ) {
                 return {
-                    status: 'aborted', requestId, reason: 'aborted',
+                    status: 'aborted',
+                    requestId,
+                    reason: 'aborted',
                     userMessageId: userDbMsg.id,
                 };
             }
             if (orMessages.length === 0) {
                 return {
-                    status: 'failed', requestId, reason: 'empty_context',
+                    status: 'failed',
+                    requestId,
+                    reason: 'empty_context',
                     error: 'No model input remained after message preparation.',
                     userMessageId: userDbMsg.id,
                 };
@@ -1928,28 +2129,34 @@ export function useChat(
             requestScope.streamId = newStreamId;
             streamId.value = newStreamId;
             const nextAssistantId = newId();
-            const assistantDbMsg = (await appendMessageToDb(requestScope.originDb, {
-                id: nextAssistantId,
-                thread_id: requestThreadId,
-                role: 'assistant',
-                stream_id: newStreamId,
-                pending: true, // Mark as streaming - HookBridge will skip sync until finalized
-                data: {
-                    ...assistantTranscriptData({
-                        turnId: userDbMsg.id,
-                        requestId,
-                        generationId: newStreamId,
-                        mode: 'foreground',
-                    }),
-                    content: '',
-                    attachments: [],
-                    reasoning_text: null,
-                    generation_state: 'streaming',
-                    ...createForegroundGenerationLease(requestId),
-                },
-            })) as StoredMessage;
+            const assistantDbMsg = (await appendMessageToDb(
+                requestScope.originDb,
+                {
+                    id: nextAssistantId,
+                    thread_id: requestThreadId,
+                    role: 'assistant',
+                    stream_id: newStreamId,
+                    pending: true, // Mark as streaming - HookBridge will skip sync until finalized
+                    data: {
+                        ...assistantTranscriptData({
+                            turnId: userDbMsg.id,
+                            requestId,
+                            generationId: newStreamId,
+                            mode: 'foreground',
+                        }),
+                        content: '',
+                        attachments: [],
+                        reasoning_text: null,
+                        generation_state: 'streaming',
+                        ...createForegroundGenerationLease(requestId),
+                    },
+                }
+            )) as StoredMessage;
+            requestScope.assistantMessageId = assistantDbMsg.id;
             requestState.value = {
-                status: 'streaming', requestId, userMessageId: userDbMsg.id,
+                status: 'streaming',
+                requestId,
+                userMessageId: userDbMsg.id,
                 assistantMessageId: assistantDbMsg.id,
             };
             // Track file hashes across loop iterations
@@ -1983,7 +2190,10 @@ export function useChat(
             });
 
             const toolRegistry = useToolRegistry();
-            const enabledToolDefs = toolRegistry.getEnabledDefinitions({ workspaceId: requestScope.workspaceId, threadId: requestThreadId });
+            const enabledToolDefs = toolRegistry.getEnabledDefinitions({
+                workspaceId: requestScope.workspaceId,
+                threadId: requestThreadId,
+            });
 
             // Track tool calls across all loop iterations (persists state)
             const activeToolCalls = new Map<string, ToolCallInfo>();
@@ -2036,7 +2246,9 @@ export function useChat(
                 requestScope.abortController = null;
                 abortController.value = null;
                 return {
-                    status: 'detached', requestId, reason: 'detached',
+                    status: 'detached',
+                    requestId,
+                    reason: 'detached',
                     userMessageId: userDbMsg.id,
                     assistantMessageId: assistantDbMsg.id,
                 };
@@ -2136,7 +2348,9 @@ export function useChat(
                 );
                 loading.value = false;
                 return {
-                    status: 'failed', requestId, reason: 'empty_context',
+                    status: 'failed',
+                    requestId,
+                    reason: 'empty_context',
                     error: emptyContextError,
                     userMessageId: userDbMsg.id,
                     assistantMessageId: assistantDbMsg.id,
@@ -2181,19 +2395,56 @@ export function useChat(
                 requestScope.abortController = new AbortController();
                 abortController.value = requestScope.abortController;
 
+                // Stable per-send admission identity. Persisted on the request
+                // scope before the start request so Stop can target the
+                // admission even before a job ID returns.
+                const backgroundAdmissionId = newId();
+                requestScope.backgroundAdmissionId = backgroundAdmissionId;
+
                 try {
                     const toolRuntime =
                         enabledToolDefs.length > 0
                             ? enabledToolDefs.reduce<Record<string, string>>(
                                   (acc, tool) => {
                                       if (tool.runtime) {
-                                          acc[tool.function.name] = tool.runtime;
+                                          acc[tool.function.name] =
+                                              tool.runtime;
                                       }
                                       return acc;
                                   },
                                   {}
                               )
                             : undefined;
+
+                    // Capture the exact local records before paid execution.
+                    // The assistant stays pending locally (so HookBridge does
+                    // not race it); the server commits this envelope directly
+                    // to canonical sync history before claiming the job.
+                    await updateMessageRecord(
+                        requestScope.originDb,
+                        assistantDbMsg.id,
+                        {
+                            data: {
+                                background_admission_id: backgroundAdmissionId,
+                                generation_mode: 'background',
+                                generation_state: 'streaming',
+                                background_history_version: 1,
+                            },
+                        }
+                    );
+                    const [historyThread, historyAssistant] = await Promise.all(
+                        [
+                            requestScope.originDb.threads.get(requestThreadId),
+                            requestScope.originDb.messages.get(
+                                assistantDbMsg.id
+                            ),
+                        ]
+                    );
+                    if (!historyThread || !historyAssistant) {
+                        throw new Error(
+                            'Unable to capture canonical background history'
+                        );
+                    }
 
                     const result = await startBackgroundStream({
                         apiKey: effectiveApiKey.value,
@@ -2204,6 +2455,19 @@ export function useChat(
                         modalities,
                         threadId: requestThreadId,
                         messageId: assistantDbMsg.id,
+                        admissionId: backgroundAdmissionId,
+                        history: {
+                            version: 1,
+                            kind: 'new-turn',
+                            admissionId: backgroundAdmissionId,
+                            generationId: newStreamId,
+                            workspaceId: requestScope.workspaceId,
+                            threadId: requestThreadId,
+                            messageId: assistantDbMsg.id,
+                            thread: historyThread,
+                            userMessage: userDbMsg,
+                            assistantMessage: historyAssistant,
+                        },
                         reasoning,
                         tools:
                             enabledToolDefs.length > 0
@@ -2220,7 +2484,10 @@ export function useChat(
                         jobId: result.jobId,
                     });
 
-                    if (assistantDbMsg.data && typeof assistantDbMsg.data === 'object') {
+                    if (
+                        assistantDbMsg.data &&
+                        typeof assistantDbMsg.data === 'object'
+                    ) {
                         assistantDbMsg.data = {
                             ...(assistantDbMsg.data as Record<string, unknown>),
                             background_job_id: result.jobId,
@@ -2232,18 +2499,21 @@ export function useChat(
                             background_job_status: 'streaming',
                         } as Record<string, unknown>;
                     }
-                    await updateMessageRecord(requestScope.originDb, assistantDbMsg.id, {
-                        data: {
-                            background_job_id: result.jobId,
-                            background_job_status: 'streaming',
-                            generation_mode: 'background',
-                            generation_state: 'streaming',
-                        },
-                    });
+                    await projectCanonicalBackgroundMessage(
+                        requestScope.originDb,
+                        assistantDbMsg.id,
+                        {
+                            data: {
+                                background_job_id: result.jobId,
+                                background_admission_id: backgroundAdmissionId,
+                                background_job_status: 'streaming',
+                                generation_mode: 'background',
+                                generation_state: 'streaming',
+                            },
+                        }
+                    );
 
-                    const ownsCurrentThread =
-                        activeRequestScope === requestScope &&
-                        threadIdRef.value === requestThreadId;
+                    const ownsCurrentThread = ownsCurrentView(requestScope);
                     if (ownsCurrentThread) {
                         backgroundJobId.value = result.jobId;
                         backgroundJobInfo.value = {
@@ -2258,6 +2528,10 @@ export function useChat(
                               userId: notificationUserId.value,
                               messageId: assistantDbMsg.id,
                               threadId: requestThreadId,
+                              originDb: requestScope.originDb,
+                              workspaceId: requestScope.workspaceId,
+                              canonicalHistory: true,
+                              generationId: newStreamId,
                               initialContent: '',
                               useSse: backgroundStreamingAllowed.value,
                           })
@@ -2266,6 +2540,10 @@ export function useChat(
                               userId: notificationUserId.value,
                               messageId: assistantDbMsg.id,
                               threadId: requestThreadId,
+                              originDb: requestScope.originDb,
+                              workspaceId: requestScope.workspaceId,
+                              canonicalHistory: true,
+                              generationId: newStreamId,
                               preferServerNotifications:
                                   serverNotificationsEnabled.value,
                               initialContent: '',
@@ -2285,15 +2563,20 @@ export function useChat(
                     });
                     if (completion.status === 'aborted') {
                         return {
-                            status: 'aborted', requestId, reason: 'aborted',
+                            status: 'aborted',
+                            requestId,
+                            reason: 'aborted',
                             userMessageId: userDbMsg.id,
                             assistantMessageId: assistantDbMsg.id,
                         };
                     }
                     if (completion.status === 'error') {
                         return {
-                            status: 'failed', requestId, reason: 'stream_error',
-                            error: completion.error || 'Background stream failed',
+                            status: 'failed',
+                            requestId,
+                            reason: 'stream_error',
+                            error:
+                                completion.error || 'Background stream failed',
                             userMessageId: userDbMsg.id,
                             assistantMessageId: assistantDbMsg.id,
                         };
@@ -2302,8 +2585,7 @@ export function useChat(
                     if (
                         aborted.value ||
                         requestScope.abortController?.signal.aborted ||
-                        (error instanceof Error &&
-                            error.name === 'AbortError')
+                        (error instanceof Error && error.name === 'AbortError')
                     ) {
                         // Let the request-level abort path own cleanup and the
                         // terminal result. Treating admission cancellation as a
@@ -2314,13 +2596,21 @@ export function useChat(
                         error instanceof Error
                             ? error.message
                             : 'Background stream failed';
+                    // This admission may have been superseded by navigation. Its
+                    // durable row still belongs to the origin DB, but no shared
+                    // UI state (tail, loading, background controls, accumulator)
+                    // may be touched once it no longer owns the visible view.
+                    const ownsView = ownsCurrentView(requestScope);
                     warnBgStream('send-message-background-failed', {
                         threadId: requestThreadId,
                         messageId: assistantDbMsg.id,
                         error: errMessage,
+                        ownsCurrentView: ownsView,
                     });
-                    const target = resolveUiMessage(assistantDbMsg.id);
-                    if (target) {
+                    const target = ownsView
+                        ? resolveUiMessage(assistantDbMsg.id)
+                        : undefined;
+                    if (ownsView && target) {
                         target.pending = false;
                         target.error = errMessage;
                         messages.value = [...messages.value];
@@ -2331,41 +2621,54 @@ export function useChat(
                             reasoning: target?.reasoning_text ?? null,
                             toolCalls: target?.toolCalls ?? null,
                             finalize: true,
+                            terminalState: 'failed',
                         });
-                        await updateMessageRecord(requestScope.originDb, assistantDbMsg.id, {
-                            pending: false,
-                            error: errMessage,
-                            data: {
-                                background_job_status: 'error',
-                                background_job_error: errMessage,
+                        await updateMessageRecord(
+                            requestScope.originDb,
+                            assistantDbMsg.id,
+                            {
+                                pending: false,
                                 error: errMessage,
-                            },
-                        });
+                                data: {
+                                    background_job_status: 'error',
+                                    background_job_error: errMessage,
+                                    error: errMessage,
+                                },
+                            }
+                        );
                     } catch (persistError) {
                         warnBgStream('background-start-finalize-failed', {
                             threadId: requestThreadId,
                             messageId: assistantDbMsg.id,
-                            error: persistError instanceof Error
-                                ? persistError.message
-                                : String(persistError),
+                            error:
+                                persistError instanceof Error
+                                    ? persistError.message
+                                    : String(persistError),
                         });
                     }
-                    requestScope.accumulator.finalize({
-                        error: new Error(errMessage),
-                    });
-                    loading.value = false;
-                    backgroundJobId.value = null;
-                    backgroundJobMode.value = 'none';
-                    backgroundJobInfo.value = null;
+                    if (ownsView) {
+                        requestScope.accumulator.finalize({
+                            error: new Error(errMessage),
+                        });
+                        loading.value = false;
+                        backgroundJobId.value = null;
+                        backgroundJobMode.value = 'none';
+                        backgroundJobInfo.value = null;
+                    }
                     return {
-                        status: 'failed', requestId, reason: 'stream_error',
-                        error: errMessage, userMessageId: userDbMsg.id,
+                        status: 'failed',
+                        requestId,
+                        reason: 'stream_error',
+                        error: errMessage,
+                        userMessageId: userDbMsg.id,
                         assistantMessageId: assistantDbMsg.id,
                     };
                 }
 
                 return {
-                    status: 'complete', requestId, userMessageId: userDbMsg.id,
+                    status: 'complete',
+                    requestId,
+                    userMessageId: userDbMsg.id,
                     assistantMessageId: assistantDbMsg.id,
                 };
             }
@@ -2379,10 +2682,7 @@ export function useChat(
                 orMessages,
                 modalities,
                 reasoning,
-                tools:
-                    enabledToolDefs.length > 0
-                        ? enabledToolDefs
-                        : undefined,
+                tools: enabledToolDefs.length > 0 ? enabledToolDefs : undefined,
                 abortSignal: requestScope.abortController.signal,
                 assistantId: assistantDbMsg.id,
                 parentTurnId: userDbMsg.id,
@@ -2399,6 +2699,7 @@ export function useChat(
                 tailAssistant,
                 rawMessages,
                 toolLedger: requestScope.toolLedger,
+                outputLimitBytes: canonicalOutputLimitBytes,
             });
 
             const current = tailAssistant.value!;
@@ -2494,14 +2795,18 @@ export function useChat(
             backgroundJobMode.value = 'none';
             backgroundJobInfo.value = null;
             terminalResult = {
-                status: 'complete', requestId, userMessageId: userDbMsg.id,
+                status: 'complete',
+                requestId,
+                userMessageId: userDbMsg.id,
                 assistantMessageId: assistantDbMsg.id,
             };
         } catch (err) {
             if (err instanceof Error && err.name === 'AbortError') {
                 if (isDetached()) {
                     return {
-                        status: 'detached', requestId, reason: 'detached',
+                        status: 'detached',
+                        requestId,
+                        reason: 'detached',
                         userMessageId: userDbMsg.id,
                     };
                 }
@@ -2511,7 +2816,9 @@ export function useChat(
                 requestScope.abortController?.signal.aborted === true
             ) {
                 terminalResult = {
-                    status: 'aborted', requestId, reason: 'aborted',
+                    status: 'aborted',
+                    requestId,
+                    reason: 'aborted',
                     userMessageId: userDbMsg.id,
                     assistantMessageId: tailAssistant.value?.id,
                 };
@@ -2537,8 +2844,11 @@ export function useChat(
                                 includeTombstones: true,
                             }),
                             async () => {
-                            await db.messages.delete(tailAssistant.value!.id);
-                        });
+                                await db.messages.delete(
+                                    tailAssistant.value!.id
+                                );
+                            }
+                        );
                         const idx = rawMessages.value.findIndex(
                             (m) => m.id === tailAssistant.value!.id
                         );
@@ -2591,9 +2901,10 @@ export function useChat(
                         }
                     }
                     try {
-                        const existing = (await requestScope.originDb.messages.get(
-                            tailAssistant.value.id
-                        )) as StoredMessage | undefined;
+                        const existing =
+                            (await requestScope.originDb.messages.get(
+                                tailAssistant.value.id
+                            )) as StoredMessage | undefined;
                         const baseData =
                             existing?.data && typeof existing.data === 'object'
                                 ? (existing.data as Record<string, unknown>)
@@ -2631,11 +2942,14 @@ export function useChat(
                         ? visibleError.message
                         : String(visibleError);
                 terminalResult = {
-                    status: 'failed', requestId,
-                    reason: err instanceof ToolIterationLimitError
-                        ? 'tool_iteration_limit'
-                        : 'stream_error',
-                    error: terminalError, userMessageId: userDbMsg.id,
+                    status: 'failed',
+                    requestId,
+                    reason:
+                        err instanceof ToolIterationLimitError
+                            ? 'tool_iteration_limit'
+                            : 'stream_error',
+                    error: terminalError,
+                    userMessageId: userDbMsg.id,
                     assistantMessageId: tailAssistant.value?.id,
                 };
                 const lastUser = [...messages.value]
@@ -2675,14 +2989,19 @@ export function useChat(
                     try {
                         await requestScope.originDb.transaction(
                             'rw',
-                            getWriteTxTableNames(requestScope.originDb, 'messages', {
-                                includeTombstones: true,
-                            }),
+                            getWriteTxTableNames(
+                                requestScope.originDb,
+                                'messages',
+                                {
+                                    includeTombstones: true,
+                                }
+                            ),
                             async () => {
-                            await requestScope.originDb.messages.delete(
-                                tailAssistant.value!.id
-                            );
-                        });
+                                await requestScope.originDb.messages.delete(
+                                    tailAssistant.value!.id
+                                );
+                            }
+                        );
                         const idx = rawMessages.value.findIndex(
                             (m) => m.id === tailAssistant.value!.id
                         );
@@ -2710,9 +3029,10 @@ export function useChat(
                         }
                     }
                     try {
-                        const existing = (await requestScope.originDb.messages.get(
-                            tailAssistant.value.id
-                        )) as StoredMessage | undefined;
+                        const existing =
+                            (await requestScope.originDb.messages.get(
+                                tailAssistant.value.id
+                            )) as StoredMessage | undefined;
                         const baseData =
                             existing?.data && typeof existing.data === 'object'
                                 ? (existing.data as Record<string, unknown>)
@@ -2759,11 +3079,15 @@ export function useChat(
                 }
             }, 0);
         }
-        return terminalResult ?? {
-            status: 'failed', requestId, reason: 'stream_error',
-            error: 'Chat request ended without a terminal state.',
-            userMessageId: userDbMsg.id,
-        };
+        return (
+            terminalResult ?? {
+                status: 'failed',
+                requestId,
+                reason: 'stream_error',
+                error: 'Chat request ended without a terminal state.',
+                userMessageId: userDbMsg.id,
+            }
+        );
     }
 
     // END sendMessage
@@ -2812,6 +3136,8 @@ export function useChat(
      */
     let activeContinuationScope: {
         requestId: string;
+        backgroundAdmissionId?: string;
+        messageId?: string;
         settled: Promise<void>;
         resolveSettled: () => void;
     } | null = null;
@@ -2857,6 +3183,47 @@ export function useChat(
                             );
                         return resolveChatInputTokenBudget(metadata);
                     },
+                    backgroundStreamingAllowed:
+                        backgroundStreamingAllowed.value,
+                    workspaceId: getActiveWorkspaceId() ?? 'local',
+                    userId: notificationUserId.value,
+                    beginBackgroundAdmission: (admissionId, assistantId) => {
+                        backgroundJobMode.value = 'background';
+                        if (activeContinuationScope?.requestId === requestId) {
+                            activeContinuationScope.backgroundAdmissionId =
+                                admissionId;
+                            activeContinuationScope.messageId = assistantId;
+                        }
+                    },
+                    attachBackgroundJob: (params) => {
+                        const ownsVisibleThread =
+                            threadIdRef.value === params.threadId &&
+                            !detached.value;
+                        if (ownsVisibleThread) {
+                            backgroundJobId.value = params.jobId;
+                            backgroundJobInfo.value = {
+                                jobId: params.jobId,
+                                threadId: params.threadId,
+                                messageId: params.messageId,
+                            };
+                            return attachBackgroundJobToUi({
+                                ...params,
+                                userId: notificationUserId.value,
+                                workspaceId: params.workspaceId,
+                                canonicalHistory: true,
+                                useSse: backgroundStreamingAllowed.value,
+                            });
+                        }
+                        return ensureBackgroundJobTracker({
+                            ...params,
+                            userId: notificationUserId.value,
+                            workspaceId: params.workspaceId,
+                            canonicalHistory: true,
+                            preferServerNotifications:
+                                serverNotificationsEnabled.value,
+                            useSse: false,
+                        });
+                    },
                     resetStream,
                 },
                 messageId,
@@ -2885,14 +3252,14 @@ export function useChat(
     let disposed = false;
 
     function disposeHooks() {
-            if (!cleanupFns.length) return;
-            for (const dispose of cleanupFns.splice(0, cleanupFns.length)) {
-                try {
-                    dispose();
-                } catch {
-                    /* intentionally empty */
-                }
+        if (!cleanupFns.length) return;
+        for (const dispose of cleanupFns.splice(0, cleanupFns.length)) {
+            try {
+                dispose();
+            } catch {
+                /* intentionally empty */
             }
+        }
     }
 
     /** Release listeners/subscriptions without mutating conversation state. */
@@ -2937,7 +3304,9 @@ export function useChat(
         } = {}
     ): Promise<void> {
         if (disposed) {
-            throw new Error('Cannot switchThread on a disposed useChat instance');
+            throw new Error(
+                'Cannot switchThread on a disposed useChat instance'
+            );
         }
 
         const currentId = threadIdRef.value;
@@ -2947,6 +3316,10 @@ export function useChat(
             }
             return;
         }
+
+        // Invalidate in-flight navigation-scoped work (e.g. reattachment)
+        // before awaiting anything below.
+        bumpNavigationRevision();
 
         const isBackgroundActive =
             backgroundStreamingAllowed.value &&
@@ -3030,7 +3403,6 @@ export function useChat(
     }
 
     function clear() {
-
         const isBackgroundActive =
             backgroundStreamingAllowed.value &&
             (backgroundJobId.value || backgroundJobMode.value !== 'none');
@@ -3162,20 +3534,30 @@ export function useChat(
      * Constraints:
      * - No-op if no active stream is present
      */
-    function abortChat() {
-        if (backgroundJobId.value) {
-            const jobId = backgroundJobId.value;
-            const info = backgroundJobInfo.value;
-            logBgStream('abort-background-job', {
-                jobId,
-                threadId: info?.threadId || threadIdRef.value || null,
-                messageId: info?.messageId || null,
-            });
+    const backgroundStopsInFlight = new Set<string>();
+
+    /**
+     * Projects a confirmed stop into UI and durable state. Only call after the
+     * server acknowledged cancellation (job or admission marker). Shared UI
+     * state is only touched while the stopped job/admission still owns the
+     * visible view, so a late confirmation cannot abort a newer request.
+     */
+    function markBackgroundStopped(
+        messageId: string | undefined,
+        jobId?: string,
+        admissionId?: string
+    ): void {
+        const ownsView =
+            (jobId !== undefined && backgroundJobId.value === jobId) ||
+            (admissionId !== undefined &&
+                (activeRequestScope?.backgroundAdmissionId === admissionId ||
+                    activeContinuationScope?.backgroundAdmissionId ===
+                        admissionId));
+        if (ownsView) {
+            aborted.value = true;
             backgroundJobId.value = null;
             backgroundJobMode.value = 'none';
             backgroundJobInfo.value = null;
-            aborted.value = true;
-            void abortBackgroundJob(jobId);
             if (abortController.value) {
                 try {
                     abortController.value.abort();
@@ -3185,22 +3567,171 @@ export function useChat(
                 abortController.value = null;
             }
             streamAcc.finalize({ aborted: true });
-            if (tailAssistant.value?.pending)
+            if (tailAssistant.value?.pending) {
                 tailAssistant.value.pending = false;
-            if (info?.messageId) {
-                const target = resolveUiMessage(info.messageId);
-                if (target) {
-                    target.pending = false;
-                    target.error = 'stopped';
-                    messages.value = [...messages.value];
-                }
-                const trackerDb =
-                    backgroundJobTrackers.get(jobId)?.originDb ?? getDb();
-                void updateMessageRecord(trackerDb, info.messageId, {
-                    pending: false,
-                    error: 'stopped',
-                });
             }
+        }
+        if (!messageId) return;
+        if (ownsView) {
+            const target = resolveUiMessage(messageId);
+            if (target) {
+                target.pending = false;
+                target.error = 'stopped';
+                messages.value = [...messages.value];
+            }
+        }
+        const trackerDb =
+            (jobId ? backgroundJobTrackers.get(jobId)?.originDb : null) ??
+            getDb();
+        const canonicalHistory =
+            admissionId !== undefined ||
+            (jobId
+                ? backgroundJobTrackers.get(jobId)?.canonicalHistory === true
+                : false);
+        const persistStop = canonicalHistory
+            ? projectCanonicalBackgroundMessage
+            : updateMessageRecord;
+        void persistStop(trackerDb, messageId, {
+            pending: false,
+            error: 'stopped',
+            data: {
+                background_job_status: 'aborted',
+                generation_state: 'aborted',
+                error: 'stopped',
+            },
+        }).catch(() => {
+            /* durable projection is best-effort here; tracker also persists */
+        });
+    }
+
+    async function confirmBackgroundStop(
+        jobId: string,
+        info: { messageId?: string } | null
+    ): Promise<void> {
+        if (backgroundStopsInFlight.has(jobId)) return;
+        backgroundStopsInFlight.add(jobId);
+        logBgStream('abort-background-request', {
+            jobId,
+            messageId: info?.messageId ?? null,
+        });
+        try {
+            const aborted = await abortBackgroundJob(jobId);
+            if (aborted) {
+                logBgStream('abort-background-confirmed', { jobId });
+                markBackgroundStopped(info?.messageId, jobId);
+                return;
+            }
+            // The server did not confirm cancellation. Never label the row
+            // stopped without evidence: reconcile the actual terminal state.
+            const status = await pollJobStatus(jobId).catch(() => null);
+            if (status && status.status !== 'streaming') {
+                logBgStream('abort-background-already-terminal', {
+                    jobId,
+                    status: status.status,
+                });
+                return;
+            }
+            logBgStream('abort-background-unconfirmed', { jobId });
+            toast.add({
+                title: 'Stop not confirmed',
+                description:
+                    'The server did not confirm cancellation. The response may still be running.',
+                color: 'warning',
+                duration: 4000,
+            });
+        } catch (error) {
+            logBgStream('abort-background-request-failed', {
+                jobId,
+                error: error instanceof Error ? error.message : String(error),
+            });
+            toast.add({
+                title: 'Stop request failed',
+                description:
+                    'Could not reach the server to confirm cancellation. The response may still be running.',
+                color: 'warning',
+                duration: 4000,
+            });
+        } finally {
+            backgroundStopsInFlight.delete(jobId);
+        }
+    }
+
+    async function confirmAdmissionStop(admissionId: string): Promise<void> {
+        if (backgroundStopsInFlight.has(admissionId)) return;
+        backgroundStopsInFlight.add(admissionId);
+        const scope = activeRequestScope;
+        const continuation =
+            activeContinuationScope?.backgroundAdmissionId === admissionId
+                ? activeContinuationScope
+                : null;
+        const messageId = scope?.assistantMessageId ?? continuation?.messageId;
+        logBgStream('abort-admission-request', {
+            admissionId,
+            messageId: messageId ?? null,
+        });
+        // Cancel our own in-flight admission request immediately; the server
+        // request below ensures a job that committed anyway gets cancelled.
+        try {
+            (scope?.abortController ?? abortController.value)?.abort();
+        } catch {
+            /* intentionally empty */
+        }
+        try {
+            const result = await abortBackgroundAdmission(admissionId);
+            if (result.aborted || result.pending) {
+                // `pending` means the server recorded a cancellation marker that
+                // the admission commit must honor, so projecting stopped is safe.
+                if (scope) scope.cancelled = true;
+                aborted.value = true;
+                markBackgroundStopped(messageId, result.jobId, admissionId);
+                logBgStream('abort-admission-confirmed', {
+                    admissionId,
+                    aborted: result.aborted,
+                    pending: result.pending,
+                    jobId: result.jobId ?? null,
+                });
+                return;
+            }
+            logBgStream('abort-admission-unconfirmed', { admissionId });
+            toast.add({
+                title: 'Stop not confirmed',
+                description:
+                    'The server did not confirm cancellation. The response may still be running.',
+                color: 'warning',
+                duration: 4000,
+            });
+        } catch (error) {
+            logBgStream('abort-admission-request-failed', {
+                admissionId,
+                error: error instanceof Error ? error.message : String(error),
+            });
+            toast.add({
+                title: 'Stop request failed',
+                description:
+                    'Could not reach the server to confirm cancellation. The response may still be running.',
+                color: 'warning',
+                duration: 4000,
+            });
+        } finally {
+            backgroundStopsInFlight.delete(admissionId);
+        }
+    }
+
+    function abortChat() {
+        if (backgroundJobId.value) {
+            // Confirmation-first: the row is only marked stopped after the
+            // server acknowledges cancellation.
+            void confirmBackgroundStop(
+                backgroundJobId.value,
+                backgroundJobInfo.value
+            );
+            return;
+        }
+        const pendingAdmissionId =
+            activeRequestScope?.backgroundAdmissionId ??
+            activeContinuationScope?.backgroundAdmissionId;
+        if (backgroundJobMode.value === 'background' && pendingAdmissionId) {
+            void confirmAdmissionStop(pendingAdmissionId);
             return;
         }
 
@@ -3226,8 +3757,7 @@ export function useChat(
             /* intentionally empty */
         }
         (requestScope?.accumulator ?? streamAcc).finalize({ aborted: true });
-        if (tailAssistant.value?.pending)
-            tailAssistant.value.pending = false;
+        if (tailAssistant.value?.pending) tailAssistant.value.pending = false;
         try {
             const showAbort =
                 typeof appConfig.errors === 'object' &&

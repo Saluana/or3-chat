@@ -49,6 +49,10 @@ type StreamEventPayload = {
         content_delta?: string;
         content_length?: number;
         content_reset?: boolean;
+        reasoning_text?: string;
+        reasoning_delta?: string;
+        reasoning_length?: number;
+        reasoning_reset?: boolean;
         tool_calls?: BackgroundJob['tool_calls'];
         workflow_state?: BackgroundJob['workflow_state'];
     };
@@ -90,6 +94,10 @@ export function serializeJobStatus(
         content_delta?: string;
         content_length?: number;
         includeContent?: boolean;
+        reasoning_text?: string;
+        reasoning_delta?: string;
+        reasoning_length?: number;
+        reasoning_reset?: boolean;
         tool_calls?: BackgroundJob['tool_calls'];
         workflow_state?: BackgroundJob['workflow_state'];
         content_reset?: boolean;
@@ -116,11 +124,21 @@ export function serializeJobStatus(
             typeof overrides?.content_length === 'number'
                 ? overrides.content_length
                 : job.content.length,
+        reasoning_delta: overrides?.reasoning_delta,
+        reasoning_length:
+            typeof overrides?.reasoning_length === 'number'
+                ? overrides.reasoning_length
+                : (job.reasoning ?? '').length,
+        reasoning_reset: overrides?.reasoning_reset,
     };
 
     if (includeContent) {
         status.content =
             typeof contentOverride === 'string' ? contentOverride : job.content;
+        status.reasoning_text =
+            typeof overrides?.reasoning_text === 'string'
+                ? overrides.reasoning_text
+                : (job.reasoning ?? '');
     } else if (typeof contentOverride === 'string') {
         status.content = contentOverride;
     }
@@ -217,6 +235,9 @@ export default defineEventHandler(async (event) => {
         async start(controller) {
             let closed = false;
             let lastContentLength = initialOffset;
+            let lastReasoningLength = attemptChanged
+                ? 0
+                : (initialJob.reasoning ?? '').length;
             let lastStatus: BackgroundJob['status'] = initialJob.status;
             let lastWorkflowVersion = workflowStateVersionOf(
                 initialJob.workflow_state
@@ -321,6 +342,9 @@ export default defineEventHandler(async (event) => {
                         content: initialJob.content,
                         content_length: initialJob.content.length,
                         content_reset: attemptChanged || undefined,
+                        reasoning_text: initialJob.reasoning ?? '',
+                        reasoning_length: (initialJob.reasoning ?? '').length,
+                        reasoning_reset: attemptChanged || undefined,
                     }),
                 });
             } else {
@@ -331,10 +355,13 @@ export default defineEventHandler(async (event) => {
                         content_delta: initialDelta,
                         includeContent: false,
                         content_length: initialJob.content.length,
+                        reasoning_text: initialJob.reasoning ?? '',
+                        reasoning_length: (initialJob.reasoning ?? '').length,
                     }),
                 });
             }
             lastContentLength = initialJob.content.length;
+            lastReasoningLength = (initialJob.reasoning ?? '').length;
 
             if (initialJob.status === 'streaming') {
                 // Subscribe to live stream updates (fast path when viewer is attached).
@@ -361,10 +388,29 @@ export default defineEventHandler(async (event) => {
                         });
                     }
                     if (liveEvent.type === 'delta') {
-                        if (liveEvent.content_length <= lastContentLength)
-                            return;
+                        const reasoningDelta =
+                            typeof liveEvent.reasoning_delta === 'string'
+                                ? liveEvent.reasoning_delta
+                                : '';
+                        const reasoningLength =
+                            typeof liveEvent.reasoning_length === 'number'
+                                ? liveEvent.reasoning_length
+                                : lastReasoningLength;
+                        const hasContentDelta =
+                            liveEvent.content_delta.length > 0 &&
+                            liveEvent.content_length > lastContentLength;
+                        const hasReasoningDelta =
+                            reasoningDelta.length > 0 &&
+                            reasoningLength > lastReasoningLength;
+                        if (!hasContentDelta && !hasReasoningDelta) return;
                         const currentLiveState = getJobLiveState(jobId);
-                        lastContentLength = liveEvent.content_length;
+                        lastContentLength = Math.max(
+                            lastContentLength,
+                            liveEvent.content_length
+                        );
+                        if (hasReasoningDelta) {
+                            lastReasoningLength = reasoningLength;
+                        }
                         lastStatus = 'streaming';
                         lastWorkflowVersion = Math.max(
                             lastWorkflowVersion,
@@ -395,8 +441,14 @@ export default defineEventHandler(async (event) => {
                                 },
                                 {
                                     includeContent: false,
-                                    content_delta: liveEvent.content_delta,
+                                    content_delta: hasContentDelta
+                                        ? liveEvent.content_delta
+                                        : undefined,
                                     content_length: liveEvent.content_length,
+                                    reasoning_delta: hasReasoningDelta
+                                        ? reasoningDelta
+                                        : undefined,
+                                    reasoning_length: reasoningLength,
                                     tool_calls:
                                         liveEvent.tool_calls ??
                                         currentLiveState?.tool_calls,
@@ -448,6 +500,19 @@ export default defineEventHandler(async (event) => {
                                 includeContent: true,
                                 content: liveEvent.content,
                                 content_length: liveEvent.content_length,
+                                reasoning_text:
+                                    liveEvent.reasoning ??
+                                    currentLiveState?.reasoning ??
+                                    initialJob.reasoning ??
+                                    '',
+                                reasoning_length:
+                                    liveEvent.reasoning_length ??
+                                    (
+                                        liveEvent.reasoning ??
+                                        currentLiveState?.reasoning ??
+                                        initialJob.reasoning ??
+                                        ''
+                                    ).length,
                                 tool_calls:
                                     liveEvent.tool_calls ??
                                     currentLiveState?.tool_calls,
@@ -455,6 +520,10 @@ export default defineEventHandler(async (event) => {
                                     liveEvent.workflow_state ??
                                     currentLiveState?.workflow_state,
                                 content_reset: liveEvent.content_reset,
+                                reasoning_reset:
+                                    liveEvent.content_reset === true
+                                        ? true
+                                        : undefined,
                             }
                         ),
                     });
@@ -464,9 +533,24 @@ export default defineEventHandler(async (event) => {
                 });
 
                 const liveState = getJobLiveState(jobId);
-                if (liveState && liveState.content.length > lastContentLength) {
-                    const delta = liveState.content.slice(lastContentLength);
-                    lastContentLength = liveState.content.length;
+                const liveReasoning = liveState?.reasoning ?? '';
+                const hasLiveContent =
+                    liveState && liveState.content.length > lastContentLength;
+                const hasLiveReasoning =
+                    liveReasoning.length > lastReasoningLength;
+                if (liveState && (hasLiveContent || hasLiveReasoning)) {
+                    const delta = hasLiveContent
+                        ? liveState.content.slice(lastContentLength)
+                        : undefined;
+                    const reasoningDelta = hasLiveReasoning
+                        ? liveReasoning.slice(lastReasoningLength)
+                        : undefined;
+                    if (hasLiveContent) {
+                        lastContentLength = liveState.content.length;
+                    }
+                    if (hasLiveReasoning) {
+                        lastReasoningLength = liveReasoning.length;
+                    }
                     write({
                         event: 'delta',
                         status: serializeJobStatus(
@@ -481,6 +565,8 @@ export default defineEventHandler(async (event) => {
                                 includeContent: false,
                                 content_delta: delta,
                                 content_length: liveState.content.length,
+                                reasoning_delta: reasoningDelta,
+                                reasoning_length: liveReasoning.length,
                                 tool_calls: liveState.tool_calls,
                                 workflow_state: liveState.workflow_state,
                             }
@@ -540,51 +626,26 @@ export default defineEventHandler(async (event) => {
                 (job, pollError) => {
                     if (isClosed()) return;
                     if (pollError) {
-                        const message = pollError.message || 'Stream error';
-                        warnBgStream('jobs-stream-error', {
+                        // A failed provider lookup is a transport/reconciliation
+                        // problem, not an authoritative generation failure.
+                        // Close the SSE viewer so the client falls back to
+                        // polling and retries; never fabricate a terminal
+                        // `error` job status here.
+                        warnBgStream('jobs-stream-reconcile-error', {
                             jobId,
                             userId,
-                            error: message,
-                        });
-                        write({
-                            event: 'status',
-                            status: {
-                                id: jobId,
-                                status: 'error',
-                                threadId: initialJob.threadId,
-                                messageId: initialJob.messageId,
-                                model: initialJob.model,
-                                chunksReceived: initialJob.chunksReceived,
-                                startedAt: initialJob.startedAt,
-                                completedAt: Date.now(),
-                                error: message,
-                                content: initialJob.content,
-                                content_length: initialJob.content.length,
-                            },
+                            error: pollError.message || 'Stream error',
                         });
                         closeStream('reconcile_error');
                         return;
                     }
                     if (!job) {
-                        warnBgStream('jobs-stream-poll-job-missing', {
+                        // Same rule: a missing snapshot may be a transient
+                        // provider/read failure. Let the client polling path
+                        // decide with bounded retries and reconciliation.
+                        warnBgStream('jobs-stream-reconcile-job-missing', {
                             jobId,
                             userId,
-                        });
-                        write({
-                            event: 'status',
-                            status: {
-                                id: jobId,
-                                status: 'error',
-                                threadId: initialJob.threadId,
-                                messageId: initialJob.messageId,
-                                model: initialJob.model,
-                                chunksReceived: initialJob.chunksReceived,
-                                startedAt: initialJob.startedAt,
-                                completedAt: Date.now(),
-                                error: 'Job not found',
-                                content: initialJob.content,
-                                content_length: initialJob.content.length,
-                            },
                         });
                         closeStream('reconcile_job_missing');
                         return;
@@ -592,6 +653,9 @@ export default defineEventHandler(async (event) => {
 
                     const attemptChanged = (job.attempts ?? 0) !== lastAttempt;
                     const hasNewContent = job.content.length > lastContentLength;
+                    const jobReasoning = job.reasoning ?? '';
+                    const hasNewReasoning =
+                        jobReasoning.length > lastReasoningLength;
                     const statusChanged = job.status !== lastStatus;
                     const workflowStateAdvanced = hasWorkflowStateAdvanced(
                         lastWorkflowVersion,
@@ -624,6 +688,7 @@ export default defineEventHandler(async (event) => {
                         // full even if the regenerated text is already longer
                         // than the pre-restart partial response.
                         lastContentLength = job.content.length;
+                        lastReasoningLength = jobReasoning.length;
                         write({
                             event: 'status',
                             status: serializeJobStatus(job, {
@@ -631,17 +696,42 @@ export default defineEventHandler(async (event) => {
                                 includeContent: true,
                                 content_length: job.content.length,
                                 content_reset: true,
+                                reasoning_text: jobReasoning,
+                                reasoning_length: jobReasoning.length,
+                                reasoning_reset: true,
                             }),
                         });
                     } else if (hasNewContent) {
                         const delta = job.content.slice(lastContentLength);
+                        const reasoningDelta = hasNewReasoning
+                            ? jobReasoning.slice(lastReasoningLength)
+                            : undefined;
                         lastContentLength = job.content.length;
+                        if (hasNewReasoning) {
+                            lastReasoningLength = jobReasoning.length;
+                        }
                         write({
                             event: 'delta',
                             status: serializeJobStatus(job, {
                                 includeContent: false,
                                 content_delta: delta,
                                 content_length: job.content.length,
+                                reasoning_delta: reasoningDelta,
+                                reasoning_length: jobReasoning.length,
+                            }),
+                        });
+                    } else if (hasNewReasoning) {
+                        const reasoningDelta = jobReasoning.slice(
+                            lastReasoningLength
+                        );
+                        lastReasoningLength = jobReasoning.length;
+                        write({
+                            event: 'delta',
+                            status: serializeJobStatus(job, {
+                                includeContent: false,
+                                content_length: job.content.length,
+                                reasoning_delta: reasoningDelta,
+                                reasoning_length: jobReasoning.length,
                             }),
                         });
                     } else if (statusChanged) {
@@ -655,6 +745,8 @@ export default defineEventHandler(async (event) => {
                                         : undefined,
                                 includeContent: job.status !== 'streaming',
                                 content_length: job.content.length,
+                                reasoning_text: jobReasoning,
+                                reasoning_length: jobReasoning.length,
                             }),
                         });
                     } else if (workflowStateAdvanced) {

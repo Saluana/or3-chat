@@ -39,6 +39,7 @@ export {
     makeAssistantPersister,
     updateMessageRecord,
 } from './persistence';
+export { projectCanonicalBackgroundMessage } from './backgroundJobPersistence';
 
 // Turn writeback
 export { reloadTurnIntoRawMessages } from './turnWriteback';

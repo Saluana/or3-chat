@@ -185,7 +185,7 @@ describe('parseOpenRouterSSE', () => {
         const sse = [
             ': keepalive\r\n',
             'data:{"choices":[{"delta":{"content":"one"}}]}\r\n\r\n',
-            'data: {"choices":[{"delta":{"content":"two"}}]}',
+            'data: {"choices":[{"delta":{"content":"two"},"finish_reason":"stop"}]}',
         ].join('');
         const events = await collect(streamFromSSE(sse));
         expect(events).toEqual([
@@ -195,9 +195,16 @@ describe('parseOpenRouterSSE', () => {
         ]);
     });
 
+    it('rejects an EOF that arrives before any verified terminal signal', async () => {
+        const sse = 'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n';
+        await expect(
+            collect(streamFromSSE(sse))
+        ).rejects.toBeInstanceOf(OpenRouterProtocolError);
+    });
+
     it('joins multiline data fields and preserves split UTF-8 code points', async () => {
         const encoded = new TextEncoder().encode(
-            'data: {"choices":[{"delta":\ndata: {"content":"café"}}]}\n\n'
+            'data: {"choices":[{"delta":\ndata: {"content":"café"},"finish_reason":"stop"}]}\n\n'
         );
         const splitAt = encoded.indexOf(0xc3) + 1;
         const events = await collect(

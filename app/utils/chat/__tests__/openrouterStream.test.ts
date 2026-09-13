@@ -57,9 +57,7 @@ describe('openrouterStream', () => {
     });
 
     it('uses server route for streaming when available', async () => {
-        const fetchMock = vi
-            .fn()
-            .mockResolvedValue(createStreamResponse());
+        const fetchMock = vi.fn().mockResolvedValue(createStreamResponse());
         (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
         const events: Array<{ type: string; text?: string }> = [];
@@ -94,7 +92,10 @@ describe('openrouterStream', () => {
         }
 
         const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
-        const body = JSON.parse(String(request?.body)) as Record<string, unknown>;
+        const body = JSON.parse(String(request?.body)) as Record<
+            string,
+            unknown
+        >;
         expect(body).not.toHaveProperty('modalities');
     });
 
@@ -131,10 +132,7 @@ describe('openrouterStream', () => {
             // drain
         }
 
-        const [, init] = fetchMock.mock.calls[0] as [
-            string,
-            RequestInit,
-        ];
+        const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
         const body = JSON.parse(String(init.body));
         expect(body.reasoning).toEqual({ effort: 'high' });
         expect(body.cache_control).toEqual({ type: 'ephemeral' });
@@ -153,10 +151,7 @@ describe('openrouterStream', () => {
             // drain
         }
 
-        const [, init] = fetchMock.mock.calls[0] as [
-            string,
-            RequestInit,
-        ];
+        const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
         const body = JSON.parse(String(init.body));
         expect(body.cache_control).toBeUndefined();
     });
@@ -164,7 +159,9 @@ describe('openrouterStream', () => {
     it('falls back to direct OpenRouter on 404 and caches unavailability', async () => {
         const fetchMock = vi.fn((url: RequestInfo | URL) => {
             if (url === '/api/openrouter/stream') {
-                return Promise.resolve(createJsonResponse({ error: 'missing' }, 404));
+                return Promise.resolve(
+                    createJsonResponse({ error: 'missing' }, 404)
+                );
             }
             return Promise.resolve(createStreamResponse());
         });
@@ -195,7 +192,9 @@ describe('openrouterStream', () => {
     it('does not fall back on proxy 5xx; error propagates and cache is not poisoned', async () => {
         const fetchMock = vi.fn((url: RequestInfo | URL) => {
             if (url === '/api/openrouter/stream') {
-                return Promise.resolve(createJsonResponse({ error: 'proxy-failed' }, 500));
+                return Promise.resolve(
+                    createJsonResponse({ error: 'proxy-failed' }, 500)
+                );
             }
             return Promise.resolve(createStreamResponse());
         });
@@ -229,7 +228,9 @@ describe('openrouterStream', () => {
 
         const fetchMock = vi.fn((url: RequestInfo | URL) => {
             if (url === '/api/openrouter/stream') {
-                return Promise.resolve(createJsonResponse({ error: 'missing' }, 404));
+                return Promise.resolve(
+                    createJsonResponse({ error: 'missing' }, 404)
+                );
             }
             return Promise.resolve(createStreamResponse());
         });
@@ -265,9 +266,11 @@ describe('openrouterStream', () => {
         const failure = await (async () => {
             try {
                 for await (const _event of openRouterStream({
-                    apiKey: 'key-1', model: 'model-1',
+                    apiKey: 'key-1',
+                    model: 'model-1',
                     orMessages: [{ role: 'user', content: 'hi' }],
-                    modalities: ['text'], signal: controller.signal,
+                    modalities: ['text'],
+                    signal: controller.signal,
                 })) {
                     // drain
                 }
@@ -292,6 +295,15 @@ describe('openrouterStream', () => {
         localStorage.setItem('or3:background-streaming-available', 'false');
         const enabled = isBackgroundStreamingEnabled();
         expect(enabled).toBe(true);
+    });
+
+    it('does not let a stale server-route veto beat explicit config', () => {
+        runtimeConfigMock.public.backgroundStreaming.enabled = true;
+        localStorage.setItem(
+            'or3:server-route-available',
+            JSON.stringify({ available: false, timestamp: Date.now() })
+        );
+        expect(isBackgroundStreamingEnabled()).toBe(true);
     });
 
     it('openRouterStreamWithRetry retries on 429 and yields events', async () => {
@@ -360,13 +372,40 @@ describe('openrouterStream', () => {
 });
 
 describe('background streaming helpers', () => {
+    const testHistory = () => ({
+        version: 1 as const,
+        kind: 'new-turn' as const,
+        admissionId: 'admission-1',
+        generationId: 'generation-1',
+        workspaceId: 'workspace-1',
+        threadId: 't1',
+        messageId: 'm1',
+        thread: { id: 't1', clock: 1 },
+        userMessage: {
+            id: 'user-m1',
+            thread_id: 't1',
+            role: 'user',
+            clock: 1,
+        },
+        assistantMessage: {
+            id: 'm1',
+            thread_id: 't1',
+            role: 'assistant',
+            clock: 1,
+        },
+    });
+
     beforeEach(() => {
         localStorage.clear();
     });
 
     it('startBackgroundStream sets availability cache', async () => {
         const fetchMock = vi.fn().mockResolvedValue(
-            createJsonResponse({ jobId: 'job-1', status: 'streaming' })
+            createJsonResponse({
+                jobId: 'job-1',
+                status: 'streaming',
+                historyVersion: 1,
+            })
         );
         (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
@@ -377,6 +416,7 @@ describe('background streaming helpers', () => {
             modalities: ['text'],
             threadId: 't1',
             messageId: 'm1',
+            history: testHistory(),
             streamedFieldMode: 'cumulative-snapshot',
         });
 
@@ -392,13 +432,23 @@ describe('background streaming helpers', () => {
 
     it('bounds the background-start wait before a job ID exists', async () => {
         vi.useFakeTimers();
-        vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})));
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(() => new Promise<Response>(() => {}))
+        );
         const start = startBackgroundStream({
-            apiKey: 'key-1', model: 'model-1',
-            orMessages: [{ role: 'user', content: 'hi' }], modalities: ['text'],
-            threadId: 't1', messageId: 'm1', responseTimeoutMs: 20,
+            apiKey: 'key-1',
+            model: 'model-1',
+            orMessages: [{ role: 'user', content: 'hi' }],
+            modalities: ['text'],
+            threadId: 't1',
+            messageId: 'm1',
+            history: testHistory(),
+            responseTimeoutMs: 20,
         });
-        const assertion = expect(start).rejects.toBeInstanceOf(OpenRouterTimeoutError);
+        const assertion = expect(start).rejects.toBeInstanceOf(
+            OpenRouterTimeoutError
+        );
 
         await vi.advanceTimersByTimeAsync(600);
 
@@ -409,16 +459,26 @@ describe('background streaming helpers', () => {
         vi.useFakeTimers();
         const fetchMock = vi
             .fn()
-            .mockResolvedValueOnce(createJsonResponse({ error: 'temporary' }, 503))
             .mockResolvedValueOnce(
-                createJsonResponse({ jobId: 'job-1', status: 'streaming' })
+                createJsonResponse({ error: 'temporary' }, 503)
+            )
+            .mockResolvedValueOnce(
+                createJsonResponse({
+                    jobId: 'job-1',
+                    status: 'streaming',
+                    historyVersion: 1,
+                })
             );
         vi.stubGlobal('fetch', fetchMock);
 
         const start = startBackgroundStream({
-            apiKey: 'key-1', model: 'model-1',
-            orMessages: [{ role: 'user', content: 'hi' }], modalities: ['text'],
-            threadId: 't1', messageId: 'm1',
+            apiKey: 'key-1',
+            model: 'model-1',
+            orMessages: [{ role: 'user', content: 'hi' }],
+            modalities: ['text'],
+            threadId: 't1',
+            messageId: 'm1',
+            history: testHistory(),
         });
         await vi.advanceTimersByTimeAsync(150);
         await expect(start).resolves.toMatchObject({ jobId: 'job-1' });
@@ -434,14 +494,24 @@ describe('background streaming helpers', () => {
     });
 
     it('lets caller abort cancel background admission before a job ID exists', async () => {
-        vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})));
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(() => new Promise<Response>(() => {}))
+        );
         const controller = new AbortController();
         const start = startBackgroundStream({
-            apiKey: 'key-1', model: 'model-1',
-            orMessages: [{ role: 'user', content: 'hi' }], modalities: ['text'],
-            threadId: 't1', messageId: 'm1', signal: controller.signal,
+            apiKey: 'key-1',
+            model: 'model-1',
+            orMessages: [{ role: 'user', content: 'hi' }],
+            modalities: ['text'],
+            threadId: 't1',
+            messageId: 'm1',
+            history: testHistory(),
+            signal: controller.signal,
         });
-        const assertion = expect(start).rejects.toMatchObject({ name: 'AbortError' });
+        const assertion = expect(start).rejects.toMatchObject({
+            name: 'AbortError',
+        });
 
         controller.abort();
 
@@ -450,7 +520,11 @@ describe('background streaming helpers', () => {
 
     it('startBackgroundStream sends Anthropic cache control', async () => {
         const fetchMock = vi.fn().mockResolvedValue(
-            createJsonResponse({ jobId: 'job-1', status: 'streaming' })
+            createJsonResponse({
+                jobId: 'job-1',
+                status: 'streaming',
+                historyVersion: 1,
+            })
         );
         (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
@@ -461,12 +535,10 @@ describe('background streaming helpers', () => {
             modalities: ['text'],
             threadId: 't1',
             messageId: 'm1',
+            history: testHistory(),
         });
 
-        const [, init] = fetchMock.mock.calls[0] as [
-            string,
-            RequestInit,
-        ];
+        const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
         const body = JSON.parse(String(init.body));
         expect(body.cache_control).toEqual({ type: 'ephemeral' });
     });
@@ -485,6 +557,7 @@ describe('background streaming helpers', () => {
                 modalities: ['text'],
                 threadId: 't1',
                 messageId: 'm1',
+                history: testHistory(),
             })
         ).rejects.toThrow('nope');
 
@@ -502,30 +575,123 @@ describe('background streaming helpers', () => {
         [404, 'not_found', true],
         [401, 'auth', true],
         [400, 'protocol', false],
-    ] as const)('classifies poll HTTP %s as %s', async (status, kind, retryable) => {
+    ] as const)(
+        'classifies poll HTTP %s as %s',
+        async (status, kind, retryable) => {
+            const fetchMock = vi.fn().mockResolvedValue(
+                new Response(JSON.stringify({ error: 'poll failed' }), {
+                    status,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Retry-After': '2',
+                    },
+                })
+            );
+            (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+
+            const failure = await pollJobStatus('job-1').catch(
+                (error) => error
+            );
+
+            expect(failure).toBeInstanceOf(BackgroundJobPollError);
+            expect(failure).toMatchObject({
+                kind,
+                retryable,
+                statusCode: status,
+            });
+            if (status === 429) expect(failure.retryAfterMs).toBe(2_000);
+        }
+    );
+
+    it('rejects a non-JSON admission response instead of switching modes', async () => {
         const fetchMock = vi.fn().mockResolvedValue(
-            new Response(JSON.stringify({ error: 'poll failed' }), {
-                status,
-                headers: { 'Content-Type': 'application/json', 'Retry-After': '2' },
+            new Response('data: some-sse-payload\n\n', {
+                status: 200,
+                headers: { 'Content-Type': 'text/event-stream' },
             })
         );
         (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
-        const failure = await pollJobStatus('job-1').catch((error) => error);
+        await expect(
+            startBackgroundStream({
+                apiKey: 'key-1',
+                model: 'model-1',
+                orMessages: [{ role: 'user', content: 'hi' }],
+                modalities: ['text'],
+                threadId: 't1',
+                messageId: 'm1',
+                history: testHistory(),
+            })
+        ).rejects.toMatchObject({ backgroundAdmissionRetryable: false });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
 
-        expect(failure).toBeInstanceOf(BackgroundJobPollError);
-        expect(failure).toMatchObject({ kind, retryable, statusCode: status });
-        if (status === 429) expect(failure.retryAfterMs).toBe(2_000);
+    it('treats a background capability rejection as terminal and disables the session', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(
+            createJsonResponse(
+                {
+                    error: 'Background streaming is not enabled on this server',
+                    code: 'background_streaming_disabled',
+                },
+                503
+            )
+        );
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+
+        await expect(
+            startBackgroundStream({
+                apiKey: 'key-1',
+                model: 'model-1',
+                orMessages: [{ role: 'user', content: 'hi' }],
+                modalities: ['text'],
+                threadId: 't1',
+                messageId: 'm1',
+                history: testHistory(),
+            })
+        ).rejects.toMatchObject({
+            backgroundAdmissionRetryable: false,
+            backgroundCapabilityDisabled: true,
+        });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(isBackgroundStreamingEnabled(true)).toBe(false);
     });
 
     it('classifies a rejected poll fetch as retryable transport failure', async () => {
-        (globalThis as unknown as { fetch: unknown }).fetch =
-            vi.fn().mockRejectedValue(new TypeError('offline'));
+        (globalThis as unknown as { fetch: unknown }).fetch = vi
+            .fn()
+            .mockRejectedValue(new TypeError('offline'));
 
         const failure = await pollJobStatus('job-1').catch((error) => error);
 
         expect(failure).toBeInstanceOf(BackgroundJobPollError);
         expect(failure).toMatchObject({ kind: 'transport', retryable: true });
+    });
+
+    it('classifies malformed poll JSON as non-retryable protocol failure', async () => {
+        (globalThis as unknown as { fetch: unknown }).fetch = vi
+            .fn()
+            .mockResolvedValue(
+                new Response('not-json', {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' },
+                })
+            );
+
+        const failure = await pollJobStatus('job-1').catch((error) => error);
+
+        expect(failure).toBeInstanceOf(BackgroundJobPollError);
+        expect(failure).toMatchObject({ kind: 'protocol', retryable: false });
+    });
+
+    it('classifies a structurally invalid poll payload as protocol failure', async () => {
+        (globalThis as unknown as { fetch: unknown }).fetch = vi
+            .fn()
+            .mockResolvedValue(createJsonResponse({ nope: true }));
+
+        const failure = await pollJobStatus('job-1').catch((error) => error);
+
+        expect(failure).toBeInstanceOf(BackgroundJobPollError);
+        expect(failure).toMatchObject({ kind: 'protocol', retryable: false });
     });
 
     it('waitForJobCompletion resolves when job completes', async () => {
@@ -535,6 +701,7 @@ describe('background streaming helpers', () => {
                 status: 'streaming',
                 threadId: 't1',
                 messageId: 'm1',
+                history: testHistory(),
                 model: 'm',
                 chunksReceived: 1,
                 startedAt: 1,
@@ -544,6 +711,7 @@ describe('background streaming helpers', () => {
                 status: 'complete',
                 threadId: 't1',
                 messageId: 'm1',
+                history: testHistory(),
                 model: 'm',
                 chunksReceived: 2,
                 startedAt: 1,

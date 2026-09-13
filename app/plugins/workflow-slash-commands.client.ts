@@ -1304,6 +1304,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                     userId: session?.user?.id || '',
                     threadId: assistantContext.threadId || '',
                     messageId: assistantContext.id,
+                    originDb: db,
                     initialContent: '',
                     useSse: true,
                 });

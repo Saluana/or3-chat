@@ -14,7 +14,6 @@ const existingProjects = nuxtProjects.filter((path) =>
     existsSync(new URL(path, import.meta.url))
 );
 const lintProject = './tsconfig.eslint.json';
-const extensionLintProject = './tsconfig.eslint.extensions.json';
 
 export default [
     {
@@ -24,8 +23,8 @@ export default [
             parser: tsParser,
             parserOptions: {
                 project: existingProjects.length
-                    ? [...existingProjects, lintProject, extensionLintProject]
-                    : [lintProject, extensionLintProject],
+                    ? [...existingProjects, lintProject]
+                    : [lintProject],
                 tsconfigRootDir: import.meta.dirname,
             },
         },

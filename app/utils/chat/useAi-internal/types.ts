@@ -23,6 +23,11 @@ export type BackgroundJobUpdate = {
     delta: string;
     /** True when recovery replaced a non-monotonic partial response. */
     replace?: boolean;
+    /** Full accepted reasoning snapshot. */
+    reasoning?: string;
+    reasoningDelta?: string;
+    /** True when recovery replaced the previous reasoning snapshot. */
+    reasoningReplace?: boolean;
 };
 
 /** Subscriber callbacks for background job events */
@@ -31,6 +36,11 @@ export type BackgroundJobSubscriber = {
     onComplete?: (update: BackgroundJobUpdate) => void;
     onError?: (update: BackgroundJobUpdate) => void;
     onAbort?: (update: BackgroundJobUpdate) => void;
+    /**
+     * Tracking was interrupted by a connection/protocol/auth problem. The
+     * server job may still be healthy; this is not a generation failure.
+     */
+    onTransportError?: (update: BackgroundJobUpdate) => void;
 };
 
 /** Tracks a single background streaming job */
@@ -48,6 +58,10 @@ export type BackgroundJobTracker = {
     lastContent: string;
     lastAttempt?: number;
     lastPersistedLength: number;
+    /** Last accepted reasoning snapshot. */
+    lastReasoning: string;
+    /** Reasoning bytes already committed to local persistence. */
+    lastPersistedReasoningLength: number;
     lastPersistAt: number;
     polling: boolean;
     streaming: boolean;
@@ -61,6 +75,27 @@ export type BackgroundJobTracker = {
     streamUnsubscribe?: () => void;
     originDb?: Or3DB;
     originDbName?: string;
+    /** Workspace captured before admission; tracker never re-resolves it. */
+    workspaceId?: string;
+    /** Server owns canonical admission/finalization; local writes are projections. */
+    canonicalHistory?: boolean;
+    generationId?: string;
+    /** Terminal snapshot retained until local persistence succeeds. */
+    terminalStatus?: BackgroundJobStatus;
+    /** Content/replace semantics captured for terminal persistence retries. */
+    terminalContent?: string;
+    terminalReplace?: boolean;
+    /** True once terminal callbacks/notifications fired (must only fire once). */
+    terminalNotified?: boolean;
+    /** Bounded retry bookkeeping for terminal persistence. */
+    terminalPersistAttempts?: number;
+    terminalPersistTimer?: ReturnType<typeof setTimeout>;
+    /** Latest SSE processing chain, drained before switching transports. */
+    streamChain?: Promise<unknown>;
+    /** Incremented per SSE connection; late events from old connections drop. */
+    sseGeneration?: number;
+    /** Set when tracking stopped due to connection/protocol/auth problems. */
+    transportInterrupted?: boolean;
     subscribers: Set<BackgroundJobSubscriber>;
     completion: Promise<BackgroundJobStatus>;
     resolveCompletion: (status: BackgroundJobStatus) => void;
@@ -97,6 +132,11 @@ export type AttachBackgroundJobParams = {
     userId: string;
     messageId: string;
     threadId: string;
+    originDb?: Or3DB;
+    workspaceId?: string;
+    /** Suppress sync capture because the server commits canonical history. */
+    canonicalHistory?: boolean;
+    generationId?: string;
     initialContent?: string;
     initialAttempt?: number;
     isReattach?: boolean;
@@ -109,8 +149,14 @@ export type EnsureBackgroundJobTrackerParams = {
     userId: string;
     threadId: string;
     messageId: string;
+    originDb?: Or3DB;
+    workspaceId?: string;
+    /** Suppress sync capture because the server commits canonical history. */
+    canonicalHistory?: boolean;
+    generationId?: string;
     preferServerNotifications?: boolean;
     initialContent?: string;
+    initialReasoning?: string;
     initialAttempt?: number;
     useSse?: boolean;
 };
@@ -127,4 +173,6 @@ export type AssistantPersister = (params: {
     reasoning?: string | null;
     toolCalls?: ToolCallInfo[] | null;
     finalize?: boolean;
+    /** Terminal generation state applied when finalizing; defaults to complete. */
+    terminalState?: 'complete' | 'failed' | 'aborted' | 'interrupted';
 }) => Promise<string | null>;

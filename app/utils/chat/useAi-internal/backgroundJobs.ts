@@ -34,6 +34,7 @@
 
 import { nowSec } from '~/db/util';
 import { getDb } from '~/db/client';
+import { redactDiagnosticDetails } from '~~/shared/logging/sensitive-metadata';
 import {
     pollJobStatus,
     subscribeBackgroundJobStream,
@@ -57,6 +58,7 @@ import {
 import {
     normalizeTerminalWorkflowState,
     persistBackgroundJobUpdate,
+    persistBackgroundTrackingInterruption,
 } from './backgroundJobPersistence';
 import {
     dispatchWorkflowComplete,
@@ -127,15 +129,31 @@ function notifyBackgroundJobTrackerLifecycle(
     }
 }
 
+function bgStreamDebugEnabled(): boolean {
+    if (import.meta.dev) return true;
+    if (typeof localStorage === 'undefined') return false;
+    try {
+        return localStorage.getItem('or3:debug:background-stream') === 'true';
+    } catch {
+        return false;
+    }
+}
+
 function bgStreamLog(
-    _stage: string,
-    _details?: Record<string, unknown>
-): void {}
+    stage: string,
+    details?: Record<string, unknown>
+): void {
+    if (!bgStreamDebugEnabled()) return;
+    console.debug('[bg-stream]', stage, redactDiagnosticDetails(details));
+}
 
 function bgStreamWarn(
-    _stage: string,
-    _details?: Record<string, unknown>
-): void {}
+    stage: string,
+    details?: Record<string, unknown>
+): void {
+    if (!bgStreamDebugEnabled()) return;
+    console.warn('[bg-stream]', stage, redactDiagnosticDetails(details));
+}
 
 function isClientRuntime(): boolean {
     const override = (globalThis as { __OR3_TEST_CLIENT?: boolean })
@@ -156,7 +174,7 @@ function notifyBackgroundSubscribers(
     tracker: BackgroundJobTracker,
     callback: keyof Pick<
         BackgroundJobSubscriber,
-        'onUpdate' | 'onComplete' | 'onError' | 'onAbort'
+        'onUpdate' | 'onComplete' | 'onError' | 'onAbort' | 'onTransportError'
     >,
     update: BackgroundJobUpdate
 ): void {
@@ -232,6 +250,47 @@ function deriveBackgroundContent(
             ? safeContent.slice(tracker.lastContent.length)
             : '';
     return { safeContent, delta, replace };
+}
+
+/**
+ * Internal helper. Derives safe reasoning and delta from a job status update.
+ * Reasoning has its own offset so text and reasoning recovery stay independent.
+ */
+function deriveBackgroundReasoning(
+    tracker: BackgroundJobTracker,
+    status: BackgroundJobStatus
+): { safeReasoning: string; reasoningDelta: string; replace: boolean } {
+    const current = tracker.lastReasoning ?? '';
+    const replace =
+        status.reasoning_reset === true ||
+        (typeof tracker.lastAttempt === 'number' &&
+            typeof status.attempt === 'number' &&
+            status.attempt > tracker.lastAttempt);
+    let nextReasoning = current;
+    if (replace) {
+        nextReasoning = status.reasoning_text ?? '';
+    } else if (typeof status.reasoning_text === 'string') {
+        nextReasoning = status.reasoning_text;
+    } else if (typeof status.reasoning_delta === 'string') {
+        nextReasoning = current + status.reasoning_delta;
+    }
+    if (
+        typeof status.reasoning_length === 'number' &&
+        Number.isFinite(status.reasoning_length) &&
+        nextReasoning.length > status.reasoning_length
+    ) {
+        nextReasoning = nextReasoning.slice(0, status.reasoning_length);
+    }
+    const safeReasoning = replace
+        ? nextReasoning
+        : nextReasoning.length >= current.length
+          ? nextReasoning
+          : current;
+    const reasoningDelta =
+        !replace && safeReasoning.length > current.length
+            ? safeReasoning.slice(current.length)
+            : '';
+    return { safeReasoning, reasoningDelta, replace };
 }
 
 /**
@@ -328,6 +387,11 @@ async function handleBackgroundStatus(
         tracker,
         nextStatus
     );
+    const {
+        safeReasoning,
+        reasoningDelta,
+        replace: replaceReasoning,
+    } = deriveBackgroundReasoning(tracker, nextStatus);
     const shouldLogStatusProgress =
         nextStatus.status !== 'streaming' ||
         delta.length >= 256 ||
@@ -350,19 +414,22 @@ async function handleBackgroundStatus(
         });
     }
     tracker.lastContent = safeContent;
+    tracker.lastReasoning = safeReasoning;
 
     const persistence = await persistBackgroundJobUpdate(
         tracker,
         nextStatus,
         safeContent,
-        replace
+        replace,
+        safeReasoning,
+        replaceReasoning
     ).catch((error) => {
         bgStreamWarn('status-persist-failed', {
             jobId: tracker.jobId,
             status: nextStatus.status,
             error: error instanceof Error ? error.message : String(error),
         });
-        return { persisted: false as const };
+        return { persisted: false as const, missing: false as const };
     });
     if (!persistence.persisted) {
         // Local projection failures must never cancel a valid server job. The
@@ -389,6 +456,9 @@ async function handleBackgroundStatus(
         content: safeContent,
         delta,
         replace,
+        reasoning: safeReasoning,
+        reasoningDelta,
+        reasoningReplace: replaceReasoning,
     };
     const workflowVersion = workflowVersionOf(nextStatus.workflow_state);
     notifyBackgroundSubscribers(tracker, 'onUpdate', update);
@@ -401,51 +471,146 @@ async function handleBackgroundStatus(
     }
 
     if (nextStatus.status !== 'streaming') {
-        notifyBackgroundSubscribers(
-            tracker,
-            nextStatus.status === 'complete'
-                ? 'onComplete'
-                : nextStatus.status === 'aborted'
-                    ? 'onAbort'
-                    : 'onError',
-            update
-        );
-        await emitBackgroundComplete(tracker, nextStatus);
-        if (
-            nextStatus.status === 'complete' &&
-            nextStatus.workflow_state &&
-            typeof nextStatus.workflow_state === 'object'
-        ) {
-            const state = nextStatus.workflow_state;
-            const workflowId = state.workflowId;
-            const finalOutput = state.finalOutput || undefined;
-            if (workflowId) {
-                dispatchWorkflowComplete(
-                    tracker.messageId,
-                    workflowId,
-                    finalOutput
-                );
+        tracker.terminalStatus = nextStatus;
+        tracker.terminalContent = safeContent;
+        tracker.terminalReplace = replace;
+        if (!tracker.terminalNotified) {
+            tracker.terminalNotified = true;
+            notifyBackgroundSubscribers(
+                tracker,
+                nextStatus.status === 'complete'
+                    ? 'onComplete'
+                    : nextStatus.status === 'aborted'
+                        ? 'onAbort'
+                        : 'onError',
+                update
+            );
+            await emitBackgroundComplete(tracker, nextStatus);
+            if (
+                nextStatus.status === 'complete' &&
+                nextStatus.workflow_state &&
+                typeof nextStatus.workflow_state === 'object'
+            ) {
+                const state = nextStatus.workflow_state;
+                const workflowId = state.workflowId;
+                const finalOutput = state.finalOutput || undefined;
+                if (workflowId) {
+                    dispatchWorkflowComplete(
+                        tracker.messageId,
+                        workflowId,
+                        finalOutput
+                    );
+                }
             }
+            // The generation indicator may stop immediately; local persistence
+            // is allowed to retry independently below.
+            tracker.resolveCompletion(nextStatus);
         }
-        tracker.resolveCompletion(nextStatus);
-        bgStreamLog('status-terminal-cleanup', {
+        if (persistence.persisted) {
+            bgStreamLog('status-terminal-cleanup', {
+                jobId: tracker.jobId,
+                status: nextStatus.status,
+                contentLength: safeContent.length,
+                subscribers: tracker.subscribers.size,
+            });
+            finalizeTrackerCleanup(tracker);
+            return false;
+        }
+        if (persistence.missing) {
+            // Deleted or superseded: never recreate the row.
+            bgStreamWarn('status-terminal-persist-row-missing', {
+                jobId: tracker.jobId,
+                status: nextStatus.status,
+            });
+            finalizeTrackerCleanup(tracker);
+            return false;
+        }
+        // Keep the final snapshot and retry the local write with capped
+        // backoff instead of discarding a completed answer.
+        bgStreamWarn('status-terminal-persist-retry-scheduled', {
             jobId: tracker.jobId,
             status: nextStatus.status,
-            contentLength: safeContent.length,
-            subscribers: tracker.subscribers.size,
         });
-        tracker.active = false;
-        tracker.polling = false;
-        tracker.streaming = false;
-        backgroundJobTrackers.delete(tracker.jobId);
-        notifyBackgroundJobTrackerLifecycle({
-            type: 'removed',
-            tracker
-        });
+        scheduleTerminalPersistenceRetry(tracker);
         return false;
     }
 
     return true;
+}
+
+/**
+ * Releases a tracker after its terminal state has been durably projected (or
+ * the row no longer exists).
+ */
+function finalizeTrackerCleanup(tracker: BackgroundJobTracker): void {
+    if (tracker.terminalPersistTimer) {
+        clearTimeout(tracker.terminalPersistTimer);
+        tracker.terminalPersistTimer = undefined;
+    }
+    tracker.active = false;
+    tracker.polling = false;
+    tracker.streaming = false;
+    backgroundJobTrackers.delete(tracker.jobId);
+    notifyBackgroundJobTrackerLifecycle({
+        type: 'removed',
+        tracker,
+    });
+}
+
+/**
+ * Retries the terminal snapshot when the first local write failed.
+ */
+async function retryTerminalPersistence(
+    tracker: BackgroundJobTracker
+): Promise<void> {
+    const status = tracker.terminalStatus;
+    if (!status || tracker.transportInterrupted) return;
+    const content = tracker.terminalContent ?? tracker.lastContent;
+    const persistence = await persistBackgroundJobUpdate(
+        tracker,
+        status,
+        content,
+        tracker.terminalReplace === true
+    ).catch((error) => {
+        bgStreamWarn('terminal-persist-retry-error', {
+            jobId: tracker.jobId,
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return { persisted: false as const, missing: false as const };
+    });
+    if (persistence.persisted) {
+        bgStreamLog('terminal-persist-retry-succeeded', {
+            jobId: tracker.jobId,
+            status: status.status,
+        });
+        finalizeTrackerCleanup(tracker);
+        return;
+    }
+    if (persistence.missing) {
+        bgStreamWarn('terminal-persist-retry-row-missing', {
+            jobId: tracker.jobId,
+        });
+        finalizeTrackerCleanup(tracker);
+        return;
+    }
+    scheduleTerminalPersistenceRetry(tracker);
+}
+
+/**
+ * Schedules one bounded-backoff retry of the terminal snapshot.
+ */
+function scheduleTerminalPersistenceRetry(tracker: BackgroundJobTracker): void {
+    if (tracker.terminalPersistTimer) return;
+    const attempt = (tracker.terminalPersistAttempts ?? 0) + 1;
+    tracker.terminalPersistAttempts = attempt;
+    const base = Math.min(30_000, 500 * 2 ** Math.min(attempt - 1, 6));
+    const delay = Math.floor(base * (0.8 + Math.random() * 0.4));
+    const timer = setTimeout(() => {
+        tracker.terminalPersistTimer = undefined;
+        void retryTerminalPersistence(tracker);
+    }, delay);
+    (timer as { unref?: () => void }).unref?.();
+    tracker.terminalPersistTimer = timer;
 }
 
 /**
@@ -519,10 +684,77 @@ export async function primeBackgroundJobUpdate(
 }
 
 /**
+ * Stops local tracking after a connection/protocol/auth failure without
+ * fabricating an authoritative generation result. `interrupt` writes the
+ * durable interrupted projection (job confirmed missing); otherwise the row
+ * stays pending so reattachment can retry after recovery.
+ */
+async function interruptBackgroundTracking(
+    tracker: BackgroundJobTracker,
+    message: string,
+    options: { interrupt: boolean; kind: 'missing' | 'auth' | 'protocol' }
+): Promise<void> {
+    if (tracker.transportInterrupted) return;
+    tracker.transportInterrupted = true;
+    tracker.active = false;
+    tracker.pollRunId = (tracker.pollRunId ?? 0) + 1;
+    tracker.polling = false;
+    tracker.streaming = false;
+    if (tracker.streamUnsubscribe) {
+        try {
+            tracker.streamUnsubscribe();
+        } catch {
+            /* intentionally empty */
+        }
+        tracker.streamUnsubscribe = undefined;
+    }
+    bgStreamWarn('tracking-interrupted', {
+        jobId: tracker.jobId,
+        message,
+        interrupt: options.interrupt,
+    });
+    if (options.interrupt) {
+        tracker.status = 'error';
+        await persistBackgroundTrackingInterruption(tracker, {
+            interrupt: true,
+        }).catch((error) => {
+            bgStreamWarn('tracking-interruption-persist-failed', {
+                jobId: tracker.jobId,
+                error: error instanceof Error ? error.message : String(error),
+            });
+        });
+    }
+    const interruptedStatus: BackgroundJobStatus = {
+        id: tracker.jobId,
+        status: 'error',
+        threadId: tracker.threadId,
+        messageId: tracker.messageId,
+        model: 'unknown',
+        chunksReceived: 0,
+        attempt: tracker.lastAttempt,
+        startedAt: Date.now(),
+        completedAt: Date.now(),
+        error: message,
+        content: tracker.lastContent,
+        trackingInterrupted: true,
+        trackingInterruptedKind: options.kind,
+    };
+    notifyBackgroundSubscribers(tracker, 'onTransportError', {
+        status: interruptedStatus,
+        content: tracker.lastContent,
+        delta: '',
+    });
+    tracker.resolveCompletion(interruptedStatus);
+    backgroundJobTrackers.delete(tracker.jobId);
+    notifyBackgroundJobTrackerLifecycle({ type: 'removed', tracker });
+}
+
+/**
  * Internal helper. Main polling loop for background job status updates.
  */
 async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
     if (tracker.polling) return;
+    if (tracker.terminalStatus) return;
     if (typeof tracker.pollRunId !== 'number') tracker.pollRunId = 0;
     const runId = tracker.pollRunId + 1;
     tracker.pollAbortController?.abort();
@@ -587,8 +819,7 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
                 // generation failed. Keep reconciling retryable network, 429,
                 // and 5xx responses with a capped backoff so an intermittent or
                 // slow connection cannot permanently mark an active job as an
-                // error. Authentication and not-found responses remain bounded:
-                // retrying them indefinitely cannot recover the job.
+                // error.
                 if (withinKindBound) {
                     await abortableDelay(
                         retryDelayMs(err, tracker.consecutivePollFailures),
@@ -596,19 +827,38 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
                     );
                     continue;
                 }
+                // Bounded kind exhausted. A missing or unauthorized job is a
+                // reconciliation problem, never an authoritative generation
+                // failure. Confirmed-missing jobs get a durable interrupted
+                // projection so Continue is offered; auth failures stay pending
+                // for session recovery.
+                await interruptBackgroundTracking(tracker, error, {
+                    interrupt: err.kind === 'not_found',
+                    kind: err.kind === 'not_found' ? 'missing' : 'auth',
+                });
+                return;
             }
-            status = {
-                id: tracker.jobId,
-                status: 'error',
-                threadId: tracker.threadId,
-                messageId: tracker.messageId,
-                model: 'unknown',
-                chunksReceived: 0,
-                startedAt: Date.now(),
-                completedAt: Date.now(),
-                error,
-                content: tracker.lastContent,
-            };
+            if (err instanceof BackgroundJobPollError && !err.retryable) {
+                // Malformed protocol response: stop automatic reconnection
+                // without rewriting the generation as failed.
+                await interruptBackgroundTracking(tracker, error, {
+                    interrupt: false,
+                    kind: 'protocol',
+                });
+                return;
+            }
+            // Unknown failure shape: treat as transport and keep retrying with
+            // capped backoff instead of minting a terminal error.
+            tracker.consecutivePollFailures =
+                (tracker.consecutivePollFailures ?? 0) + 1;
+            await abortableDelay(
+                retryDelayMs(
+                    new BackgroundJobPollError(error, 'transport', true),
+                    tracker.consecutivePollFailures
+                ),
+                pollAbortController.signal
+            );
+            continue;
         }
         if (!isActive() || tracker.pollRunId !== runId) break;
 
@@ -712,6 +962,15 @@ function startBackgroundJobTracking(
     tracker: BackgroundJobTracker,
     options?: { useSse?: boolean }
 ): void {
+    if (tracker.terminalStatus) {
+        // A terminal snapshot awaiting local persistence must not restart a
+        // transport; the persistence retry owns finalization.
+        bgStreamLog('start-tracking-skipped-terminal-persist-pending', {
+            jobId: tracker.jobId,
+            requestedSse: Boolean(options?.useSse),
+        });
+        return;
+    }
     if (tracker.polling || tracker.streaming) {
         bgStreamLog('start-tracking-skipped-already-running', {
             jobId: tracker.jobId,
@@ -729,8 +988,13 @@ function startBackgroundJobTracking(
         });
         tracker.streaming = true;
         tracker.active = true;
+        // Each SSE connection gets a generation. Callbacks from an abandoned
+        // connection must never mutate tracker state after a transport switch.
+        const sseGeneration = (tracker.sseGeneration ?? 0) + 1;
+        tracker.sseGeneration = sseGeneration;
         let closed = false;
-        let chain = Promise.resolve();
+        let chain: Promise<void> = Promise.resolve();
+        tracker.streamChain = chain;
         let unsubscribe: (() => void) | null = null;
 
         const closeStream = () => {
@@ -752,12 +1016,26 @@ function startBackgroundJobTracking(
             }
         };
 
+        const fallbackToPolling = () => {
+            if (tracker.sseGeneration !== sseGeneration) return;
+            // Drain already-accepted SSE updates before polling so an older
+            // event cannot land after polling has advanced the offset.
+            void chain.finally(() => {
+                if (tracker.sseGeneration !== sseGeneration) return;
+                if (tracker.streaming) return;
+                if (tracker.active && !tracker.polling) {
+                    void pollBackgroundJob(tracker);
+                }
+            });
+        };
+
         try {
             unsubscribe = subscribeBackgroundJobStream({
                 jobId: tracker.jobId,
                 offset: tracker.lastContent.length,
                 attempt: tracker.lastAttempt,
                 onStatus: (status) => {
+                    if (closed || tracker.sseGeneration !== sseGeneration) return;
                     const shouldLogSseStatus =
                         status.status !== 'streaming' ||
                         (typeof status.content_delta === 'string' &&
@@ -777,46 +1055,57 @@ function startBackgroundJobTracking(
                         });
                     }
                     chain = chain
-                        .then(() => handleBackgroundStatus(tracker, status))
-                        .then((shouldContinue) => {
-                            if (!shouldContinue) {
-                                closeStream();
+                        .then(() => {
+                            if (
+                                closed ||
+                                tracker.sseGeneration !== sseGeneration
+                            ) {
+                                return;
                             }
+                            return handleBackgroundStatus(tracker, status).then(
+                                (shouldContinue) => {
+                                    if (!shouldContinue) {
+                                        closeStream();
+                                    }
+                                }
+                            );
                         })
                         .catch(() => {
+                            if (
+                                closed ||
+                                tracker.sseGeneration !== sseGeneration
+                            ) {
+                                return;
+                            }
                             // Fallback to polling on handler error
                             bgStreamWarn('sse-handler-error-fallback-poll', {
                                 jobId: tracker.jobId,
                             });
                             closeStream();
-                            void pollBackgroundJob(tracker);
+                            fallbackToPolling();
                         });
+                    tracker.streamChain = chain;
                 },
                 onError: (error) => {
-                    if (!closed) {
-                        const terminalState =
-                            tracker.status !== 'streaming' || !tracker.active;
-                        if (terminalState) {
-                            bgStreamLog('sse-error-ignored-terminal', {
-                                jobId: tracker.jobId,
-                                status: tracker.status,
-                                active: tracker.active,
-                                error: error.message,
-                            });
-                            closeStream();
-                            return;
-                        }
-                        bgStreamWarn('sse-error-fallback-poll', {
+                    if (closed || tracker.sseGeneration !== sseGeneration) return;
+                    const terminalState =
+                        tracker.status !== 'streaming' || !tracker.active;
+                    if (terminalState) {
+                        bgStreamLog('sse-error-ignored-terminal', {
                             jobId: tracker.jobId,
+                            status: tracker.status,
+                            active: tracker.active,
                             error: error.message,
                         });
                         closeStream();
-                        // Drain already-queued SSE statuses before polling so
-                        // an older event cannot land after a recovered attempt.
-                        void chain.finally(() => {
-                            if (tracker.active) void pollBackgroundJob(tracker);
-                        });
+                        return;
                     }
+                    bgStreamWarn('sse-error-fallback-poll', {
+                        jobId: tracker.jobId,
+                        error: error.message,
+                    });
+                    closeStream();
+                    fallbackToPolling();
                 },
             });
         } catch (error) {
@@ -919,8 +1208,35 @@ export function ensureBackgroundJobTracker(
         if (params.userId && existing.userId !== params.userId) {
             existing.userId = params.userId;
         }
+        if (
+            (existing.threadId && existing.threadId !== params.threadId) ||
+            (existing.messageId && existing.messageId !== params.messageId)
+        ) {
+            // A job's ownership must never be silently reassigned. Reusing the
+            // tracker for a different thread/message would bind persistence and
+            // Stop controls to the wrong conversation.
+            bgStreamWarn('tracker-reuse-ownership-conflict', {
+                jobId: params.jobId,
+                existingThreadId: existing.threadId,
+                incomingThreadId: params.threadId,
+                existingMessageId: existing.messageId,
+                incomingMessageId: params.messageId,
+            });
+            return existing;
+        }
         if (!existing.threadId) existing.threadId = params.threadId;
         if (!existing.messageId) existing.messageId = params.messageId;
+        if (params.originDb && !existing.originDb) {
+            existing.originDb = params.originDb;
+            existing.originDbName = params.originDb.name;
+        }
+        if (params.workspaceId && !existing.workspaceId) {
+            existing.workspaceId = params.workspaceId;
+        }
+        if (params.canonicalHistory) existing.canonicalHistory = true;
+        if (params.generationId && !existing.generationId) {
+            existing.generationId = params.generationId;
+        }
         if (
             !isStaleAttempt &&
             typeof params.initialContent === 'string' &&
@@ -929,6 +1245,23 @@ export function ensureBackgroundJobTracker(
         ) {
             existing.lastContent = params.initialContent;
             existing.lastPersistedLength = params.initialContent.length;
+        }
+        if (typeof existing.lastReasoning !== 'string') {
+            existing.lastReasoning = '';
+        }
+        if (typeof existing.lastPersistedReasoningLength !== 'number') {
+            existing.lastPersistedReasoningLength =
+                existing.lastReasoning.length;
+        }
+        if (
+            !isStaleAttempt &&
+            typeof params.initialReasoning === 'string' &&
+            (isNewerAttempt ||
+                params.initialReasoning.length > existing.lastReasoning.length)
+        ) {
+            existing.lastReasoning = params.initialReasoning;
+            existing.lastPersistedReasoningLength =
+                params.initialReasoning.length;
         }
         if (params.useSse) {
             existing.preferSse = true;
@@ -948,7 +1281,12 @@ export function ensureBackgroundJobTracker(
     });
     const seedContent =
         typeof params.initialContent === 'string' ? params.initialContent : '';
-    const originDb = getDb();
+    const seedReasoning =
+        typeof params.initialReasoning === 'string'
+            ? params.initialReasoning
+            : '';
+    // The originating workspace database must be captured at admission, not
+    const originDb = params.originDb ?? getDb();
     const tracker: BackgroundJobTracker = {
         jobId: params.jobId,
         userId: params.userId,
@@ -960,8 +1298,10 @@ export function ensureBackgroundJobTracker(
         lastToolStateFingerprint: '[]',
         lastWorkflowFingerprint: 'null',
         lastContent: seedContent,
+        lastReasoning: seedReasoning,
         lastAttempt: params.initialAttempt,
         lastPersistedLength: seedContent.length,
+        lastPersistedReasoningLength: seedReasoning.length,
         lastPersistAt: 0,
         polling: false,
         streaming: false,
@@ -970,6 +1310,9 @@ export function ensureBackgroundJobTracker(
         pollRunId: 0,
         originDb,
         originDbName: originDb.name,
+        workspaceId: params.workspaceId,
+        canonicalHistory: params.canonicalHistory,
+        generationId: params.generationId,
         subscribers: new Set<BackgroundJobSubscriber>(),
         completion,
         resolveCompletion,
@@ -1078,11 +1421,26 @@ export function subscribeBackgroundJob(
             bgStreamLog('subscriber-none-close-sse', {
                 jobId: tracker.jobId,
             });
+            const closingGeneration = tracker.sseGeneration;
+            const drainChain = tracker.streamChain ?? Promise.resolve();
             try {
                 tracker.streamUnsubscribe();
             } catch {
                 /* intentionally empty */
             }
+            // Drain already-accepted SSE updates before the polling path starts
+            // so both transports cannot process overlapping deltas.
+            void drainChain.finally(() => {
+                if (!tracker.active || tracker.streaming) return;
+                if (tracker.sseGeneration !== closingGeneration) return;
+                if (!tracker.polling && tracker.status === 'streaming') {
+                    bgStreamLog('subscriber-none-start-poll-after-drain', {
+                        jobId: tracker.jobId,
+                    });
+                    void pollBackgroundJob(tracker);
+                }
+            });
+            return;
         }
         // Keep tracking via polling so local persistence and completion callbacks
         // continue even while detached.

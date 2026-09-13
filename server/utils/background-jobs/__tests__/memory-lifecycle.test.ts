@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-    clearAllJobs,
-    memoryJobProvider,
-} from '../providers/memory';
+import { clearAllJobs, memoryJobProvider } from '../providers/memory';
 import {
     decryptBackgroundCredential,
     encryptBackgroundCredential,
@@ -21,11 +18,36 @@ const config = vi.hoisted(() => ({
     completedJobRetentionMs: 300_000,
 }));
 
+vi.mock('#imports', () => ({
+    useRuntimeConfig: () => ({
+        public: { sync: { provider: 'memory' } },
+    }),
+}));
+
 vi.mock('../store', () => ({
     getJobConfig: () => config,
     getJobProvider: async () => memoryJobProvider,
     getBackgroundJobEncryptionKey: () => secret,
     isBackgroundStreamingEnabled: () => true,
+}));
+
+vi.mock('../history', () => ({
+    assertBackgroundHistoryProvider: vi.fn(),
+    reconcileBackgroundJobHistory: vi.fn(async (provider, job) => {
+        if (job.historyPhase === 'admission_pending') {
+            await provider.setHistoryPhase(job.id, 'ready', {
+                from: ['admission_pending'],
+            });
+            return 'ready';
+        }
+        if (job.historyPhase === 'finalization_pending') {
+            await provider.setHistoryPhase(job.id, 'committed', {
+                from: ['finalization_pending'],
+            });
+            return 'committed';
+        }
+        return 'unchanged';
+    }),
 }));
 
 const secret = 'background-lifecycle-test-secret-that-is-long-enough';
@@ -76,7 +98,9 @@ describe('memory background job admission and lifecycle', () => {
             )
         );
 
-        expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(2);
+        expect(
+            results.filter((result) => result.status === 'fulfilled')
+        ).toHaveLength(2);
         expect(await memoryJobProvider.getActiveJobCount?.()).toBe(2);
     });
 
@@ -117,13 +141,15 @@ describe('memory background job admission and lifecycle', () => {
             });
             await vi.advanceTimersByTimeAsync(999);
             expect(await memoryJobProvider.cleanupExpired()).toBe(0);
-            expect((await memoryJobProvider.getJob(jobId, 'user-1'))?.status).toBe(
-                'streaming'
-            );
+            expect(
+                (await memoryJobProvider.getJob(jobId, 'user-1'))?.status
+            ).toBe('streaming');
 
             await vi.advanceTimersByTimeAsync(2);
             expect(await memoryJobProvider.cleanupExpired()).toBe(1);
-            expect(await memoryJobProvider.getJob(jobId, 'user-1')).toMatchObject({
+            expect(
+                await memoryJobProvider.getJob(jobId, 'user-1')
+            ).toMatchObject({
                 status: 'error',
                 error: 'Job timed out',
             });
@@ -141,7 +167,8 @@ describe('memory background job admission and lifecycle', () => {
             model: 'test-model',
             execution: execution(),
         });
-        const abortSignal = memoryJobProvider.getAbortController?.(jobId)?.signal;
+        const abortSignal =
+            memoryJobProvider.getAbortController?.(jobId)?.signal;
 
         expect(abortSignal?.aborted).toBe(false);
         await expect(memoryJobProvider.abortJob(jobId, 'user-1')).resolves.toBe(
@@ -176,25 +203,51 @@ describe('memory background job admission and lifecycle', () => {
 
     it('starts one model stream for duplicate background admissions', async () => {
         const encoder = new TextEncoder();
-        const fetchMock = vi.fn(async () => new Response(
-            new ReadableStream({
-                start(controller) {
-                    controller.enqueue(
-                        encoder.encode(
-                            'data: {"choices":[{"delta":{"content":"done"}}]}\n\n' +
-                            'data: [DONE]\n\n'
-                        )
-                    );
-                    controller.close();
-                },
-            })
-        ));
+        const fetchMock = vi.fn(
+            async () =>
+                new Response(
+                    new ReadableStream({
+                        start(controller) {
+                            controller.enqueue(
+                                encoder.encode(
+                                    'data: {"choices":[{"delta":{"content":"done"}}]}\n\n' +
+                                        'data: [DONE]\n\n'
+                                )
+                            );
+                            controller.close();
+                        },
+                    })
+                )
+        );
         vi.stubGlobal('fetch', fetchMock);
         const params = {
             body: {
                 _background: true,
                 _threadId: 'thread-1',
                 _messageId: 'message-1',
+                _backgroundAdmissionId: 'admission-1',
+                _history: {
+                    version: 1,
+                    kind: 'new-turn',
+                    admissionId: 'admission-1',
+                    generationId: 'generation-1',
+                    workspaceId: 'workspace-1',
+                    threadId: 'thread-1',
+                    messageId: 'message-1',
+                    thread: { id: 'thread-1', clock: 1 },
+                    userMessage: {
+                        id: 'user-message-1',
+                        thread_id: 'thread-1',
+                        role: 'user',
+                        clock: 1,
+                    },
+                    assistantMessage: {
+                        id: 'message-1',
+                        thread_id: 'thread-1',
+                        role: 'assistant',
+                        clock: 1,
+                    },
+                },
                 model: 'test-model',
                 messages: [],
                 stream: true,
@@ -281,7 +334,11 @@ describe('memory background job admission and lifecycle', () => {
         const execute = vi.fn(async (id, params, provider) => {
             expect(params.apiKey).toBe('user-api-key');
             expect(params.execution?.contentBase).toBe('checkpoint:');
-            await provider.completeJob(id, 'checkpoint:resumed', params.leaseOwner);
+            await provider.completeJob(
+                id,
+                'checkpoint:resumed',
+                params.leaseOwner
+            );
         });
 
         await runClaimedBackgroundJob(reclaimed!, {
@@ -309,12 +366,7 @@ describe('memory background job admission and lifecycle', () => {
             execution: execution(),
         });
         const now = Date.now();
-        await memoryJobProvider.claimJob?.(
-            jobId,
-            'dead-worker',
-            now,
-            now + 10
-        );
+        await memoryJobProvider.claimJob?.(jobId, 'dead-worker', now, now + 10);
         const execute = vi.fn(async (id, params, provider) => {
             await provider.completeJob(id, 'recovered', params.leaseOwner);
         });
@@ -370,5 +422,54 @@ describe('memory background job admission and lifecycle', () => {
             status: 'error',
             error: expect.stringContaining('avoid repeating a side effect'),
         });
+    });
+
+    it('cancels an admission before its job commits so no work launches', async () => {
+        await expect(
+            memoryJobProvider.cancelAdmission!('user-1', 'admission-x')
+        ).resolves.toMatchObject({ aborted: false, pending: true });
+
+        await expect(
+            memoryJobProvider.createJob({
+                userId: 'user-1',
+                threadId: 'thread-1',
+                messageId: 'message-1',
+                model: 'test-model',
+                idempotencyKey: 'admission-x',
+            })
+        ).rejects.toMatchObject({ name: 'AdmissionCancelledError' });
+
+        await expect(memoryJobProvider.getActiveJobCount!()).resolves.toBe(0);
+    });
+
+    it('cancels a committed streaming job and keeps replay idempotent', async () => {
+        const jobId = await memoryJobProvider.createJob({
+            userId: 'user-1',
+            threadId: 'thread-1',
+            messageId: 'message-1',
+            model: 'test-model',
+            idempotencyKey: 'admission-y',
+        });
+
+        await expect(
+            memoryJobProvider.cancelAdmission!('user-1', 'admission-y')
+        ).resolves.toMatchObject({ aborted: true, jobId, pending: false });
+        await expect(
+            memoryJobProvider.getJob(jobId, 'user-1')
+        ).resolves.toMatchObject({
+            status: 'aborted',
+            error: 'Cancelled by user',
+        });
+
+        // A duplicate admission returns the same terminal row, not new work.
+        await expect(
+            memoryJobProvider.createJob({
+                userId: 'user-1',
+                threadId: 'thread-1',
+                messageId: 'message-1',
+                model: 'test-model',
+                idempotencyKey: 'admission-y',
+            })
+        ).resolves.toBe(jobId);
     });
 });

@@ -35,19 +35,22 @@ import { newId } from '~/db/util';
 import { parseHashes } from '~/utils/files/attachments';
 import { createOrRefFile } from '~/db/files';
 import {
-    createContinuationDeltaNormalizer,
     shouldKeepAssistantMessage,
     getChatModalities,
     normalizeStreamingMessage,
 } from '~/utils/chat/messages';
 import { composeSystemPrompt } from '~/utils/chat/prompt-utils';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
-import { openRouterStreamWithRetry } from '~/utils/chat/openrouterStream';
+import {
+    openRouterStreamWithRetry,
+    startBackgroundStream,
+} from '~/utils/chat/openrouterStream';
 import { dataUrlToBlob, fetchImageBlob } from '~/utils/chat/files';
 import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
 import { reportError, err } from '~/utils/errors';
 import type { StoredMessage, OpenRouterMessage } from './types';
 import { makeAssistantPersister, updateMessageRecord } from './persistence';
+import { createForegroundGenerationLease } from '~/utils/chat/generation-lease';
 import {
     buildOpenRouterMessagesForSend,
     enforceOpenRouterMessageTokenBudget,
@@ -55,6 +58,13 @@ import {
 import { createStreamWriteCoalescer } from './streamWriteCoalescer';
 import { utf8Bytes } from '~~/shared/chat/tool-limits';
 import { DEFAULT_MAX_INPUT_TOKENS } from '~/utils/chat/constants';
+import {
+    CONTINUATION_PREFIX,
+    CONTINUE_TAIL_CHARS,
+    createContinuationDeltaNormalizer,
+} from '~~/shared/chat/continuation';
+import type { BackgroundJobTracker } from './types';
+import { projectCanonicalBackgroundMessage } from './backgroundJobPersistence';
 
 /** Chat settings from useAiSettings */
 type ChatSettings = {
@@ -102,13 +112,21 @@ export type ContinueMessageContext = {
     useAiSettings: () => { settings: Ref<ChatSettings | undefined> };
     resolveInputTokenBudget?: (modelId: string) => number;
     resetStream: () => void;
+    backgroundStreamingAllowed?: boolean;
+    workspaceId?: string;
+    userId?: string;
+    beginBackgroundAdmission?: (admissionId: string, messageId: string) => void;
+    attachBackgroundJob?: (params: {
+        jobId: string;
+        messageId: string;
+        threadId: string;
+        originDb: ReturnType<typeof getDb>;
+        workspaceId: string;
+        generationId: string;
+        initialContent: string;
+        initialReasoning: string;
+    }) => BackgroundJobTracker;
 };
-
-/** Number of tail characters to include in continuation prompt */
-const CONTINUE_TAIL_CHARS = 1200;
-
-/** Continuation prefix that model is instructed to emit */
-const CONTINUATION_PREFIX = '>>';
 
 /**
  * Build the continuation system prompt prefix.
@@ -211,6 +229,7 @@ export async function continueMessageImpl(
     let continuationSetLoading = false;
     let continuationAbortController: AbortController | null = null;
     let innerStreamLifecycleStarted = false;
+    let backgroundAdmissionStarted = false;
 
     try {
         const target = (await originDb.messages.get(messageId)) as StoredMessage | undefined;
@@ -396,6 +415,11 @@ export async function continueMessageImpl(
         if (!ownsThread()) return;
         // modalities controls OUTPUT format, not input capability
         const modalities = getChatModalities(modelId);
+        const useBackground =
+            ctx.backgroundStreamingAllowed === true &&
+            modalities.length === 1 &&
+            modalities[0] === 'text' &&
+            Boolean(ctx.workspaceId && ctx.userId && ctx.attachBackgroundJob);
 
         ctx.streamAcc.reset();
         const newStreamId = newId();
@@ -453,22 +477,123 @@ export async function continueMessageImpl(
         const persistAssistant = makeAssistantPersister(
             originDb,
             target,
-            assistantFileHashes
+            assistantFileHashes,
+            newStreamId
         );
         activePersister = persistAssistant;
 
         // Durable generation identity must precede the first continuation byte,
         // so reload can distinguish an active continuation from a stale row.
+        // Stale background job identity is cleared atomically: otherwise the
+        // old job ID makes foreground recovery skip this row and the new
+        // generation cannot be reconciled.
         targetMarkedPending = true;
         target.pending = true;
         target.stream_id = newStreamId;
         target.error = null;
+        const priorGenerationId =
+            target.data && typeof target.data === 'object' &&
+            typeof (target.data as Record<string, unknown>).generation_id === 'string'
+                ? (target.data as Record<string, unknown>).generation_id as string
+                : undefined;
+        const backgroundAdmissionId = useBackground ? newId() : undefined;
+        if (useBackground && backgroundAdmissionId) {
+            backgroundAdmissionStarted = true;
+            ctx.beginBackgroundAdmission?.(backgroundAdmissionId, messageId);
+        }
         await updateMessageRecord(originDb, messageId, {
             pending: true,
             stream_id: newStreamId,
             error: null,
-            data: { error: null },
+            data: {
+                error: null,
+                generation_state: 'streaming',
+                generation_id: newStreamId,
+                request_id: backgroundAdmissionId ?? newStreamId,
+                generation_mode: useBackground ? 'background' : 'foreground',
+                background_job_id: undefined,
+                background_job_status: undefined,
+                background_job_error: undefined,
+                background_admission_id: backgroundAdmissionId,
+                background_history_version: useBackground ? 1 : undefined,
+                ...(useBackground ? {} : createForegroundGenerationLease(newStreamId)),
+            },
         });
+
+        if (useBackground) {
+            const admittedAssistant = await originDb.messages.get(messageId);
+            if (!admittedAssistant || !backgroundAdmissionId || !ctx.workspaceId) {
+                throw new Error('Unable to capture continuation history');
+            }
+            const result = await startBackgroundStream({
+                apiKey: ctx.effectiveApiKey.value,
+                model: modelId,
+                orMessages: orMessages as Parameters<typeof startBackgroundStream>[0]['orMessages'],
+                modalities,
+                threadId: originThreadId,
+                messageId: target.id,
+                admissionId: backgroundAdmissionId,
+                history: {
+                    version: 1,
+                    kind: 'continuation',
+                    admissionId: backgroundAdmissionId,
+                    generationId: newStreamId,
+                    workspaceId: ctx.workspaceId,
+                    threadId: originThreadId,
+                    messageId: target.id,
+                    assistantMessage: admittedAssistant,
+                    expectedAssistant: {
+                        clock: target.clock,
+                        ...(priorGenerationId
+                            ? { generationId: priorGenerationId }
+                            : {}),
+                    },
+                },
+                signal: continuationAbortController.signal,
+            });
+            await projectCanonicalBackgroundMessage(originDb, messageId, {
+                data: {
+                    background_job_id: result.jobId,
+                    background_job_status: 'streaming',
+                },
+            });
+            const tracker = ctx.attachBackgroundJob!({
+                jobId: result.jobId,
+                messageId: target.id,
+                threadId: originThreadId,
+                originDb,
+                workspaceId: ctx.workspaceId,
+                generationId: newStreamId,
+                initialContent: existingText,
+                initialReasoning: existingReasoning ?? '',
+            });
+            innerStreamLifecycleStarted = true;
+            try {
+                const completion = await tracker.completion;
+                if (ownsThread()) {
+                    if (completion.status === 'complete') ctx.streamAcc.finalize();
+                    else ctx.streamAcc.finalize({
+                        error: new Error(
+                            completion.error ?? `Background continuation ${completion.status}`
+                        ),
+                    });
+                }
+            } finally {
+                if (ownsThread()) {
+                    ctx.loading.value = false;
+                    current.pending = false;
+                }
+                if (ctx.abortController.value === continuationAbortController) {
+                    ctx.abortController.value = null;
+                }
+                setTimeout(() => {
+                    if (ownsThread() && !ctx.loading.value && ctx.streamState.finalized) {
+                        ctx.resetStream();
+                    }
+                }, 0);
+            }
+            return;
+        }
 
         const stream = openRouterStreamWithRetry({
             apiKey: ctx.effectiveApiKey.value,
@@ -662,6 +787,14 @@ export async function continueMessageImpl(
         const setupError =
             e instanceof Error ? e : new Error(String(e));
         const errorType = 'stream_interrupted';
+
+        if (backgroundAdmissionStarted && ctx.aborted.value) {
+            if (ownsThread()) ctx.loading.value = false;
+            if (ctx.abortController.value === continuationAbortController) {
+                ctx.abortController.value = null;
+            }
+            return;
+        }
 
         // The inner lifecycle owns stream errors and its own finally block.
         // Do not run setup cleanup a second time if its finalization happens

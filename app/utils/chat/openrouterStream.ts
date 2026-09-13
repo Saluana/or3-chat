@@ -438,6 +438,12 @@ export async function* openRouterStreamWithRetry(
     } = params;
     const baseDelayMs = 500;
     let lastError: OpenRouterStreamError | undefined;
+    /**
+     * Once any event has been handed to the consumer, automatic replay is
+     * forbidden: a retry would duplicate output. Mid-stream recovery is owned
+     * by the explicit checkpoint/attempt mechanism instead.
+     */
+    let yieldedAnyEvent = false;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
@@ -447,9 +453,10 @@ export async function* openRouterStreamWithRetry(
             if (first.done) {
                 return;
             }
+            yieldedAnyEvent = true;
             yield first.value;
             // First event succeeded; drain the rest without retry to avoid duplicates.
-            while (true) {
+            for (;;) {
                 const next = await iterator.next();
                 if (next.done) return;
                 yield next.value;
@@ -468,7 +475,11 @@ export async function* openRouterStreamWithRetry(
                           }
                       );
             lastError = error;
-            if (!error.retryable || attempt >= maxRetries) {
+            if (
+                yieldedAnyEvent ||
+                !error.retryable ||
+                attempt >= maxRetries
+            ) {
                 throw error;
             }
             const delayMs = Math.min(
@@ -498,6 +509,13 @@ export async function* openRouterStreamWithRetry(
 const BACKGROUND_STREAMING_CACHE_KEY = 'or3:background-streaming-available';
 
 /**
+ * Session-scoped override set when the server explicitly rejects background
+ * execution. It beats explicit client config so a mismatched deployment does
+ * not cause repeated admissions on every send.
+ */
+let backgroundStreamingCapabilityDisabled = false;
+
+/**
  * `BackgroundJobStatus`
  *
  * Purpose:
@@ -518,8 +536,25 @@ export interface BackgroundJobStatus {
     content?: string;
     content_delta?: string;
     content_length?: number;
+    /** Full reasoning snapshot when the server provides one. */
+    reasoning_text?: string;
+    reasoning_delta?: string;
+    reasoning_length?: number;
+    reasoning_reset?: boolean;
     /** Full content replaces a pre-recovery partial response. */
     content_reset?: boolean;
+    /**
+     * Client-side only. The server job may still be healthy; tracking was
+     * interrupted by a connection/protocol/auth problem. Callers must not
+     * treat this as an authoritative generation failure.
+     */
+    trackingInterrupted?: boolean;
+    /**
+     * Client-side only reason for `trackingInterrupted`. `missing` means the
+     * job was confirmed gone and the row was durably projected as interrupted;
+     * `auth` and `protocol` leave the row pending for reattachment retry.
+     */
+    trackingInterruptedKind?: 'missing' | 'auth' | 'protocol';
     tool_calls?: Array<{
         id?: string;
         name: string;
@@ -540,6 +575,8 @@ export interface BackgroundJobStatus {
 export interface BackgroundStreamResult {
     jobId: string;
     status: 'streaming';
+    /** Present for canonical chat admission; workflow jobs use another contract. */
+    historyVersion?: 1;
 }
 
 /**
@@ -553,16 +590,43 @@ export type BackgroundJobStreamEvent = {
     status: BackgroundJobStatus;
 };
 
+type BackgroundAdmissionError = Error & {
+    backgroundAdmissionRetryable?: boolean;
+    backgroundCapabilityDisabled?: boolean;
+};
+
+function makeBackgroundAdmissionError(
+    message: string,
+    options: { retryable: boolean; capabilityDisabled?: boolean }
+): BackgroundAdmissionError {
+    const error = new Error(message) as BackgroundAdmissionError;
+    error.name = 'BackgroundAdmissionError';
+    error.backgroundAdmissionRetryable = options.retryable;
+    error.backgroundCapabilityDisabled = options.capabilityDisabled === true;
+    return error;
+}
+
+async function readErrorPayload(
+    response: Response
+): Promise<{ error?: string; code?: string }> {
+    const data = (await response.json().catch(() => null)) as unknown;
+    if (data && typeof data === 'object') {
+        const error = (data as { error?: unknown }).error;
+        const code = (data as { code?: unknown }).code;
+        return {
+            error: typeof error === 'string' ? error : undefined,
+            code: typeof code === 'string' ? code : undefined,
+        };
+    }
+    return {};
+}
+
 async function readErrorMessage(
     response: Response,
     fallback: string
 ): Promise<string> {
-    const data = (await response.json().catch(() => null)) as unknown;
-    if (data && typeof data === 'object' && 'error' in data) {
-        const error = (data as { error?: unknown }).error;
-        if (typeof error === 'string') return error;
-    }
-    return fallback;
+    const payload = await readErrorPayload(response);
+    return payload.error ?? fallback;
 }
 
 /**
@@ -574,8 +638,7 @@ async function readErrorMessage(
 export function isBackgroundStreamingEnabled(
     configuredEnabled?: boolean
 ): boolean {
-    if (!isServerRouteAvailable()) return false;
-
+    if (backgroundStreamingCapabilityDisabled) return false;
     const configEnabled =
         configuredEnabled ??
         (
@@ -583,10 +646,14 @@ export function isBackgroundStreamingEnabled(
                 public?: { backgroundStreaming?: { enabled?: boolean } };
             }
         ).public?.backgroundStreaming?.enabled;
+    // Explicit config wins over stale local caches. A stale "server route
+    // unavailable" entry must not veto a Cloud instance that explicitly
+    // enables background streaming.
     if (configEnabled === false) return false;
-    // Explicit config should win over stale local cache.
     if (configEnabled === true) return true;
-    
+
+    if (!isServerRouteAvailable()) return false;
+
     // Check cached result
     if (typeof localStorage !== 'undefined') {
         const cached = localStorage.getItem(BACKGROUND_STREAMING_CACHE_KEY);
@@ -619,6 +686,9 @@ export async function startBackgroundStream(params: {
     modalities: string[];
     threadId: string;
     messageId: string;
+    /** Stable admission identity; generated once per user-initiated send. */
+    admissionId?: string;
+    history: import('~~/shared/chat/background-history').ChatGenerationAdmissionEnvelope;
     reasoning?: OpenRouterReasoningConfig;
     tools?: ToolDefinition[];
     toolChoice?: ToolChoice;
@@ -633,6 +703,7 @@ export async function startBackgroundStream(params: {
         _threadId: string;
         _messageId: string;
         _backgroundAdmissionId: string;
+        _history: import('~~/shared/chat/background-history').ChatGenerationAdmissionEnvelope;
     } = {
         model: params.model,
         messages: params.orMessages,
@@ -643,7 +714,11 @@ export async function startBackgroundStream(params: {
         _messageId: params.messageId,
         // One admission ID per user-initiated send. Transport retries reuse
         // this body, while an explicit retry creates a fresh admission.
-        _backgroundAdmissionId: crypto.randomUUID(),
+        _backgroundAdmissionId:
+            params.admissionId && params.admissionId.length > 0
+                ? params.admissionId
+                : crypto.randomUUID(),
+        _history: params.history,
     };
 
     if (params.reasoning) {
@@ -690,25 +765,85 @@ export async function startBackgroundStream(params: {
             });
 
             if (!resp.ok) {
+                const payload = await readErrorPayload(resp);
+                const message =
+                    payload.error ?? `Background stream failed: ${resp.status}`;
+                if (
+                    payload.code === 'background_streaming_disabled' ||
+                    payload.code === 'background_history_unsupported'
+                ) {
+                    // Server explicitly rejected durable execution. Refresh the
+                    // capability cache; do not retry and do not fall through to
+                    // a different execution mode.
+                    backgroundStreamingCapabilityDisabled = true;
+                    setBackgroundStreamingAvailable(false);
+                    setServerRouteAvailable(true);
+                    throw makeBackgroundAdmissionError(message, {
+                        retryable: false,
+                        capabilityDisabled: true,
+                    });
+                }
                 if (resp.status === 404 || resp.status === 405) {
                     setServerRouteAvailable(false);
                     setBackgroundStreamingAvailable(false);
                 }
-                const message = await readErrorMessage(
-                    resp,
-                    `Background stream failed: ${resp.status}`
-                );
-                const error = new Error(message);
-                Object.assign(error, {
-                    backgroundAdmissionRetryable: resp.status >= 500,
+                const retryable = resp.status >= 500;
+                const error = makeBackgroundAdmissionError(message, {
+                    retryable,
                 });
-                if (resp.status < 500 || attempt === 2) throw error;
+                if (!retryable || attempt === 2) throw error;
                 lastError = error;
             } else {
-                result = await readResponseJsonWithIdleDeadline<BackgroundStreamResult>(
-                    resp,
-                    { signal: params.signal, timeoutMs: params.idleTimeoutMs }
-                );
+                // Strict admission contract: `_background: true` must return a
+                // JSON `{ jobId, status: 'streaming' }` body. An unexpected SSE
+                // or malformed body means a mismatched deployment; reject it
+                // instead of silently launching another execution mode.
+                const contentType = resp.headers.get('content-type') ?? '';
+                if (!contentType.includes('application/json')) {
+                    throw makeBackgroundAdmissionError(
+                        'Background admission returned a non-JSON response',
+                        { retryable: false }
+                    );
+                }
+                let decoded: unknown;
+                try {
+                    decoded = await readResponseJsonWithIdleDeadline<unknown>(
+                        resp,
+                        {
+                            signal: params.signal,
+                            timeoutMs: params.idleTimeoutMs,
+                        }
+                    );
+                } catch (decodeError) {
+                    if (params.signal?.aborted) throw decodeError;
+                    throw makeBackgroundAdmissionError(
+                        decodeError instanceof Error
+                            ? decodeError.message
+                            : 'Malformed background admission response',
+                        { retryable: false }
+                    );
+                }
+                const candidate =
+                    decoded && typeof decoded === 'object'
+                        ? (decoded as { jobId?: unknown; status?: unknown; historyVersion?: unknown })
+                        : null;
+                if (
+                    !candidate ||
+                    typeof candidate.jobId !== 'string' ||
+                    candidate.jobId.length === 0 ||
+                    candidate.status !== 'streaming' ||
+                    candidate.historyVersion !== 1
+                ) {
+                    throw makeBackgroundAdmissionError(
+                        'Malformed background admission response',
+                        { retryable: false }
+                    );
+                }
+                result = {
+                    jobId: candidate.jobId,
+                    status: 'streaming',
+                    historyVersion: 1,
+                };
                 break;
             }
         } catch (error) {
@@ -716,9 +851,8 @@ export async function startBackgroundStream(params: {
                 params.signal?.aborted ||
                 (error instanceof Error && error.name === 'AbortError') ||
                 (error instanceof Error &&
-                    (error as Error & {
-                        backgroundAdmissionRetryable?: boolean;
-                    }).backgroundAdmissionRetryable === false) ||
+                    (error as BackgroundAdmissionError)
+                        .backgroundAdmissionRetryable === false) ||
                 attempt === 2
             ) {
                 throw error;
@@ -806,8 +940,44 @@ export async function pollJobStatus(
         );
     }
 
-    const status = await readResponseJsonWithIdleDeadline<BackgroundJobStatus>(resp, { signal });
-    return status;
+    let decoded: unknown;
+    try {
+        decoded = await readResponseJsonWithIdleDeadline<unknown>(resp, {
+            signal,
+        });
+    } catch (error) {
+        if (
+            signal?.aborted ||
+            (error instanceof Error && error.name === 'AbortError')
+        ) {
+            throw error;
+        }
+        // Body timeouts and malformed payloads are transport/provider problems,
+        // not authoritative job states. Classify them so callers retry instead
+        // of fabricating a terminal generation failure.
+        if (error instanceof OpenRouterTimeoutError) {
+            throw new BackgroundJobPollError(error.message, 'transport', true);
+        }
+        throw new BackgroundJobPollError(
+            error instanceof Error
+                ? error.message
+                : 'Job status response decode failed',
+            'protocol',
+            false
+        );
+    }
+    if (
+        !decoded ||
+        typeof decoded !== 'object' ||
+        typeof (decoded as { status?: unknown }).status !== 'string'
+    ) {
+        throw new BackgroundJobPollError(
+            'Malformed job status response',
+            'protocol',
+            false
+        );
+    }
+    return decoded as BackgroundJobStatus;
 }
 
 /**
@@ -827,6 +997,61 @@ export async function abortBackgroundJob(jobId: string): Promise<boolean> {
 
     const result = await resp.json() as { aborted: boolean };
     return result.aborted;
+}
+
+/**
+ * `abortBackgroundAdmission`
+ *
+ * Purpose:
+ * Cancels a background admission before its job ID is known, using the stable
+ * admission ID. The server either aborts the committed job or records a
+ * cancellation marker consumed when the admission commits.
+ */
+export async function abortBackgroundAdmission(
+    admissionId: string
+): Promise<{ aborted: boolean; pending: boolean; jobId?: string }> {
+    let resp: Response;
+    try {
+        resp = await fetch('/api/jobs/admission-abort', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ admissionId }),
+        });
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') throw error;
+        throw new BackgroundJobPollError(
+            error instanceof Error
+                ? error.message
+                : 'Admission cancellation transport failed',
+            'transport',
+            true
+        );
+    }
+    if (!resp.ok) {
+        throw new BackgroundJobPollError(
+            `Admission cancellation failed: ${resp.status}`,
+            resp.status === 401 || resp.status === 403 ? 'auth' : 'transport',
+            resp.status >= 500 || resp.status === 429
+        );
+    }
+    const result = (await resp.json().catch(() => null)) as {
+        aborted?: boolean;
+        pending?: boolean;
+        jobId?: string;
+    } | null;
+    if (!result || typeof result !== 'object') {
+        throw new BackgroundJobPollError(
+            'Malformed admission cancellation response',
+            'protocol',
+            false
+        );
+    }
+    return {
+        aborted: result.aborted === true,
+        pending: result.pending === true,
+        jobId: typeof result.jobId === 'string' ? result.jobId : undefined,
+    };
 }
 
 /**

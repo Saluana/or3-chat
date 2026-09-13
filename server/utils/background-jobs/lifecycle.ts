@@ -1,12 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import type {
-    BackgroundJob,
-    BackgroundJobProvider,
-    JobUpdate,
-} from './types';
+import type { BackgroundJob, BackgroundJobProvider, JobUpdate } from './types';
 import type { BackgroundStreamParams } from './stream-handler';
 import { decryptBackgroundCredential } from './crypto';
 import { emitJobStatus } from './viewers';
+import { reconcileBackgroundJobHistory } from './history';
 
 export const BACKGROUND_JOB_LEASE_MS = 30_000;
 const BACKGROUND_JOB_HEARTBEAT_MS = 10_000;
@@ -46,17 +43,13 @@ function launchClaimedJob(
 
 function supportsDurableClaims(provider: BackgroundJobProvider): boolean {
     return Boolean(
-        provider.claimJob &&
-        provider.claimNextJob &&
-        provider.renewJobLease
+        provider.claimJob && provider.claimNextJob && provider.renewJobLease
     );
 }
 
 function hasUnsafeInterruptedTool(job: BackgroundJob): boolean {
     if ((job.attempts ?? 0) <= 1) return false;
-    const checkpointed = new Set(
-        job.execution?.checkpointedToolCallIds ?? []
-    );
+    const checkpointed = new Set(job.execution?.checkpointedToolCallIds ?? []);
     return (job.tool_calls ?? []).some(
         (call) =>
             call.status !== 'pending' &&
@@ -66,9 +59,7 @@ function hasUnsafeInterruptedTool(job: BackgroundJob): boolean {
 
 function pendingToolCleanup(job: BackgroundJob): JobUpdate | null {
     if ((job.attempts ?? 0) <= 1 || !job.tool_calls?.length) return null;
-    const checkpointed = new Set(
-        job.execution?.checkpointedToolCallIds ?? []
-    );
+    const checkpointed = new Set(job.execution?.checkpointedToolCallIds ?? []);
     const retained = job.tool_calls.filter(
         (call) => call.id && checkpointed.has(call.id)
     );
@@ -101,39 +92,43 @@ export async function runClaimedBackgroundJob(
     const now = dependencies.now ?? Date.now;
     const leaseMs = dependencies.leaseMs ?? BACKGROUND_JOB_LEASE_MS;
     let renewing = false;
-    const heartbeat = setInterval(() => {
-        if (renewing || abortController.signal.aborted) return;
-        renewing = true;
-        void renew.call(
-            dependencies.provider,
-            job.id,
-            workerId,
-            now(),
-            now() + leaseMs
-        ).then((owned) => {
-            if (!owned) {
-                abortController.abort(
-                    new Error('Background job lease was superseded')
-                );
-            }
-        }).catch(() => {
-            // A transient provider outage is retried on the next heartbeat.
-            // Fenced writes still prevent this worker from committing if the
-            // lease expires and another process takes over.
-        }).finally(() => {
-            renewing = false;
-        });
-    }, Math.min(BACKGROUND_JOB_HEARTBEAT_MS, Math.max(1, leaseMs / 3)));
+    const heartbeat = setInterval(
+        () => {
+            if (renewing || abortController.signal.aborted) return;
+            renewing = true;
+            void renew
+                .call(
+                    dependencies.provider,
+                    job.id,
+                    workerId,
+                    now(),
+                    now() + leaseMs
+                )
+                .then((owned) => {
+                    if (!owned) {
+                        abortController.abort(
+                            new Error('Background job lease was superseded')
+                        );
+                    }
+                })
+                .catch(() => {
+                    // A transient provider outage is retried on the next heartbeat.
+                    // Fenced writes still prevent this worker from committing if the
+                    // lease expires and another process takes over.
+                })
+                .finally(() => {
+                    renewing = false;
+                });
+        },
+        Math.min(BACKGROUND_JOB_HEARTBEAT_MS, Math.max(1, leaseMs / 3))
+    );
     if (typeof heartbeat.unref === 'function') heartbeat.unref();
 
     try {
         if (hasUnsafeInterruptedTool(job)) {
-            await dependencies.provider.failJob(
-                job.id,
-                'Server restarted while a tool result was not safely checkpointed. Retry the message to avoid repeating a side effect.',
-                workerId
+            throw new Error(
+                'Server restarted while a tool result was not safely checkpointed. Retry the message to avoid repeating a side effect.'
             );
-            return;
         }
 
         const cleanup = pendingToolCleanup(job);
@@ -176,6 +171,15 @@ export async function runClaimedBackgroundJob(
             dependencies.provider,
             abortController.signal
         );
+        const completed = await dependencies.provider
+            .getJob(job.id, job.userId)
+            .catch(() => null);
+        if (completed?.historyPhase === 'finalization_pending') {
+            await reconcileBackgroundJobHistory(
+                dependencies.provider,
+                completed
+            );
+        }
     } catch (error) {
         const latest = await dependencies.provider
             .getJob(job.id, job.userId)
@@ -185,11 +189,48 @@ export async function runClaimedBackgroundJob(
             latest.leaseOwner === workerId &&
             !abortController.signal.aborted
         ) {
-            await dependencies.provider.failJob(
-                job.id,
-                error instanceof Error ? error.message : String(error),
-                workerId
-            );
+            const message =
+                error instanceof Error ? error.message : String(error);
+            if (
+                latest.execution?.history &&
+                dependencies.provider.saveTerminalSnapshot
+            ) {
+                const saved = await dependencies.provider.saveTerminalSnapshot(
+                    job.id,
+                    {
+                        status: 'error',
+                        content: latest.content,
+                        reasoning: latest.reasoning,
+                        toolCalls: latest.tool_calls,
+                        error: message,
+                        completedAt: Date.now(),
+                    },
+                    workerId
+                );
+                if (saved) {
+                    emitJobStatus(job.id, 'error', {
+                        content: latest.content,
+                        contentLength: latest.content.length,
+                        reasoning: latest.reasoning,
+                        error: message,
+                        tool_calls: latest.tool_calls,
+                        attempt: latest.attempts ?? 0,
+                        chunksReceived: latest.chunksReceived,
+                    });
+                    const terminal = await dependencies.provider.getJob(
+                        job.id,
+                        job.userId
+                    );
+                    if (terminal) {
+                        await reconcileBackgroundJobHistory(
+                            dependencies.provider,
+                            terminal
+                        );
+                    }
+                }
+            } else {
+                await dependencies.provider.failJob(job.id, message, workerId);
+            }
         }
     } finally {
         clearInterval(heartbeat);

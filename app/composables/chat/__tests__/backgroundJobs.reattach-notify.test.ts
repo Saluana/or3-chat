@@ -938,4 +938,69 @@ describe('backgroundJobs reattach + notifications', () => {
         expect(abortBackgroundJobMock).not.toHaveBeenCalled();
         expect(backgroundJobTrackers.has('job-1')).toBe(false);
     });
+
+    it('stops tracking on a protocol failure without failing the generation', async () => {
+        pollJobStatusMock.mockRejectedValue(
+            new BackgroundJobPollErrorMock('malformed', 'protocol', false)
+        );
+        const { ensureBackgroundJobTracker, backgroundJobTrackers } =
+            await import('~/utils/chat/useAi-internal/backgroundJobs');
+
+        const tracker = ensureBackgroundJobTracker({
+            jobId: 'job-1',
+            userId: 'user-1',
+            threadId: 'thread-1',
+            messageId: 'msg-1',
+        });
+
+        await expect(tracker.completion).resolves.toMatchObject({
+            trackingInterrupted: true,
+            trackingInterruptedKind: 'protocol',
+        });
+        expect(backgroundJobTrackers.has('job-1')).toBe(false);
+        // A protocol failure must not rewrite the assistant message.
+        expect(dbMock.messages.put).not.toHaveBeenCalled();
+    });
+
+    it('retains a completed tracker and retries when the terminal write fails', async () => {
+        vi.useFakeTimers();
+        try {
+            const {
+                ensureBackgroundJobTracker,
+                primeBackgroundJobUpdate,
+                backgroundJobTrackers,
+            } = await import('~/utils/chat/useAi-internal/backgroundJobs');
+            pollJobStatusMock.mockResolvedValue(makeStatus('complete'));
+            subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+            dbMock.messages.put.mockRejectedValueOnce(
+                new Error('indexeddb unavailable')
+            );
+
+            const tracker = ensureBackgroundJobTracker({
+                jobId: 'job-1',
+                userId: 'user-1',
+                threadId: 'thread-1',
+                messageId: 'msg-1',
+                initialContent: 'partial',
+                useSse: true,
+            });
+
+            await primeBackgroundJobUpdate(tracker);
+
+            // The generation is complete, but the failed local write must not
+            // discard the final snapshot or the tracker.
+            await expect(tracker.completion).resolves.toMatchObject({
+                status: 'complete',
+            });
+            expect(backgroundJobTrackers.has('job-1')).toBe(true);
+
+            dbMock.messages.put.mockResolvedValue(undefined);
+            await vi.advanceTimersByTimeAsync(2_000);
+
+            expect(backgroundJobTrackers.has('job-1')).toBe(false);
+            expect(dbMock.messages.put).toHaveBeenCalledTimes(2);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
 });

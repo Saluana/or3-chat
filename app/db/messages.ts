@@ -368,16 +368,16 @@ export async function patchMessageInDb(
  * Queries by thread id and sorts by index, then applies output filters.
  *
  * Constraints:
- * - Uses the active workspace DB.
+ * - Uses the active workspace DB unless an explicit DB is supplied.
  *
  * Non-Goals:
  * - Does not paginate results.
  */
-export function messagesByThread(threadId: string) {
+export function messagesByThread(threadId: string, db?: Or3DB) {
     const hooks = useHooks();
     return dbTry(
         () =>
-            getDb()
+            (db ?? getDb())
                 .messages.where('[thread_id+index]')
                 .between([threadId, Dexie.minKey], [threadId, Dexie.maxKey])
                 .toArray(),

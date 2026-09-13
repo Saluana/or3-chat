@@ -25,6 +25,7 @@ import { useRuntimeConfig } from '#imports';
 import type {
     BackgroundJobExecution,
     BackgroundJobProvider,
+    TerminalGenerationSnapshot,
 } from '../background-jobs/types';
 import {
     getBackgroundJobEncryptionKey,
@@ -40,6 +41,7 @@ import {
 import { getNotificationEmitter } from '../notifications/registry';
 import {
     emitJobDelta,
+    emitJobReasoningDelta,
     emitJobStatus,
     hasJobViewers,
     initJobLiveState,
@@ -56,7 +58,9 @@ import {
 import { snapshotToolDefinitions } from '~~/shared/chat/tool-policy';
 import { sensitiveValueMetadata } from '~~/shared/logging/sensitive-metadata';
 import {
+    MAX_CANONICAL_MESSAGE_OUTPUT_BYTES,
     projectToolResult,
+    utf8Bytes,
 } from '~~/shared/chat/tool-limits';
 import {
     decideToolCall,
@@ -80,6 +84,16 @@ import {
     readResponseTextWithIdleDeadline,
     withIdleWatchdog,
 } from '~~/shared/openrouter/deadlines';
+import {
+    parseChatGenerationAdmissionEnvelope,
+    type CanonicalHistoryRecord,
+} from '~~/shared/chat/background-history';
+import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
+import {
+    assertBackgroundHistoryProvider,
+    reconcileBackgroundJobHistory,
+} from './history';
+import { createContinuationDeltaNormalizer } from '~~/shared/chat/continuation';
 
 function logBgStream(
     _stage: string,
@@ -183,6 +197,7 @@ function normalizeStreamedFieldMode(value: unknown): StreamedFieldMode {
 export interface BackgroundStreamResult {
     jobId: string;
     status: 'streaming';
+    historyVersion: 1;
 }
 
 /**
@@ -236,6 +251,48 @@ export function validateBackgroundParams(body: Record<string, unknown>): {
  * Constraints:
  * - Errors in the background loop are captured and recorded on the job.
  */
+/**
+ * Persists the terminal generation snapshot and marks history finalization
+ * pending. Providers without the atomic snapshot contract fall back to the
+ * legacy terminal methods (reasoning persistence is then provider-dependent).
+ */
+async function persistTerminalGenerationSnapshot(
+    provider: BackgroundJobProvider,
+    jobId: string,
+    snapshot: TerminalGenerationSnapshot,
+    leaseOwner?: string
+): Promise<void> {
+    if (provider.saveTerminalSnapshot) {
+        try {
+            await provider.saveTerminalSnapshot(jobId, snapshot, leaseOwner);
+        } catch (error) {
+            if (isBackgroundJobLeaseLost(error)) throw error;
+            logBackgroundEvent('warn', 'background.chat.snapshot.save_failed', {
+                jobId,
+                status: snapshot.status,
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+        return;
+    }
+    if (snapshot.status === 'complete') {
+        if (leaseOwner) {
+            await provider.completeJob(jobId, snapshot.content, leaseOwner);
+        } else {
+            await provider.completeJob(jobId, snapshot.content);
+        }
+        return;
+    }
+    if (snapshot.status === 'error') {
+        const message = snapshot.error ?? 'Background stream failed';
+        if (leaseOwner) {
+            await provider.failJob(jobId, message, leaseOwner);
+        } else {
+            await provider.failJob(jobId, message);
+        }
+    }
+}
+
 export async function startBackgroundStream(
     params: BackgroundStreamParams
 ): Promise<BackgroundStreamResult> {
@@ -243,23 +300,98 @@ export async function startBackgroundStream(
     if (
         !provider.claimJob ||
         !provider.claimNextJob ||
-        !provider.renewJobLease
+        !provider.renewJobLease ||
+        !provider.saveTerminalSnapshot ||
+        !provider.setHistoryPhase ||
+        !provider.getPendingHistoryJobs
     ) {
-        throw new Error(
-            `Background job provider "${provider.name}" does not support durable recovery`
+        const error = new Error(
+            `Background job provider "${provider.name}" does not support durable canonical recovery`
         );
+        error.name = 'BackgroundHistoryUnsupportedError';
+        throw error;
     }
     const encryptionKey = getBackgroundJobEncryptionKey();
+    const parsedHistory = parseChatGenerationAdmissionEnvelope(params.body._history);
+    const sanitizeHistoryRecord = (
+        tableName: 'threads' | 'messages',
+        value: CanonicalHistoryRecord
+    ): CanonicalHistoryRecord => {
+        const sanitized = sanitizePayloadForSync(tableName, value, 'put');
+        if (!sanitized) throw new Error('Invalid background history payload');
+        return {
+            ...sanitized,
+            id: value.id,
+            clock: value.clock,
+            ...(value.hlc ? { hlc: value.hlc } : {}),
+        };
+    };
+    const history = {
+        ...parsedHistory,
+        thread: parsedHistory.thread
+            ? sanitizeHistoryRecord('threads', parsedHistory.thread)
+            : undefined,
+        userMessage: parsedHistory.userMessage
+            ? sanitizeHistoryRecord('messages', parsedHistory.userMessage)
+            : undefined,
+        assistantMessage: sanitizeHistoryRecord(
+            'messages',
+            parsedHistory.assistantMessage
+        ),
+    };
+    const syncProviderId = String(
+        (
+            useRuntimeConfig().public as {
+                sync?: { provider?: string };
+            }
+        ).sync?.provider ?? ''
+    );
+    const admissionId =
+        typeof params.body._backgroundAdmissionId === 'string' &&
+        params.body._backgroundAdmissionId.trim() &&
+        params.body._backgroundAdmissionId.length <= 128
+            ? params.body._backgroundAdmissionId.trim()
+            : params.messageId;
+    if (
+        !syncProviderId ||
+        history.admissionId !== admissionId ||
+        history.workspaceId !== params.workspaceId ||
+        history.threadId !== params.threadId ||
+        history.messageId !== params.messageId
+    ) {
+        throw new Error('Invalid background history scope');
+    }
+    assertBackgroundHistoryProvider(syncProviderId);
+    const executionBody = { ...params.body };
+    delete executionBody._history;
     const execution: BackgroundJobExecution = {
         version: 1,
-        body: params.body,
+        body: executionBody,
         workspaceId: params.workspaceId,
         referer: params.referer,
         apiKeyCiphertext: encryptBackgroundCredential(
             params.apiKey,
             encryptionKey
         ),
-        contentBase: '',
+        history,
+        contentBase:
+            history.kind === 'continuation'
+                ? String(
+                      (history.assistantMessage.data as
+                          | Record<string, unknown>
+                          | undefined)?.content ?? ''
+                  )
+                : '',
+        reasoningBase:
+            history.kind === 'continuation'
+                ? String(
+                      (history.assistantMessage.data as
+                          | Record<string, unknown>
+                          | undefined)?.reasoning_text ?? ''
+                  )
+                : '',
+        continuation:
+            history.kind === 'continuation' ? { prefix: '>>' } : undefined,
         checkpointedToolCallIds: [],
     };
     const model = (params.body.model as string) || 'unknown';
@@ -279,14 +411,31 @@ export async function startBackgroundStream(
         messageId: params.messageId,
         model,
         kind: 'chat',
-        idempotencyKey:
-            typeof params.body._backgroundAdmissionId === 'string' &&
-            params.body._backgroundAdmissionId.trim() &&
-            params.body._backgroundAdmissionId.length <= 128
-                ? params.body._backgroundAdmissionId.trim()
-                : params.messageId,
+        idempotencyKey: admissionId,
+        generationId: history.generationId,
+        syncProviderId,
+        historyPhase: 'admission_pending',
+        initialContent: execution.contentBase,
+        initialReasoning: execution.reasoningBase,
         execution,
     });
+    const created = await provider.getJob(jobId, params.userId);
+    if (!created) throw new Error('Background job disappeared during admission');
+    const historyResult = await reconcileBackgroundJobHistory(provider, created);
+    if (
+        historyResult !== 'ready' &&
+        historyResult !== 'committed' &&
+        historyResult !== 'superseded' &&
+        created.historyPhase !== 'ready' &&
+        created.historyPhase !== 'committed' &&
+        created.historyPhase !== 'superseded'
+    ) {
+        const error = new Error('Background history admission did not become ready');
+        if (historyResult === 'blocked') {
+            error.name = 'BackgroundHistoryAdmissionError';
+        }
+        throw error;
+    }
     logBackgroundEvent('info', 'background.chat.started', {
         jobId,
         userId: params.userId,
@@ -313,7 +462,7 @@ export async function startBackgroundStream(
         model,
     });
 
-    return { jobId, status: 'streaming' };
+    return { jobId, status: 'streaming', historyVersion: 1 };
 }
 
 /**
@@ -342,10 +491,26 @@ export async function consumeBackgroundStream(params: {
     streamedFieldMode?: StreamedFieldMode;
 }): Promise<void> {
     const contentBase = params.context.execution?.contentBase ?? '';
+    const reasoningBase = params.context.execution?.reasoningBase ?? '';
+    const continuationNormalizer = params.context.execution?.continuation
+        ? createContinuationDeltaNormalizer(
+              contentBase,
+              params.context.execution.continuation.prefix
+          )
+        : null;
     let fullContent = contentBase;
+    let fullReasoning = reasoningBase;
     let chunks = 0;
+    const remainingOutputBytes = Math.max(
+        0,
+        MAX_CANONICAL_MESSAGE_OUTPUT_BYTES -
+            utf8Bytes(contentBase) -
+            utf8Bytes(reasoningBase)
+    );
     let normalizedState = beginNormalizedIteration(
-        createNormalizedStreamState()
+        createNormalizedStreamState({
+            outputLimitBytes: remainingOutputBytes,
+        })
     );
     const flushEveryChunk = params.flushOnEveryChunk ?? false;
     const UPDATE_INTERVAL =
@@ -363,6 +528,7 @@ export async function consumeBackgroundStream(params: {
     const notificationEmitter = getNotificationEmitter(params.provider.name);
     const shouldNotify = params.shouldNotify ?? (() => true);
     let pendingChunk = '';
+    let pendingReasoning = '';
     let lastUpdateAt = Date.now();
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
     let flushScheduled = false;
@@ -378,7 +544,7 @@ export async function consumeBackgroundStream(params: {
         updateIntervalMs: UPDATE_INTERVAL_MS,
     });
 
-    initJobLiveState(params.jobId);
+    initJobLiveState(params.jobId, { contentBase, reasoningBase });
 
     const clearFlushTimer = () => {
         if (!flushScheduled) return;
@@ -397,13 +563,35 @@ export async function consumeBackgroundStream(params: {
         }, Math.max(0, delayMs));
     };
 
+    const maybeScheduleProgressFlush = () => {
+        const now = Date.now();
+        const shouldFlushByChunk = chunks % UPDATE_INTERVAL === 0;
+        const shouldFlushByTime =
+            UPDATE_INTERVAL_MS === 0
+                ? false
+                : now - lastUpdateAt >= UPDATE_INTERVAL_MS;
+        if (!pendingChunk && !pendingReasoning) return;
+        if (shouldFlushByChunk || shouldFlushByTime) {
+            void flushPending();
+        } else {
+            const remaining =
+                UPDATE_INTERVAL_MS > 0
+                    ? UPDATE_INTERVAL_MS - (now - lastUpdateAt)
+                    : 0;
+            scheduleFlush(remaining);
+        }
+    };
+
     const flushPending = async () => {
         flushInFlight = flushInFlight.then(async () => {
-            if (!pendingChunk) return;
+            if (!pendingChunk && !pendingReasoning) return;
             const chunk = pendingChunk;
+            const reasoningChunk = pendingReasoning;
             pendingChunk = '';
+            pendingReasoning = '';
             await params.provider.updateJob(params.jobId, {
-                contentChunk: chunk,
+                contentChunk: chunk || undefined,
+                reasoningChunk: reasoningChunk || undefined,
                 chunksReceived: chunks,
                 leaseOwner: params.context.leaseOwner,
             });
@@ -432,43 +620,60 @@ export async function consumeBackgroundStream(params: {
         for await (const evt of parseOpenRouterSSE(params.stream, {
             streamedFieldMode: params.streamedFieldMode,
         })) {
-            normalizedState = reduceNormalizedStreamEvent(normalizedState, evt);
+            const normalizedEvent =
+                evt.type === 'text' && continuationNormalizer
+                    ? { ...evt, text: continuationNormalizer.push(evt.text) }
+                    : evt;
+            if (normalizedEvent.type === 'text' && !normalizedEvent.text) continue;
+            normalizedState = reduceNormalizedStreamEvent(normalizedState, normalizedEvent);
             if (evt.type === 'text') {
                 fullContent = contentBase + normalizedState.cumulativeText;
                 chunks = normalizedState.chunks;
-                pendingChunk += evt.text;
-                emitJobDelta(params.jobId, evt.text, {
+                pendingChunk += normalizedEvent.type === 'text' ? normalizedEvent.text : '';
+                emitJobDelta(params.jobId, normalizedEvent.type === 'text' ? normalizedEvent.text : '', {
                     contentLength: fullContent.length,
                     chunksReceived: chunks,
+                    reasoningLength: fullReasoning.length,
                 });
 
-                const now = Date.now();
-                const shouldFlushByChunk = chunks % UPDATE_INTERVAL === 0;
-                const shouldFlushByTime =
-                    UPDATE_INTERVAL_MS === 0
-                        ? false
-                        : now - lastUpdateAt >= UPDATE_INTERVAL_MS;
-
-                // Update provider periodically
-                if (pendingChunk) {
-                    if (shouldFlushByChunk || shouldFlushByTime) {
-                        void flushPending();
-                    } else {
-                        const remaining =
-                            UPDATE_INTERVAL_MS > 0
-                                ? UPDATE_INTERVAL_MS - (now - lastUpdateAt)
-                                : 0;
-                        scheduleFlush(remaining);
-                    }
+                maybeScheduleProgressFlush();
+                if (flushError) {
+                    throw flushError;
                 }
+            } else if (evt.type === 'reasoning') {
+                // Reasoning is progress: it must be flushed and broadcast even
+                // when no visible answer text exists.
+                fullReasoning = reasoningBase + normalizedState.reasoningText;
+                pendingReasoning += evt.text;
+                emitJobReasoningDelta(params.jobId, evt.text, {
+                    reasoningLength: fullReasoning.length,
+                    chunksReceived: chunks,
+                });
+                maybeScheduleProgressFlush();
                 if (flushError) {
                     throw flushError;
                 }
             }
         }
 
+        const continuationTail = continuationNormalizer?.finish() ?? '';
+        if (continuationTail) {
+            normalizedState = reduceNormalizedStreamEvent(normalizedState, {
+                type: 'text',
+                text: continuationTail,
+            });
+            fullContent = contentBase + normalizedState.cumulativeText;
+            chunks = normalizedState.chunks;
+            pendingChunk += continuationTail;
+            emitJobDelta(params.jobId, continuationTail, {
+                contentLength: fullContent.length,
+                chunksReceived: chunks,
+                reasoningLength: fullReasoning.length,
+            });
+        }
+
         clearFlushTimer();
-        if (pendingChunk) {
+        if (pendingChunk || pendingReasoning) {
             await flushPending();
         }
         await flushInFlight;
@@ -496,16 +701,20 @@ export async function consumeBackgroundStream(params: {
             );
         }
 
-        // Complete the job
-        if (params.context.leaseOwner) {
-            await params.provider.completeJob(
-                params.jobId,
-                fullContent,
-                params.context.leaseOwner
-            );
-        } else {
-            await params.provider.completeJob(params.jobId, fullContent);
-        }
+        // Complete the job with a single terminal snapshot so the canonical
+        // history worker consumes exactly the accepted content and reasoning.
+        const completedAt = Date.now();
+        await persistTerminalGenerationSnapshot(
+            params.provider,
+            params.jobId,
+            {
+                status: 'complete',
+                content: fullContent,
+                reasoning: fullReasoning,
+                completedAt,
+            },
+            params.context.leaseOwner
+        );
         logBgStream('server-consume-background-complete', {
             jobId: params.jobId,
             chunks,
@@ -514,8 +723,10 @@ export async function consumeBackgroundStream(params: {
         emitJobStatus(params.jobId, 'complete', {
             content: fullContent,
             contentLength: fullContent.length,
+            reasoning: fullReasoning,
+            reasoningLength: fullReasoning.length,
             chunksReceived: chunks,
-            completedAt: Date.now(),
+            completedAt,
         });
         await emitBackgroundJobWebhookEvent({
             status: 'completed',
@@ -601,18 +812,37 @@ export async function consumeBackgroundStream(params: {
             emitJobStatus(params.jobId, 'aborted', {
                 content: fullContent,
                 contentLength: fullContent.length,
+                reasoning: fullReasoning,
+                reasoningLength: fullReasoning.length,
                 chunksReceived: chunks,
                 completedAt: Date.now(),
             });
             return;
         }
 
+        const failedAt = Date.now();
+        const failureMessage =
+            err instanceof Error ? err.message : String(err);
+        await persistTerminalGenerationSnapshot(
+            params.provider,
+            params.jobId,
+            {
+                status: 'error',
+                content: fullContent,
+                reasoning: fullReasoning,
+                error: failureMessage,
+                completedAt: failedAt,
+            },
+            params.context.leaseOwner
+        );
         emitJobStatus(params.jobId, 'error', {
             content: fullContent,
             contentLength: fullContent.length,
+            reasoning: fullReasoning,
+            reasoningLength: fullReasoning.length,
             chunksReceived: chunks,
-            completedAt: Date.now(),
-            error: err instanceof Error ? err.message : String(err),
+            completedAt: failedAt,
+            error: failureMessage,
         });
         await emitBackgroundJobWebhookEvent({
             status: 'failed',
@@ -701,9 +931,13 @@ export async function consumeBackgroundStreamWithTools(params: {
     streamedFieldMode?: StreamedFieldMode;
 }): Promise<void> {
     const contentBase = params.context.execution?.contentBase ?? '';
+    const reasoningBase = params.context.execution?.reasoningBase ?? '';
     let fullContent = contentBase;
+    let fullReasoning = reasoningBase;
     let chunks = 0;
-    let normalizedState = createNormalizedStreamState();
+    let normalizedState = createNormalizedStreamState({
+        outputLimitBytes: MAX_CANONICAL_MESSAGE_OUTPUT_BYTES,
+    });
     const notificationEmitter = getNotificationEmitter(params.provider.name);
     const shouldNotify = params.shouldNotify ?? (() => true);
     const tools = snapshotToolDefinitions(
@@ -730,6 +964,7 @@ export async function consumeBackgroundStreamWithTools(params: {
     }>();
     const toolLedger = new Map<string, ToolLedgerEntry>();
     let pendingProviderContent = '';
+    let pendingProviderReasoning = '';
     let providerDirtyEvents = 0;
     let lastProviderFlushAt = Date.now();
     const persistedJob = await params.provider.getJob(params.jobId, params.context.userId);
@@ -758,9 +993,12 @@ export async function consumeBackgroundStreamWithTools(params: {
         ) return;
         const contentChunk = pendingProviderContent;
         pendingProviderContent = '';
+        const reasoningChunk = pendingProviderReasoning;
+        pendingProviderReasoning = '';
         providerDirtyEvents = 0;
         await params.provider.updateJob(params.jobId, {
             contentChunk: contentChunk || undefined,
+            reasoningChunk: reasoningChunk || undefined,
             chunksReceived: chunks,
             tool_calls: Array.from(toolStates.values()),
             leaseOwner: params.context.leaseOwner,
@@ -793,7 +1031,7 @@ export async function consumeBackgroundStreamWithTools(params: {
         });
     };
 
-    initJobLiveState(params.jobId);
+    initJobLiveState(params.jobId, { contentBase, reasoningBase });
     logBgStream('server-consume-tools-start', {
         jobId: params.jobId,
         userId: params.context.userId,
@@ -898,6 +1136,20 @@ export async function consumeBackgroundStreamWithTools(params: {
                     providerDirtyEvents += 1;
                     emitJobDelta(params.jobId, evt.text, {
                         contentLength: fullContent.length,
+                        chunksReceived: chunks,
+                        reasoningLength: fullReasoning.length,
+                    });
+                    await flushProviderProgress();
+                }
+                if (evt.type === 'reasoning') {
+                    // Reasoning-only progress must persist and broadcast even
+                    // when no answer text exists for this iteration.
+                    fullReasoning =
+                        reasoningBase + normalizedState.reasoningText;
+                    pendingProviderReasoning += evt.text;
+                    providerDirtyEvents += 1;
+                    emitJobReasoningDelta(params.jobId, evt.text, {
+                        reasoningLength: fullReasoning.length,
                         chunksReceived: chunks,
                     });
                     await flushProviderProgress();
@@ -1126,6 +1378,7 @@ export async function consumeBackgroundStreamWithTools(params: {
                         tool_choice: nextToolChoice,
                     },
                     contentBase: fullContent,
+                    reasoningBase: fullReasoning,
                     checkpointedToolCallIds: Array.from(toolStates.values())
                         .filter(
                             (call) =>
@@ -1172,15 +1425,19 @@ export async function consumeBackgroundStreamWithTools(params: {
         }
 
         await flushProviderProgress(true);
-        if (params.context.leaseOwner) {
-            await params.provider.completeJob(
-                params.jobId,
-                fullContent,
-                params.context.leaseOwner
-            );
-        } else {
-            await params.provider.completeJob(params.jobId, fullContent);
-        }
+        const toolCompletedAt = Date.now();
+        await persistTerminalGenerationSnapshot(
+            params.provider,
+            params.jobId,
+            {
+                status: 'complete',
+                content: fullContent,
+                reasoning: fullReasoning,
+                toolCalls: Array.from(toolStates.values()),
+                completedAt: toolCompletedAt,
+            },
+            params.context.leaseOwner
+        );
         logBackgroundEvent('info', 'background.tools.completed', {
             jobId: params.jobId,
             chunksReceived: chunks,
@@ -1194,8 +1451,10 @@ export async function consumeBackgroundStreamWithTools(params: {
         emitJobStatus(params.jobId, 'complete', {
             content: fullContent,
             contentLength: fullContent.length,
+            reasoning: fullReasoning,
+            reasoningLength: fullReasoning.length,
             chunksReceived: chunks,
-            completedAt: Date.now(),
+            completedAt: toolCompletedAt,
             tool_calls: Array.from(toolStates.values()),
         });
         await emitBackgroundJobWebhookEvent({
@@ -1276,6 +1535,8 @@ export async function consumeBackgroundStreamWithTools(params: {
             emitJobStatus(params.jobId, 'aborted', {
                 content: fullContent,
                 contentLength: fullContent.length,
+                reasoning: fullReasoning,
+                reasoningLength: fullReasoning.length,
                 chunksReceived: chunks,
                 completedAt: Date.now(),
                 tool_calls: Array.from(toolStates.values()),
@@ -1283,12 +1544,30 @@ export async function consumeBackgroundStreamWithTools(params: {
             return;
         }
 
+        const toolFailedAt = Date.now();
+        const toolFailureMessage =
+            err instanceof Error ? err.message : String(err);
+        await persistTerminalGenerationSnapshot(
+            params.provider,
+            params.jobId,
+            {
+                status: 'error',
+                content: fullContent,
+                reasoning: fullReasoning,
+                toolCalls: Array.from(toolStates.values()),
+                error: toolFailureMessage,
+                completedAt: toolFailedAt,
+            },
+            params.context.leaseOwner
+        );
         emitJobStatus(params.jobId, 'error', {
             content: fullContent,
             contentLength: fullContent.length,
+            reasoning: fullReasoning,
+            reasoningLength: fullReasoning.length,
             chunksReceived: chunks,
-            completedAt: Date.now(),
-            error: err instanceof Error ? err.message : String(err),
+            completedAt: toolFailedAt,
+            error: toolFailureMessage,
             tool_calls: Array.from(toolStates.values()),
         });
         await emitBackgroundJobWebhookEvent({
@@ -1298,7 +1577,7 @@ export async function consumeBackgroundStreamWithTools(params: {
             userId: params.context.userId,
             threadId: params.context.threadId,
             messageId: params.context.messageId,
-            error: err instanceof Error ? err.message : String(err),
+            error: toolFailureMessage,
         });
         warnBgStream('server-consume-tools-error', {
             jobId: params.jobId,
@@ -1396,6 +1675,7 @@ export async function executeBackgroundJob(
         _backgroundMode,
         _toolRuntime,
         _streamedFieldMode,
+        _history,
         ...cleanBody
     } = params.body;
     const toolRuntime =

@@ -74,6 +74,13 @@ export default defineEventHandler(async (event) => {
     const query = getQuery(event);
     const offsetParam = typeof query.offset === 'string' ? query.offset : null;
     const offset = offsetParam ? Number(offsetParam) : null;
+    const reasoningOffsetParam =
+        typeof query.reasoning_offset === 'string'
+            ? query.reasoning_offset
+            : null;
+    const reasoningOffset = reasoningOffsetParam
+        ? Number(reasoningOffsetParam)
+        : null;
     const attemptParam =
         typeof query.attempt === 'string' ? Number(query.attempt) : null;
     const currentAttempt = job.attempts ?? 0;
@@ -82,11 +89,23 @@ export default defineEventHandler(async (event) => {
         currentAttempt,
         offset
     );
-    const liveState = getJobLiveState(jobId);
+    const liveStateRaw = getJobLiveState(jobId);
+    // Ignore in-memory live state from a superseded execution attempt.
+    const liveState =
+        liveStateRaw &&
+        (typeof liveStateRaw.attempt !== 'number' ||
+            liveStateRaw.attempt >= currentAttempt)
+            ? liveStateRaw
+            : null;
     const effectiveContent =
         liveState && liveState.content.length > job.content.length
             ? liveState.content
             : job.content;
+    const jobReasoning = job.reasoning ?? '';
+    const effectiveReasoning =
+        liveState && liveState.reasoning.length > jobReasoning.length
+            ? liveState.reasoning
+            : jobReasoning;
     const effectiveChunks =
         liveState && liveState.chunksReceived > job.chunksReceived
             ? liveState.chunksReceived
@@ -153,6 +172,21 @@ export default defineEventHandler(async (event) => {
                 includesFullContent: attemptChanged || safeOffset < offset,
             });
         }
+        const reasoningLength = effectiveReasoning.length;
+        const safeReasoningOffset = attemptChanged
+            ? 0
+            : reasoningOffset !== null &&
+                Number.isFinite(reasoningOffset) &&
+                reasoningOffset >= 0
+              ? Math.min(reasoningOffset, reasoningLength)
+              : reasoningLength;
+        const reasoningDelta = attemptChanged
+            ? undefined
+            : reasoningOffset !== null &&
+                Number.isFinite(reasoningOffset) &&
+                reasoningOffset >= 0
+              ? effectiveReasoning.slice(safeReasoningOffset)
+              : effectiveReasoning;
         return {
             id: job.id,
             status: effectiveStatus,
@@ -173,6 +207,16 @@ export default defineEventHandler(async (event) => {
                 attemptChanged || safeOffset < offset
                     ? effectiveContent
                     : undefined,
+            reasoning_delta: reasoningDelta,
+            reasoning_length: reasoningLength,
+            reasoning_text:
+                attemptChanged ||
+                reasoningOffset === null ||
+                !Number.isFinite(reasoningOffset) ||
+                safeReasoningOffset < reasoningOffset
+                    ? effectiveReasoning
+                    : undefined,
+            reasoning_reset: attemptChanged || undefined,
         };
     }
 
@@ -196,5 +240,7 @@ export default defineEventHandler(async (event) => {
         tool_calls: effectiveToolCalls,
         workflow_state: effectiveWorkflowState,
         content: effectiveContent,
+        reasoning_text: effectiveReasoning,
+        reasoning_length: effectiveReasoning.length,
     };
 });

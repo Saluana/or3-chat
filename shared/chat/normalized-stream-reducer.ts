@@ -1,5 +1,10 @@
 import type { ORStreamEvent } from '../openrouter/parseOpenRouterSSE';
-import { MAX_STREAM_OUTPUT_BYTES, utf8Bytes } from './tool-limits';
+import {
+    CANONICAL_MESSAGE_FIXED_BYTES,
+    MAX_STREAM_OUTPUT_BYTES,
+    OutputLimitExceededError,
+    utf8Bytes,
+} from './tool-limits';
 import { ToolIterationLimitError } from './stream-errors';
 
 export type NormalizedToolState = {
@@ -21,11 +26,22 @@ export type NormalizedStreamState = {
     images: string[];
     iterationToolCallIds: string[];
     tools: Record<string, NormalizedToolState>;
+    /**
+     * Canonical message byte budget. When set, output is rejected before it
+     * would produce a message that cannot be committed to sync history.
+     */
+    outputLimitBytes?: number;
+    /** Accepted serialized-byte estimate for tool arguments/results/errors. */
+    toolBytes: number;
+    /** Per-tool accepted byte estimate, for incremental accounting. */
+    toolBytesById: Record<string, number>;
     terminal: 'active' | 'complete' | 'aborted' | 'failed';
     error?: string;
 };
 
-export function createNormalizedStreamState(): NormalizedStreamState {
+export function createNormalizedStreamState(options?: {
+    outputLimitBytes?: number;
+}): NormalizedStreamState {
     return {
         iteration: 0,
         cumulativeText: '',
@@ -36,6 +52,9 @@ export function createNormalizedStreamState(): NormalizedStreamState {
         images: [],
         iterationToolCallIds: [],
         tools: {},
+        outputLimitBytes: options?.outputLimitBytes,
+        toolBytes: 0,
+        toolBytesById: {},
         terminal: 'active',
     };
 }
@@ -53,11 +72,52 @@ export function beginNormalizedIteration(
     };
 }
 
+function assertCanonicalBudget(
+    state: NormalizedStreamState,
+    nextOutputBytes: number,
+    nextToolBytes: number
+): void {
+    const limit = state.outputLimitBytes;
+    if (limit === undefined) return;
+    // `content` is serialized both top-level and inside `data`; reasoning once.
+    const projected =
+        nextOutputBytes * 2 + nextToolBytes + CANONICAL_MESSAGE_FIXED_BYTES;
+    if (projected > limit) {
+        throw new OutputLimitExceededError(limit, projected);
+    }
+}
+
+function toolEntryBytes(tool: NormalizedToolState): number {
+    return (
+        utf8Bytes(tool.arguments) +
+        utf8Bytes(tool.result ?? '') +
+        utf8Bytes(tool.error ?? '')
+    );
+}
+
+function applyToolBytes(
+    state: NormalizedStreamState,
+    toolId: string,
+    nextEntryBytes: number
+): Pick<NormalizedStreamState, 'toolBytes' | 'toolBytesById'> {
+    const previous = state.toolBytesById[toolId] ?? 0;
+    const nextToolBytes = Math.max(
+        0,
+        state.toolBytes - previous + nextEntryBytes
+    );
+    assertCanonicalBudget(state, state.outputBytes, nextToolBytes);
+    return {
+        toolBytes: nextToolBytes,
+        toolBytesById: { ...state.toolBytesById, [toolId]: nextEntryBytes },
+    };
+}
+
 function addOutputBytes(state: NormalizedStreamState, value: string): number {
     const next = state.outputBytes + utf8Bytes(value);
     if (next > MAX_STREAM_OUTPUT_BYTES) {
         throw new Error('Chat output exceeded UTF-8 byte limit');
     }
+    assertCanonicalBudget(state, next, state.toolBytes);
     return next;
 }
 
@@ -87,19 +147,26 @@ export function reduceNormalizedStreamEvent(
         return { ...state, images: [...state.images, event.url] };
     }
     const call = event.tool_call;
+    const nextTool: NormalizedToolState = {
+        id: call.id,
+        name: call.function.name,
+        arguments: call.function.arguments,
+        status: 'pending',
+    };
+    const toolBytePatch = applyToolBytes(
+        state,
+        call.id,
+        toolEntryBytes(nextTool)
+    );
     return {
         ...state,
+        ...toolBytePatch,
         iterationToolCallIds: state.iterationToolCallIds.includes(call.id)
             ? state.iterationToolCallIds
             : [...state.iterationToolCallIds, call.id],
         tools: {
             ...state.tools,
-            [call.id]: {
-                id: call.id,
-                name: call.function.name,
-                arguments: call.function.arguments,
-                status: 'pending',
-            },
+            [call.id]: nextTool,
         },
     };
 }
@@ -126,9 +193,16 @@ export function settleNormalizedTool(
 ): NormalizedStreamState {
     const current = state.tools[callId];
     if (!current) return state;
+    const nextTool: NormalizedToolState = { ...current, ...patch };
+    const toolBytePatch = applyToolBytes(
+        state,
+        callId,
+        toolEntryBytes(nextTool)
+    );
     return {
         ...state,
-        tools: { ...state.tools, [callId]: { ...current, ...patch } },
+        ...toolBytePatch,
+        tools: { ...state.tools, [callId]: nextTool },
     };
 }
 

@@ -218,6 +218,11 @@ export type ForegroundStreamContext = {
     tailAssistant: RefLike<UiChatMessage | null>;
     rawMessages: RefLike<ChatMessage[]>;
     toolLedger?: Map<string, ToolLedgerEntry>;
+    /**
+     * Canonical message byte budget. Set when canonical sync history exists;
+     * unset for local-only workspaces (streams keep the larger stream cap).
+     */
+    outputLimitBytes?: number;
 };
 
 /**
@@ -305,7 +310,9 @@ export async function runForegroundStreamLoop(
     const admittedByName = new Map(
         (admittedTools ?? []).map((definition) => [definition.function.name, definition])
     );
-    let normalizedState = createNormalizedStreamState();
+    let normalizedState = createNormalizedStreamState({
+        outputLimitBytes: ctx.outputLimitBytes,
+    });
     const toolLedger = ctx.toolLedger ?? new Map<string, ToolLedgerEntry>();
 
     while (normalizedState.terminal === 'active') {

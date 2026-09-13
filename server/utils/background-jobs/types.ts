@@ -18,6 +18,48 @@
 
 import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
 import type { CanonicalToolResult } from '~~/shared/chat/canonical-tool-transcript';
+import type { ChatGenerationAdmissionEnvelope } from '~~/shared/chat/background-history';
+
+/**
+ * Durable history phase for a generation. The model finishing, the job being
+ * saved, and the message reaching canonical history are separate events; this
+ * tracks where the canonical write stands.
+ */
+export type GenerationHistoryPhase =
+    | 'admission_pending'
+    | 'ready'
+    | 'finalization_pending'
+    | 'committed'
+    | 'superseded'
+    | 'blocked';
+
+/**
+ * Immutable identity for one user-requested generation. A worker restart
+ * increments `attempt`; it must never create another generation ID.
+ */
+export type GenerationIdentity = {
+    admissionId: string;
+    generationId: string;
+    userId: string;
+    workspaceId: string;
+    threadId: string;
+    messageId: string;
+    syncProviderId?: string;
+};
+
+/**
+ * Immutable terminal result of model execution, consumed by the canonical
+ * history worker. Saving this and moving the job to `finalization_pending`
+ * must be one provider transaction.
+ */
+export type TerminalGenerationSnapshot = {
+    status: 'complete' | 'error' | 'aborted';
+    content: string;
+    reasoning: string;
+    toolCalls?: BackgroundJob['tool_calls'];
+    error?: string;
+    completedAt: number;
+};
 
 /**
  * Purpose:
@@ -42,6 +84,14 @@ export interface BackgroundJob {
     status: 'streaming' | 'complete' | 'error' | 'aborted';
     /** Accumulated content from streaming */
     content: string;
+    /** Accumulated model reasoning, kept distinct from request reasoning config. */
+    reasoning: string;
+    /** One user-requested generation; stable across worker attempts. */
+    generationId?: string;
+    /** Where the canonical history write stands for this generation. */
+    historyPhase?: GenerationHistoryPhase;
+    /** Sync provider that owns canonical history for the job's workspace. */
+    syncProviderId?: string;
     /** Number of chunks received */
     chunksReceived: number;
     /** Unix timestamp when job started */
@@ -89,10 +139,49 @@ export interface BackgroundJobExecution {
     workspaceId: string;
     referer: string;
     apiKeyCiphertext: string;
+    /** Immutable canonical-history admission captured before paid execution. */
+    history?: ChatGenerationAdmissionEnvelope;
     /** Text that is already represented by a durable tool-loop checkpoint. */
     contentBase?: string;
+    /** Reasoning already represented by a durable tool-loop checkpoint. */
+    reasoningBase?: string;
+    /** Continuation normalization contract when this job continues existing text. */
+    continuation?: {
+        prefix: string;
+    };
     /** Tool calls whose results are included in the checkpointed request body. */
     checkpointedToolCallIds?: string[];
+}
+
+/**
+ * Result of cancelling an admission that may not have committed yet.
+ */
+export interface AdmissionCancellationResult {
+    /** True when a committed streaming job was aborted. */
+    aborted: boolean;
+    /** Committed job ID, when one existed. */
+    jobId?: string;
+    /**
+     * True when a durable marker now guarantees a not-yet-committed admission
+     * cannot launch work.
+     */
+    pending: boolean;
+}
+
+/**
+ * Thrown by `createJob` when a durable admission-cancellation marker exists.
+ * Cross-package providers throw an error with this name; use
+ * `isAdmissionCancelledError` rather than `instanceof` at boundaries.
+ */
+export class AdmissionCancelledError extends Error {
+    constructor(readonly admissionId: string) {
+        super(`Background admission ${admissionId} was cancelled`);
+        this.name = 'AdmissionCancelledError';
+    }
+}
+
+export function isAdmissionCancelledError(error: unknown): boolean {
+    return error instanceof Error && error.name === 'AdmissionCancelledError';
 }
 
 /**
@@ -109,6 +198,16 @@ export interface CreateJobParams {
     workflow_state?: BackgroundJob['workflow_state'];
     /** Stable key used to make admission idempotent. */
     idempotencyKey?: string;
+    /** Stable generation identity for canonical-history finalization. */
+    generationId?: string;
+    /** Present when durable provider execution is resumable. */
+    syncProviderId?: string;
+    /** Where the canonical write stands at admission time. */
+    historyPhase?: GenerationHistoryPhase;
+    /** Seed content for a continuation; the model appends after this base. */
+    initialContent?: string;
+    /** Seed reasoning for a continuation. */
+    initialReasoning?: string;
     /** Server-only execution input used by the durable worker. */
     execution?: BackgroundJobExecution;
 }
@@ -123,6 +222,8 @@ export interface CreateJobParams {
 export interface JobUpdate {
     /** Content chunk to append */
     contentChunk?: string;
+    /** Reasoning chunk to append (distinct from request reasoning config). */
+    reasoningChunk?: string;
     /** Updated total chunks received */
     chunksReceived?: number;
     /** Tool call status updates */
@@ -237,6 +338,50 @@ export interface BackgroundJobProvider {
         execution: BackgroundJobExecution,
         leaseOwner: string
     ): Promise<boolean>;
+
+    /**
+     * Optional lookup by admission idempotency key. Enables cancellation of an
+     * admission before the client has received its job ID.
+     */
+    findJobByIdempotencyKey?(
+        idempotencyKey: string,
+        userId: string
+    ): Promise<BackgroundJob | null>;
+
+    /**
+     * Durably cancel an admission by its idempotency key. Committed streaming
+     * jobs are aborted immediately; otherwise a marker is recorded that
+     * `createJob` observes atomically so a late commit cannot launch work.
+     */
+    cancelAdmission?(
+        userId: string,
+        admissionId: string
+    ): Promise<AdmissionCancellationResult>;
+
+    /**
+     * Atomically persist the terminal snapshot and move the job's history
+     * phase to `finalization_pending`. Returns false when the lease was
+     * superseded (the existing terminal result remains authoritative).
+     */
+    saveTerminalSnapshot?(
+        jobId: string,
+        snapshot: TerminalGenerationSnapshot,
+        leaseOwner?: string
+    ): Promise<boolean>;
+
+    /**
+     * Conditionally update the durable history phase. When `from` is supplied,
+     * the update only applies if the current phase is one of those values, so a
+     * late failure cannot move `committed` back to `finalization_pending`.
+     */
+    setHistoryPhase?(
+        jobId: string,
+        phase: GenerationHistoryPhase,
+        options?: { from?: GenerationHistoryPhase[] }
+    ): Promise<boolean>;
+
+    /** Return a bounded page of jobs whose canonical history delivery is pending. */
+    getPendingHistoryJobs?(limit: number): Promise<BackgroundJob[]>;
 
     /**
      * Clean up expired or stale jobs.

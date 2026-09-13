@@ -11,7 +11,9 @@ const upsertMessageMock = vi.fn();
 const hookOnMock = vi.fn();
 const hookDisposeMock = vi.fn();
 const hookDoActionMock = vi.fn(async () => {});
-const hookApplyFiltersMock = vi.fn(async (_name: string, value: unknown) => value);
+const hookApplyFiltersMock = vi.fn(
+    async (_name: string, value: unknown) => value
+);
 const messagesByThreadMock = vi.fn<() => Promise<any[]>>(async () => []);
 const backgroundJobTrackers = new Map<string, any>();
 const messageStore = new Map<string, any>();
@@ -22,7 +24,7 @@ const runtimeConfigRef = {
         public: {
             ssrAuthEnabled: true,
             sync: {
-                enabled: false,
+                enabled: true,
                 provider: 'memory',
                 convexUrl: null,
             },
@@ -84,17 +86,26 @@ vi.mock('~/db/client', () => ({
 }));
 
 const dbMock = {
-        messages: {
-            get: async (id: string) => messageStore.get(id),
-            delete: vi.fn(async (id: string) => {
-                messageStore.delete(id);
-            }),
-        },
-        transaction: async (
-            _mode: string,
-            _tables: string[],
-            fn: () => Promise<unknown>
-        ) => await fn(),
+    threads: {
+        get: async (id: string) => ({
+            id,
+            title: 'Test thread',
+            created_at: 1,
+            updated_at: 1,
+            clock: 1,
+        }),
+    },
+    messages: {
+        get: async (id: string) => messageStore.get(id),
+        delete: vi.fn(async (id: string) => {
+            messageStore.delete(id);
+        }),
+    },
+    transaction: async (
+        _mode: string,
+        _tables: string[],
+        fn: () => Promise<unknown>
+    ) => await fn(),
 };
 let activeDb = dbMock;
 
@@ -278,23 +289,39 @@ vi.mock('~/utils/chat/useAi-internal', () => ({
     enforceOpenRouterMessageTokenBudget: vi.fn(async (messages) => messages),
     retryMessageImpl: vi.fn(),
     continueMessageImpl: vi.fn(),
-    makeAssistantPersister: (_db: unknown, message: any) => async (patch: any) => {
-        const existing = messageStore.get(message.id) ?? message;
-        const next = {
-            ...existing,
-            pending: patch.finalize ? false : existing.pending,
-            data: {
-                ...(existing.data ?? {}),
-                ...(patch.content !== undefined ? { content: patch.content } : {}),
-                ...(patch.reasoning !== undefined
-                    ? { reasoning_text: patch.reasoning }
-                    : {}),
-            },
-        };
-        messageStore.set(message.id, next);
-        return next.file_hashes ?? null;
-    },
+    makeAssistantPersister:
+        (_db: unknown, message: any) => async (patch: any) => {
+            const existing = messageStore.get(message.id) ?? message;
+            const next = {
+                ...existing,
+                pending: patch.finalize ? false : existing.pending,
+                data: {
+                    ...(existing.data ?? {}),
+                    ...(patch.content !== undefined
+                        ? { content: patch.content }
+                        : {}),
+                    ...(patch.reasoning !== undefined
+                        ? { reasoning_text: patch.reasoning }
+                        : {}),
+                },
+            };
+            messageStore.set(message.id, next);
+            return next.file_hashes ?? null;
+        },
     updateMessageRecord: async (_db: unknown, id: string, patch: any) => {
+        const existing = messageStore.get(id);
+        if (!existing) return;
+        messageStore.set(id, {
+            ...existing,
+            ...patch,
+            data: { ...(existing.data ?? {}), ...(patch.data ?? {}) },
+        });
+    },
+    projectCanonicalBackgroundMessage: async (
+        _db: unknown,
+        id: string,
+        patch: any
+    ) => {
         const existing = messageStore.get(id);
         if (!existing) return;
         messageStore.set(id, {
@@ -307,7 +334,9 @@ vi.mock('~/utils/chat/useAi-internal', () => ({
 
 vi.unmock('~/composables/chat/useAi');
 
-async function waitForCall(mock: { mock: { calls: unknown[][] } }): Promise<void> {
+async function waitForCall(mock: {
+    mock: { calls: unknown[][] };
+}): Promise<void> {
     for (let i = 0; i < 200; i++) {
         if (mock.mock.calls.length > 0) return;
         await new Promise((resolve) => setTimeout(resolve, 1));
@@ -329,7 +358,7 @@ describe('useChat background detach race', () => {
             public: {
                 ssrAuthEnabled: true,
                 sync: {
-                    enabled: false,
+                    enabled: true,
                     provider: 'memory',
                     convexUrl: null,
                 },
@@ -355,7 +384,8 @@ describe('useChat background detach race', () => {
         streamAccAppendMock.mockReset();
 
         appendMessageMock.mockImplementation(async (payload: any) => {
-            const id = payload.role === 'user' ? 'user-msg-1' : 'assistant-msg-1';
+            const id =
+                payload.role === 'user' ? 'user-msg-1' : 'assistant-msg-1';
             const row = {
                 id,
                 role: payload.role,
@@ -364,7 +394,10 @@ describe('useChat background detach race', () => {
                 pending: payload.pending ?? false,
                 stream_id: payload.stream_id ?? null,
                 file_hashes: payload.file_hashes ?? null,
-                content: typeof payload.data?.content === 'string' ? payload.data.content : '',
+                content:
+                    typeof payload.data?.content === 'string'
+                        ? payload.data.content
+                        : '',
                 created_at: 1,
                 updated_at: 1,
                 clock: 1,
@@ -645,7 +678,11 @@ describe('useChat background detach race', () => {
         const { useChat } = await import('~/composables/chat/useAi');
         const chat = useChat([], 'thread-1');
         const params = {
-            files: [], model: 'test-model', file_hashes: [], online: false, context_hashes: [],
+            files: [],
+            model: 'test-model',
+            file_hashes: [],
+            online: false,
+            context_hashes: [],
         } as any;
 
         const first = chat.sendMessage('first', params);
@@ -655,7 +692,10 @@ describe('useChat background detach race', () => {
         await waitForCall(startBackgroundStreamMock);
         expect(appendMessageMock).toHaveBeenCalledTimes(2);
         resolveBackgroundStart?.({ jobId: 'job-one-winner' });
-        await expect(first).resolves.toMatchObject({ status: 'complete', requestId: 'id-test' });
+        await expect(first).resolves.toMatchObject({
+            status: 'complete',
+            requestId: 'id-test',
+        });
         expect(chat.requestState.value).toMatchObject({ status: 'terminal' });
     });
 
@@ -798,7 +838,10 @@ describe('useChat background detach race', () => {
         const { useChat } = await import('~/composables/chat/useAi');
         const chat = useChat([], 'thread-1');
         const sendPromise = chat.sendMessage('foreground please', {
-            files: [], model: 'test-model', file_hashes: [], online: false,
+            files: [],
+            model: 'test-model',
+            file_hashes: [],
+            online: false,
             context_hashes: [],
         } as any);
 
@@ -818,7 +861,8 @@ describe('useChat background detach race', () => {
         );
 
         await expect(sendPromise).resolves.toMatchObject({
-            status: 'aborted', reason: 'aborted',
+            status: 'aborted',
+            reason: 'aborted',
         });
         await switchPromise;
 
@@ -881,7 +925,9 @@ describe('useChat background detach race', () => {
         expect(streamAccAppendMock).toHaveBeenNthCalledWith(2, 'd', {
             kind: 'text',
         });
-        expect(streamAccResetMock.mock.calls.length).toBe(resetCallsBeforeUpdates);
+        expect(streamAccResetMock.mock.calls.length).toBe(
+            resetCallsBeforeUpdates
+        );
     });
 
     it('clears stale live text for an empty recovery replacement', async () => {
@@ -889,7 +935,10 @@ describe('useChat background detach race', () => {
         const { useChat } = await import('~/composables/chat/useAi');
         const chat = useChat([], 'thread-1');
         const sendPromise = chat.sendMessage('hello', {
-            files: [], model: 'test-model', file_hashes: [], online: false,
+            files: [],
+            model: 'test-model',
+            file_hashes: [],
+            online: false,
             context_hashes: [],
         } as any);
         await waitForCall(startBackgroundStreamMock);
@@ -903,17 +952,21 @@ describe('useChat background detach race', () => {
             | undefined;
 
         subscriber?.onUpdate?.({
-            content: 'old partial', delta: 'old partial',
+            content: 'old partial',
+            delta: 'old partial',
             status: { status: 'streaming' },
         });
         subscriber?.onUpdate?.({
-            content: '', delta: '', replace: true,
+            content: '',
+            delta: '',
+            replace: true,
             status: { status: 'streaming', content_reset: true, attempt: 2 },
         });
         expect(chat.streamState.text).toBe('');
 
         subscriber?.onUpdate?.({
-            content: 'new', delta: 'new',
+            content: 'new',
+            delta: 'new',
             status: { status: 'streaming', attempt: 2 },
         });
         expect(chat.streamState.text).toBe('new');
@@ -959,7 +1012,10 @@ describe('useChat background detach race', () => {
         const chat = useChat([], 'thread-1');
 
         const result = await chat.sendMessage('hello', {
-            files: [], model: 'test-model', file_hashes: [], online: false,
+            files: [],
+            model: 'test-model',
+            file_hashes: [],
+            online: false,
             context_hashes: [],
         });
 
@@ -986,7 +1042,10 @@ describe('useChat background detach race', () => {
         const chat = useChat([], 'thread-1');
 
         const result = await chat.sendMessage('hello', {
-            files: [], model: 'test-model', file_hashes: [], online: false,
+            files: [],
+            model: 'test-model',
+            file_hashes: [],
+            online: false,
             context_hashes: [],
         });
 
@@ -997,7 +1056,9 @@ describe('useChat background detach race', () => {
         });
         expect(chat.loading.value).toBe(false);
         expect(chat.tailAssistant.value).toBeNull();
-        expect(chat.messages.value.every((message) => !message.pending)).toBe(true);
+        expect(chat.messages.value.every((message) => !message.pending)).toBe(
+            true
+        );
         expect(messageStore.get('assistant-msg-1')).toMatchObject({
             pending: false,
             error: 'empty_context',
@@ -1055,24 +1116,38 @@ describe('useChat background detach race', () => {
 
     it('reconciles a stale foreground pending row as interrupted on reload', async () => {
         const stale = {
-            id: 'assistant-stale', role: 'assistant', thread_id: 'thread-1',
-            content: 'partial', pending: true, error: null, index: 1,
+            id: 'assistant-stale',
+            role: 'assistant',
+            thread_id: 'thread-1',
+            content: 'partial',
+            pending: true,
+            error: null,
+            index: 1,
             data: {
-                content: 'partial', generation_lease_id: 'old-request',
+                content: 'partial',
+                generation_lease_id: 'old-request',
                 generation_heartbeat_at: 0,
             },
-            created_at: 1, updated_at: 1, clock: 1,
+            created_at: 1,
+            updated_at: 1,
+            clock: 1,
         };
         messageStore.set(stale.id, stale);
         messagesByThreadMock.mockResolvedValue([stale]);
         vi.resetModules();
         const { useChat } = await import('~/composables/chat/useAi');
-        const chat = useChat([
-            {
-                id: stale.id, role: 'assistant', content: 'partial', pending: true,
-                data: stale.data,
-            },
-        ], 'thread-1');
+        const chat = useChat(
+            [
+                {
+                    id: stale.id,
+                    role: 'assistant',
+                    content: 'partial',
+                    pending: true,
+                    data: stale.data,
+                },
+            ],
+            'thread-1'
+        );
 
         await chat.ensureHistorySynced();
 
@@ -1089,24 +1164,40 @@ describe('useChat background detach race', () => {
 
     it('reconciles a stale foreground row even when history was already loaded', async () => {
         const stale = {
-            id: 'assistant-seeded', role: 'assistant', thread_id: 'thread-1',
-            content: 'partial', pending: true, error: null, index: 1,
+            id: 'assistant-seeded',
+            role: 'assistant',
+            thread_id: 'thread-1',
+            content: 'partial',
+            pending: true,
+            error: null,
+            index: 1,
             data: {
-                content: 'partial', generation_lease_id: 'old-request',
+                content: 'partial',
+                generation_lease_id: 'old-request',
                 generation_heartbeat_at: 0,
             },
-            created_at: 1, updated_at: 1, clock: 1,
+            created_at: 1,
+            updated_at: 1,
+            clock: 1,
         };
         messageStore.set(stale.id, stale);
         messagesByThreadMock.mockResolvedValue([stale]);
         vi.resetModules();
         const { useChat } = await import('~/composables/chat/useAi');
-        const chat = useChat([
-            {
-                id: stale.id, role: 'assistant', content: 'partial', pending: true,
-                data: stale.data,
-            },
-        ], 'thread-1', undefined, { historyAlreadyLoaded: true });
+        const chat = useChat(
+            [
+                {
+                    id: stale.id,
+                    role: 'assistant',
+                    content: 'partial',
+                    pending: true,
+                    data: stale.data,
+                },
+            ],
+            'thread-1',
+            undefined,
+            { historyAlreadyLoaded: true }
+        );
 
         await chat.ensureHistorySynced();
 

@@ -139,6 +139,12 @@ export async function* parseOpenRouterSSE(
     let buffer = '';
     let dataLines: string[] = [];
     let sourceDone = false;
+    /**
+     * Verified termination: `[DONE]` or a recognized finish reason. EOF
+     * without one means the transport ended early and the output is partial.
+     * Held in an object so closure mutation survives TypeScript narrowing.
+     */
+    const termination = { verified: false };
 
     const extractImageUrl = (part: ContentPart): string | null => {
         if (typeof part !== 'object') return null;
@@ -189,6 +195,9 @@ export async function* parseOpenRouterSSE(
                     `Provider ended the stream with finish reason: ${finishReason}`,
                     finishReason
                 );
+            }
+            if (finishReason) {
+                termination.verified = true;
             }
 
             const delta = choice.delta ?? {};
@@ -404,6 +413,14 @@ export async function* parseOpenRouterSSE(
                         return;
                     }
                     for (const event of result) yield event;
+                }
+                if (!termination.verified) {
+                    // The transport ended without [DONE] or a recognized finish
+                    // reason. Partial output must be treated as interrupted, not
+                    // as a successful completion.
+                    throw new OpenRouterProtocolError(
+                        'OpenRouter stream ended before a terminal finish reason'
+                    );
                 }
                 yield { type: 'done' };
                 return;

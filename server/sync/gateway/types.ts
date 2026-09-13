@@ -27,6 +27,13 @@ import type {
     SnapshotResponse,
 } from '~~/shared/sync/types';
 import type { FileKind } from '~~/shared/files/file-kind';
+import type {
+    AdmitChatGenerationResult,
+    CanonicalGenerationSnapshot,
+    CanonicalHistoryActor,
+    ChatGenerationAdmissionEnvelope,
+    FinalizeChatGenerationResult,
+} from '~~/shared/chat/background-history';
 
 export type CanonicalStorageQueryKind =
     | 'live_metadata'
@@ -149,7 +156,32 @@ export interface SyncGatewayAdapter {
     capabilities?: {
         snapshotBootstrap?: 'snapshot-v1';
         historyRetention?: 'snapshot-v1';
+        /** Atomic canonical chat admission/finalization and durable receipts. */
+        backgroundGenerationHistory?: 'v1';
     };
+
+    /**
+     * Atomically materialize the thread/turn placeholder and record the
+     * generation admission receipt. This is called only after HTTP auth and
+     * workspace authorization have produced the immutable actor.
+     */
+    admitChatGeneration?(
+        actor: CanonicalHistoryActor,
+        input: ChatGenerationAdmissionEnvelope
+    ): Promise<AdmitChatGenerationResult>;
+
+    /**
+     * Compare the current assistant generation with the admitted envelope,
+     * write its terminal snapshot to canonical history, append change_log, and
+     * record an idempotent receipt in one provider transaction.
+     */
+    finalizeChatGeneration?(
+        actor: CanonicalHistoryActor,
+        input: {
+            admission: ChatGenerationAdmissionEnvelope;
+            snapshot: CanonicalGenerationSnapshot;
+        }
+    ): Promise<FinalizeChatGenerationResult>;
 
     /**
      * Pull changes from server since cursor.

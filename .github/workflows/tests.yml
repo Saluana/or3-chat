@@ -19,6 +19,26 @@ jobs:
     name: Core and affected contracts
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      CI: '1'
+      SSR_AUTH_ENABLED: 'true'
+      AUTH_PROVIDER: basic-auth
+      OR3_AUTH_PROVIDER: basic-auth
+      OR3_GUEST_ACCESS_ENABLED: 'false'
+      OR3_AUTH_REGISTRATION_MODE: invite_only
+      OR3_AUTH_AUTO_PROVISION: 'false'
+      OR3_BASIC_AUTH_JWT_SECRET: ci-only-jwt-secret-0123456789abcdef0123456789abcdef
+      OR3_BASIC_AUTH_DB_PATH: .data/or3-basic-auth.sqlite
+      OR3_SYNC_ENABLED: 'true'
+      OR3_CLOUD_SYNC_ENABLED: 'true'
+      OR3_SYNC_PROVIDER: sqlite
+      OR3_SQLITE_DB_PATH: .data/sync.sqlite
+      OR3_STORAGE_ENABLED: 'true'
+      OR3_CLOUD_STORAGE_ENABLED: 'true'
+      NUXT_PUBLIC_STORAGE_PROVIDER: fs
+      OR3_STORAGE_FS_ROOT: .data/storage
+      OR3_STORAGE_FS_TOKEN_SECRET: ci-only-storage-secret-0123456789abcdef0123456789abcdef
+      OR3_BACKGROUND_STREAMING_ENABLED: 'false'
     steps:
       # paths-filter compares push events against the repository's default
       # branch. A depth-1 checkout makes it repeatedly deepen both refs and can

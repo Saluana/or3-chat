@@ -7,6 +7,7 @@ import {
     reduceNormalizedStreamEvent,
     settleNormalizedTool,
 } from '../normalized-stream-reducer';
+import { OutputLimitExceededError } from '../tool-limits';
 
 const toolEvent = {
     type: 'tool_call' as const,
@@ -109,5 +110,45 @@ describe('normalized stream reducer', () => {
             terminal: 'failed',
             error: 'boom',
         });
+    });
+
+    it('rejects output that would exceed the canonical message budget', () => {
+        let state = createNormalizedStreamState({
+            outputLimitBytes: 8 * 1024,
+        });
+        state = reduceNormalizedStreamEvent(state, { type: 'text', text: 'ok' });
+        expect(state.cumulativeText).toBe('ok');
+
+        expect(() =>
+            reduceNormalizedStreamEvent(state, {
+                type: 'text',
+                text: 'x'.repeat(3_000),
+            })
+        ).toThrow(OutputLimitExceededError);
+
+        // The accepted prefix is preserved; the offending event is not applied.
+        expect(state.cumulativeText).toBe('ok');
+        expect(state.outputBytes).toBe(2);
+    });
+
+    it('counts tool metadata against the canonical message budget', () => {
+        const state = createNormalizedStreamState({
+            outputLimitBytes: 8 * 1024,
+        });
+        expect(() =>
+            reduceNormalizedStreamEvent(state, {
+                type: 'tool_call',
+                tool_call: {
+                    id: 'call-1',
+                    type: 'function',
+                    function: {
+                        name: 'echo',
+                        arguments: JSON.stringify({
+                            value: 'x'.repeat(5_000),
+                        }),
+                    },
+                },
+            })
+        ).toThrow(OutputLimitExceededError);
     });
 });

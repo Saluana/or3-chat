@@ -45,7 +45,7 @@ beforeEach(() => {
         transaction: async (
             _: unknown,
             __unknown: unknown,
-            fn: () => unknown,
+            fn: () => unknown
         ) => fn(),
         messages: { get: async () => state.message, put: state.put },
     };
@@ -61,7 +61,7 @@ describe('workflow generated image ownership', () => {
         } as any);
         expect(state.create).toHaveBeenCalledOnce();
         expect(state.message.file_hashes).toBe(JSON.stringify(['hash']));
-        expect(result.images).toBeUndefined();
+        expect((result as { images?: unknown }).images).toBeUndefined();
         expect(result.content).toContain('file-hash:hash');
         expect(JSON.stringify(result)).not.toContain('data:image');
         await wrapped.generate({
@@ -80,7 +80,7 @@ describe('workflow generated image ownership', () => {
             setup(url).wrapped.generate({
                 models: ['image-model'],
                 messages: [],
-            } as any),
+            } as any)
         ).rejects.toThrow('supported raster');
         expect(state.create).not.toHaveBeenCalled();
     });
@@ -91,7 +91,7 @@ describe('workflow generated image ownership', () => {
             return { images: [{ url: png }] };
         });
         await expect(
-            wrapped.generate({ models: ['image-model'], messages: [] } as any),
+            wrapped.generate({ models: ['image-model'], messages: [] } as any)
         ).rejects.toThrow('session');
         expect(state.create).not.toHaveBeenCalled();
     });
@@ -99,7 +99,7 @@ describe('workflow generated image ownership', () => {
         const { wrapped } = setup();
         state.message = null;
         await expect(
-            wrapped.generate({ models: ['image-model'], messages: [] } as any),
+            wrapped.generate({ models: ['image-model'], messages: [] } as any)
         ).rejects.toThrow('no longer available');
         expect(state.change).toHaveBeenCalledWith('hash', -1, state.current);
     });

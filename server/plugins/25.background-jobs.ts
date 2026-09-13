@@ -8,6 +8,7 @@ import {
 } from '../utils/background-jobs/store';
 import { reconcileBackgroundJobs } from '../utils/background-jobs/lifecycle';
 import { executeBackgroundJob } from '../utils/background-jobs/stream-handler';
+import { reconcilePendingBackgroundHistory } from '../utils/background-jobs/history';
 
 const RECONCILE_INTERVAL_MS = 5_000;
 let activeInterval: ReturnType<typeof setInterval> | null = null;
@@ -35,6 +36,10 @@ export default defineNitroPlugin((nitroApp) => {
         try {
             const provider = await getJobProvider();
             await provider.cleanupExpired();
+            await reconcilePendingBackgroundHistory(
+                provider,
+                getJobConfig().maxConcurrentJobs
+            );
             await reconcileBackgroundJobs(
                 {
                     provider,

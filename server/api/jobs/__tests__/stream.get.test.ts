@@ -11,6 +11,7 @@ const baseJob: BackgroundJob = {
     model: 'model-1',
     status: 'streaming',
     content: 'Hello world',
+    reasoning: '',
     chunksReceived: 3,
     startedAt: 123,
     tool_calls: [

@@ -40,11 +40,13 @@ export function makeAssistantPersister(
         reasoning,
         toolCalls,
         finalize = false, // When true, clears pending flag to trigger sync
+        terminalState,
     }: {
         content?: string;
         reasoning?: string | null;
         toolCalls?: ToolCallInfo[] | null;
         finalize?: boolean;
+        terminalState?: 'complete' | 'failed' | 'aborted' | 'interrupted';
     }): Promise<string | null> {
         // Build only the owned delta. The merge against the latest row happens
         // atomically inside patchMessageInDb's write transaction, so concurrent
@@ -75,7 +77,9 @@ export function makeAssistantPersister(
             ...(hasToolCalls
                 ? { tool_calls: (toolCalls ?? []).map((t) => ({ ...t })) }
                 : {}),
-            ...(finalize ? { generation_state: 'complete' } : {}),
+            ...(finalize
+                ? { generation_state: terminalState ?? 'complete' }
+                : {}),
             ...(generationLeaseId && !finalize
                 ? createForegroundGenerationLease(generationLeaseId)
                 : {}),

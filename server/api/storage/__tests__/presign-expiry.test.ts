@@ -77,6 +77,7 @@ vi.mock('../../../sync/gateway/registry', () => ({
                 hash: 'sha256:' + 'a'.repeat(64),
                 sizeBytes: 1024,
                 storageId: 'storage-1',
+                mimeType: 'image/png',
                 updatedAt: 1,
             }],
             hasMore: false,

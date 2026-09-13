@@ -1,17 +1,28 @@
 <template>
-    <main class="h-full min-h-0 overflow-y-auto mx-auto max-w-7xl p-6 pb-10 space-y-6" data-testid="background-stream-modes-page">
+    <main
+        class="h-full min-h-0 overflow-y-auto mx-auto max-w-7xl p-6 pb-10 space-y-6"
+        data-testid="background-stream-modes-page"
+    >
         <header class="space-y-2">
-            <h1 class="text-2xl font-semibold">Background Stream Modes Harness</h1>
+            <h1 class="text-2xl font-semibold">
+                Background Stream Modes Harness
+            </h1>
             <p class="text-sm opacity-80">
-                Runs three end-to-end checks: normal background stream, background workflow execution, and background stream with tool calling.
+                Runs three end-to-end checks: normal background stream,
+                background workflow execution, and background stream with tool
+                calling.
             </p>
         </header>
 
-        <section class="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr] items-start">
+        <section
+            class="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr] items-start"
+        >
             <div class="space-y-4">
                 <UCard>
                     <template #header>
-                        <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div
+                            class="flex flex-wrap items-center justify-between gap-2"
+                        >
                             <span class="font-medium">Controls</span>
                             <div class="flex flex-wrap gap-2">
                                 <UButton
@@ -37,7 +48,9 @@
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                         <div class="space-y-1">
-                            <label class="opacity-80" for="bg-model-id">Model</label>
+                            <label class="opacity-80" for="bg-model-id"
+                                >Model</label
+                            >
                             <UInput
                                 id="bg-model-id"
                                 v-model="modelId"
@@ -49,14 +62,28 @@
                             <div class="opacity-80">Workflow Fixture</div>
                             <div class="flex items-center gap-2">
                                 <UBadge
-                                    :color="firstWorkflowPost ? 'success' : 'warning'"
+                                    :color="
+                                        firstWorkflowPost
+                                            ? 'success'
+                                            : 'warning'
+                                    "
                                     variant="soft"
                                     data-testid="bg-modes-workflow-count"
                                 >
-                                    {{ firstWorkflowPost ? 'available' : 'missing' }}
+                                    {{
+                                        firstWorkflowPost
+                                            ? 'available'
+                                            : 'missing'
+                                    }}
                                 </UBadge>
-                                <span class="truncate" data-testid="bg-modes-workflow-name">
-                                    {{ firstWorkflowPost?.title || 'No local workflow-entry found' }}
+                                <span
+                                    class="truncate"
+                                    data-testid="bg-modes-workflow-name"
+                                >
+                                    {{
+                                        firstWorkflowPost?.title ||
+                                        'No local workflow-entry found'
+                                    }}
                                 </span>
                             </div>
                         </div>
@@ -66,11 +93,19 @@
                 <section class="space-y-3">
                     <UCard v-for="testId in TEST_ORDER" :key="testId">
                         <template #header>
-                            <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div
+                                class="flex flex-wrap items-center justify-between gap-2"
+                            >
                                 <div class="flex items-center gap-2">
-                                    <span class="font-medium">{{ TEST_META[testId].title }}</span>
+                                    <span class="font-medium">{{
+                                        TEST_META[testId].title
+                                    }}</span>
                                     <UBadge
-                                        :color="statusColor(testStates[testId].status)"
+                                        :color="
+                                            statusColor(
+                                                testStates[testId].status
+                                            )
+                                        "
                                         variant="soft"
                                         :data-testid="`bg-modes-status-${testId}`"
                                     >
@@ -83,7 +118,9 @@
                                     variant="outline"
                                     size="sm"
                                     :loading="activeTestId === testId"
-                                    :disabled="isRunning && activeTestId !== testId"
+                                    :disabled="
+                                        isRunning && activeTestId !== testId
+                                    "
                                     @click="runTest(testId)"
                                 >
                                     Run Test
@@ -92,15 +129,28 @@
                         </template>
 
                         <div class="space-y-2 text-sm">
-                            <p class="opacity-80">{{ TEST_META[testId].description }}</p>
-                            <div v-if="testStates[testId].jobId" :data-testid="`bg-modes-job-${testId}`">
+                            <p class="opacity-80">
+                                {{ TEST_META[testId].description }}
+                            </p>
+                            <div
+                                v-if="testStates[testId].jobId"
+                                :data-testid="`bg-modes-job-${testId}`"
+                            >
                                 Job:
                                 <code>{{ testStates[testId].jobId }}</code>
                             </div>
                             <div v-if="testStates[testId].durationMs !== null">
-                                Duration: {{ formatDuration(testStates[testId].durationMs) }}
+                                Duration:
+                                {{
+                                    formatDuration(
+                                        testStates[testId].durationMs
+                                    )
+                                }}
                             </div>
-                            <div v-if="testStates[testId].detail" class="text-xs opacity-90">
+                            <div
+                                v-if="testStates[testId].detail"
+                                class="text-xs opacity-90"
+                            >
                                 {{ testStates[testId].detail }}
                             </div>
                         </div>
@@ -117,7 +167,9 @@
                             variant="soft"
                             data-testid="bg-modes-running-state"
                         >
-                            {{ isRunning ? `running: ${activeTestId}` : 'idle' }}
+                            {{
+                                isRunning ? `running: ${activeTestId}` : 'idle'
+                            }}
                         </UBadge>
                     </div>
                 </template>
@@ -125,7 +177,8 @@
                     ref="logPaneRef"
                     class="flex-1 max-h-[65vh] overflow-auto text-xs whitespace-pre-wrap rounded border border-default p-3"
                     data-testid="bg-modes-log-pane"
-                >{{ logText || '[No logs yet]' }}</pre>
+                    >{{ logText || '[No logs yet]' }}</pre
+                >
             </UCard>
         </section>
     </main>
@@ -133,6 +186,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
+import { getActiveWorkspaceId } from '~/db/client';
 import { usePostsList } from '~/composables/posts/usePostsList';
 import {
     pollJobStatus,
@@ -212,14 +266,14 @@ const testStates = reactive<Record<TestId, TestState>>({
 const isRunning = computed(() => activeTestId.value !== null);
 const logText = computed(() => logs.value.join('\n'));
 
-const {
-    items: workflowPosts,
-    loading: workflowPostsLoading,
-} = usePostsList('workflow-entry', {
-    limit: 50,
-    sort: 'updated_at',
-    sortDir: 'desc',
-});
+const { items: workflowPosts, loading: workflowPostsLoading } = usePostsList(
+    'workflow-entry',
+    {
+        limit: 50,
+        sort: 'updated_at',
+        sortDir: 'desc',
+    }
+);
 const firstWorkflowPost = computed(() => workflowPosts.value[0] ?? null);
 
 function nowIso(): string {
@@ -245,7 +299,9 @@ function formatDuration(durationMs: number): string {
     return `${(durationMs / 1000).toFixed(1)}s`;
 }
 
-function statusColor(status: TestStatus): 'neutral' | 'primary' | 'warning' | 'success' | 'error' {
+function statusColor(
+    status: TestStatus
+): 'neutral' | 'primary' | 'warning' | 'success' | 'error' {
     if (status === 'running') return 'primary';
     if (status === 'pass') return 'success';
     if (status === 'fail') return 'error';
@@ -253,7 +309,10 @@ function statusColor(status: TestStatus): 'neutral' | 'primary' | 'warning' | 's
 }
 
 function contentLength(status: BackgroundJobStatus): number {
-    if (typeof status.content_length === 'number' && Number.isFinite(status.content_length)) {
+    if (
+        typeof status.content_length === 'number' &&
+        Number.isFinite(status.content_length)
+    ) {
         return status.content_length;
     }
     return typeof status.content === 'string' ? status.content.length : 0;
@@ -278,13 +337,17 @@ function compactJson(value: unknown, max = 800): string {
             }
         );
         if (typeof text !== 'string') return String(value);
-        return text.length > max ? `${text.slice(0, max)}...(${text.length})` : text;
+        return text.length > max
+            ? `${text.slice(0, max)}...(${text.length})`
+            : text;
     } catch {
         return String(value);
     }
 }
 
-function summarizeToolCall(call: NonNullable<BackgroundJobStatus['tool_calls']>[number]): string {
+function summarizeToolCall(
+    call: NonNullable<BackgroundJobStatus['tool_calls']>[number]
+): string {
     const args = call.args ? `args=${truncate(call.args, 90)}` : 'args=<none>';
     const result = call.result ? `result=${truncate(call.result, 90)}` : null;
     const error = call.error ? `error=${truncate(call.error, 90)}` : null;
@@ -299,11 +362,71 @@ function summarizeToolCall(call: NonNullable<BackgroundJobStatus['tool_calls']>[
         .join(' ');
 }
 
-function createThreadAndMessageIds(prefix: string): { threadId: string; messageId: string } {
+function createThreadAndMessageIds(prefix: string): {
+    threadId: string;
+    messageId: string;
+} {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     return {
         threadId: `${prefix}-thread-${suffix}`,
         messageId: `${prefix}-message-${suffix}`,
+    };
+}
+
+function createChatHistory(
+    ids: { threadId: string; messageId: string },
+    prompt: string
+): Parameters<typeof startBackgroundStream>[0]['history'] {
+    const workspaceId = getActiveWorkspaceId();
+    if (!workspaceId) throw new Error('No active workspace is available');
+
+    const now = Math.floor(Date.now() / 1000);
+    const admissionId = crypto.randomUUID();
+    const generationId = crypto.randomUUID();
+    return {
+        version: 1,
+        kind: 'new-turn',
+        admissionId,
+        generationId,
+        workspaceId,
+        threadId: ids.threadId,
+        messageId: ids.messageId,
+        thread: {
+            id: ids.threadId,
+            title: 'Background stream modes test',
+            clock: 1,
+            created_at: now,
+            updated_at: now,
+        },
+        userMessage: {
+            id: crypto.randomUUID(),
+            thread_id: ids.threadId,
+            role: 'user',
+            data: { content: prompt },
+            index: 0,
+            order_key: `${now}:0:user`,
+            clock: 1,
+            created_at: now,
+            updated_at: now,
+        },
+        assistantMessage: {
+            id: ids.messageId,
+            thread_id: ids.threadId,
+            role: 'assistant',
+            data: {
+                content: '',
+                generation_id: generationId,
+                generation_state: 'streaming',
+                background_history_version: 1,
+            },
+            index: 1,
+            order_key: `${now}:1:assistant`,
+            stream_id: generationId,
+            pending: true,
+            clock: 1,
+            created_at: now,
+            updated_at: now,
+        },
     };
 }
 
@@ -368,17 +491,17 @@ async function waitForTerminalStatus(params: {
                 status.content_delta.length > 0
                     ? status.content_delta
                     : typeof status.content === 'string'
-                    ? status.content
-                    : '';
+                      ? status.content
+                      : '';
             if (previewSource.length > 0) {
                 appendLog(
-                    `[${params.label}] content-preview="${truncate(
-                        previewSource,
-                        170
-                    )}"`
+                    `[${params.label}] content-preview="${truncate(previewSource, 170)}"`
                 );
             }
-            if (status.workflow_state && typeof status.workflow_state === 'object') {
+            if (
+                status.workflow_state &&
+                typeof status.workflow_state === 'object'
+            ) {
                 appendLog(
                     `[${params.label}] workflow execution=${status.workflow_state.executionState ?? 'unknown'} version=${status.workflow_state.version ?? '?'} currentNode=${status.workflow_state.currentNodeId ?? 'null'}`
                 );
@@ -441,18 +564,22 @@ async function executeTest(
 async function runNormalTest(): Promise<void> {
     await executeTest('normal', async () => {
         const ids = createThreadAndMessageIds('normal-bg');
+        const prompt =
+            'Write exactly two short lines about resilient background processing.';
+        const history = createChatHistory(ids, prompt);
         const response = await startBackgroundStream({
             model: modelId.value.trim() || DEFAULT_MODEL,
             orMessages: [
                 {
                     role: 'user',
-                    content:
-                        'Write exactly two short lines about resilient background processing.',
+                    content: prompt,
                 },
             ],
             modalities: ['text'],
             threadId: ids.threadId,
             messageId: ids.messageId,
+            admissionId: history.admissionId,
+            history,
         });
 
         appendLog(`[normal] started job ${response.jobId}`);
@@ -500,8 +627,7 @@ async function runWorkflowTest(): Promise<void> {
         if (!workflow) {
             return {
                 pass: false,
-                detail:
-                    'No local workflow-entry found. Create one in Workflows first.',
+                detail: 'No local workflow-entry found. Create one in Workflows first.',
             };
         }
 
@@ -510,8 +636,7 @@ async function runWorkflowTest(): Promise<void> {
 
         const response = await startBackgroundWorkflow({
             workflowId: workflow.id,
-            prompt:
-                'Generate a concise verse about confidence and respect. Keep it under six lines.',
+            prompt: 'Generate a concise verse about confidence and respect. Keep it under six lines.',
             threadId: ids.threadId,
             messageId: ids.messageId,
         });
@@ -525,10 +650,7 @@ async function runWorkflowTest(): Promise<void> {
         const executionState = terminal.workflow_state?.executionState;
         const version = terminal.workflow_state?.version;
 
-        if (
-            terminal.status === 'complete' &&
-            executionState === 'completed'
-        ) {
+        if (terminal.status === 'complete' && executionState === 'completed') {
             return {
                 pass: true,
                 jobId: response.jobId,
@@ -561,6 +683,7 @@ async function runToolsTest(): Promise<void> {
         const selectedModel = modelId.value.trim() || DEFAULT_MODEL;
         const toolPrompt =
             'You must use the add_numbers tool for a=19 and b=23 before answering. Do not compute manually. After the tool result, reply with only the numeric sum.';
+        const history = createChatHistory(ids, toolPrompt);
         const forcedToolChoice = {
             type: 'function' as const,
             function: {
@@ -602,6 +725,8 @@ async function runToolsTest(): Promise<void> {
             modalities: ['text'],
             threadId: ids.threadId,
             messageId: ids.messageId,
+            admissionId: history.admissionId,
+            history,
             tools: [ADD_NUMBERS_TOOL],
             toolChoice: forcedToolChoice,
             toolRuntime,
@@ -663,14 +788,14 @@ async function runToolsTest(): Promise<void> {
 
         if (!sawAddNumbersCall) {
             const outputPreview =
-                typeof terminal.content === 'string' && terminal.content.length > 0
+                typeof terminal.content === 'string' &&
+                terminal.content.length > 0
                     ? truncate(terminal.content, 120)
                     : '[empty]';
             return {
                 pass: false,
                 jobId: response.jobId,
-                detail:
-                    `Completed without add_numbers tool invocation. tools=${terminal.tool_calls?.length ?? 0}, chars=${contentLength(terminal)}, output=${outputPreview}`,
+                detail: `Completed without add_numbers tool invocation. tools=${terminal.tool_calls?.length ?? 0}, chars=${contentLength(terminal)}, output=${outputPreview}`,
             };
         }
 
