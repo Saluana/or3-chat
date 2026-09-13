@@ -108,7 +108,7 @@ const fixedProfile = {
 };
 
 if (full) {
-    await requireCommand('Populated workspace performance gate', 'bun', ['run', 'performance:workspace:check'], fixedProfile);
+    await requireCommand('Populated workspace performance gate', 'bun', ['run', 'scripts/performance/compare-populated-workspace.ts'], fixedProfile);
 }
 await requireCommand('Registry-clean lock contract', 'bun', ['run', 'scripts/release/check-lock-drift.mjs']);
 await requireCommand(

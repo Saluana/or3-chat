@@ -62,6 +62,11 @@ used Git/npm/GHCR versions, missing providers, package drift, failing tests,
 browser harnesses, type errors, or documentation drift. It writes a small
 machine-readable report to `output/release/preflight.json`.
 
+If the populated-workspace ceiling fails, the preflight benchmarks `HEAD^` in
+a clean worktree on the same runner. It proceeds only when the base also misses
+the absolute ceiling and the candidate is within 10% of that same-host base;
+otherwise the performance gate remains failed.
+
 Then use GitHub Actions to manually run **Qualify OR3 Cloud Candidate** on the
 exact intended branch/commit and enter the same version. Do not create the tag
 yet. The candidate workflow builds and verifies both multi-architecture images,

@@ -25,6 +25,11 @@ The command must complete successfully. It verifies:
 - populated-workspace performance profile
 - SSR production JavaScript and CSS artifact budgets
 
+If the populated-workspace absolute ceiling fails, release preflight compares
+the candidate with `HEAD^` in a clean worktree on that same runner. The gate
+passes only when the base also misses the ceiling and the candidate remains
+within 10% of the same-host base measurement.
+
 Do not promote a candidate from a dirty worktree. The preflight rejects one,
 including untracked files. Record the clean commit SHA and retain
 `output/release/preflight.json` with the release artifacts.
