@@ -32,6 +32,7 @@ import {
   snapshotManagedAssets,
   stateFromEnv,
   supportedImageArchitectures,
+  updateRequiresVolumeRecreation,
   validateVerificationHealth,
   validatePassword,
   withoutProvisioningCredentials,
@@ -47,6 +48,22 @@ test('release image labels match the authenticated package source revision', () 
   };
   expect(() => assertImageReleaseLabels('or3', labels, '0.1.39', 'a'.repeat(40))).not.toThrow();
   expect(() => assertImageReleaseLabels('or3', labels, '0.1.39', 'b'.repeat(40))).toThrow('expected source/version release labels');
+});
+
+test('recreates only legacy data volumes when adding deployment identity labels', () => {
+  const env = buildEnv({
+    mode: 'local',
+    version: '0.1.38',
+    directory: '/tmp/or3-cloud-volume-label-test',
+    email: 'admin@example.com',
+    password: 'AValidPassword123',
+    port: 3000,
+  });
+  const state = stateFromEnv('/tmp/or3-cloud-volume-label-test', env, 'local', 'init', 'sha256:test');
+  expect(updateRequiresVolumeRecreation(state, env)).toBe(false);
+  delete env.OR3_DEPLOYMENT_ID;
+  delete state.deploymentId;
+  expect(updateRequiresVolumeRecreation(state, env)).toBe(true);
 });
 
 test('provisioned passwords are removed from persistent deployment metadata', () => {

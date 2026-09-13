@@ -31,7 +31,7 @@ import { createGunzip } from 'node:zlib';
 const execFile = promisify(execFileCallback);
 const PACKAGE_ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
 
-export const PACKAGE_VERSION = '0.1.42';
+export const PACKAGE_VERSION = '0.1.43';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 const STATE_SCHEMA_VERSION = 1;
@@ -130,6 +130,8 @@ export type ManagedState = {
     previousBackupPath?: string;
     phase?: 'prepared' | 'snapshot-created' | 'target-mutating' | 'restoring-previous' | 'starting-target' | 'starting-previous';
     previousRootOwnership?: { uid: number; gid: number };
+    /** A legacy unlabeled volume must be recreated from its verified snapshot. */
+    recreateDataVolume?: boolean;
     /** Whether the managed app was running before a standalone backup. */
     initialAppRunning?: boolean;
     /** Whether an adopted source should be restarted if adoption fails. */
@@ -1134,6 +1136,51 @@ async function setManagedVolumeRootOwnership(image: string, volume: string, owne
   }
 }
 
+export function updateRequiresVolumeRecreation(state: ManagedState, env: Record<string, string>) {
+  return !state.deploymentId && !env.OR3_DEPLOYMENT_ID;
+}
+
+/**
+ * Removes only the app containers and data volume bound to this managed
+ * deployment. Callers must already hold a verified backup. This is used for
+ * the one-time migration from legacy Compose volumes that cannot acquire the
+ * immutable deployment label in place.
+ */
+async function removeManagedDataVolumeForRecreation(directory: string, state: ManagedState) {
+  const containers = await run('docker', [
+    'ps', '-aq',
+    '--filter', `label=com.docker.compose.project=${state.composeProject}`,
+    '--filter', 'label=com.docker.compose.service=or3',
+  ], directory);
+  if (!containers.ok) throw new Error(`Could not resolve the managed OR3 container. ${containers.stderr.trim()}`);
+  const containerIds = containers.stdout.trim().split(/\s+/).filter(Boolean);
+  if (containerIds.some((value) => !/^[0-9a-f]{12,64}$/i.test(value))) {
+    throw new Error('Docker returned an invalid managed OR3 container ID. Refusing to recreate the data volume.');
+  }
+  if (containerIds.length) {
+    const removedContainers = await run('docker', ['rm', '--force', ...containerIds], directory);
+    if (!removedContainers.ok) throw new Error(`Could not remove the stopped managed OR3 container. ${removedContainers.stderr.trim()}`);
+  }
+
+  const inspected = await run('docker', ['volume', 'inspect', state.volumeName, '--format', '{{json .}}'], directory);
+  if (!inspected.ok) return;
+  let volume: { Name?: unknown; Labels?: Record<string, unknown> };
+  try {
+    volume = JSON.parse(inspected.stdout.trim()) as typeof volume;
+  } catch {
+    throw new Error(`Docker returned unreadable metadata for managed volume ${state.volumeName}.`);
+  }
+  if (
+    volume.Name !== state.volumeName
+    || volume.Labels?.['com.docker.compose.project'] !== state.composeProject
+    || volume.Labels?.['com.docker.compose.volume'] !== 'or3-data'
+  ) {
+    throw new Error(`Volume ${state.volumeName} is not bound to this managed Compose deployment. Refusing to recreate it.`);
+  }
+  const removedVolume = await run('docker', ['volume', 'rm', state.volumeName], directory);
+  if (!removedVolume.ok) throw new Error(`Could not remove the verified legacy data volume for recreation. ${removedVolume.stderr.trim()}`);
+}
+
 async function portAvailable(port: number) {
   return new Promise<boolean>((resolvePromise) => {
     const server = createServer();
@@ -1892,7 +1939,11 @@ async function dataVolumeSize(directory: string, mode: Mode, env: Record<string,
   };
   const exec = await run('docker', [...composeArgs(directory, mode, ['exec', '-T', 'or3', 'sh', '-c', 'du -sb /data 2>/dev/null'])], directory);
   if (exec.ok) return parseDuOutput(exec.stdout);
-  const fallback = await run('docker', [...composeArgs(directory, mode, ['run', '--rm', '--no-deps', '--entrypoint', 'sh', 'or3', '-c', 'du -sb /data 2>/dev/null'])], directory);
+  const fallback = await run('docker', [
+    'run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
+    '-v', `${env.OR3_VOLUME_NAME}:/data:ro`, '--entrypoint', 'sh', env.OR3_IMAGE,
+    '-c', 'du -sb /data 2>/dev/null',
+  ], directory);
   if (fallback.ok) return parseDuOutput(fallback.stdout);
   throw new Error(`Could not measure the data volume size for the free-space preflight. Start the deployment and retry. ${redact(`${exec.stderr} ${fallback.stderr}`)}`);
 }
@@ -2341,13 +2392,15 @@ async function restoreVolumeArchive(directory: string, mode: Mode, env: Record<s
   );
 }
 
-async function validateVolumeArchive(directory: string, mode: Mode, env: Record<string, string>, backupPath: string) {
+async function validateVolumeArchive(directory: string, _mode: Mode, env: Record<string, string>, backupPath: string) {
   await streamFileToCommand(
     'docker',
-    composeArgs(directory, mode, [
-      'run', '--rm', '-T', '--no-deps', '--entrypoint', 'sh', 'or3', '-c',
+    [
+      'run', '--rm', '-i', '--network', 'none', '--read-only',
+      '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL',
+      '--entrypoint', 'sh', env.OR3_IMAGE, '-c',
       'tar tzf - >/dev/null',
-    ]),
+    ],
     join(backupPath, 'data.tgz'),
     directory,
     secretValues(env),
@@ -2485,7 +2538,11 @@ async function dataVolumeFreeBytes(directory: string, mode: Mode, env: Record<st
   const script = "df -Pk /data | awk 'NR == 2 { print $4 }'";
   const exec = await run('docker', [...composeArgs(directory, mode, ['exec', '-T', 'or3', 'sh', '-c', script])], directory);
   if (exec.ok) return parse(exec.stdout);
-  const fallback = await run('docker', [...composeArgs(directory, mode, ['run', '--rm', '--no-deps', '--entrypoint', 'sh', 'or3', '-c', script])], directory);
+  const fallback = await run('docker', [
+    'run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
+    '-v', `${env.OR3_VOLUME_NAME}:/data:ro`, '--entrypoint', 'sh', env.OR3_IMAGE,
+    '-c', script,
+  ], directory);
   if (fallback.ok) return parse(fallback.stdout);
   throw new Error(`Could not measure free space in the Docker data volume. ${redact(`${exec.stderr} ${fallback.stderr}`, secretValues(env))}`);
 }
@@ -2506,7 +2563,13 @@ async function assertRestoreFreeSpace(
   assertEnoughFreeSpace(freeBytes + reclaimableBytes, requiredBytes, 'Restore');
 }
 
-async function restoreBackupData(directory: string, state: ManagedState, env: Record<string, string>, backupPath: string) {
+async function restoreBackupData(
+  directory: string,
+  state: ManagedState,
+  env: Record<string, string>,
+  backupPath: string,
+  options: { recreateDataVolume?: boolean } = {},
+) {
   const manifest = await readManifest(backupPath, directory);
   assertRestorableManagedAssets(manifest);
   const backupEnv = parseEnv(await readText(join(backupPath, 'config.env')));
@@ -2535,7 +2598,8 @@ async function restoreBackupData(directory: string, state: ManagedState, env: Re
         OR3_IMAGE: imageAtDigest(manifest.image, manifest.imageDigest),
       });
 
-  await stopProject(directory, state.mode);
+  if (options.recreateDataVolume) await removeManagedDataVolumeForRecreation(directory, state);
+  else await stopProject(directory, state.mode);
   if (
     dashboardUpdatesEnabled(directory)
     && restoredEnv.OR3_DASHBOARD_UPDATES_ENABLED !== 'true'
@@ -3125,13 +3189,19 @@ async function updateCommand(directory: string, flags: Flags) {
     };
     const previousRootOwnership = await managedVolumeRootOwnership(targetImage, state.volumeName);
     const migrateLegacyVolume = previousRootOwnership.uid !== MANAGED_RUNTIME_UID || previousRootOwnership.gid !== MANAGED_RUNTIME_GID;
+    const recreateDataVolume = updateRequiresVolumeRecreation(state, env);
     await updatePending(loaded.directory, state, {
       phase: 'target-mutating',
       previousRootOwnership,
+      recreateDataVolume,
     });
     try {
-      await stopProject(loaded.directory, state.mode);
-      if (migrateLegacyVolume) {
+      if (recreateDataVolume) {
+        await removeManagedDataVolumeForRecreation(loaded.directory, state);
+      } else {
+        await stopProject(loaded.directory, state.mode);
+      }
+      if (migrateLegacyVolume && !recreateDataVolume) {
         // Change only the mount root, then recreate every data entry from the
         // checksummed backup as the target runtime user. Avoid recursive chown:
         // it would erase heterogeneous ownership without a reversible record.
@@ -3142,19 +3212,18 @@ async function updateCommand(directory: string, flags: Flags) {
       }
       await writeSecure(deploymentPaths(loaded.directory).env, serializeEnv(nextEnv));
       await copyAssets(loaded.directory, state.mode);
-      if (migrateLegacyVolume) {
+      if (migrateLegacyVolume || recreateDataVolume) {
         await restoreVolumeArchive(loaded.directory, state.mode, nextEnv, backup.backupDir);
       }
       await startProject(loaded.directory, state.mode, nextEnv);
     } catch (error) {
       await updatePending(loaded.directory, state, { phase: 'restoring-previous' });
-      await writeSecure(deploymentPaths(loaded.directory).env, serializeEnv(oldEnv));
       try {
-        await stopProject(loaded.directory, state.mode).catch(() => undefined);
-        if (migrateLegacyVolume) {
+        if (!recreateDataVolume) await stopProject(loaded.directory, state.mode).catch(() => undefined);
+        if (migrateLegacyVolume && !recreateDataVolume) {
           await setManagedVolumeRootOwnership(targetImage, state.volumeName, previousRootOwnership);
         }
-        await restoreBackupData(loaded.directory, state, oldEnv, backup.backupDir);
+        await restoreBackupData(loaded.directory, state, oldEnv, backup.backupDir, { recreateDataVolume });
       } catch (restoreError) {
         throw new Error(`Update to ${targetVersion} failed, and automatic backup restoration also failed: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}. Original update error: ${error instanceof Error ? error.message : String(error)}`);
       }
@@ -3248,6 +3317,10 @@ async function restorePreMutationSnapshot(
   if (!pending) throw new Error('No incomplete operation is available to restore.');
   const previous = await recordedBackupPath(directory, pending, true);
   await updatePending(directory, state, { phase: 'restoring-previous' });
+  if (pending.recreateDataVolume) {
+    await restoreBackupData(directory, state, env, previous.path, { recreateDataVolume: true });
+    return previous;
+  }
   if (pending.previousRootOwnership) {
     await pullAndRequireImage(state.image, state.imageDigest, 'Previous deployment');
     await setManagedVolumeRootOwnership(state.image, state.volumeName, pending.previousRootOwnership);
