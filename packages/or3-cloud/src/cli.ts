@@ -31,7 +31,7 @@ import { createGunzip } from 'node:zlib';
 const execFile = promisify(execFileCallback);
 const PACKAGE_ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
 
-export const PACKAGE_VERSION = '0.1.43';
+export const PACKAGE_VERSION = '0.1.44';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 const STATE_SCHEMA_VERSION = 1;
@@ -1179,6 +1179,38 @@ async function removeManagedDataVolumeForRecreation(directory: string, state: Ma
   }
   const removedVolume = await run('docker', ['volume', 'rm', state.volumeName], directory);
   if (!removedVolume.ok) throw new Error(`Could not remove the verified legacy data volume for recreation. ${removedVolume.stderr.trim()}`);
+}
+
+async function ensureManagedDataVolume(
+  directory: string,
+  mode: Mode,
+  state: ManagedState,
+  env: Record<string, string>,
+) {
+  const existing = await run('docker', ['volume', 'inspect', state.volumeName, '--format', '{{.Name}}'], directory);
+  if (existing.ok && existing.stdout.trim() === state.volumeName) return;
+  const created = await run('docker', composeArgs(directory, mode, [
+    'run', '--rm', '-T', '--no-deps', '--entrypoint', 'sh', 'or3', '-c', 'true',
+  ]), directory);
+  if (!created.ok) throw new Error(`Could not create the managed data volume. ${redact(created.stderr, secretValues(env))}`);
+  const inspected = await run('docker', ['volume', 'inspect', state.volumeName, '--format', '{{json .Labels}}'], directory);
+  if (!inspected.ok) throw new Error(`Could not verify the recreated managed data volume ${state.volumeName}.`);
+  let labels: Record<string, unknown>;
+  try {
+    labels = JSON.parse(inspected.stdout.trim()) as Record<string, unknown>;
+  } catch {
+    throw new Error(`Docker returned unreadable labels for recreated managed volume ${state.volumeName}.`);
+  }
+  if (!labels || typeof labels !== 'object') {
+    throw new Error(`Recreated volume ${state.volumeName} has no managed deployment labels.`);
+  }
+  if (
+    labels['com.docker.compose.project'] !== state.composeProject
+    || labels['com.docker.compose.volume'] !== 'or3-data'
+    || (env.OR3_DEPLOYMENT_ID && labels['io.or3.cloud.deployment-id'] !== env.OR3_DEPLOYMENT_ID)
+  ) {
+    throw new Error(`Recreated volume ${state.volumeName} does not carry the expected managed deployment labels.`);
+  }
 }
 
 async function portAvailable(port: number) {
@@ -2372,20 +2404,25 @@ async function restoreVolumeArchive(directory: string, mode: Mode, env: Record<s
   // Host backups intentionally stay 0700/0600. Stream the archive over stdin
   // so the normal image user can write its owned /data volume without either
   // exposing the backup through a bind mount or forcing a capability-less root.
-  const clear = await run('docker', composeArgs(directory, mode, [
-    'run', '--rm', '-T', '--no-deps', '--user', '0:0', '--read-only',
+  const state = await readState(directory);
+  await ensureManagedDataVolume(directory, mode, state, env);
+  const clear = await run('docker', [
+    'run', '--rm', '--network', 'none', '--user', '0:0', '--read-only',
     '--cap-drop', 'ALL', '--cap-add', 'DAC_OVERRIDE', '--cap-add', 'FOWNER',
-    '--entrypoint', 'sh', 'or3', '-c', 'find /data -mindepth 1 -delete',
-  ]), directory);
+    '--security-opt', 'no-new-privileges:true', '-v', `${state.volumeName}:/data`,
+    '--entrypoint', 'sh', env.OR3_IMAGE, '-c', 'find /data -mindepth 1 -delete',
+  ], directory);
   if (!clear.ok) {
     throw new Error(`Could not safely clear the managed data volume before restore. ${redact(clear.stderr, secretValues(env))}`);
   }
   await streamFileToCommand(
     'docker',
-    composeArgs(directory, mode, [
-      'run', '--rm', '-T', '--no-deps', '--entrypoint', 'sh', 'or3', '-c',
+    [
+      'run', '--rm', '-i', '--network', 'none', '--read-only',
+      '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL',
+      '-v', `${state.volumeName}:/data`, '--entrypoint', 'sh', env.OR3_IMAGE, '-c',
       'tar xzf - -C /data',
-    ]),
+    ],
     join(backupPath, 'data.tgz'),
     directory,
     secretValues(env),
@@ -2579,6 +2616,7 @@ async function restoreBackupData(
   assertBackupMatchesDeployment(manifest, backupEnv, state, env);
   if (manifest.imageDigest) await requireImageDigest(manifest.image, manifest.imageDigest, `Backup ${manifest.backupId}`);
   await validateVolumeArchive(directory, state.mode, env, backupPath);
+  await ensureManagedDataVolume(directory, state.mode, state, env);
   // Preflight the filesystem Docker will actually extract into. A compressed
   // tarball's byte size and the backup directory's filesystem cannot prove
   // there is room in /data.

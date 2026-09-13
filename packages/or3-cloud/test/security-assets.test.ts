@@ -309,6 +309,9 @@ test('restore and adoption stream private archives into the managed volume', () 
   expect(cli).toContain('pipeline(createReadStream(source), child.stdin)');
   expect(cli).toContain("'find /data -mindepth 1 -delete'");
   expect(cli).toContain("'tar xzf - -C /data'");
+  expect(cli).toContain("'run', '--rm', '-i', '--network', 'none', '--read-only'");
+  expect(cli).toContain("'-v', `${state.volumeName}:/data`");
+  expect(cli).not.toContain("'run', '--rm', '-T', '--no-deps', '--user', '0:0', '--read-only'");
   expect(cli).not.toContain('`${backupPath}:/backup:ro`');
   expect(cli).not.toContain("'--user', '0:0', '-v', `${sourceVolume}:/source:ro`");
 });
