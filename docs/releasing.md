@@ -83,6 +83,11 @@ identities in `candidate-receipt.json` only after every required verifier
 passes. It publishes only source-qualified candidate evidence; it cannot
 publish npm or the public version images.
 
+The manifest contract also starts the exact operator image as an unprivileged,
+read-only container and installs the latest published Cloud CLI in its bounded
+tmpfs. This keeps the operator's pinned npm bootstrap on the pre-tag path;
+dashboard package-install failures must not first appear after publication.
+
 The application build uses a registry-backed BuildKit cache at
 `ghcr.io/saluana/or3-chat:buildcache-cloud`. Only the manually dispatched
 candidate workflow has permission to update it. The cache is not release

@@ -103,6 +103,8 @@ For the supported Basic Auth + SQLite + filesystem distribution, manually run
 `Qualify OR3 Cloud Candidate` on the intended commit before creating a tag. It
 rejects reused identities before setup, builds once, stores the exact image and
 operator digests, and fans out scanning, ARM, manifest, and lifecycle jobs.
+The manifest job also proves that the exact unprivileged, read-only operator
+image can bootstrap the latest published Cloud CLI with its pinned npm runtime.
 Upgrade, rollback, restart, and persistence checks consume the digest-bound
 tarball. Only after they all succeed does the workflow publish a receipt bound
 to the source SHA, image digests, and tarball hashes. A failed verification job

@@ -417,6 +417,14 @@ function runProcess(file, args, options) {
   });
 }
 
+function processDiagnostic(result) {
+  const output = String(result?.output || '')
+    .replaceAll(/(\/\/[^:\s]+:_authToken=)[^\s]+/gi, '$1[redacted]')
+    .replaceAll(/https?:\/\/[^@\s]+@/gi, 'https://[redacted]@')
+    .trim();
+  return output ? output.slice(-2048) : `exit code ${result?.code ?? 'unknown'}`;
+}
+
 export function provenanceStatement(payload, expectedRelease) {
   if (typeof payload !== 'string' || payload.length > maxAttestationBytes) throw new Error('The OR3 provenance payload is invalid.');
   let statement;
@@ -567,7 +575,9 @@ async function withVerifiedUpdater(expectedRelease, job, action) {
       env: updaterEnvironment(installDirectory, job),
       timeoutMs: 120_000,
     });
-    if (installed.code !== 0) throw new Error('The verified updater package could not be installed.');
+    if (installed.code !== 0) {
+      throw new Error(`The verified updater package could not be installed: ${processDiagnostic(installed)}`);
+    }
     const updater = await verifyInstalledUpdater(installDirectory, expectedRelease, job, provenanceFingerprint);
     return await action(updater, installDirectory);
   } finally {

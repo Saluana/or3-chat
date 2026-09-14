@@ -228,6 +228,7 @@ test('dashboard operator binds provenance to the OR3 tagged release workflow', (
 test('Dockerfile builds shared Nuxt output only once on the native runner', () => {
   const dockerfile = readFileSync(DOCKERFILE, 'utf8');
   expect(dockerfile).toMatch(/^FROM --platform=\$BUILDPLATFORM node:.* AS dependency-manifests$/m);
+  expect(dockerfile).toMatch(/^FROM --platform=\$BUILDPLATFORM node:.* AS operator-npm$/m);
   expect(dockerfile).toMatch(/^FROM --platform=\$BUILDPLATFORM node:.* AS build$/m);
   expect(dockerfile).toMatch(/^FROM busybox:1\.37\.0-uclibc@sha256:.* AS runtime-tools$/m);
   expect(dockerfile).toMatch(/^FROM gcr\.io\/distroless\/nodejs24-debian13:.* AS runtime$/m);
@@ -244,6 +245,7 @@ test('Dockerfile builds shared Nuxt output only once on the native runner', () =
   expect(dockerfile).toContain('ENTRYPOINT ["/nodejs/bin/node"');
   expect(dockerfile).toContain('npm pkg set version=0.0.0-docker-dependencies');
   expect(dockerfile).toContain('COPY --from=dependency-manifests /app/package.json /app/package-lock.json ./');
+  expect(dockerfile).toContain('COPY --from=operator-npm /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm');
   expect(dockerfile).not.toContain('COPY package*.json bun.lock* ./');
 });
 
@@ -376,6 +378,7 @@ test('candidate verification reuses the exact built digest without rebuilding', 
   expect(workflow).toContain('needs: [identity, source-validation, build-app, build-operator, package, image-contracts, security-scan, arm-runtime, lifecycle]');
   expect(workflow).toContain('cache-from: type=registry,ref=ghcr.io/saluana/or3-chat:buildcache-cloud');
   expect(workflow).toContain('cache-to: type=registry,ref=ghcr.io/saluana/or3-chat:buildcache-cloud,mode=max');
+  expect(workflow).toContain('test "$(/usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js --version)" = 11.6.2');
 });
 
 test('clean browser smoke uses the explicit super-admin elevation route', () => {
