@@ -26,6 +26,7 @@ FROM node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba32756
 COPY --from=operator-npm /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
 COPY --from=docker-client /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker-client /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose
+COPY --from=docker-client /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 WORKDIR /operator
 
 # Normalize version-only release metadata in a throwaway stage. The resulting

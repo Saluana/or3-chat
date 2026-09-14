@@ -31,7 +31,7 @@ import { createGunzip } from 'node:zlib';
 const execFile = promisify(execFileCallback);
 const PACKAGE_ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
 
-export const PACKAGE_VERSION = '0.1.61';
+export const PACKAGE_VERSION = '0.1.62';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 const STATE_SCHEMA_VERSION = 1;
@@ -1462,15 +1462,13 @@ async function dockerDaemonArchitecture(): Promise<'arm64' | 'amd64'> {
 
 async function assertSupportedHostArchitecture(image: string) {
   const hostArch = await dockerDaemonArchitecture();
-  // Qualification runs intentionally use a local, not-yet-published candidate
-  // image. Its single-platform Docker image config is the authoritative source
-  // there; normal operator installs still require the registry manifest list.
-  if (process.env.OR3_CLOUD_SKIP_PULL === 'true') {
-    const local = await run('docker', ['image', 'inspect', '--format', '{{.Architecture}}', image]);
-    if (local.ok && local.stdout.trim()) {
-      assertSupportedArchitecture({ architecture: local.stdout.trim() }, hostArch);
-      return;
-    }
+  // pullImage runs before this check. The exact local image configuration is
+  // therefore authoritative for the selected daemon and avoids making a
+  // second client-side registry request from the dashboard operator.
+  const local = await run('docker', ['image', 'inspect', '--format', '{{.Architecture}}', image]);
+  if (local.ok && local.stdout.trim()) {
+    assertSupportedArchitecture({ architecture: local.stdout.trim() }, hostArch);
+    return;
   }
   const result = await run('docker', ['manifest', 'inspect', image]);
   if (!result.ok) {

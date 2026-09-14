@@ -339,7 +339,8 @@ jobs:
             --entrypoint /bin/sh "$OPERATOR@$OPERATOR_DIGEST" -ec '
               install_dir=/tmp/operator-package-probe
               mkdir -m 700 "$install_dir"
-              node -e '\''require("node:fs").writeFileSync(process.argv[1], JSON.stringify({private:true,dependencies:{"@or3/cloud":process.argv[2]}}))'\'' "$install_dir/package.json" "$1"
+              HOME="$install_dir" /usr/local/bin/docker manifest inspect "$1" >/dev/null
+              node -e '\''require("node:fs").writeFileSync(process.argv[1], JSON.stringify({private:true,dependencies:{"@or3/cloud":process.argv[2]}}))'\'' "$install_dir/package.json" "$2"
               cd "$install_dir"
               HOME="$install_dir" NPM_CONFIG_CACHE="$install_dir/npm-cache" NPM_CONFIG_LOGLEVEL=error \
                 NPM_CONFIG_REGISTRY=https://registry.npmjs.org/ NPM_CONFIG_IGNORE_SCRIPTS=true \
@@ -349,7 +350,7 @@ jobs:
                 /usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js install \
                   --save-exact --package-lock=true --ignore-scripts --no-audit --no-fund
               test "$(/usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js --version)" = 11.6.2
-            ' _ "$previous_version"
+            ' _ "$IMAGE@$IMAGE_DIGEST" "$previous_version"
           echo "Manifest and anonymous-pull verification completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
 
   security-scan:

@@ -241,6 +241,7 @@ test('Dockerfile builds shared Nuxt output only once on the native runner', () =
   expect(dockerfile).toContain('COPY --from=runtime-tools /bin/ /bin/');
   expect(dockerfile).toContain('COPY --from=docker-client /usr/local/bin/docker /usr/local/bin/docker');
   expect(dockerfile).toContain('COPY --from=docker-client /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose');
+  expect(dockerfile).toContain('COPY --from=docker-client /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt');
   const appRuntime = dockerfile.slice(dockerfile.indexOf(' AS runtime\n'), dockerfile.length);
   expect(appRuntime).not.toContain('COPY --from=docker-client');
   expect(appRuntime).not.toContain('/usr/local/lib/node_modules/npm');
@@ -374,6 +375,7 @@ test('compose failures capture redacted state before cleanup', () => {
 test('candidate verification reuses the exact built digest without rebuilding', () => {
   const workflow = readFileSync(CANDIDATE_WORKFLOW, 'utf8');
   expect(workflow).toContain('docker pull --platform linux/amd64 "$IMAGE@$IMAGE_DIGEST"');
+  expect(workflow).toContain('/usr/local/bin/docker manifest inspect "$1"');
   expect(workflow).toContain('OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE"');
   expect(workflow.match(/docker\/build-push-action@v6/g)?.length).toBe(2);
   expect(workflow).toContain('digest: ${{ steps.build-app.outputs.digest }}');
