@@ -440,7 +440,9 @@ export class FileTransferQueue {
             }
 
             // Handle abort specially - don't retry aborted transfers
-            if (isAbortError(error)) {
+            // Chromium can surface an aborted fetch as `TypeError: Failed to fetch`
+            // instead of an AbortError. The signal is the authoritative source.
+            if (controller.signal.aborted || isAbortError(error)) {
                 if (this.requeueOnAbort.delete(transfer.id)) {
                     await this.safeUpdateTransfer(transfer.id, {
                         state: 'queued',

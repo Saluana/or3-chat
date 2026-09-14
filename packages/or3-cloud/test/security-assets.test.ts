@@ -73,9 +73,26 @@ test('dashboard updates isolate Docker access to the operator sidecar', () => {
   expect(cli).toContain('await chmod(ipc, 0o710);');
 });
 
+test('dashboard updates hand operator recreation to a separate helper container', () => {
+  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  const operator = readFileSync(DASHBOARD_OPERATOR, 'utf8');
+  expect(cli).toContain("'run', '--detach', '--rm', '--network', 'none', '--read-only'");
+  expect(cli).toContain("'--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL'");
+  expect(cli).toContain("'--complete-handoff', jobId, project");
+  expect(operator).toContain("process.argv[2] === '--complete-handoff'");
+  expect(operator).toContain("['succeeded', 'failed', 'needs_attention'].includes(job.phase)");
+  expect(operator).not.toContain("['rm', '--force', ...containerIds]");
+  expect(operator).toContain("'up', '-d', '--no-deps', '--force-recreate', 'or3-operator'");
+  expect(operator).toContain("'ps', '--status', 'running', '-q', 'or3-operator'");
+});
+
 test('dashboard operator verifies exact release provenance before executing package code', () => {
   const operator = readFileSync(DASHBOARD_OPERATOR, 'utf8');
   expect(operator).toContain("NPM_CONFIG_IGNORE_SCRIPTS: 'true'");
+  expect(operator).toContain("NPM_CONFIG_USERCONFIG: join(installDirectory, 'disabled-user.npmrc')");
+  expect(operator).toContain("NPM_CONFIG_GLOBALCONFIG: join(installDirectory, 'disabled-global.npmrc')");
+  expect(operator).not.toContain("NPM_CONFIG_USERCONFIG: '/dev/null'");
+  expect(operator).not.toContain("NPM_CONFIG_GLOBALCONFIG: '/dev/null'");
   expect(operator).toContain("'audit',\n    'signatures'");
   expect(operator).toContain("expectedWorkflow = '.github/workflows/release-cloud.yml'");
   expect(operator).toContain("expectedRepository = 'https://github.com/Saluana/or3-chat'");
@@ -84,6 +101,8 @@ test('dashboard operator verifies exact release provenance before executing pack
   expect(operator).toContain("manifest?.or3Cloud?.imageDigest");
   expect(operator).toContain("manifest?.or3Cloud?.sourceRevision !== expectedRelease.sourceRevision");
   expect(operator).toContain("OR3_EXPECTED_IMAGE_DIGEST: imageDigest");
+  expect(operator).toContain('The managed updater did not complete successfully: ${processDiagnostic(updated)}');
+  expect(operator).toContain('The exact dashboard updater could not recover the interrupted operation: ${processDiagnostic(recovered)}');
   expect(operator).toContain("maxAttestationBytes = 1024 * 1024");
   expect(operator).toContain("await verify(bundle");
   expect(operator).toContain("npmRequire('sigstore')");
@@ -91,7 +110,7 @@ test('dashboard operator verifies exact release provenance before executing pack
   expect(operator).toContain("const auditPath = join(cloudDirectory, 'dashboard-update-audit.jsonl')");
   expect(operator).toContain("await audit('update_accepted'");
   expect(operator).toContain('void chmod(socketPath, 0o660)');
-  expect(operator).toContain('function recreateOperatorAfterCommit(environment)');
+  expect(operator).toContain('async function completeOperatorHandoff(jobId, project)');
   expect(operator).toContain("'up', '-d', '--no-deps', '--force-recreate', 'or3-operator'");
   expect(operator).not.toContain("'exec',\n    '--yes'");
   expect(operator).not.toContain('shell: true');
@@ -210,6 +229,7 @@ test('dashboard operator binds provenance to the OR3 tagged release workflow', (
 test('Dockerfile builds shared Nuxt output only once on the native runner', () => {
   const dockerfile = readFileSync(DOCKERFILE, 'utf8');
   expect(dockerfile).toMatch(/^FROM --platform=\$BUILDPLATFORM node:.* AS dependency-manifests$/m);
+  expect(dockerfile).toMatch(/^FROM --platform=\$BUILDPLATFORM node:.* AS operator-npm$/m);
   expect(dockerfile).toMatch(/^FROM --platform=\$BUILDPLATFORM node:.* AS build$/m);
   expect(dockerfile).toMatch(/^FROM busybox:1\.37\.0-uclibc@sha256:.* AS runtime-tools$/m);
   expect(dockerfile).toMatch(/^FROM gcr\.io\/distroless\/nodejs24-debian13:.* AS runtime$/m);
@@ -220,12 +240,14 @@ test('Dockerfile builds shared Nuxt output only once on the native runner', () =
   expect(dockerfile).toContain('COPY --from=runtime-tools /bin/ /bin/');
   expect(dockerfile).toContain('COPY --from=docker-client /usr/local/bin/docker /usr/local/bin/docker');
   expect(dockerfile).toContain('COPY --from=docker-client /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose');
+  expect(dockerfile).toContain('COPY --from=docker-client /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt');
   const appRuntime = dockerfile.slice(dockerfile.indexOf(' AS runtime\n'), dockerfile.length);
   expect(appRuntime).not.toContain('COPY --from=docker-client');
   expect(appRuntime).not.toContain('/usr/local/lib/node_modules/npm');
   expect(dockerfile).toContain('ENTRYPOINT ["/nodejs/bin/node"');
   expect(dockerfile).toContain('npm pkg set version=0.0.0-docker-dependencies');
   expect(dockerfile).toContain('COPY --from=dependency-manifests /app/package.json /app/package-lock.json ./');
+  expect(dockerfile).toContain('COPY --from=operator-npm /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm');
   expect(dockerfile).not.toContain('COPY package*.json bun.lock* ./');
 });
 
@@ -352,12 +374,14 @@ test('compose failures capture redacted state before cleanup', () => {
 test('candidate verification reuses the exact built digest without rebuilding', () => {
   const workflow = readFileSync(CANDIDATE_WORKFLOW, 'utf8');
   expect(workflow).toContain('docker pull --platform linux/amd64 "$IMAGE@$IMAGE_DIGEST"');
+  expect(workflow).toContain('/usr/local/bin/docker manifest inspect "$1"');
   expect(workflow).toContain('OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE"');
   expect(workflow.match(/docker\/build-push-action@v6/g)?.length).toBe(2);
   expect(workflow).toContain('digest: ${{ steps.build-app.outputs.digest }}');
   expect(workflow).toContain('needs: [identity, source-validation, build-app, build-operator, package, image-contracts, security-scan, arm-runtime, lifecycle]');
   expect(workflow).toContain('cache-from: type=registry,ref=ghcr.io/saluana/or3-chat:buildcache-cloud');
   expect(workflow).toContain('cache-to: type=registry,ref=ghcr.io/saluana/or3-chat:buildcache-cloud,mode=max');
+  expect(workflow).toContain('test "$(/usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js --version)" = 11.6.2');
 });
 
 test('clean browser smoke uses the explicit super-admin elevation route', () => {

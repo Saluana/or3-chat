@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { request } from 'node:http';
-import { resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const delay = (milliseconds) => new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
@@ -52,12 +52,29 @@ export async function runDashboardUpdateSmoke(socketPath, targetVersion, options
     const timeoutMs = options.timeoutMs ?? 8 * 60 * 1000;
     const pollMs = options.pollMs ?? 2_000;
     const statusErrorTimeoutMs = options.statusErrorTimeoutMs ?? 45_000;
+    const startupTimeoutMs = options.startupTimeoutMs ?? 20_000;
     const statePath = options.statePath;
     const log = options.log ?? ((message) => console.log(message));
     const startedAt = Date.now();
     const elapsed = () => `${((Date.now() - startedAt) / 1000).toFixed(1)}s`;
     log(`[dashboard-smoke +${elapsed()}] checking release metadata for ${targetVersion}`);
-    const checked = await operatorRequest(socketPath, 'POST', '/check');
+    const startupDeadline = Date.now() + startupTimeoutMs;
+    let checked;
+    let startupError;
+    while (Date.now() < startupDeadline) {
+        try {
+            checked = await operatorRequest(socketPath, 'POST', '/check');
+            if (checked.status < 500) break;
+            startupError = new Error(`status ${checked.status}`);
+        } catch (error) {
+            startupError = error;
+        }
+        await delay(pollMs);
+    }
+    if (!checked || checked.status >= 500) {
+        const detail = startupError instanceof Error ? startupError.message : String(startupError || 'unavailable');
+        throw new Error(`Dashboard operator did not become ready for the release check within ${(startupTimeoutMs / 1000).toFixed(0)}s: ${detail}`);
+    }
     if (
         checked.status !== 200
         || checked.body?.latestVersion !== targetVersion
@@ -109,6 +126,7 @@ export async function runDashboardUpdateSmoke(socketPath, targetVersion, options
             lastJobPhase = job.phase;
             log(`[dashboard-smoke +${elapsed()}] operator job phase: ${job.phase}`);
         }
+        let durableJob;
         if (statePath) {
             try {
                 const state = JSON.parse(await readFile(statePath, 'utf8'));
@@ -117,9 +135,17 @@ export async function runDashboardUpdateSmoke(socketPath, targetVersion, options
                     lastOperationPhase = operationPhase;
                     log(`[dashboard-smoke +${elapsed()}] managed lifecycle phase: ${operationPhase}`);
                 }
+                durableJob = JSON.parse(await readFile(join(dirname(statePath), 'dashboard-update.json'), 'utf8'));
             } catch {
                 // The state file is briefly replaced atomically during updates.
             }
+        }
+        if (durableJob?.id === jobId && durableJob.phase === 'succeeded') {
+            log(`[dashboard-smoke +${elapsed()}] durable update job succeeded; operator handoff is verified by the next release check`);
+            return durableJob;
+        }
+        if (durableJob?.id === jobId && ['failed', 'needs_attention'].includes(durableJob.phase)) {
+            throw new Error(`Dashboard update ended in ${durableJob.phase}: ${durableJob.error || 'no diagnostic'}`);
         }
         if (job?.id === jobId && job.phase === 'succeeded') {
             log(`[dashboard-smoke +${elapsed()}] update job succeeded`);

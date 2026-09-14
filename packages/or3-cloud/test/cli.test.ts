@@ -18,6 +18,7 @@ import {
   buildEnv,
   checkResolvedLoopbackBinding,
   copyAssets,
+  dashboardOperatorHandoffArgs,
   isVersion,
   parseEnv,
   parseFlags,
@@ -49,6 +50,30 @@ test('release image labels match the authenticated package source revision', () 
   };
   expect(() => assertImageReleaseLabels('or3', labels, '0.1.39', 'a'.repeat(40))).not.toThrow();
   expect(() => assertImageReleaseLabels('or3', labels, '0.1.39', 'b'.repeat(40))).toThrow('expected source/version release labels');
+});
+
+test('dashboard handoff runs in a separate least-privilege helper container', () => {
+  const directory = '/srv/or3';
+  const jobId = '123e4567-e89b-42d3-a456-426614174000';
+  const args = dashboardOperatorHandoffArgs(directory, {
+    OR3_COMPOSE_PROJECT: 'or3-cloud',
+    OR3_OPERATOR_UID: '1000',
+    OR3_OPERATOR_GID: '1000',
+    OR3_DOCKER_GID: '999',
+    OR3_DOCKER_SOCKET: '/var/run/docker.sock',
+    OR3_OPERATOR_IMAGE: `ghcr.io/saluana/or3-chat@sha256:${'a'.repeat(64)}`,
+  }, jobId);
+  expect(args).toContain('--detach');
+  expect(args).toContain('--rm');
+  expect(args).toContain('none');
+  expect(args).toContain('no-new-privileges:true');
+  expect(args).toContain('ALL');
+  expect(args).toContain('/usr/local/bin/node');
+  expect(args).toContain(join(directory, 'dashboard-operator.mjs'));
+  expect(args.slice(-3)).toEqual(['--complete-handoff', jobId, 'or3-cloud']);
+  expect(() => dashboardOperatorHandoffArgs(directory, {
+    OR3_COMPOSE_PROJECT: 'or3-cloud; docker system prune',
+  }, jobId)).toThrow('invalid dashboard operator handoff');
 });
 
 test('recreates only legacy data volumes when adding deployment identity labels', () => {

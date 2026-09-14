@@ -28,6 +28,7 @@ const maxRegistryBytes = 256 * 1024;
 const maxAttestationBytes = 1024 * 1024;
 const maxProcessOutputBytes = 64 * 1024;
 const maxUpdateDurationMs = 15 * 60 * 1000;
+const operatorHandoffTimeoutMs = 2 * 60 * 1000;
 let updateClaimed = false;
 const checkAttempts = [];
 const startAttempts = [];
@@ -355,8 +356,8 @@ function updaterEnvironment(installDirectory, job, imageDigest) {
     NPM_CONFIG_IGNORE_SCRIPTS: 'true',
     NPM_CONFIG_AUDIT: 'false',
     NPM_CONFIG_FUND: 'false',
-    NPM_CONFIG_USERCONFIG: '/dev/null',
-    NPM_CONFIG_GLOBALCONFIG: '/dev/null',
+    NPM_CONFIG_USERCONFIG: join(installDirectory, 'disabled-user.npmrc'),
+    NPM_CONFIG_GLOBALCONFIG: join(installDirectory, 'disabled-global.npmrc'),
     OR3_DASHBOARD_UPDATE_JOB_ID: job.id,
     ...(imageDigest ? { OR3_EXPECTED_IMAGE_DIGEST: imageDigest } : {}),
   };
@@ -414,6 +415,14 @@ function runProcess(file, args, options) {
       : undefined;
     timer?.unref();
   });
+}
+
+function processDiagnostic(result) {
+  const output = String(result?.output || '')
+    .replaceAll(/(\/\/[^:\s]+:_authToken=)[^\s]+/gi, '$1[redacted]')
+    .replaceAll(/https?:\/\/[^@\s]+@/gi, 'https://[redacted]@')
+    .trim();
+  return output ? output.slice(-2048) : `exit code ${result?.code ?? 'unknown'}`;
 }
 
 export function provenanceStatement(payload, expectedRelease) {
@@ -566,7 +575,9 @@ async function withVerifiedUpdater(expectedRelease, job, action) {
       env: updaterEnvironment(installDirectory, job),
       timeoutMs: 120_000,
     });
-    if (installed.code !== 0) throw new Error('The verified updater package could not be installed.');
+    if (installed.code !== 0) {
+      throw new Error(`The verified updater package could not be installed: ${processDiagnostic(installed)}`);
+    }
     const updater = await verifyInstalledUpdater(installDirectory, expectedRelease, job, provenanceFingerprint);
     return await action(updater, installDirectory);
   } finally {
@@ -586,7 +597,9 @@ async function runUpdate(job) {
       maxOutputBytes: 256 * 1024,
       timeoutMs: maxUpdateDurationMs,
     });
-    if (updated.code !== 0) throw new Error('The managed updater did not complete successfully.');
+    if (updated.code !== 0) {
+      throw new Error(`The managed updater did not complete successfully: ${processDiagnostic(updated)}`);
+    }
   });
 }
 
@@ -599,7 +612,9 @@ async function runRecovery(job) {
       maxOutputBytes: 256 * 1024,
       timeoutMs: maxUpdateDurationMs,
     });
-    if (recovered.code !== 0) throw new Error('The exact dashboard updater could not recover the interrupted operation.');
+    if (recovered.code !== 0) {
+      throw new Error(`The exact dashboard updater could not recover the interrupted operation: ${processDiagnostic(recovered)}`);
+    }
   });
 }
 
@@ -607,35 +622,61 @@ function closeAfter(server, code) {
   setTimeout(() => server.close(() => process.exit(code)), 250).unref();
 }
 
-/**
- * A dashboard-origin update cannot recreate its own container before the CLI
- * has committed terminal state. Once the job is durable, ask Docker to replace
- * only this sidecar from the newly written digest-qualified overlay. The
- * detached Docker client survives the current container's termination.
- */
-function recreateOperatorAfterCommit(environment) {
-  const project = envValue(environment, 'OR3_COMPOSE_PROJECT');
-  if (!project) return;
-  try {
-    const child = spawn('docker', [
-      'compose',
-      '--project-name', project,
-      '--project-directory', deploymentDirectory,
-      '--env-file', join(deploymentDirectory, '.env'),
-      '-f', join(deploymentDirectory, 'compose.yaml'),
-      '-f', join(deploymentDirectory, 'compose.operator.yaml'),
-      'up', '-d', '--no-deps', '--force-recreate', 'or3-operator',
-    ], {
-      cwd: deploymentDirectory,
-      env: process.env,
-      detached: process.platform !== 'win32',
-      stdio: 'ignore',
-    });
-    child.unref();
-  } catch {
-    // The durable terminal job and restart policy still leave a host-CLI
-    // recovery path if Docker cannot schedule the sidecar replacement.
+async function completeOperatorHandoff(jobId, project) {
+  if (!requestIdPattern.test(jobId || '') || !/^[a-z0-9][a-z0-9_-]*$/i.test(project || '')) {
+    throw new Error('The dashboard operator handoff arguments are invalid.');
   }
+  const deadline = Date.now() + operatorHandoffTimeoutMs;
+  while (Date.now() < deadline) {
+    const job = await readJob();
+    let state;
+    try {
+      state = JSON.parse(await readFile(statePath, 'utf8'));
+    } catch {
+      state = undefined;
+    }
+    if (
+      job?.id === jobId
+      && ['succeeded', 'failed', 'needs_attention'].includes(job.phase)
+      && state
+      && !state.incompleteOperation
+    ) {
+      const environment = await deploymentEnv();
+      if (envValue(environment, 'OR3_DASHBOARD_UPDATES_ENABLED') !== 'true') return;
+      let lastOutput = '';
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const compose = [
+          'compose',
+          '--project-name', project,
+          '--project-directory', deploymentDirectory,
+          '--env-file', join(deploymentDirectory, '.env'),
+          '-f', join(deploymentDirectory, 'compose.yaml'),
+          '-f', join(deploymentDirectory, 'compose.operator.yaml'),
+        ];
+        // Compose owns the replacement transaction. Removing the current
+        // operator first creates an avoidable gap and, on some daemons, races
+        // the service's restart policy so that no successor remains.
+        const restarted = await runProcess('docker', [...compose, 'up', '-d', '--no-deps', '--force-recreate', 'or3-operator'], {
+          cwd: deploymentDirectory,
+          env: process.env,
+          timeoutMs: 60_000,
+        });
+        const running = restarted.code === 0
+          ? await runProcess('docker', [...compose, 'ps', '--status', 'running', '-q', 'or3-operator'], {
+              cwd: deploymentDirectory,
+              env: process.env,
+              timeoutMs: 30_000,
+            })
+          : { code: restarted.code, output: '' };
+        lastOutput = `${lastOutput}\n${restarted.output}\n${running.output}`.trim();
+        if (restarted.code === 0 && running.code === 0 && /^[0-9a-f]{12,64}$/i.test(running.output.trim())) return;
+        await delay(2_000);
+      }
+      throw new Error(`The dashboard operator handoff could not start its successor: ${lastOutput}`);
+    }
+    await delay(250);
+  }
+  throw new Error('The dashboard operator handoff did not observe a durable terminal job.');
 }
 
 async function finish(server, job, error) {
@@ -644,21 +685,17 @@ async function finish(server, job, error) {
   if (error) job.error = error instanceof Error ? error.message : 'The update did not complete. OR3 restored the previous verified deployment when possible.';
   await writeJob(job);
   await audit(error ? 'update_failed' : 'update_succeeded', { jobId: job.id, targetVersion: job.targetVersion });
-  // A successful run restarts this narrowly scoped service so it reloads the
-  // just-installed operator program. Failed first-time enablement exits cleanly
-  // because the restored .env no longer declares the profile.
+  // The target CLI schedules a separate helper container before returning.
+  // That helper can survive replacing this container after the terminal job
+  // and lifecycle journal are durable. A process inside this container cannot.
   let enabled = true;
   try {
     const environment = await deploymentEnv();
     enabled = envValue(environment, 'OR3_DASHBOARD_UPDATES_ENABLED') === 'true';
-    if (enabled) recreateOperatorAfterCommit(environment);
   } catch {
-    // Keep the service restart-on-failure behavior when state cannot be read.
+    // Keep serving the durable job when state cannot be read.
   }
-  // A disabled bridge must stay down after a host update/restore. When it is
-  // still enabled, restart the sidecar so Docker recreates it from the just
-  // committed digest-qualified overlay and reloads the operator asset.
-  closeAfter(server, enabled ? 75 : 0);
+  if (!enabled) closeAfter(server, 0);
 }
 
 async function reconcileInterruptedJob() {
@@ -870,5 +907,9 @@ async function main() {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
-  await main();
+  if (process.argv[2] === '--complete-handoff') {
+    await completeOperatorHandoff(process.argv[3], process.argv[4]);
+  } else {
+    await main();
+  }
 }

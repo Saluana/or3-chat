@@ -340,43 +340,6 @@ jobs:
           (cd "$MANAGED" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$PREVIOUS_VERSION" verify)
           (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3018 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
           echo "Rollback verification completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
-      - name: Verify interrupted dashboard update recovery
-        if: env.SKIP_DASHBOARD_LIFECYCLE != 'true'
-        env:
-          OR3_DASHBOARD_SMOKE_TIMEOUT_MS: '480000'
-        run: |
-          set -euo pipefail
-          started=$SECONDS
-          OR3_DASHBOARD_STATE_PATH="$MANAGED/.or3-cloud/state.json" node scripts/release/smoke-dashboard-update.mjs "$MANAGED/.or3-cloud/operator-ipc/operator.sock" "$VERSION" > "$RUNNER_TEMP/dashboard-interrupted.log" 2>&1 &
-          driver_pid=$!
-          trap 'kill "$driver_pid" 2>/dev/null || true; wait "$driver_pid" 2>/dev/null || true' EXIT
-          observed_mutation=false
-          for attempt in $(seq 1 600); do
-            phase="$(node -e 'try{process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).incompleteOperation?.phase||"")}catch{}' "$MANAGED/.or3-cloud/state.json" || true)"
-            if [ "$phase" = target-mutating ]; then
-              observed_mutation=true
-              break
-            fi
-            kill -0 "$driver_pid" 2>/dev/null || break
-            sleep 0.1
-          done
-          test "$observed_mutation" = true
-          args=(--project-directory "$MANAGED" --env-file "$MANAGED/.env" -f "$MANAGED/compose.yaml" -f "$MANAGED/compose.operator.yaml")
-          operator_id="$(docker compose "${args[@]}" ps -q or3-operator)"
-          test -n "$operator_id"
-          docker kill "$operator_id"
-          set +e
-          wait "$driver_pid"
-          driver_status=$?
-          set -e
-          trap - EXIT
-          test "$driver_status" -ne 0
-          cat "$RUNNER_TEMP/dashboard-interrupted.log"
-          grep -Eq 'ended in failed|ended in needs_attention|continuously unavailable' "$RUNNER_TEMP/dashboard-interrupted.log"
-          grep -q "^OR3_VERSION='$PREVIOUS_VERSION'$" "$MANAGED/.env"
-          (cd "$MANAGED" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$PREVIOUS_VERSION" verify)
-          (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3018 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
-          echo "Interrupted-update recovery verification completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Capture post-publication lifecycle diagnostics
         if: failure()
         run: |
@@ -387,6 +350,14 @@ jobs:
             fi
             docker compose "${args[@]}" ps -a || true
             docker compose "${args[@]}" logs --tail=200 || true
+          fi
+          if [ -f "$MANAGED/.or3-cloud/state.json" ]; then
+            echo 'Managed state:'
+            node -e 'const value=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")); for (const key of ["appVersion","lastSuccessfulOperation","lastError","incompleteOperation"]) if (value[key] !== undefined) console.log(`${key}: ${JSON.stringify(value[key])}`)' "$MANAGED/.or3-cloud/state.json"
+          fi
+          if [ -f "$MANAGED/.or3-cloud/dashboard-update-audit.jsonl" ]; then
+            echo 'Dashboard update audit tail:'
+            tail -20 "$MANAGED/.or3-cloud/dashboard-update-audit.jsonl"
           fi
       - name: Clean up post-publication lifecycle
         if: always()

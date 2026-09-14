@@ -12,12 +12,21 @@ FROM busybox:1.37.0-uclibc@sha256:8d7b1636e974e0adfd8d945955fca609304f0a56c18799
 # the web service never contains or mounts either one.
 FROM docker:27.5.1-cli@sha256:851f91d241214e7c6db86513b270d58776379aacc5eb9c4a87e5b47115e3065c AS docker-client
 
+# Keep the operator's package manager on the same tested release-toolchain
+# version instead of inheriting whichever npm happens to ship in a refreshed
+# Node base image. npm is architecture-independent, so prepare it once on the
+# native BuildKit platform and copy it into each operator architecture.
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03 AS operator-npm
+RUN npm install --global npm@11.6.2
+
 # This protocol runtime intentionally contains Node/npm plus the Docker client,
 # but none of the OR3 application output or runtime data. It is published as a
 # separately digest-pinned image and only the narrow operator service uses it.
 FROM node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03 AS dashboard-operator
+COPY --from=operator-npm /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
 COPY --from=docker-client /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker-client /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose
+COPY --from=docker-client /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 WORKDIR /operator
 
 # Normalize version-only release metadata in a throwaway stage. The resulting

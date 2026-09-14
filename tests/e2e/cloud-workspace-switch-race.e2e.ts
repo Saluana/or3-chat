@@ -7,7 +7,13 @@ test.describe('Cloud Workspace Switch Race', () => {
 
         await page.getByTestId('run-switch-race').click();
 
-        await expect(page.getByTestId('phase')).toHaveText('complete', { timeout: 30000 });
+        await expect(page.getByTestId('phase')).toHaveText(/^(complete|failed)$/, { timeout: 30000 });
+        const phase = await page.getByTestId('phase').innerText();
+        if (phase === 'failed') {
+            const details = await page.getByTestId('details').innerText();
+            const log = await page.getByTestId('race-log').innerText();
+            throw new Error(`Workspace race failed: ${details}\n${log}`);
+        }
         await expect(page.getByTestId('scenario-pass')).toHaveText('pass');
         await expect(page.getByTestId('ws-a-threads')).toHaveText('2');
         await expect(page.getByTestId('ws-b-threads')).toHaveText('3');

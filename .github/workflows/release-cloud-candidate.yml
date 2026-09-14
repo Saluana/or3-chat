@@ -309,6 +309,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
       - uses: docker/setup-buildx-action@v3
       - name: Verify exact multi-architecture image digests
         env:
@@ -329,6 +334,23 @@ jobs:
           test "$(awk '$1 == "Digest:" { print $2; exit }' <<<"$operator_inspect")" = "$OPERATOR_DIGEST"
           docker pull --platform linux/amd64 "$IMAGE@$IMAGE_DIGEST"
           docker pull --platform linux/amd64 "$OPERATOR@$OPERATOR_DIGEST"
+          previous_version="$(npm view @or3/cloud version)"
+          docker run --rm --platform linux/amd64 --read-only --tmpfs /tmp:size=128m --user 1001:1001 \
+            --entrypoint /bin/sh "$OPERATOR@$OPERATOR_DIGEST" -ec '
+              install_dir=/tmp/operator-package-probe
+              mkdir -m 700 "$install_dir"
+              HOME="$install_dir" /usr/local/bin/docker manifest inspect "$1" >/dev/null
+              node -e '\''require("node:fs").writeFileSync(process.argv[1], JSON.stringify({private:true,dependencies:{"@or3/cloud":process.argv[2]}}))'\'' "$install_dir/package.json" "$2"
+              cd "$install_dir"
+              HOME="$install_dir" NPM_CONFIG_CACHE="$install_dir/npm-cache" NPM_CONFIG_LOGLEVEL=error \
+                NPM_CONFIG_REGISTRY=https://registry.npmjs.org/ NPM_CONFIG_IGNORE_SCRIPTS=true \
+                NPM_CONFIG_AUDIT=false NPM_CONFIG_FUND=false \
+                NPM_CONFIG_USERCONFIG="$install_dir/disabled-user.npmrc" \
+                NPM_CONFIG_GLOBALCONFIG="$install_dir/disabled-global.npmrc" \
+                /usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js install \
+                  --save-exact --package-lock=true --ignore-scripts --no-audit --no-fund
+              test "$(/usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js --version)" = 11.6.2
+            ' _ "$IMAGE@$IMAGE_DIGEST" "$previous_version"
           echo "Manifest and anonymous-pull verification completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
 
   security-scan:
