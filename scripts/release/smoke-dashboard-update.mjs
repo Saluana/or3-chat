@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { request } from 'node:http';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,8 +49,14 @@ function operatorRequest(socketPath, method, path, body) {
 }
 
 export async function runDashboardUpdateSmoke(socketPath, targetVersion, options = {}) {
-    const timeoutMs = options.timeoutMs ?? 15 * 60 * 1000;
+    const timeoutMs = options.timeoutMs ?? 8 * 60 * 1000;
     const pollMs = options.pollMs ?? 2_000;
+    const statusErrorTimeoutMs = options.statusErrorTimeoutMs ?? 45_000;
+    const statePath = options.statePath;
+    const log = options.log ?? ((message) => console.log(message));
+    const startedAt = Date.now();
+    const elapsed = () => `${((Date.now() - startedAt) / 1000).toFixed(1)}s`;
+    log(`[dashboard-smoke +${elapsed()}] checking release metadata for ${targetVersion}`);
     const checked = await operatorRequest(socketPath, 'POST', '/check');
     if (
         checked.status !== 200
@@ -59,6 +66,7 @@ export async function runDashboardUpdateSmoke(socketPath, targetVersion, options
         throw new Error(`Dashboard operator did not offer ${targetVersion}: ${JSON.stringify(checked)}`);
     }
 
+    log(`[dashboard-smoke +${elapsed()}] release check passed; testing serialized update start`);
     const requests = [randomUUID(), randomUUID()].map((requestId) => ({ requestId, targetVersion }));
     const starts = await Promise.all(requests.map((body) => operatorRequest(socketPath, 'POST', '/start', body)));
     const accepted = starts.filter((result) => result.status === 202);
@@ -71,26 +79,63 @@ export async function runDashboardUpdateSmoke(socketPath, targetVersion, options
         throw new Error('Dashboard operator accepted an unexpected job identity.');
     }
 
+    log(`[dashboard-smoke +${elapsed()}] update job ${jobId} accepted`);
     const deadline = Date.now() + timeoutMs;
     let lastError;
+    let statusErrorStartedAt;
+    let lastJobPhase;
+    let lastOperationPhase;
+    let lastProgressLogAt = 0;
     while (Date.now() < deadline) {
         let status;
         try {
             status = await operatorRequest(socketPath, 'GET', '/status');
             if (status.status !== 200) throw new Error(`status ${status.status}`);
+            if (statusErrorStartedAt) {
+                log(`[dashboard-smoke +${elapsed()}] operator status recovered after ${((Date.now() - statusErrorStartedAt) / 1000).toFixed(1)}s`);
+            }
             lastError = undefined;
+            statusErrorStartedAt = undefined;
         } catch (error) {
             lastError = error;
+            statusErrorStartedAt ??= Date.now();
+            if (Date.now() - statusErrorStartedAt >= statusErrorTimeoutMs) {
+                const detail = error instanceof Error ? error.message : String(error);
+                throw new Error(`Dashboard operator status was continuously unavailable for ${(statusErrorTimeoutMs / 1000).toFixed(0)}s during job ${jobId}: ${detail}`);
+            }
         }
         const job = status?.body?.job;
-        if (job?.id === jobId && job.phase === 'succeeded') return job;
+        if (job?.id === jobId && job.phase !== lastJobPhase) {
+            lastJobPhase = job.phase;
+            log(`[dashboard-smoke +${elapsed()}] operator job phase: ${job.phase}`);
+        }
+        if (statePath) {
+            try {
+                const state = JSON.parse(await readFile(statePath, 'utf8'));
+                const operationPhase = state?.incompleteOperation?.phase ?? 'idle';
+                if (operationPhase !== lastOperationPhase) {
+                    lastOperationPhase = operationPhase;
+                    log(`[dashboard-smoke +${elapsed()}] managed lifecycle phase: ${operationPhase}`);
+                }
+            } catch {
+                // The state file is briefly replaced atomically during updates.
+            }
+        }
+        if (job?.id === jobId && job.phase === 'succeeded') {
+            log(`[dashboard-smoke +${elapsed()}] update job succeeded`);
+            return job;
+        }
         if (job?.id === jobId && ['failed', 'needs_attention'].includes(job.phase)) {
             throw new Error(`Dashboard update ended in ${job.phase}: ${job.error || 'no diagnostic'}`);
+        }
+        if (Date.now() - lastProgressLogAt >= 30_000) {
+            lastProgressLogAt = Date.now();
+            log(`[dashboard-smoke +${elapsed()}] waiting; job=${job?.phase ?? 'unavailable'} lifecycle=${lastOperationPhase ?? 'unknown'}`);
         }
         await delay(pollMs);
     }
     const detail = lastError instanceof Error ? lastError.message : String(lastError || '');
-    throw new Error(`Dashboard update did not succeed before the deadline.${detail ? ` Last status error: ${detail}` : ''}`);
+    throw new Error(`Dashboard update job ${jobId} did not succeed within ${(timeoutMs / 1000).toFixed(0)}s; last job phase=${lastJobPhase ?? 'unavailable'}, lifecycle phase=${lastOperationPhase ?? 'unknown'}.${detail ? ` Last status error: ${detail}` : ''}`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
@@ -98,6 +143,13 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import
     if (!socketPath || !/^\d+\.\d+\.\d+$/.test(targetVersion || '')) {
         throw new Error('Usage: smoke-dashboard-update.mjs <operator-socket> <target-version>');
     }
-    const job = await runDashboardUpdateSmoke(socketPath, targetVersion);
+    const timeoutMs = Number(process.env.OR3_DASHBOARD_SMOKE_TIMEOUT_MS || 8 * 60 * 1000);
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 60_000 || timeoutMs > 15 * 60 * 1000) {
+        throw new Error('OR3_DASHBOARD_SMOKE_TIMEOUT_MS must be between 60000 and 900000.');
+    }
+    const job = await runDashboardUpdateSmoke(socketPath, targetVersion, {
+        timeoutMs,
+        statePath: process.env.OR3_DASHBOARD_STATE_PATH,
+    });
     console.log(`Dashboard update ${job.id} reached ${job.phase}.`);
 }

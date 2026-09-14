@@ -83,8 +83,15 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bunx nuxt prepare
       - run: bun run plugin-runtime:compatibility:check
-      - run: bun run test:plugin-compatibility
-      - run: bunx vitest run scripts/__tests__/plugin-runtime-compatibility-snapshots.test.ts
+      # test:full already owns these Vitest projects when all scheduled suites
+      # run together. Keep them here only for the standalone plugin-runtime
+      # dispatch so `suite: plugin-runtime` remains complete.
+      - name: Run plugin compatibility tests for standalone suite
+        if: github.event_name == 'workflow_dispatch' && inputs.suite == 'plugin-runtime'
+        run: bun run test:plugin-compatibility
+      - name: Run snapshot contract test for standalone suite
+        if: github.event_name == 'workflow_dispatch' && inputs.suite == 'plugin-runtime'
+        run: bunx vitest run scripts/__tests__/plugin-runtime-compatibility-snapshots.test.ts
       - run: bun run plugin-runtime:examples:check
       - run: bun run plugin-runtime:external-v1:check
       - run: bun run build

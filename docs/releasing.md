@@ -17,10 +17,13 @@ republish a version with different contents.
 
 ## CI lanes
 
-Normal pull requests run one fast **PR checks** workflow. It installs once,
-runs the core/docs/release/skills checks, and adds Cloud, plugin-runtime, or
-advisory performance checks only when those surfaces changed. Generic version
-and lockfile edits do not launch unrelated performance or deployment suites.
+Normal pull requests run a required **Core and affected contracts** job. It
+installs once, runs type checking alongside the core tests, and adds Cloud or
+plugin-runtime checks only when those surfaces changed. Full-project lint and
+affected performance measurements run in the separate non-required
+**Advisory lint and affected performance** job, so they remain visible without
+extending the required critical path. Generic version and lockfile edits do
+not launch unrelated performance or deployment suites.
 Configure the `or3-cloud` branch protection rule to require **PR checks / Core
 and affected contracts**; the workflow intentionally runs on every pull
 request so that required status is never left pending by a path filter.
@@ -51,32 +54,39 @@ version.
 
 ## Prepare and qualify before tagging
 
-Use one command from a clean isolated worktree:
+Use this focused source gate from a clean isolated worktree:
 
 ```bash
-bun run release:prepare -- --version <version> --registry --full
+bun run release:prepare -- --version <version> --registry
 ```
 
 This refuses dirty source, inconsistent versions (including lock metadata),
-used Git/npm/GHCR versions, missing providers, package drift, failing tests,
-browser harnesses, type errors, or documentation drift. It writes a small
-machine-readable report to `output/release/preflight.json`.
+used Git/npm/GHCR versions, missing providers, package drift, failing Cloud and
+release contract tests, type errors, or documentation drift. It writes a small
+machine-readable report with per-check timings to
+`output/release/preflight.json`. The candidate Docker build is the
+authoritative production build; this gate does not build a second host copy.
 
-If the populated-workspace ceiling fails, the preflight benchmarks `HEAD^` in
-a clean worktree on the same runner. It proceeds only when the base also misses
-the absolute ceiling and the candidate is within 10% of that same-host base;
-otherwise the performance gate remains failed.
+Use `--full` only for a local deep-validation run. The scheduled **Extended
+validation** workflow owns full tests, browser suites, production asset
+budgets, compatibility checks, and performance baselines outside the Cloud
+release critical path.
 
 Then use GitHub Actions to manually run **Qualify OR3 Cloud Candidate** on the
 exact intended branch/commit and enter the same version. Do not create the tag
-yet. The candidate workflow builds and verifies both multi-architecture images,
-binds their immutable digests into the exact packed CLI, upgrades a deployment
-from the current npm release, runs rollback and a second update, calls the
-dashboard operator over its Unix socket, executes `or3 verify`, checks
-persistence and the clean-browser journey, and records immutable
-source/image/tarball identities in `candidate-receipt.json`. It publishes only
-source-qualified candidate evidence; it cannot publish npm or the public
-version images.
+yet. The workflow rejects used identities first, runs focused source checks,
+then builds both multi-architecture images once. It stores their exact digests
+and the digest-bound tarball, then runs manifest/anonymous-pull checks, security
+scans, ARM runtime checks, and upgrade/rollback/restart/persistence checks as
+independent jobs. The final job records immutable source/image/tarball
+identities in `candidate-receipt.json` only after every required verifier
+passes. It publishes only source-qualified candidate evidence; it cannot
+publish npm or the public version images.
+
+The application build uses a registry-backed BuildKit cache at
+`ghcr.io/saluana/or3-chat:buildcache-cloud`. Only the manually dispatched
+candidate workflow has permission to update it. The cache is not release
+evidence and cannot replace the digest-qualified candidate image.
 
 When the default profile changed, verify the exact build-time provider versions
 in `packages/create-or3-chat/first-party-versions.json` are already available
@@ -112,7 +122,10 @@ The `Release OR3 Cloud` workflow then:
    `ghcr.io/saluana/or3-chat:<version>-operator` without rebuilding;
 4. publishes the exact qualified tarball as `@or3/cloud@<version>` in an
    isolated trusted-publishing job; and
-5. retries exact npm and `npx` verification until registry propagation ends.
+5. retries exact npm and `npx` verification until registry propagation ends;
+   and
+6. runs dashboard update, rollback, interruption, and persistence checks in a
+   clearly labeled post-publication job with per-stage timing.
 
 The workflow's application and operator image digests are deployment identity
 inputs. Copy both into the release notes with the supported profile and any
@@ -120,13 +133,22 @@ migration/rollback warnings.
 
 ## Failure handling
 
-If candidate qualification fails, fix the source and bump the version before
-qualifying again because candidate identities are single-use. Do not tag a
-failed candidate. If promotion succeeds but npm has a transient failure, rerun
+If a candidate verifier fails after the image-build job succeeded, use
+GitHub's **Re-run failed jobs** action. The successful build and package jobs
+are retained, so the failed stage reuses the same immutable digests instead of
+rebuilding. If the source must change, bump the version before qualifying again
+because candidate identities are single-use. Do not tag a failed candidate.
+If promotion succeeds but npm has a transient failure, rerun
 the tag workflow unchanged: it may continue only when both public image digests
 and the npm tarball integrity exactly match the receipt. If npm accepted the
 package but reads return 404/ETARGET, wait for propagation; do not republish,
 change source, or reuse the version.
+
+The public images and npm package are complete when **Publish exact npm package**
+succeeds. A later **Post-publication dashboard lifecycle verification** failure
+means the artifacts were published but deployment verification failed; fix it
+with a new patch release rather than attempting to overwrite the published
+version.
 
 If a release needs a correction after publication, bump the version. The old
 image and package remain available for rollback and support.
@@ -145,13 +167,13 @@ npm deprecate 'create-or3-chat@<0.1.12' 'Use npx @or3/cloud init; the creator is
 
 ## Release checklist
 
-- `bun run release:prepare -- --version <version> --registry --full` passes in a clean worktree.
+- `bun run release:prepare -- --version <version> --registry` passes in a clean worktree.
 - The candidate workflow succeeds before the release tag exists.
 - The tag and candidate receipt contain the same source SHA and version.
 - `npm pack --dry-run` contains only the Cloud CLI and deployment assets.
 - The exact default provider versions exist on npm.
-- The `deployment` suite in **Extended validation** passes before the tag is
-  created.
+- Recent scheduled **Extended validation** results are healthy; use an on-demand
+  suite when a change affects a deep-only surface.
 - Both public GHCR images pull from a clean machine.
 - Basic Auth login, deep health, conversation persistence, and file persistence
   pass after container restart.

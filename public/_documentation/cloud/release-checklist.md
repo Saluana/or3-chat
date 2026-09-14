@@ -9,26 +9,23 @@ against the exact production candidate.
 Run from a clean isolated `or3-chat` worktree with the exact unused version:
 
 ```bash
-bun run release:prepare -- --version <version> --registry --full
+bun run release:prepare -- --version <version> --registry
 ```
 
 The command must complete successfully. It verifies:
 
-- host type-check and unit/integration tests
-- deterministic cloud browser harnesses for auth gating, offline recovery,
-  workspace-switch races, and adapter fault handling
+- host type-check and focused Cloud/release contract tests
 - OR3 Cloud CLI bundle
 - exact published-version availability for the fixed Basic Auth, SQLite, and
   filesystem provider profile (provider source qualification remains in each
   provider repository)
-- fixed-profile SSR production build
-- populated-workspace performance profile
-- SSR production JavaScript and CSS artifact budgets
+- documentation and exact package contents
 
-If the populated-workspace absolute ceiling fails, release preflight compares
-the candidate with `HEAD^` in a clean worktree on that same runner. The gate
-passes only when the base also misses the ceiling and the candidate remains
-within 10% of the same-host base measurement.
+The candidate Docker build is the authoritative fixed-profile production
+build. Full tests, browser suites, compatibility matrices, production asset
+budgets, and broad performance baselines remain strict in the scheduled or
+on-demand **Extended validation** workflow instead of rebuilding the host app
+on the release critical path.
 
 Do not promote a candidate from a dirty worktree. The preflight rejects one,
 including untracked files. Record the clean commit SHA and retain
@@ -104,12 +101,15 @@ promotion.
 
 For the supported Basic Auth + SQLite + filesystem distribution, manually run
 `Qualify OR3 Cloud Candidate` on the intended commit before creating a tag. It
-builds once, scans both architectures, upgrades from the current public release,
-rolls back, upgrades again, verifies persistence, and publishes a receipt bound
-to the source SHA, image digest, and tarball hashes. Only after it succeeds may
-you push `v<version>`. The tag workflow cannot rebuild: it promotes the receipt's
-exact digest and publishes the receipt's exact tarball. A missing or mismatched
-receipt fails closed.
+rejects reused identities before setup, builds once, stores the exact image and
+operator digests, and fans out scanning, ARM, manifest, and lifecycle jobs.
+Upgrade, rollback, restart, and persistence checks consume the digest-bound
+tarball. Only after they all succeed does the workflow publish a receipt bound
+to the source SHA, image digests, and tarball hashes. A failed verification job
+can be retried without rebuilding; a source change still requires a new version.
+Only after qualification succeeds may you push `v<version>`. The tag workflow
+cannot rebuild: it promotes the receipt's exact digest and publishes the
+receipt's exact tarball. A missing or mismatched receipt fails closed.
 
 ## Related
 

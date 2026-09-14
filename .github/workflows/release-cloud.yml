@@ -245,14 +245,32 @@ jobs:
           done
           echo "@or3/cloud@$VERSION was not available after registry propagation retries."
           exit 1
+      - name: Record successful artifact publication
+        env:
+          VERSION: ${{ needs.promote.outputs.version }}
+          IMAGE_DIGEST: ${{ needs.promote.outputs.digest }}
+          OPERATOR_DIGEST: ${{ needs.promote.outputs.operator_digest }}
+        run: |
+          {
+            echo "## OR3 Cloud $VERSION artifacts published"
+            echo
+            echo "- Application image: \`ghcr.io/saluana/or3-chat:$VERSION@$IMAGE_DIGEST\`"
+            echo "- Operator image: \`ghcr.io/saluana/or3-chat:$VERSION-operator@$OPERATOR_DIGEST\`"
+            echo "- Package: \`@or3/cloud@$VERSION\`"
+            echo
+            echo "Post-publication dashboard lifecycle verification runs as a separate job."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   dashboard-lifecycle:
+    name: Post-publication dashboard lifecycle verification
     needs: [promote, publish-npm]
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
     permissions:
       contents: read
       packages: read
+    env:
+      VERSION: ${{ needs.promote.outputs.version }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -260,12 +278,13 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
-      - name: Exercise the published dashboard update and rollback path
-        env:
-          VERSION: ${{ needs.promote.outputs.version }}
+      - name: Set disposable deployment path
+        run: echo "MANAGED=$RUNNER_TEMP/or3-cloud-dashboard-release" >> "$GITHUB_ENV"
+      - name: Record completed publication and resolve upgrade source
         run: |
           set -euo pipefail
-          managed="$RUNNER_TEMP/or3-cloud-dashboard-release"
+          started=$SECONDS
+          test "$(npm view "@or3/cloud@$VERSION" version)" = "$VERSION"
           minimum_source="$(npm view "@or3/cloud@$VERSION" or3Cloud.dashboardUpdateMinimumSourceVersion)"
           candidate_versions="$(npm view @or3/cloud versions --json | MINIMUM_SOURCE="$minimum_source" node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const target=process.env.VERSION,minimum=process.env.MINIMUM_SOURCE;const values=JSON.parse(s);const compare=(a,b)=>{const x=a.split(".").map(Number),y=b.split(".").map(Number);for(let i=0;i<3;i+=1){if(x[i]!==y[i])return x[i]-y[i]}return 0};process.stdout.write((Array.isArray(values)?values:[values]).filter(v=>/^\d+\.\d+\.\d+$/.test(v)&&compare(v,target)<0&&compare(v,minimum)>=0).sort(compare).reverse().join("\n"))})')"
           previous_version=""
@@ -278,53 +297,62 @@ jobs:
           done <<< "$candidate_versions"
           if [ -z "$previous_version" ]; then
             echo "No earlier dashboard-compatible release satisfies minimum source $minimum_source; the candidate bridge probe is the inaugural-release gate."
-            exit 0
+            echo "SKIP_DASHBOARD_LIFECYCLE=true" >> "$GITHUB_ENV"
+          else
+            echo "PREVIOUS_VERSION=$previous_version" >> "$GITHUB_ENV"
           fi
-          compose_args() {
-            local args=(--project-directory "$managed" --env-file "$managed/.env" -f "$managed/compose.yaml")
-            if [ -f "$managed/compose.operator.yaml" ] && grep -q "^OR3_DASHBOARD_UPDATES_ENABLED='true'$" "$managed/.env"; then
-              args+=(-f "$managed/compose.operator.yaml")
-            fi
-            printf '%s\n' "${args[@]}"
-          }
-          cleanup() {
-            if [ -n "${driver_pid:-}" ]; then
-              kill "$driver_pid" 2>/dev/null || true
-              wait "$driver_pid" 2>/dev/null || true
-            fi
-            if [ -f "$managed/.env" ] && [ -f "$managed/compose.yaml" ]; then
-              mapfile -t args < <(compose_args)
-              docker compose "${args[@]}" down --volumes --remove-orphans 2>/dev/null || true
-            fi
-          }
-          diagnostics() {
-            if [ -f "$managed/.env" ] && [ -f "$managed/compose.yaml" ]; then
-              mapfile -t args < <(compose_args)
-              docker compose "${args[@]}" ps -a || true
-              docker compose "${args[@]}" logs --tail=200 || true
-            fi
-          }
-          trap 'status=$?; if [ "$status" -ne 0 ]; then diagnostics; fi; cleanup; exit "$status"' EXIT
-
-          npx --yes "@or3/cloud@$previous_version" init "$managed" --local --port 3018 --admin-email dashboard-smoke@example.com
-          test -S "$managed/.or3-cloud/operator-ipc/operator.sock"
-          test "$(stat -c '%a' "$managed/.or3-cloud/operator-ipc")" = 710
-          test "$(stat -c '%a' "$managed/.or3-cloud/operator-ipc/operator.sock")" = 660
-          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3018 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
-          node scripts/release/smoke-dashboard-update.mjs "$managed/.or3-cloud/operator-ipc/operator.sock" "$VERSION"
-          (cd "$managed" && npx --yes "@or3/cloud@$VERSION" verify)
-          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3018 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
-          grep -q "^OR3_VERSION='$VERSION'$" "$managed/.env"
-
-          (cd "$managed" && npx --yes "@or3/cloud@$VERSION" rollback --yes)
-          (cd "$managed" && npx --yes "@or3/cloud@$previous_version" verify)
-          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3018 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
-
-          node scripts/release/smoke-dashboard-update.mjs "$managed/.or3-cloud/operator-ipc/operator.sock" "$VERSION" > "$RUNNER_TEMP/dashboard-interrupted.log" 2>&1 &
+          echo "Application image, operator image, and @or3/cloud@$VERSION were published before this post-publication gate." | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Publication-state resolution completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Start previous release and create persistence fixture
+        if: env.SKIP_DASHBOARD_LIFECYCLE != 'true'
+        run: |
+          set -euo pipefail
+          started=$SECONDS
+          timeout --signal=TERM 5m npx --yes "@or3/cloud@$PREVIOUS_VERSION" init "$MANAGED" --local --port 3018 --admin-email dashboard-smoke@example.com
+          test -S "$MANAGED/.or3-cloud/operator-ipc/operator.sock"
+          test "$(stat -c '%a' "$MANAGED/.or3-cloud/operator-ipc")" = 710
+          test "$(stat -c '%a' "$MANAGED/.or3-cloud/operator-ipc/operator.sock")" = 660
+          (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3018 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
+          echo "Previous-release startup and fixture creation completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Run published dashboard update with phase diagnostics
+        if: env.SKIP_DASHBOARD_LIFECYCLE != 'true'
+        env:
+          OR3_DASHBOARD_SMOKE_TIMEOUT_MS: '480000'
+        run: |
+          started=$SECONDS
+          OR3_DASHBOARD_STATE_PATH="$MANAGED/.or3-cloud/state.json" node scripts/release/smoke-dashboard-update.mjs "$MANAGED/.or3-cloud/operator-ipc/operator.sock" "$VERSION"
+          echo "Published dashboard update completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Verify updated release and persistence
+        if: env.SKIP_DASHBOARD_LIFECYCLE != 'true'
+        run: |
+          set -euo pipefail
+          started=$SECONDS
+          (cd "$MANAGED" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$VERSION" verify)
+          (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3018 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+          grep -q "^OR3_VERSION='$VERSION'$" "$MANAGED/.env"
+          echo "Updated-release verification completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Roll back and verify previous release
+        if: env.SKIP_DASHBOARD_LIFECYCLE != 'true'
+        run: |
+          set -euo pipefail
+          started=$SECONDS
+          (cd "$MANAGED" && timeout --signal=TERM 6m npx --yes "@or3/cloud@$VERSION" rollback --yes)
+          (cd "$MANAGED" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$PREVIOUS_VERSION" verify)
+          (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3018 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+          echo "Rollback verification completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Verify interrupted dashboard update recovery
+        if: env.SKIP_DASHBOARD_LIFECYCLE != 'true'
+        env:
+          OR3_DASHBOARD_SMOKE_TIMEOUT_MS: '480000'
+        run: |
+          set -euo pipefail
+          started=$SECONDS
+          OR3_DASHBOARD_STATE_PATH="$MANAGED/.or3-cloud/state.json" node scripts/release/smoke-dashboard-update.mjs "$MANAGED/.or3-cloud/operator-ipc/operator.sock" "$VERSION" > "$RUNNER_TEMP/dashboard-interrupted.log" 2>&1 &
           driver_pid=$!
+          trap 'kill "$driver_pid" 2>/dev/null || true; wait "$driver_pid" 2>/dev/null || true' EXIT
           observed_mutation=false
           for attempt in $(seq 1 600); do
-            phase="$(node -e 'try{process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).incompleteOperation?.phase||"")}catch{}' "$managed/.or3-cloud/state.json" || true)"
+            phase="$(node -e 'try{process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).incompleteOperation?.phase||"")}catch{}' "$MANAGED/.or3-cloud/state.json" || true)"
             if [ "$phase" = target-mutating ]; then
               observed_mutation=true
               break
@@ -333,7 +361,7 @@ jobs:
             sleep 0.1
           done
           test "$observed_mutation" = true
-          mapfile -t args < <(compose_args)
+          args=(--project-directory "$MANAGED" --env-file "$MANAGED/.env" -f "$MANAGED/compose.yaml" -f "$MANAGED/compose.operator.yaml")
           operator_id="$(docker compose "${args[@]}" ps -q or3-operator)"
           test -n "$operator_id"
           docker kill "$operator_id"
@@ -341,8 +369,32 @@ jobs:
           wait "$driver_pid"
           driver_status=$?
           set -e
+          trap - EXIT
           test "$driver_status" -ne 0
-          grep -Eq 'ended in failed|ended in needs_attention' "$RUNNER_TEMP/dashboard-interrupted.log"
-          grep -q "^OR3_VERSION='$previous_version'$" "$managed/.env"
-          (cd "$managed" && npx --yes "@or3/cloud@$previous_version" verify)
-          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3018 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+          cat "$RUNNER_TEMP/dashboard-interrupted.log"
+          grep -Eq 'ended in failed|ended in needs_attention|continuously unavailable' "$RUNNER_TEMP/dashboard-interrupted.log"
+          grep -q "^OR3_VERSION='$PREVIOUS_VERSION'$" "$MANAGED/.env"
+          (cd "$MANAGED" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$PREVIOUS_VERSION" verify)
+          (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3018 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+          echo "Interrupted-update recovery verification completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Capture post-publication lifecycle diagnostics
+        if: failure()
+        run: |
+          if [ -f "$MANAGED/.env" ] && [ -f "$MANAGED/compose.yaml" ]; then
+            args=(--project-directory "$MANAGED" --env-file "$MANAGED/.env" -f "$MANAGED/compose.yaml")
+            if [ -f "$MANAGED/compose.operator.yaml" ] && grep -q "^OR3_DASHBOARD_UPDATES_ENABLED='true'$" "$MANAGED/.env"; then
+              args+=(-f "$MANAGED/compose.operator.yaml")
+            fi
+            docker compose "${args[@]}" ps -a || true
+            docker compose "${args[@]}" logs --tail=200 || true
+          fi
+      - name: Clean up post-publication lifecycle
+        if: always()
+        run: |
+          if [ -f "$MANAGED/.env" ] && [ -f "$MANAGED/compose.yaml" ]; then
+            args=(--project-directory "$MANAGED" --env-file "$MANAGED/.env" -f "$MANAGED/compose.yaml")
+            if [ -f "$MANAGED/compose.operator.yaml" ] && grep -q "^OR3_DASHBOARD_UPDATES_ENABLED='true'$" "$MANAGED/.env"; then
+              args+=(-f "$MANAGED/compose.operator.yaml")
+            fi
+            docker compose "${args[@]}" down --volumes --remove-orphans 2>/dev/null || true
+          fi

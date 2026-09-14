@@ -20,10 +20,54 @@ COPY --from=docker-client /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker-client /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose
 WORKDIR /operator
 
+# Normalize version-only release metadata in a throwaway stage. The resulting
+# install manifests remain byte-identical when dependencies do not change, so
+# BuildKit can reuse npm ci across Cloud patch releases while the application
+# build below still receives the real release version from COPY . . .
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03 AS dependency-manifests
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY packages/create-or3-chat/first-party-versions.json ./packages/create-or3-chat/first-party-versions.json
+COPY scripts/docker/prepare-manifest.mjs ./scripts/docker/prepare-manifest.mjs
+COPY scripts/release/check-lock-drift.mjs ./scripts/release/check-lock-drift.mjs
+RUN node scripts/docker/prepare-manifest.mjs package.json && \
+    node scripts/release/check-lock-drift.mjs && \
+    npm pkg set version=0.0.0-docker-dependencies && \
+    node -e 'const fs=require("node:fs");const p="package-lock.json";const lock=JSON.parse(fs.readFileSync(p,"utf8"));lock.version="0.0.0-docker-dependencies";lock.packages[""].version=lock.version;fs.writeFileSync(p,JSON.stringify(lock,null,2)+"\n")'
+
 # The Nuxt output is architecture-neutral and better-sqlite3 ships both Linux
 # runtime bindings in its package. Build it once on the native CI platform;
 # only the runtime and static operator tools vary across output architectures.
 FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03 AS build
+WORKDIR /app
+ENV NODE_ENV=development \
+    NODE_OPTIONS=--max-old-space-size=4096 \
+    NPM_CONFIG_FETCH_RETRIES=5 \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000 \
+    NPM_CONFIG_FETCH_TIMEOUT=600000
+
+RUN npm install --global npm@11.6.2
+COPY --from=dependency-manifests /app/package.json /app/package-lock.json ./
+COPY packages/plugin-sdk ./packages/plugin-sdk
+COPY scripts/docker/preflight-registry.mjs ./scripts/docker/preflight-registry.mjs
+# The committed package-lock.json is the FIXED-PROFILE lock: it is generated
+# from the pruned manifest (pinned first-party versions, inactive provider
+# stacks removed) and intentionally differs from the contributor manifest,
+# which still lists every provider. The build never re-resolves the tree; the
+# drift check fails qualification if the committed lock no longer matches the
+# pruned manifest, then npm ci installs from that exact lock. Lifecycle scripts
+# are unnecessary here: Nuxt is prepared by the explicit build and the pinned
+# better-sqlite3 package already contains both Linux bindings. The cache mount
+# survives failed builds and retries.
+RUN --mount=type=cache,target=/root/.npm \
+    node scripts/docker/preflight-registry.mjs && \
+    npm ci --ignore-scripts --no-audit --no-fund
+
+COPY . .
+# Restore the real release version while retaining the fixed production
+# provider graph used for dependency installation.
+RUN node scripts/docker/prepare-manifest.mjs package.json
 
 ARG SSR_AUTH_ENABLED=false
 ARG AUTH_PROVIDER=clerk
@@ -44,44 +88,6 @@ ENV SSR_AUTH_ENABLED=$SSR_AUTH_ENABLED \
     OR3_SYNC_PROVIDER=$OR3_SYNC_PROVIDER \
     OR3_STORAGE_ENABLED=$OR3_STORAGE_ENABLED \
     NUXT_PUBLIC_STORAGE_PROVIDER=$NUXT_PUBLIC_STORAGE_PROVIDER
-
-WORKDIR /app
-ENV NODE_ENV=development \
-    NODE_OPTIONS=--max-old-space-size=4096 \
-    NPM_CONFIG_FETCH_RETRIES=5 \
-    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
-    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000 \
-    NPM_CONFIG_FETCH_TIMEOUT=600000
-
-RUN npm install --global npm@11.6.2
-COPY package*.json bun.lock* ./
-COPY packages/plugin-sdk ./packages/plugin-sdk
-COPY packages/create-or3-chat/first-party-versions.json ./packages/create-or3-chat/first-party-versions.json
-COPY scripts/docker/prepare-manifest.mjs ./scripts/docker/prepare-manifest.mjs
-COPY scripts/docker/preflight-registry.mjs ./scripts/docker/preflight-registry.mjs
-COPY scripts/release/check-lock-drift.mjs ./scripts/release/check-lock-drift.mjs
-RUN node scripts/docker/prepare-manifest.mjs package.json
-# The committed package-lock.json is the FIXED-PROFILE lock: it is generated
-# from the pruned manifest (pinned first-party versions, inactive provider
-# stacks removed) and intentionally differs from the contributor manifest,
-# which still lists every provider. The build never re-resolves the tree; the
-# drift check fails qualification if the committed lock no longer matches the
-# pruned manifest, then npm ci installs from that exact lock. Lifecycle scripts
-# are unnecessary here: Nuxt is prepared by the explicit build and the pinned
-# better-sqlite3 package already contains both Linux bindings. The cache mount
-# survives failed builds and retries.
-RUN --mount=type=cache,target=/root/.npm \
-    node scripts/docker/preflight-registry.mjs && \
-    node scripts/release/check-lock-drift.mjs && \
-    npm ci --ignore-scripts --no-audit --no-fund && \
-    cp package.json /tmp/or3-registry-package.json && \
-    cp package-lock.json /tmp/or3-registry-package-lock.json
-
-COPY . .
-# COPY . . includes the contributor manifest with local provider links. Keep
-# the registry-clean manifest/lock that was used to install node_modules.
-RUN cp /tmp/or3-registry-package.json package.json && \
-    cp /tmp/or3-registry-package-lock.json package-lock.json
 # Cloud providers are initialized while Nitro prerenders routes. Supply only
 # disposable build-time values here: real credentials and paths remain runtime
 # environment values from Compose and are never copied into the image.

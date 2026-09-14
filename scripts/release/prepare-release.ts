@@ -46,9 +46,15 @@ async function command(command: string, commandArgs: string[], options: { quiet?
 
 async function requireCommand(label: string, executable: string, commandArgs: string[], env?: Record<string, string>) {
     console.log(`\n[release:prepare] ${label}`);
+    const startedAt = Date.now();
     const result = await command(executable, commandArgs, { env });
+    const elapsedMs = Date.now() - startedAt;
+    timings[label] = elapsedMs;
+    console.log(`[release:prepare] ${label} completed in ${(elapsedMs / 1000).toFixed(1)}s`);
     if (result.exitCode !== 0) throw new Error(`${label} failed with exit ${result.exitCode}.`);
 }
+
+const timings: Record<string, number> = {};
 
 const rootPackage = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8')) as { version: string };
 const cloudPackage = JSON.parse(await readFile(resolve(root, 'packages/or3-cloud/package.json'), 'utf8')) as { version: string };
@@ -143,6 +149,7 @@ const report = {
     fixedProfile: 'basic-auth+sqlite+fs',
     registryChecked: registry,
     fullChecks: full,
+    timingsMs: timings,
     completedAt: new Date().toISOString(),
 };
 await writeFile(resolve(reportDirectory, 'preflight.json'), `${JSON.stringify(report, null, 2)}\n`, 'utf8');
