@@ -218,6 +218,9 @@ jobs:
             "import basicAuth from 'or3-provider-basic-auth/nuxt'" \
             "import sqlite from 'or3-provider-sqlite/nuxt'" \
             "import fs from 'or3-provider-fs/nuxt'" > "$managed/or3.providers.generated.ts"
+          # A real V1 source retains bootstrap credentials in .env. Managed V2
+          # moves them to the owner-only handoff file after provisioning.
+          grep '^OR3_BASIC_AUTH_BOOTSTRAP_' "$managed/.or3-initial-credentials" >> "$managed/.env"
           adopted="$RUNNER_TEMP/or3-cloud-adopted"
           OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true \
             node packages/or3-cloud/dist/cli.mjs adopt --from "$managed" "$adopted"
