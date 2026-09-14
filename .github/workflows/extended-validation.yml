@@ -268,7 +268,9 @@ jobs:
           OR3_FORCE_HTTPS=true
           OR3_TRUST_PROXY=true
           EOF
-          chmod 600 "$smoke/.env"
+          grep -E '^OR3_(BASIC_AUTH_BOOTSTRAP_(EMAIL|PASSWORD)|ADMIN_(USERNAME|PASSWORD))=' \
+            "$smoke/.env" > "$smoke/.or3-initial-credentials"
+          chmod 600 "$smoke/.env" "$smoke/.or3-initial-credentials"
           docker compose --project-directory "$smoke" --env-file "$smoke/.env" -f "$smoke/compose.yaml" -f "$smoke/compose.public.yaml" up -d --wait --wait-timeout 180
           for attempt in $(seq 1 30); do
             curl --insecure --fail --silent "https://localhost/api/health?deep=true" && break

@@ -31,7 +31,7 @@ import { createGunzip } from 'node:zlib';
 const execFile = promisify(execFileCallback);
 const PACKAGE_ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
 
-export const PACKAGE_VERSION = '0.1.52';
+export const PACKAGE_VERSION = '0.1.53';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 const STATE_SCHEMA_VERSION = 1;
