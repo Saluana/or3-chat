@@ -356,8 +356,8 @@ function updaterEnvironment(installDirectory, job, imageDigest) {
     NPM_CONFIG_IGNORE_SCRIPTS: 'true',
     NPM_CONFIG_AUDIT: 'false',
     NPM_CONFIG_FUND: 'false',
-    NPM_CONFIG_USERCONFIG: '/dev/null',
-    NPM_CONFIG_GLOBALCONFIG: '/dev/null',
+    NPM_CONFIG_USERCONFIG: join(installDirectory, 'disabled-user.npmrc'),
+    NPM_CONFIG_GLOBALCONFIG: join(installDirectory, 'disabled-global.npmrc'),
     OR3_DASHBOARD_UPDATE_JOB_ID: job.id,
     ...(imageDigest ? { OR3_EXPECTED_IMAGE_DIGEST: imageDigest } : {}),
   };

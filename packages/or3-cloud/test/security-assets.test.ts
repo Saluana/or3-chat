@@ -89,6 +89,10 @@ test('dashboard updates hand operator recreation to a separate helper container'
 test('dashboard operator verifies exact release provenance before executing package code', () => {
   const operator = readFileSync(DASHBOARD_OPERATOR, 'utf8');
   expect(operator).toContain("NPM_CONFIG_IGNORE_SCRIPTS: 'true'");
+  expect(operator).toContain("NPM_CONFIG_USERCONFIG: join(installDirectory, 'disabled-user.npmrc')");
+  expect(operator).toContain("NPM_CONFIG_GLOBALCONFIG: join(installDirectory, 'disabled-global.npmrc')");
+  expect(operator).not.toContain("NPM_CONFIG_USERCONFIG: '/dev/null'");
+  expect(operator).not.toContain("NPM_CONFIG_GLOBALCONFIG: '/dev/null'");
   expect(operator).toContain("'audit',\n    'signatures'");
   expect(operator).toContain("expectedWorkflow = '.github/workflows/release-cloud.yml'");
   expect(operator).toContain("expectedRepository = 'https://github.com/Saluana/or3-chat'");
