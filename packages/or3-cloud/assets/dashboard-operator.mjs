@@ -643,36 +643,8 @@ async function completeOperatorHandoff(jobId, project) {
     ) {
       const environment = await deploymentEnv();
       if (envValue(environment, 'OR3_DASHBOARD_UPDATES_ENABLED') !== 'true') return;
-      const serviceFilters = [
-        '--filter', `label=com.docker.compose.project=${project}`,
-        '--filter', 'label=com.docker.compose.service=or3-operator',
-      ];
       let lastOutput = '';
       for (let attempt = 0; attempt < 6; attempt += 1) {
-        // Old protocol-v1 operators may start their own Compose replacement
-        // after writing the terminal job. Removing every container for this
-        // one stateless service also kills that in-container Compose child and
-        // clears any half-created successor without touching the application.
-        for (let sweep = 0; sweep < 2; sweep += 1) {
-          const listed = await runProcess('docker', ['ps', '-aq', ...serviceFilters], {
-            cwd: deploymentDirectory,
-            env: process.env,
-            timeoutMs: 30_000,
-          });
-          lastOutput = listed.output;
-          const containerIds = listed.code === 0
-            ? listed.output.split(/\s+/).filter((value) => /^[0-9a-f]{12,64}$/i.test(value))
-            : [];
-          if (containerIds.length > 0) {
-            const removed = await runProcess('docker', ['rm', '--force', ...containerIds], {
-              cwd: deploymentDirectory,
-              env: process.env,
-              timeoutMs: 30_000,
-            });
-            lastOutput = `${lastOutput}\n${removed.output}`.trim();
-          }
-          await delay(750);
-        }
         const compose = [
           'compose',
           '--project-name', project,
@@ -681,7 +653,10 @@ async function completeOperatorHandoff(jobId, project) {
           '-f', join(deploymentDirectory, 'compose.yaml'),
           '-f', join(deploymentDirectory, 'compose.operator.yaml'),
         ];
-        const restarted = await runProcess('docker', [...compose, 'up', '-d', '--no-deps', 'or3-operator'], {
+        // Compose owns the replacement transaction. Removing the current
+        // operator first creates an avoidable gap and, on some daemons, races
+        // the service's restart policy so that no successor remains.
+        const restarted = await runProcess('docker', [...compose, 'up', '-d', '--no-deps', '--force-recreate', 'or3-operator'], {
           cwd: deploymentDirectory,
           env: process.env,
           timeoutMs: 60_000,

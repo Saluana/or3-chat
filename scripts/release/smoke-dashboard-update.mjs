@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { request } from 'node:http';
-import { resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const delay = (milliseconds) => new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
@@ -109,6 +109,7 @@ export async function runDashboardUpdateSmoke(socketPath, targetVersion, options
             lastJobPhase = job.phase;
             log(`[dashboard-smoke +${elapsed()}] operator job phase: ${job.phase}`);
         }
+        let durableJob;
         if (statePath) {
             try {
                 const state = JSON.parse(await readFile(statePath, 'utf8'));
@@ -117,9 +118,17 @@ export async function runDashboardUpdateSmoke(socketPath, targetVersion, options
                     lastOperationPhase = operationPhase;
                     log(`[dashboard-smoke +${elapsed()}] managed lifecycle phase: ${operationPhase}`);
                 }
+                durableJob = JSON.parse(await readFile(join(dirname(statePath), 'dashboard-update.json'), 'utf8'));
             } catch {
                 // The state file is briefly replaced atomically during updates.
             }
+        }
+        if (durableJob?.id === jobId && durableJob.phase === 'succeeded') {
+            log(`[dashboard-smoke +${elapsed()}] durable update job succeeded; operator handoff is verified by the next release check`);
+            return durableJob;
+        }
+        if (durableJob?.id === jobId && ['failed', 'needs_attention'].includes(durableJob.phase)) {
+            throw new Error(`Dashboard update ended in ${durableJob.phase}: ${durableJob.error || 'no diagnostic'}`);
         }
         if (job?.id === jobId && job.phase === 'succeeded') {
             log(`[dashboard-smoke +${elapsed()}] update job succeeded`);

@@ -81,9 +81,8 @@ test('dashboard updates hand operator recreation to a separate helper container'
   expect(cli).toContain("'--complete-handoff', jobId, project");
   expect(operator).toContain("process.argv[2] === '--complete-handoff'");
   expect(operator).toContain("['succeeded', 'failed', 'needs_attention'].includes(job.phase)");
-  expect(operator).toContain("'label=com.docker.compose.service=or3-operator'");
-  expect(operator).toContain("['rm', '--force', ...containerIds]");
-  expect(operator).toContain("'up', '-d', '--no-deps', 'or3-operator'");
+  expect(operator).not.toContain("['rm', '--force', ...containerIds]");
+  expect(operator).toContain("'up', '-d', '--no-deps', '--force-recreate', 'or3-operator'");
   expect(operator).toContain("'ps', '--status', 'running', '-q', 'or3-operator'");
 });
 
@@ -112,7 +111,7 @@ test('dashboard operator verifies exact release provenance before executing pack
   expect(operator).toContain("await audit('update_accepted'");
   expect(operator).toContain('void chmod(socketPath, 0o660)');
   expect(operator).toContain('async function completeOperatorHandoff(jobId, project)');
-  expect(operator).toContain("'up', '-d', '--no-deps', 'or3-operator'");
+  expect(operator).toContain("'up', '-d', '--no-deps', '--force-recreate', 'or3-operator'");
   expect(operator).not.toContain("'exec',\n    '--yes'");
   expect(operator).not.toContain('shell: true');
 });
