@@ -7,6 +7,7 @@ import { consumeRateLimit, provenanceStatement, validDashboardUpdateJob, validRe
 const ASSET_ROOT = resolve(import.meta.dir, '../assets');
 const RUNTIME_ENTRYPOINT = resolve(import.meta.dir, '../../../scripts/docker/runtime-entrypoint.mjs');
 const DOCKERFILE = resolve(import.meta.dir, '../../../Dockerfile');
+const DOCKERIGNORE = resolve(import.meta.dir, '../../../.dockerignore');
 const CLOUD_CLI_SOURCE = resolve(import.meta.dir, '../src/cli.ts');
 const DASHBOARD_OPERATOR = resolve(ASSET_ROOT, 'dashboard-operator.mjs');
 const RELEASE_WORKFLOW = resolve(import.meta.dir, '../../../.github/workflows/release-cloud.yml');
@@ -208,12 +209,13 @@ test('dashboard operator binds provenance to the OR3 tagged release workflow', (
 
 test('Dockerfile builds shared Nuxt output only once on the native runner', () => {
   const dockerfile = readFileSync(DOCKERFILE, 'utf8');
+  expect(dockerfile).toMatch(/^FROM --platform=\$BUILDPLATFORM node:.* AS dependency-manifests$/m);
   expect(dockerfile).toMatch(/^FROM --platform=\$BUILDPLATFORM node:.* AS build$/m);
   expect(dockerfile).toMatch(/^FROM busybox:1\.37\.0-uclibc@sha256:.* AS runtime-tools$/m);
   expect(dockerfile).toMatch(/^FROM gcr\.io\/distroless\/nodejs24-debian13:.* AS runtime$/m);
   expect(dockerfile).toMatch(/^FROM docker:27\.5\.1-cli@sha256:.* AS docker-client$/m);
   expect(dockerfile).toMatch(/^FROM node:24-bookworm-slim@sha256:.* AS dashboard-operator$/m);
-  const toolsStage = dockerfile.slice(dockerfile.indexOf('FROM busybox:'), dockerfile.indexOf(' AS build'));
+  const toolsStage = dockerfile.slice(dockerfile.indexOf('FROM busybox:'), dockerfile.indexOf('FROM docker:'));
   expect(toolsStage).not.toContain('\nRUN ');
   expect(dockerfile).toContain('COPY --from=runtime-tools /bin/ /bin/');
   expect(dockerfile).toContain('COPY --from=docker-client /usr/local/bin/docker /usr/local/bin/docker');
@@ -222,6 +224,16 @@ test('Dockerfile builds shared Nuxt output only once on the native runner', () =
   expect(appRuntime).not.toContain('COPY --from=docker-client');
   expect(appRuntime).not.toContain('/usr/local/lib/node_modules/npm');
   expect(dockerfile).toContain('ENTRYPOINT ["/nodejs/bin/node"');
+  expect(dockerfile).toContain('npm pkg set version=0.0.0-docker-dependencies');
+  expect(dockerfile).toContain('COPY --from=dependency-manifests /app/package.json /app/package-lock.json ./');
+  expect(dockerfile).not.toContain('COPY package*.json bun.lock* ./');
+});
+
+test('Docker build context excludes generated CI and release evidence', () => {
+  const ignored = readFileSync(DOCKERIGNORE, 'utf8').split(/\r?\n/);
+  for (const path of ['output/', 'test-results/', 'playwright-report/', 'release-artifact/']) {
+    expect(ignored).toContain(path);
+  }
 });
 
 test('fixed-profile image declares the extension archive runtime', () => {
@@ -337,21 +349,15 @@ test('compose failures capture redacted state before cleanup', () => {
   expect(cli.match(/Captured Docker diagnostics:/g)?.length).toBe(2);
 });
 
-test('release smoke re-resolves amd64 after architecture-specific scans', () => {
+test('candidate verification reuses the exact built digest without rebuilding', () => {
   const workflow = readFileSync(CANDIDATE_WORKFLOW, 'utf8');
-  const smoke = workflow.slice(
-    workflow.indexOf('- name: Exercise upgrade, rollback, persistence, and production verification'),
-    workflow.indexOf('- uses: docker/setup-qemu-action@v3'),
-  );
-  const pull = smoke.indexOf('docker pull --platform linux/amd64 "$OR3_IMAGE"');
-  const init = smoke.indexOf('init "$managed"');
-  // The anonymous amd64 pull is an earlier candidate gate and the lifecycle
-  // must consume the same candidate identity rather than build another image.
-  expect(workflow).toContain('docker pull --platform linux/amd64 "$OR3_IMAGE"');
+  expect(workflow).toContain('docker pull --platform linux/amd64 "$IMAGE@$IMAGE_DIGEST"');
   expect(workflow).toContain('OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE"');
   expect(workflow.match(/docker\/build-push-action@v6/g)?.length).toBe(2);
-  expect(init).toBeGreaterThan(-1);
-  expect(pull).toBe(-1);
+  expect(workflow).toContain('digest: ${{ steps.build-app.outputs.digest }}');
+  expect(workflow).toContain('needs: [identity, source-validation, build-app, build-operator, package, image-contracts, security-scan, arm-runtime, lifecycle]');
+  expect(workflow).toContain('cache-from: type=registry,ref=ghcr.io/saluana/or3-chat:buildcache-cloud');
+  expect(workflow).toContain('cache-to: type=registry,ref=ghcr.io/saluana/or3-chat:buildcache-cloud,mode=max');
 });
 
 test('clean browser smoke uses the explicit super-admin elevation route', () => {
@@ -383,7 +389,7 @@ test('release digest verification uses buildx-compatible manifest output', () =>
   expect(workflow).not.toContain('docker/build-push-action');
   expect(workflow).toContain('dashboard-lifecycle:');
   expect(workflow).toContain('smoke-dashboard-update.mjs');
-  expect(workflow).toContain('npx --yes "@or3/cloud@$previous_version" verify');
+  expect(workflow).toContain('npx --yes "@or3/cloud@$PREVIOUS_VERSION" verify');
   expect(workflow).toContain('No earlier dashboard-compatible release satisfies minimum source');
 });
 
@@ -409,11 +415,13 @@ test('npm publication identifies the qualified tarball as a local file', () => {
 
 test('candidate evidence is source-qualified and cannot publish a release', () => {
   const candidate = readFileSync(CANDIDATE_WORKFLOW, 'utf8');
-  expect(candidate).toContain('candidate-$VERSION-$SOURCE_SHA');
-  expect(candidate).toContain('candidate-operator-$VERSION-$SOURCE_SHA');
-  expect(candidate).toContain('candidate-evidence-$VERSION-$SOURCE_SHA');
-  expect(candidate).toContain('sha=$(git rev-parse HEAD)');
-  expect(candidate).toContain('bun run release:prepare -- --version "$VERSION" --registry --full');
+  expect(candidate).toContain('candidate-$VERSION-$source_sha');
+  expect(candidate).toContain('candidate-operator-$VERSION-$source_sha');
+  expect(candidate).toContain('candidate-evidence-$VERSION-$source_sha');
+  expect(candidate).toContain('source_sha="$(git rev-parse HEAD)"');
+  expect(candidate).toContain('bun run release:prepare -- --version "$VERSION" --registry');
+  expect(candidate).not.toContain('bun run release:prepare -- --version "$VERSION" --registry --full');
+  expect(candidate.indexOf('assert_image_missing "$candidate"')).toBeLessThan(candidate.indexOf('bun install --frozen-lockfile'));
   expect(candidate).toContain('or3 verify');
   expect(candidate).not.toContain('npm publish');
   expect(candidate).not.toContain('contents: write');
@@ -449,12 +457,12 @@ test('candidate qualification runs against the final digest-bound manifest', () 
   expect(candidate).toContain("tar -tzf \"$tarball\" | grep -x 'package/LICENSE' >/dev/null");
 });
 
-test('candidate qualification installs Chromium before the full preflight', () => {
+test('candidate qualification leaves deep browser and host builds off the critical path', () => {
   const candidate = readFileSync(CANDIDATE_WORKFLOW, 'utf8');
-  const browserInstall = candidate.indexOf('bunx playwright install --with-deps chromium');
-  const preflight = candidate.indexOf('bun run release:prepare -- --version "$VERSION" --registry --full');
-  expect(browserInstall).toBeGreaterThan(-1);
-  expect(preflight).toBeGreaterThan(browserInstall);
+  expect(candidate).not.toContain('bunx playwright install --with-deps chromium');
+  expect(candidate).not.toContain('bun run build');
+  expect(candidate).not.toContain('performance:production-build:check');
+  expect(candidate).toContain('Build and push the application image once');
 });
 
 test('release storage smokes persist canonical metadata before download', () => {

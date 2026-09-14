@@ -6,6 +6,10 @@
 .wizard
 coverage
 dist
+output/
+test-results/
+playwright-report/
+release-artifact/
 node_modules
 packages/create-or3-chat/dist
 tests

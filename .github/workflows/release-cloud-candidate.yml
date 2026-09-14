@@ -19,19 +19,114 @@ permissions:
   contents: read
 
 jobs:
-  qualify:
+  identity:
+    name: Validate immutable release identity
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 5
     permissions:
       contents: read
-      packages: write
+      packages: read
+    outputs:
+      version: ${{ steps.identity.outputs.version }}
+      source_sha: ${{ steps.identity.outputs.source_sha }}
+      image: ${{ steps.identity.outputs.image }}
+      operator: ${{ steps.identity.outputs.operator }}
+      evidence: ${{ steps.identity.outputs.evidence }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Resolve checked-out source commit
-        id: source
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Reject used versions and candidate identities before setup or build
+        id: identity
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          started=$SECONDS
+          source_sha="$(git rev-parse HEAD)"
+          root_version="$(node -p 'require("./package.json").version')"
+          lock_version="$(node -p 'require("./package-lock.json").version')"
+          lock_root_version="$(node -p 'require("./package-lock.json").packages[""].version')"
+          cloud_version="$(node -p 'require("./packages/or3-cloud/package.json").version')"
+          cli_version="$(sed -n "s/^export const PACKAGE_VERSION = '\([^']*\)';/\1/p" packages/or3-cloud/src/cli.ts)"
+          test "$VERSION" = "$root_version"
+          test "$VERSION" = "$lock_version"
+          test "$VERSION" = "$lock_root_version"
+          test "$VERSION" = "$cloud_version"
+          test "$VERSION" = "$cli_version"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+
+          if git show-ref --verify --quiet "refs/tags/v$VERSION"; then
+            echo "Git tag v$VERSION already exists locally." >&2
+            exit 1
+          fi
+          test -z "$(git ls-remote --tags origin "refs/tags/v$VERSION")" || {
+            echo "Git tag v$VERSION already exists on origin." >&2
+            exit 1
+          }
+
+          assert_npm_missing() {
+            local output status=0
+            output="$(npm view "@or3/cloud@$VERSION" version 2>&1)" || status=$?
+            if [ "$status" -eq 0 ]; then
+              echo "@or3/cloud@$VERSION already exists; versions are immutable." >&2
+              exit 1
+            fi
+            grep -Eqi 'E404|404 Not Found|not found' <<<"$output" || {
+              echo "$output" >&2
+              exit "$status"
+            }
+          }
+
+          assert_image_missing() {
+            local image="$1" output status=0
+            output="$(docker manifest inspect "$image" 2>&1)" || status=$?
+            if [ "$status" -eq 0 ]; then
+              echo "$image already exists; candidate and release identities are immutable." >&2
+              exit 1
+            fi
+            grep -Eqi 'manifest unknown|name unknown|no such manifest|not found' <<<"$output" || {
+              echo "$output" >&2
+              exit "$status"
+            }
+          }
+
+          candidate="ghcr.io/saluana/or3-chat:candidate-$VERSION-$source_sha"
+          operator="ghcr.io/saluana/or3-chat:candidate-operator-$VERSION-$source_sha"
+          evidence="ghcr.io/saluana/or3-chat:candidate-evidence-$VERSION-$source_sha"
+          assert_npm_missing
+          assert_image_missing "ghcr.io/saluana/or3-chat:$VERSION"
+          assert_image_missing "ghcr.io/saluana/or3-chat:$VERSION-operator"
+          assert_image_missing "$candidate"
+          assert_image_missing "$operator"
+          assert_image_missing "$evidence"
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "image=$candidate" >> "$GITHUB_OUTPUT"
+          echo "operator=$operator" >> "$GITHUB_OUTPUT"
+          echo "evidence=$evidence" >> "$GITHUB_OUTPUT"
+          echo "Identity validation completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+
+  source-validation:
+    name: Source and package contracts
+    needs: identity
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -42,56 +137,56 @@ jobs:
           bun-version: 1.3.14
       - run: npm install --global npm@11.6.2
       - run: bun install --frozen-lockfile
-      - run: bunx playwright install --with-deps chromium
-      - name: Prove clean source and run the complete preflight
+      - name: Run candidate source checks without rebuilding the production app
         env:
-          VERSION: ${{ inputs.version }}
-        run: bun run release:prepare -- --version "$VERSION" --registry --full
+          VERSION: ${{ needs.identity.outputs.version }}
+        run: |
+          started=$SECONDS
+          bun run release:prepare -- --version "$VERSION" --registry
+          echo "Source validation completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: or3-cloud-source-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
+          path: output/release/preflight.json
+          if-no-files-found: error
+          retention-days: 30
+
+  build-app:
+    name: Build immutable application image
+    needs: [identity, source-validation]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.build-app.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Derive immutable candidate names and reject reuse
-        id: candidate
-        env:
-          VERSION: ${{ inputs.version }}
-          SOURCE_SHA: ${{ steps.source.outputs.sha }}
-        run: |
-          set -euo pipefail
-          candidate="ghcr.io/saluana/or3-chat:candidate-$VERSION-$SOURCE_SHA"
-          operator="ghcr.io/saluana/or3-chat:candidate-operator-$VERSION-$SOURCE_SHA"
-          evidence="ghcr.io/saluana/or3-chat:candidate-evidence-$VERSION-$SOURCE_SHA"
-          if docker manifest inspect "$candidate" >/dev/null 2>&1; then
-            echo "$candidate already exists; candidate identities are single-use."
-            exit 1
-          fi
-          if docker manifest inspect "$evidence" >/dev/null 2>&1; then
-            echo "$evidence already exists; candidate identities are single-use."
-            exit 1
-          fi
-          if docker manifest inspect "$operator" >/dev/null 2>&1; then
-            echo "$operator already exists; candidate identities are single-use."
-            exit 1
-          fi
-          echo "image=$candidate" >> "$GITHUB_OUTPUT"
-          echo "operator=$operator" >> "$GITHUB_OUTPUT"
-          echo "evidence=$evidence" >> "$GITHUB_OUTPUT"
-      - name: Build the candidate image once
+      - name: Start application image timer
+        id: app-timer
+        run: echo "started=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Build and push the application image once
+        id: build-app
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.candidate.outputs.image }}
+          tags: ${{ needs.identity.outputs.image }}
           provenance: true
           sbom: false
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ steps.source.outputs.sha }}
-            org.opencontainers.image.version=${{ inputs.version }}
+            org.opencontainers.image.revision=${{ needs.identity.outputs.source_sha }}
+            org.opencontainers.image.version=${{ needs.identity.outputs.version }}
           build-args: |
             SSR_AUTH_ENABLED=true
             AUTH_PROVIDER=basic-auth
@@ -102,9 +197,37 @@ jobs:
             OR3_SYNC_PROVIDER=sqlite
             OR3_STORAGE_ENABLED=true
             NUXT_PUBLIC_STORAGE_PROVIDER=fs
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Build the dedicated dashboard operator runtime
+          cache-from: type=registry,ref=ghcr.io/saluana/or3-chat:buildcache-cloud
+          cache-to: type=registry,ref=ghcr.io/saluana/or3-chat:buildcache-cloud,mode=max
+      - name: Record application image build timing
+        env:
+          STARTED: ${{ steps.app-timer.outputs.started }}
+          DIGEST: ${{ steps.build-app.outputs.digest }}
+        run: echo "Application image build/push completed in $(($(date +%s) - STARTED))s at $DIGEST." | tee -a "$GITHUB_STEP_SUMMARY"
+
+  build-operator:
+    name: Build immutable dashboard operator image
+    needs: [identity, source-validation]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.build-operator.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Start operator image timer
+        id: operator-timer
+        run: echo "started=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Build and push the dedicated dashboard operator
+        id: build-operator
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -112,61 +235,46 @@ jobs:
           target: dashboard-operator
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.candidate.outputs.operator }}
+          tags: ${{ needs.identity.outputs.operator }}
           provenance: true
           sbom: false
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ steps.source.outputs.sha }}
-            org.opencontainers.image.version=${{ inputs.version }}
-      - name: Verify manifest and anonymous pull
-        id: image
+            org.opencontainers.image.revision=${{ needs.identity.outputs.source_sha }}
+            org.opencontainers.image.version=${{ needs.identity.outputs.version }}
+      - name: Record operator image build timing
         env:
-          OR3_IMAGE: ${{ steps.candidate.outputs.image }}
-        run: |
-          set -euo pipefail
-          inspect="$(docker buildx imagetools inspect "$OR3_IMAGE")"
-          grep -q 'linux/amd64' <<<"$inspect"
-          grep -q 'linux/arm64' <<<"$inspect"
-          digest="$(awk '$1 == "Digest:" { print $2; exit }' <<<"$inspect")"
-          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-          echo "digest=$digest" >> "$GITHUB_OUTPUT"
-          docker logout ghcr.io
-          docker pull --platform linux/amd64 "$OR3_IMAGE"
-      - uses: docker/login-action@v3
+          STARTED: ${{ steps.operator-timer.outputs.started }}
+          DIGEST: ${{ steps.build-operator.outputs.digest }}
+        run: echo "Operator image build/push completed in $(($(date +%s) - STARTED))s at $DIGEST." | tee -a "$GITHUB_STEP_SUMMARY"
+
+  package:
+    name: Bind and pack exact Cloud CLI
+    needs: [identity, build-app, build-operator]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Verify dedicated operator manifest
-        id: operator-image
-        env:
-          OR3_OPERATOR_IMAGE: ${{ steps.candidate.outputs.operator }}
-        run: |
-          set -euo pipefail
-          inspect="$(docker buildx imagetools inspect "$OR3_OPERATOR_IMAGE")"
-          grep -q 'linux/amd64' <<<"$inspect"
-          grep -q 'linux/arm64' <<<"$inspect"
-          digest="$(awk '$1 == "Digest:" { print $2; exit }' <<<"$inspect")"
-          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-          echo "digest=$digest" >> "$GITHUB_OUTPUT"
-          docker logout ghcr.io
-          docker pull --platform linux/amd64 "$OR3_OPERATOR_IMAGE"
-      - uses: docker/login-action@v3
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - uses: oven-sh/setup-bun@v2
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Bind and pack the operator to the qualified image digest
-        id: pack
+          bun-version: 1.3.14
+      - run: npm install --global npm@11.6.2
+      - run: bun install --frozen-lockfile
+      - name: Bind package metadata to qualified image digests
         working-directory: packages/or3-cloud
         env:
-          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
-          OPERATOR_IMAGE_DIGEST: ${{ steps.operator-image.outputs.digest }}
-          SOURCE_REVISION: ${{ steps.source.outputs.sha }}
-          VERSION: ${{ inputs.version }}
+          IMAGE_DIGEST: ${{ needs.build-app.outputs.digest }}
+          OPERATOR_IMAGE_DIGEST: ${{ needs.build-operator.outputs.digest }}
+          SOURCE_REVISION: ${{ needs.identity.outputs.source_sha }}
+          VERSION: ${{ needs.identity.outputs.version }}
         run: |
           set -euo pipefail
+          started=$SECONDS
           npm pkg set "or3Cloud.imageDigest=$IMAGE_DIGEST"
           npm pkg set "or3Cloud.operatorImageDigest=$OPERATOR_IMAGE_DIGEST"
           npm pkg set "or3Cloud.sourceRevision=$SOURCE_REVISION"
@@ -183,11 +291,53 @@ jobs:
           test "$packed_operator_digest" = "$OPERATOR_IMAGE_DIGEST"
           packed_source_revision="$(tar -xOf "$tarball" package/package.json | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>process.stdout.write(JSON.parse(s).or3Cloud?.sourceRevision||""))')"
           test "$packed_source_revision" = "$SOURCE_REVISION"
-          echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
+          echo "Package binding and checks completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Check documentation against the exact tarball
         env:
-          CLOUD_TARBALL: ${{ steps.pack.outputs.tarball }}
+          CLOUD_TARBALL: release-artifact/or3-cloud-${{ needs.identity.outputs.version }}.tgz
         run: bun run check:docs -- --cloud-tarball "$CLOUD_TARBALL"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: or3-cloud-package-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
+          path: release-artifact/or3-cloud-${{ needs.identity.outputs.version }}.tgz
+          if-no-files-found: error
+          retention-days: 30
+
+  image-contracts:
+    name: Verify manifests and anonymous pulls
+    needs: [identity, build-app, build-operator]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - name: Verify exact multi-architecture image digests
+        env:
+          IMAGE: ${{ needs.identity.outputs.image }}
+          IMAGE_DIGEST: ${{ needs.build-app.outputs.digest }}
+          OPERATOR: ${{ needs.identity.outputs.operator }}
+          OPERATOR_DIGEST: ${{ needs.build-operator.outputs.digest }}
+        run: |
+          set -euo pipefail
+          started=$SECONDS
+          inspect="$(docker buildx imagetools inspect "$IMAGE")"
+          grep -q 'linux/amd64' <<<"$inspect"
+          grep -q 'linux/arm64' <<<"$inspect"
+          test "$(awk '$1 == "Digest:" { print $2; exit }' <<<"$inspect")" = "$IMAGE_DIGEST"
+          operator_inspect="$(docker buildx imagetools inspect "$OPERATOR")"
+          grep -q 'linux/amd64' <<<"$operator_inspect"
+          grep -q 'linux/arm64' <<<"$operator_inspect"
+          test "$(awk '$1 == "Digest:" { print $2; exit }' <<<"$operator_inspect")" = "$OPERATOR_DIGEST"
+          docker pull --platform linux/amd64 "$IMAGE@$IMAGE_DIGEST"
+          docker pull --platform linux/amd64 "$OPERATOR@$OPERATOR_DIGEST"
+          echo "Manifest and anonymous-pull verification completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+
+  security-scan:
+    name: Scan both runtime architectures
+    needs: [identity, build-app]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
       - name: Install Syft
         id: syft
         uses: anchore/sbom-action/download-syft@d8a2c0130026bf585de5c176ab8f7ce62d75bf04
@@ -197,127 +347,229 @@ jobs:
         uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514
         with:
           version: v0.70.0
-      - name: Scan both runtime architectures
+      - name: Scan exact application digest
         env:
-          OR3_IMAGE: ${{ steps.candidate.outputs.image }}
+          OR3_IMAGE: ${{ needs.identity.outputs.image }}@${{ needs.build-app.outputs.digest }}
         run: |
           set -euo pipefail
+          started=$SECONDS
+          mkdir -p release-artifact
           (cd release-artifact && node "$GITHUB_WORKSPACE/scripts/release/scan-image.mjs" "$OR3_IMAGE" \
             --platform linux/amd64 --syft "${{ steps.syft.outputs.cmd }}" --out release-evidence-amd64.json)
           (cd release-artifact && node "$GITHUB_WORKSPACE/scripts/release/scan-image.mjs" "$OR3_IMAGE" \
             --platform linux/arm64 --syft "${{ steps.syft.outputs.cmd }}" --out release-evidence-arm64.json)
-      - name: Exercise upgrade, rollback, persistence, and production verification
-        env:
-          CANDIDATE_IMAGE: ${{ steps.candidate.outputs.image }}
-          CANDIDATE_OPERATOR_IMAGE: ${{ steps.candidate.outputs.operator }}
-          CANDIDATE_TARBALL: ${{ steps.pack.outputs.tarball }}
-        run: |
-          set -euo pipefail
-          managed="$RUNNER_TEMP/or3-cloud-candidate"
-          previous_version="$(npm view @or3/cloud version)"
-          compose_args() {
-            local args=(--project-directory "$managed" --env-file "$managed/.env" -f "$managed/compose.yaml")
-            if [ -f "$managed/compose.operator.yaml" ] && grep -q "^OR3_DASHBOARD_UPDATES_ENABLED='true'$" "$managed/.env"; then
-              args+=(-f "$managed/compose.operator.yaml")
-            fi
-            printf '%s\n' "${args[@]}"
-          }
-          cleanup() {
-            if [ -f "$managed/.env" ] && [ -f "$managed/compose.yaml" ]; then
-              mapfile -t args < <(compose_args)
-              docker compose "${args[@]}" down --volumes --remove-orphans 2>/dev/null || true
-            fi
-          }
-          diagnostics() {
-            if [ -f "$managed/.env" ] && [ -f "$managed/compose.yaml" ]; then
-              mapfile -t args < <(compose_args)
-              docker compose "${args[@]}" ps -a || true
-              docker compose "${args[@]}" logs --tail=200 || true
-            fi
-          }
-          trap 'status=$?; if [ "$status" -ne 0 ]; then diagnostics; fi; cleanup; exit "$status"' EXIT
+          echo "Two-architecture security scan completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: or3-cloud-scans-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
+          path: release-artifact/
+          if-no-files-found: error
+          retention-days: 30
 
-          docker image rm "$CANDIDATE_IMAGE" 2>/dev/null || true
-          docker pull --platform linux/amd64 "$CANDIDATE_IMAGE"
-          npx --yes "@or3/cloud@$previous_version" init "$managed" --local --port 3017 --admin-email smoke@example.com
-          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
-          (cd "$managed" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
-
-          (cd "$managed" && OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE" OR3_CLOUD_TEST_OPERATOR_IMAGE="$CANDIDATE_OPERATOR_IMAGE" OR3_EXPECTED_OPERATOR_IMAGE_DIGEST="${{ steps.operator-image.outputs.digest }}" \
-            npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 update --to "${{ inputs.version }}")
-          # Exercise the actual privileged bridge from the unprivileged app
-          # container. The candidate itself is intentionally not published to
-          # npm yet, so this cannot start a synthetic release; status and an
-          # invalid /start prove the mounted Unix API and input boundary.
-          test -S "$managed/.or3-cloud/operator-ipc/operator.sock"
-          (cd "$managed" && docker compose --env-file .env -f compose.yaml -f compose.operator.yaml exec -T or3 /nodejs/bin/node -e '
-            const http=require("node:http");
-            const request=(method,path,body)=>new Promise((resolve,reject)=>{const r=http.request({socketPath:"/run/or3-operator/operator.sock",method,path,headers:body?{"content-type":"application/json"}:{ }},x=>{let s="";x.on("data",c=>s+=c);x.on("end",()=>resolve({status:x.statusCode,body:s}))});r.on("error",reject);if(body)r.end(JSON.stringify(body));else r.end()});
-            (async()=>{const status=await request("GET","/status");if(status.status!==200||!JSON.parse(status.body).enabled)process.exit(1);const bad=await request("POST","/start",{});if(bad.status!==400)process.exit(1)})().catch(()=>process.exit(1));')
-          (cd "$managed" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
-          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
-          manifest="$(find "$managed/.or3-cloud/backups" -name manifest.json -print | sort | tail -1)"
-          test -n "$manifest"
-          node -e 'const m=require(process.argv[1]); if (!m.managedAssetSha256?.["compose.yaml"]) process.exit(1)' "$manifest"
-
-          (cd "$managed" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 rollback --yes)
-          (cd "$managed" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
-          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
-
-          (cd "$managed" && OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE" OR3_CLOUD_TEST_OPERATOR_IMAGE="$CANDIDATE_OPERATOR_IMAGE" OR3_EXPECTED_OPERATOR_IMAGE_DIGEST="${{ steps.operator-image.outputs.digest }}" \
-            npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 update --to "${{ inputs.version }}")
-          (cd "$managed" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
-          (cd "$managed" && docker compose --env-file .env -f compose.yaml restart or3)
-          (cd "$managed" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
-          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-browser.mjs")
+  arm-runtime:
+    name: Verify arm64 runtime and native SQLite
+    needs: [identity, build-app]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
       - uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
-      - name: Verify arm64 runtime and SQLite native binding
+      - name: Exercise exact arm64 image digest
         env:
-          OR3_IMAGE: ${{ steps.candidate.outputs.image }}
+          OR3_IMAGE: ${{ needs.identity.outputs.image }}@${{ needs.build-app.outputs.digest }}
         run: |
           set -euo pipefail
+          started=$SECONDS
           docker run --rm --platform linux/arm64 --user 65532:65532 --read-only --cap-drop ALL \
             --security-opt no-new-privileges --tmpfs /tmp:rw,noexec,nosuid,size=64m --volume /data \
             --entrypoint /bin/sh "$OR3_IMAGE" -c 'printf runtime-contract > /data/probe && tar czf /tmp/data.tgz -C /data . && find /data -mindepth 1 -delete && tar xzf /tmp/data.tgz -C /data && test -f /data/probe'
           docker run --rm --platform linux/arm64 --entrypoint /nodejs/bin/node "$OR3_IMAGE" -e \
             'const D=require("/app/.output/server/node_modules/better-sqlite3"); const d=new D(":memory:"); if(d.prepare("select 42 value").get().value!==42)process.exit(1); d.close()'
-      - name: Create the immutable qualification receipt
+          echo "arm64 runtime verification completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+
+  lifecycle:
+    name: Upgrade, rollback, restart, and persistence
+    needs: [identity, build-app, build-operator, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CANDIDATE_IMAGE: ${{ needs.identity.outputs.image }}@${{ needs.build-app.outputs.digest }}
+      CANDIDATE_OPERATOR_IMAGE: ${{ needs.identity.outputs.operator }}@${{ needs.build-operator.outputs.digest }}
+      CANDIDATE_TARBALL: ${{ github.workspace }}/release-artifact/or3-cloud-${{ needs.identity.outputs.version }}.tgz
+      VERSION: ${{ needs.identity.outputs.version }}
+      OPERATOR_DIGEST: ${{ needs.build-operator.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: or3-cloud-package-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
+          path: release-artifact
+      - name: Set disposable deployment path
+        run: echo "MANAGED=$RUNNER_TEMP/or3-cloud-candidate" >> "$GITHUB_ENV"
+      - name: Initialize previous release and write persistence fixture
+        run: |
+          set -euo pipefail
+          started=$SECONDS
+          previous_version="$(npm view @or3/cloud version)"
+          echo "PREVIOUS_VERSION=$previous_version" >> "$GITHUB_ENV"
+          docker pull --platform linux/amd64 "$CANDIDATE_IMAGE"
+          timeout --signal=TERM 5m npx --yes "@or3/cloud@$previous_version" init "$MANAGED" --local --port 3017 --admin-email smoke@example.com
+          (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
+          (cd "$MANAGED" && timeout --signal=TERM 4m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
+          echo "Previous-release startup and fixture creation completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Update to the exact candidate digest
+        run: |
+          set -euo pipefail
+          started=$SECONDS
+          (cd "$MANAGED" && OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE" OR3_CLOUD_TEST_OPERATOR_IMAGE="$CANDIDATE_OPERATOR_IMAGE" OR3_EXPECTED_OPERATOR_IMAGE_DIGEST="$OPERATOR_DIGEST" \
+            timeout --signal=TERM 8m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 update --to "$VERSION")
+          echo "Candidate update completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Verify operator bridge and persisted data
+        run: |
+          set -euo pipefail
+          started=$SECONDS
+          test -S "$MANAGED/.or3-cloud/operator-ipc/operator.sock"
+          (cd "$MANAGED" && docker compose --env-file .env -f compose.yaml -f compose.operator.yaml exec -T or3 /nodejs/bin/node -e '
+            const http=require("node:http");
+            const request=(method,path,body)=>new Promise((resolve,reject)=>{const r=http.request({socketPath:"/run/or3-operator/operator.sock",method,path,headers:body?{"content-type":"application/json"}:{}},x=>{let s="";x.on("data",c=>s+=c);x.on("end",()=>resolve({status:x.statusCode,body:s}))});r.on("error",reject);if(body)r.end(JSON.stringify(body));else r.end()});
+            (async()=>{const status=await request("GET","/status");if(status.status!==200||!JSON.parse(status.body).enabled)process.exit(1);const bad=await request("POST","/start",{});if(bad.status!==400)process.exit(1)})().catch(()=>process.exit(1));')
+          (cd "$MANAGED" && timeout --signal=TERM 4m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
+          (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+          manifest="$(find "$MANAGED/.or3-cloud/backups" -name manifest.json -print | sort | tail -1)"
+          test -n "$manifest"
+          node -e 'const m=require(process.argv[1]); if (!m.managedAssetSha256?.["compose.yaml"]) process.exit(1)' "$manifest"
+          echo "Candidate verification and persistence check completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Roll back and verify previous release
+        run: |
+          set -euo pipefail
+          started=$SECONDS
+          (cd "$MANAGED" && timeout --signal=TERM 6m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 rollback --yes)
+          (cd "$MANAGED" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$PREVIOUS_VERSION" verify)
+          (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+          echo "Rollback and previous-release verification completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Reapply candidate, restart, and verify persistence
+        run: |
+          set -euo pipefail
+          started=$SECONDS
+          (cd "$MANAGED" && OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE" OR3_CLOUD_TEST_OPERATOR_IMAGE="$CANDIDATE_OPERATOR_IMAGE" OR3_EXPECTED_OPERATOR_IMAGE_DIGEST="$OPERATOR_DIGEST" \
+            timeout --signal=TERM 8m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 update --to "$VERSION")
+          (cd "$MANAGED" && timeout --signal=TERM 4m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
+          (cd "$MANAGED" && timeout --signal=TERM 3m docker compose --env-file .env -f compose.yaml restart or3)
+          (cd "$MANAGED" && timeout --signal=TERM 4m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
+          (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+          echo "Second update, restart, and persistence verification completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Capture lifecycle diagnostics
+        if: failure()
+        run: |
+          if [ -f "$MANAGED/.env" ] && [ -f "$MANAGED/compose.yaml" ]; then
+            args=(--project-directory "$MANAGED" --env-file "$MANAGED/.env" -f "$MANAGED/compose.yaml")
+            if [ -f "$MANAGED/compose.operator.yaml" ] && grep -q "^OR3_DASHBOARD_UPDATES_ENABLED='true'$" "$MANAGED/.env"; then
+              args+=(-f "$MANAGED/compose.operator.yaml")
+            fi
+            docker compose "${args[@]}" ps -a || true
+            docker compose "${args[@]}" logs --tail=200 || true
+          fi
+      - name: Clean up disposable lifecycle
+        if: always()
+        run: |
+          if [ -f "$MANAGED/.env" ] && [ -f "$MANAGED/compose.yaml" ]; then
+            args=(--project-directory "$MANAGED" --env-file "$MANAGED/.env" -f "$MANAGED/compose.yaml")
+            if [ -f "$MANAGED/compose.operator.yaml" ] && grep -q "^OR3_DASHBOARD_UPDATES_ENABLED='true'$" "$MANAGED/.env"; then
+              args+=(-f "$MANAGED/compose.operator.yaml")
+            fi
+            docker compose "${args[@]}" down --volumes --remove-orphans 2>/dev/null || true
+          fi
+
+  receipt:
+    name: Publish immutable qualification receipt
+    needs: [identity, source-validation, build-app, build-operator, package, image-contracts, security-scan, arm-runtime, lifecycle]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: or3-cloud-package-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
+          path: release-artifact
+      - uses: actions/download-artifact@v8
+        with:
+          name: or3-cloud-source-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
+          path: release-artifact/source-validation
+      - uses: actions/download-artifact@v8
+        with:
+          name: or3-cloud-scans-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
+          path: release-artifact/scans
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create the receipt after every required verifier passes
         env:
-          CANDIDATE_IMAGE: ${{ steps.candidate.outputs.image }}
-          CANDIDATE_OPERATOR_IMAGE: ${{ steps.candidate.outputs.operator }}
-          CANDIDATE_TARBALL: ${{ steps.pack.outputs.tarball }}
+          CANDIDATE_IMAGE: ${{ needs.identity.outputs.image }}
+          CANDIDATE_OPERATOR_IMAGE: ${{ needs.identity.outputs.operator }}
+          CANDIDATE_TARBALL: release-artifact/or3-cloud-${{ needs.identity.outputs.version }}.tgz
         run: |
           node scripts/release/candidate-receipt.mjs create \
-            --version "${{ inputs.version }}" \
-            --source-sha "${{ steps.source.outputs.sha }}" \
+            --version "${{ needs.identity.outputs.version }}" \
+            --source-sha "${{ needs.identity.outputs.source_sha }}" \
             --image "$CANDIDATE_IMAGE" \
             --operator-image "$CANDIDATE_OPERATOR_IMAGE" \
             --tarball "$CANDIDATE_TARBALL" \
             --output release-artifact/candidate-receipt.json \
             --run-id "$GITHUB_RUN_ID"
-      - name: Publish the receipt and exact tarball as candidate evidence
+      - name: Publish receipt and exact tarball as candidate evidence
         env:
-          EVIDENCE_IMAGE: ${{ steps.candidate.outputs.evidence }}
+          EVIDENCE_IMAGE: ${{ needs.identity.outputs.evidence }}
         run: |
           set -euo pipefail
           evidence="$RUNNER_TEMP/or3-cloud-evidence"
           mkdir -p "$evidence"
-          cp "release-artifact/or3-cloud-${{ inputs.version }}.tgz" "$evidence/"
+          cp "release-artifact/or3-cloud-${{ needs.identity.outputs.version }}.tgz" "$evidence/"
           cp release-artifact/candidate-receipt.json "$evidence/"
           printf '%s\n' \
             'FROM scratch' \
             'COPY candidate-receipt.json /candidate-receipt.json' \
-            'COPY or3-cloud-${{ inputs.version }}.tgz /or3-cloud-${{ inputs.version }}.tgz' \
-            'LABEL org.opencontainers.image.revision=${{ steps.source.outputs.sha }}' \
-            'LABEL org.opencontainers.image.version=${{ inputs.version }}' \
+            'COPY or3-cloud-${{ needs.identity.outputs.version }}.tgz /or3-cloud-${{ needs.identity.outputs.version }}.tgz' \
+            'LABEL org.opencontainers.image.revision=${{ needs.identity.outputs.source_sha }}' \
+            'LABEL org.opencontainers.image.version=${{ needs.identity.outputs.version }}' \
             'CMD ["/candidate-receipt.json"]' > "$evidence/Dockerfile"
-          docker build --tag "$EVIDENCE_IMAGE" "$evidence"
-          docker push "$EVIDENCE_IMAGE"
+          if docker manifest inspect "$EVIDENCE_IMAGE" >/dev/null 2>&1; then
+            existing="$RUNNER_TEMP/existing-evidence"
+            mkdir -p "$existing"
+            docker pull "$EVIDENCE_IMAGE"
+            container="$(docker create "$EVIDENCE_IMAGE")"
+            trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+            docker cp "$container:/candidate-receipt.json" "$existing/candidate-receipt.json"
+            docker cp "$container:/or3-cloud-${{ needs.identity.outputs.version }}.tgz" "$existing/or3-cloud-${{ needs.identity.outputs.version }}.tgz"
+            cmp "release-artifact/or3-cloud-${{ needs.identity.outputs.version }}.tgz" "$existing/or3-cloud-${{ needs.identity.outputs.version }}.tgz"
+            node scripts/release/candidate-receipt.mjs verify \
+              --version "${{ needs.identity.outputs.version }}" \
+              --image "${{ needs.identity.outputs.image }}" \
+              --operator-image "${{ needs.identity.outputs.operator }}" \
+              --receipt "$existing/candidate-receipt.json" \
+              --tarball "$existing/or3-cloud-${{ needs.identity.outputs.version }}.tgz"
+            cp "$existing/candidate-receipt.json" release-artifact/candidate-receipt.json
+            docker rm "$container"
+            trap - EXIT
+            echo "Existing candidate evidence has the same verified identities and tarball; reusing it."
+          else
+            docker build --tag "$EVIDENCE_IMAGE" "$evidence"
+            docker push "$EVIDENCE_IMAGE"
+          fi
       - uses: actions/upload-artifact@v7
         with:
-          name: or3-cloud-candidate-${{ inputs.version }}-${{ steps.source.outputs.sha }}
+          name: or3-cloud-candidate-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
           path: release-artifact/
           if-no-files-found: error
           retention-days: 30
