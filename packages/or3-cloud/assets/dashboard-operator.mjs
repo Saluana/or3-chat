@@ -627,26 +627,63 @@ async function completeOperatorHandoff(jobId, project) {
       && state
       && !state.incompleteOperation
     ) {
-      await delay(1_000);
       const environment = await deploymentEnv();
       if (envValue(environment, 'OR3_DASHBOARD_UPDATES_ENABLED') !== 'true') return;
-      const restarted = await runProcess('docker', [
-        'compose',
-        '--project-name', project,
-        '--project-directory', deploymentDirectory,
-        '--env-file', join(deploymentDirectory, '.env'),
-        '-f', join(deploymentDirectory, 'compose.yaml'),
-        '-f', join(deploymentDirectory, 'compose.operator.yaml'),
-        'up', '-d', '--no-deps', '--force-recreate', 'or3-operator',
-      ], {
-        cwd: deploymentDirectory,
-        env: process.env,
-        timeoutMs: 60_000,
-      });
-      if (restarted.code !== 0) {
-        throw new Error(`The dashboard operator handoff could not start its successor: ${restarted.output}`);
+      const serviceFilters = [
+        '--filter', `label=com.docker.compose.project=${project}`,
+        '--filter', 'label=com.docker.compose.service=or3-operator',
+      ];
+      let lastOutput = '';
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        // Old protocol-v1 operators may start their own Compose replacement
+        // after writing the terminal job. Removing every container for this
+        // one stateless service also kills that in-container Compose child and
+        // clears any half-created successor without touching the application.
+        for (let sweep = 0; sweep < 2; sweep += 1) {
+          const listed = await runProcess('docker', ['ps', '-aq', ...serviceFilters], {
+            cwd: deploymentDirectory,
+            env: process.env,
+            timeoutMs: 30_000,
+          });
+          lastOutput = listed.output;
+          const containerIds = listed.code === 0
+            ? listed.output.split(/\s+/).filter((value) => /^[0-9a-f]{12,64}$/i.test(value))
+            : [];
+          if (containerIds.length > 0) {
+            const removed = await runProcess('docker', ['rm', '--force', ...containerIds], {
+              cwd: deploymentDirectory,
+              env: process.env,
+              timeoutMs: 30_000,
+            });
+            lastOutput = `${lastOutput}\n${removed.output}`.trim();
+          }
+          await delay(750);
+        }
+        const compose = [
+          'compose',
+          '--project-name', project,
+          '--project-directory', deploymentDirectory,
+          '--env-file', join(deploymentDirectory, '.env'),
+          '-f', join(deploymentDirectory, 'compose.yaml'),
+          '-f', join(deploymentDirectory, 'compose.operator.yaml'),
+        ];
+        const restarted = await runProcess('docker', [...compose, 'up', '-d', '--no-deps', 'or3-operator'], {
+          cwd: deploymentDirectory,
+          env: process.env,
+          timeoutMs: 60_000,
+        });
+        const running = restarted.code === 0
+          ? await runProcess('docker', [...compose, 'ps', '--status', 'running', '-q', 'or3-operator'], {
+              cwd: deploymentDirectory,
+              env: process.env,
+              timeoutMs: 30_000,
+            })
+          : { code: restarted.code, output: '' };
+        lastOutput = `${lastOutput}\n${restarted.output}\n${running.output}`.trim();
+        if (restarted.code === 0 && running.code === 0 && /^[0-9a-f]{12,64}$/i.test(running.output.trim())) return;
+        await delay(2_000);
       }
-      return;
+      throw new Error(`The dashboard operator handoff could not start its successor: ${lastOutput}`);
     }
     await delay(250);
   }
