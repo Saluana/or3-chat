@@ -72,6 +72,17 @@ test('dashboard updates isolate Docker access to the operator sidecar', () => {
   expect(cli).toContain('await chmod(ipc, 0o710);');
 });
 
+test('dashboard updates hand operator recreation to a separate helper container', () => {
+  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  const operator = readFileSync(DASHBOARD_OPERATOR, 'utf8');
+  expect(cli).toContain("'run', '--detach', '--rm', '--network', 'none', '--read-only'");
+  expect(cli).toContain("'--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL'");
+  expect(cli).toContain("'--complete-handoff', jobId, project");
+  expect(operator).toContain("process.argv[2] === '--complete-handoff'");
+  expect(operator).toContain("['succeeded', 'failed', 'needs_attention'].includes(job.phase)");
+  expect(operator).toContain("'up', '-d', '--no-deps', '--force-recreate', 'or3-operator'");
+});
+
 test('dashboard operator verifies exact release provenance before executing package code', () => {
   const operator = readFileSync(DASHBOARD_OPERATOR, 'utf8');
   expect(operator).toContain("NPM_CONFIG_IGNORE_SCRIPTS: 'true'");
@@ -90,7 +101,7 @@ test('dashboard operator verifies exact release provenance before executing pack
   expect(operator).toContain("const auditPath = join(cloudDirectory, 'dashboard-update-audit.jsonl')");
   expect(operator).toContain("await audit('update_accepted'");
   expect(operator).toContain('void chmod(socketPath, 0o660)');
-  expect(operator).toContain('function recreateOperatorAfterCommit(environment)');
+  expect(operator).toContain('async function completeOperatorHandoff(jobId, project)');
   expect(operator).toContain("'up', '-d', '--no-deps', '--force-recreate', 'or3-operator'");
   expect(operator).not.toContain("'exec',\n    '--yes'");
   expect(operator).not.toContain('shell: true');

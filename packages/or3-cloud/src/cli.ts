@@ -31,7 +31,7 @@ import { createGunzip } from 'node:zlib';
 const execFile = promisify(execFileCallback);
 const PACKAGE_ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
 
-export const PACKAGE_VERSION = '0.1.54';
+export const PACKAGE_VERSION = '0.1.55';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 const STATE_SCHEMA_VERSION = 1;
@@ -43,6 +43,8 @@ const BACKUP_RETENTION_KEEP = 5;
 const PURGE_REQUIRES_BACKUP_WITHIN_MS = 24 * 60 * 60 * 1000;
 const FREE_SPACE_HEADROOM_BYTES = 64 * 1024 * 1024;
 const BACKUP_ID_PATTERN = /^backup-[0-9A-Za-z-]+$/;
+const DASHBOARD_JOB_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const COMPOSE_PROJECT_PATTERN = /^[a-z0-9][a-z0-9_-]*$/i;
 const MANAGED_ASSET_INVENTORY_VERSION = 3;
 const DASHBOARD_LEASE_STALE_MS = 30_000;
 const PROVISIONING_CREDENTIAL_KEYS = [
@@ -1602,6 +1604,47 @@ async function prepareVerifiedDashboardOperator(directory: string, version: stri
   await rm(deploymentPaths(directory).operatorIpc, { recursive: true, force: true }).catch(() => undefined);
   console.warn('Dashboard updates are unavailable on this Docker setup; the deployment will remain host-CLI managed.');
   return undefined;
+}
+
+export function dashboardOperatorHandoffArgs(
+  directory: string,
+  env: Record<string, string>,
+  jobId: string,
+) {
+  const project = env.OR3_COMPOSE_PROJECT;
+  if (
+    !isAbsolute(directory)
+    || !DASHBOARD_JOB_ID_PATTERN.test(jobId)
+    || !COMPOSE_PROJECT_PATTERN.test(project ?? '')
+    || !/^\d+$/.test(env.OR3_OPERATOR_UID ?? '')
+    || !/^\d+$/.test(env.OR3_OPERATOR_GID ?? '')
+    || !/^\d+$/.test(env.OR3_DOCKER_GID ?? '')
+    || !isAbsolute(env.OR3_DOCKER_SOCKET ?? '')
+    || !/@sha256:[0-9a-f]{64}$/i.test(env.OR3_OPERATOR_IMAGE ?? '')
+  ) {
+    throw new Error('Refusing to schedule an invalid dashboard operator handoff.');
+  }
+  return [
+    'run', '--detach', '--rm', '--network', 'none', '--read-only',
+    '--name', `${project}-operator-handoff-${jobId}`,
+    '--user', `${env.OR3_OPERATOR_UID}:${env.OR3_OPERATOR_GID}`,
+    '--group-add', env.OR3_DOCKER_GID,
+    '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL',
+    '--mount', `type=bind,src=${env.OR3_DOCKER_SOCKET},dst=/var/run/docker.sock`,
+    '--mount', `type=bind,src=${directory},dst=${directory},readonly`,
+    '--workdir', directory, '--tmpfs', '/tmp:rw,noexec,nosuid,size=16m',
+    '--entrypoint', '/usr/local/bin/node', env.OR3_OPERATOR_IMAGE,
+    join(directory, 'dashboard-operator.mjs'), '--complete-handoff', jobId, project,
+  ];
+}
+
+async function scheduleDashboardOperatorHandoff(directory: string, env: Record<string, string>) {
+  const jobId = process.env.OR3_DASHBOARD_UPDATE_JOB_ID?.trim();
+  if (!jobId || env.OR3_DASHBOARD_UPDATES_ENABLED !== 'true') return;
+  const scheduled = await run('docker', dashboardOperatorHandoffArgs(directory, env, jobId), directory);
+  if (!scheduled.ok || !/^[0-9a-f]{12,64}$/i.test(scheduled.stdout.trim())) {
+    throw new Error(`Could not schedule the dashboard operator handoff. ${scheduled.stderr.trim()}`);
+  }
 }
 
 const DASHBOARD_OPERATOR_ENV_KEYS = [
@@ -3291,8 +3334,9 @@ async function updateCommand(directory: string, flags: Flags) {
     state.deploymentRoot = resolve(loaded.directory);
     state.lastSuccessfulOperation = 'update';
     state.lastError = undefined;
-    await clearPending(loaded.directory, state);
     await pruneBackups(loaded.directory, state, BACKUP_RETENTION_KEEP, false);
+    await scheduleDashboardOperatorHandoff(loaded.directory, nextEnv);
+    await clearPending(loaded.directory, state);
     console.log(`OR3 updated to ${targetVersion}. Image digest: ${digest}`);
     console.log(`Rollback point: ${backup.backupId}. Keep it until login, chat, and file checks pass.`);
   } catch (error) {
