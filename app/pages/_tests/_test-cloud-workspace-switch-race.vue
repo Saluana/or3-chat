@@ -401,7 +401,8 @@ async function runScenario(iterations: number): Promise<void> {
 }
 
 installErrorTracking();
-void resetHarness();
+// `runScenario` owns and awaits the reset. Starting another reset here races
+// the click path on slower browsers and can clear data after seeding begins.
 
 onBeforeUnmount(() => {
     queue?.cancelAllRunning();
