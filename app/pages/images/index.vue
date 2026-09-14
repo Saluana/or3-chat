@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import type { FileMeta } from '../../db/schema';
-import { listAllImageMetas, updateFileName } from '../../db/files-select';
+import { updateFileName } from '../../db/files-select';
 import {
     createOrRefFile,
     getFileBlob,
@@ -11,8 +11,7 @@ import {
     restoreMany,
     hardDeleteMany,
 } from '../../db/files';
-import { listDocuments } from '../../db/documents';
-import { parseDocumentFileHashes } from '~/utils/documents/document-content';
+import { getDb } from '../../db/client';
 import {
     consumePendingPaletteImageSelection,
     subscribePaletteImageSelection,
@@ -23,22 +22,36 @@ import { reportError } from '../../utils/errors';
 import { useToast, useIcon } from '#imports';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { copyImageBlobToClipboard } from './copy-image-to-clipboard';
-import { useImageSearch } from '~/core/search/useImageSearch';
-import {
-    filterImageLibrary,
-    imageLibraryCounts,
-    sortImageLibrary,
-    type ImageLibrarySort,
-    type ImageLibraryView,
-} from './image-library';
+import { useImageGallery } from './useImageGallery';
+import type { ImageLibraryView } from './image-library';
 
-const PAGE_SIZE = 50;
-const items = ref<FileMeta[]>([]);
-const loading = ref(false);
-const visibleLimit = ref(PAGE_SIZE);
-const activeView = ref<ImageLibraryView>('all');
-const sortMode = ref<ImageLibrarySort>('newest');
-const usedInDocumentHashes = ref<Set<string>>(new Set());
+const gallery = useImageGallery({
+    onWorkspaceChange: () => {
+        clearSelection();
+        selectionMode.value = false;
+        selected.value = null;
+        showViewer.value = false;
+    },
+});
+const {
+    activeView,
+    sortMode,
+    searchQuery,
+    items,
+    loading,
+    done,
+    pageError,
+    counts,
+    countsFailed,
+    matchingTotal,
+    searchPending,
+    start: startGallery,
+    stop: stopGallery,
+    retry: retryGallery,
+    refresh: refreshGallery,
+    loadMore,
+} = gallery;
+
 const showViewer = ref(false);
 const selected = ref<FileMeta | null>(null);
 const selectionMode = ref(false);
@@ -57,46 +70,10 @@ const uploading = ref(false);
 
 const selectedCount = computed(() => selectedHashes.value.size);
 const hasSelection = computed(() => selectedCount.value > 0);
-const hasItems = computed(() => visibleItems.value.length > 0);
+const hasItems = computed(() => items.value.length > 0);
 const canSelectAll = computed(
     () =>
-        hasItems.value && selectedHashes.value.size < visibleItems.value.length
-);
-
-const searchableItems = computed(() => items.value);
-const imageSearch = useImageSearch(searchableItems);
-const searchQuery = imageSearch.query;
-const searchedHashes = computed(
-    () => new Set(imageSearch.results.value.map((item) => item.hash))
-);
-const activeItems = computed(() =>
-    items.value.filter((item) => item.deleted === trashMode.value)
-);
-const filteredItems = computed(() => {
-    const searched = searchQuery.value.trim()
-        ? activeItems.value.filter((item) =>
-              searchedHashes.value.has(item.hash)
-          )
-        : activeItems.value;
-    return sortImageLibrary(
-        filterImageLibrary(
-            searched,
-            activeView.value,
-            usedInDocumentHashes.value
-        ),
-        sortMode.value
-    );
-});
-const visibleItems = computed(() =>
-    filteredItems.value.slice(0, visibleLimit.value)
-);
-const done = computed(() => visibleLimit.value >= filteredItems.value.length);
-const counts = computed(() =>
-    imageLibraryCounts(
-        items.value.filter((item) => !item.deleted),
-        items.value.filter((item) => item.deleted),
-        usedInDocumentHashes.value
-    )
+        hasItems.value && selectedHashes.value.size < items.value.length
 );
 
 const libraryViews: Array<{
@@ -146,30 +123,9 @@ type RestoreOutcome = {
     aborted: boolean;
 };
 
-async function refreshLibrary() {
-    if (loading.value) return;
-    loading.value = true;
-    try {
-        const [library, trash, documents] = await Promise.all([
-            listAllImageMetas(false),
-            listAllImageMetas(true),
-            listDocuments(Number.MAX_SAFE_INTEGER),
-        ]);
-        items.value = [...library, ...trash];
-        usedInDocumentHashes.value = new Set(
-            documents.flatMap((document) =>
-                parseDocumentFileHashes(document.file_hashes)
-            )
-        );
-        await imageSearch.rebuild();
-        await imageSearch.search();
-    } finally {
-        loading.value = false;
-    }
-}
-
-function loadMore() {
-    visibleLimit.value += PAGE_SIZE;
+function formatCount(value: number | null | undefined): string {
+    if (typeof value === 'number') return String(value);
+    return countsFailed.value ? '—' : '…';
 }
 
 /**
@@ -178,9 +134,13 @@ function loadMore() {
  */
 async function openPaletteSelection(hash: string) {
     if (!hash) return;
-    const meta =
-        items.value.find((item) => item.hash === hash) ??
-        (await getFileMeta(hash));
+    const db = getDb();
+    let meta = items.value.find((item) => item.hash === hash);
+    if (!meta) {
+        const fetched = await getFileMeta(hash);
+        if (getDb() !== db) return;
+        meta = fetched;
+    }
     if (!meta || meta.deleted) return;
     selected.value = meta;
     showViewer.value = true;
@@ -189,7 +149,7 @@ async function openPaletteSelection(hash: string) {
 let stopPaletteSelection: (() => void) | null = null;
 
 onMounted(() => {
-    void refreshLibrary();
+    startGallery();
     stopPaletteSelection = subscribePaletteImageSelection((hash) => {
         consumePendingPaletteImageSelection();
         if (hash) void openPaletteSelection(hash);
@@ -200,6 +160,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+    stopGallery();
     stopPaletteSelection?.();
 });
 
@@ -273,8 +234,7 @@ async function handleRename(meta: FileMeta) {
     meta.name = next;
     try {
         await updateFileName(meta.hash, next);
-        await imageSearch.rebuild();
-        await imageSearch.search();
+        refreshGallery();
     } catch (error) {
         meta.name = old;
         reportError(error, {
@@ -300,7 +260,7 @@ async function handleUpload(event: Event) {
         for (const file of files) {
             await createOrRefFile(file, file.name || 'Uploaded image');
         }
-        await refreshLibrary();
+        refreshGallery();
         setActiveView('uploads');
         toast.add({
             title: files.length === 1 ? 'Image uploaded' : 'Images uploaded',
@@ -327,7 +287,6 @@ function handleView(meta: FileMeta) {
 function setActiveView(view: ImageLibraryView) {
     if (isMutating.value || activeView.value === view) return;
     activeView.value = view;
-    visibleLimit.value = PAGE_SIZE;
     selectionMode.value = false;
     clearSelection();
     selected.value = null;
@@ -346,8 +305,8 @@ function clearSelection() {
 }
 
 function selectAllVisible() {
-    if (!visibleItems.value.length) return;
-    selectedHashes.value = new Set(visibleItems.value.map((item) => item.hash));
+    if (!items.value.length) return;
+    selectedHashes.value = new Set(items.value.map((item) => item.hash));
     if (selectedHashes.value.size > 0) {
         selectionMode.value = true;
     }
@@ -365,30 +324,20 @@ function toggleSelect(hash: string) {
     if (next.size > 0) selectionMode.value = true;
 }
 
-function removeHashesFromState(hashes: string[]) {
-    if (!hashes.length) {
-        return { removedHashes: [] as string[], remaining: [] as string[] };
-    }
+/** Drop hashes from loaded pages and clear selection/viewer references. */
+function removeHashesFromState(hashes: string[]): void {
+    if (!hashes.length) return;
     const removal = new Set(hashes);
-    const removedSet = new Set<string>();
-    items.value = items.value.filter((item) => {
-        if (removal.has(item.hash)) {
-            removedSet.add(item.hash);
-            return false;
-        }
-        return true;
-    });
+    items.value = items.value.filter((item) => !removal.has(item.hash));
     const nextSelected = new Set<string>();
     for (const hash of selectedHashes.value) {
-        if (!removedSet.has(hash)) nextSelected.add(hash);
+        if (!removal.has(hash)) nextSelected.add(hash);
     }
     selectedHashes.value = nextSelected;
-    if (selected.value && removedSet.has(selected.value.hash)) {
+    if (selected.value && removal.has(selected.value.hash)) {
         selected.value = null;
         showViewer.value = false;
     }
-    const remaining = hashes.filter((hash) => !removedSet.has(hash));
-    return { removedHashes: Array.from(removedSet), remaining };
 }
 
 async function executeDeleteByMode(
@@ -420,13 +369,17 @@ async function executeDeleteByMode(
     }
     mutationState.value = options.mode;
     try {
-        if (options.mode === 'hard-delete') {
-            await hardDeleteMany(attempted);
-        } else {
-            await softDeleteMany(attempted);
-        }
-        const { removedHashes, remaining } = removeHashesFromState(attempted);
-        await refreshLibrary();
+        const affected =
+            options.mode === 'hard-delete'
+                ? await hardDeleteMany(attempted)
+                : await softDeleteMany(attempted);
+        const affectedSet = new Set(affected);
+        const removedHashes = attempted.filter((hash) =>
+            affectedSet.has(hash)
+        );
+        const remaining = attempted.filter((hash) => !affectedSet.has(hash));
+        removeHashesFromState(removedHashes);
+        refreshGallery();
         if (removedHashes.length > 0) {
             toast.add({
                 title: options.successTitle,
@@ -509,13 +462,15 @@ async function executeRestore(
     }
     mutationState.value = 'restore';
     try {
-        await restoreMany(attempted);
-        const { removedHashes, remaining } = removeHashesFromState(attempted);
-        await refreshLibrary();
-        if (removedHashes.length > 0) {
+        const restored = await restoreMany(attempted);
+        const restoredSet = new Set(restored);
+        const remaining = attempted.filter((hash) => !restoredSet.has(hash));
+        removeHashesFromState(restored);
+        refreshGallery();
+        if (restored.length > 0) {
             toast.add({
                 title: 'Images restored',
-                description: successMessage(removedHashes.length),
+                description: successMessage(restored.length),
                 color: 'success',
             });
         }
@@ -529,7 +484,7 @@ async function executeRestore(
         }
         return {
             attempted,
-            restored: removedHashes,
+            restored,
             remaining,
             aborted: false,
         };
@@ -882,13 +837,13 @@ const searchInputProps = computed(() => {
                     <UIcon :name="view.icon" class="h-4 w-4 shrink-0" />
                     <span>{{ view.label }}</span>
                     <span class="ml-auto tabular-nums opacity-60">{{
-                        counts[view.id]
+                        formatCount(counts[view.id])
                     }}</span>
                 </button>
 
                 <div class="image-library-summary">
                     <span class="text-xs opacity-65">Stored locally</span>
-                    <strong>{{ counts.all }} active images</strong>
+                    <strong>{{ formatCount(counts.all) }} active images</strong>
                     <span class="text-xs opacity-65">
                         Previews load only when visible.
                     </span>
@@ -914,10 +869,36 @@ const searchInputProps = computed(() => {
                     />
                 </div>
 
+                <div
+                    v-if="pageError || countsFailed"
+                    class="image-library-error"
+                    role="alert"
+                >
+                    <UIcon :name="useIcon('ui.warning').value" class="h-4 w-4 shrink-0" />
+                    <span class="min-w-0 flex-1">
+                        {{
+                            pageError
+                                ? "Couldn't load the image library."
+                                : "Couldn't load image counts."
+                        }}
+                    </span>
+                    <UButton
+                        v-bind="loadMoreButtonProps"
+                        :disabled="loading || isMutating"
+                        @click="retryGallery"
+                    >
+                        Retry
+                    </UButton>
+                </div>
+
                 <div class="image-library-results-meta">
-                    <span>
-                        {{ filteredItems.length }}
-                        {{ filteredItems.length === 1 ? 'image' : 'images' }}
+                    <span v-if="matchingTotal === null">
+                        <span v-if="searchPending">Searching…</span>
+                        <span v-else>Counting…</span>
+                    </span>
+                    <span v-else>
+                        {{ matchingTotal }}
+                        {{ matchingTotal === 1 ? 'image' : 'images' }}
                     </span>
                     <span v-if="searchQuery" class="truncate">
                         matching “{{ searchQuery }}”
@@ -947,7 +928,7 @@ const searchInputProps = computed(() => {
                             >
                                 {{
                                     canSelectAll
-                                        ? `Select visible (${visibleItems.length})`
+                                        ? `Select visible (${items.length})`
                                         : 'All selected'
                                 }}
                             </UButton>
@@ -1005,7 +986,7 @@ const searchInputProps = computed(() => {
                     </div>
                 </div>
                 <GalleryGrid
-                    :items="visibleItems"
+                    :items="items"
                     :selection-mode="selectionMode"
                     :selected-hashes="selectedHashes"
                     :is-deleting="isMutating"
@@ -1018,7 +999,7 @@ const searchInputProps = computed(() => {
                     @toggle-select="toggleSelect"
                 />
                 <div
-                    v-if="!loading && filteredItems.length === 0"
+                    v-if="!loading && !pageError && matchingTotal === 0"
                     class="image-library-empty"
                 >
                     <UIcon
@@ -1035,18 +1016,15 @@ const searchInputProps = computed(() => {
                     </span>
                 </div>
                 <div
-                    v-if="filteredItems.length > PAGE_SIZE"
+                    v-if="items.length > 0 && !done"
                     class="mt-5 flex justify-center"
                 >
                     <UButton
                         v-bind="loadMoreButtonProps"
-                        :disabled="loading || done || isMutating"
+                        :disabled="loading || isMutating"
                         @click="loadMore"
                     >
-                        <span v-if="!done">{{
-                            loading ? 'Loading…' : 'Load more'
-                        }}</span>
-                        <span v-else>All loaded</span>
+                        <span>{{ loading ? 'Loading…' : 'Load more' }}</span>
                     </UButton>
                 </div>
             </main>
@@ -1147,6 +1125,18 @@ const searchInputProps = computed(() => {
     border: var(--md-border-width) dashed var(--md-outline-variant);
     border-radius: var(--md-border-radius);
     text-align: center;
+}
+.image-library-error {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    padding: 0.6rem 0.7rem;
+    color: var(--md-on-error-container, var(--md-on-surface));
+    background: var(--md-error-container, var(--md-surface));
+    border: var(--md-border-width) solid var(--md-outline-variant);
+    border-radius: var(--md-border-radius);
+    font-size: 0.72rem;
 }
 .image-library-empty span {
     font-size: 0.72rem;

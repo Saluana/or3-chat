@@ -507,19 +507,22 @@ export async function softDeleteFile(hash: string): Promise<void> {
  *
  * Non-Goals:
  * - Does not remove blobs from storage.
+ *
+ * @returns Hashes that were actually marked deleted.
  */
-export async function softDeleteMany(hashes: string[]): Promise<void> {
+export async function softDeleteMany(hashes: string[]): Promise<string[]> {
     const unique = Array.from(new Set(hashes.filter(Boolean)));
-    if (!unique.length) return;
+    if (!unique.length) return [];
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction(
+    return db.transaction(
         'rw',
         getWriteTxTableNames(db, 'file_meta', { includeTombstones: true }),
         async () => {
         const metas = await db.file_meta.bulkGet(unique);
         const updates: FileMeta[] = [];
         const payloads: DbDeletePayload<FileEntity>[] = [];
+        const removed: string[] = [];
 
         for (let i = 0; i < unique.length; i++) {
             const hash = unique[i]!;
@@ -537,6 +540,7 @@ export async function softDeleteMany(hashes: string[]): Promise<void> {
                 clock: nextClock(meta.clock),
             });
             payloads.push(payload);
+            removed.push(hash);
         }
 
         if (updates.length > 0) {
@@ -546,6 +550,7 @@ export async function softDeleteMany(hashes: string[]): Promise<void> {
         for (const payload of payloads) {
             await hooks.doAction('db.files.delete:action:soft:after', payload);
         }
+        return removed;
         }
     );
 }
@@ -562,15 +567,18 @@ export async function softDeleteMany(hashes: string[]): Promise<void> {
  *
  * Non-Goals:
  * - Does not restore missing blobs.
+ *
+ * @returns Hashes that were actually restored.
  */
-export async function restoreMany(hashes: string[]): Promise<void> {
+export async function restoreMany(hashes: string[]): Promise<string[]> {
     const unique = Array.from(new Set(hashes.filter(Boolean)));
-    if (!unique.length) return;
+    if (!unique.length) return [];
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getWriteTxTableNames(db, 'file_meta'), async () => {
+    return db.transaction('rw', getWriteTxTableNames(db, 'file_meta'), async () => {
         const metas = await db.file_meta.bulkGet(unique);
         const updates: FileMeta[] = [];
+        const restored: string[] = [];
 
         for (let i = 0; i < unique.length; i++) {
             const meta = metas[i];
@@ -584,6 +592,7 @@ export async function restoreMany(hashes: string[]): Promise<void> {
                 updated_at: nowSec(),
                 clock: nextClock(meta.clock),
             } as FileMeta);
+            restored.push(unique[i]!);
         }
 
         if (updates.length > 0) {
@@ -597,6 +606,7 @@ export async function restoreMany(hashes: string[]): Promise<void> {
                 );
             }
         }
+        return restored;
     });
 }
 
@@ -612,10 +622,12 @@ export async function restoreMany(hashes: string[]): Promise<void> {
  *
  * Non-Goals:
  * - Does not delete remote storage objects.
+ *
+ * @returns The unique hashes whose local rows were removed.
  */
-export async function hardDeleteMany(hashes: string[]): Promise<void> {
+export async function hardDeleteMany(hashes: string[]): Promise<string[]> {
     const unique = Array.from(new Set(hashes.filter(Boolean)));
-    if (!unique.length) return;
+    if (!unique.length) return [];
     const hooks = useHooks();
     const db = getDb();
     await db.transaction(
@@ -635,7 +647,9 @@ export async function hardDeleteMany(hashes: string[]): Promise<void> {
             await db.file_blobs.delete(hash);
             await hooks.doAction('db.files.delete:action:hard:after', payload);
         }
-    });
+        }
+    );
+    return unique;
 }
 
 /**

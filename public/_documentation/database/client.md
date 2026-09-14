@@ -8,7 +8,8 @@ Dexie database client that defines the `Or3DB` schema, typed tables, and version
 
 -   Establishes the IndexedDB database named `or3-db`.
 -   Declares typed `Dexie.Table` instances for every entity.
--   Applies the current version `15` schema while preserving explicit upgrade paths for older installs.
+-   Applies the current version `17` schema while preserving explicit upgrade paths for older installs.
+-   Installs deterministic local derived-index hooks on every database instance, including workspace DBs.
 -   Provides workspace-scoped database instances named `or3-db-${workspaceId}` held in a bounded LRU cache.
 
 ---
@@ -22,10 +23,10 @@ Dexie database client that defines the `Or3DB` schema, typed tables, and version
 | `messages`      | `id`        | `[thread_id+index+order_key]`, `[thread_id+index]`, `thread_id`, `index`, `role`, `deleted`, `stream_id`, `clock`, `created_at`, `updated_at`, `data.type`, `[data.type+data.executionState]`                                                                                                                                            |
 | `kv`            | `id`        | `&name`, `clock`, `created_at`, `updated_at`                                                                                                                                                                                                                                                                                             |
 | `attachments`   | `id`        | `type`, `name`, `clock`, `created_at`, `updated_at`                                                                                                                                                                                                                                                                                      |
-| `file_meta`     | `hash`      | `[kind+deleted]`, `mime_type`, `clock`, `created_at`, `updated_at`                                                                                                                                                                                                                                                                       |
+| `file_meta`     | `hash`      | `[kind+deleted]`, `mime_type`, `clock`, `created_at`, `updated_at`, `gallery_state`, `[gallery_state+created_at+hash]`, `[gallery_state+size_bytes+hash]`, `[gallery_state+name+mime_type+created_at+size_bytes+hash]`                                                                                                                   |
 | `file_blobs`    | `hash`      | (none)                                                                                                                                                                                                                                                                                                                                   |
-| `posts`         | `id`        | `title`, `postType`, `[postType+title]`, `deleted`, `created_at`, `updated_at`                                                                                                                                                                                                                                                           |
-| `pending_ops`   | `id`        | `tableName`, `status`, `createdAt`, `[tableName+pk]`                                                                                                                                                                                                                                                                                     |
+| `posts`         | `id`        | `title`, `postType`, `[postType+title]`, `document_reference_key`, `deleted`, `created_at`, `updated_at`                                                                                                                                                                                                                                 |
+| `pending_ops`   | `id`        | `tableName`, `status`, `createdAt`, `[tableName+pk]`, `[status+readyAt+createdAt+id]`                                                                                                                                                                                                                                                    |
 | `tombstones`    | `id`        | `[tableName+pk]`, `deletedAt`                                                                                                                                                                                                                                                                                                            |
 | `sync_state`    | `id`        | (none)                                                                                                                                                                                                                                                                                                                                   |
 | `sync_runs`     | `id`        | `startedAt`, `status`                                                                                                                                                                                                                                                                                                                    |
@@ -36,6 +37,25 @@ Dexie database client that defines the `Or3DB` schema, typed tables, and version
 -   `file_transfers` is a local-only transfer queue added in version 8, with durable leases and retry scheduling added in version 13.
 -   `notifications` was added in version 12.
 -   `file_blobs` stores raw binary objects; the rest are JSON-like metadata rows.
+
+### Local derived indexes (version 16)
+
+Version 16 adds two sparse, local-only derived fields and their indexes:
+
+-   `posts.document_reference_key` — `[serializedFileHashes, documentId]` for active `postType === 'doc'` rows with nonempty `file_hashes`.
+-   `file_meta.gallery_state` — `'active' | 'trash'` for rows that pass the verified raster rules.
+
+Derived keys are recomputed at the Dexie write boundary on create, update, bulk write, remote apply, snapshot install, and backup restore; they are stripped from sync payloads by `sanitizePayloadForSync` and never trusted from incoming data. The v16 upgrade populates them for existing rows without parsing document bodies.
+
+### Outbox due-time projection (version 17)
+
+Version 17 adds one local-only scheduling field and its index:
+
+-   `pending_ops.readyAt` — `nextAttemptAt ?? 0`, where `0` means immediately eligible. `createdAt` remains an ordering tie-breaker, not an eligibility condition.
+
+The v17 upgrade backfills `readyAt` transactionally from the same projection rule without rewriting operation identity, revisions, attempts, statuses, or payloads; legacy rows with absent retry times stay discoverable (`readyAt: 0`). Every `pending_ops` create/update path recomputes `readyAt` from the effective committed row (including when `nextAttemptAt` is cleared), so capture, retry, deferral, manual retry, bulk writes, and startup recovery keep the index current in the same transaction. A failed migration aborts opening rather than clearing the queue.
+
+`[status+readyAt+createdAt+id]` serves status-scoped due ranges (`readyAt <= now`, inclusive) already ordered by `(readyAt, createdAt, id)` before limiting. `readyAt` is stripped before wire-size calculation and provider submission and never leaves the device.
 
 ---
 

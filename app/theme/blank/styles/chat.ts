@@ -102,7 +102,7 @@ export const chatCssSelectors = {
     '.cm-action-group': {
         style: {
             backgroundColor: 'var(--md-surface)',
-            border: 'none',
+            border: 'var(--md-border-width) solid var(--md-border-color)',
             boxShadow: '0 1px 3px rgba(0, 0, 0, 0.06)',
             borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
             opacity: '0',

@@ -53,12 +53,13 @@ describe('sanitizePayloadForSync', () => {
         expect(result).not.toHaveProperty('hlc');
     });
 
-    it('removes ref_count for file_meta table', () => {
+    it('removes ref_count and gallery_state for file_meta table', () => {
         const payload = {
             hash: 'sha256:abc123',
             mime_type: 'image/png',
             size: 1024,
             ref_count: 5,
+            gallery_state: 'active',
         };
         const result = sanitizePayloadForSync('file_meta', payload, 'put');
         expect(result).toEqual({
@@ -67,6 +68,21 @@ describe('sanitizePayloadForSync', () => {
             size: 1024,
             deleted: false, // Added for legacy data compatibility
         });
+        expect(result?.gallery_state).toBeUndefined();
+    });
+
+    it('removes document_reference_key for posts table', () => {
+        const payload = {
+            id: 'doc-1',
+            title: 'Doc',
+            postType: 'doc',
+            file_hashes: '["sha256:a"]',
+            document_reference_key: ['["sha256:a"]', 'doc-1'],
+        };
+        const result = sanitizePayloadForSync('posts', payload, 'put');
+        expect(result?.document_reference_key).toBeUndefined();
+        expect(result?.post_type).toBe('doc');
+        expect(result?.postType).toBeUndefined();
     });
 
     it('does not remove ref_count for other tables', () => {

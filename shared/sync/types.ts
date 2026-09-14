@@ -42,6 +42,13 @@ export interface PendingOp {
     createdAt: number;
     attempts: number;
     nextAttemptAt?: number;
+    /**
+     * Local-only scheduling projection: `nextAttemptAt ?? 0`.
+     * `0` means immediately eligible. Maintained at the Dexie write
+     * boundary and covered by `[status+readyAt+createdAt+id]`; never sent
+     * to providers. Absent on pre-migration rows until backfilled.
+     */
+    readyAt?: number;
     status: PendingOpStatus;
     lastError?: string;
     lastErrorCode?: SyncErrorCode;

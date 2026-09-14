@@ -53,6 +53,12 @@ export function sanitizePayloadForSync(
     if (tableName === 'file_meta') {
         // ref_count is derived locally, not synced
         delete sanitized.ref_count;
+        // gallery_state is a local gallery index field
+        delete sanitized.gallery_state;
+    }
+    if (tableName === 'posts') {
+        // document_reference_key is a local reference index field
+        delete sanitized.document_reference_key;
     }
 
     // Ensure required `deleted` field exists for synced tables

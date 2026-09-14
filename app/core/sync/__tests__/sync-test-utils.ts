@@ -106,21 +106,83 @@ export function createMemoryTable<T extends Record<string, unknown>>(
  * Purpose:
  * Create a minimal `pending_ops` table mock with the subset of query APIs used by sync tests.
  */
+function mockReadyAt(op: PendingOp): number {
+    if (typeof op.readyAt === 'number' && Number.isFinite(op.readyAt)) {
+        return op.readyAt;
+    }
+    if (typeof op.nextAttemptAt === 'number' && Number.isFinite(op.nextAttemptAt)) {
+        return op.nextAttemptAt;
+    }
+    return 0;
+}
+
+function mockSchedulingOrder(a: PendingOp, b: PendingOp): number {
+    const readyOrder = mockReadyAt(a) - mockReadyAt(b);
+    if (readyOrder) return readyOrder;
+    const createdOrder = a.createdAt - b.createdAt;
+    if (createdOrder) return createdOrder;
+    return a.id.localeCompare(b.id);
+}
+
 export function createPendingOpsTable(initial: PendingOp[] = []) {
     const rows = new Map<string, PendingOp>();
     for (const op of initial) {
         rows.set(op.id, { ...op });
     }
     const list = () => Array.from(rows.values());
-    const matchField = <K extends keyof PendingOp>(field: K, value: PendingOp[K]) =>
-        list().filter((row) => row[field] === value);
 
     return {
         __rows: rows,
-        where<K extends keyof PendingOp>(field: K) {
+        where(field: string) {
+            if (field === '[status+readyAt+createdAt+id]') {
+                return {
+                    between(lower: unknown[], upper: unknown[]) {
+                        const status = lower[0] as PendingOp['status'];
+                        const lowerReady =
+                            typeof lower[1] === 'number' ? (lower[1] as number) : Number.NEGATIVE_INFINITY;
+                        const upperReady =
+                            typeof upper[1] === 'number' ? (upper[1] as number) : Number.POSITIVE_INFINITY;
+                        const getMatches = () =>
+                            list()
+                                .filter(
+                                    (row) =>
+                                        row.status === status &&
+                                        mockReadyAt(row) >= lowerReady &&
+                                        mockReadyAt(row) <= upperReady
+                                )
+                                .sort(mockSchedulingOrder);
+                        const collection = {
+                            async count() {
+                                return getMatches().length;
+                            },
+                            async toArray() {
+                                return getMatches();
+                            },
+                            async modify(patch: Partial<PendingOp>) {
+                                for (const row of getMatches()) {
+                                    rows.set(row.id, { ...row, ...patch });
+                                }
+                            },
+                            limit(n: number) {
+                                return {
+                                    ...collection,
+                                    async toArray() {
+                                        return getMatches().slice(0, n);
+                                    },
+                                };
+                            },
+                        };
+                        return collection;
+                    },
+                };
+            }
             return {
-                equals(value: PendingOp[K]) {
-                    const getMatches = () => matchField(field, value);
+                equals(value: PendingOp[keyof PendingOp]) {
+                    const getMatches = () =>
+                        list().filter(
+                            (row) =>
+                                (row as unknown as Record<string, unknown>)[field] === value
+                        );
 
                     const collection = {
                         async sortBy(sortField: keyof PendingOp) {

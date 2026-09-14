@@ -307,6 +307,9 @@ export const PostSchema = z.object({
             .optional(),
     ]),
     file_hashes: z.string().nullable().optional(),
+    // Local-only sparse index key for active documents; recomputed at the
+    // Dexie write boundary and stripped from sync payloads.
+    document_reference_key: z.tuple([z.string(), z.string()]).optional(),
 });
 
 /**
@@ -608,6 +611,9 @@ export const FileMetaSchema = z.object({
     clock: z.number().int(),
     hlc: z.string().optional(),
     op_id: z.string().optional(),
+    // Local-only sparse gallery index state; recomputed at the Dexie write
+    // boundary and stripped from sync payloads.
+    gallery_state: z.enum(['active', 'trash']).optional(),
 });
 /**
  * Purpose:

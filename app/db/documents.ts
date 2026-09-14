@@ -26,7 +26,7 @@ import type {
 import type { TypedHookEngine } from '~/core/hooks/typed-hooks';
 import type { TipTapDocument } from '~/types/database';
 import type { Post } from './schema';
-import { serializeDocumentFileHashes } from '~/utils/documents/document-content';
+import { serializeDocumentFileHashes, parseDocumentFileHashes } from '~/utils/documents/document-content';
 
 /**
  * Type guard to check if a post is a document
@@ -427,6 +427,43 @@ export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
         sliced.map(toDocumentEntity)
     );
     return mergeDocumentEntities(filteredEntities, baseMap).map(rowToRecord);
+}
+
+/**
+ * Purpose:
+ * List the unique file hashes referenced by persisted, active documents.
+ *
+ * Behavior:
+ * Enumerates sparse `document_reference_key` index keys only; no post values
+ * are fetched and no document content is parsed or filtered through the
+ * full-document output hooks.
+ *
+ * Constraints:
+ * - Missing, deleted, non-doc, and empty `file_hashes` rows are excluded.
+ * - Malformed serialized hashes are ignored using the shared parser.
+ *
+ * Non-Goals:
+ * - Does not return document records; use `listDocuments` for that.
+ */
+export async function listDocumentFileHashes(): Promise<string[]> {
+    const hashes = new Set<string>();
+    await dbTry(
+        async () => {
+            await getDb()
+                .posts.orderBy('document_reference_key')
+                .eachKey((key) => {
+                    if (!Array.isArray(key) || typeof key[0] !== 'string') {
+                        return;
+                    }
+                    for (const hash of parseDocumentFileHashes(key[0])) {
+                        hashes.add(hash);
+                    }
+                });
+        },
+        { op: 'read', entity: 'posts', action: 'listDocumentFileHashes' },
+        { rethrow: true }
+    );
+    return [...hashes];
 }
 
 /**

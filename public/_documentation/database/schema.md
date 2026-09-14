@@ -21,14 +21,18 @@ Central Zod schemas and generated TypeScript types for all Dexie tables.
 | `ThreadCreateSchema`                          | Optional fields with defaults for `id`, `clock`, timestamps.               |
 | `MessageSchema`                               | Includes `file_hashes` string column, `stream_id`, sparse `index`.         |
 | `MessageCreateSchema`                         | Auto-generates `id`, `clock`, timestamps; leaves `index` optional.         |
-| `PostSchema` / `PostCreateSchema`             | Covers generic posts plus normalized title/meta logic.                     |
+| `PostSchema` / `PostCreateSchema`             | Covers generic posts plus normalized title/meta logic. Includes the local-only `document_reference_key`. |
 | `KvSchema` / `KvCreateSchema`                 | Simple key-value store with optional `value`.                              |
 | `AttachmentSchema` / `AttachmentCreateSchema` | Enforces URL+type/name, optional `deleted`.                                |
-| `FileMetaSchema` / `FileMetaCreateSchema`     | Metadata for blobs, defaulting `ref_count` to 1 and `clock` to 0.          |
+| `FileMetaSchema` / `FileMetaCreateSchema`     | Metadata for blobs, defaulting `ref_count` to 1 and `clock` to 0. Includes the local-only `gallery_state`. |
 | `NotificationActionSchema`                    | Action with `navigate` or `callback` kind and optional target fields.      |
 | `NotificationSchema` / `NotificationCreateSchema` | Inbox records scoped by `user_id` with actions, read state, and clocks. |
 
 Derived types mirror the schemas exactly: `Project`, `Thread`, `ThreadCreate`, `Message`, `MessageCreate`, `Post`, `PostCreate`, `Kv`, `KvCreate`, `Attachment`, `AttachmentCreate`, `FileMeta`, `FileMetaCreate`, `NotificationAction`, `Notification`, and `NotificationCreate`.
+
+### Local derived fields
+
+`PostSchema.document_reference_key` and `FileMetaSchema.gallery_state` are optional, local-only index fields. They are recomputed from canonical fields by `app/db/derived-indexes.ts` whenever rows are written, are never sent to sync backends (`sanitizePayloadForSync` strips them), and incoming values are ignored. See `database/client` and `database/files-select` for their indexes and query behavior.
 
 ---
 

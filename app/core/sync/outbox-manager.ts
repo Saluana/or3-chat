@@ -53,6 +53,121 @@ const DEFAULT_MAX_BATCH_SIZE = 50;
 /** Max pending ops before emitting capacity warning */
 const MAX_PENDING_OPS = 500;
 
+type EligibleStatus = 'pending' | 'retry_wait';
+
+function getReadyAt(op: PendingOp): number {
+    if (typeof op.readyAt === 'number' && Number.isFinite(op.readyAt)) {
+        return op.readyAt;
+    }
+    if (typeof op.nextAttemptAt === 'number' && Number.isFinite(op.nextAttemptAt)) {
+        return op.nextAttemptAt;
+    }
+    return 0;
+}
+
+function compareSchedulingKey(a: PendingOp, b: PendingOp): number {
+    const readyOrder = getReadyAt(a) - getReadyAt(b);
+    if (readyOrder) return readyOrder;
+    const createdOrder = a.createdAt - b.createdAt;
+    if (createdOrder) return createdOrder;
+    return a.id.localeCompare(b.id);
+}
+
+function stripReadyAt(op: PendingOp): Omit<PendingOp, 'readyAt'> {
+    const { readyAt: _omitted, ...rest } = op;
+    return rest;
+}
+
+type LocalRevision = { clock: number; hlc: string; opId: string };
+
+function materializedRevisionFromRow(row: unknown): LocalRevision {
+    const rec = (row && typeof row === 'object' ? row : {}) as Record<string, unknown>;
+    return {
+        clock: typeof rec.clock === 'number' && Number.isFinite(rec.clock) ? rec.clock : 0,
+        hlc: typeof rec.hlc === 'string' ? rec.hlc : '',
+        opId:
+            typeof rec.op_id === 'string'
+                ? rec.op_id
+                : typeof rec.opId === 'string'
+                  ? rec.opId
+                  : '',
+    };
+}
+
+function winnerRevisionFromPayload(payload: unknown, fallback: LocalRevision): LocalRevision {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        return fallback;
+    }
+    const rec = payload as Record<string, unknown>;
+    return {
+        clock:
+            typeof rec.clock === 'number' && Number.isFinite(rec.clock)
+                ? rec.clock
+                : fallback.clock,
+        hlc: typeof rec.hlc === 'string' ? rec.hlc : '',
+        opId:
+            typeof rec.op_id === 'string'
+                ? rec.op_id
+                : typeof rec.opId === 'string'
+                  ? rec.opId
+                  : fallback.opId,
+    };
+}
+
+function tombstoneRevisionFromRow(row: unknown): LocalRevision | undefined {
+    if (!row || typeof row !== 'object') return undefined;
+    const rec = row as { clock?: unknown; hlc?: unknown; opId?: unknown; op_id?: unknown };
+    if (typeof rec.clock !== 'number' || !Number.isFinite(rec.clock)) return undefined;
+    return {
+        clock: rec.clock,
+        hlc: typeof rec.hlc === 'string' ? rec.hlc : '',
+        opId: typeof rec.opId === 'string' ? rec.opId : typeof rec.op_id === 'string' ? rec.op_id : '',
+    };
+}
+
+// Fail closed like the pull path: an equal-clock tombstone without full
+// tie-break metadata blocks the incoming revision until repaired.
+function tombstoneBlocksRevision(
+    tombstone: { clock: number; hlc?: string; opId?: string } | undefined,
+    incoming: LocalRevision
+): boolean {
+    if (!tombstone) return false;
+    if (tombstone.clock !== incoming.clock) return tombstone.clock > incoming.clock;
+    if (!tombstone.hlc || !tombstone.opId) return true;
+    return (
+        compareSyncRevision(
+            { clock: tombstone.clock, hlc: tombstone.hlc, opId: tombstone.opId },
+            incoming
+        ) >= 0
+    );
+}
+
+function interleaveByStatus<T extends PendingOp>(
+    pending: T[],
+    retryWait: T[],
+    limit: number,
+    first: EligibleStatus
+): T[] {
+    const merged: T[] = [];
+    let pendingIndex = 0;
+    let retryIndex = 0;
+    let turn: EligibleStatus = first;
+    while (merged.length < limit && (pendingIndex < pending.length || retryIndex < retryWait.length)) {
+        if (turn === 'pending' && pendingIndex < pending.length) {
+            merged.push(pending[pendingIndex++]!);
+            turn = 'retry_wait';
+        } else if (turn === 'retry_wait' && retryIndex < retryWait.length) {
+            merged.push(retryWait[retryIndex++]!);
+            turn = 'pending';
+        } else if (pendingIndex < pending.length) {
+            merged.push(pending[pendingIndex++]!);
+        } else {
+            merged.push(retryWait[retryIndex++]!);
+        }
+    }
+    return merged;
+}
+
 function httpStatusOf(error: unknown): number | null {
     if (!error || typeof error !== 'object') return null;
     const candidate = error as { status?: unknown; statusCode?: unknown };
@@ -101,6 +216,7 @@ export class OutboxManager {
     private needsSyncingRecovery = true;
     private providerRateLimitedUntil = 0;
     private lifecycleGeneration = 0;
+    private nextStatus: EligibleStatus = 'retry_wait';
 
     constructor(
         db: Or3DB,
@@ -190,59 +306,62 @@ export class OutboxManager {
             const hooks = useHooks();
 
             // Crash recovery: reset stale in-flight ops once when the loop starts.
+            // Recovered rows are immediately eligible with no positive
+            // scheduling time (readyAt 0). Stamping them with `now` would sort
+            // them after every fresh pending row and let a sustained pending
+            // backlog postpone them on every flush; same-status FIFO via
+            // (readyAt, createdAt, id) is the fair position.
             if (this.needsSyncingRecovery) {
                 await this.db.pending_ops
                     .where('status')
                     .equals('syncing')
-                    .modify({ status: 'pending', nextAttemptAt: Date.now() });
+                    .modify({ status: 'pending', nextAttemptAt: undefined });
                 if (generation !== this.lifecycleGeneration) return false;
                 await this.db.pending_ops
                     .where('status')
                     .equals('in_flight')
-                    .modify({ status: 'pending', nextAttemptAt: Date.now() });
+                    .modify({ status: 'pending', nextAttemptAt: undefined });
                 if (generation !== this.lifecycleGeneration) return false;
                 this.needsSyncingRecovery = false;
             }
 
-            // Get pending ops (limited to prevent O(N) memory usage)
-            // We fetch more than maxBatchSize to allow for some coalescing
+            // Select already-due work with bounded indexed reads. Each status
+            // stream is ordered by (readyAt, createdAt, id) before limiting;
+            // the streams share the combined scan limit fairly.
             const scanLimit = this.config.maxBatchSize * 10;
-            const pendingOps = [
-                ...(await this.db.pending_ops
-                    .where('status')
-                    .equals('pending')
-                    .limit(scanLimit)
-                    .toArray()),
-                ...(await this.db.pending_ops
-                    .where('status')
-                    .equals('retry_wait')
-                    .limit(scanLimit)
-                    .toArray()),
-            ].slice(0, scanLimit);
+            const now = Date.now();
+            const [pendingDue, retryDue] = await Promise.all([
+                this.queryEligibleOps('pending', now, scanLimit),
+                this.queryEligibleOps('retry_wait', now, scanLimit),
+            ]);
             if (generation !== this.lifecycleGeneration) return false;
-            
-            // Sort by createdAt to ensure correct order
-            pendingOps.sort((a, b) => a.createdAt - b.createdAt);
+
+            const pendingOps = interleaveByStatus(
+                pendingDue,
+                retryDue,
+                scanLimit,
+                this.nextStatus
+            );
 
             if (!pendingOps.length) return false;
 
             // Log only when there's work to do
 
-            // Check capacity
-            if (pendingOps.length >= MAX_PENDING_OPS) {
-                console.warn('[OutboxManager] Queue near capacity:', pendingOps.length);
+            // Check capacity from indexed queue counts; the ready candidate
+            // count is no longer a suitable proxy for total backlog.
+            const totalQueued = await this.getPendingCount();
+            if (generation !== this.lifecycleGeneration) return false;
+            if (totalQueued >= MAX_PENDING_OPS) {
+                console.warn('[OutboxManager] Queue near capacity:', totalQueued);
                 await hooks.doAction('sync.queue:action:full', {
-                    pendingCount: pendingOps.length,
+                    pendingCount: totalQueued,
                     maxSize: MAX_PENDING_OPS,
                 });
             }
 
-            // Coalesce and batch
+            // Coalesce within the selected eligible set only. Deferred and
+            // unselected rows stay intact; only selected losers are removed.
             const coalesced = this.coalesceOps(pendingOps);
-            const now = Date.now();
-            const dueOps = coalesced.filter(
-                (op) => op.nextAttemptAt === undefined || op.nextAttemptAt <= now
-            );
 
             // Mark dropped ops for deletion
             const coalescedIds = new Set(coalesced.map((op) => op.id));
@@ -250,13 +369,28 @@ export class OutboxManager {
             if (dropped.length) {
                 await this.db.pending_ops.bulkDelete(dropped.map((op) => op.id));
             }
+            if (generation !== this.lifecycleGeneration) return false;
 
-            if (!dueOps.length) return false;
+            if (!coalesced.length) return false;
+
+            // coalesceOps() sorts by creation time, which would undo the fair
+            // selection order. Restore fairness before packing so count/byte
+            // limits share capacity between statuses.
+            const dueOps = this.restoreFairOrder(coalesced);
 
             const batch = this.packDueOps(dueOps);
             if (!batch.length) return false;
 
             if (!circuitBreaker.beginProbe()) return false;
+            // Consume the turn only when a batch actually starts a push
+            // attempt. Empty or gated flushes preserve it. The last packed
+            // operation decides so single-op and byte-limited batches do not
+            // reserve unused slots.
+            const lastStatus = batch[batch.length - 1]?.status;
+            if (lastStatus === 'pending' || lastStatus === 'retry_wait') {
+                this.nextStatus =
+                    lastStatus === 'pending' ? 'retry_wait' : 'pending';
+            }
             let probeSettled = false;
 
             try {
@@ -318,11 +452,66 @@ export class OutboxManager {
         });
     }
 
+    private async queryEligibleOps(
+        status: EligibleStatus,
+        now: number,
+        limit: number
+    ): Promise<PendingOp[]> {
+        const rows = (await (this.db.pending_ops as unknown as {
+            where: (index: string) => {
+                between: (
+                    lower: unknown[],
+                    upper: unknown[],
+                    lowerOpen: boolean,
+                    upperOpen: boolean
+                ) => { limit: (n: number) => { toArray: () => Promise<PendingOp[]> } };
+            };
+        })
+            .where('[status+readyAt+createdAt+id]')
+            .between(
+                [status, 0, 0, ''],
+                [status, now, Number.MAX_SAFE_INTEGER, '\uffff'],
+                true,
+                true
+            )
+            .limit(limit)
+            .toArray()) as PendingOp[];
+        // The index range already enforces eligibility and ordering. Filter
+        // and sort defensively so doubles without the projection (legacy mock
+        // rows) behave identically without moving policy into test doubles.
+        return rows
+            .filter((op) => op.status === status && getReadyAt(op) <= now)
+            .sort(compareSchedulingKey)
+            .slice(0, limit);
+    }
+
+    private restoreFairOrder(winners: PendingOp[]): PendingOp[] {
+        const pending = winners
+            .filter((op) => op.status === 'pending')
+            .sort(compareSchedulingKey);
+        const retryWait = winners
+            .filter((op) => op.status === 'retry_wait')
+            .sort(compareSchedulingKey);
+        const rest = winners
+            .filter((op) => op.status !== 'pending' && op.status !== 'retry_wait')
+            .sort(compareSchedulingKey);
+        return [
+            ...interleaveByStatus(
+                pending,
+                retryWait,
+                pending.length + retryWait.length,
+                this.nextStatus
+            ),
+            ...rest,
+        ];
+    }
+
     private packDueOps(dueOps: PendingOp[]): PendingOp[] {
         const packed: PendingOp[] = [];
         for (const op of dueOps) {
             if (packed.length >= this.config.maxBatchSize) break;
-            const candidate = [...packed, op];
+            // Size the wire form without the local-only projection.
+            const candidate = [...packed, op].map(stripReadyAt);
             const bytes = syncJsonByteLength({
                 scope: this.scope,
                 ops: candidate,
@@ -366,7 +555,7 @@ export class OutboxManager {
 
         try {
             const sanitizedBatch = batch.map((op) => ({
-                ...op,
+                ...stripReadyAt(op),
                 payload: sanitizePayloadForSync(op.tableName, op.payload, op.operation),
             }));
 
@@ -536,10 +725,59 @@ export class OutboxManager {
             hookBridge.markSyncTransaction(tx);
             const table = tx.table(op.tableName);
             if (winnerPayload && typeof winnerPayload === 'object' && !Array.isArray(winnerPayload)) {
+                // Eligibility-first selection can push an older revision while a
+                // newer revision for the same record stays deferred. The server
+                // winner is newer than the pushed op but may still be older
+                // than local materialized state; applying it unconditionally
+                // would overwrite newer local data that the deferred row alone
+                // cannot restore. Fail closed on ambiguous ties.
+                const winnerRev = winnerRevisionFromPayload(winnerPayload, op.stamp);
+                const local: unknown = await table.get(op.pk);
+                if (local) {
+                    if (compareSyncRevision(winnerRev, materializedRevisionFromRow(local)) <= 0) {
+                        return;
+                    }
+                } else {
+                    const tombstone: unknown = await tx.table('tombstones').get(`${op.tableName}:${op.pk}`);
+                    const tombRev = tombstoneRevisionFromRow(tombstone);
+                    if (
+                        tombRev &&
+                        tombstoneBlocksRevision(
+                            {
+                                clock: tombRev.clock,
+                                hlc: tombRev.hlc || undefined,
+                                opId: tombRev.opId || undefined,
+                            },
+                            winnerRev
+                        )
+                    ) {
+                        return;
+                    }
+                }
                 await table.put(winnerPayload as Record<string, unknown>);
                 return;
             }
             if (op.operation === 'delete') {
+                // A stale delete must not remove a newer local put.
+                const local: unknown = await table.get(op.pk);
+                if (local && compareSyncRevision(op.stamp, materializedRevisionFromRow(local)) <= 0) {
+                    return;
+                }
+                const existingTombstone: unknown = await tx.table('tombstones').get(`${op.tableName}:${op.pk}`);
+                const existingRev = tombstoneRevisionFromRow(existingTombstone);
+                if (
+                    existingRev &&
+                    tombstoneBlocksRevision(
+                        {
+                            clock: existingRev.clock,
+                            hlc: existingRev.hlc || undefined,
+                            opId: existingRev.opId || undefined,
+                        },
+                        op.stamp
+                    )
+                ) {
+                    return;
+                }
                 await table.delete(op.pk);
                 const deletedAt = nowSec();
                 await tx.table('tombstones').put({

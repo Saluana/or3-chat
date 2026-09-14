@@ -773,7 +773,7 @@
                     "name": "client.md",
                     "path": "/database/client",
                     "category": "Core",
-                    "summary": "Dexie database client that defines the Or3DB schema, typed tables, and versioning rules."
+                    "summary": "Dexie database client that defines the Or3DB schema, typed tables, versioning rules, and local derived-index hooks including the v17 outbox readyAt projection."
                 },
                 {
                     "name": "dbTry.md",
@@ -1277,7 +1277,7 @@
                     "name": "sync-layer.md",
                     "path": "/cloud/sync-layer",
                     "category": "Architecture",
-                    "summary": "OR3 sync is offline-first Dexie plus a change-log. Pulls include oldestRetainedVersion and requiresSnapshot; notifications are session-scoped; LWW ties break on op_id; server ops use UUID op_id."
+                    "summary": "OR3 sync is offline-first Dexie plus a change-log. Outbox selection is readyAt-bounded and fair across pending and retry_wait with guarded winner application and delay-free recovery; pulls include oldestRetainedVersion and requiresSnapshot."
                 },
                 {
                     "name": "troubleshooting.md",

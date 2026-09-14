@@ -102,6 +102,16 @@ and replay strictly after its watermark.
 4.  **Flush**: `OutboxManager` detects pending items and pushes them to the backend (`mutation: sync.push`).
 5.  **Confirmation**: On success, the `PendingOp` is removed. On failure, it is scheduled for retry.
 
+### Outbox scheduling and retry fairness
+
+Each outbox row carries a local-only `readyAt` projection (`nextAttemptAt ?? 0`; `0` means immediately eligible). `OutboxManager.flush()` captures one `now`, then reads each of `pending` and `retry_wait` through `[status+readyAt+createdAt+id]` with `readyAt <= now` (inclusive) already ordered by `(readyAt, createdAt, id)` before limiting. Each stream is bounded by `maxBatchSize * 10`; the two streams share that combined scan limit fairly.
+
+Selection interleaves the streams starting with the manager's turn (initially `retry_wait`), coalesces only the selected eligible set with the existing `compareSyncRevision` winner rule (deleting only selected losers; deferred and unselected rows stay intact), then re-interleaves the winners by original status before the existing count/byte packer. Restoring fair order after coalescing matters because the coalescer sorts by creation time. The turn flips to the opposite of the last packed operation's original status only when a batch actually starts a push, so empty or gated flushes preserve it and single-operation or byte-limited requests do not reserve unused slots. A lone ready group fills the full request capacity; deferred-only or terminal-only queues make no push request.
+
+`readyAt` is stripped before wire-size calculation and provider submission and never reaches the server. Queue-capacity reporting (`sync.queue:action:full` at 500 ops) uses indexed `pending` plus `retry_wait` counts, not the ready candidate count.
+
+Startup recovery resets stale `syncing`/`in_flight` rows to `pending` with no positive scheduling delay (`readyAt` 0), so a sustained same-status backlog cannot postpone them behind every fresh row. When a push returns `applied: false` with a server winner, the winner is applied only if it is newer than the local materialized row/tombstone under `compareSyncRevision` (fail closed on ambiguous ties); a stale winner never overwrites newer local state, the pushed operation is still acknowledged, and deferred newer rows are preserved for later convergence.
+
 ### Read Path (Remote to Local)
 
 1.  **Subscription**: `SubscriptionManager` listens for changes since the last known cursor (`query: sync.watchChanges`).

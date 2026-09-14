@@ -89,6 +89,9 @@ export const PendingOpSchema = z.object({
     createdAt: z.number(),
     attempts: z.number().int().nonnegative(),
     nextAttemptAt: z.number().int().nonnegative().optional(),
+    // Local-only scheduling projection (`nextAttemptAt ?? 0`). Accepted so
+    // persisted rows validate; stripped before wire-size and provider input.
+    readyAt: z.number().optional(),
     status: z.enum([
         'pending',
         'in_flight',

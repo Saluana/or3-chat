@@ -190,7 +190,7 @@
 
 [data-theme="blank"] .cm-action-group {
   background-color: var(--md-surface);
-  border: none;
+  border: var(--md-border-width) solid var(--md-border-color);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
   border-radius: var(--md-border-radius-small, var(--md-border-radius));
   opacity: 0;

@@ -36,23 +36,31 @@ vi.mock('../client', () => {
                 else rows.push(meta);
             }
         },
+        async delete(hash: string) {
+            const idx = rows.findIndex((row) => row.hash === hash);
+            if (idx >= 0) rows.splice(idx, 1);
+        },
     };
 
+    const deletedBlobs: string[] = [];
     const mockDb = {
         file_meta: table,
         file_blobs: {
+            __deletedBlobs: deletedBlobs,
             async get() {
                 return undefined;
             },
             async put() {},
-            async delete() {},
+            async delete(hash: string) {
+                deletedBlobs.push(hash);
+            },
         },
-        transaction: async (
+        transaction: async <T>(
             _mode: string,
             _tables: unknown,
-            fn: () => Promise<void>
-        ) => {
-            await fn();
+            fn: () => Promise<T>
+        ): Promise<T> => {
+            return fn();
         },
     };
 
@@ -86,7 +94,13 @@ vi.mock('../../core/hooks/useHooks', () => ({
     })),
 }));
 
-import { getFileMeta, softDeleteFile, softDeleteMany } from '../files';
+import {
+    getFileMeta,
+    hardDeleteMany,
+    restoreMany,
+    softDeleteFile,
+    softDeleteMany,
+} from '../files';
 import { db } from '../client';
 
 const table = db.file_meta as unknown as {
@@ -96,6 +110,7 @@ const table = db.file_meta as unknown as {
     put: (meta: FileMeta) => Promise<void>;
     bulkGet: (hashes: string[]) => Promise<(FileMeta | undefined)[]>;
 };
+const blobs = db.file_blobs as unknown as { __deletedBlobs: string[] };
 
 const baseMeta = (overrides: Partial<FileMeta>): FileMeta => ({
     hash: 'hash-' + Math.random().toString(16).slice(2),
@@ -178,7 +193,7 @@ describe('files soft delete', () => {
             }
         });
 
-        it('skips already deleted files', async () => {
+        it('skips already deleted files and reports only affected hashes', async () => {
             const metas = [
                 baseMeta({ hash: 'already-deleted', deleted: true, deleted_at: 100 }),
                 baseMeta({ hash: 'not-deleted', deleted: false }),
@@ -186,8 +201,13 @@ describe('files soft delete', () => {
             table.__setRows(metas);
             nowSecState.value = 500;
 
-            await softDeleteMany(['already-deleted', 'not-deleted']);
+            const affected = await softDeleteMany([
+                'already-deleted',
+                'not-deleted',
+                'missing',
+            ]);
 
+            expect(affected).toEqual(['not-deleted']);
             // Already deleted should keep original deleted_at
             const alreadyDeleted = table.__rows.find(
                 (r) => r.hash === 'already-deleted'
@@ -205,11 +225,64 @@ describe('files soft delete', () => {
             table.__setRows(metas);
             nowSecState.value = 1000;
 
-            await softDeleteMany(['single', 'single', '', 'single']);
+            const affected = await softDeleteMany([
+                'single',
+                'single',
+                '',
+                'single',
+            ]);
 
+            expect(affected).toEqual(['single']);
             const stored = table.__rows.find((r) => r.hash === 'single');
             expect(stored!.deleted).toBe(true);
             expect(stored!.deleted_at).toBe(1000);
+        });
+    });
+
+    describe('restoreMany', () => {
+        it('restores only deleted rows and reports affected hashes', async () => {
+            table.__setRows([
+                baseMeta({ hash: 'deleted', deleted: true, deleted_at: 5 }),
+                baseMeta({ hash: 'active', deleted: false }),
+            ]);
+            nowSecState.value = 2000;
+
+            const restored = await restoreMany(['deleted', 'active', 'missing']);
+
+            expect(restored).toEqual(['deleted']);
+            const stored = table.__rows.find((r) => r.hash === 'deleted');
+            expect(stored!.deleted).toBe(false);
+            expect(stored!.updated_at).toBe(2000);
+        });
+    });
+
+    describe('hardDeleteMany', () => {
+        beforeEach(() => {
+            blobs.__deletedBlobs.length = 0;
+        });
+
+        it('removes metadata and blobs for unique hashes', async () => {
+            table.__setRows([
+                baseMeta({ hash: 'keep', deleted: false }),
+                baseMeta({ hash: 'remove-1', deleted: false }),
+                baseMeta({ hash: 'remove-2', deleted: true }),
+            ]);
+
+            const removed = await hardDeleteMany([
+                'remove-1',
+                'remove-1',
+                'remove-2',
+                '',
+                'missing',
+            ]);
+
+            expect(removed).toEqual(['remove-1', 'remove-2', 'missing']);
+            expect(table.__rows.map((row) => row.hash)).toEqual(['keep']);
+            expect(blobs.__deletedBlobs).toEqual([
+                'remove-1',
+                'remove-2',
+                'missing',
+            ]);
         });
     });
 });

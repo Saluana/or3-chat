@@ -31,6 +31,12 @@ import { cleanupCursorManager } from '~/core/sync/cursor-manager';
 import { cleanupHookBridge } from '~/core/sync/hook-bridge';
 import { cleanupSubscriptionManagersByWorkspace } from '~/core/sync/subscription-manager';
 import { cleanupSyncCircuitBreakers } from '~~/shared/sync/circuit-breaker';
+import {
+    applyDocumentReferenceKey,
+    applyGalleryState,
+    applyReadyAt,
+    installDerivedIndexHooks,
+} from './derived-indexes';
 
 /** Maximum number of workspace DBs to keep open (prevents IndexedDB connection exhaustion) */
 const MAX_CACHED_WORKSPACE_DBS = 10;
@@ -241,6 +247,55 @@ export class Or3DB extends Dexie {
                         delete post.post_type;
                     })
             );
+
+        // Version 16: Sparse local indexes for image-library browsing and
+        // reference-only document reads. Derived fields are local-only and
+        // maintained at the Dexie write boundary (see derived-indexes.ts).
+        this.version(16)
+            .stores({
+                posts:
+                    'id, title, postType, [postType+title], document_reference_key, deleted, created_at, updated_at',
+                file_meta:
+                    'hash, [kind+deleted], mime_type, clock, created_at, updated_at, gallery_state, [gallery_state+created_at+hash], [gallery_state+size_bytes+hash], [gallery_state+name+mime_type+created_at+size_bytes+hash]',
+            })
+            .upgrade(async (tx) => {
+                await tx
+                    .table('posts')
+                    .where('postType')
+                    .equals('doc')
+                    .modify((post: Record<string, unknown>) => {
+                        applyDocumentReferenceKey(post);
+                    });
+                await tx
+                    .table('file_meta')
+                    .toCollection()
+                    .modify((meta: Record<string, unknown>) => {
+                        applyGalleryState(meta);
+                    });
+            });
+
+        // Version 17: Due-time scheduling projection for the outbox.
+        // `pending_ops.readyAt` mirrors `nextAttemptAt ?? 0` so status-scoped
+        // due ranges can be served by `[status+readyAt+createdAt+id]` without
+        // materializing deferred work. The field is local-only and maintained
+        // at the Dexie write boundary (see derived-indexes.ts).
+        this.version(17)
+            .stores({
+                pending_ops:
+                    'id, tableName, status, createdAt, [tableName+pk], [status+readyAt+createdAt+id]',
+            })
+            .upgrade((tx) =>
+                tx
+                    .table('pending_ops')
+                    .toCollection()
+                    .modify((op: Record<string, unknown>) => {
+                        applyReadyAt(op);
+                    })
+            );
+
+        // Derived-key maintenance must run on every instance, including
+        // workspace DBs, and independently of sync capture suppression.
+        installDerivedIndexHooks(this);
     }
 }
 
