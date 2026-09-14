@@ -72,6 +72,10 @@ import {
     type OpenRouterReasoningConfig,
 } from '../../utils/chat/openrouterStream';
 import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
+import {
+    appendModelVariant,
+    stripModelVariantSuffix,
+} from '~~/shared/openrouter/model-variants';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { inferMimeFromUrl } from '~/utils/chat/files';
 import { createStreamAccumulator } from '~/composables/chat/useStreamAccumulator';
@@ -1889,6 +1893,7 @@ export function useChat(
         const {
             extraTextParts,
             online,
+            modelVariant,
             thinking,
             reasoningEffort,
             context_hashes,
@@ -1938,7 +1943,10 @@ export function useChat(
               })
             : undefined;
         model = normalizedModelId;
-        if (online === true) model = model + ':online';
+        model = appendModelVariant(
+            model,
+            modelVariant ?? (online === true ? 'online' : 'off')
+        );
 
         file_hashes = mergeAssistantFileHashes(assistantHashes, file_hashes);
 
@@ -2077,9 +2085,8 @@ export function useChat(
                 Array.isArray(effectiveMessages) ? effectiveMessages : []
             ).filter(shouldKeepAssistantMessage);
 
-            const budgetModelId = stripThinkingSuffix(modelId).replace(
-                /:online$/,
-                ''
+            const budgetModelId = stripModelVariantSuffix(
+                stripThinkingSuffix(modelId)
             );
             const budgetModelMeta =
                 catalog.value.find(
@@ -3168,9 +3175,9 @@ export function useChat(
                     getSystemPromptContent,
                     useAiSettings,
                     resolveInputTokenBudget: (selectedModelId: string) => {
-                        const normalizedId = stripThinkingSuffix(
-                            selectedModelId
-                        ).replace(/:online$/, '');
+                        const normalizedId = stripModelVariantSuffix(
+                            stripThinkingSuffix(selectedModelId)
+                        );
                         const { catalog, favoriteModels } = useModelStore();
                         const metadata =
                             catalog.value.find(

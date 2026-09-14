@@ -307,7 +307,8 @@ interface SendMessageParams {
     model?: string;
     file_hashes?: string[];
     extraTextParts?: string[];
-    online: boolean;
+    online?: boolean; // deprecated: use modelVariant: 'online' instead
+    modelVariant?: OpenRouterModelVariant;
     thinking?: boolean;
     reasoningEffort?: string | null;
     context_hashes?: string[];
@@ -320,7 +321,8 @@ interface SendMessageParams {
 - `model` — AI model to use (e.g., 'openai/gpt-4')
 - `file_hashes` — Reference existing files by hash
 - `extraTextParts` — Additional text segments
-- `online` — Enable web search (adds ':online' suffix to model)
+- `modelVariant` — OpenRouter routing variant (`'off'` for standard routing, or `'online'` / `'nitro'` / `'floor'` to append that model suffix)
+- `online` — Deprecated alias for `modelVariant: 'online'` (kept for backward compatibility; `modelVariant` takes precedence)
 - `thinking` — Enable extended reasoning mode
 - `reasoningEffort` — Reasoning budget for models that support it
 - `context_hashes` — Hashes to include for model context without reattaching to the new UI message
@@ -332,7 +334,7 @@ interface SendMessageParams {
 await chat.sendMessage('Analyze this', {
     model: 'anthropic/claude-3-sonnet',
     file_hashes: ['abc123'],
-    online: false
+    modelVariant: 'off'
 });
 ```
 

@@ -173,7 +173,7 @@
                     "name": "useChatModelSelection.md",
                     "path": "/composables/useChatModelSelection",
                     "category": "Core",
-                    "summary": "Reactive controller for the model picker in a chat composer. It manages the selected model, web search, thinking mode, and reasoning effort for a single thread, and persists the last model choice."
+                    "summary": "Reactive controller for the model picker in a chat composer. It manages the selected model, routing variant, thinking mode, and reasoning effort for a single thread, and persists the last model choice."
                 },
                 {
                     "name": "useClientAuthStatus.md",

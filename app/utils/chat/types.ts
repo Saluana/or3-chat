@@ -51,7 +51,14 @@ export interface SendMessageParams {
     model?: string;
     file_hashes?: string[];
     extraTextParts?: string[];
-    online: boolean;
+    /**
+     * @deprecated Use `modelVariant: 'online'` instead. When `modelVariant`
+     * is set it takes precedence; otherwise `online: true` maps to the
+     * `:online` model suffix for backward compatibility.
+     */
+    online?: boolean;
+    /** OpenRouter routing variant suffix (`:online` / `:nitro` / `:floor`). */
+    modelVariant?: import('~~/shared/openrouter/model-variants').OpenRouterModelVariant;
     thinking?: boolean;
     reasoningEffort?: string | null;
     // Optional hashes to include for model context without reattaching to the new UI message.

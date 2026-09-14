@@ -29,6 +29,7 @@
  * - `masterSystemPrompt`: Global system prompt prepended to all chats
  * - `defaultModelMode`: "lastSelected" (use last chosen model) or "fixed" (always use fixedModelId)
  * - `fixedModelId`: Model ID to use when defaultModelMode is "fixed"
+ * - `defaultModelVariant`: Default OpenRouter routing variant for new chats
  *
  * **Migration**
  * - On first load, checks localStorage for legacy key (`or3.ai.settings.v1`)
@@ -55,6 +56,11 @@
 import { ref, computed, readonly } from 'vue';
 import { getDb } from '~/db/client';
 import { setKvByName, getKvByName } from '~/db/kv';
+import {
+    DEFAULT_MODEL_VARIANT,
+    sanitizeModelVariant,
+    type OpenRouterModelVariant,
+} from '~~/shared/openrouter/model-variants';
 
 // Settings schema
 export interface AiSettingsV1 {
@@ -62,6 +68,7 @@ export interface AiSettingsV1 {
     masterSystemPrompt: string;
     defaultModelMode: 'lastSelected' | 'fixed';
     fixedModelId: string | null;
+    defaultModelVariant: OpenRouterModelVariant;
 }
 
 const AI_SETTINGS_KV_KEY = 'ai_settings';
@@ -75,6 +82,7 @@ export const DEFAULT_AI_SETTINGS: AiSettingsV1 = {
     masterSystemPrompt: '',
     defaultModelMode: 'lastSelected',
     fixedModelId: null,
+    defaultModelVariant: DEFAULT_MODEL_VARIANT,
 };
 
 // Module-level singleton state
@@ -115,6 +123,10 @@ export function sanitizeAiSettings(
         masterSystemPrompt,
         defaultModelMode,
         fixedModelId: fixedModelId ?? defaults.fixedModelId,
+        defaultModelVariant: sanitizeModelVariant(
+            inObj.defaultModelVariant,
+            defaults.defaultModelVariant
+        ),
     };
 }
 

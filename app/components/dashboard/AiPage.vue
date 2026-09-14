@@ -201,6 +201,33 @@
                     >
                 </div>
             </div>
+            <div
+                id="dashboard-ai-variant-row"
+                class="flex flex-wrap items-center justify-between gap-3"
+            >
+                <div>
+                    <label
+                        class="text-xs font-medium"
+                        for="dashboard-ai-variant-select"
+                        >Model variant</label
+                    >
+                    <p class="supporting-text mt-1">
+                        Default routing for new chats: fastest (Nitro),
+                        cheapest (Floor), or web search (Online).
+                    </p>
+                </div>
+                <USelect
+                    id="dashboard-ai-variant-select"
+                    :model-value="settings.defaultModelVariant"
+                    :items="variantItems"
+                    value-key="value"
+                    label-key="label"
+                    size="sm"
+                    class="min-w-36"
+                    aria-label="Default model variant"
+                    @update:model-value="onPickVariant"
+                />
+            </div>
         </section>
 
         <section
@@ -248,6 +275,10 @@
 import { ref, computed, onMounted } from 'vue';
 import { useIcon } from '#imports';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
+import {
+    sanitizeModelVariant,
+    type OpenRouterModelVariant,
+} from '~~/shared/openrouter/model-variants';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useModelSearch } from '~/core/search/useModelSearch';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
@@ -297,6 +328,20 @@ function onPickModel(id: string) {
 }
 function clearModel() {
     set({ fixedModelId: null });
+}
+
+// Model variant default for new chats
+const variantItems: Array<{ label: string; value: OpenRouterModelVariant }> = [
+    { label: 'Off', value: 'off' },
+    { label: 'Online', value: 'online' },
+    { label: 'Nitro', value: 'nitro' },
+    { label: 'Floor', value: 'floor' },
+];
+function onPickVariant(value: unknown) {
+    const variant = sanitizeModelVariant(value);
+    set({ defaultModelVariant: variant });
+    if (liveStatus.value)
+        liveStatus.value.textContent = `Selected default variant: ${variant}`;
 }
 onMounted(async () => {
     try {

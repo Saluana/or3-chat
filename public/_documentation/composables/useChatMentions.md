@@ -675,7 +675,7 @@ There is no built-in global hook fired on mention selection at the moment. If yo
                                 url: a.url,
                             })),
                             model: payload.model,
-                            online: payload.webSearchEnabled,
+                            modelVariant: payload.modelVariant,
                         })
                 "
                 :disabled="chat.loading.value"

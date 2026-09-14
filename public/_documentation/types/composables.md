@@ -796,7 +796,7 @@ export interface WorkspaceChatTabDraft {
     largeTextBlocks: LargeTextBlock[];
     composer?: {
         model: string;
-        webSearchEnabled: boolean;
+        modelVariant: OpenRouterModelVariant;
         thinkingEnabled: boolean;
         reasoningEffort?: string;
         imageSettings: ImageSettings;

@@ -31,6 +31,7 @@ import type {
     UploadedImage,
 } from '~/components/chat/chat-input/types';
 import type { RegisterSendResult } from '~/utils/chat/types';
+import type { OpenRouterModelVariant } from '~~/shared/openrouter/model-variants';
 
 defineOptions({ inheritAttrs: false });
 
@@ -41,7 +42,7 @@ type ChatInputSendPayload = {
     largeTexts: LargeTextBlock[];
     model: string;
     settings: ImageSettings;
-    webSearchEnabled: boolean;
+    modelVariant: OpenRouterModelVariant;
     thinkingEnabled: boolean;
     reasoningEffort: string | null;
     registerResult: RegisterSendResult;

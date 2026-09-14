@@ -16,6 +16,10 @@ import {
     type OpenRouterReasoningEffort,
 } from '~~/shared/openrouter/reasoning';
 import type { OpenRouterModel } from '~~/shared/openrouter/types';
+import {
+    DEFAULT_MODEL_VARIANT,
+    type OpenRouterModelVariant,
+} from '~~/shared/openrouter/model-variants';
 
 const DEFAULT_MODEL = 'openai/gpt-oss-120b';
 const LAST_MODEL_KEY = 'last_selected_model';
@@ -31,7 +35,7 @@ export function useChatModelSelection(options: {
     onChange: (modelId: string) => void;
 }): {
     selectedModel: Ref<string>;
-    webSearchEnabled: Ref<boolean>;
+    modelVariant: Ref<OpenRouterModelVariant>;
     thinkingEnabled: Ref<boolean>;
     reasoningEffort: Ref<string | undefined>;
     modelReasoningEfforts: Readonly<Ref<OpenRouterReasoningEffort[]>>;
@@ -45,7 +49,7 @@ export function useChatModelSelection(options: {
     } = useModelStore();
     const { settings } = useAiSettings();
     const selectedModel = ref(DEFAULT_MODEL);
-    const webSearchEnabled = ref(false);
+    const modelVariant = ref<OpenRouterModelVariant>(DEFAULT_MODEL_VARIANT);
     const thinkingEnabled = ref(false);
     const reasoningEffort = ref<string>();
     const persistedModel = useLocalStorage(LAST_MODEL_KEY, DEFAULT_MODEL);
@@ -144,7 +148,7 @@ export function useChatModelSelection(options: {
 
     return {
         selectedModel,
-        webSearchEnabled,
+        modelVariant,
         thinkingEnabled,
         reasoningEffort,
         modelReasoningEfforts,

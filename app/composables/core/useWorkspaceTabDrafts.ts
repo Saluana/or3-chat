@@ -3,6 +3,7 @@ import type {
     LargeTextBlock,
     UploadedImage,
 } from '~/components/chat/chat-input/types';
+import type { OpenRouterModelVariant } from '~~/shared/openrouter/model-variants';
 
 export interface WorkspaceChatTabDraft {
     version: 1;
@@ -12,7 +13,9 @@ export interface WorkspaceChatTabDraft {
     largeTextBlocks: LargeTextBlock[];
     composer?: {
         model: string;
-        webSearchEnabled: boolean;
+        modelVariant: OpenRouterModelVariant;
+        /** @deprecated Migrated to `modelVariant` (`true` maps to `'online'`). */
+        webSearchEnabled?: boolean;
         thinkingEnabled: boolean;
         reasoningEffort?: string;
         imageSettings: ImageSettings;

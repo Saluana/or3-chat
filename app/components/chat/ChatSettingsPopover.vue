@@ -47,33 +47,35 @@
             </section>
 
             <div class="chat-settings-section">
-                <div
-                    class="chat-settings-row chat-settings-popover-switch chat-settings-switch"
-                >
+                <div class="chat-settings-row chat-settings-switch">
                     <span class="chat-settings-icon" aria-hidden="true">
-                        <UIcon :name="iconWebSearch" class="size-4" />
+                        <UIcon :name="iconModelVariant" class="size-4" />
                     </span>
                     <label
-                        for="chat-web-search"
+                        for="chat-model-variant"
                         class="chat-settings-row-copy"
                     >
                         <span class="chat-settings-row-title">
-                            Enable web search
+                            Model variant
                         </span>
                         <span
-                            id="chat-web-search-description"
+                            id="chat-model-variant-description"
                             class="chat-settings-row-description"
                         >
-                            Search the web for up-to-date information.
+                            Route requests for speed, savings, or web search.
                         </span>
                     </label>
-                    <USwitch
-                        id="chat-web-search"
-                        v-bind="webSearchSwitchProps"
-                        v-model="webSearchEnabled"
-                        aria-label="Enable web search"
-                        aria-describedby="chat-web-search-description"
-                        class="chat-settings-control"
+                    <USelect
+                        id="chat-model-variant"
+                        v-model="modelVariant"
+                        :items="modelVariantItems"
+                        value-key="value"
+                        label-key="label"
+                        size="sm"
+                        class="min-w-32"
+                        aria-label="Model variant"
+                        aria-describedby="chat-model-variant-description"
+                        :disabled="loading || streaming"
                     />
                 </div>
 
@@ -339,6 +341,7 @@ import { computed, ref, watch } from 'vue';
 import { useIcon } from '~/composables/useIcon';
 import { useToolRegistry } from '~/utils/chat/tools-public';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import type { OpenRouterModelVariant } from '~~/shared/openrouter/model-variants';
 
 const props = defineProps<{
     containerWidth?: number;
@@ -448,11 +451,11 @@ function getCategorySubtitle(category: string) {
 
 // These will be provided by the parent component via v-model
 const selectedModel = defineModel<string>('model');
-const webSearchEnabled = defineModel<boolean>('webSearchEnabled');
+const modelVariant = defineModel<OpenRouterModelVariant>('modelVariant');
 const thinkingEnabled = defineModel<boolean>('thinkingEnabled');
 const reasoningEffort = defineModel<string | undefined>('reasoningEffort');
 
-const iconWebSearch = useIcon('chat.web_search');
+const iconModelVariant = useIcon('chat.web_search');
 const iconReasoning = useIcon('chat.reasoning');
 const iconToolWrench = useIcon('chat.tool.wrench');
 const iconClose = useIcon('ui.close');
@@ -488,20 +491,13 @@ const closeButtonProps = computed(() => {
     };
 });
 
-// Web search switch
-const webSearchSwitchProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'switch',
-        context: 'settings',
-        identifier: 'settings.web-search',
-        isNuxtUI: true,
-    });
-    return {
-        color: 'primary' as const,
-        size: 'sm' as const,
-        ...overrides.value,
-    };
-});
+// Model variant select
+const modelVariantItems = computed(() => [
+    { label: 'Off', value: 'off' as const },
+    { label: 'Online', value: 'online' as const },
+    { label: 'Nitro', value: 'nitro' as const },
+    { label: 'Floor', value: 'floor' as const },
+]);
 
 // Thinking switch
 const thinkingSwitchProps = computed(() => {
@@ -677,8 +673,7 @@ const modelCatalogButtonProps = computed(() => {
     max-width: none;
     color: var(--md-on-surface);
     background: var(--md-surface);
-    border: var(--chat-settings-divider-width) solid
-        color-mix(in srgb, var(--md-border-color) 55%, transparent);
+    border: var(--md-border-width) solid var(--md-border-color);
     border-radius: var(--md-border-radius-small, var(--md-border-radius));
 }
 

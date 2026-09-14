@@ -49,6 +49,7 @@ interface AiSettingsV1 {
     masterSystemPrompt: string;
     defaultModelMode: 'lastSelected' | 'fixed';
     fixedModelId: string | null;
+    defaultModelVariant: OpenRouterModelVariant;
 }
 ```
 
@@ -60,8 +61,11 @@ const DEFAULT_AI_SETTINGS: AiSettingsV1 = {
     masterSystemPrompt: '',
     defaultModelMode: 'lastSelected',
     fixedModelId: null,
+    defaultModelVariant: 'off',
 };
 ```
+
+`defaultModelVariant` is the OpenRouter routing variant applied to new chats (`'off'` for standard routing, or `'online'` / `'nitro'` / `'floor'` to append that model suffix). See `shared/openrouter/model-variants.ts`.
 
 ---
 

@@ -1,13 +1,13 @@
 # useChatModelSelection
 
-Reactive controller for the model picker in a chat composer. It manages the selected model, web search, thinking mode, and reasoning effort for a single thread, and persists the last model choice.
+Reactive controller for the model picker in a chat composer. It manages the selected model, routing variant, thinking mode, and reasoning effort for a single thread, and persists the last model choice.
 
 ## Purpose
 
 `useChatModelSelection(options)` gives a chat input a consistent model-selection state:
 
 -   `selectedModel` — the current model id (`Ref<string>`).
--   `webSearchEnabled` — web search toggle.
+-   `modelVariant` — OpenRouter routing variant (`Ref<OpenRouterModelVariant>`: `'off'` for standard routing, or `'online'` / `'nitro'` / `'floor'` to append that model suffix).
 -   `thinkingEnabled` — extended thinking toggle.
 -   `reasoningEffort` — reasoning effort level, kept in sync with the model.
 -   `modelReasoningEfforts` — reasoning efforts the selected model supports.
@@ -39,7 +39,7 @@ useChatModelSelection({
 ```ts
 import { useChatModelSelection } from '~/composables/chat/useChatModelSelection';
 
-const { selectedModel, webSearchEnabled, thinkingEnabled, reasoningEffort } =
+const { selectedModel, modelVariant, thinkingEnabled, reasoningEffort } =
     useChatModelSelection({
         threadId: () => threadId.value,
         onChange: (modelId) => console.log('model', modelId),

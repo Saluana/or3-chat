@@ -827,7 +827,7 @@ type ChatInputSendPayload = {
         numResults: number;
         size: '1024x1024' | '1024x1536' | '1536x1024';
     };
-    webSearchEnabled: boolean;
+    modelVariant: import('~~/shared/openrouter/model-variants').OpenRouterModelVariant;
     thinkingEnabled: boolean;
     reasoningEffort?: string | null;
     registerResult: RegisterSendResult;
@@ -950,7 +950,7 @@ function onSend(payload: ChatInputSendPayload) {
         files,
         file_hashes,
         extraTextParts,
-        online: !!payload.webSearchEnabled,
+        modelVariant: payload.modelVariant ?? 'off',
         thinking: !!payload.thinkingEnabled,
         reasoningEffort: payload.reasoningEffort ?? null,
         context_hashes,

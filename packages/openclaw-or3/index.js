@@ -164,6 +164,8 @@ export default {
           ),
         messages: (params) =>
           gatewayRequest("chat.history", params, ["operator.read"]),
+        sessions: (params) =>
+          gatewayRequest("sessions.list", params, ["operator.read"]),
         models: () =>
           gatewayRequest("models.list", { view: "configured" }, [
             "operator.read",

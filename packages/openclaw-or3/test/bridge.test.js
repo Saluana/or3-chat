@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { test } from "node:test";
 import { Or3RunsBridge, createOr3RunsHttpHandler } from "../src/bridge.js";
+
+function sessionKeyFor(agentId, sessionId) {
+  const digest = createHash("sha256").update(sessionId, "utf8").digest("hex");
+  return `agent:${agentId}:or3:${digest}`;
+}
 
 function control() {
   const calls = { start: 0, configure: [], decide: [] };
@@ -232,6 +238,7 @@ test("settles from assistant history created after the run started", async () =>
     ],
   });
   const bridge = new Or3RunsBridge({ agentId: "main", control: runtime });
+  bridge.ensureSession("session-history");
   const run = {
     id: "run-history",
     sessionId: "session-history",
@@ -387,4 +394,135 @@ test("bounds accumulated output and replay-event bytes for an active run", () =>
   assert.equal(run.status, "cancelled");
   assert.match(run.error, /output exceeded/u);
   assert.ok(run.output.length === 0);
+});
+
+test("restores a historical session without stamping the current time", async () => {
+  const historical = 1_700_000_000;
+  const key = sessionKeyFor("main", "old-session");
+  const runtime = control();
+  runtime.sessions = async (params) => {
+    assert.equal(params.search, key);
+    return { sessions: [{ key, lastActivityAt: historical, updatedAt: historical }] };
+  };
+  const bridge = new Or3RunsBridge({ agentId: "main", control: runtime });
+
+  const session = await bridge.resolveSession("old-session");
+
+  assert.equal(session.updatedAt, historical);
+  assert.equal(session.createdAt, historical);
+  assert.equal(session.sessionKey, key);
+  assert.ok(Math.abs(Date.now() / 1_000 - session.updatedAt) > 86400);
+});
+
+test("prefers lastActivityAt and falls back to updatedAt", async () => {
+  const key = sessionKeyFor("main", "fallback-session");
+  const runtime = control();
+  runtime.sessions = async () => ({
+    sessions: [{ key, lastActivityAt: 1_700_000_100, updatedAt: 1_700_000_000 }],
+  });
+  const bridge = new Or3RunsBridge({ agentId: "main", control: runtime });
+  assert.equal((await bridge.resolveSession("fallback-session")).updatedAt, 1_700_000_100);
+
+  const updatedOnlyKey = sessionKeyFor("main", "updated-only");
+  const updatedOnly = control();
+  updatedOnly.sessions = async () => ({
+    sessions: [{ key: updatedOnlyKey, updatedAt: 1_700_000_050 }],
+  });
+  const second = new Or3RunsBridge({ agentId: "main", control: updatedOnly });
+  assert.equal((await second.resolveSession("updated-only")).updatedAt, 1_700_000_050);
+});
+
+test("requires an exact session-key match and leaves the map untouched when missing", async () => {
+  const key = sessionKeyFor("main", "missing-session");
+  const runtime = control();
+  runtime.sessions = async () => ({
+    sessions: [{ key: `${key}-other`, lastActivityAt: 1_700_000_000 }],
+  });
+  const bridge = new Or3RunsBridge({ agentId: "main", control: runtime });
+
+  await assert.rejects(() => bridge.resolveSession("missing-session"), (error) => error?.status === 404);
+  assert.equal(bridge.sessions.has("missing-session"), false);
+});
+
+test("returns 404 without mutation when native timestamps are unusable", async () => {
+  const key = sessionKeyFor("main", "undated-session");
+  const runtime = control();
+  runtime.sessions = async () => ({ sessions: [{ key }] });
+  const bridge = new Or3RunsBridge({ agentId: "main", control: runtime });
+
+  await assert.rejects(() => bridge.resolveSession("undated-session"), (error) => error?.status === 404);
+  assert.equal(bridge.sessions.has("undated-session"), false);
+});
+
+test("surfaces a 503 without mutation when sessions.list fails", async () => {
+  const runtime = control();
+  runtime.sessions = async () => {
+    throw new Error("gateway down");
+  };
+  const bridge = new Or3RunsBridge({ agentId: "main", control: runtime });
+
+  await assert.rejects(() => bridge.resolveSession("failing-session"), (error) => error?.status === 503);
+  assert.equal(bridge.sessions.has("failing-session"), false);
+});
+
+test("normalizes seconds, milliseconds, and ISO timestamps to the same instant", async () => {
+  const historical = 1_700_000_000;
+  const key = sessionKeyFor("main", "format-session");
+  const runtime = control();
+  runtime.sessions = async () => ({ sessions: [{ key, updatedAt: historical }] });
+  runtime.messages = async () => ({
+    messages: [
+      { id: "sec", role: "assistant", content: "a", timestamp: historical },
+      { id: "ms", role: "assistant", content: "b", timestamp: historical * 1_000 },
+      { id: "iso", role: "assistant", content: "c", createdAt: new Date(historical * 1_000).toISOString() },
+      { id: "undated", role: "assistant", content: "d" },
+    ],
+  });
+  const bridge = new Or3RunsBridge({ agentId: "main", control: runtime });
+
+  const messages = await bridge.messages("format-session");
+
+  for (const message of messages) assert.equal(message.timestamp, historical);
+});
+
+test("GET session restores history and missing rows stay 404 without creating state", async () => {
+  const historical = 1_700_000_000;
+  const key = sessionKeyFor("main", "http-session");
+  const runtime = control();
+  runtime.sessions = async () => ({ sessions: [{ key, lastActivityAt: historical }] });
+  const bridge = new Or3RunsBridge({ agentId: "main", control: runtime });
+  const handler = createOr3RunsHttpHandler(bridge, () => ({ token: "test-token", allowedOrigins: [] }));
+  const get = async (url) => {
+    const request = new EventEmitter();
+    request.method = "GET";
+    request.url = url;
+    request.headers = { authorization: "Bearer test-token" };
+    const response = { statusCode: 200, setHeader() {}, end(body) { this.body = body; } };
+    await handler(request, response);
+    return response;
+  };
+
+  const restored = await get("/or3/api/sessions/http-session");
+  assert.equal(restored.statusCode, 200);
+  assert.equal(JSON.parse(restored.body).session.last_active, historical);
+
+  const missing = await get("/or3/api/sessions/unknown-session");
+  assert.equal(missing.statusCode, 404);
+  assert.equal(bridge.sessions.has("unknown-session"), false);
+});
+
+test("new sessions and runs still initialize from the current clock", async () => {
+  const before = Date.now() / 1_000;
+  const bridge = new Or3RunsBridge({ agentId: "main", control: control() });
+  const session = await bridge.createSession("fresh-session");
+  assert.ok(session.createdAt >= before - 1 && session.updatedAt >= before - 1);
+
+  const runBridge = new Or3RunsBridge({ agentId: "main", control: control() });
+  await runBridge.capabilities();
+  await runBridge.createSession("active-session");
+  const beforeRun = Date.now() / 1_000;
+  const run = await runBridge.startRun("active-session", { input: "/models" });
+  assert.equal(run.status, "completed");
+  assert.ok(runBridge.sessions.get("active-session").updatedAt >= beforeRun - 1);
+  assert.ok(run.updatedAt >= beforeRun - 1);
 });

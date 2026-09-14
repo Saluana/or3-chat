@@ -95,9 +95,7 @@
                                             modelReasoningEfforts
                                         "
                                         v-model:model="selectedModel"
-                                        v-model:web-search-enabled="
-                                            webSearchEnabled
-                                        "
+                                        v-model:model-variant="modelVariant"
                                         v-model:thinking-enabled="
                                             thinkingEnabled
                                         "
@@ -377,6 +375,11 @@ import {
     type SendResult,
 } from '~/utils/chat/types';
 import { useWorkspaceTabDrafts } from '~/composables/core/useWorkspaceTabDrafts';
+import { useAiSettings } from '~/composables/chat/useAiSettings';
+import {
+    sanitizeModelVariant,
+    type OpenRouterModelVariant,
+} from '~~/shared/openrouter/model-variants';
 
 const OpenRouterKeyModal = defineAsyncComponent(
     () => import('~/components/chat/OpenRouterKeyModal.vue')
@@ -562,7 +565,7 @@ const emit = defineEmits<{
             largeTexts: LargeTextBlock[];
             model: string;
             settings: ImageSettings;
-            webSearchEnabled: boolean;
+            modelVariant: OpenRouterModelVariant;
             thinkingEnabled: boolean;
             reasoningEffort: string | null;
             registerResult: RegisterSendResult;
@@ -581,7 +584,7 @@ const emit = defineEmits<{
 
 const {
     selectedModel,
-    webSearchEnabled,
+    modelVariant,
     thinkingEnabled,
     reasoningEffort,
     modelReasoningEfforts,
@@ -659,6 +662,8 @@ const imageSettings = ref<ImageSettings>({
     size: '1024x1024',
 });
 const tabDrafts = useWorkspaceTabDrafts();
+const { settings: aiSettings, ensureLoaded: ensureAiSettingsLoaded } =
+    useAiSettings();
 const restoringDraft = ref(false);
 let draftCaptureTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -686,7 +691,7 @@ function captureDraft(tabId = props.tabId): void {
         largeTextBlocks: largeTextBlocks.value,
         composer: {
             model: selectedModel.value,
-            webSearchEnabled: webSearchEnabled.value,
+            modelVariant: modelVariant.value,
             thinkingEnabled: thinkingEnabled.value,
             reasoningEffort: reasoningEffort.value,
             imageSettings: { ...imageSettings.value },
@@ -708,10 +713,24 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
         );
         if (draft?.composer) {
             selectedModel.value = draft.composer.model;
-            webSearchEnabled.value = draft.composer.webSearchEnabled;
+            // Migrate legacy drafts that stored the web-search toggle.
+            modelVariant.value = sanitizeModelVariant(
+                draft.composer.modelVariant ??
+                    (draft.composer.webSearchEnabled === true
+                        ? 'online'
+                        : undefined)
+            );
             thinkingEnabled.value = draft.composer.thinkingEnabled;
             reasoningEffort.value = draft.composer.reasoningEffort;
             imageSettings.value = { ...draft.composer.imageSettings };
+        } else {
+            // New chat: apply the dashboard default variant.
+            try {
+                await ensureAiSettingsLoaded?.();
+            } catch {}
+            modelVariant.value = sanitizeModelVariant(
+                aiSettings.value?.defaultModelVariant
+            );
         }
     } finally {
         await nextTick();
@@ -733,7 +752,7 @@ watch([attachments, largeTextBlocks], () => scheduleDraftCapture(props.tabId), {
     deep: true,
 });
 watch(
-    [selectedModel, webSearchEnabled, thinkingEnabled, reasoningEffort, imageSettings],
+    [selectedModel, modelVariant, thinkingEnabled, reasoningEffort, imageSettings],
     () => scheduleDraftCapture(props.tabId),
     { deep: true }
 );
@@ -892,7 +911,7 @@ const handleSend = async (): Promise<SendResult> => {
             largeTexts: largeTextBlocks.value,
             model: selectedModel.value,
             settings: imageSettings.value,
-            webSearchEnabled: webSearchEnabled.value,
+            modelVariant: modelVariant.value,
             thinkingEnabled:
                 thinkingEnabled.value && modelSupportsThinking.value,
             reasoningEffort:

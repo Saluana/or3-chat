@@ -41,7 +41,7 @@ export const chatOverrides = {
     'button#chat.attach': chatInputButtonConfig,
     'button#chat.settings': chatInputButtonConfig,
     'selectmenu#chat.model-select': {
-        class: 'h-[36px] rounded-full border-0 px-3 bg-transparent w-full min-w-[100px] max-w-[320px] ring-0! hover:bg-[var(--md-surface-hover)]! cursor-pointer text-[14px]! max-md:min-h-[44px]! max-md:text-[16px]!',
+        class: 'h-[36px] rounded-full border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] px-3 bg-transparent w-full min-w-[100px] max-w-[320px] ring-0! hover:bg-[var(--md-surface-hover)]! cursor-pointer text-[14px]! max-md:min-h-[44px]! max-md:text-[16px]!',
         ui: {
             base: 'text-[14px]! max-md:min-h-[44px]! max-md:text-[16px]!',
             value: 'text-[14px]! max-md:text-[16px]!',

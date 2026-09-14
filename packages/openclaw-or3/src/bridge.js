@@ -101,21 +101,61 @@ function contentText(content) {
     .join("\n");
 }
 
-function normalizeMessages(messages) {
+function normalizeTimestamp(value) {
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return undefined;
+    const seconds =
+      Math.abs(value) >= 1e11 ? value / 1_000 : value;
+    if (!Number.isFinite(seconds) || seconds < 0) return undefined;
+    return seconds;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    if (/^-?\d+(\.\d+)?$/u.test(trimmed)) {
+      return normalizeTimestamp(Number(trimmed));
+    }
+    const parsed = Date.parse(trimmed);
+    if (!Number.isNaN(parsed)) return parsed / 1_000;
+    return undefined;
+  }
+  if (value instanceof Date) {
+    const time = value.getTime();
+    if (!Number.isNaN(time)) return time / 1_000;
+  }
+  return undefined;
+}
+
+function normalizeMessages(messages, fallbackSeconds) {
   return messages.map((message, index) => {
     const item = object(message);
+    const timestamp =
+      normalizeTimestamp(item.timestamp) ??
+      normalizeTimestamp(item.createdAt) ??
+      normalizeTimestamp(item.created_at) ??
+      fallbackSeconds;
     return {
       id: text(item.id) ?? `message-${index + 1}`,
       role: text(item.role) ?? "assistant",
       content: contentText(item.content),
-      timestamp:
-        typeof item.timestamp === "number"
-          ? item.timestamp
-          : typeof item.createdAt === "number"
-            ? item.createdAt / 1_000
-            : nowSeconds(),
+      timestamp,
     };
   });
+}
+
+function extractSessionRows(result) {
+  if (Array.isArray(result)) return result;
+  const container = object(result);
+  for (const key of ["sessions", "data", "items", "results"]) {
+    if (Array.isArray(container[key])) return container[key];
+  }
+  if (Array.isArray(container.result)) return container.result;
+  const nested = object(container.result);
+  for (const key of ["sessions", "data", "items"]) {
+    if (Array.isArray(nested[key])) return nested[key];
+  }
+  if (container.key || container.sessionKey) return [container];
+  return [];
 }
 
 function commandText(command, value) {
@@ -441,6 +481,55 @@ export class Or3RunsBridge {
     return session;
   }
 
+  async resolveSession(id) {
+    const existing = this.sessions.get(id);
+    if (existing) return existing;
+    if (!text(id)) throw Object.assign(new Error("Session not found"), { status: 404 });
+    const key = sessionKey(this.agentId, id);
+    let result;
+    try {
+      if (typeof this.control.sessions !== "function") {
+        throw new Error("OpenClaw session lookup is unavailable");
+      }
+      result = await this.control.sessions({ search: key });
+    } catch (error) {
+      if (error?.status === 404) throw error;
+      throw Object.assign(
+        new Error("OpenClaw session history is unavailable"),
+        {
+          status: 503,
+          cause: error,
+        },
+      );
+    }
+    const row = extractSessionRows(result).find((entry) => {
+      const candidate = object(entry);
+      return candidate.key === key || candidate.sessionKey === key;
+    });
+    const native = object(row);
+    const activity =
+      normalizeTimestamp(native.lastActivityAt) ??
+      normalizeTimestamp(native.last_activity_at) ??
+      normalizeTimestamp(native.updatedAt) ??
+      normalizeTimestamp(native.updated_at);
+    if (!row || activity === undefined) {
+      throw Object.assign(new Error("Session not found"), { status: 404 });
+    }
+    const created =
+      normalizeTimestamp(native.createdAt) ??
+      normalizeTimestamp(native.created_at) ??
+      activity;
+    const session = {
+      id,
+      sessionKey: key,
+      createdAt: created,
+      updatedAt: activity,
+    };
+    this.sessions.set(id, session);
+    this.prune();
+    return session;
+  }
+
   async createSession(id, model) {
     if (!text(id))
       throw Object.assign(new Error("Session id is required"), { status: 400 });
@@ -466,12 +555,13 @@ export class Or3RunsBridge {
   }
 
   async messages(sessionId) {
-    const session = this.ensureSession(sessionId);
+    const session = await this.resolveSession(sessionId);
     try {
       const request = { sessionKey: session.sessionKey, limit: 1_000 };
       const result = await this.control.messages(request);
       return normalizeMessages(
         Array.isArray(result.messages) ? result.messages : [],
+        session.updatedAt,
       );
     } catch (error) {
       throw Object.assign(
@@ -1055,7 +1145,7 @@ export function createOr3RunsHttpHandler(
             data: await bridge.messages(decodeURIComponent(messagesMatch[1])),
           });
         } else if (method === "GET" && sessionMatch) {
-          const session = bridge.ensureSession(
+          const session = await bridge.resolveSession(
             decodeURIComponent(sessionMatch[1]),
           );
           sendJson(res, 200, {
