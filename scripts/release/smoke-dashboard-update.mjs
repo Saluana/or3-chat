@@ -52,12 +52,29 @@ export async function runDashboardUpdateSmoke(socketPath, targetVersion, options
     const timeoutMs = options.timeoutMs ?? 8 * 60 * 1000;
     const pollMs = options.pollMs ?? 2_000;
     const statusErrorTimeoutMs = options.statusErrorTimeoutMs ?? 45_000;
+    const startupTimeoutMs = options.startupTimeoutMs ?? 20_000;
     const statePath = options.statePath;
     const log = options.log ?? ((message) => console.log(message));
     const startedAt = Date.now();
     const elapsed = () => `${((Date.now() - startedAt) / 1000).toFixed(1)}s`;
     log(`[dashboard-smoke +${elapsed()}] checking release metadata for ${targetVersion}`);
-    const checked = await operatorRequest(socketPath, 'POST', '/check');
+    const startupDeadline = Date.now() + startupTimeoutMs;
+    let checked;
+    let startupError;
+    while (Date.now() < startupDeadline) {
+        try {
+            checked = await operatorRequest(socketPath, 'POST', '/check');
+            if (checked.status < 500) break;
+            startupError = new Error(`status ${checked.status}`);
+        } catch (error) {
+            startupError = error;
+        }
+        await delay(pollMs);
+    }
+    if (!checked || checked.status >= 500) {
+        const detail = startupError instanceof Error ? startupError.message : String(startupError || 'unavailable');
+        throw new Error(`Dashboard operator did not become ready for the release check within ${(startupTimeoutMs / 1000).toFixed(0)}s: ${detail}`);
+    }
     if (
         checked.status !== 200
         || checked.body?.latestVersion !== targetVersion

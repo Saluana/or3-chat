@@ -308,3 +308,65 @@ jobs:
           if [ -d "$adopted" ]; then
             docker compose --project-directory "$adopted" --env-file "$adopted/.env" -f "$adopted/compose.yaml" down --volumes 2>/dev/null || true
           fi
+
+  dashboard-fault-injection:
+    name: Scheduled dashboard interruption recovery
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Interrupt an exact published dashboard update
+        env:
+          OR3_DASHBOARD_SMOKE_TIMEOUT_MS: '480000'
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          previous_version="$(node -p "const [major, minor, patch] = process.argv[1].split('.'); major+'.'+minor+'.'+(Number(patch)-1)" "$version")"
+          managed="$RUNNER_TEMP/or3-cloud-dashboard-interruption"
+          timeout --signal=TERM 5m npx --yes "@or3/cloud@$previous_version" init "$managed" --local --port 3019 --admin-email dashboard-interruption@example.com
+          OR3_DASHBOARD_STATE_PATH="$managed/.or3-cloud/state.json" node scripts/release/smoke-dashboard-update.mjs "$managed/.or3-cloud/operator-ipc/operator.sock" "$version" > "$RUNNER_TEMP/dashboard-interrupted.log" 2>&1 &
+          driver_pid=$!
+          trap 'kill "$driver_pid" 2>/dev/null || true; wait "$driver_pid" 2>/dev/null || true' EXIT
+          observed_mutation=false
+          for attempt in $(seq 1 600); do
+            phase="$(node -e 'try{process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).incompleteOperation?.phase||"")}catch{}' "$managed/.or3-cloud/state.json" || true)"
+            if [ "$phase" = target-mutating ]; then
+              observed_mutation=true
+              break
+            fi
+            kill -0 "$driver_pid" 2>/dev/null || break
+            sleep 0.1
+          done
+          if [ "$observed_mutation" != true ]; then
+            cat "$RUNNER_TEMP/dashboard-interrupted.log"
+            echo "Dashboard update never reached target-mutating within 60s."
+            exit 1
+          fi
+          args=(--project-directory "$managed" --env-file "$managed/.env" -f "$managed/compose.yaml" -f "$managed/compose.operator.yaml")
+          operator_id="$(docker compose "${args[@]}" ps -q or3-operator)"
+          test -n "$operator_id"
+          docker kill "$operator_id"
+          set +e
+          wait "$driver_pid"
+          driver_status=$?
+          set -e
+          trap - EXIT
+          cat "$RUNNER_TEMP/dashboard-interrupted.log"
+          test "$driver_status" -ne 0
+          grep -Eq 'ended in failed|ended in needs_attention|continuously unavailable' "$RUNNER_TEMP/dashboard-interrupted.log"
+          grep -q "^OR3_VERSION='$previous_version'$" "$managed/.env"
+          (cd "$managed" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$previous_version" verify)
+      - name: Clean up interruption fixture
+        if: always()
+        run: |
+          managed="$RUNNER_TEMP/or3-cloud-dashboard-interruption"
+          if [ -f "$managed/.env" ] && [ -f "$managed/compose.yaml" ]; then
+            args=(--project-directory "$managed" --env-file "$managed/.env" -f "$managed/compose.yaml")
+            if [ -f "$managed/compose.operator.yaml" ]; then args+=(-f "$managed/compose.operator.yaml"); fi
+            docker compose "${args[@]}" down --volumes --remove-orphans 2>/dev/null || true
+          fi
