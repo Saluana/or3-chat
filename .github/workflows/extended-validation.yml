@@ -193,8 +193,8 @@ jobs:
           cat "$RUNNER_TEMP/update-failed.log"
           test "$failed_update_status" -ne 0
           grep -q 'Captured Docker diagnostics' "$RUNNER_TEMP/update-failed.log"
+          grep -q 'or3-cloud-unhealthy' "$RUNNER_TEMP/update-failed.log"
           grep -Eq 'container [0-9a-f]+ state:' "$RUNNER_TEMP/update-failed.log"
-          grep -q '"ExitCode":1' "$RUNNER_TEMP/update-failed.log"
           ! grep -Fq "$captured_secret" "$RUNNER_TEMP/update-failed.log"
           grep -q 'restored' "$RUNNER_TEMP/update-failed.log"
           for attempt in $(seq 1 60); do
