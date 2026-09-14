@@ -597,7 +597,9 @@ async function runUpdate(job) {
       maxOutputBytes: 256 * 1024,
       timeoutMs: maxUpdateDurationMs,
     });
-    if (updated.code !== 0) throw new Error('The managed updater did not complete successfully.');
+    if (updated.code !== 0) {
+      throw new Error(`The managed updater did not complete successfully: ${processDiagnostic(updated)}`);
+    }
   });
 }
 
@@ -610,7 +612,9 @@ async function runRecovery(job) {
       maxOutputBytes: 256 * 1024,
       timeoutMs: maxUpdateDurationMs,
     });
-    if (recovered.code !== 0) throw new Error('The exact dashboard updater could not recover the interrupted operation.');
+    if (recovered.code !== 0) {
+      throw new Error(`The exact dashboard updater could not recover the interrupted operation: ${processDiagnostic(recovered)}`);
+    }
   });
 }
 

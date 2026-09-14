@@ -102,6 +102,8 @@ test('dashboard operator verifies exact release provenance before executing pack
   expect(operator).toContain("manifest?.or3Cloud?.imageDigest");
   expect(operator).toContain("manifest?.or3Cloud?.sourceRevision !== expectedRelease.sourceRevision");
   expect(operator).toContain("OR3_EXPECTED_IMAGE_DIGEST: imageDigest");
+  expect(operator).toContain('The managed updater did not complete successfully: ${processDiagnostic(updated)}');
+  expect(operator).toContain('The exact dashboard updater could not recover the interrupted operation: ${processDiagnostic(recovered)}');
   expect(operator).toContain("maxAttestationBytes = 1024 * 1024");
   expect(operator).toContain("await verify(bundle");
   expect(operator).toContain("npmRequire('sigstore')");
