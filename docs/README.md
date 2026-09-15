@@ -41,6 +41,7 @@ Connect capability, and editable source development.
 
 ## Releases and Operations
 
+-   **[Updating OR3](cloud-updates.md)** - Canonical routine update guide: development images, Docker Compose deployments, and stable releases
 -   **[Installation and operations](installation.md)** - Local, Docker, and public VPS setup with Caddy
 -   **[Environment and provider settings](../public/_documentation/cloud/environment-reference.md)** - Complete runtime env matrix for auth, sync, storage, OpenRouter, admin, plugins, Connect, and the wizard
 -   **[Start Here](start-here.md)** - One supported setup route per goal

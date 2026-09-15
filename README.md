@@ -132,9 +132,13 @@ npx @or3/cloud doctor
 ```
 
 See [Installation and operations](docs/installation.md) for the supported local
-and public VPS deployment. Maintainers can follow [Releasing OR3 Cloud](docs/releasing.md)
-for the image-first release workflow. Editable source and custom provider
-development still use the repository-local wizard.
+and public VPS deployment. [Updating OR3](docs/cloud-updates.md) is the
+canonical guide for routine updates: it explains the development image
+workflow, updating a Docker Compose development deployment by exact digest, and
+the separate stable release path. Maintainers can follow
+[Releasing OR3 Cloud](docs/releasing.md) for the image-first release workflow.
+Editable source and custom provider development still use the repository-local
+wizard.
 
 ---
 

@@ -136,6 +136,13 @@ Don’t:
 -   Do not add permanently skipped tests, test-local reimplementations of production behavior, source-string assertions for cosmetic details, or a new test file when an existing canonical suite can hold the case.
 -   Prefer compact output (`dot`, failed output only) so successful checks do not consume agent tokens.
 
+### Updating OR3 deployments
+
+-   Routine application changes use the fast path: push to `or3-cloud` → **Checks** workflow → development image → update the Docker Compose development deployment by exact digest.
+-   Stable releases require explicit intent and the candidate/tag ceremony; they are not a routine update step.
+-   [`docs/cloud-updates.md`](docs/cloud-updates.md) is the canonical update guide. Do not restate or invent update procedures.
+-   Agents must not invent release commands, publish packages or images outside the documented workflows, bump versions, or alter live or production data merely to update application code.
+
 ### Using test driven development (TDD) is encouraged.
 
 Test-Driven Development (TDD)

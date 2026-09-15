@@ -156,7 +156,9 @@ does not modify Tailscale state.
 
 ## Updates
 
-Run updates from the managed deployment directory:
+The canonical procedure, including the development-image path for routine
+source changes, is [Updating OR3](cloud-updates.md). Managed installations run
+updates from the managed deployment directory:
 
 ```bash
 npx @or3/cloud update

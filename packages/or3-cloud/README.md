@@ -58,6 +58,11 @@ npx @or3/cloud stop
 npx @or3/cloud restart
 ```
 
+The canonical procedure for both development and managed deployments is
+[Updating OR3](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/cloud-updates.md).
+This package is the managed path: it accepts only published stable releases and
+never a development image.
+
 Run `verify` after every update and before declaring a deployment healthy. It
 checks the managed image digest, deep provider health, Basic Auth sign-in,
 session hydration, SQLite sync, a disposable filesystem upload/download/delete

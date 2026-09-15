@@ -1,0 +1,63 @@
+# Standalone development deployment of a tested OR3 image.
+#
+# This is a plain Docker Compose deployment, not a managed @or3/cloud
+# deployment. It intentionally has no operator, dashboard update, or managed
+# state: run `docker compose` commands only, and never run `npx @or3/cloud`
+# commands against this directory.
+#
+# Point OR3_IMAGE at the immutable digest published by the "Development image"
+# job in .github/workflows/tests.yml, then:
+#
+#   docker compose -f compose.dev.yaml pull or3
+#   docker compose -f compose.dev.yaml up -d --wait or3
+#
+# Managed production deployments keep using the exact-version @or3/cloud
+# updater. See docs/cloud-updates.md for the full procedure.
+name: or3-dev
+
+services:
+  or3:
+    image: ${OR3_IMAGE:?Set OR3_IMAGE in .env to the exact dev image digest}
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      OR3_BASIC_AUTH_DB_PATH: /data/auth.sqlite
+      OR3_SQLITE_DB_PATH: /data/sync.sqlite
+      OR3_STORAGE_FS_ROOT: /data/storage
+      OR3_EXTENSIONS_ROOT: /data/extensions
+      OR3_ADMIN_DATA_DIR: /data/admin
+    ports:
+      - "127.0.0.1:${OR3_PORT:-3100}:3000"
+    volumes:
+      - or3-dev-data:/data
+    restart: unless-stopped
+    stop_grace_period: 25s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test:
+        - CMD
+        - /nodejs/bin/node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health?deep=true').then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok||b.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  or3-dev-data:
+    name: or3-dev-data

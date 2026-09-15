@@ -10,6 +10,7 @@ output/
 test-results/
 playwright-report/
 release-artifact/
+.playwright-mcp/
 node_modules
 packages/create-or3-chat/dist
 tests

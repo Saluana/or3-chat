@@ -11,6 +11,8 @@ const DOCKERIGNORE = resolve(import.meta.dir, '../../../.dockerignore');
 const CLOUD_CLI_SOURCE = resolve(import.meta.dir, '../src/cli.ts');
 const DASHBOARD_OPERATOR = resolve(ASSET_ROOT, 'dashboard-operator.mjs');
 const RELEASE_WORKFLOW = resolve(import.meta.dir, '../../../.github/workflows/release-cloud.yml');
+const DEVELOPMENT_WORKFLOW = resolve(import.meta.dir, '../../../.github/workflows/tests.yml');
+const DEV_COMPOSE = resolve(import.meta.dir, '../../../compose.dev.yaml');
 const CANDIDATE_WORKFLOW = resolve(import.meta.dir, '../../../.github/workflows/release-cloud-candidate.yml');
 const CANDIDATE_RECEIPT = resolve(import.meta.dir, '../../../scripts/release/candidate-receipt.mjs');
 const ROOT_MANIFEST = resolve(import.meta.dir, '../../../package.json');
@@ -382,6 +384,60 @@ test('candidate verification reuses the exact built digest without rebuilding', 
   expect(workflow).toContain('cache-from: type=registry,ref=ghcr.io/saluana/or3-chat:buildcache-cloud');
   expect(workflow).toContain('cache-to: type=registry,ref=ghcr.io/saluana/or3-chat:buildcache-cloud,mode=max');
   expect(workflow).toContain('test "$(/usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js --version)" = 11.6.2');
+});
+
+test('development image is built once, smoked by digest, and only then tagged', () => {
+  const workflow = readFileSync(DEVELOPMENT_WORKFLOW, 'utf8');
+  const image = workflow.slice(workflow.indexOf('  dev-image:'), workflow.indexOf('  dev-smoke:'));
+  const smoke = workflow.slice(workflow.indexOf('  dev-smoke:'), workflow.indexOf('  dev-publish:'));
+  const publish = workflow.slice(workflow.indexOf('  dev-publish:'));
+  expect(image.match(/docker\/build-push-action@v6/g)?.length).toBe(1);
+  expect(image).toContain('needs: core');
+  expect(image).toContain('buildcache-dev');
+  expect(image).toContain('docker manifest inspect "$IMAGE"');
+  expect(image).toContain('refusing to reuse or overwrite it');
+  expect(image).toContain('platforms: ${{ steps.identity.outputs.platform }}');
+  // Architectures must never share an immutable identity, and reuse must
+  // distinguish a confirmed missing manifest from a registry failure.
+  expect(image).toContain('image=ghcr.io/saluana/or3-chat:dev-$short-$arch');
+  expect(image).toContain('Could not confirm whether $IMAGE exists');
+  expect(image).toContain("grep -Eqi 'manifest unknown|name unknown|no such manifest|not found'");
+  expect(image).toContain('docker pull --platform "$PLATFORM" "$IMAGE"');
+  expect(image).toContain("actual_platform=\"$(docker image inspect --format '{{.Os}}/{{.Architecture}}' \"$IMAGE\")\"");
+  expect(smoke).toContain('/api/health?deep=true');
+  expect(smoke).toContain("docker inspect --format '{{.State.Running}}'");
+  expect(smoke).toContain('smoke-create-docker.mjs');
+  expect(smoke).toContain('--read-only');
+  expect(smoke).toContain('--cap-drop ALL');
+  expect(smoke).toContain('docker pull --platform "$PLATFORM" "$REF"');
+  expect(smoke).toContain('--platform "$PLATFORM"');
+  expect(smoke).toContain('docker rm -f or3-dev-smoke');
+  expect(smoke).toContain('docker volume rm or3-dev-smoke-data');
+  // dev-publish reads dev-image outputs, so dev-image must be a direct need.
+  expect(publish).toContain('needs: [dev-image, dev-smoke]');
+  expect(publish).toContain('tag="ghcr.io/saluana/or3-chat:dev-${ARCH}"');
+  expect(publish).toContain('imagetools create -t "$tag" "$REF"');
+  expect(publish).toContain('test "$published" = "$EXPECTED_DIGEST"');
+  expect(workflow).not.toContain('npm publish');
+  expect(workflow).not.toContain('contents: write');
+  expect(workflow).not.toContain('release:prepare');
+  expect(workflow).toContain("- 'plugins/**'");
+  expect(workflow).toContain("github.ref == 'refs/heads/or3-cloud'");
+});
+
+test('development compose deployment is separate from managed installers', () => {
+  const compose = readFileSync(DEV_COMPOSE, 'utf8');
+  expect(compose).toContain('image: ${OR3_IMAGE:?');
+  expect(compose).toContain('name: or3-dev');
+  expect(compose).toContain('or3-dev-data:/data');
+  expect(compose).toContain('deep=true');
+  const effective = compose
+    .split(/\r?\n/)
+    .filter((line) => !line.trimStart().startsWith('#'))
+    .join('\n');
+  expect(effective).not.toMatch(/^\s*or3-operator:/m);
+  expect(effective).not.toContain('dashboard-operator');
+  expect(effective).not.toContain('@or3/cloud');
 });
 
 test('clean browser smoke uses the explicit super-admin elevation route', () => {

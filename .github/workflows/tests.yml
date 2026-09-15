@@ -1,44 +1,68 @@
-name: PR checks
+name: Checks
+
+# Two lanes:
+# - Core checks are the blocking source gate (type-check + core tests + small
+#   relevant checks). They are the only prerequisite for the development image.
+# - Contracts and compatibility run in parallel for visibility; they never
+#   authorise a development image by themselves.
+#
+# A trusted push to or3-cloud (or a manual dispatch) additionally builds one
+# production application image, starts that exact digest with disposable
+# configuration, runs the supported deep-health/auth/sync/storage smoke against
+# it, and only then advances the deployable `dev` tag. Stable releases remain in
+# release-cloud-candidate.yml + release-cloud.yml and are never triggered here.
 
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Architecture for the development image
+        required: false
+        type: choice
+        default: linux/amd64
+        options:
+          - linux/amd64
+          - linux/arm64
   pull_request:
   push:
     branches: [main, or3-cloud]
 
 concurrency:
-  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  group: checks-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
   pull-requests: read
 
+env:
+  CI: '1'
+  SSR_AUTH_ENABLED: 'true'
+  AUTH_PROVIDER: basic-auth
+  OR3_AUTH_PROVIDER: basic-auth
+  OR3_GUEST_ACCESS_ENABLED: 'false'
+  OR3_AUTH_REGISTRATION_MODE: invite_only
+  OR3_AUTH_AUTO_PROVISION: 'false'
+  OR3_BASIC_AUTH_JWT_SECRET: ci-only-jwt-secret-0123456789abcdef0123456789abcdef
+  OR3_BASIC_AUTH_DB_PATH: .data/or3-basic-auth.sqlite
+  OR3_SYNC_ENABLED: 'true'
+  OR3_CLOUD_SYNC_ENABLED: 'true'
+  OR3_SYNC_PROVIDER: sqlite
+  OR3_SQLITE_DB_PATH: .data/sync.sqlite
+  OR3_STORAGE_ENABLED: 'true'
+  OR3_CLOUD_STORAGE_ENABLED: 'true'
+  NUXT_PUBLIC_STORAGE_PROVIDER: fs
+  OR3_STORAGE_FS_ROOT: ${{ github.workspace }}/.data/storage
+  OR3_STORAGE_FS_TOKEN_SECRET: ci-only-storage-secret-0123456789abcdef0123456789abcdef
+  OR3_BACKGROUND_STREAMING_ENABLED: 'false'
+
 jobs:
   core:
-    name: Core and affected contracts
+    name: Core checks
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    env:
-      CI: '1'
-      SSR_AUTH_ENABLED: 'true'
-      AUTH_PROVIDER: basic-auth
-      OR3_AUTH_PROVIDER: basic-auth
-      OR3_GUEST_ACCESS_ENABLED: 'false'
-      OR3_AUTH_REGISTRATION_MODE: invite_only
-      OR3_AUTH_AUTO_PROVISION: 'false'
-      OR3_BASIC_AUTH_JWT_SECRET: ci-only-jwt-secret-0123456789abcdef0123456789abcdef
-      OR3_BASIC_AUTH_DB_PATH: .data/or3-basic-auth.sqlite
-      OR3_SYNC_ENABLED: 'true'
-      OR3_CLOUD_SYNC_ENABLED: 'true'
-      OR3_SYNC_PROVIDER: sqlite
-      OR3_SQLITE_DB_PATH: .data/sync.sqlite
-      OR3_STORAGE_ENABLED: 'true'
-      OR3_CLOUD_STORAGE_ENABLED: 'true'
-      NUXT_PUBLIC_STORAGE_PROVIDER: fs
-      OR3_STORAGE_FS_ROOT: ${{ github.workspace }}/.data/storage
-      OR3_STORAGE_FS_TOKEN_SECRET: ci-only-storage-secret-0123456789abcdef0123456789abcdef
-      OR3_BACKGROUND_STREAMING_ENABLED: 'false'
+    timeout-minutes: 20
+    outputs:
+      runtime: ${{ steps.changes.outputs.runtime }}
     steps:
       # paths-filter compares push events against the repository's default
       # branch. A depth-1 checkout makes it repeatedly deepen both refs and can
@@ -54,34 +78,28 @@ jobs:
             banned_imports:
               - 'app/**'
               - 'server/**'
-            cloud:
+            runtime:
               - '.dockerignore'
+              - '.github/workflows/tests.yml'
               - 'Dockerfile'
-              - 'compose*.yaml'
+              - 'app.config.ts'
+              - 'app/**'
+              - 'config.or3.ts'
+              - 'config.or3cloud.ts'
+              - 'extensions/**'
               - 'modules/**'
-              - 'packages/or3-cloud/**'
-              - 'packages/create-or3-chat/first-party-versions.json'
-              - 'scripts/docker/**'
-              - 'scripts/release/**'
-              - '.github/workflows/extended-validation.yml'
-              - '.github/workflows/release-cloud-candidate.yml'
-              - '.github/workflows/release-cloud.yml'
-            plugin_runtime:
-              - 'app/composables/**'
-              - 'app/core/hooks/**'
-              - 'app/plugins/examples/**'
-              - 'app/utils/chat/**'
-              - 'server/hooks/**'
-              - 'server/utils/chat/**'
-              - 'shared/hooks/**'
-              - 'shared/plugins/**'
-              - 'scripts/plugin-runtime/**'
-              - 'scripts/__tests__/plugin-runtime-compatibility-snapshots.test.ts'
-              - 'scripts/__tests__/plugin-runtime-example-fixtures.test.ts'
-              - 'tests/plugin-runtime/**'
-              - 'planning/complete/plugin-runtime-v2/**'
               - 'nuxt.config.ts'
-              - 'vitest.config.ts'
+              - 'or3.providers.generated.ts'
+              - 'package-lock.json'
+              - 'package.json'
+              - 'packages/create-or3-chat/first-party-versions.json'
+              - 'packages/plugin-sdk/**'
+              - 'plugins/**'
+              - 'public/**'
+              - 'scripts/**'
+              - 'server/**'
+              - 'shared/**'
+              - 'tests/plugin-runtime/**'
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
@@ -125,6 +143,52 @@ jobs:
             echo "Core tests exit=$test_status; type-check exit=$typecheck_status" >&2
             exit 1
           fi
+
+  contracts:
+    name: Contracts and compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: dorny/paths-filter@v4
+        id: changes
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          filters: |
+            cloud:
+              - '.dockerignore'
+              - 'Dockerfile'
+              - 'compose*.yaml'
+              - 'modules/**'
+              - 'packages/or3-cloud/**'
+              - 'packages/create-or3-chat/first-party-versions.json'
+              - 'scripts/docker/**'
+              - 'scripts/release/**'
+              - '.github/workflows/extended-validation.yml'
+              - '.github/workflows/release-cloud-candidate.yml'
+              - '.github/workflows/release-cloud.yml'
+            plugin_runtime:
+              - 'app/composables/**'
+              - 'app/core/hooks/**'
+              - 'app/plugins/examples/**'
+              - 'app/utils/chat/**'
+              - 'server/hooks/**'
+              - 'server/utils/chat/**'
+              - 'shared/hooks/**'
+              - 'shared/plugins/**'
+              - 'scripts/plugin-runtime/**'
+              - 'scripts/__tests__/plugin-runtime-compatibility-snapshots.test.ts'
+              - 'scripts/__tests__/plugin-runtime-example-fixtures.test.ts'
+              - 'tests/plugin-runtime/**'
+              - 'planning/complete/plugin-runtime-v2/**'
+              - 'nuxt.config.ts'
+              - 'vitest.config.ts'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
       - name: Run script tests
         run: bun run test:scripts
       - name: Run release policy tests
@@ -152,107 +216,287 @@ jobs:
           bun run plugin-runtime:examples:check
           bun run plugin-runtime:external-v1:check
 
-  advisory:
-    name: Advisory lint and affected performance
+  dev-image:
+    name: Development image
+    needs: core
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.ref == 'refs/heads/or3-cloud' && needs.core.outputs.runtime == 'true')
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    env:
-      CI: '1'
-      SSR_AUTH_ENABLED: 'true'
-      AUTH_PROVIDER: basic-auth
-      OR3_AUTH_PROVIDER: basic-auth
-      OR3_GUEST_ACCESS_ENABLED: 'false'
-      OR3_AUTH_REGISTRATION_MODE: invite_only
-      OR3_AUTH_AUTO_PROVISION: 'false'
-      OR3_BASIC_AUTH_JWT_SECRET: ci-only-jwt-secret-0123456789abcdef0123456789abcdef
-      OR3_BASIC_AUTH_DB_PATH: .data/or3-basic-auth.sqlite
-      OR3_SYNC_ENABLED: 'true'
-      OR3_CLOUD_SYNC_ENABLED: 'true'
-      OR3_SYNC_PROVIDER: sqlite
-      OR3_SQLITE_DB_PATH: .data/sync.sqlite
-      OR3_STORAGE_ENABLED: 'true'
-      OR3_CLOUD_STORAGE_ENABLED: 'true'
-      NUXT_PUBLIC_STORAGE_PROVIDER: fs
-      OR3_STORAGE_FS_ROOT: ${{ github.workspace }}/.data/storage
-      OR3_STORAGE_FS_TOKEN_SECRET: ci-only-storage-secret-0123456789abcdef0123456789abcdef
-      OR3_BACKGROUND_STREAMING_ENABLED: 'false'
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      ref: ${{ steps.ref.outputs.ref }}
+      digest: ${{ steps.ref.outputs.digest }}
+      source: ${{ steps.identity.outputs.source }}
+      platform: ${{ steps.identity.outputs.platform }}
+      arch: ${{ steps.identity.outputs.arch }}
+      tag: ${{ steps.identity.outputs.image }}
+      seconds: ${{ steps.ref.outputs.seconds }}
     steps:
       - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
         with:
-          fetch-depth: 0
-      - uses: dorny/paths-filter@v4
-        id: changes
-        if: github.event_name != 'workflow_dispatch'
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve the immutable development identity
+        id: identity
+        run: |
+          set -euo pipefail
+          source="$(git rev-parse HEAD)"
+          version="$(node -p 'require("./package.json").version')"
+          platform="${{ inputs.platform || 'linux/amd64' }}"
+          arch="${platform##*/}"
+          short="${source:0:12}"
+          {
+            echo "source=$source"
+            echo "short=$short"
+            echo "platform=$platform"
+            echo "arch=$arch"
+            echo "version=$version"
+            echo "started=$(date +%s)"
+            echo "image=ghcr.io/saluana/or3-chat:dev-$short-$arch"
+          } >> "$GITHUB_OUTPUT"
+      - name: Check the immutable identity before any build
+        id: existing
+        env:
+          IMAGE: ${{ steps.identity.outputs.image }}
+          SOURCE: ${{ steps.identity.outputs.source }}
+          PLATFORM: ${{ steps.identity.outputs.platform }}
+        run: |
+          set -euo pipefail
+          set +e
+          inspect_output="$(docker manifest inspect "$IMAGE" 2>&1)"
+          inspect_status=$?
+          set -e
+          if [ "$inspect_status" -ne 0 ]; then
+            if grep -Eqi 'manifest unknown|name unknown|no such manifest|not found' <<<"$inspect_output"; then
+              echo "reuse=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "$inspect_output" >&2
+            echo "Could not confirm whether $IMAGE exists; refusing to build over an unknown identity." >&2
+            exit 1
+          fi
+          docker pull --platform "$PLATFORM" "$IMAGE"
+          revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$IMAGE")"
+          if [ "$revision" != "$SOURCE" ]; then
+            echo "$IMAGE already exists with revision $revision; refusing to reuse or overwrite it." >&2
+            exit 1
+          fi
+          actual_platform="$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$IMAGE")"
+          if [ "$actual_platform" != "$PLATFORM" ]; then
+            echo "$IMAGE resolved to $actual_platform instead of $PLATFORM; refusing to reuse or overwrite it." >&2
+            exit 1
+          fi
+          inspect="$(docker buildx imagetools inspect "$IMAGE")"
+          digest="$(awk '$1 == "Digest:" { print $2; exit }' <<<"$inspect")"
+          test -n "$digest" || { echo "Could not resolve a registry digest for $IMAGE." >&2; exit 1; }
+          {
+            echo "reuse=true"
+            echo "digest=$digest"
+          } >> "$GITHUB_OUTPUT"
+          echo "Reusing the already-published ${PLATFORM} image for this source revision (${digest})." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Build and push the application image once
+        id: build
+        if: steps.existing.outputs.reuse != 'true'
+        uses: docker/build-push-action@v6
         with:
-          filters: |
-            perf_search:
-              - 'app/components/search/**'
-              - 'app/composables/search/**'
-              - 'app/core/search/command-palette/**'
-              - 'scripts/performance/report.ts'
-            perf_sync:
-              - 'app/core/sync/**'
-              - 'shared/sync/**'
-            perf_workspace:
-              - 'scripts/performance/populated-workspace.perf.ts'
-              - 'scripts/performance/report.ts'
-            perf_browser:
-              - 'tests/e2e/performance-budgets.e2e.ts'
-            perf_build:
-              - 'Dockerfile'
-              - 'packages/or3-cloud/**'
-              - 'server/admin/update/**'
-              - 'server/api/admin/update/**'
-              - 'app/components/admin/system/AdminSystemUpdateCard.vue'
-              - 'scripts/performance/production-build.perf.ts'
-              - 'scripts/performance/report.ts'
-              - 'scripts/__tests__/production-build-performance.test.ts'
-              - 'nuxt.config.ts'
-      - uses: oven-sh/setup-bun@v2
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ steps.identity.outputs.platform }}
+          push: true
+          tags: ${{ steps.identity.outputs.image }}
+          provenance: true
+          sbom: false
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.identity.outputs.source }}
+            org.opencontainers.image.version=${{ steps.identity.outputs.version }}-dev.${{ steps.identity.outputs.short }}-${{ steps.identity.outputs.arch }}
+          build-args: |
+            SSR_AUTH_ENABLED=true
+            AUTH_PROVIDER=basic-auth
+            OR3_GUEST_ACCESS_ENABLED=false
+            OR3_AUTH_REGISTRATION_MODE=invite_only
+            OR3_AUTH_AUTO_PROVISION=false
+            OR3_SYNC_ENABLED=true
+            OR3_SYNC_PROVIDER=sqlite
+            OR3_STORAGE_ENABLED=true
+            NUXT_PUBLIC_STORAGE_PROVIDER=fs
+          cache-from: type=registry,ref=ghcr.io/saluana/or3-chat:buildcache-dev
+          cache-to: type=registry,ref=ghcr.io/saluana/or3-chat:buildcache-dev,mode=max
+      - name: Record the exact image reference to test
+        id: ref
+        env:
+          IMAGE: ${{ steps.identity.outputs.image }}
+          BUILD_DIGEST: ${{ steps.build.outputs.digest }}
+          REUSED: ${{ steps.existing.outputs.reuse }}
+          REUSED_DIGEST: ${{ steps.existing.outputs.digest }}
+          STARTED: ${{ steps.identity.outputs.started }}
+        run: |
+          set -euo pipefail
+          if [ "$REUSED" = "true" ]; then digest="$REUSED_DIGEST"; else digest="$BUILD_DIGEST"; fi
+          test -n "$digest" || { echo "No image digest was produced." >&2; exit 1; }
+          elapsed=$(( $(date +%s) - STARTED ))
+          {
+            echo "digest=$digest"
+            echo "ref=$IMAGE@$digest"
+            echo "seconds=$elapsed"
+          } >> "$GITHUB_OUTPUT"
+          echo "Image build/reuse completed in ${elapsed}s." | tee -a "$GITHUB_STEP_SUMMARY"
+
+  dev-smoke:
+    name: Smoke-test the development image
+    needs: dev-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          bun-version: 1.3.14
-      - run: bun install --frozen-lockfile
-      # These diagnostics deliberately do not gate the required core job. The
-      # strict versions continue to run in Extended validation.
-      - name: Report full-project ESLint baseline
-        continue-on-error: true
-        run: bun run lint
-      - name: Check command-palette performance budget
-        continue-on-error: true
-        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.perf_search == 'true'
-        run: bun run command-palette:benchmarks:check
-      - name: Check sync performance budgets
-        continue-on-error: true
-        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.perf_sync == 'true'
-        run: bun run sync:benchmarks:check
-      - name: Check populated-workspace budget
-        continue-on-error: true
-        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.perf_workspace == 'true'
-        run: bun run performance:workspace:check
-      - name: Install Chromium for affected browser budget
-        continue-on-error: true
-        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.perf_browser == 'true'
-        run: bunx playwright install --with-deps chromium
-      - name: Check browser performance budgets
-        continue-on-error: true
-        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.perf_browser == 'true'
-        run: bun run performance:browser:check
-      - name: Build affected production application for budget inspection
-        continue-on-error: true
-        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.perf_build == 'true'
-        run: bun run build
-      - name: Check production build budget
-        continue-on-error: true
-        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.perf_build == 'true'
-        run: bun run performance:production-build:check
-      - name: Upload affected performance reports
-        if: always() && (github.event_name == 'workflow_dispatch' || steps.changes.outputs.perf_search == 'true' || steps.changes.outputs.perf_sync == 'true' || steps.changes.outputs.perf_workspace == 'true' || steps.changes.outputs.perf_browser == 'true' || steps.changes.outputs.perf_build == 'true')
-        uses: actions/upload-artifact@v7
+          node-version: 24
+          package-manager-cache: false
+      # Required only when the manual dispatch selects linux/arm64.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/login-action@v3
         with:
-          name: affected-performance-${{ github.sha }}
-          path: |
-            output/performance/*.json
-            output/playwright/*.json
-            test-results/**
-          if-no-files-found: warn
-          retention-days: 14
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Start the exact image with disposable configuration and storage
+        env:
+          REF: ${{ needs.dev-image.outputs.ref }}
+          PLATFORM: ${{ needs.dev-image.outputs.platform }}
+        run: |
+          set -euo pipefail
+          smoke="$RUNNER_TEMP/or3-dev-smoke"
+          rm -rf "$smoke"
+          mkdir -p "$smoke"
+          jwt="dev-jwt-$(openssl rand -hex 24)"
+          refresh="dev-refresh-$(openssl rand -hex 24)"
+          storage="dev-storage-$(openssl rand -hex 24)"
+          admin="dev-admin-$(openssl rand -hex 24)"
+          password="DevSmoke-$(openssl rand -hex 12)"
+          for secret in "$jwt" "$refresh" "$storage" "$admin" "$password"; do
+            echo "::add-mask::$secret"
+          done
+          cat > "$smoke/.env" <<EOF
+          SSR_AUTH_ENABLED=true
+          AUTH_PROVIDER=basic-auth
+          OR3_AUTH_PROVIDER=basic-auth
+          OR3_GUEST_ACCESS_ENABLED=false
+          OR3_AUTH_REGISTRATION_MODE=invite_only
+          OR3_AUTH_AUTO_PROVISION=false
+          OR3_BASIC_AUTH_JWT_SECRET=$jwt
+          OR3_BASIC_AUTH_REFRESH_SECRET=$refresh
+          OR3_BASIC_AUTH_DB_PATH=/data/auth.sqlite
+          OR3_BASIC_AUTH_BOOTSTRAP_EMAIL=dev-smoke@example.com
+          OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD=$password
+          OR3_ADMIN_USERNAME=dev-smoke@example.com
+          OR3_ADMIN_PASSWORD=$password
+          OR3_ADMIN_JWT_SECRET=$admin
+          OR3_SYNC_ENABLED=true
+          OR3_CLOUD_SYNC_ENABLED=true
+          OR3_SYNC_PROVIDER=sqlite
+          OR3_SQLITE_DB_PATH=/data/sync.sqlite
+          OR3_STORAGE_ENABLED=true
+          OR3_CLOUD_STORAGE_ENABLED=true
+          NUXT_PUBLIC_STORAGE_PROVIDER=fs
+          OR3_STORAGE_FS_ROOT=/data/storage
+          OR3_STORAGE_FS_TOKEN_SECRET=$storage
+          OR3_MANAGED_OWNER_EMAIL=dev-smoke@example.com
+          EOF
+          grep -E '^OR3_(BASIC_AUTH_BOOTSTRAP_(EMAIL|PASSWORD)|ADMIN_(USERNAME|PASSWORD))=' \
+            "$smoke/.env" > "$smoke/.or3-initial-credentials"
+          docker pull --platform "$PLATFORM" "$REF"
+          docker volume create or3-dev-smoke-data >/dev/null
+          docker run -d --name or3-dev-smoke \
+            --platform "$PLATFORM" \
+            --env-file "$smoke/.env" \
+            -p 127.0.0.1:3121:3000 \
+            -v or3-dev-smoke-data:/data \
+            --read-only \
+            --tmpfs /tmp:size=256m \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            "$REF"
+          ready=false
+          for attempt in $(seq 1 90); do
+            if [ "$(docker inspect --format '{{.State.Running}}' or3-dev-smoke 2>/dev/null || echo false)" != "true" ]; then
+              echo "The development container exited before readiness (attempt $attempt)." >&2
+              exit 1
+            fi
+            if curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:3121/api/health?deep=true" >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" != "true" ]; then
+            echo "Deep health did not become ready within 180s." >&2
+            exit 1
+          fi
+          (cd "$smoke" && OR3_SMOKE_URL=http://127.0.0.1:3121 \
+            node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
+      - name: Print sanitized container logs on failure
+        if: failure()
+        run: docker logs --tail=200 or3-dev-smoke 2>&1 || true
+      - name: Remove the disposable container and volume
+        if: always()
+        run: |
+          docker rm -f or3-dev-smoke >/dev/null 2>&1 || true
+          docker volume rm or3-dev-smoke-data >/dev/null 2>&1 || true
+
+  dev-publish:
+    name: Advance the development tag
+    needs: [dev-image, dev-smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Advance the deployable development tag only after the smoke passed
+        env:
+          REF: ${{ needs.dev-image.outputs.ref }}
+          EXPECTED_DIGEST: ${{ needs.dev-image.outputs.digest }}
+          ARCH: ${{ needs.dev-image.outputs.arch }}
+        run: |
+          set -euo pipefail
+          tag="ghcr.io/saluana/or3-chat:dev-${ARCH}"
+          docker buildx imagetools create -t "$tag" "$REF"
+          inspect="$(docker buildx imagetools inspect "$tag")"
+          published="$(awk '$1 == "Digest:" { print $2; exit }' <<<"$inspect")"
+          test "$published" = "$EXPECTED_DIGEST"
+      - name: Write the development image summary
+        run: |
+          {
+            echo "## Development image"
+            echo
+            echo "- Source: \`${{ needs.dev-image.outputs.source }}\`"
+            echo "- Architecture: \`${{ needs.dev-image.outputs.platform }}\`"
+            echo "- Build/reuse time: ${{ needs.dev-image.outputs.seconds }}s"
+            echo "- Immutable reference: \`${{ needs.dev-image.outputs.tag }}@${{ needs.dev-image.outputs.digest }}\`"
+            echo "- Deployable tag: \`ghcr.io/saluana/or3-chat:dev-${{ needs.dev-image.outputs.arch }}@${{ needs.dev-image.outputs.digest }}\`"
+            echo "- Checks: core type-check and tests; disposable-container deep health, sign-in, SQLite sync, and file upload"
+            echo "- Published only. No running deployment was updated."
+            echo
+            echo "Next: set \`OR3_IMAGE\` in the development deployment to the immutable reference above, then run:"
+            echo
+            echo '```bash'
+            echo "docker compose pull or3 && docker compose up -d --wait or3"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

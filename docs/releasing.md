@@ -1,5 +1,9 @@
 # Releasing OR3 Cloud
 
+This document covers the **stable release** ceremony only. Ordinary development
+updates do not need a version bump, an npm publication, or this workflow; use
+the development image path in [Updating OR3](cloud-updates.md).
+
 Normal OR3 Cloud releases publish a versioned application image, a separate
 digest-pinned dashboard-operator image, and the operator package. The release
 version must match in:
@@ -17,22 +21,28 @@ republish a version with different contents.
 
 ## CI lanes
 
-Normal pull requests run a required **Core and affected contracts** job. It
-installs once, runs type checking alongside the core tests, and adds Cloud or
-plugin-runtime checks only when those surfaces changed. Full-project lint and
-affected performance measurements run in the separate non-required
-**Advisory lint and affected performance** job, so they remain visible without
-extending the required critical path. Generic version and lockfile edits do
-not launch unrelated performance or deployment suites.
-Configure the `or3-cloud` branch protection rule to require **PR checks / Core
-and affected contracts**; the workflow intentionally runs on every pull
-request so that required status is never left pending by a path filter.
+The **Checks** workflow (`.github/workflows/tests.yml`) separates a fast source
+gate from compatibility checks and from image publication:
 
-The **Extended validation** workflow runs on weekday schedules and on demand.
-Its manual `suite` selector can run `tests`, `performance`, `plugin-runtime`,
-or `deployment` independently; `all` runs every suite. Performance budgets are
-strict here, and the deployment suite exercises the complete disposable Cloud
-lifecycle. Package publication remains isolated in the candidate and tag
+- **Core checks** is the blocking gate: type-check, core tests, changed-file
+  lint, documentation, and banned-import checks.
+- **Contracts and compatibility** runs in parallel: script and release-policy
+  tests, Cloud package contracts, and plugin compatibility checks. It does not
+  gate development images.
+- **Development image** runs after **Core checks** on trusted `or3-cloud`
+  pushes and manual dispatches. It builds one image, smoke-tests the exact
+  digest, and only then advances `ghcr.io/saluana/or3-chat:dev-<arch>`. It
+  never publishes npm packages or stable tags. See [Updating OR3](cloud-updates.md).
+
+If `or3-cloud` branch protection is enabled, require **Checks / Core checks**.
+Pull requests deliberately run the workflow even when a path filter would skip
+the deeper suites, so a required status is never left pending.
+
+Full-project lint, strict performance budgets, full tests, browser suites,
+plugin-runtime matrices, static generation, and the disposable deployment
+lifecycle live in **Extended validation**, which runs on weekday schedules and
+on demand (`tests`, `lint`, `performance`, `plugin-runtime`, `deployment`, or
+`all`). Package publication remains isolated in the candidate and tag
 workflows below.
 
 ## Registry setup

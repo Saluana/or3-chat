@@ -116,6 +116,10 @@ forwarding headers); otherwise proxy-supplied client identity is untrusted.
 - The backup authentication key is not included in an exported archive. Escrow
   an owner-only copy of `.or3-cloud/backup-auth.key` separately in an encrypted
   secret store and restore it before using an off-host archive.
+- The canonical update procedure — including the development-image workflow used
+  for routine source changes — is the repository's
+  [Updating OR3](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/cloud-updates.md)
+  guide. This page documents the managed runtime contract that guide relies on.
 - After every deployment or update, run `npx @or3/cloud verify`. For a public
   VPS, run `npx @or3/cloud verify --public` so success requires the real HTTPS
   origin with no redirect loop. Verification covers the managed image digest,

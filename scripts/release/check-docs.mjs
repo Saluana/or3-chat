@@ -22,6 +22,7 @@ const docs = [
   'docs/README.md',
   'docs/start-here.md',
   'docs/installation.md',
+  'docs/cloud-updates.md',
   'packages/or3-cloud/README.md',
   'public/_documentation/cloud/deployment-operations.md',
   'public/_documentation/cloud/or3-cloud-wizard.md',
