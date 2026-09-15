@@ -48,9 +48,9 @@ const starFilledIcon = useIcon('catalog.star.filled');
         <ModelCatalogProviderLogo :slug="provider.slug" :size="36" tile />
 
         <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-1.5">
+            <div class="flex items-start gap-1.5 sm:items-center">
                 <span
-                    class="font-medium text-sm truncate text-[var(--md-on-surface)]"
+                    class="font-medium text-sm min-w-0 max-sm:line-clamp-2 sm:truncate break-words text-[var(--md-on-surface)]"
                     :title="model.name"
                     >{{ model.name }}</span
                 >
@@ -71,10 +71,28 @@ const starFilledIcon = useIcon('catalog.star.filled');
                 <span class="opacity-60">·</span>
                 {{ formatTokenCount(contextLength) }} context
             </div>
+
+            <!-- Mobile pricing: own line so the model name keeps full width -->
+            <div
+                class="sm:hidden mt-1 text-xs leading-tight tabular-nums text-[var(--md-on-surface)]"
+            >
+                {{ formatPerMillion(model.pricing?.prompt) }}
+                <span class="text-[var(--md-on-surface-variant)] opacity-80"
+                    >/ 1M input</span
+                >
+                <span class="px-1 text-[var(--md-on-surface-variant)] opacity-60"
+                    >·</span
+                >
+                {{ formatPerMillion(model.pricing?.completion) }}
+                <span class="text-[var(--md-on-surface-variant)] opacity-80"
+                    >/ 1M output</span
+                >
+            </div>
         </div>
 
+        <!-- Desktop pricing: compact right column -->
         <div
-            class="text-right text-xs leading-tight tabular-nums shrink-0 text-[var(--md-on-surface)]"
+            class="hidden sm:block text-right text-xs leading-tight tabular-nums shrink-0 text-[var(--md-on-surface)]"
         >
             <div>
                 {{ formatPerMillion(model.pricing?.prompt) }}
@@ -92,7 +110,7 @@ const starFilledIcon = useIcon('catalog.star.filled');
 
         <button
             type="button"
-            class="shrink-0 p-1 rounded transition"
+            class="shrink-0 p-1 rounded transition self-start sm:self-center"
             :class="
                 favorite
                     ? 'text-amber-400 hover:text-amber-500'

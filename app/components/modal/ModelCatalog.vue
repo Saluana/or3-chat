@@ -196,7 +196,7 @@
                                     :key="listKey"
                                     :items="visibleModels"
                                     :item-key="(model) => model.id"
-                                    :estimate-height="72"
+                                    :estimate-height="rowEstimateHeight"
                                     :overscan="520"
                                     :maintain-bottom="false"
                                     class="model-catalog-list__rows px-2 sm:px-3 py-2.5 [scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin]"
@@ -604,6 +604,8 @@ const detailSheetOpen = ref(false);
 const selectedId = ref<string | null>(null);
 
 const isDesktop = useMediaQuery('(min-width: 1024px)');
+const isWideRow = useMediaQuery('(min-width: 640px)');
+const rowEstimateHeight = computed(() => (isWideRow.value ? 72 : 100));
 
 interface ChipDef {
     key: CapabilityFilter;
