@@ -49,7 +49,7 @@ export const chatOverrides = {
             item: 'text-[14px]! max-md:min-h-[44px]! max-md:text-[16px]!',
             itemLabel: 'text-[14px]! max-md:text-[16px]!',
             content:
-                'ring-0! border-0! rounded-[var(--md-border-radius-large,var(--md-border-radius))] bg-[var(--md-surface)] shadow-lg text-[14px]! max-md:text-[16px]!',
+                'ring-0! border-[length:var(--md-border-width)] border-[color:color-mix(in_srgb,var(--md-border-color)_45%,transparent)] rounded-[var(--md-border-radius-large,var(--md-border-radius))] bg-[var(--md-surface)] shadow-lg text-[14px]! max-md:text-[16px]!',
         },
         searchInput: {
             ui: {

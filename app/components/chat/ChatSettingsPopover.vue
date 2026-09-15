@@ -26,117 +26,122 @@
         </header>
 
         <div class="chat-settings-body">
-            <!-- The model selector moves into settings when the composer is narrow. -->
-            <section
+            <!-- Current model: shown when the composer is too narrow for its
+                 own picker. Opens the favorites dropdown directly. -->
+            <USelectMenu
                 v-if="containerWidth && containerWidth < 400"
-                class="chat-settings-model-section"
-                aria-labelledby="chat-settings-model-label"
+                v-model="selectedModel"
+                :items="modelItems"
+                value-key="value"
+                :search-input="modelSearchInput"
+                :disabled="loading"
+                aria-label="Current model"
+                class="chat-settings-model-trigger ring-0!"
+                :ui="selectMenuUi"
             >
-                <label
-                    id="chat-settings-model-label"
-                    class="chat-settings-section-label"
-                >
-                    Model
-                </label>
-                <LazyChatModelSelect
-                    hydrate-on-interaction="focus"
-                    v-model:model="selectedModel"
-                    :loading="loading"
-                    class="chat-settings-model-select w-full!"
-                />
-            </section>
-
-            <div class="chat-settings-section">
-                <div class="chat-settings-row chat-settings-switch">
-                    <span class="chat-settings-icon" aria-hidden="true">
-                        <UIcon :name="iconModelVariant" class="size-4" />
+                <template #default="{ open }">
+                    <ModelCatalogProviderLogo
+                        :slug="selectedProviderSlug"
+                        :size="32"
+                        :tile="true"
+                    />
+                    <span class="chat-settings-row-copy min-w-0">
+                        <span class="chat-settings-row-title truncate">
+                            {{ selectedModel || 'Select a model' }}
+                        </span>
+                        <span class="chat-settings-row-description truncate">
+                            Current model for this chat
+                        </span>
                     </span>
-                    <label
-                        for="chat-model-variant"
-                        class="chat-settings-row-copy"
+                    <UIcon
+                        :name="iconChevronDown"
+                        class="chat-settings-option-chevron size-4 shrink-0"
+                        :class="{ 'is-open': open }"
+                        aria-hidden="true"
+                    />
+                </template>
+                <template #item-leading="{ item }">
+                    <ModelCatalogProviderLogo :slug="item.slug" :size="20" />
+                </template>
+                <template #empty>
+                    <UButton
+                        variant="ghost"
+                        size="sm"
+                        block
+                        class="chat-settings-popover-button"
+                        @click="emit('open-model-catalog')"
                     >
-                        <span class="chat-settings-row-title">
-                            Model variant
-                        </span>
-                        <span
-                            id="chat-model-variant-description"
-                            class="chat-settings-row-description"
-                        >
-                            Route requests for speed, savings, or web search.
-                        </span>
-                    </label>
-                    <USelect
-                        id="chat-model-variant"
+                        Browse model catalog
+                    </UButton>
+                </template>
+            </USelectMenu>
+
+            <p class="chat-settings-heading" aria-hidden="true">Options</p>
+
+            <div class="chat-settings-options">
+                <div class="chat-settings-row-item">
+                    <USelectMenu
                         v-model="modelVariant"
-                        :items="modelVariantItems"
+                        :items="variantItems"
                         value-key="value"
-                        label-key="label"
-                        size="sm"
-                        class="min-w-32"
+                        :search-input="false"
+                        :disabled="loading || streaming"
                         aria-label="Model variant"
-                        aria-describedby="chat-model-variant-description"
-                        :disabled="loading || streaming"
-                    />
+                        class="chat-settings-row-trigger ring-0! border-0 bg-transparent"
+                        :ui="selectMenuUi"
+                    >
+                        <template #default="{ open }">
+                            <span class="chat-settings-icon" aria-hidden="true">
+                                <UIcon
+                                    :name="iconVariantSettings"
+                                    class="size-4"
+                                />
+                            </span>
+                            <span class="chat-settings-row-title">
+                                Model variant
+                            </span>
+                            <span class="chat-settings-option-value">
+                                {{ activeVariantLabel }}
+                            </span>
+                            <UIcon
+                                :name="iconChevronDown"
+                                class="chat-settings-option-chevron size-4 shrink-0"
+                                :class="{ 'is-open': open }"
+                                aria-hidden="true"
+                            />
+                        </template>
+                    </USelectMenu>
                 </div>
 
-                <div
-                    v-if="thinkingSupported"
-                    class="chat-settings-row chat-settings-switch"
-                >
-                    <span class="chat-settings-icon" aria-hidden="true">
-                        <UIcon :name="iconReasoning" class="size-4" />
-                    </span>
-                    <label
-                        for="chat-thinking"
-                        class="chat-settings-row-copy"
-                    >
-                        <span class="chat-settings-row-title">
-                            Enable thinking
-                        </span>
-                        <span
-                            id="chat-thinking-description"
-                            class="chat-settings-row-description"
-                        >
-                            Let supported models reason before answering.
-                        </span>
-                    </label>
-                    <USwitch
-                        id="chat-thinking"
-                        v-bind="thinkingSwitchProps"
-                        v-model="thinkingEnabled"
-                        aria-label="Enable thinking"
-                        aria-describedby="chat-thinking-description"
-                        class="chat-settings-control"
-                    />
-                </div>
-
-                <div
-                    v-if="
-                        thinkingSupported &&
-                        thinkingEnabled &&
-                        reasoningEffortOptions.length > 0
-                    "
-                    class="chat-settings-reasoning-effort"
-                >
-                    <label
-                        for="chat-reasoning-effort"
-                        class="chat-settings-row-copy"
-                    >
-                        <span class="chat-settings-row-title">
-                            Reasoning level
-                        </span>
-                        <span class="chat-settings-row-description">
-                            Choose how much effort the model should use.
-                        </span>
-                    </label>
-                    <USelect
-                        id="chat-reasoning-effort"
-                        v-model="reasoningEffort"
-                        :items="reasoningEffortItems"
-                        size="sm"
-                        class="min-w-32"
+                <div v-if="thinkingSupported" class="chat-settings-row-item">
+                    <USelectMenu
+                        v-model="thinkingSelection"
+                        :items="thinkingItems"
+                        value-key="value"
+                        :search-input="false"
                         :disabled="loading || streaming"
-                    />
+                        aria-label="Thinking level"
+                        class="chat-settings-row-trigger ring-0! border-0 bg-transparent"
+                        :ui="selectMenuUi"
+                    >
+                        <template #default="{ open }">
+                            <span class="chat-settings-icon" aria-hidden="true">
+                                <UIcon :name="iconReasoning" class="size-4" />
+                            </span>
+                            <span class="chat-settings-row-title">
+                                Thinking
+                            </span>
+                            <span class="chat-settings-option-value">
+                                {{ thinkingValueLabel }}
+                            </span>
+                            <UIcon
+                                :name="iconChevronDown"
+                                class="chat-settings-option-chevron size-4 shrink-0"
+                                :class="{ 'is-open': open }"
+                                aria-hidden="true"
+                            />
+                        </template>
+                    </USelectMenu>
                 </div>
             </div>
 
@@ -288,6 +293,8 @@
                 </div>
             </section>
 
+            <p class="chat-settings-heading" aria-hidden="true">More</p>
+
             <nav class="chat-settings-navigation" aria-label="More settings">
                 <UButton
                     v-bind="systemPromptsButtonProps"
@@ -307,7 +314,8 @@
                     </span>
                     <UIcon
                         :name="iconChevronRight"
-                        class="size-4 shrink-0"
+                        class="size-4 shrink-0 text-[var(--md-on-surface-variant)]"
+                        aria-hidden="true"
                     />
                 </UButton>
                 <UButton
@@ -328,7 +336,8 @@
                     </span>
                     <UIcon
                         :name="iconChevronRight"
-                        class="size-4 shrink-0"
+                        class="size-4 shrink-0 text-[var(--md-on-surface-variant)]"
+                        aria-hidden="true"
                     />
                 </UButton>
             </nav>
@@ -342,6 +351,21 @@ import { useIcon } from '~/composables/useIcon';
 import { useToolRegistry } from '~/utils/chat/tools-public';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import type { OpenRouterModelVariant } from '~~/shared/openrouter/model-variants';
+import { MODEL_VARIANT_OPTIONS } from '~~/shared/openrouter/model-variants';
+import { getProviderSlug } from '~/utils/modelCatalog';
+import { useModelStore } from '~/composables/chat/useModelStore';
+import { useModelVariantItems } from '~/composables/chat/useModelVariantItems';
+import { isMobile } from '~/state/global';
+import ModelCatalogProviderLogo from '~/components/modal/model-catalog/ModelCatalogProviderLogo.vue';
+import {
+    applyThinkingSelection,
+    getReasoningEffortDescription,
+    OPENROUTER_REASONING_EFFORTS,
+    resolveThinkingSelection,
+    THINKING_BASIC,
+    THINKING_DISABLED,
+    type OpenRouterReasoningEffort,
+} from '~~/shared/openrouter/reasoning';
 
 const props = defineProps<{
     containerWidth?: number;
@@ -349,6 +373,8 @@ const props = defineProps<{
     streaming?: boolean;
     thinkingSupported?: boolean;
     reasoningEfforts?: string[];
+    /** Model's default effort, so the picker matches the request. */
+    reasoningDefaultEffort?: string;
 }>();
 
 const emit = defineEmits<{
@@ -455,8 +481,17 @@ const modelVariant = defineModel<OpenRouterModelVariant>('modelVariant');
 const thinkingEnabled = defineModel<boolean>('thinkingEnabled');
 const reasoningEffort = defineModel<string | undefined>('reasoningEffort');
 
-const iconModelVariant = useIcon('chat.web_search');
+// Dropdown menus read as raised panels: a light themed border instead of the
+// default accent ring, matching the settings cards.
+const selectMenuUi = {
+    trailing: 'hidden',
+    content:
+        'ring-0! border-[length:var(--md-border-width)] border-[color:color-mix(in_srgb,var(--md-border-color)_45%,transparent)]',
+} as const;
+
 const iconReasoning = useIcon('chat.reasoning');
+const iconVariantSettings = useIcon('chat.model.settings');
+const searchIcon = useIcon('ui.search');
 const iconToolWrench = useIcon('chat.tool.wrench');
 const iconClose = useIcon('ui.close');
 const iconChevronRight = useIcon('ui.chevron.right');
@@ -491,40 +526,125 @@ const closeButtonProps = computed(() => {
     };
 });
 
-// Model variant select
-const modelVariantItems = computed(() => [
-    { label: 'Off', value: 'off' as const },
-    { label: 'Online', value: 'online' as const },
-    { label: 'Nitro', value: 'nitro' as const },
-    { label: 'Floor', value: 'floor' as const },
+// Favorites model dropdown (narrow composers). Rows open the menu directly.
+const { favoriteModels } = useModelStore();
+
+function providerSlugFor(modelId: string): string {
+    // Some upstream canonical slugs carry a leading `~`, which is not part
+    // of the provider prefix.
+    return getProviderSlug({ id: modelId.replace(/^~+/, '') });
+}
+
+const modelItems = computed(() =>
+    (favoriteModels.value ?? [])
+        .map((model) => {
+            const value = model.canonical_slug ?? model.id;
+            if (!value) return null;
+            return { label: value, value, slug: providerSlugFor(value) };
+        })
+        .filter(
+            (
+                item
+            ): item is {
+                label: string;
+                value: string;
+                slug: string;
+            } => Boolean(item)
+        )
+);
+
+const selectedProviderSlug = computed(() =>
+    providerSlugFor(selectedModel.value ?? '')
+);
+
+// Favorite picker: searchable when there are many favorites, matching the
+// composer's model picker (no mobile autofocus so the keyboard stays shut).
+const modelSearchInput = computed(() => ({
+    icon: searchIcon.value,
+    autofocus: !isMobile.value,
+}));
+
+// Model variant dropdown (options + descriptions from the shared helper).
+const variantItems = useModelVariantItems();
+
+const activeVariantLabel = computed(
+    () =>
+        MODEL_VARIANT_OPTIONS.find(
+            (option) => option.value === modelVariant.value
+        )?.label ?? 'Off'
+);
+
+// Thinking level select: one dropdown for Disabled / Enabled / effort.
+// The underlying data model (thinkingEnabled + reasoningEffort) is unchanged,
+// so drafts, send payloads, and useAi keep working as before.
+const defaultEffort = computed(
+    () => props.reasoningDefaultEffort as OpenRouterReasoningEffort | undefined
+);
+
+const thinkingSelection = computed<string>({
+    get: () =>
+        resolveThinkingSelection({
+            thinkingEnabled: thinkingEnabled.value ?? false,
+            reasoningEffort: reasoningEffort.value,
+            efforts: reasoningEffortOptions.value,
+            defaultEffort: defaultEffort.value,
+        }),
+    set: (value) => {
+        const next = applyThinkingSelection(
+            value,
+            reasoningEffortOptions.value
+        );
+        thinkingEnabled.value = next.thinkingEnabled;
+        reasoningEffort.value = next.reasoningEffort;
+    },
+});
+
+function capitalizeEffort(effort: string): string {
+    return effort.charAt(0).toUpperCase() + effort.slice(1);
+}
+
+const thinkingItems = computed(() => [
+    {
+        label: 'Disabled',
+        value: THINKING_DISABLED,
+        // Not every model allows reasoning to be turned off; the send path
+        // simply omits reasoning config rather than forcing it off.
+        description: 'Answer without reasoning where supported.',
+    },
+    ...(reasoningEffortOptions.value.length > 0
+        ? [...reasoningEffortOptions.value]
+              .sort(
+                  (a, b) =>
+                      OPENROUTER_REASONING_EFFORTS.indexOf(
+                          a as OpenRouterReasoningEffort
+                      ) -
+                      OPENROUTER_REASONING_EFFORTS.indexOf(
+                          b as OpenRouterReasoningEffort
+                      )
+              )
+              .map((effort) => ({
+                  label: capitalizeEffort(effort),
+                  value: effort,
+                  description: getReasoningEffortDescription(effort),
+              }))
+        : [
+              {
+                  label: 'Enabled',
+                  value: THINKING_BASIC,
+                  description: 'Let the model reason before answering.',
+              },
+          ]),
 ]);
 
-// Thinking switch
-const thinkingSwitchProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'switch',
-        context: 'settings',
-        identifier: 'settings.thinking',
-        isNuxtUI: true,
-    });
-    return {
-        color: 'primary' as const,
-        size: 'sm' as const,
-        disabled:
-            props.thinkingSupported === false || props.loading || props.streaming,
-        ...overrides.value,
-    };
-});
+const thinkingValueLabel = computed(
+    () =>
+        thinkingItems.value.find(
+            (item) => item.value === thinkingSelection.value
+        )?.label ?? 'Disabled'
+);
 
 const reasoningEffortOptions = computed(() =>
     Array.isArray(props.reasoningEfforts) ? props.reasoningEfforts : []
-);
-
-const reasoningEffortItems = computed(() =>
-    reasoningEffortOptions.value.map((value) => ({
-        label: value,
-        value,
-    }))
 );
 
 // Tool switch (dynamic per tool)
@@ -639,10 +759,7 @@ const modelCatalogButtonProps = computed(() => {
     padding: 0.75rem;
 }
 
-.chat-settings-model-section,
-.chat-settings-section,
-.chat-settings-tools,
-.chat-settings-navigation {
+.chat-settings-tools {
     overflow: hidden;
     border: var(--chat-settings-divider-width) solid
         color-mix(in srgb, var(--md-border-color) 45%, transparent);
@@ -650,11 +767,101 @@ const modelCatalogButtonProps = computed(() => {
     background: var(--md-surface);
 }
 
-.chat-settings-model-section {
+.chat-settings-heading {
+    margin: 0.25rem 0 0;
+    padding: 0 0.25rem;
+    color: var(--md-on-surface-variant);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    line-height: 1.2;
+}
+
+/*
+ * Rows are USelectMenu triggers, so their base button lives inside a child
+ * component: layout is applied with :deep(). All rows share one geometry so
+ * the Options and More sections line up exactly.
+ */
+:deep(.chat-settings-model-trigger),
+:deep(.chat-settings-row-trigger) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    min-height: 3.5rem;
+    padding: 0.625rem 0.75rem;
+    color: var(--md-on-surface);
+    text-align: left;
+    background: transparent;
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
+    cursor: pointer;
+}
+
+:deep(.chat-settings-model-trigger) {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    background: var(--md-surface);
+    border: var(--md-border-width) solid var(--md-border-color);
+}
+
+:deep(.chat-settings-model-trigger:hover),
+:deep(.chat-settings-row-trigger:hover) {
+    background: var(--md-surface-hover);
+}
+
+:deep(.chat-settings-model-trigger:focus-visible),
+:deep(.chat-settings-row-trigger:focus-visible) {
+    outline: var(--app-focus-ring-width, 2px) solid
+        var(--md-focus-ring, var(--md-primary));
+    outline-offset: -2px;
+}
+
+.chat-settings-options {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    padding: 0.75rem;
+    min-width: 0;
+}
+
+/*
+ * Row dividers are drawn with a pseudo-element instead of `border-top`:
+ * a border on a rounded row curves down at the ends, while the pseudo
+ * element keeps the line perfectly straight.
+ */
+.chat-settings-row-item + .chat-settings-row-item,
+.chat-settings-nav-button + .chat-settings-nav-button {
+    position: relative;
+}
+
+.chat-settings-row-item + .chat-settings-row-item::before,
+.chat-settings-nav-button + .chat-settings-nav-button::before {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    /* Rows are positioned (relative) buttons; without a stacking context of
+       its own the divider would be painted under an opaque hover background. */
+    z-index: 1;
+    border-top: var(--chat-settings-divider-width) solid
+        color-mix(in srgb, var(--md-border-color) 35%, transparent);
+    pointer-events: none;
+}
+
+.chat-settings-option-value {
+    color: var(--md-on-surface-variant);
+    font-size: 0.8125rem;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.chat-settings-option-chevron {
+    color: var(--md-on-surface-variant);
+    transition: transform var(--app-motion-duration-fast, 150ms)
+        var(--app-motion-easing-standard, ease);
+}
+
+.chat-settings-option-chevron.is-open {
+    transform: rotate(180deg);
 }
 
 .chat-settings-section-label {
@@ -662,32 +869,6 @@ const modelCatalogButtonProps = computed(() => {
     font-size: 0.75rem;
     font-weight: 650;
     line-height: 1.2;
-}
-
-.chat-settings-model-select {
-    min-width: 0;
-}
-
-.chat-settings-model-select :deep(button) {
-    width: 100%;
-    max-width: none;
-    color: var(--md-on-surface);
-    background: var(--md-surface);
-    border: var(--md-border-width) solid var(--md-border-color);
-    border-radius: var(--md-border-radius-small, var(--md-border-radius));
-}
-
-.chat-settings-model-select :deep(button:hover) {
-    background: var(--md-surface-hover);
-    border-color: color-mix(
-        in srgb,
-        var(--md-primary) 40%,
-        var(--md-border-color)
-    );
-}
-
-.chat-settings-model-select :deep(button:focus-visible) {
-    border-color: var(--md-primary);
 }
 
 .chat-settings-row,
@@ -700,8 +881,7 @@ const modelCatalogButtonProps = computed(() => {
     padding: 0.625rem 0.75rem;
 }
 
-.chat-settings-row + .chat-settings-row,
-.chat-settings-reasoning-effort {
+.chat-settings-row + .chat-settings-row {
     border-top: var(--chat-settings-divider-width) solid
         color-mix(in srgb, var(--md-border-color) 35%, transparent);
 }
@@ -750,14 +930,6 @@ const modelCatalogButtonProps = computed(() => {
 
 .chat-settings-control {
     flex: none;
-}
-
-.chat-settings-reasoning-effort {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.75rem;
 }
 
 .chat-settings-section-heading {
@@ -829,20 +1001,25 @@ const modelCatalogButtonProps = computed(() => {
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 0.75rem;
+    width: 100%;
     min-height: 3.5rem;
     padding: 0.625rem 0.75rem;
     color: var(--md-on-surface);
     border: 0;
-    border-radius: 0;
-}
-
-.chat-settings-nav-button + .chat-settings-nav-button {
-    border-top: var(--chat-settings-divider-width) solid
-        color-mix(in srgb, var(--md-border-color) 35%, transparent);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
 }
 
 .chat-settings-nav-button:hover {
     background: var(--md-surface-hover);
+}
+
+/*
+ * UButton wraps slotted content in its label span, which would lay the
+ * icon/copy/chevron out with flex instead of the grid below. Collapsing
+ * the wrapper keeps nav rows on the exact same grid as the option rows.
+ */
+.chat-settings-nav-button > [data-slot='label'] {
+    display: contents;
 }
 
 @media (max-width: 640px) {
@@ -863,6 +1040,10 @@ const modelCatalogButtonProps = computed(() => {
 @media (prefers-reduced-motion: reduce) {
     .chat-settings-tool-category {
         transition-duration: 1ms;
+    }
+
+    .chat-settings-option-chevron {
+        transition: none;
     }
 }
 </style>

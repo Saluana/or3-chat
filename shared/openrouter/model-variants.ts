@@ -61,3 +61,47 @@ export function stripModelVariantSuffix(modelId: string): string {
     }
     return modelId;
 }
+
+export interface ModelVariantOption {
+    value: OpenRouterModelVariant;
+    label: string;
+    /** One-line plain-language summary shown under the option. */
+    description: string;
+}
+
+/**
+ * Display metadata for the variant picker, ordered as presented in the UI.
+ * Descriptions stay to one line so they fit under each dropdown option.
+ */
+export const MODEL_VARIANT_OPTIONS: readonly ModelVariantOption[] = [
+    {
+        value: 'off',
+        label: 'Off',
+        description: 'Standard routing, no suffix added.',
+    },
+    {
+        value: 'online',
+        label: 'Online',
+        description: 'Live web results in answers.',
+    },
+    {
+        value: 'nitro',
+        label: 'Nitro',
+        description: 'Fastest providers; may cost more.',
+    },
+    {
+        value: 'floor',
+        label: 'Floor',
+        description: 'Cheapest providers; may be slower.',
+    },
+];
+
+/** Description for the given variant (falls back to `off` for unknown input). */
+export function getModelVariantDescription(
+    variant: OpenRouterModelVariant | undefined | null
+): string {
+    const match = MODEL_VARIANT_OPTIONS.find(
+        (option) => option.value === variant
+    );
+    return match?.description ?? MODEL_VARIANT_OPTIONS[0]!.description;
+}

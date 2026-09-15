@@ -3105,3 +3105,55 @@ html[data-theme='retro'].dark
         font-size: 16px !important;
     }
 }
+
+/*
+ * Chat settings popover: hard retro chrome.
+ * The shared component styles with theme tokens; these overrides replace the
+ * soft blank ratios (45% border mixes, soft shadows, tinted icon wells) with
+ * retro's flat surfaces, 2px borders, and offset elevation tokens.
+ */
+[data-theme="retro"] .chat-settings-popover {
+	border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .chat-settings-popover .chat-settings-icon {
+	color: var(--md-primary);
+	background: var(--md-surface);
+	border: var(--md-border-width) solid var(--md-border-color);
+	border-radius: var(--md-border-radius);
+	box-shadow: var(--app-elevation-low, 2px 2px 0 0 var(--md-surface-variant));
+}
+
+[data-theme="retro"] .chat-settings-popover .chat-settings-model-trigger {
+	border-radius: var(--md-border-radius);
+	box-shadow: var(--app-elevation-low, 2px 2px 0 0 var(--md-surface-variant));
+}
+
+[data-theme="retro"] .chat-settings-popover .chat-settings-header {
+	border-bottom: var(--md-border-width-subtle, var(--md-border-width)) solid
+		var(--md-border-color);
+}
+
+[data-theme="retro"] .chat-settings-popover .chat-settings-tools {
+	background: var(--md-surface);
+	border: var(--md-border-width) solid var(--md-border-color);
+	border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .chat-settings-popover .chat-settings-row-item + .chat-settings-row-item::before,
+[data-theme="retro"] .chat-settings-popover .chat-settings-nav-button + .chat-settings-nav-button::before {
+	border-top-color: var(--md-border-color);
+}
+
+[data-theme="retro"] .chat-settings-popover .chat-settings-section-heading,
+[data-theme="retro"] .chat-settings-popover .chat-settings-tool-list {
+	border-color: var(--md-border-color);
+}
+
+[data-theme="retro"] .chat-settings-popover .chat-settings-close {
+	color: var(--md-on-surface);
+	background: var(--md-surface);
+	border: var(--md-border-width) solid var(--md-border-color);
+	border-radius: var(--md-border-radius);
+	box-shadow: var(--app-elevation-low, 2px 2px 0 0 var(--md-surface-variant));
+}

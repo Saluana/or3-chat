@@ -494,7 +494,7 @@ export default defineTheme({
         popover: {
             slots: {
                 content:
-                    'bg-white ring-0 dark:bg-black rounded-[var(--md-border-radius)] border-[color:var(--md-border-color)] border-[length:var(--md-border-width)] p-0.5',
+                    'bg-white ring-0 dark:bg-black rounded-[var(--md-border-radius)] border-[color:var(--md-border-color)] border-[length:var(--md-border-width)] p-0.5 shadow-[var(--app-elevation-medium)]',
             },
         } /*
         tooltip: {
@@ -552,7 +552,7 @@ export default defineTheme({
             slots: {
                 base: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] max-lg:text-[16px]!',
                 content:
-                    'ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] bg-[var(--md-surface)]',
+                    'ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] bg-[var(--md-surface)] shadow-[var(--app-elevation-medium)]',
                 input: 'border-0 rounded-none! focus:outline-none! focus-visible:outline-none! retro-shadow-none max-lg:text-[16px]!',
                 arrow: 'h-[18px] w-[18px]',
                 itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',

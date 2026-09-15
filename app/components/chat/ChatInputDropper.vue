@@ -94,6 +94,9 @@
                                         :reasoning-efforts="
                                             modelReasoningEfforts
                                         "
+                                        :reasoning-default-effort="
+                                            modelDefaultReasoningEffort
+                                        "
                                         v-model:model="selectedModel"
                                         v-model:model-variant="modelVariant"
                                         v-model:thinking-enabled="
@@ -588,6 +591,7 @@ const {
     thinkingEnabled,
     reasoningEffort,
     modelReasoningEfforts,
+    modelDefaultReasoningEffort,
     modelSupportsThinking,
 } = useChatModelSelection({
     threadId: () => props.threadId,

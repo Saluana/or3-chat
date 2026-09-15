@@ -11,7 +11,22 @@
             :value-key="'value'"
             :disabled="loading"
             v-bind="selectMenuProps"
-        />
+        >
+            <template #leading>
+                <ModelCatalogProviderLogo
+                    :slug="selectedProviderSlug"
+                    :size="18"
+                    class="shrink-0"
+                />
+            </template>
+            <template #item-leading="{ item }">
+                <ModelCatalogProviderLogo
+                    :slug="item.slug"
+                    :size="18"
+                    class="shrink-0"
+                />
+            </template>
+        </USelectMenu>
     </div>
 </template>
 
@@ -21,6 +36,8 @@ import { isMobile } from '~/state/global';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useIcon } from '~/composables/useIcon';
+import { getProviderSlug } from '~/utils/modelCatalog';
+import ModelCatalogProviderLogo from '~/components/modal/model-catalog/ModelCatalogProviderLogo.vue';
 import type { OpenRouterModel } from '~/core/auth/models-service';
 
 interface Emits {
@@ -127,6 +144,7 @@ const items = computed(() =>
             return {
                 label: value,
                 value,
+                slug: providerSlugForModelId(value),
             };
         })
         .filter(
@@ -135,8 +153,21 @@ const items = computed(() =>
             ): m is {
                 label: string;
                 value: string;
+                slug: string;
             } => Boolean(m)
         )
+);
+
+/**
+ * Provider slug for the logo tile. Strips a leading `~` some upstream
+ * canonical slugs carry so favorites still resolve to the right brand.
+ */
+function providerSlugForModelId(modelId: string): string {
+    return getProviderSlug({ id: modelId.replace(/^~+/, '') });
+}
+
+const selectedProviderSlug = computed(() =>
+    providerSlugForModelId(internalModel.value ?? '')
 );
 </script>
 

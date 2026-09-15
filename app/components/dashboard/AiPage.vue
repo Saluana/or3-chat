@@ -216,15 +216,10 @@
                         cheapest (Floor), or web search (Online).
                     </p>
                 </div>
-                <USelect
+                <ChatModelVariantSelect
                     id="dashboard-ai-variant-select"
                     :model-value="settings.defaultModelVariant"
-                    :items="variantItems"
-                    value-key="value"
-                    label-key="label"
-                    size="sm"
-                    class="min-w-36"
-                    aria-label="Default model variant"
+                    class="w-full sm:w-64"
                     @update:model-value="onPickVariant"
                 />
             </div>
@@ -275,11 +270,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useIcon } from '#imports';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
-import {
-    sanitizeModelVariant,
-    type OpenRouterModelVariant,
-} from '~~/shared/openrouter/model-variants';
-import { useModelStore } from '~/composables/chat/useModelStore';
+import { sanitizeModelVariant } from '~~/shared/openrouter/model-variants';import { useModelStore } from '~/composables/chat/useModelStore';
 import { useModelSearch } from '~/core/search/useModelSearch';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 
@@ -331,12 +322,6 @@ function clearModel() {
 }
 
 // Model variant default for new chats
-const variantItems: Array<{ label: string; value: OpenRouterModelVariant }> = [
-    { label: 'Off', value: 'off' },
-    { label: 'Online', value: 'online' },
-    { label: 'Nitro', value: 'nitro' },
-    { label: 'Floor', value: 'floor' },
-];
 function onPickVariant(value: unknown) {
     const variant = sanitizeModelVariant(value);
     set({ defaultModelVariant: variant });

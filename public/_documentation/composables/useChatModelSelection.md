@@ -11,6 +11,7 @@ Reactive controller for the model picker in a chat composer. It manages the sele
 -   `thinkingEnabled` — extended thinking toggle.
 -   `reasoningEffort` — reasoning effort level, kept in sync with the model.
 -   `modelReasoningEfforts` — reasoning efforts the selected model supports.
+-   `modelDefaultReasoningEffort` — the model's default effort; the thinking picker uses it to resolve the displayed level with the same normalization as the request path.
 -   `modelSupportsThinking` — whether the selected model supports thinking mode.
 
 Behavior:
@@ -50,6 +51,7 @@ const { selectedModel, modelVariant, thinkingEnabled, reasoningEffort } =
 
 -   The fallback model is `openai/gpt-oss-120b`.
 -   The `:thinking` suffix is stripped when matching models against the catalog.
+-   `modelVariant` labels and one-line descriptions come from `MODEL_VARIANT_OPTIONS` in `shared/openrouter/model-variants.ts`. The dashboard AI preferences render them with `ChatModelVariantSelect`; the chat settings popover reuses the same metadata in its own row dropdown.
 
 ## Related
 

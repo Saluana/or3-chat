@@ -25,6 +25,10 @@ export const DEFAULT_ICONS = {
     'chat.model.catalog': 'pixelarticons:android',
     'chat.system_prompt': 'pixelarticons:script-text',
     'chat.web_search': 'pixelarticons:globe',
+    'chat.variant.off': 'pixelarticons:minus',
+    'chat.variant.online': 'pixelarticons:globe',
+    'chat.variant.nitro': 'pixelarticons:zap',
+    'chat.variant.floor': 'pixelarticons:coin',
     'chat.scrollToBottom': 'pixelarticons:arrow-bar-down',
 
     // Chat Messages

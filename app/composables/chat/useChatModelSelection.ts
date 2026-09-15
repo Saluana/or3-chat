@@ -39,6 +39,7 @@ export function useChatModelSelection(options: {
     thinkingEnabled: Ref<boolean>;
     reasoningEffort: Ref<string | undefined>;
     modelReasoningEfforts: Readonly<Ref<OpenRouterReasoningEffort[]>>;
+    modelDefaultReasoningEffort: Readonly<Ref<OpenRouterReasoningEffort>>;
     modelSupportsThinking: Readonly<Ref<boolean>>;
 } {
     const {
@@ -66,6 +67,9 @@ export function useChatModelSelection(options: {
     });
     const modelReasoningEfforts = computed(() =>
         getSupportedReasoningEfforts(selectedModelMeta.value)
+    );
+    const modelDefaultReasoningEffort = computed(() =>
+        getDefaultReasoningEffort(selectedModelMeta.value)
     );
     const modelSupportsThinking = computed(() =>
         modelSupportsReasoning(selectedModelMeta.value)
@@ -152,6 +156,7 @@ export function useChatModelSelection(options: {
         thinkingEnabled,
         reasoningEffort,
         modelReasoningEfforts,
+        modelDefaultReasoningEffort,
         modelSupportsThinking,
     };
 }

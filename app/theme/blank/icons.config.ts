@@ -27,6 +27,10 @@ export default <IconMap>{
     'chat.model.catalog': 'tabler:robot-face',
     'chat.system_prompt': 'tabler:script',
     'chat.web_search': 'tabler:world',
+    'chat.variant.off': 'tabler:minus',
+    'chat.variant.online': 'tabler:world',
+    'chat.variant.nitro': 'tabler:bolt',
+    'chat.variant.floor': 'tabler:coins',
     'chat.message.continue': 'tabler:message-circle-up',
 
     // Chat Messages
