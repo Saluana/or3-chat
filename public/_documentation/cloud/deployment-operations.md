@@ -156,6 +156,13 @@ The previous root owner and backup remain the automatic recovery path until
 the replacement passes deep health. Each mutation holds one deployment-wide
 lease. Do not remove `.or3-cloud` lock or recovery files manually.
 
+Interrupted updates recover from their authenticated `backupPath`/`backupId`
+snapshot. Restore and rollback operations instead recover from
+`previousBackupPath`/`previousBackupId`. Recovery restores the saved data and
+matching release assets before clearing the operation record; changes made
+after that snapshot are rolled back. Legacy `adopt-source-*` directories remain
+untouched and are excluded from authenticated backup listing and retention.
+
 ## Dashboard updates
 
 For managed Linux deployments using a local Docker socket, super admins can
@@ -199,6 +206,8 @@ remain outside that boundary.
 `doctor` also validates the operator container image, deployment label, three
 required mounts, IPC types/modes, absence of an orphaned disabled operator,
 daemon-side Caddy port publication, and an actual public HTTPS 200 response.
+The deployment directory is mounted at its absolute host path, matching
+`OR3_DEPLOYMENT_DIR` in the shipped operator overlay.
 
 ## Logging
 

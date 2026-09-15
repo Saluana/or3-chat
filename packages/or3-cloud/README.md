@@ -92,6 +92,12 @@ carry a deployment-local authentication tag, so an altered or foreign archive
 cannot supply configuration or executable Compose assets. Every mutating
 command holds one deployment-wide lease; do not delete `.or3-cloud` lock or
 recovery files by hand.
+Update recovery reads the authenticated pre-update snapshot recorded in
+`backupPath`/`backupId`; restore and rollback recovery use their separate
+`previousBackupPath`/`previousBackupId` snapshot. Recovery restores that snapshot,
+including its data and release assets, before clearing the pending operation.
+Legacy `adopt-source-*` directories are preserved outside managed backup
+retention and are not treated as authenticated restore points.
 Backup artifacts are allocated in that journal before archiving, fully
 revalidated before success is reported, and safely removed by `recover` if a
 hard interruption leaves an incomplete artifact. A standalone backup and a

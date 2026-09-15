@@ -444,6 +444,8 @@ jobs:
           timeout --signal=TERM 5m npx --yes "@or3/cloud@$previous_version" init "$MANAGED" --local --port 3017 --admin-email smoke@example.com
           (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
           (cd "$MANAGED" && timeout --signal=TERM 4m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
+          mkdir -p "$MANAGED/.or3-cloud/backups/adopt-source-legacy-fixture"
+          printf 'legacy adoption archive\n' > "$MANAGED/.or3-cloud/backups/adopt-source-legacy-fixture/data.tgz"
           echo "Previous-release startup and fixture creation completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Update to the exact candidate digest
         run: |
@@ -456,6 +458,8 @@ jobs:
         run: |
           set -euo pipefail
           started=$SECONDS
+          (cd "$MANAGED" && timeout --signal=TERM 4m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 doctor)
+          test -f "$MANAGED/.or3-cloud/backups/adopt-source-legacy-fixture/data.tgz"
           test -S "$MANAGED/.or3-cloud/operator-ipc/operator.sock"
           (cd "$MANAGED" && docker compose --env-file .env -f compose.yaml -f compose.operator.yaml exec -T or3 /nodejs/bin/node -e '
             const http=require("node:http");
@@ -467,6 +471,38 @@ jobs:
           test -n "$manifest"
           node -e 'const m=require(process.argv[1]); if (!m.managedAssetSha256?.["compose.yaml"]) process.exit(1)' "$manifest"
           echo "Candidate verification and persistence check completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Recover a stale update journal using its authenticated pre-update backup
+        run: |
+          set -euo pipefail
+          # Reproduce an update that reached healthy target state but failed
+          # during retention, as older adopters did. This is disposable CI data.
+          node --input-type=module -e '
+            import { readFileSync, writeFileSync } from "node:fs";
+            import { join } from "node:path";
+            const root = process.env.MANAGED;
+            if (root !== join(process.env.RUNNER_TEMP, "or3-cloud-candidate")) throw new Error("Expected disposable candidate deployment");
+            const path = join(root, ".or3-cloud/state.json");
+            const state = JSON.parse(readFileSync(path, "utf8"));
+            const backupPath = join(root, ".or3-cloud/backups", state.rollback.backupId);
+            const manifest = JSON.parse(readFileSync(join(backupPath, "manifest.json"), "utf8"));
+            state.incompleteOperation = {
+              id: "update-retention-interruption-fixture", operation: "update",
+              startedAt: new Date().toISOString(), message: "Simulated legacy retention failure",
+              phase: "target-mutating", backupId: manifest.backupId, backupPath,
+              backupDataSha256: manifest.dataSha256, backupConfigSha256: manifest.configSha256,
+              targetVersion: state.appVersion, targetImage: state.image,
+              targetImageDigest: state.imageDigest, targetDeploymentId: state.deploymentId,
+            };
+            writeFileSync(path, JSON.stringify(state, null, 2) + "\n", { mode: 0o600 });'
+          (cd "$MANAGED" && timeout --signal=TERM 6m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 recover)
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            const state = JSON.parse(readFileSync(process.env.MANAGED + "/.or3-cloud/state.json", "utf8"));
+            if (state.incompleteOperation || state.appVersion !== process.env.PREVIOUS_VERSION) throw new Error("Recovery did not restore the previous release and clear the journal");'
+          (cd "$MANAGED" && timeout --signal=TERM 4m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 doctor)
+          (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+          (cd "$MANAGED" && OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE" OR3_CLOUD_TEST_OPERATOR_IMAGE="$CANDIDATE_OPERATOR_IMAGE" OR3_EXPECTED_OPERATOR_IMAGE_DIGEST="$OPERATOR_DIGEST" \
+            timeout --signal=TERM 8m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 update --to "$VERSION")
       - name: Roll back and verify previous release
         run: |
           set -euo pipefail

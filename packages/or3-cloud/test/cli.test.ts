@@ -1,10 +1,12 @@
 import { expect, test } from 'bun:test';
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { createHash, createHmac } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   assertCommandFlags,
   assertCommandPositionals,
+  assertDashboardOperatorMounts,
   assertEnoughFreeSpace,
   assertImageReleaseLabels,
   assertPurgeBackupFreshness,
@@ -19,11 +21,13 @@ import {
   checkResolvedLoopbackBinding,
   copyAssets,
   dashboardOperatorHandoffArgs,
+  enumerateBackups,
   isVersion,
   parseEnv,
   parseFlags,
   purgeVolumesFromState,
   redact,
+  recordedBackupPath,
   requiredArchiveSpace,
   restoreManagedAssets,
   restoreRequiresVolumeRecreation,
@@ -39,8 +43,113 @@ import {
   validatePassword,
   withoutProvisioningCredentials,
 } from '../src/cli';
+import type { ManagedState } from '../src/cli';
 import { ADMIN_PASSWORD_POLICY_VECTORS } from '../../../shared/cloud/wizard/admin-password-policy-vectors';
 import { MANAGED_PROFILE_SHARED_ENV } from '../../../shared/cloud/wizard/managed-profile-contract';
+
+async function authenticatedBackupFixture(directory: string, backupId: string) {
+  const path = join(directory, '.or3-cloud', 'backups', backupId);
+  await mkdir(path, { recursive: true });
+  await copyAssets(directory, 'local');
+  const key = 'ab'.repeat(32);
+  await writeFile(join(directory, '.or3-cloud', 'backup-auth.key'), key);
+  const data = 'snapshot data';
+  const config = 'OR3_VERSION=0.1.63\n';
+  const hash = (value: string) => createHash('sha256').update(value).digest('hex');
+  const manifest = {
+    schemaVersion: 1,
+    backupId,
+    createdAt: '2026-09-15T00:00:00.000Z',
+    appVersion: '0.1.63',
+    image: `ghcr.io/saluana/or3-chat@sha256:${'a'.repeat(64)}`,
+    imageDigest: `sha256:${'a'.repeat(64)}`,
+    mode: 'local',
+    dataSha256: hash(data),
+    configSha256: hash(config),
+    managedAssetInventoryVersion: 3,
+    managedAssetSha256: await snapshotManagedAssets(directory, 'local', path),
+  };
+  const contents = JSON.stringify(manifest);
+  await writeFile(join(path, 'data.tgz'), data);
+  await writeFile(join(path, 'config.env'), config);
+  await writeFile(join(path, 'manifest.json'), contents);
+  await writeFile(join(path, 'manifest.auth'), createHmac('sha256', Buffer.from(key, 'hex')).update(contents).digest('hex'));
+  return { path, manifest };
+}
+
+test('update recovery resolves and authenticates its own backup fields, including ID-only journals', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'or3-update-recovery-'));
+  try {
+    const { path, manifest } = await authenticatedBackupFixture(directory, 'backup-pre-update');
+    const pending: NonNullable<ManagedState['incompleteOperation']> = {
+      id: 'update-interrupted', operation: 'update', startedAt: manifest.createdAt,
+      message: 'Interrupted update', phase: 'target-mutating',
+      backupId: manifest.backupId, backupPath: path,
+      backupDataSha256: manifest.dataSha256, backupConfigSha256: manifest.configSha256,
+      previousBackupPath: join(directory, 'wrong-restore-only-field'),
+    };
+    expect((await recordedBackupPath(directory, pending)).path).toBe(path);
+    expect((await recordedBackupPath(directory, { ...pending, backupPath: undefined })).path).toBe(path);
+    await expect(recordedBackupPath(directory, { ...pending, backupDataSha256: 'b'.repeat(64) })).rejects.toThrow('expected data checksum');
+    await expect(recordedBackupPath(directory, { ...pending, backupConfigSha256: 'b'.repeat(64) })).rejects.toThrow('expected configuration checksum');
+    await writeFile(join(path, 'manifest.auth'), '00'.repeat(32));
+    await expect(recordedBackupPath(directory, pending)).rejects.toThrow('Backup authentication failed');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('restore and rollback recovery still require their separate pre-mutation snapshot', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'or3-restore-recovery-'));
+  try {
+    const { path, manifest } = await authenticatedBackupFixture(directory, 'backup-before-restore');
+    for (const operation of ['restore', 'rollback'] as const) {
+      const pending = {
+        id: 'restore-interrupted', operation, startedAt: manifest.createdAt, message: 'Interrupted restore',
+        backupPath: join(directory, 'requested-target'), previousBackupId: manifest.backupId,
+      };
+      expect((await recordedBackupPath(directory, pending)).path).toBe(path);
+      await expect(recordedBackupPath(directory, { ...pending, previousBackupId: undefined, backupPath: path })).rejects.toThrow('no readable pre-mutation');
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('retention preserves legacy adoption directories without trusting them as backups', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'or3-legacy-retention-'));
+  try {
+    const { manifest } = await authenticatedBackupFixture(directory, 'backup-current');
+    const root = join(directory, '.or3-cloud', 'backups');
+    const legacy = join(root, 'adopt-source-2026-08-07T10-30-00-000Z-a1b2c3d4');
+    await mkdir(legacy);
+    await writeFile(join(legacy, 'data.tgz'), 'legacy archive retained');
+    expect((await enumerateBackups(directory)).map((backup) => backup.backupId)).toEqual([manifest.backupId]);
+    expect(await readFile(join(legacy, 'data.tgz'), 'utf8')).toBe('legacy archive retained');
+    await symlink(legacy, join(root, 'adopt-source-symlink'));
+    await expect(enumerateBackups(directory)).rejects.toThrow('unexpected artifact');
+    await rm(join(root, 'adopt-source-symlink'));
+    await writeFile(join(root, 'unexpected-file'), 'unknown');
+    await expect(enumerateBackups(directory)).rejects.toThrow('unexpected artifact');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('doctor accepts the deployment mount in the shipped operator overlay and rejects missing mounts', async () => {
+  const directory = '/srv/or3-managed';
+  const overlay = Bun.YAML.parse(await readFile(join(import.meta.dir, '../assets/compose.operator.yaml'), 'utf8')) as {
+    services: { 'or3-operator': { volumes: Array<{ target: string }> } };
+  };
+  const mounts = overlay.services['or3-operator'].volumes.map(({ target }) => ({
+    Destination: target.replace('${OR3_DEPLOYMENT_DIR}', directory),
+  }));
+  expect(() => assertDashboardOperatorMounts(mounts, directory)).not.toThrow();
+  for (const destination of ['/var/run/docker.sock', directory, '/run/or3-operator']) {
+    expect(() => assertDashboardOperatorMounts(mounts.filter((mount) => mount.Destination !== destination), directory)).toThrow(`required ${destination} mount`);
+  }
+  expect(() => assertDashboardOperatorMounts(mounts.map((mount) => ({ Destination: mount.Destination === directory ? '/deployment' : mount.Destination })), directory)).toThrow(`required ${directory} mount`);
+});
 
 test('release image labels match the authenticated package source revision', () => {
   const labels = {

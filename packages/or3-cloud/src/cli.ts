@@ -10,6 +10,7 @@ import { createReadStream, createWriteStream, existsSync, readFileSync } from 'n
 import {
   chmod,
   copyFile,
+  lstat,
   mkdir,
   open,
   readFile,
@@ -31,7 +32,7 @@ import { createGunzip } from 'node:zlib';
 const execFile = promisify(execFileCallback);
 const PACKAGE_ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
 
-export const PACKAGE_VERSION = '0.1.64';
+export const PACKAGE_VERSION = '0.1.65';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 const STATE_SCHEMA_VERSION = 1;
@@ -2072,7 +2073,7 @@ type BackupListing = {
 };
 
 /** Enumerates only fully verified backups; retention must never make policy from corrupt metadata. */
-async function enumerateBackups(directory: string): Promise<BackupListing[]> {
+export async function enumerateBackups(directory: string): Promise<BackupListing[]> {
   const backupsRoot = deploymentPaths(directory).backups;
   let entries: string[] = [];
   try {
@@ -2083,6 +2084,11 @@ async function enumerateBackups(directory: string): Promise<BackupListing[]> {
   }
   const result: BackupListing[] = [];
   for (const entry of entries) {
+    // Older adopters stored source archives outside the authenticated backup
+    // format. Preserve those directories without trusting or pruning them.
+    if (/^adopt-source-[0-9A-Za-z-]+$/.test(entry) && (await lstat(join(backupsRoot, entry))).isDirectory()) {
+      continue;
+    }
     if (!BACKUP_ID_PATTERN.test(entry)) {
       throw new Error(`Backup store contains an unexpected artifact ${join(backupsRoot, entry)}. Refusing to use it for retention; inspect or remove it explicitly.`);
     }
@@ -3355,7 +3361,17 @@ async function resolveBackup(directory: string, value: string) {
   return resolve(candidate);
 }
 
-async function recordedBackupPath(directory: string, pending: PendingOperation, previous = false) {
+export function assertDashboardOperatorMounts(mounts: Array<{ Destination?: string }>, directory: string) {
+  const destinations = new Set(mounts.map((mount) => mount.Destination));
+  for (const destination of ['/var/run/docker.sock', resolve(directory), '/run/or3-operator']) {
+    if (!destinations.has(destination)) throw new Error(`Dashboard operator is missing its required ${destination} mount.`);
+  }
+}
+
+export async function recordedBackupPath(directory: string, pending: PendingOperation) {
+  // Updates have one pre-update backup. Restore/rollback have a requested
+  // target backup plus a separate snapshot of the deployment being replaced.
+  const previous = pending.operation !== 'update';
   const path = previous ? pending.previousBackupPath : pending.backupPath;
   const backupId = previous ? pending.previousBackupId : pending.backupId;
   const resolved = path
@@ -3399,7 +3415,7 @@ async function restorePreMutationSnapshot(
 ) {
   const pending = state.incompleteOperation;
   if (!pending) throw new Error('No incomplete operation is available to restore.');
-  const previous = await recordedBackupPath(directory, pending, true);
+  const previous = await recordedBackupPath(directory, pending);
   await updatePending(directory, state, { phase: 'restoring-previous' });
   if (pending.recreateDataVolume) {
     await restoreBackupData(directory, state, env, previous.path, { recreateDataVolume: true });
@@ -3691,10 +3707,7 @@ async function doctorCommand(directory: string) {
           if (state.deploymentId && container.Config?.Labels?.['io.or3.cloud.deployment-id'] !== state.deploymentId) {
             throw new Error('Dashboard operator deployment identity does not match managed state.');
           }
-          const destinations = new Set(container.Mounts?.map((mount) => mount.Destination));
-          for (const destination of ['/var/run/docker.sock', '/deployment', '/run/or3-operator']) {
-            if (!destinations.has(destination)) throw new Error(`Dashboard operator is missing its required ${destination} mount.`);
-          }
+          assertDashboardOperatorMounts(container.Mounts ?? [], resolved);
           const ipcDirectory = await stat(paths.operatorIpc);
           const operatorSocket = await stat(join(paths.operatorIpc, 'operator.sock'));
           const operatorUid = Number(env.OR3_OPERATOR_UID);
