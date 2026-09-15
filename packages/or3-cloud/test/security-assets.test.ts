@@ -35,6 +35,7 @@ test('Caddyfile sets the full security header set inside the site block', () => 
   expect(siteBlock).toContain('Permissions-Policy "camera=(), microphone=(), geolocation=()"');
   expect(siteBlock).toContain("Content-Security-Policy \"default-src 'self'");
   expect(siteBlock).toContain("frame-ancestors 'none'");
+  expect(siteBlock).toContain("connect-src 'self' https://openrouter.ai");
 });
 
 test('Caddyfile keeps SSE streaming and compression intact', () => {
