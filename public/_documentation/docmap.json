@@ -1151,7 +1151,7 @@
                     "name": "deployment-operations.md",
                     "path": "/cloud/deployment-operations",
                     "category": "Operations",
-                    "summary": "Operational runbook for OR3 Cloud SSR deployments, including authenticated interrupted-update recovery, legacy adoption archive retention, operator checks, and verified CLI and dashboard updates."
+                    "summary": "Operational runbook for OR3 Cloud SSR deployments, including authenticated recovery, preservation of legacy adoption and pre-authentication backups, operator checks, and verified CLI and dashboard updates."
                 },
                 {
                     "name": "environment-reference.md",

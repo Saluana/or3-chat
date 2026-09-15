@@ -444,6 +444,23 @@ jobs:
           timeout --signal=TERM 5m npx --yes "@or3/cloud@$previous_version" init "$MANAGED" --local --port 3017 --admin-email smoke@example.com
           (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
           (cd "$MANAGED" && timeout --signal=TERM 4m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
+          (cd "$MANAGED" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$previous_version" backup)
+          node --input-type=module -e '
+            import { cpSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+            import { join } from "node:path";
+            const root = join(process.env.MANAGED, ".or3-cloud/backups");
+            const source = readdirSync(root).find(name => name.startsWith("backup-"));
+            if (!source) throw new Error("Expected an authenticated source backup fixture");
+            for (let index = 0; index < 5; index++) {
+              const id = `backup-2026-08-12T02-34-07-685Z-legacy${index}`;
+              const path = join(root, id);
+              cpSync(join(root, source), path, { recursive: true, errorOnExist: true, force: false });
+              rmSync(join(path, "manifest.auth"));
+              const manifest = JSON.parse(readFileSync(join(path, "manifest.json"), "utf8"));
+              manifest.backupId = id;
+              manifest.createdAt = "2026-08-12T02:34:07.685Z";
+              writeFileSync(join(path, "manifest.json"), JSON.stringify(manifest) + "\n", { mode: 0o600 });
+            }'
           mkdir -p "$MANAGED/.or3-cloud/backups/adopt-source-legacy-fixture"
           printf 'legacy adoption archive\n' > "$MANAGED/.or3-cloud/backups/adopt-source-legacy-fixture/data.tgz"
           echo "Previous-release startup and fixture creation completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
@@ -459,6 +476,19 @@ jobs:
           set -euo pipefail
           started=$SECONDS
           (cd "$MANAGED" && timeout --signal=TERM 4m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 doctor)
+          (cd "$MANAGED" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 backup list)
+          (cd "$MANAGED" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 backup prune --keep 1)
+          node --input-type=module -e '
+            import { existsSync, readFileSync } from "node:fs";
+            import { join } from "node:path";
+            import { createHash } from "node:crypto";
+            for (let index = 0; index < 5; index++) {
+              const path = join(process.env.MANAGED, ".or3-cloud/backups", `backup-2026-08-12T02-34-07-685Z-legacy${index}`);
+              const manifest = JSON.parse(readFileSync(join(path, "manifest.json"), "utf8"));
+              if (existsSync(join(path, "manifest.auth"))) throw new Error("Legacy backup was silently authenticated");
+              const checksum = createHash("sha256").update(readFileSync(join(path, "data.tgz"))).digest("hex");
+              if (checksum !== manifest.dataSha256) throw new Error("Legacy backup changed during update or pruning");
+            }'
           test -f "$MANAGED/.or3-cloud/backups/adopt-source-legacy-fixture/data.tgz"
           test -S "$MANAGED/.or3-cloud/operator-ipc/operator.sock"
           (cd "$MANAGED" && docker compose --env-file .env -f compose.yaml -f compose.operator.yaml exec -T or3 /nodejs/bin/node -e '

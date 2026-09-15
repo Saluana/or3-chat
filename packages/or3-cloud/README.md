@@ -98,6 +98,11 @@ Update recovery reads the authenticated pre-update snapshot recorded in
 including its data and release assets, before clearing the pending operation.
 Legacy `adopt-source-*` directories are preserved outside managed backup
 retention and are not treated as authenticated restore points.
+Backups from releases before authentication tags existed are also preserved:
+`backup list` and retention skip `backup-*` entries with no `manifest.auth` and
+print a warning. They do not sign, migrate, or delete those archives. An existing
+but invalid tag remains an error; restore, recovery, and export still require
+valid deployment authentication.
 Backup artifacts are allocated in that journal before archiving, fully
 revalidated before success is reported, and safely removed by `recover` if a
 hard interruption leaves an incomplete artifact. A standalone backup and a

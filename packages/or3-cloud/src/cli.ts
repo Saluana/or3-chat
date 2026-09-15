@@ -32,7 +32,7 @@ import { createGunzip } from 'node:zlib';
 const execFile = promisify(execFileCallback);
 const PACKAGE_ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
 
-export const PACKAGE_VERSION = '0.1.65';
+export const PACKAGE_VERSION = '0.1.66';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 const STATE_SCHEMA_VERSION = 1;
@@ -2093,6 +2093,16 @@ export async function enumerateBackups(directory: string): Promise<BackupListing
       throw new Error(`Backup store contains an unexpected artifact ${join(backupsRoot, entry)}. Refusing to use it for retention; inspect or remove it explicitly.`);
     }
     const path = join(backupsRoot, entry);
+    // Pre-authentication releases produced backup-* directories without a
+    // tag. Preserve them outside retention; never bless them for restore.
+    // Only absence is legacy: unreadable, malformed, or invalid tags still fail.
+    try {
+      await lstat(join(path, 'manifest.auth'));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      console.warn(`Preserving unauthenticated backup ${entry}: no manifest.auth; excluded from managed backup listing and retention.`);
+      continue;
+    }
     const manifest = await readManifest(path, directory);
     if (manifest.backupId !== entry) {
       throw new Error(`Backup directory ${path} does not match manifest ID ${manifest.backupId}. Refusing to use it for retention.`);
@@ -3100,7 +3110,7 @@ async function backupListCommand(directory: string) {
   const loaded = await loadManaged(directory);
   const backups = await enumerateBackups(loaded.directory);
   if (backups.length === 0) {
-    console.log(`No backups exist yet for ${loaded.directory}. Run "npx @or3/cloud backup" to create one.`);
+    console.log(`No authenticated backups are available for ${loaded.directory}. Run "npx @or3/cloud backup" to create one.`);
     return;
   }
   console.log(`OR3 Cloud backups for ${loaded.directory} (${backups.length}):`);

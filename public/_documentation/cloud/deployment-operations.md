@@ -162,6 +162,10 @@ snapshot. Restore and rollback operations instead recover from
 matching release assets before clearing the operation record; changes made
 after that snapshot are rolled back. Legacy `adopt-source-*` directories remain
 untouched and are excluded from authenticated backup listing and retention.
+The same preservation rule applies to pre-authentication `backup-*` archives
+with no `manifest.auth`: listing and retention warn and skip them. They remain
+unauthenticated and cannot be used by restore, recovery, or export. An existing
+invalid tag or a checksum mismatch still fails validation.
 
 ## Dashboard updates
 

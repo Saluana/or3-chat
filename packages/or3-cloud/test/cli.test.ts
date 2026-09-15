@@ -136,6 +136,48 @@ test('retention preserves legacy adoption directories without trusting them as b
   }
 });
 
+test('retention skips pre-auth backups but explicit recovery still refuses to trust them', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'or3-pre-auth-retention-'));
+  try {
+    const current = await authenticatedBackupFixture(directory, 'backup-current');
+    const legacy = await authenticatedBackupFixture(directory, 'backup-2026-08-12T02-34-07-685Z-fed812c8');
+    await rm(join(legacy.path, 'manifest.auth'));
+    expect((await enumerateBackups(directory)).map((backup) => backup.backupId)).toEqual([current.manifest.backupId]);
+    expect(await readFile(join(legacy.path, 'data.tgz'), 'utf8')).toBe('snapshot data');
+    expect(await readFile(join(legacy.path, 'manifest.json'), 'utf8')).toBe(JSON.stringify(legacy.manifest));
+    await expect(recordedBackupPath(directory, {
+      id: 'update-interrupted', operation: 'update', startedAt: legacy.manifest.createdAt,
+      message: 'Cannot recover from an unauthenticated backup', backupPath: legacy.path,
+    })).rejects.toThrow('no valid deployment authentication tag');
+    await rm(current.path, { recursive: true });
+    expect(await enumerateBackups(directory)).toEqual([]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('retention rejects existing invalid authentication tags and corrupted signed backup data', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'or3-invalid-backup-retention-'));
+  try {
+    const backup = await authenticatedBackupFixture(directory, 'backup-current');
+    const authPath = join(backup.path, 'manifest.auth');
+    const auth = await readFile(authPath);
+    for (const invalid of ['', 'invalid', '00'.repeat(32)]) {
+      await writeFile(authPath, invalid);
+      await expect(enumerateBackups(directory)).rejects.toThrow();
+    }
+    await rm(authPath);
+    await symlink(join(directory, 'missing-auth-target'), authPath);
+    await expect(enumerateBackups(directory)).rejects.toThrow('no valid deployment authentication tag');
+    await rm(authPath);
+    await writeFile(authPath, auth);
+    await writeFile(join(backup.path, 'data.tgz'), 'tampered');
+    await expect(enumerateBackups(directory)).rejects.toThrow('Backup checksum mismatch');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('doctor accepts the deployment mount in the shipped operator overlay and rejects missing mounts', async () => {
   const directory = '/srv/or3-managed';
   const overlay = Bun.YAML.parse(await readFile(join(import.meta.dir, '../assets/compose.operator.yaml'), 'utf8')) as {
