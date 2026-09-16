@@ -54,7 +54,8 @@
 		transition:
 			background-color 0.15s ease,
 			border-color 0.15s ease,
-			box-shadow 0.15s ease;
+			box-shadow 0.15s ease,
+			transform 80ms ease;
 	}
 
 	.workspace-chrome .workspace-tab:hover,
@@ -73,6 +74,34 @@
 		box-shadow:
 			var(--or3-tab-shadow-hover),
 			inset 0 -2px 0 color-mix(in srgb, var(--md-primary) 58%, transparent);
+	}
+
+	/*
+	 * Physical press: tabs sink into their offset shadow and shade their face,
+	 * matching .retro-press on the rest of the chrome.
+	 */
+	.workspace-chrome .workspace-tab:active,
+	.workspace-chrome .workspace-tab-wrap.is-active .workspace-tab:active,
+	.workspace-chrome .workspace-tab-wrap.is-visible:not(.is-active)
+		.workspace-tab:active,
+	.workspace-chrome .workspace-tab-new:active {
+		transform: translate(2px, 2px);
+		box-shadow:
+			0 0 0 var(--md-border-color),
+			inset 0 2px 0 rgba(0, 0, 0, 0.25),
+			inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+	}
+
+	/*
+	 * Close affordance: nudge it with the tab face so it still feels physical
+	 * without the icon leaving the chip.
+	 */
+	.workspace-chrome .workspace-tab-close:active,
+	.workspace-chrome .workspace-tab-wrap:active .workspace-tab-close {
+		transition: transform 80ms ease;
+		transform: translate(2px, calc(-50% + 2px));
+		background: color-mix(in srgb, var(--md-on-surface) 12%, transparent);
+		box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.22);
 	}
 
 	/* Chrome actions: bordered + flat like the existing header controls. */
