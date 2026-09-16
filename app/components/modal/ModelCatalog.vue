@@ -2,6 +2,7 @@
     <UModal
         v-bind="modelCatalogModalProps"
         v-model:open="open"
+        :fullscreen="!isWideRow"
         title="Model catalog"
         description="Discover and select the best model for your use case"
     >
@@ -199,7 +200,7 @@
                                     :estimate-height="rowEstimateHeight"
                                     :overscan="520"
                                     :maintain-bottom="false"
-                                    class="model-catalog-list__rows px-2 sm:px-3 py-2.5 [scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin]"
+                                    class="model-catalog-list__rows px-2 sm:px-3 py-2.5 max-sm:pb-[max(0.625rem,env(safe-area-inset-bottom))] [scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin]"
                                 >
                                     <template #default="{ item: m }">
                                         <div class="pb-2">
@@ -320,7 +321,9 @@
                                     @click="filtersOpen = false"
                                 />
                             </div>
-                            <div class="flex-1 overflow-y-auto p-4">
+                            <div
+                                class="flex-1 overflow-y-auto p-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]"
+                            >
                                 <ModelCatalogSidebar
                                     v-model:scope="scope"
                                     :total-count="baseModels.length"
@@ -365,7 +368,9 @@
                                 >Model details</span
                             >
                         </div>
-                        <div class="flex-1 overflow-y-auto p-4 sm:p-5">
+                        <div
+                            class="flex-1 overflow-y-auto p-4 sm:p-5 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]"
+                        >
                             <ModelCatalogDetail
                                 :model="selectedModel"
                                 :favorite="isFavorite(selectedModel)"
@@ -436,7 +441,7 @@ const modelCatalogModalOverrides = useThemeOverrides({
 const modelCatalogModalProps = computed(() => {
     return buildThemeOverrideProps(modelCatalogModalOverrides.value, {
         baseClass:
-            'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] w-[100dvw] h-[100dvh] sm:w-[96dvw] sm:h-[92dvh] sm:min-w-[720px]! sm:max-w-[1400px] sm:max-h-[900px] overflow-hidden',
+            'max-sm:rounded-none max-sm:border-0 max-sm:shadow-none max-sm:pt-[env(safe-area-inset-top)] sm:border-[length:var(--md-border-width)] sm:border-[color:var(--md-border-color)] w-[100dvw] h-[100dvh] sm:w-[96dvw] sm:h-[92dvh] sm:min-w-[720px]! sm:max-w-[1400px] sm:max-h-[900px] overflow-hidden',
         baseUi: {
             header: 'sm:px-5 border-b border-[var(--md-border-color)]',
             title: 'text-base font-semibold',
@@ -605,7 +610,7 @@ const selectedId = ref<string | null>(null);
 
 const isDesktop = useMediaQuery('(min-width: 1024px)');
 const isWideRow = useMediaQuery('(min-width: 640px)');
-const rowEstimateHeight = computed(() => (isWideRow.value ? 72 : 100));
+const rowEstimateHeight = computed(() => (isWideRow.value ? 72 : 88));
 
 interface ChipDef {
     key: CapabilityFilter;

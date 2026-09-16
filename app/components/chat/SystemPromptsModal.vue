@@ -2,6 +2,7 @@
     <UModal
         v-bind="systemPromptsModalProps"
         v-model:open="open"
+        :fullscreen="!isWideRow"
         title="System Prompts"
         description="Browse, organize, edit, and apply system prompts."
     >
@@ -13,12 +14,12 @@
                 <div class="min-w-0">
                     <!-- VT323 keeps modal titles readable; Press Start at text-lg overflows the header. -->
                     <h2
-                        class="m-0 truncate font-vt323 text-base font-semibold leading-tight text-[var(--md-on-primary)]"
+                        class="m-0 truncate font-vt323 text-base font-semibold leading-tight"
                     >
                         System Prompts
                     </h2>
                     <p
-                        class="m-0 hidden text-xs leading-snug text-[var(--md-on-primary)]/80 sm:block"
+                        class="m-0 hidden text-xs leading-snug opacity-80 sm:block"
                     >
                         Browse, organize, edit, and apply system prompts.
                     </p>
@@ -29,10 +30,11 @@
                         class="sm:hidden"
                         data-test="system-prompts-new"
                         :icon="plusIcon"
-                        square
-                        aria-label="New Prompt"
+                        aria-label="New prompt"
                         @click="createNewPrompt"
-                    />
+                    >
+                        New
+                    </UButton>
                     <UButton
                         v-bind="headerActionButtonProps"
                         class="hidden sm:inline-flex"
@@ -201,71 +203,6 @@
                                     data-test="system-prompts-search"
                                     autofocus
                                 />
-                                <UPopover>
-                                    <UButton
-                                        v-bind="iconButtonProps"
-                                        class="lg:hidden"
-                                        :icon="filterIcon"
-                                        aria-label="Filter prompts"
-                                    />
-                                    <template #content>
-                                        <div
-                                            class="flex w-64 flex-col gap-1 p-2"
-                                            aria-label="Prompt filters"
-                                        >
-                                            <button
-                                                type="button"
-                                                :class="
-                                                    filterButtonClass(
-                                                        scope === 'all' &&
-                                                            !selectedTag
-                                                    )
-                                                "
-                                                @click="setScope('all')"
-                                            >
-                                                All prompts
-                                                <span class="ml-auto">{{
-                                                    prompts.length
-                                                }}</span>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                :class="
-                                                    filterButtonClass(
-                                                        scope === 'favorites'
-                                                    )
-                                                "
-                                                @click="setScope('favorites')"
-                                            >
-                                                Favorites
-                                                <span class="ml-auto">{{
-                                                    favoriteCount
-                                                }}</span>
-                                            </button>
-                                            <div
-                                                v-if="tagCounts.length"
-                                                class="my-1 border-t-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)]"
-                                            />
-                                            <button
-                                                v-for="entry in tagCounts"
-                                                :key="`mobile-${entry.key}`"
-                                                type="button"
-                                                :class="
-                                                    filterButtonClass(
-                                                        selectedTagKey ===
-                                                            entry.key
-                                                    )
-                                                "
-                                                @click="selectTag(entry.label)"
-                                            >
-                                                {{ entry.label }}
-                                                <span class="ml-auto">{{
-                                                    entry.count
-                                                }}</span>
-                                            </button>
-                                        </div>
-                                    </template>
-                                </UPopover>
                             </div>
 
                             <div
@@ -282,18 +219,99 @@
                                             : 'prompts'
                                     }}
                                 </span>
-                                <USelectMenu
-                                    v-model="sort"
-                                    :items="sortItems"
-                                    value-key="value"
-                                    size="sm"
-                                    class="w-[168px]"
-                                    aria-label="Sort prompts"
-                                />
+                                <div class="flex items-center gap-1">
+                                    <UPopover>
+                                        <UButton
+                                            size="sm"
+                                            color="neutral"
+                                            variant="ghost"
+                                            :icon="filterIcon"
+                                            label="Filter"
+                                            class="lg:hidden"
+                                            aria-label="Filter prompts"
+                                        />
+                                        <template #content>
+                                            <div
+                                                class="flex w-64 flex-col gap-1 p-2"
+                                                aria-label="Prompt filters"
+                                            >
+                                                <button
+                                                    type="button"
+                                                    :class="
+                                                        filterButtonClass(
+                                                            scope === 'all' &&
+                                                                !selectedTag
+                                                        )
+                                                    "
+                                                    @click="setScope('all')"
+                                                >
+                                                    All prompts
+                                                    <span class="ml-auto">{{
+                                                        prompts.length
+                                                    }}</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    :class="
+                                                        filterButtonClass(
+                                                            scope ===
+                                                                'favorites'
+                                                        )
+                                                    "
+                                                    @click="
+                                                        setScope('favorites')
+                                                    "
+                                                >
+                                                    Favorites
+                                                    <span class="ml-auto">{{
+                                                        favoriteCount
+                                                    }}</span>
+                                                </button>
+                                                <div
+                                                    v-if="tagCounts.length"
+                                                    class="my-1 border-t-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)]"
+                                                />
+                                                <button
+                                                    v-for="entry in tagCounts"
+                                                    :key="`mobile-${entry.key}`"
+                                                    type="button"
+                                                    :class="
+                                                        filterButtonClass(
+                                                            selectedTagKey ===
+                                                                entry.key
+                                                        )
+                                                    "
+                                                    @click="
+                                                        selectTag(entry.label)
+                                                    "
+                                                >
+                                                    {{ entry.label }}
+                                                    <span class="ml-auto">{{
+                                                        entry.count
+                                                    }}</span>
+                                                </button>
+                                            </div>
+                                        </template>
+                                    </UPopover>
+                                    <UDropdownMenu
+                                        :items="sortMenuItems"
+                                        :content="{ align: 'end' }"
+                                    >
+                                        <UButton
+                                            size="sm"
+                                            color="neutral"
+                                            variant="ghost"
+                                            :trailing-icon="chevronDownIcon"
+                                            aria-label="Sort prompts"
+                                        >
+                                            {{ activeSortLabel }}
+                                        </UButton>
+                                    </UDropdownMenu>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="min-h-0 flex-1 overflow-y-auto p-2 sm:p-3">
+                        <div class="min-h-0 flex-1 overflow-y-auto p-2 max-sm:pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:p-3">
                             <div
                                 v-if="loading"
                                 class="flex h-full items-center justify-center text-sm text-[var(--md-on-surface-variant)]"
@@ -337,11 +355,13 @@
                                 <article
                                     v-for="prompt in visiblePrompts"
                                     :key="prompt.id"
-                                    class="group cursor-pointer rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] bg-[var(--md-surface)] p-3 transition-colors hover:bg-[var(--md-surface-hover)] sm:p-3.5"
+                                    class="group cursor-pointer rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-border-color)] p-3 transition-colors hover:bg-[var(--md-surface-hover)] sm:p-3.5"
                                     :class="
-                                        prompt.id === selectedPromptId
-                                            ? 'border-[var(--md-primary)] ring-1 ring-[var(--md-primary)]/20'
-                                            : 'border-[var(--md-border-color)]'
+                                        prompt.id === currentActivePromptId
+                                            ? 'shadow-[inset_3px_0_0_0_var(--md-primary)]'
+                                            : prompt.id === selectedPromptId
+                                              ? 'bg-[var(--md-surface-container-low)]'
+                                              : 'bg-[var(--md-surface)]'
                                     "
                                     :data-test="`system-prompt-row-${prompt.id}`"
                                     tabindex="0"
@@ -350,114 +370,103 @@
                                         selectPromptForDetail(prompt.id)
                                     "
                                 >
-                                    <div class="flex items-start gap-3">
+                                    <div
+                                        class="flex items-start justify-between gap-2"
+                                    >
                                         <div class="min-w-0 flex-1">
-                                            <div
-                                                class="flex flex-wrap items-center gap-2"
+                                            <h3
+                                                class="m-0 truncate font-vt323 text-sm font-semibold leading-tight"
                                             >
-                                                <h3
-                                                    class="m-0 truncate font-vt323 text-sm font-semibold leading-tight"
-                                                >
-                                                    {{
-                                                        prompt.title ||
-                                                        'Untitled Prompt'
-                                                    }}
-                                                </h3>
+                                                {{
+                                                    prompt.title ||
+                                                    'Untitled Prompt'
+                                                }}
+                                            </h3>
+                                            <div
+                                                v-if="
+                                                    prompt.id ===
+                                                        defaultPromptId ||
+                                                    prompt.id ===
+                                                        currentActivePromptId
+                                                "
+                                                class="mt-1.5 flex flex-wrap items-center gap-1.5"
+                                            >
                                                 <span
                                                     v-if="
                                                         prompt.id ===
                                                         defaultPromptId
                                                     "
-                                                    class="rounded bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary"
+                                                    class="rounded-full bg-[var(--md-surface-variant)] px-2 py-0.5 text-[10px] font-medium text-[var(--md-on-surface-variant)]"
                                                 >
                                                     Default
                                                 </span>
                                                 <span
                                                     v-if="
                                                         prompt.id ===
-                                                            currentActivePromptId &&
-                                                        prompt.id !==
-                                                            defaultPromptId
+                                                        currentActivePromptId
                                                     "
-                                                    class="rounded bg-[var(--md-surface-variant)] px-2 py-0.5 text-[10px]"
+                                                    class="inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--md-primary)_10%,transparent)] px-2 py-0.5 text-[10px] font-medium text-[var(--md-primary)]"
                                                 >
+                                                    <UIcon
+                                                        :name="checkIcon"
+                                                        class="h-3 w-3"
+                                                    />
                                                     Active
                                                 </span>
                                             </div>
-                                            <p
-                                                class="mb-0 mt-1 line-clamp-2 text-xs text-[var(--md-on-surface-variant)]"
-                                            >
-                                                {{
-                                                    promptExcerpt(prompt) ||
-                                                    'No prompt content yet.'
-                                                }}
-                                            </p>
-                                            <div
-                                                class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--md-on-surface-variant)]"
-                                            >
-                                                <span
-                                                    >Updated
-                                                    {{
-                                                        formatDate(
-                                                            prompt.updated_at
-                                                        )
-                                                    }}</span
-                                                >
-                                                <span aria-hidden="true">•</span>
-                                                <span
-                                                    >{{
-                                                        tokenCounts[prompt.id] ||
-                                                        0
-                                                    }}
-                                                    tokens</span
-                                                >
-                                                <template
-                                                    v-if="prompt.tags.length"
-                                                >
-                                                    <span aria-hidden="true"
-                                                        >•</span
-                                                    >
-                                                    <span class="truncate">{{
-                                                        prompt.tags.join(', ')
-                                                    }}</span>
-                                                </template>
-                                            </div>
                                         </div>
                                         <div
-                                            class="flex shrink-0 items-center gap-1"
+                                            class="-mr-1 -mt-0.5 flex shrink-0 items-center gap-0.5"
                                         >
-                                            <UButton
-                                                v-bind="iconButtonProps"
-                                                :icon="
+                                            <button
+                                                type="button"
+                                                class="rounded p-1.5 transition"
+                                                :class="
                                                     prompt.favorite
-                                                        ? starFilledIcon
-                                                        : starIcon
+                                                        ? 'text-amber-400 hover:text-amber-500'
+                                                        : 'text-[var(--md-on-surface-variant)] opacity-50 hover:opacity-100'
                                                 "
                                                 :aria-label="
                                                     prompt.favorite
                                                         ? 'Remove from favorites'
                                                         : 'Add to favorites'
                                                 "
-                                                :aria-pressed="prompt.favorite"
+                                                :aria-pressed="
+                                                    prompt.favorite
+                                                "
                                                 @click.stop="
                                                     toggleFavorite(prompt)
                                                 "
-                                            />
+                                            >
+                                                <UIcon
+                                                    :name="
+                                                        prompt.favorite
+                                                            ? starFilledIcon
+                                                            : starIcon
+                                                    "
+                                                    class="h-[18px] w-[18px]"
+                                                />
+                                            </button>
                                             <UPopover>
-                                                <UButton
-                                                    v-bind="iconButtonProps"
-                                                    :icon="moreIcon"
+                                                <button
+                                                    type="button"
+                                                    class="rounded p-1.5 text-[var(--md-on-surface-variant)] opacity-50 transition hover:opacity-100"
                                                     aria-label="Prompt actions"
                                                     @click.stop
-                                                />
+                                                >
+                                                    <UIcon
+                                                        :name="moreIcon"
+                                                        class="h-[18px] w-[18px]"
+                                                    />
+                                                </button>
                                                 <template #content>
                                                     <div
-                                                        class="flex w-40 flex-col p-1"
+                                                        class="flex w-52 flex-col p-1"
                                                     >
                                                         <UButton
                                                             variant="ghost"
                                                             color="neutral"
-                                                            class="justify-start"
+                                                            class="justify-start whitespace-nowrap"
                                                             :icon="editIcon"
                                                             @click="
                                                                 startEditing(
@@ -470,7 +479,7 @@
                                                         <UButton
                                                             variant="ghost"
                                                             color="neutral"
-                                                            class="justify-start"
+                                                            class="justify-start whitespace-nowrap"
                                                             :icon="
                                                                 prompt.id ===
                                                                 defaultPromptId
@@ -493,7 +502,7 @@
                                                         <UButton
                                                             variant="ghost"
                                                             color="error"
-                                                            class="justify-start"
+                                                            class="justify-start whitespace-nowrap"
                                                             :icon="trashIcon"
                                                             @click="
                                                                 requestDeletePrompt(
@@ -507,6 +516,38 @@
                                                 </template>
                                             </UPopover>
                                         </div>
+                                    </div>
+
+                                    <p
+                                        class="mb-0 mt-1.5 line-clamp-2 text-xs text-[var(--md-on-surface-variant)]"
+                                    >
+                                        {{
+                                            promptExcerpt(prompt) ||
+                                            'No prompt content yet.'
+                                        }}
+                                    </p>
+                                    <div
+                                        class="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-[var(--md-on-surface-variant)] opacity-80"
+                                    >
+                                        <span
+                                            >Updated
+                                            {{
+                                                formatDate(prompt.updated_at)
+                                            }}</span
+                                        >
+                                        <span aria-hidden="true">·</span>
+                                        <span
+                                            >{{
+                                                tokenCounts[prompt.id] || 0
+                                            }}
+                                            tokens</span
+                                        >
+                                        <template v-if="prompt.tags.length">
+                                            <span aria-hidden="true">·</span>
+                                            <span class="truncate">{{
+                                                prompt.tags.join(', ')
+                                            }}</span>
+                                        </template>
                                     </div>
                                 </article>
                             </div>
@@ -705,7 +746,7 @@
                             </div>
 
                             <div
-                            class="shrink-0 border-t-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)] p-4"
+                            class="shrink-0 border-t-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)] p-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]"
                             >
                                 <UButton
                                     block
@@ -745,6 +786,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { useMediaQuery } from '@vueuse/core';
 import {
     createPrompt,
     listPrompts,
@@ -828,10 +870,12 @@ const promptIcon = useIcon('chat.system_prompt');
 const moreIcon = useIcon('ui.more');
 const editIcon = useIcon('ui.edit');
 const trashIcon = useIcon('ui.trash');
+const checkIcon = useIcon('ui.check');
 const backIcon = useIcon('shell.back');
 const defaultIcon = useIcon('catalog.star');
 const clearIcon = useIcon('ui.close');
 const plusIcon = useIcon('ui.plus');
+const chevronDownIcon = useIcon('ui.chevron.down');
 
 const currentActivePromptId = computed(() => {
     if (props.threadId) return threadPromptId.value;
@@ -899,17 +943,34 @@ const visiblePrompts = computed(() => {
             .toLocaleLowerCase()
             .includes(query);
     });
-    return filtered.sort((a, b) =>
-        sort.value === 'title'
+    return filtered.sort((a, b) => {
+        if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
+        return sort.value === 'title'
             ? a.title.localeCompare(b.title)
-            : b.updated_at - a.updated_at
-    );
+            : b.updated_at - a.updated_at;
+    });
 });
 
-const sortItems = [
-    { label: 'Recently updated', value: 'updated' },
-    { label: 'Title A–Z', value: 'title' },
-];
+const sortMenuItems = computed(() => [
+    {
+        label: 'Updated',
+        onSelect: () => {
+            sort.value = 'updated';
+        },
+    },
+    {
+        label: 'Title A–Z',
+        onSelect: () => {
+            sort.value = 'title';
+        },
+    },
+]);
+
+const activeSortLabel = computed(() =>
+    sort.value === 'title' ? 'Title A–Z' : 'Updated'
+);
+
+const isWideRow = useMediaQuery('(min-width: 640px)');
 
 const systemPromptsModalOverrides = useThemeOverrides({
     component: 'modal',
@@ -933,7 +994,7 @@ const systemPromptsModalProps = computed(() => {
     return {
         ...rest,
         class: [
-            'sp-modal w-[96dvw] max-w-[1450px] h-[92dvh] max-h-[900px] overflow-hidden',
+            'sp-modal max-sm:w-[100dvw] max-sm:h-[100dvh] max-sm:max-w-none max-sm:max-h-none max-sm:rounded-none max-sm:border-0 max-sm:shadow-none max-sm:pt-[env(safe-area-inset-top)] sm:w-[96dvw] sm:h-[92dvh] sm:max-w-[1450px] sm:max-h-[900px] overflow-hidden',
             overrideClass,
         ]
             .filter(Boolean)
@@ -1017,7 +1078,12 @@ function promptExcerpt(prompt: PromptRecord): string {
 }
 
 function formatDate(timestamp: number): string {
-    return new Date(timestamp * 1000).toLocaleDateString();
+    const date = new Date(timestamp * 1000);
+    const options: Intl.DateTimeFormatOptions =
+        date.getFullYear() === new Date().getFullYear()
+            ? { month: 'short', day: 'numeric' }
+            : { month: 'short', day: 'numeric', year: 'numeric' };
+    return date.toLocaleDateString('en-US', options);
 }
 
 async function loadPrompts(): Promise<void> {
