@@ -27,6 +27,13 @@
                 <button
                     v-if="errorMessage"
                     class="px-4 py-2 rounded-[var(--md-border-radius-small,0.375rem)] bg-amber-600 text-white hover:bg-amber-500"
+                    @click="startAgain"
+                >
+                    Start connection again
+                </button>
+                <button
+                    v-if="errorMessage"
+                    class="px-4 py-2 rounded-[var(--md-border-radius-small,0.375rem)] border border-neutral-300 dark:border-neutral-700"
                     @click="goHome"
                 >
                     Go Home
@@ -39,18 +46,70 @@
 <script setup lang="ts">
 import { useToast } from '#imports';
 import { reportError, err } from '~/utils/errors';
-import { kv } from '~/db';
-import { state } from '~/state/global';
 import { exchangeOpenRouterCode } from '~/core/auth/openrouter-auth';
+import { persistUserApiKey } from '~/core/auth/useUserApiKey';
+import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
 
 const route = useRoute();
 const router = useRouter();
 const rc = useRuntimeConfig();
+const { startLogin } = useOpenRouterAuth();
+
+const PKCE_MARKER_KEYS = [
+    'openrouter_auth_code',
+    'openrouter_code_verifier',
+    'openrouter_state',
+    'openrouter_code_method',
+];
 
 const loading = ref(true);
 const ready = ref(false);
 const redirecting = ref(false);
 const errorMessage = ref('');
+// A confirmed CSP violation is distinct from an unclassified network failure.
+const cspViolation = ref(false);
+
+function clearPkceMarkers() {
+    PKCE_MARKER_KEYS.forEach((key) => {
+        sessionStorage.removeItem(key);
+        localStorage.removeItem(key);
+    });
+}
+
+/**
+ * Only an enforced connection directive that blocked an OpenRouter origin
+ * indicates the exchange could not reach OpenRouter. Any other violation (for
+ * example an unrelated image or style directive) is not evidence of that.
+ */
+function onSecurityPolicyViolation(event: SecurityPolicyViolationEvent) {
+    const directive = event.effectiveDirective || event.violatedDirective || '';
+    const connectionDirective = directive === 'connect-src' || directive === 'default-src';
+    const blocked = event.blockedURI || '';
+    let blockedOpenRouter = false;
+    try {
+        blockedOpenRouter = new URL(blocked).origin === 'https://openrouter.ai';
+    } catch {
+        blockedOpenRouter = blocked.includes('openrouter.ai');
+    }
+    if (connectionDirective && blockedOpenRouter) cspViolation.value = true;
+}
+
+/** Discards the used authorization attempt and starts a fresh PKCE flow. */
+async function startAgain() {
+    clearPkceMarkers();
+    errorMessage.value = '';
+    cspViolation.value = false;
+    ready.value = false;
+    loading.value = true;
+    try {
+        await startLogin();
+    } catch (e: any) {
+        loading.value = false;
+        ready.value = true;
+        errorMessage.value =
+            'Could not start the connection again. Return home and retry from the chat screen.';
+    }
+}
 const title = computed(() =>
     errorMessage.value
         ? 'OpenRouter connection not completed'
@@ -76,21 +135,6 @@ function log(...args: any[]) {
     }
 }
 
-async function setKVNonBlocking(key: string, value: string, timeoutMs = 300) {
-    try {
-        if (!kv?.set) return;
-        log(`syncing key to KV via kvByName.set (timeout ${timeoutMs}ms)`);
-        const result = await Promise.race([
-            kv.set(key, value),
-            new Promise((res) => setTimeout(() => res('timeout'), timeoutMs)),
-        ]);
-        if (result === 'timeout') log('setKV timed out; continuing');
-        else log('setKV resolved');
-    } catch (e: any) {
-        // intentionally ignored: non-critical KV sync failure
-    }
-}
-
 async function goHome() {
     redirecting.value = true;
     log("goHome() invoked. Trying router.replace('/').");
@@ -112,6 +156,7 @@ async function goHome() {
 
 onMounted(async () => {
     log('mounted at', window.location.href, 'referrer:', document.referrer);
+    document.addEventListener('securitypolicyviolation', onSecurityPolicyViolation);
     const code =
         route.query.code ||
         sessionStorage.getItem('openrouter_auth_code') ||
@@ -182,70 +227,56 @@ onMounted(async () => {
             attempt,
         });
         if (!result.ok) {
-            // Provide user-facing message for first failure
-            errorMessage.value =
-                result.reason === 'no-key'
-                    ? 'No key returned. Continue to finish.'
-                    : 'Exchange failed. Retry or continue home.';
-            // Attach retry closure only if network/bad-response
-            if (result.reason !== 'no-key') {
-                reportError(
-                    err('ERR_NETWORK', 'Auth code exchange failed', {
-                        severity: 'error',
-                        tags: {
-                            domain: 'auth',
-                            page: 'openrouter-callback',
-                            status: result.status,
-                            attempt,
-                        },
-                        retryable: true,
-                    }),
-                    { toast: true, retry: doExchange }
-                );
+            // One UI layer, one error. The used authorization code is never
+            // replayed automatically; the user explicitly starts a fresh flow.
+            if (result.reason === 'no-key') {
+                errorMessage.value = 'No key was returned. Start the connection again.';
+            } else if (cspViolation.value) {
+                errorMessage.value =
+                    'This browser blocked the OpenRouter connection (Content-Security-Policy). Start the connection again, or check the deployment CSP allows https://openrouter.ai.';
+            } else {
+                errorMessage.value = 'The connection could not be completed. Start the connection again.';
             }
+            reportError(
+                err(cspViolation.value ? 'ERR_AUTH' : result.errorCode || 'ERR_NETWORK', 'Auth code exchange failed', {
+                    severity: 'error',
+                    tags: {
+                        domain: 'auth',
+                        page: 'openrouter-callback',
+                        status: result.status,
+                        attempt,
+                        csp: cspViolation.value,
+                    },
+                    retryable: false,
+                }),
+                { toast: true }
+            );
+            clearPkceMarkers();
             loading.value = false;
             ready.value = true;
             return false;
         }
         const userKey = result.userKey;
-        // store in localStorage for use by front-end
-        log('storing key in localStorage (length)', String(userKey).length);
-        // Save a human-readable name and the value; id/clock are handled
-        // inside the helper to match your schema
+        log('persisting key via persistUserApiKey (length)', String(userKey).length);
         try {
-            await kv.set('openrouter_api_key', userKey);
-            // Update global state immediately so UI reacts even before listeners.
-            try {
-                (state as any).value.openrouterKey = userKey;
-            } catch (e) {
-                // intentionally ignored: dispatch failure (no user impact)
-            }
+            await persistUserApiKey(userKey);
         } catch (e: any) {
-            log('kvByName.set failed', (e && e.message) || e);
-        }
-        try {
-            log('dispatching openrouter:connected event');
-            window.dispatchEvent(new CustomEvent('openrouter:connected'));
-            // Best-effort: also persist to synced KV
-            try {
-                await setKVNonBlocking('openrouter_api_key', userKey, 300);
-            } catch (e) {
-                // intentionally ignored: optional synced KV persistence
-            }
-        } catch (e) {
-            // intentionally ignored: event dispatch failure
+            loading.value = false;
+            ready.value = true;
+            errorMessage.value = 'OpenRouter returned a key in an unexpected format. Start the connection again.';
+            reportError(
+                err('ERR_AUTH', 'Auth code exchange returned an invalid key', {
+                    severity: 'error',
+                    tags: { domain: 'auth', page: 'openrouter-callback', status: result.status },
+                    retryable: false,
+                }),
+                { toast: true }
+            );
+            clearPkceMarkers();
+            return false;
         }
         log('clearing session markers (verifier/state/method)');
-        const keys = [
-            'openrouter_auth_code',
-            'openrouter_code_verifier',
-            'openrouter_state',
-            'openrouter_code_method',
-        ];
-        keys.forEach((k) => {
-            sessionStorage.removeItem(k);
-            localStorage.removeItem(k);
-        });
+        clearPkceMarkers();
         // Allow event loop to process storage events in other tabs/components
         await new Promise((r) => setTimeout(r, 10));
         loading.value = false;
@@ -277,5 +308,9 @@ onMounted(async () => {
             }
         }
     }, 4000);
+});
+
+onBeforeUnmount(() => {
+    document.removeEventListener('securitypolicyviolation', onSecurityPolicyViolation);
 });
 </script>

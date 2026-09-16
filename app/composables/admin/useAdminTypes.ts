@@ -40,10 +40,18 @@ export type DashboardUpdateJob = {
     error?: string;
 };
 
+export type DashboardUpdateReceipt = {
+    schemaVersion: 1;
+    warnings?: Array<{ code: string; message: string }>;
+    checks?: Array<{ code: string; status: string; detail: string }>;
+    operatorHandoff?: string;
+};
+
 export type DashboardUpdateStatus =
     | {
           kind: 'managed';
           enabled: true;
+          protocolVersion?: 2;
           currentVersion: string | null;
           checkedAt?: string;
           latestVersion?: string;
@@ -51,12 +59,29 @@ export type DashboardUpdateStatus =
           checkError?: string;
           incompatibilityReason?: string;
           job: DashboardUpdateJob | null;
+          receipt?: DashboardUpdateReceipt;
       }
     | {
           kind: 'unsupported' | 'unavailable';
           enabled: false;
           reason: string;
       };
+
+export type DashboardUpdatePreview = {
+    protocolVersion: 2;
+    preview: {
+        version: string;
+        assessment: {
+            schemaVersion: number;
+            observedAt: string;
+            target: { appVersion: string; imageDigest: string };
+            checks: Array<{ code: string; status: 'passed' | 'failed' | 'deferred' | 'unknown'; detail: string }>;
+            findings: Array<{ code: string; severity: 'blocker' | 'warning' | 'info'; message: string; nextCommand?: string }>;
+            retention: { keep: string[]; remove: string[]; preserve: Array<{ entryName: string; reason: string }>; canPrune: boolean };
+            stateFingerprint: string;
+        };
+    };
+};
 
 export type ConfigEntry = {
     key: string;

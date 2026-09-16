@@ -157,15 +157,44 @@ the replacement passes deep health. Each mutation holds one deployment-wide
 lease. Do not remove `.or3-cloud` lock or recovery files manually.
 
 Interrupted updates recover from their authenticated `backupPath`/`backupId`
-snapshot. Restore and rollback operations instead recover from
-`previousBackupPath`/`previousBackupId`. Recovery restores the saved data and
-matching release assets before clearing the operation record; changes made
-after that snapshot are rolled back. Legacy `adopt-source-*` directories remain
-untouched and are excluded from authenticated backup listing and retention.
-The same preservation rule applies to pre-authentication `backup-*` archives
-with no `manifest.auth`: listing and retention warn and skip them. They remain
-unauthenticated and cannot be used by restore, recovery, or export. An existing
-invalid tag or a checksum mismatch still fails validation.
+snapshot; restore and rollback operations instead recover from
+`previousBackupPath`/`previousBackupId`. Recovery separates outcomes:
+`recover --dry-run` explains the evidence and data-loss boundary,
+`recover --finish` commits a proven completed replacement while preserving
+post-replacement writes, and `recover --restore --yes` is the explicit
+destructive restore that discards later writes. Plain `recover` never silently
+falls back to a restore; a deployment that may have replaced data without
+completion proof requires the explicit choice.
+
+`backup list` classifies every backup-store entry (`verified`,
+`legacy-unsigned`, `legacy-adoption`, `unsupported`, `invalid`, `unreadable`)
+instead of aborting or silently skipping. Only `verified` entries are trusted
+restore points; legacy and suspect entries are preserved and labelled.
+`backup list --json` returns the same classification as one object. Automatic
+retention protects the rollback point, the pending update snapshot, and every
+restore/rollback source; it defers when a suspect entry is present, and no
+`--force` path can remove a protected recovery source. Legacy `adopt-source-*`
+directories and pre-authentication `backup-*` archives (no `manifest.auth`)
+remain unauthenticated and cannot be used by restore, recovery, or export.
+
+An update commits its terminal state (target identity, rollback reference,
+receipt, and absence of a pending operation) in one atomic write before
+retention or operation-mirror cleanup. A housekeeping failure is reported as a
+maintenance warning and never recreates a pending operation or rolls back a
+healthy deployment; the same rule covers restore, rollback, and recovery
+completion. Once an update has started the target (which may accept writes), a
+failed check is not restored automatically — the journal is preserved for an
+explicit `recover --finish` or `recover --restore --yes`. While any incomplete
+operation is recorded, `start` and `restart` refuse so an ambiguous deployment
+cannot be resurrected; `stop` and read-only observation remain available.
+
+This release is the compatibility bridge: it reads managed state schemas 1 and
+2 but writes schema 1. A release qualified to write schema 2 declares that in
+its package metadata and migrates only a deployment at or above the declared
+bridge minimum source. A bridge CLI refuses to mutate newer-schema state and
+points at the compatible exact-target CLI. Unknown future schemas are refused
+before mutation. `status --json` emits a public projection that excludes
+credential-reset recovery payloads and raw configuration.
 
 ## Dashboard updates
 

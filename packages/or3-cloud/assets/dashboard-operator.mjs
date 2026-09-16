@@ -24,6 +24,13 @@ const expectedWorkflow = '.github/workflows/release-cloud.yml';
 const stableVersion = /^\d+\.\d+\.\d+$/;
 const requestIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const activePhases = new Set(['queued', 'running']);
+// Protocol 1 responses are retained verbatim for older app readers; protocol 2
+// is served from the versioned /v2/* routes. The operator accepts updater
+// packages declaring either protocol, so an old protocol-1 operator still
+// rejects a protocol-2 package and forces the documented bridge upgrade.
+const supportedDashboardUpdateProtocols = new Set([1, 2]);
+const currentProtocolVersion = 2;
+const supportedStateSchemas = new Set([1, 2]);
 const maxRegistryBytes = 256 * 1024;
 const maxAttestationBytes = 1024 * 1024;
 const maxProcessOutputBytes = 64 * 1024;
@@ -32,6 +39,7 @@ const operatorHandoffTimeoutMs = 2 * 60 * 1000;
 let updateClaimed = false;
 const checkAttempts = [];
 const startAttempts = [];
+const previewAttempts = [];
 let auditQueue = Promise.resolve();
 
 export function consumeRateLimit(attempts, now, limit, windowMs) {
@@ -239,7 +247,7 @@ async function release(requestedVersion) {
   if (
     metadata?.name !== packageName
     || !stableVersion.test(version)
-    || metadata?.or3Cloud?.dashboardUpdateProtocol !== 1
+    || !supportedDashboardUpdateProtocols.has(metadata?.or3Cloud?.dashboardUpdateProtocol)
     || typeof minimumSourceVersion !== 'string'
     || !stableVersion.test(minimumSourceVersion)
     || typeof operatorImageDigest !== 'string'
@@ -268,7 +276,9 @@ async function release(requestedVersion) {
 async function managedState() {
   try {
     const state = JSON.parse(await readFile(statePath, 'utf8'));
-    if (!state || typeof state !== 'object' || state.schemaVersion !== 1) throw new Error();
+    // Bridge/schema-2 readers observe both formats; a future schema is refused
+    // before any mutation instead of being misread as schema 1.
+    if (!state || typeof state !== 'object' || !supportedStateSchemas.has(state.schemaVersion)) throw new Error();
     return state;
   } catch {
     throw new Error('The managed deployment state is unavailable or invalid.');
@@ -283,7 +293,31 @@ async function assertUpdateReady() {
   return state;
 }
 
-async function status() {
+/**
+ * A completed application commit with an unfinished privileged handoff must
+ * not start another dashboard mutation. Release checks remain available so an
+ * operator can still observe the state and the guidance.
+ */
+async function assertHandoffReady() {
+  const state = await managedState();
+  const handoff = state.lastReceipt?.operatorHandoff;
+  if (handoff === 'pending' || handoff === 'needs-attention') {
+    throw new Error('The previous update finished, but its dashboard operator handoff needs reconciliation. Run `npx @or3/cloud recover --finish` on the host before starting another dashboard update.');
+  }
+}
+
+/** Bounded latest terminal receipt from the CLI, exposed only on protocol 2. */
+async function readLastReceipt() {
+  try {
+    const receipt = JSON.parse(await readFile(join(cloudDirectory, 'last-operation.json'), 'utf8'));
+    if (!receipt || typeof receipt !== 'object' || receipt.schemaVersion !== 1) return undefined;
+    return receipt;
+  } catch {
+    return undefined;
+  }
+}
+
+async function status(includeReceipt = false) {
   const version = await currentVersion();
   const [job, checked] = await Promise.all([readJob(), readReleaseCheck()]);
   return {
@@ -303,10 +337,11 @@ async function status() {
       completedAt: job.completedAt,
       error: job.error,
     } : null,
+    ...(includeReceipt ? { receipt: await readLastReceipt() } : {}),
   };
 }
 
-async function check() {
+async function check(includeReceipt = false) {
   await assertUpdateReady();
   const previous = await readReleaseCheck();
   const checkedAt = new Date().toISOString();
@@ -330,7 +365,7 @@ async function check() {
       updateAvailable: compareVersions(latest.version, current) > 0,
     };
     await writeReleaseCheck({ schemaVersion: 1, checkedAt, lastSuccessful });
-    return await status();
+    return await status(includeReceipt);
   } catch (error) {
     const message = (error instanceof Error ? error.message : String(error)).slice(0, 4096);
     const persisted = await readReleaseCheck().catch(() => previous);
@@ -372,6 +407,8 @@ function runProcess(file, args, options) {
   });
   return new Promise((resolve, reject) => {
     let output = '';
+    let stdout = '';
+    let stderr = '';
     let settled = false;
     const finish = (error, result) => {
       if (settled) return;
@@ -403,10 +440,12 @@ function runProcess(file, args, options) {
         finish(new Error('The updater command returned too much output.'));
       }
     };
+    child.stdout.on('data', (chunk) => { stdout += chunk.toString('utf8'); });
+    child.stderr.on('data', (chunk) => { stderr += chunk.toString('utf8'); });
     child.stdout.on('data', append);
     child.stderr.on('data', append);
     child.once('error', (error) => finish(error));
-    child.once('close', (code, signal) => finish(undefined, { code, signal, output }));
+    child.once('close', (code, signal) => finish(undefined, { code, signal, output, stdout, stderr }));
     const timer = options.timeoutMs
       ? setTimeout(() => {
           terminate();
@@ -503,7 +542,7 @@ async function verifyInstalledUpdater(installDirectory, expectedRelease, job, pr
     || manifest?.repository?.url !== 'git+https://github.com/Saluana/or3-chat.git'
     || manifest?.repository?.directory !== 'packages/or3-cloud'
     || manifest?.bin?.or3 !== './dist/cli.mjs'
-    || manifest?.or3Cloud?.dashboardUpdateProtocol !== 1
+    || !supportedDashboardUpdateProtocols.has(manifest?.or3Cloud?.dashboardUpdateProtocol)
     || !stableVersion.test(manifest?.or3Cloud?.dashboardUpdateMinimumSourceVersion || '')
     || !/^sha256:[0-9a-f]{64}$/.test(manifest?.or3Cloud?.imageDigest || '')
     || !/^sha256:[0-9a-f]{64}$/.test(manifest?.or3Cloud?.operatorImageDigest || '')
@@ -618,8 +657,132 @@ async function runRecovery(job) {
   });
 }
 
+/**
+ * Runs the exact verified updater in read-only preview mode and returns its
+ * parsed assessment. It only ever invokes the pinned CLI `update --dry-run`;
+ * no caller-provided command, package location, or extra argument is accepted.
+ */
+async function runPreview() {
+  const expectedRelease = await release();
+  return await withVerifiedUpdater(expectedRelease, { id: randomUUID() }, async (updater, installDirectory) => {
+    const previewed = await runProcess(nodeBinary, [updater.cli, 'update', '--to', expectedRelease.version, '--dry-run', '--json'], {
+      cwd: deploymentDirectory,
+      env: updaterEnvironment(installDirectory, { id: 'preview' }, updater.imageDigest),
+      maxOutputBytes: 512 * 1024,
+      timeoutMs: maxUpdateDurationMs,
+    });
+    // Exit 1 means the assessment reported blockers, which is still a valid result.
+    if (previewed.code !== 0 && previewed.code !== 1) {
+      throw new Error(`The update preview could not run: ${processDiagnostic(previewed)}`);
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(previewed.stdout);
+    } catch {
+      throw new Error('The update preview did not return a readable assessment.');
+    }
+    return { version: expectedRelease.version, assessment: parsed };
+  });
+}
+
 function closeAfter(server, code) {
   setTimeout(() => server.close(() => process.exit(code)), 250).unref();
+}
+
+const leasePath = join(cloudDirectory, 'operation-lease');
+
+/**
+ * Acquires the same single-writer deployment lease the CLI uses. Returns a
+ * release function, or undefined when another operation owns the lease.
+ */
+async function acquireDeploymentLease() {
+  await mkdir(dirname(leasePath), { recursive: true, mode: 0o700 });
+  const owner = {
+    schemaVersion: 1,
+    nonce: randomUUID(),
+    command: 'operator-handoff',
+    origin: 'cli',
+    pid: process.pid,
+    acquiredAt: new Date().toISOString(),
+    heartbeatAt: new Date().toISOString(),
+  };
+  try {
+    await mkdir(leasePath, { recursive: false, mode: 0o700 });
+  } catch (error) {
+    if (error && typeof error === 'object' && error.code === 'EEXIST') return undefined;
+    throw error;
+  }
+  try {
+    const ownerPath = join(leasePath, 'owner.json');
+    await writeFile(ownerPath, `${JSON.stringify(owner, null, 2)}\n`, { mode: 0o600 });
+    await chmod(ownerPath, 0o600);
+  } catch (error) {
+    await rm(leasePath, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
+  return async () => {
+    await rm(leasePath, { recursive: true, force: true }).catch(() => undefined);
+  };
+}
+
+async function atomicWriteJson(path, value) {
+  const temporary = `${path}.${randomUUID()}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+  await chmod(temporary, 0o600);
+  await durableRename(temporary, path);
+}
+
+/**
+ * Marks the recorded terminal receipt's operator handoff verified once the
+ * successor operator is running. Runs under the deployment lease, reloads the
+ * authoritative state, and verifies the recorded operation/job identity before
+ * persisting; a concurrent CLI operation is never overwritten. Bounded and
+ * best-effort: a write failure must not roll back the healthy application.
+ */
+async function markHandoffVerified(jobId) {
+  let release;
+  try {
+    release = await acquireDeploymentLease();
+  } catch (error) {
+    console.error(`Could not acquire the deployment lease to record the operator handoff: ${error instanceof Error ? error.message : String(error)}`);
+    return;
+  }
+  if (!release) {
+    console.error('Could not mark the operator handoff verified: another operation owns the deployment lease. Run `npx @or3/cloud recover --finish` on the host to reconcile.');
+    return;
+  }
+  try {
+    let state;
+    try {
+      state = JSON.parse(await readFile(statePath, 'utf8'));
+    } catch {
+      return;
+    }
+    if (!state || typeof state !== 'object' || state.incompleteOperation) return;
+    const receipt = state.lastReceipt;
+    if (receipt && typeof receipt === 'object') {
+      if (receipt.operatorHandoff !== 'pending' && receipt.operatorHandoff !== 'needs-attention') return;
+      if (receipt.dashboardJobId && jobId && receipt.dashboardJobId !== jobId) return;
+      receipt.operatorHandoff = 'verified';
+      state.updatedAt = new Date().toISOString();
+      await atomicWriteJson(statePath, state);
+    }
+    const receiptPath = join(cloudDirectory, 'last-operation.json');
+    try {
+      const mirror = JSON.parse(await readFile(receiptPath, 'utf8'));
+      if (mirror && typeof mirror === 'object' && mirror.schemaVersion === 1) {
+        if (mirror.dashboardJobId && jobId && mirror.dashboardJobId !== jobId) return;
+        mirror.operatorHandoff = 'verified';
+        await atomicWriteJson(receiptPath, mirror);
+      }
+    } catch {
+      // The authoritative state write is sufficient; the mirror is convenience.
+    }
+  } catch (error) {
+    console.error(`Could not mark the operator handoff verified: ${error instanceof Error ? error.message : String(error)}`);
+  } finally {
+    await release();
+  }
 }
 
 async function completeOperatorHandoff(jobId, project) {
@@ -669,7 +832,10 @@ async function completeOperatorHandoff(jobId, project) {
             })
           : { code: restarted.code, output: '' };
         lastOutput = `${lastOutput}\n${restarted.output}\n${running.output}`.trim();
-        if (restarted.code === 0 && running.code === 0 && /^[0-9a-f]{12,64}$/i.test(running.output.trim())) return;
+        if (restarted.code === 0 && running.code === 0 && /^[0-9a-f]{12,64}$/i.test(running.output.trim())) {
+          await markHandoffVerified(jobId);
+          return;
+        }
         await delay(2_000);
       }
       throw new Error(`The dashboard operator handoff could not start its successor: ${lastOutput}`);
@@ -809,53 +975,60 @@ async function main() {
   await rm(socketPath, { force: true });
 
   const server = createServer(async (request, response) => {
+    // Protocol 2 is additive: the versioned routes are the same handlers with a
+    // protocolVersion field, while /status, /check, and /start remain byte-for-
+    // byte protocol-1 responses for existing exact-key app validators.
+    const isV2 = ['/v2/status', '/v2/check', '/v2/start', '/v2/preview'].includes(request.url);
+    const route = isV2 ? request.url.slice(3) : request.url;
+    const reply = (statusCode, payload) => send(response, statusCode, isV2 ? { protocolVersion: currentProtocolVersion, ...payload } : payload);
     try {
-      if (request.method === 'GET' && request.url === '/status') return send(response, 200, await status());
-      if (request.method === 'POST' && request.url === '/check') {
+      if (request.method === 'GET' && route === '/status') return reply(200, await status(isV2));
+      if (request.method === 'POST' && route === '/check') {
         if (!consumeRateLimit(checkAttempts, Date.now(), 30, 60_000)) {
           await audit('check_rate_limited');
-          return send(response, 429, { message: 'Release checks are temporarily rate limited.' });
+          return reply(429, { message: 'Release checks are temporarily rate limited.' });
         }
-        const checked = await check();
+        const checked = await check(isV2);
         await audit('release_checked', { latestVersion: checked.latestVersion, updateAvailable: checked.updateAvailable });
-        return send(response, 200, checked);
+        return reply(200, checked);
       }
-      if (request.method === 'POST' && request.url === '/start') {
+      if (request.method === 'POST' && route === '/start') {
         if (!consumeRateLimit(startAttempts, Date.now(), 6, 60_000)) {
           await audit('start_rate_limited');
-          return send(response, 429, { message: 'Update starts are temporarily rate limited.' });
+          return reply(429, { message: 'Update starts are temporarily rate limited.' });
         }
         const input = await body(request);
         if (!validStartInput(input)) {
           await audit('start_rejected_invalid');
-          return send(response, 400, { message: 'A valid update request is required.' });
+          return reply(400, { message: 'A valid update request is required.' });
         }
         if (updateClaimed) {
           await audit('start_rejected_busy', { requestId: input.requestId, targetVersion: input.targetVersion });
-          return send(response, 409, { message: 'An update is already starting or running.' });
+          return reply(409, { message: 'An update is already starting or running.' });
         }
         updateClaimed = true;
         try {
-          const checked = await check();
+          await assertHandoffReady();
+          const checked = await check(isV2);
           if (!checked.updateAvailable) {
             updateClaimed = false;
             await audit('start_rejected_no_update', { requestId: input.requestId, targetVersion: input.targetVersion });
-            return send(response, 409, { message: 'No newer supported release is available.' });
+            return reply(409, { message: 'No newer supported release is available.' });
           }
           if (input.targetVersion !== checked.latestVersion) {
             updateClaimed = false;
             await audit('start_rejected_stale_target', { requestId: input.requestId, targetVersion: input.targetVersion });
-            return send(response, 409, { message: 'The requested version is no longer the verified latest release. Check again.' });
+            return reply(409, { message: 'The requested version is no longer the verified latest release. Check again.' });
           }
           const previous = await readJob();
           if (previous && activePhases.has(previous.phase)) {
             updateClaimed = false;
             if (previous.id === input.requestId) {
               await audit('start_replayed', { jobId: previous.id, targetVersion: previous.targetVersion });
-              return send(response, 202, { ...checked, job: previous });
+              return reply(202, { ...checked, job: previous });
             }
             await audit('start_rejected_busy', { requestId: input.requestId, targetVersion: input.targetVersion });
-            return send(response, 409, { message: 'An update is already running.' });
+            return reply(409, { message: 'An update is already running.' });
           }
           const job = {
             id: input.requestId,
@@ -865,7 +1038,7 @@ async function main() {
           };
           await writeJob(job);
           await audit('update_accepted', { jobId: job.id, targetVersion: job.targetVersion });
-          send(response, 202, { ...checked, job });
+          reply(202, { ...checked, job });
           queueMicrotask(async () => {
             try {
               job.phase = 'running';
@@ -882,9 +1055,22 @@ async function main() {
           throw error;
         }
       }
-      send(response, 404, { message: 'Not found.' });
+      if (request.method === 'POST' && route === '/preview') {
+        if (!consumeRateLimit(previewAttempts, Date.now(), 10, 60_000)) {
+          await audit('preview_rate_limited');
+          return reply(429, { message: 'Update previews are temporarily rate limited.' });
+        }
+        if (updateClaimed) {
+          return reply(409, { message: 'An update is already starting or running.' });
+        }
+        const checked = await check(isV2);
+        const preview = await runPreview();
+        await audit('update_previewed', { latestVersion: checked.latestVersion });
+        return reply(200, { ...checked, preview });
+      }
+      reply(404, { message: 'Not found.' });
     } catch (error) {
-      send(response, 503, { message: error instanceof Error ? error.message : 'The update operator is unavailable.' });
+      reply(503, { message: error instanceof Error ? error.message : 'The update operator is unavailable.' });
     }
   });
 

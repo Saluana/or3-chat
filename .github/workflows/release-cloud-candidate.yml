@@ -461,6 +461,13 @@ jobs:
               manifest.createdAt = "2026-08-12T02:34:07.685Z";
               writeFileSync(join(path, "manifest.json"), JSON.stringify(manifest) + "\n", { mode: 0o600 });
             }'
+          # A suspect (invalid-authentication) historical entry must defer
+          # automatic retention without blocking a fresh authenticated update.
+          source="$(find "$MANAGED/.or3-cloud/backups" -maxdepth 1 -type d -name 'backup-*' | sort | head -1)"
+          test -n "$source"
+          suspect="$MANAGED/.or3-cloud/backups/backup-2026-08-10T00-00-00-000Z-suspect"
+          cp -r "$source" "$suspect"
+          printf 'invalid' > "$suspect/manifest.auth"
           mkdir -p "$MANAGED/.or3-cloud/backups/adopt-source-legacy-fixture"
           printf 'legacy adoption archive\n' > "$MANAGED/.or3-cloud/backups/adopt-source-legacy-fixture/data.tgz"
           echo "Previous-release startup and fixture creation completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
@@ -477,7 +484,11 @@ jobs:
           started=$SECONDS
           (cd "$MANAGED" && timeout --signal=TERM 4m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 doctor)
           (cd "$MANAGED" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 backup list)
-          (cd "$MANAGED" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 backup prune --keep 1)
+          (cd "$MANAGED" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 backup list --json | node -e '
+            let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const parsed=JSON.parse(s);if(!Array.isArray(parsed.backups)||!Array.isArray(parsed.findings))process.exit(1)});')
+          # Explicit prune bypasses the suspect-entry deferral but never removes
+          # a protected recovery source or a preserved historical entry.
+          (cd "$MANAGED" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 backup prune --keep 1 --force --yes)
           node --input-type=module -e '
             import { existsSync, readFileSync } from "node:fs";
             import { join } from "node:path";
@@ -490,6 +501,7 @@ jobs:
               if (checksum !== manifest.dataSha256) throw new Error("Legacy backup changed during update or pruning");
             }'
           test -f "$MANAGED/.or3-cloud/backups/adopt-source-legacy-fixture/data.tgz"
+          test -f "$MANAGED/.or3-cloud/backups/backup-2026-08-10T00-00-00-000Z-suspect/manifest.auth"
           test -S "$MANAGED/.or3-cloud/operator-ipc/operator.sock"
           (cd "$MANAGED" && docker compose --env-file .env -f compose.yaml -f compose.operator.yaml exec -T or3 /nodejs/bin/node -e '
             const http=require("node:http");
@@ -504,8 +516,8 @@ jobs:
       - name: Recover a stale update journal using its authenticated pre-update backup
         run: |
           set -euo pipefail
-          # Reproduce an update that reached healthy target state but failed
-          # during retention, as older adopters did. This is disposable CI data.
+          # Reproduce a partial update with no completion proof. This is
+          # disposable CI data; it must never be finished from health alone.
           node --input-type=module -e '
             import { readFileSync, writeFileSync } from "node:fs";
             import { join } from "node:path";
@@ -524,7 +536,13 @@ jobs:
               targetImageDigest: state.imageDigest, targetDeploymentId: state.deploymentId,
             };
             writeFileSync(path, JSON.stringify(state, null, 2) + "\n", { mode: 0o600 });'
-          (cd "$MANAGED" && timeout --signal=TERM 6m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 recover)
+          (cd "$MANAGED" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 recover --dry-run --json | node -e '
+            let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const parsed=JSON.parse(s);if(parsed.decision?.action!=="require-explicit-restore")process.exit(1)});')
+          if (cd "$MANAGED" && timeout --signal=TERM 2m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 recover >/dev/null 2>&1); then
+            echo "plain recover silently restored a data-mutated journal" >&2; exit 1; fi
+          if (cd "$MANAGED" && timeout --signal=TERM 2m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 recover --finish >/dev/null 2>&1); then
+            echo "recover --finish adopted a partial journal without completion proof" >&2; exit 1; fi
+          (cd "$MANAGED" && timeout --signal=TERM 6m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 recover --restore --yes)
           node --input-type=module -e '
             import { readFileSync } from "node:fs";
             const state = JSON.parse(readFileSync(process.env.MANAGED + "/.or3-cloud/state.json", "utf8"));
@@ -552,6 +570,68 @@ jobs:
           (cd "$MANAGED" && timeout --signal=TERM 4m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
           (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
           echo "Second update, restart, and persistence verification completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Finish a proven replacement and preserve post-replacement data
+        run: |
+          set -euo pipefail
+          # Simulate a crash after the target-ready milestone: the replacement
+          # completed with durable evidence, but the terminal commit did not run.
+          node --input-type=module -e '
+            import { readFileSync, writeFileSync, existsSync } from "node:fs";
+            import { join } from "node:path";
+            import { createHash } from "node:crypto";
+            const root = process.env.MANAGED;
+            if (root !== join(process.env.RUNNER_TEMP, "or3-cloud-candidate")) throw new Error("Expected disposable candidate deployment");
+            const statePath = join(root, ".or3-cloud/state.json");
+            const state = JSON.parse(readFileSync(statePath, "utf8"));
+            const sha256 = (buffer) => createHash("sha256").update(buffer).digest("hex");
+            const managedAssetSha256 = {};
+            for (const name of ["compose.yaml", "compose.operator.yaml", "dashboard-operator.mjs"]) {
+              const path = join(root, name);
+              if (existsSync(path)) managedAssetSha256[name] = sha256(readFileSync(path));
+            }
+            if (Object.keys(managedAssetSha256).length === 0) throw new Error("No managed assets found");
+            const { execFileSync } = await import("node:child_process");
+            const containerId = execFileSync("docker", ["compose", "--project-directory", root, "--env-file", join(root, ".env"), "-f", "compose.yaml", "ps", "-q", "or3"], { cwd: root, encoding: "utf8" }).trim();
+            if (!/^[0-9a-f]{12,64}$/i.test(containerId)) throw new Error("Could not resolve the running container for the finish fixture");
+            const backupId = state.rollback.backupId;
+            state.incompleteOperation = {
+              id: "update-target-ready-fixture", operation: "update",
+              startedAt: new Date().toISOString(), phase: "target-ready",
+              message: "Simulated target-ready milestone",
+              targetVersion: state.appVersion, targetImage: state.image, targetImageDigest: state.imageDigest,
+              targetDeploymentId: state.deploymentId,
+              backupId, backupPath: join(root, ".or3-cloud/backups", backupId),
+              evidence: {
+                checkedAt: new Date().toISOString(), deploymentId: state.deploymentId,
+                deploymentRoot: root, containerId, imageDigest: state.imageDigest,
+                configurationSha256: sha256(readFileSync(join(root, ".env"))),
+                managedAssetSha256, dataReplacementCompleted: true,
+                checks: [
+                  { code: "image-digest", status: "passed", detail: "fixture" },
+                  { code: "deep-health", status: "passed", detail: "fixture" },
+                  { code: "container-binding", status: "passed", detail: "fixture" },
+                  { code: "database-integrity", status: "passed", detail: "fixture" },
+                  { code: "public-health", status: "passed", detail: "fixture" },
+                ],
+              },
+            };
+            writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", { mode: 0o600 });
+            writeFileSync(join(process.env.RUNNER_TEMP, "or3-rollback-id"), backupId);'
+          (cd "$MANAGED" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 recover --dry-run --json | node -e '
+            let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const parsed=JSON.parse(s);if(parsed.decision?.action!=="finish")process.exit(1)});')
+          # A write after replacement must survive the finish commit.
+          (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
+          (cd "$MANAGED" && timeout --signal=TERM 6m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 recover --finish)
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            const state = JSON.parse(readFileSync(process.env.MANAGED + "/.or3-cloud/state.json", "utf8"));
+            const expectedRollback = readFileSync(process.env.RUNNER_TEMP + "/or3-rollback-id", "utf8").trim();
+            if (state.incompleteOperation) throw new Error("finish did not clear the journal");
+            if (state.appVersion !== process.env.VERSION) throw new Error("finish did not adopt the target release");
+            if (state.rollback?.backupId !== expectedRollback) throw new Error("finish did not preserve the rollback point");'
+          # Repeating recovery must not replay replacement or delete the rollback point.
+          (cd "$MANAGED" && timeout --signal=TERM 2m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 recover --finish)
+          (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
       - name: Capture lifecycle diagnostics
         if: failure()
         run: |

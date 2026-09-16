@@ -107,6 +107,20 @@ update logic, runtime dependencies) should also run the relevant deeper suite
 from [Extended validation](#running-deeper-checks-on-demand) before reaching
 production.
 
+`bun install` and `bun run dev` operate on this local checkout and its installed
+dependencies — not the latest npm release and not the VPS image. Use the pinned
+toolchain in the repository (`packageManager`/`bun.lock`); `bun run dev` serves
+the source in this working tree. If the dependency tree looks broken, scope the
+diagnosis before changing anything:
+
+```bash
+bun install --frozen-lockfile    # reproduce the pinned tree
+bun pm ls                        # inspect resolved first-party packages
+```
+
+Only reinstall the specific package that is wrong. Do not delete `bun.lock`,
+`package.json`, or source files to work around a dependency error.
+
 ### 4. Commit and push
 
 ```bash
@@ -448,6 +462,92 @@ Do not delete the data volume to "clean" a failing start.
 - Publication succeeded but post-publication verification failed: the artifacts
   are public; correct the problem with a new patch version instead of trying to
   overwrite them.
+
+### Backup history, trust, and cleanup warnings
+
+`npx @or3/cloud backup list` classifies every entry in the backup store rather
+than aborting on the unusual ones:
+
+- `verified` — has a valid deployment authentication tag and matching checksums;
+  this is the only trust level that restore, export, and recovery accept.
+- `legacy-unsigned` — a `backup-*` directory with no `manifest.auth`, kept from
+  before authentication tags existed.
+- `legacy-adoption` — an `adopt-source-*` directory left by an adoption.
+- `unsupported` — a manifest schema newer than this CLI understands.
+- `invalid` / `unreadable` — unreadable metadata, a bad tag, a checksum
+  mismatch, or an entry that is not a regular directory.
+
+Preserved entries are never signed automatically. To obtain a trusted restore
+point from a store that only has legacy history, create a fresh backup of the
+current healthy deployment. `backup list --json` prints the same classification
+as one parseable object. `npx @or3/cloud backup prune` protects the rollback
+point, the pending update snapshot, and every restore/rollback source; when a
+suspect entry is present it reports a specific blocked result and deletes
+nothing. `--force --yes` skips the suspect-entry deferral but cannot remove a
+protected recovery source.
+
+An update commits its terminal result before optional cleanup. If retention or
+the operation-mirror delete fails after the application is healthy, the update
+prints a maintenance warning, still exits successfully, and never recreates a
+pending operation or restores old data. Re-run `npx @or3/cloud backup list` to
+inspect what cleanup left behind.
+
+### Compatibility bridge (managed state schema 1 → 2)
+
+This release is the bridge: it **reads** managed `state.json` schemas 1 and 2
+but **writes schema 1**. A release qualified to write schema 2 sets
+`or3Cloud.stateSchema` in its package metadata; only such a release migrates a
+settled schema-1 deployment, and only when the deployment's source is at or
+above the declared `dashboardUpdateMinimumSourceVersion` bridge. Migration and
+its initial pending update are one atomic write, so an empty new-format state is
+never published. A bridge CLI refuses to mutate state written by a newer schema
+and points at the compatible exact-target CLI. Do not edit, delete, or
+hand-migrate `.or3-cloud/state.json`.
+
+### Previewing and recovering an interrupted update
+
+Managed update failures are explicit and previewable:
+
+```bash
+npx @or3/cloud recover --dry-run   # explain source/target, phase, evidence, actions
+npx @or3/cloud recover --finish    # adopt a proven completed target, keep its writes
+npx @or3/cloud recover --restore --yes   # return to the recorded snapshot (discards later writes)
+```
+
+- `recover --finish` only succeeds when the update recorded a durable
+  target-ready milestone and the live target still matches it (exact image,
+  observed container, unchanged configuration/assets, SQLite integrity and
+  ownership, authenticated rollback snapshot, and mode-appropriate deep
+  health). A crash before that milestone cannot be finished from health alone.
+- `recover --restore --yes` takes precedence over finish, so a target-ready
+  journal can always be returned to its recorded snapshot explicitly.
+- Plain `recover` finishes proven non-destructive work and otherwise prints the
+  assessment; it never silently restores data. A deployment that may have
+  replaced data without completion proof requires the explicit
+  `recover --restore --yes` choice, which names the snapshot and its data-loss
+  boundary.
+- Once an update has started the target, a failed check is not restored
+  automatically; the journal is preserved for an explicit choice.
+- While an incomplete operation is recorded, `start` and `restart` refuse and
+  direct you to recovery; `stop`, `status`, `logs`, `doctor`, and
+  `verify --read-only` remain available. `status --json` emits a public
+  projection that never includes credential-reset payloads or raw configuration.
+- `update --dry-run` previews the same assessment the real update runs under the
+  lease and refuses before any pull or data change when a blocker is present. A
+  required asset the CLI cannot read is a blocker, not a silent "unchanged".
+  Preview uses the read-only daemon/architecture probe when Docker is available
+  and only marks checks that need a real pull or writable probe as deferred.
+- The dashboard update preview calls the versioned `/v2/preview` operator route.
+  A preview failure is surfaced with a retry path rather than hidden; the update
+  action stays available because execution revalidates every check.
+- With `--json`, `update` and `recover` write exactly one
+  `or3-operation-result` object to stdout for success, no-op, blocked, and
+  failure, and route all progress to stderr. Post-commit maintenance warnings are
+  persisted into the receipt so a reload still shows them.
+- Read-only verification distinguishes deliberately skipped checks
+  (`deferred`: login/storage, SQLite inspection, log scanning) from failures, so
+  a read-only run only exits nonzero for an actual failure. `status` still
+  reports readable state when the managed `.env` is unreadable.
 
 ### Restoring a previous version
 

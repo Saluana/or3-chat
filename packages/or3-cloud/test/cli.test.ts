@@ -2,29 +2,42 @@ import { expect, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { createHash, createHmac } from 'node:crypto';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import {
+  STATE_SCHEMA_COMPATIBILITY,
   assertCommandFlags,
   assertCommandPositionals,
   assertDashboardOperatorMounts,
   assertEnoughFreeSpace,
   assertImageReleaseLabels,
+  assertKnownStateSchema,
   assertPurgeBackupFreshness,
   assertRemovableArtifactName,
   assertSupportedSource,
   assertSupportedSourceCompose,
   assertBackupMatchesDeployment,
+  assertPhaseAllowsCommand,
+  assertStateSchemaWritable,
   assertSupportedArchitecture,
   assertVerificationGrant,
+  assessUpdate,
+  publicStateProjection,
+  writeStateSchema,
   buildCredentialsResetScript,
   buildEnv,
   checkResolvedLoopbackBinding,
   copyAssets,
+  decideRecoveryAction,
+  stateFingerprint,
+  verifyIsReadOnly,
   dashboardOperatorHandoffArgs,
   enumerateBackups,
+  inventoryBackups,
   isVersion,
+  lifecycleFaults,
   parseEnv,
   parseFlags,
+  planRetention,
   purgeVolumesFromState,
   redact,
   recordedBackupPath,
@@ -124,13 +137,25 @@ test('retention preserves legacy adoption directories without trusting them as b
     const legacy = join(root, 'adopt-source-2026-08-07T10-30-00-000Z-a1b2c3d4');
     await mkdir(legacy);
     await writeFile(join(legacy, 'data.tgz'), 'legacy archive retained');
+    let inventory = await inventoryBackups(directory);
     expect((await enumerateBackups(directory)).map((backup) => backup.backupId)).toEqual([manifest.backupId]);
+    expect(inventory.entries.find((entry) => entry.kind !== 'verified' && entry.entryName === basename(legacy)))
+      .toMatchObject({ kind: 'legacy-adoption' });
     expect(await readFile(join(legacy, 'data.tgz'), 'utf8')).toBe('legacy archive retained');
     await symlink(legacy, join(root, 'adopt-source-symlink'));
-    await expect(enumerateBackups(directory)).rejects.toThrow('unexpected artifact');
+    inventory = await inventoryBackups(directory);
+    expect(inventory.entries.find((entry) => entry.kind !== 'verified' && entry.entryName === 'adopt-source-symlink'))
+      .toMatchObject({ kind: 'invalid', code: 'backup-entry-not-directory' });
+    expect(await readFile(join(legacy, 'data.tgz'), 'utf8')).toBe('legacy archive retained');
     await rm(join(root, 'adopt-source-symlink'));
     await writeFile(join(root, 'unexpected-file'), 'unknown');
-    await expect(enumerateBackups(directory)).rejects.toThrow('unexpected artifact');
+    await mkdir(join(root, 'unexpected-directory'));
+    inventory = await inventoryBackups(directory);
+    expect(inventory.entries.find((entry) => entry.kind !== 'verified' && entry.entryName === 'unexpected-file'))
+      .toMatchObject({ kind: 'invalid', code: 'backup-entry-not-directory' });
+    expect(inventory.entries.find((entry) => entry.kind !== 'verified' && entry.entryName === 'unexpected-directory'))
+      .toMatchObject({ kind: 'invalid', code: 'backup-entry-unexpected' });
+    expect((await enumerateBackups(directory)).map((backup) => backup.backupId)).toEqual([manifest.backupId]);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -156,7 +181,7 @@ test('retention skips pre-auth backups but explicit recovery still refuses to tr
   }
 });
 
-test('retention rejects existing invalid authentication tags and corrupted signed backup data', async () => {
+test('retention classifies invalid authentication tags and corrupted signed backup data', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'or3-invalid-backup-retention-'));
   try {
     const backup = await authenticatedBackupFixture(directory, 'backup-current');
@@ -164,18 +189,90 @@ test('retention rejects existing invalid authentication tags and corrupted signe
     const auth = await readFile(authPath);
     for (const invalid of ['', 'invalid', '00'.repeat(32)]) {
       await writeFile(authPath, invalid);
-      await expect(enumerateBackups(directory)).rejects.toThrow();
+      const entry = (await inventoryBackups(directory)).entries.find((candidate) => candidate.kind !== 'verified');
+      expect(entry?.kind).toBe('invalid');
+      expect(entry && entry.kind !== 'verified' ? entry.code : undefined).toBe('backup-authentication-failed');
+      expect(await enumerateBackups(directory)).toEqual([]);
     }
     await rm(authPath);
     await symlink(join(directory, 'missing-auth-target'), authPath);
-    await expect(enumerateBackups(directory)).rejects.toThrow('no valid deployment authentication tag');
+    const symlinked = (await inventoryBackups(directory)).entries.find((candidate) => candidate.kind !== 'verified');
+    expect(symlinked?.kind).toMatch(/invalid|unreadable/);
     await rm(authPath);
     await writeFile(authPath, auth);
     await writeFile(join(backup.path, 'data.tgz'), 'tampered');
-    await expect(enumerateBackups(directory)).rejects.toThrow('Backup checksum mismatch');
+    const tampered = (await inventoryBackups(directory)).entries.find((candidate) => candidate.kind !== 'verified');
+    expect(tampered).toMatchObject({ kind: 'invalid', code: 'backup-checksum-mismatch' });
+    expect(await enumerateBackups(directory)).toEqual([]);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test('inventory classifies future manifests as unsupported and never follows symlinked entries', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'or3-inventory-formats-'));
+  try {
+    const { path: verifiedPath } = await authenticatedBackupFixture(directory, 'backup-current');
+    const root = join(directory, '.or3-cloud', 'backups');
+    const future = join(root, 'backup-2099-01-01T00-00-00-000Z-future');
+    await mkdir(future);
+    await writeFile(join(future, 'manifest.json'), JSON.stringify({ schemaVersion: 3, backupId: basename(future) }));
+    await writeFile(join(future, 'manifest.auth'), '00'.repeat(32));
+    const inventory = await inventoryBackups(directory);
+    expect(inventory.storeErrors).toEqual([]);
+    expect(inventory.entries.find((entry) => entry.kind !== 'verified' && entry.entryName === basename(future)))
+      .toMatchObject({ kind: 'unsupported', code: 'backup-format-unsupported' });
+    expect((await enumerateBackups(directory)).map((backup) => backup.path)).toEqual([verifiedPath]);
+    expect(inventory.entries[0]).toMatchObject({ kind: 'verified' });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('planRetention preserves protected recovery sources and defers on suspect entries', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'or3-plan-retention-'));
+  try {
+    await authenticatedBackupFixture(directory, 'backup-current');
+    const root = join(directory, '.or3-cloud', 'backups');
+    const legacy = join(root, 'backup-2020-01-01T00-00-00-000Z-legacy');
+    await mkdir(legacy);
+    const suspect = join(root, 'backup-2021-01-01T00-00-00-000Z-suspect');
+    await mkdir(suspect);
+    await writeFile(join(suspect, 'manifest.json'), JSON.stringify({ schemaVersion: 1, backupId: basename(suspect) }));
+    await writeFile(join(suspect, 'manifest.auth'), 'invalid');
+    const inventory = await inventoryBackups(directory);
+    const automatic = planRetention(inventory.entries, 1, new Set(['backup-current']), { automatic: true });
+    expect(automatic.remove).toEqual([]);
+    expect(automatic.canPrune).toBe(false);
+    expect(automatic.preserve.map((entry) => entry.entryName)).toContain(basename(legacy));
+    expect(automatic.warnings.some((warning) => warning.code === 'backup-authentication-failed')).toBe(true);
+    // An explicit prune bypasses suspect deferral but never protected IDs.
+    const forced = planRetention(inventory.entries, 1, new Set(['backup-current']), { automatic: false });
+    expect(forced.canPrune).toBe(true);
+    expect(forced.remove).toEqual([]);
+    expect(() => planRetention(inventory.entries, 0, new Set())).toThrow('at least 1');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('state schema compatibility table documents the bridge transition', () => {
+  expect(STATE_SCHEMA_COMPATIBILITY[1].readers).toContain('bridge');
+  expect(STATE_SCHEMA_COMPATIBILITY[1].mutable).toBe(false);
+  expect(STATE_SCHEMA_COMPATIBILITY[2].mutable).toBe(true);
+  expect(() => assertKnownStateSchema(1)).not.toThrow();
+  expect(() => assertKnownStateSchema(2)).not.toThrow();
+  expect(() => assertKnownStateSchema(3)).toThrow('Unsupported managed state schema');
+  expect(() => assertKnownStateSchema(undefined)).toThrow('Unsupported managed state schema');
+});
+
+test('lifecycle fault seams are inert by default and settable by tests', () => {
+  expect(lifecycleFaults.beforeStateWrite).toBeUndefined();
+  const before = () => {};
+  lifecycleFaults.beforeStateWrite = before;
+  expect(lifecycleFaults.beforeStateWrite).toBe(before);
+  delete lifecycleFaults.beforeStateWrite;
+  expect(lifecycleFaults.beforeArtifactDelete).toBeUndefined();
 });
 
 test('doctor accepts the deployment mount in the shipped operator overlay and rejects missing mounts', async () => {
@@ -878,5 +975,157 @@ test('fails closed on malformed or empty manifests', () => {
     expect(() => assertSupportedArchitecture(manifest as never, 'amd64')).toThrow(
       'no recognizable architecture list',
     );
+  }
+});
+
+test('this bridge release writes schema 1 while reading both formats', () => {
+  expect(writeStateSchema()).toBe(1);
+  const env = buildEnv({ mode: 'local', version: '0.1.12', directory: '/tmp/or3-schema-bridge', email: 'admin@example.com', password: 'AValidPassword123', port: 3000 });
+  expect(stateFromEnv('/tmp/or3-schema-bridge', env, 'local', 'init', `sha256:${'a'.repeat(64)}`).schemaVersion).toBe(1);
+});
+
+test('a bridge writer refuses to mutate newer-schema state', () => {
+  const env = buildEnv({ mode: 'local', version: '0.1.12', directory: '/tmp/or3-schema-writable', email: 'admin@example.com', password: 'AValidPassword123', port: 3000 });
+  const state = stateFromEnv('/tmp/or3-schema-writable', env, 'local', 'init', `sha256:${'a'.repeat(64)}`);
+  expect(() => assertStateSchemaWritable(state)).not.toThrow();
+  expect(() => assertStateSchemaWritable({ ...state, schemaVersion: 2 })).toThrow('qualified to write schema 1');
+});
+
+test('status projection never exposes credential-reset secrets or raw configuration', () => {
+  const env = buildEnv({ mode: 'local', version: '0.1.12', directory: '/tmp/or3-projection', email: 'admin@example.com', password: 'OwnerSecretPassword123', port: 3000 });
+  const state = stateFromEnv('/tmp/or3-projection', env, 'local', 'init', `sha256:${'a'.repeat(64)}`);
+  state.incompleteOperation = {
+    id: 'credentials-reset-1', operation: 'credentials-reset', startedAt: new Date().toISOString(),
+    message: 'resetting', credentialReset: { nextEnv: { OR3_ADMIN_PASSWORD: 'AdminSecretPassword123', OR3_BASIC_AUTH_JWT_SECRET: 'jwt-secret-value', OR3_STORAGE_FS_TOKEN_SECRET: 'storage-secret' } },
+  };
+  state.lastError = 'OR3_ADMIN_PASSWORD=leaked-in-error';
+  const serialized = JSON.stringify(publicStateProjection(state));
+  expect(serialized).not.toContain('AdminSecretPassword123');
+  expect(serialized).not.toContain('jwt-secret-value');
+  expect(serialized).not.toContain('storage-secret');
+  expect(serialized).not.toContain('leaked-in-error');
+  expect(serialized).toContain('credentials-reset-1');
+  expect(serialized).toContain('credentials-reset');
+});
+
+test('lifecycle phase policy blocks start/restart but allows stop during a pending operation', () => {
+  const env = buildEnv({ mode: 'local', version: '0.1.12', directory: '/tmp/or3-phase-policy', email: 'admin@example.com', password: 'AValidPassword123', port: 3000 });
+  const clean = stateFromEnv('/tmp/or3-phase-policy', env, 'local', 'init', `sha256:${'a'.repeat(64)}`);
+  expect(() => assertPhaseAllowsCommand('start', clean)).not.toThrow();
+  const pending = { ...clean, incompleteOperation: { id: 'update-1', operation: 'update' as const, startedAt: new Date().toISOString(), message: 'x', phase: 'starting-target' as const } };
+  expect(() => assertPhaseAllowsCommand('start', pending)).toThrow('Refusing to start');
+  expect(() => assertPhaseAllowsCommand('restart', pending)).toThrow('Refusing to restart');
+  expect(() => assertPhaseAllowsCommand('stop', pending)).not.toThrow();
+});
+
+test('read-only invocation policy bypasses the mutation lease', () => {
+  expect(verifyIsReadOnly({ 'read-only': true })).toBe(true);
+  expect(verifyIsReadOnly({ public: true })).toBe(false);
+  expect(verifyIsReadOnly({})).toBe(false);
+});
+
+test('recovery decision distinguishes finish, resume, and explicit restore', () => {
+  const base = stateFromEnv('/tmp/or3-recovery-decision', buildEnv({
+    mode: 'local', version: '0.1.12', directory: '/tmp/or3-recovery-decision',
+    email: 'admin@example.com', password: 'AValidPassword123', port: 3000,
+  }), 'local', 'init', `sha256:${'a'.repeat(64)}`);
+  expect(decideRecoveryAction(base)).toEqual({ action: 'none', detail: expect.any(String) });
+
+  const prepared = { ...base, incompleteOperation: { id: 'update-1', operation: 'update' as const, startedAt: new Date().toISOString(), message: 'x', phase: 'prepared' as const } };
+  expect(decideRecoveryAction(prepared).action).toBe('resume');
+
+  const targetReady = {
+    ...base,
+    incompleteOperation: {
+      id: 'update-2', operation: 'update' as const, startedAt: new Date().toISOString(), message: 'x',
+      phase: 'target-ready' as const, targetVersion: '0.1.13', targetImage: 'ghcr.io/saluana/or3-chat:0.1.13', targetImageDigest: `sha256:${'b'.repeat(64)}`,
+      evidence: { checkedAt: new Date().toISOString(), deploymentId: 'd1', deploymentRoot: '/tmp/x', imageDigest: `sha256:${'b'.repeat(64)}`, configurationSha256: 'c'.repeat(64), managedAssetSha256: {}, dataReplacementCompleted: true as const, checks: [] },
+    },
+  };
+  expect(decideRecoveryAction(targetReady).action).toBe('finish');
+
+  const mutating = { ...base, incompleteOperation: { id: 'update-3', operation: 'update' as const, startedAt: new Date().toISOString(), message: 'x', phase: 'target-mutating' as const, backupId: 'backup-pre' } };
+  expect(decideRecoveryAction(mutating)).toMatchObject({ action: 'require-explicit-restore', snapshotId: 'backup-pre' });
+
+  // Legacy/partial journals without durable completion proof never finish,
+  // even when the phase name looks advanced.
+  const legacyTargetReady = { ...base, incompleteOperation: { id: 'update-4', operation: 'update' as const, startedAt: new Date().toISOString(), message: 'x', phase: 'target-ready' as const, backupId: 'backup-legacy' } };
+  expect(decideRecoveryAction(legacyTargetReady).action).toBe('require-explicit-restore');
+
+  // A completed commit whose privileged handoff is unfinished reconciles only
+  // the handoff.
+  const handoffPending = { ...base, lastReceipt: { ...base.lastReceipt!, operatorHandoff: 'pending' as const } };
+  expect(decideRecoveryAction(handoffPending).action).toBe('reconcile-handoff');
+  const handoffAttention = { ...base, lastReceipt: { ...base.lastReceipt!, operatorHandoff: 'needs-attention' as const } };
+  expect(decideRecoveryAction(handoffAttention).action).toBe('reconcile-handoff');
+  const handoffVerified = { ...base, lastReceipt: { ...base.lastReceipt!, operatorHandoff: 'verified' as const } };
+  expect(decideRecoveryAction(handoffVerified).action).toBe('none');
+});
+
+test('state fingerprint changes with identity and pending operation', () => {
+  const env = buildEnv({ mode: 'local', version: '0.1.12', directory: '/tmp/or3-fingerprint', email: 'admin@example.com', password: 'AValidPassword123', port: 3000 });
+  const state = stateFromEnv('/tmp/or3-fingerprint', env, 'local', 'init', `sha256:${'a'.repeat(64)}`);
+  const fingerprint = stateFingerprint(state);
+  expect(fingerprint).toMatch(/^[0-9a-f]{16}$/);
+  expect(stateFingerprint({ ...state })).toBe(fingerprint);
+  expect(stateFingerprint({ ...state, appVersion: '0.1.13' })).not.toBe(fingerprint);
+  expect(stateFingerprint({ ...state, incompleteOperation: { id: 'op', operation: 'update', startedAt: new Date().toISOString(), message: 'x' } })).not.toBe(fingerprint);
+});
+
+test('update assessment previews a settled deployment without mutation', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'or3-assess-'));
+  try {
+    const env = buildEnv({ mode: 'local', version: '0.1.12', directory, email: 'admin@example.com', password: 'AValidPassword123', port: 3000 });
+    await copyAssets(directory, 'local');
+    await mkdir(join(directory, '.or3-cloud', 'backups'), { recursive: true });
+    const state = stateFromEnv(directory, env, 'local', 'init', `sha256:${'a'.repeat(64)}`);
+    await writeFile(join(directory, '.env'), serializeEnv(env));
+    await writeFile(join(directory, '.or3-cloud', 'state.json'), JSON.stringify(state));
+    const before = await readFile(join(directory, '.or3-cloud', 'state.json'), 'utf8');
+
+    const assessment = await assessUpdate(directory, '0.1.13');
+    expect(assessment.source?.appVersion).toBe('0.1.12');
+    expect(assessment.target.appVersion).toBe('0.1.13');
+    expect(assessment.stateFingerprint).toMatch(/^[0-9a-f]{16}$/);
+    expect(assessment.checks.some((check) => check.code === 'image-pull' && check.status === 'deferred')).toBe(true);
+    expect(assessment.findings.filter((finding) => finding.severity === 'blocker')).toEqual([]);
+    expect(await readFile(join(directory, '.or3-cloud', 'state.json'), 'utf8')).toBe(before);
+    expect(await enumerateBackups(directory)).toEqual([]);
+
+    const blocked = await assessUpdate(directory, '0.1.12');
+    expect(blocked.checks.some((check) => check.code === 'already-installed' && check.status === 'passed')).toBe(true);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('shared update assessment blocks on a foreign lease but not the caller own lease', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'or3-assess-lease-'));
+  try {
+    const env = buildEnv({ mode: 'local', version: '0.1.12', directory, email: 'admin@example.com', password: 'AValidPassword123', port: 3000 });
+    await copyAssets(directory, 'local');
+    await mkdir(join(directory, '.or3-cloud', 'backups'), { recursive: true });
+    const state = stateFromEnv(directory, env, 'local', 'init', `sha256:${'a'.repeat(64)}`);
+    await writeFile(join(directory, '.env'), serializeEnv(env));
+    await writeFile(join(directory, '.or3-cloud', 'state.json'), JSON.stringify(state));
+    const leasePath = join(directory, '.or3-cloud', 'operation-lease');
+    await mkdir(leasePath, { recursive: true });
+    await writeFile(join(leasePath, 'owner.json'), JSON.stringify({
+      schemaVersion: 1,
+      nonce: 'test-lease',
+      command: 'update',
+      origin: 'cli',
+      pid: process.pid,
+      acquiredAt: new Date().toISOString(),
+      heartbeatAt: new Date().toISOString(),
+    }));
+
+    const foreign = await assessUpdate(directory, '0.1.13');
+    expect(foreign.findings.some((finding) => finding.code === 'operation-in-progress' && finding.severity === 'blocker')).toBe(true);
+
+    const own = await assessUpdate(directory, '0.1.13', { underLease: true });
+    expect(own.findings.some((finding) => finding.code === 'operation-in-progress' && finding.severity === 'blocker')).toBe(false);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 });

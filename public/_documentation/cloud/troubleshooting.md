@@ -445,6 +445,37 @@ plugins/
 - Check for errors in plugin initialization
 - Verify plugin is imported in nuxt.config.ts
 
+### Managed update or recovery is blocked
+
+**Symptoms:** `update` refuses because an incomplete operation is recorded, a
+cleanup warning appears after a successful update, or the Dashboard Update card
+says the operator needs host attention.
+
+**Diagnosis (read-only, never changes state):**
+
+```bash
+npx @or3/cloud status --json
+npx @or3/cloud doctor
+npx @or3/cloud verify --read-only
+npx @or3/cloud recover --dry-run
+npx @or3/cloud backup list
+```
+
+**Resolution:**
+- A completed replacement with a recorded target-ready milestone:
+  `npx @or3/cloud recover --finish` adopts the live target and keeps writes made
+  after replacement.
+- A deployment that may have replaced data without completion proof: nothing is
+  changed automatically. Review `recover --dry-run`, then choose explicitly with
+  `npx @or3/cloud recover --restore --yes` (this discards writes after the
+  recorded snapshot).
+- Cleanup warnings after a successful update are not deployment failures; the
+  app is upgraded. Run `npx @or3/cloud backup list` to inspect what was
+  preserved.
+- Never delete or edit `.or3-cloud/state.json`, the lease, or recovery files by
+  hand. If `status` reports a schema or digest mismatch, run `doctor` before any
+  mutation.
+
 ---
 
 ## Debugging Tips

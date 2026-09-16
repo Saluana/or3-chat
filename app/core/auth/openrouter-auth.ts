@@ -22,7 +22,7 @@
  * @see core/auth/useOpenrouter for the login flow initiator
  * @see shared/openrouter/errors for SDK error normalization
  */
-import { err, reportError, type ErrorCode } from '~/utils/errors';
+import { type ErrorCode } from '~/utils/errors';
 import {
     createOpenRouterClient,
     normalizeSDKError,
@@ -42,10 +42,21 @@ export interface ExchangeResultFail {
     ok: false;
     status: number;
     reason: 'network' | 'bad-response' | 'no-key';
+    /** App-level error code for the callback page to render once. */
+    errorCode?: ErrorCode;
+    /** Redacted SDK message; the callback page decides user-facing wording. */
+    errorMessage?: string;
 }
 
 /** Discriminated union returned by `exchangeOpenRouterCode`. */
 export type ExchangeResult = ExchangeResultSuccess | ExchangeResultFail;
+
+/**
+ * Bounded deadline for the one-shot PKCE exchange. The authorization code is
+ * single-use, so a retry cannot succeed and only delays showing the user a fresh
+ * authorization prompt.
+ */
+const OAUTH_EXCHANGE_TIMEOUT_MS = 15_000;
 
 export interface ExchangeParams {
     code: string;
@@ -112,23 +123,18 @@ export async function exchangeOpenRouterCode(
                 code: p.code,
                 codeVerifier: p.verifier,
                 codeChallengeMethod: p.codeMethod as 'S256' | 'plain',
-            })
+            }),
+            // The SDK otherwise retries connection errors and 5xx responses for
+            // up to an hour. An authorization code is single-use, so retries
+            // waste the user's time instead of recovering; fail fast and let the
+            // callback page offer a fresh authorization.
+            { retries: { strategy: 'none' }, timeoutMs: OAUTH_EXCHANGE_TIMEOUT_MS }
         );
 
         // SDK response contains { key: string }
         const userKey = response.key;
 
         if (!userKey) {
-            reportError(
-                err('ERR_AUTH', 'Auth exchange returned no key', {
-                    severity: 'error',
-                    tags: {
-                        domain: 'auth',
-                        stage: 'exchange',
-                    },
-                }),
-                { toast: true }
-            );
             return { ok: false, status: 200, reason: 'no-key' };
         }
 
@@ -140,19 +146,16 @@ export async function exchangeOpenRouterCode(
             return { ok: false, status: 0, reason: 'network' };
         }
 
-        reportError(
-            err(mapToErrorCode(normalized.code), normalized.message, {
-                severity: 'error',
-                tags: {
-                    domain: 'auth',
-                    stage: 'exchange',
-                    attempt: p.attempt || 1,
-                },
-                retryable: normalized.retryable,
-            }),
-            { toast: true }
-        );
-
-        return { ok: false, status: normalized.status, reason: 'bad-response' };
+        // The callback page is the single UI layer that owns error display. It
+        // needs the mapped code to choose guidance (for example a confirmed CSP
+        // violation versus an unclassified network failure) without a second
+        // toast being emitted here.
+        return {
+            ok: false,
+            status: normalized.status,
+            reason: 'bad-response',
+            errorCode: mapToErrorCode(normalized.code),
+            errorMessage: normalized.message,
+        };
     }
 }

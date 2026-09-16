@@ -32,10 +32,11 @@ import { createGunzip } from 'node:zlib';
 const execFile = promisify(execFileCallback);
 const PACKAGE_ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
 
-export const PACKAGE_VERSION = '0.1.67';
+export const PACKAGE_VERSION = '0.1.68';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
-const STATE_SCHEMA_VERSION = 1;
+/** Schema this bridge release writes by default; schema 2 is opt-in metadata. */
+const LEGACY_STATE_SCHEMA_VERSION = 1;
 const DEFAULT_PORT = 3000;
 const DEEP_HEALTH_TIMEOUT_MS = 180_000;
 const COMMAND_TIMEOUT_MS = 180_000;
@@ -97,7 +98,7 @@ type DashboardOperatorEnv = {
 };
 
 export type ManagedState = {
-  schemaVersion: 1;
+  schemaVersion: StateSchemaVersion;
   mode: Mode;
   composeProject: string;
   volumeName: string;
@@ -115,6 +116,8 @@ export type ManagedState = {
   lastSuccessfulOperation: Operation;
   updatedAt: string;
   rollback?: RollbackPoint;
+  /** Bounded latest terminal receipt; regenerable from terminal state. */
+  lastReceipt?: OperationReceipt;
   incompleteOperation?: {
     id: string;
     operation: Operation | 'backup' | 'rollback';
@@ -131,7 +134,10 @@ export type ManagedState = {
     /** Verified pre-mutation snapshot used to restore a failed restore/rollback. */
     previousBackupId?: string;
     previousBackupPath?: string;
-    phase?: 'prepared' | 'snapshot-created' | 'target-mutating' | 'restoring-previous' | 'starting-target' | 'starting-previous';
+    phase?: 'prepared' | 'snapshot-created' | 'target-mutating' | 'target-ready' | 'restoring-previous' | 'starting-target' | 'starting-previous';
+    /** Durable proof of a completed replacement boundary for schema-2 updates. */
+    evidence?: TargetReadyEvidence;
+    verifiedSnapshot?: VerifiedSnapshot;
     previousRootOwnership?: { uid: number; gid: number };
     /** A legacy unlabeled volume must be recreated from its verified snapshot. */
     recreateDataVolume?: boolean;
@@ -203,6 +209,180 @@ type CommandResult = {
   command: string;
   exitCode: number | null;
 };
+
+/**
+ * Operation, diagnostic, receipt, and compatibility contracts.
+ *
+ * Terminal outcomes are deliberately distinct from per-check or maintenance
+ * status: a completed deployment can still carry cleanup warnings, and a
+ * deferred check is not a passed one. Update phases that require durable
+ * evidence carry it explicitly so a crash cannot be inferred as completion.
+ */
+export type ReleaseIdentity = {
+  appVersion: string;
+  image: string;
+  imageDigest: string;
+  sourceRevision?: string;
+  operatorImageDigest?: string;
+};
+
+export type CheckResult = {
+  code: string;
+  status: 'passed' | 'failed' | 'deferred' | 'unknown';
+  detail: string;
+};
+
+export type DiagnosticSeverity = 'blocker' | 'warning' | 'info';
+
+export type Diagnostic = {
+  code: string;
+  severity: DiagnosticSeverity;
+  resource?: string;
+  message: string;
+  nextCommand?: string;
+};
+
+export type OperationReceipt = {
+  schemaVersion: 1;
+  operationId: string;
+  /** Dashboard job that owns an operator handoff, when one is required. */
+  dashboardJobId?: string;
+  cliVersion: string;
+  source: ReleaseIdentity;
+  target: ReleaseIdentity;
+  observed: ReleaseIdentity;
+  completedAt: string;
+  rollbackBackupId: string;
+  checks: CheckResult[];
+  warnings: Diagnostic[];
+  phaseDurationsMs: Record<string, number>;
+  operatorHandoff: 'not-required' | 'verified' | 'pending' | 'needs-attention';
+};
+
+export type OperationOutcome =
+  | { kind: 'blocked'; findings: Diagnostic[] }
+  | { kind: 'completed'; receipt: OperationReceipt }
+  | { kind: 'completed-with-warnings'; receipt: OperationReceipt; warnings: Diagnostic[] }
+  | { kind: 'restored'; receipt: OperationReceipt; cause: Diagnostic }
+  | { kind: 'needs-recovery'; operationId: string; findings: Diagnostic[] }
+  | { kind: 'no-op'; detail: string; currentVersion?: string; targetVersion?: string }
+  | { kind: 'recovered'; operation: string; detail: string };
+
+/** Serializes exactly one machine-readable operation result to stdout. */
+function emitOperationResult(outcome: OperationOutcome) {
+  console.log(JSON.stringify({ schemaVersion: 1, kind: 'or3-operation-result', outcome }, null, 2));
+}
+
+export type VerifiedSnapshot = {
+  backupId: string;
+  path: string;
+  dataSha256: string;
+  configSha256: string;
+  createdAt: string;
+};
+
+export type TargetReadyEvidence = {
+  checkedAt: string;
+  deploymentId: string;
+  deploymentRoot: string;
+  /** Observed application container id bound to this replacement. */
+  containerId?: string;
+  imageDigest: string;
+  configurationSha256: string;
+  managedAssetSha256: Record<string, string>;
+  dataReplacementCompleted: true;
+  checks: CheckResult[];
+};
+
+type UpdateJournalV2 = {
+  schemaVersion: 2;
+  id: string;
+  operation: 'update';
+  startedAt: string;
+  origin: 'cli' | 'dashboard';
+  dashboardJobId?: string;
+  source: ReleaseIdentity;
+  target: ReleaseIdentity;
+  backupId: string;
+  backupPath: string;
+  phase: 'prepared' | 'snapshot-created' | 'target-mutating' | 'target-ready' | 'restoring-previous';
+  snapshot?: VerifiedSnapshot;
+  evidence?: TargetReadyEvidence;
+};
+
+export type BackupEntry =
+  | { kind: 'verified'; backup: BackupListing }
+  | {
+      kind: 'legacy-unsigned' | 'legacy-adoption' | 'unsupported' | 'invalid' | 'unreadable';
+      entryName: string;
+      code: string;
+      message: string;
+    };
+
+export type BackupInventory = {
+  entries: BackupEntry[];
+  storeErrors: Diagnostic[];
+};
+
+export type RetentionPlan = {
+  keep: string[];
+  remove: string[];
+  preserve: Array<{ entryName: string; reason: string }>;
+  warnings: Diagnostic[];
+  canPrune: boolean;
+};
+
+export type UpdateAssessment = {
+  schemaVersion: 1;
+  observedAt: string;
+  source: ReleaseIdentity | null;
+  target: ReleaseIdentity;
+  checks: CheckResult[];
+  findings: Diagnostic[];
+  retention: RetentionPlan;
+  stateFingerprint: string;
+};
+
+/**
+ * Compatibility transition table (R13.AC1): for each persisted state schema,
+ * which readers may observe it and which writer may mutate it. The bridge and
+ * schema-2 readers recognize both formats; unknown future schemas are refused
+ * before any mutation.
+ */
+export const STATE_SCHEMA_COMPATIBILITY = {
+  1: { readers: ['bridge', 'schema-2'], writer: 'migrating', mutable: false },
+  2: { readers: ['bridge', 'schema-2'], writer: 'schema-2', mutable: true },
+} as const;
+
+export const MAX_SUPPORTED_STATE_SCHEMA = 2;
+export const READER_SUPPORTED_STATE_SCHEMAS = [1, 2] as const;
+
+export type StateSchemaVersion = 1 | 2;
+
+/** Fails closed before mutation when a future format is encountered. */
+export function assertKnownStateSchema(schemaVersion: unknown): asserts schemaVersion is StateSchemaVersion {
+  if (schemaVersion !== 1 && schemaVersion !== 2) {
+    throw new Error(
+      `Unsupported managed state schema ${String(schemaVersion)}. This CLI reads schemas 1 and 2. Run a compatible exact-version @or3/cloud CLI for this deployment instead of editing managed state.`,
+    );
+  }
+}
+
+/**
+ * Test-only lifecycle fault seams. Production logic always calls these slots,
+ * but a published CLI/flag cannot set them: tests import this module and assign
+ * a slot to exercise write/rename/fsync, delete, command, and handoff failures
+ * through the real transition code.
+ */
+export const lifecycleFaults: {
+  beforeStateWrite?: () => void | Promise<void>;
+  afterStateWrite?: () => void | Promise<void>;
+  beforeMirrorDelete?: () => void | Promise<void>;
+  beforeArchiveRead?: () => void | Promise<void>;
+  beforeArtifactDelete?: () => void | Promise<void>;
+  beforeCommand?: (command: string, args: string[]) => void | Promise<void>;
+  beforeHandoff?: () => void | Promise<void>;
+} = {};
 
 const PROCESS_ENV_PASSTHROUGH = [
   'PATH',
@@ -352,22 +532,31 @@ export function parseFlags(argv: string[]) {
 
 const COMMAND_FLAGS: Record<string, readonly string[]> = {
   init: ['local', 'public', 'domain', 'admin-email', 'admin-password', 'admin-password-file', 'port'],
-  update: ['to'],
-  backup: ['keep', 'force', 'yes'],
+  update: ['to', 'dry-run', 'json'],
+  backup: ['keep', 'force', 'yes', 'json'],
   restore: ['yes'],
   rollback: ['yes'],
   doctor: [],
-  verify: ['public', 'verification-email', 'verification-password-file'],
-  recover: [],
+  verify: ['public', 'verification-email', 'verification-password-file', 'read-only', 'json'],
+  recover: ['dry-run', 'finish', 'restore', 'yes', 'json'],
   adopt: ['from'],
   credentials: ['yes', 'owner-password', 'owner-password-file', 'admin-password', 'admin-password-file'],
-  status: [],
+  status: ['json'],
   logs: ['tail'],
   start: [],
   stop: [],
   restart: [],
   remove: ['purge-data', 'yes'],
 };
+
+/**
+ * Explicit command mutation policy (R4.AC4). Read-only invocation bypasses the
+ * deployment lease entirely; full verification and every other mutation keep
+ * the existing single-writer lease and pending-operation gate.
+ */
+export function verifyIsReadOnly(flags: Flags) {
+  return flags['read-only'] === true;
+}
 
 /** Reject typos before they can silently produce an unexpected deployment. */
 export function assertCommandFlags(command: string, flags: Flags) {
@@ -415,6 +604,16 @@ function requireStringFlag(flags: Flags, key: string) {
 
 export function isVersion(value: string) {
   return /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(value);
+}
+
+/** Compares two release versions by major.minor.patch (prerelease ignored). */
+export function compareReleaseVersions(left: string, right: string) {
+  const leftParts = left.split('-', 1)[0].split('.').map(Number);
+  const rightParts = right.split('-', 1)[0].split('.').map(Number);
+  for (let index = 0; index < 3; index += 1) {
+    if (leftParts[index] !== rightParts[index]) return leftParts[index] > rightParts[index] ? 1 : -1;
+  }
+  return 0;
 }
 
 function imageFor(version: string) {
@@ -498,6 +697,7 @@ function commandEnvironment(command: string, args: string[], cwd?: string, suppl
 
 async function run(command: string, args: string[], cwd?: string, environment?: NodeJS.ProcessEnv): Promise<CommandResult> {
   const printable = `${command} ${args.map(quote).join(' ')}`;
+  await lifecycleFaults.beforeCommand?.(command, args);
   try {
     const result = await execFile(command, args, {
       cwd,
@@ -660,6 +860,7 @@ function deploymentPaths(directory: string) {
     operations: join(cloud, 'operations'),
     backups: join(cloud, 'backups'),
     exports: join(cloud, 'exports'),
+    lastOperation: join(cloud, 'last-operation.json'),
     lease: join(cloud, 'operation-lease'),
     backupAuthKey: join(cloud, 'backup-auth.key'),
     operatorIpc: join(cloud, 'operator-ipc'),
@@ -713,14 +914,17 @@ async function assertBackupAuthentication(directory: string, backupPath: string,
 async function readState(directory: string): Promise<ManagedState> {
   const paths = deploymentPaths(directory);
   const parsed = JSON.parse(await readText(paths.state)) as Partial<ManagedState>;
-  if (parsed.schemaVersion !== STATE_SCHEMA_VERSION || !parsed.appVersion || !parsed.image || !parsed.composeProject) {
+  assertKnownStateSchema(parsed.schemaVersion);
+  if (!parsed.appVersion || !parsed.image || !parsed.composeProject || !parsed.mode) {
     throw new Error(`Invalid managed state at ${paths.state}. Run "npx @or3/cloud doctor" for diagnostics.`);
   }
   return parsed as ManagedState;
 }
 
 async function writeState(directory: string, state: ManagedState) {
+  await lifecycleFaults.beforeStateWrite?.();
   await writeSecure(deploymentPaths(directory).state, `${JSON.stringify(state, null, 2)}\n`);
+  await lifecycleFaults.afterStateWrite?.();
 }
 
 async function readDirectoryEmpty(directory: string) {
@@ -1090,8 +1294,10 @@ function containerNodeCommand(script: string) {
 }
 
 async function waitForDeepHealthWithArgs(composeCommand: string[], directory: string, secrets: string[] = []) {
-  const deadline = Date.now() + DEEP_HEALTH_TIMEOUT_MS;
+  const startedAt = Date.now();
+  const deadline = startedAt + DEEP_HEALTH_TIMEOUT_MS;
   let lastError = 'health check did not complete';
+  let lastProgressAt = startedAt;
   while (Date.now() < deadline) {
     const result = await run('docker', [
       ...composeCommand,
@@ -1099,6 +1305,11 @@ async function waitForDeepHealthWithArgs(composeCommand: string[], directory: st
     ], directory);
     if (result.ok) return;
     lastError = redact(result.stderr, secrets);
+    // Bounded waits must still surface progress every 15 seconds.
+    if (Date.now() - lastProgressAt >= 15_000) {
+      console.error(`Waiting for OR3 deep health (${Math.round((Date.now() - startedAt) / 1000)}s elapsed)…`);
+      lastProgressAt = Date.now();
+    }
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 1000));
   }
   throw new Error(`OR3 deep health did not pass within ${DEEP_HEALTH_TIMEOUT_MS / 1000} seconds. Last error: ${lastError}`);
@@ -1292,6 +1503,39 @@ function packagedSourceRevision(version: string) {
     throw new Error('This @or3/cloud package contains an invalid source revision. Refusing to run an unbound release image.');
   }
   return revision;
+}
+
+type PackagedOr3CloudMetadata = {
+  stateSchema?: unknown;
+  dashboardUpdateMinimumSourceVersion?: unknown;
+};
+
+function packagedOr3CloudMetadata(): PackagedOr3CloudMetadata {
+  try {
+    const manifest = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')) as { or3Cloud?: PackagedOr3CloudMetadata };
+    return manifest.or3Cloud ?? {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Persisted state schema this CLI is qualified to write. A release that only
+ * reads schema 2 keeps writing schema 1 (the compatibility bridge); a release
+ * explicitly qualified to write the new recovery journal sets
+ * `or3Cloud.stateSchema` to 2. Migration to schema 2 is refused below.
+ */
+export function writeStateSchema(): StateSchemaVersion {
+  const value = packagedOr3CloudMetadata().stateSchema;
+  if (value === undefined) return LEGACY_STATE_SCHEMA_VERSION;
+  if (value === 1 || value === 2) return value;
+  throw new Error('This @or3/cloud package declares an unsupported managed state schema. Refusing to write managed state.');
+}
+
+/** Bridge version a schema-2 writer requires before migrating a schema-1 deployment. */
+export function packagedMinimumSourceVersion(): string | undefined {
+  const value = packagedOr3CloudMetadata().dashboardUpdateMinimumSourceVersion;
+  return typeof value === 'string' && /^\d+\.\d+\.\d+$/.test(value) ? value : undefined;
 }
 
 function expectedImageDigest(version: string) {
@@ -1637,9 +1881,10 @@ export function dashboardOperatorHandoffArgs(
   ];
 }
 
-async function scheduleDashboardOperatorHandoff(directory: string, env: Record<string, string>) {
-  const jobId = process.env.OR3_DASHBOARD_UPDATE_JOB_ID?.trim();
+async function scheduleDashboardOperatorHandoff(directory: string, env: Record<string, string>, jobIdOverride?: string) {
+  const jobId = jobIdOverride ?? process.env.OR3_DASHBOARD_UPDATE_JOB_ID?.trim();
   if (!jobId || env.OR3_DASHBOARD_UPDATES_ENABLED !== 'true') return;
+  await lifecycleFaults.beforeHandoff?.();
   const scheduled = await run('docker', dashboardOperatorHandoffArgs(directory, env, jobId), directory);
   if (!scheduled.ok || !/^[0-9a-f]{12,64}$/i.test(scheduled.stdout.trim())) {
     throw new Error(`Could not schedule the dashboard operator handoff. ${scheduled.stderr.trim()}`);
@@ -1853,6 +2098,16 @@ export async function copyAssets(directory: string, mode: Mode) {
   await installManagedAssets(directory, assets);
 }
 
+/** Checksums of the managed assets currently installed in the deployment. */
+export async function installedManagedAssetChecksums(directory: string, mode: Mode) {
+  const checksums: Record<string, string> = {};
+  for (const name of managedAssetNames(mode)) {
+    if (!await fileExists(join(directory, name))) continue;
+    checksums[name] = await sha256File(join(directory, name));
+  }
+  return checksums;
+}
+
 export async function snapshotManagedAssets(directory: string, mode: Mode, backupDir: string) {
   const assetDir = join(backupDir, 'managed-assets');
   await mkdir(assetDir, { recursive: true, mode: 0o700 });
@@ -1951,15 +2206,94 @@ async function updatePending(directory: string, state: ManagedState, patch: Part
 
 async function removeOperationRecord(directory: string, operationId?: string) {
   if (!operationId) return;
+  await lifecycleFaults.beforeMirrorDelete?.();
   await rm(join(deploymentPaths(directory).operations, `${operationId}.json`), { force: true });
 }
 
-async function clearPending(directory: string, state: ManagedState) {
+/**
+ * Housekeeping mirror deletion after a terminal commit. A failure here must
+ * only warn: the authoritative state is already committed, and throwing would
+ * let an enclosing destructive-recovery handler undo the completed operation.
+ */
+async function removeOperationRecordSafely(directory: string, operationId?: string) {
+  try {
+    await removeOperationRecord(directory, operationId);
+  } catch (error) {
+    console.warn(`Could not remove the redundant operation mirror ${operationId ?? '(none)'}: ${redact(error instanceof Error ? error.message : String(error))}`);
+  }
+}
+
+/**
+ * Commits a terminal state write before touching the redundant operation
+ * mirror. The state file is the single authority: if the mirror delete fails
+ * or the process dies afterwards, the deployment is already complete and a
+ * leftover mirror is removable housekeeping rather than a pending operation.
+ *
+ * Returns the operation ID whose mirror (if any) still needs removal so callers
+ * can treat a failed delete as completed-with-warnings.
+ */
+async function commitTerminalState(
+  directory: string,
+  state: ManagedState,
+  receipt?: OperationReceipt,
+): Promise<{ committed: true; operationId?: string }> {
   const operationId = state.incompleteOperation?.id;
   delete state.incompleteOperation;
+  if (receipt) state.lastReceipt = receipt;
   state.updatedAt = now();
-  await removeOperationRecord(directory, operationId);
   await writeState(directory, state);
+  if (receipt) {
+    // A convenience mirror, not a second transaction authority. Export failure
+    // must never invalidate a durable deployment commit.
+    try {
+      await exportTerminalReceipt(directory, receipt);
+    } catch (error) {
+      console.warn(`Could not export the latest operation receipt: ${redact(error instanceof Error ? error.message : String(error))}`);
+    }
+  }
+  return { committed: true, operationId };
+}
+
+/**
+ * Writes the latest bounded terminal receipt to `.or3-cloud/last-operation.json`
+ * (mode 0600). The receipt schema deliberately contains no secrets,
+ * credentials, raw configuration, or log contents.
+ */
+async function exportTerminalReceipt(directory: string, receipt: OperationReceipt) {
+  const payload = `${JSON.stringify(receipt, null, 2)}\n`;
+  await writeSecure(deploymentPaths(directory).lastOperation, payload);
+}
+
+/**
+ * Persists post-commit maintenance warnings (for example a failed mirror
+ * delete or deferred retention) into the already-committed receipt. The
+ * authoritative state is terminal, so this only updates `lastReceipt.warnings`
+ * and never recreates a pending operation. A failure warns rather than throwing:
+ * the deployment is already complete and the warnings are advisory.
+ */
+async function persistReceiptWarnings(directory: string, state: ManagedState, warnings: Diagnostic[]) {
+  if (warnings.length === 0 || !state.lastReceipt) return;
+  const existing = state.lastReceipt.warnings;
+  const additions = warnings.filter((warning) => !existing.some((current) => current.code === warning.code && current.message === warning.message));
+  if (additions.length === 0) return;
+  const merged: OperationReceipt = { ...state.lastReceipt, warnings: [...existing, ...additions] };
+  try {
+    if (state.incompleteOperation) return;
+    state.lastReceipt = merged;
+    state.updatedAt = now();
+    await writeState(directory, state);
+    await exportTerminalReceipt(directory, merged).catch((error) => {
+      console.warn(`Could not re-export the operation receipt: ${redact(error instanceof Error ? error.message : String(error))}`);
+    });
+  } catch (error) {
+    console.warn(`Could not persist maintenance warnings to the receipt: ${redact(error instanceof Error ? error.message : String(error))}`);
+  }
+}
+
+/** Convenience wrapper: commit terminal state, then warning-only mirror cleanup. */
+async function clearPending(directory: string, state: ManagedState, receipt?: OperationReceipt) {
+  const { operationId } = await commitTerminalState(directory, state, receipt);
+  await removeOperationRecordSafely(directory, operationId);
 }
 
 async function stopProject(directory: string, mode: Mode) {
@@ -2040,6 +2374,7 @@ export function assertRemovableArtifactName(name: string) {
  * resolved path must sit directly inside the backups root.
  */
 async function removeNamedBackupArtifact(directory: string, backupId: string) {
+  await lifecycleFaults.beforeArtifactDelete?.();
   assertRemovableArtifactName(backupId);
   const target = backupDirectory(directory, backupId);
   if (dirname(target) !== deploymentPaths(directory).backups) {
@@ -2050,6 +2385,7 @@ async function removeNamedBackupArtifact(directory: string, backupId: string) {
 }
 
 async function removeEnumeratedBackupArtifact(directory: string, backup: BackupListing) {
+  await lifecycleFaults.beforeArtifactDelete?.();
   const backupsRoot = resolve(deploymentPaths(directory).backups);
   const target = resolve(backup.path);
   if (
@@ -2072,65 +2408,182 @@ type BackupListing = {
   dataSha256: string;
 };
 
-/** Enumerates only fully verified backups; retention must never make policy from corrupt metadata. */
-export async function enumerateBackups(directory: string): Promise<BackupListing[]> {
-  const backupsRoot = deploymentPaths(directory).backups;
-  let entries: string[] = [];
-  try {
-    entries = await readdir(backupsRoot);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
-    throw new Error(`Could not enumerate managed backups at ${backupsRoot}: ${error instanceof Error ? error.message : String(error)}`);
+function classifyBackupError(error: unknown): { code: string; message: string } {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/authentication failed|no valid deployment authentication tag|invalid authentication tag/i.test(message)) {
+    return { code: 'backup-authentication-failed', message };
   }
-  const result: BackupListing[] = [];
-  for (const entry of entries) {
-    // Older adopters stored source archives outside the authenticated backup
-    // format. Preserve those directories without trusting or pruning them.
-    if (/^adopt-source-[0-9A-Za-z-]+$/.test(entry) && (await lstat(join(backupsRoot, entry))).isDirectory()) {
-      continue;
+  if (/checksum mismatch/i.test(message)) return { code: 'backup-checksum-mismatch', message };
+  if (/invalid managed asset inventory|managed asset checksum mismatch/i.test(message)) {
+    return { code: 'backup-assets-invalid', message };
+  }
+  if (/Invalid backup manifest/i.test(message)) return { code: 'backup-manifest-invalid', message };
+  if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return { code: 'backup-entry-incomplete', message };
+  return { code: 'backup-entry-invalid', message };
+}
+
+type BackupEntryInspection = BackupEntry;
+
+/**
+ * Classifies one direct backup-store entry. Uses `lstat` so a symlink is never
+ * followed; metadata reads are bounded to the six expected files. Missing
+ * authentication is legacy (preserved), while unreadable/malformed/invalid
+ * authentication is reported as invalid rather than aborting the scan.
+ */
+async function inspectBackupEntry(backupsRoot: string, entry: string, directory: string): Promise<BackupEntryInspection> {
+  const path = join(backupsRoot, entry);
+  let info;
+  try {
+    info = await lstat(path);
+  } catch (error) {
+    return { kind: 'unreadable', entryName: entry, ...classifyBackupError(error) };
+  }
+  if (info.isSymbolicLink() || !info.isDirectory()) {
+    return {
+      kind: 'invalid',
+      entryName: entry,
+      code: 'backup-entry-not-directory',
+      message: `Backup store entry ${entry} is not a regular directory; symlinks and non-directories are never trusted.`,
+    };
+  }
+  // Older adopters stored source archives outside the authenticated format.
+  if (/^adopt-source-[0-9A-Za-z-]+$/.test(entry)) {
+    return {
+      kind: 'legacy-adoption',
+      entryName: entry,
+      code: 'backup-legacy-adoption',
+      message: `Preserved legacy adoption source ${entry}; it is not an authenticated managed backup.`,
+    };
+  }
+  if (!BACKUP_ID_PATTERN.test(entry)) {
+    return {
+      kind: 'invalid',
+      entryName: entry,
+      code: 'backup-entry-unexpected',
+      message: `Backup store contains an unexpected artifact ${path}; inspect or remove it explicitly.`,
+    };
+  }
+  try {
+    await lstat(join(path, 'manifest.auth'));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return {
+        kind: 'legacy-unsigned',
+        entryName: entry,
+        code: 'backup-unsigned',
+        message: `Preserved unauthenticated backup ${entry} (no manifest.auth); never trusted for restore.`,
+      };
     }
-    if (!BACKUP_ID_PATTERN.test(entry)) {
-      throw new Error(`Backup store contains an unexpected artifact ${join(backupsRoot, entry)}. Refusing to use it for retention; inspect or remove it explicitly.`);
+    return { kind: 'unreadable', entryName: entry, ...classifyBackupError(error) };
+  }
+  try {
+    const raw = JSON.parse(await readText(join(path, 'manifest.json'))) as { schemaVersion?: unknown };
+    if (typeof raw.schemaVersion === 'number' && raw.schemaVersion > 1) {
+      return {
+        kind: 'unsupported',
+        entryName: entry,
+        code: 'backup-format-unsupported',
+        message: `Backup ${entry} uses manifest schema ${raw.schemaVersion}; preserved for a newer reader.`,
+      };
     }
-    const path = join(backupsRoot, entry);
-    // Pre-authentication releases produced backup-* directories without a
-    // tag. Preserve them outside retention; never bless them for restore.
-    // Only absence is legacy: unreadable, malformed, or invalid tags still fail.
-    try {
-      await lstat(join(path, 'manifest.auth'));
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      console.warn(`Preserving unauthenticated backup ${entry}: no manifest.auth; excluded from managed backup listing and retention.`);
-      continue;
-    }
+  } catch (error) {
+    return { kind: 'invalid', entryName: entry, ...classifyBackupError(error) };
+  }
+  try {
     const manifest = await readManifest(path, directory);
     if (manifest.backupId !== entry) {
-      throw new Error(`Backup directory ${path} does not match manifest ID ${manifest.backupId}. Refusing to use it for retention.`);
+      return {
+        kind: 'invalid',
+        entryName: entry,
+        code: 'backup-id-mismatch',
+        message: `Backup directory ${path} does not match manifest ID ${manifest.backupId}.`,
+      };
     }
     if (!Number.isFinite(Date.parse(manifest.createdAt))) {
-      throw new Error(`Backup ${manifest.backupId} has an invalid creation time.`);
+      return {
+        kind: 'invalid',
+        entryName: entry,
+        code: 'backup-created-at-invalid',
+        message: `Backup ${manifest.backupId} has an invalid creation time.`,
+      };
     }
     let bytes = 0;
     for (const file of ['data.tgz', 'config.env', 'manifest.json', 'manifest.auth']) {
-      bytes += (await stat(join(path, file))).size;
+      bytes += (await lstat(join(path, file))).size;
     }
-    result.push({
-      backupId: manifest.backupId,
-      createdAt: manifest.createdAt,
-      appVersion: manifest.appVersion,
-      path,
-      bytes,
-      dataSha256: manifest.dataSha256,
-    });
+    return {
+      kind: 'verified',
+      backup: {
+        backupId: manifest.backupId,
+        createdAt: manifest.createdAt,
+        appVersion: manifest.appVersion,
+        path,
+        bytes,
+        dataSha256: manifest.dataSha256,
+      },
+    };
+  } catch (error) {
+    return { kind: 'invalid', entryName: entry, ...classifyBackupError(error) };
   }
-  result.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-  return result;
+}
+
+const BACKUP_ENTRY_SEVERITY: Record<BackupEntry['kind'], number> = {
+  verified: 0,
+  'legacy-unsigned': 1,
+  'legacy-adoption': 2,
+  unsupported: 3,
+  invalid: 4,
+  unreadable: 5,
+};
+
+/**
+ * Observations of the whole backup store: one classification per direct entry,
+ * in deterministic severity/name order, plus any store-level diagnostic. It is
+ * never authority to restore or delete; authentication still gates trust.
+ */
+export async function inventoryBackups(directory: string): Promise<BackupInventory> {
+  const backupsRoot = deploymentPaths(directory).backups;
+  let names: string[];
+  try {
+    names = await readdir(backupsRoot);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { entries: [], storeErrors: [] };
+    return {
+      entries: [],
+      storeErrors: [{
+        code: 'backup-store-unreadable',
+        severity: 'blocker',
+        resource: backupsRoot,
+        message: `Could not enumerate managed backups at ${backupsRoot}: ${error instanceof Error ? error.message : String(error)}`,
+      }],
+    };
+  }
+  const entries: BackupEntry[] = [];
+  for (const name of [...names].sort()) entries.push(await inspectBackupEntry(backupsRoot, name, directory));
+  entries.sort((a, b) => {
+    const severity = BACKUP_ENTRY_SEVERITY[a.kind] - BACKUP_ENTRY_SEVERITY[b.kind];
+    if (severity !== 0) return severity;
+    const aName = a.kind === 'verified' ? a.backup.backupId : a.entryName;
+    const bName = b.kind === 'verified' ? b.backup.backupId : b.entryName;
+    return aName < bName ? -1 : aName > bName ? 1 : 0;
+  });
+  return { entries, storeErrors: [] };
+}
+
+/** Enumerates only fully verified backups (newest first) for restore/listing. */
+export async function enumerateBackups(directory: string): Promise<BackupListing[]> {
+  const inventory = await inventoryBackups(directory);
+  return inventory.entries
+    .filter((entry): entry is { kind: 'verified'; backup: BackupListing } => entry.kind === 'verified')
+    .map((entry) => entry.backup)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
 }
 
 /**
- * Pure retention rule: keeps the newest `keep` backups. Backups referenced by
- * the rollback point or an incomplete operation are never pruned unless
- * `force` is set. Returns the IDs to delete (newest first).
+ * Pure retention rule: keeps the newest `keep` verified backups. Backups
+ * referenced by the rollback point, an update, or a restore/rollback are never
+ * removed. This helper keeps the legacy force-override only for its original
+ * unit contract; `planRetention` is the production planner.
  */
 export function selectPruneTargets(
   backups: Array<{ backupId: string; createdAt: string }>,
@@ -2144,6 +2597,52 @@ export function selectPruneTargets(
   return deletable.slice(keep).map((backup) => backup.backupId);
 }
 
+/**
+ * Separated retention decision. No force path can override protected IDs
+ * (rollback point, update snapshot, or a pending restore/rollback source).
+ * Suspect or legacy entries are preserved; automatic pruning is deferred when
+ * any entry is invalid/unreadable/unsupported, but a fresh authenticated
+ * snapshot and update are never blocked by an unrelated suspect entry.
+ */
+export function planRetention(
+  entries: BackupEntry[],
+  keep: number,
+  protectedIds: ReadonlySet<string>,
+  options: { automatic?: boolean } = {},
+): RetentionPlan {
+  if (!Number.isInteger(keep) || keep < 1) throw new Error('Backup retention must be an integer of at least 1.');
+  const automatic = options.automatic ?? true;
+  const warnings: Diagnostic[] = [];
+  const preserve: Array<{ entryName: string; reason: string }> = [];
+  let canPrune = true;
+  for (const entry of entries) {
+    if (entry.kind === 'verified') continue;
+    preserve.push({ entryName: entry.entryName, reason: entry.message });
+    if (entry.kind === 'legacy-unsigned' || entry.kind === 'legacy-adoption') continue;
+    warnings.push({
+      code: entry.code,
+      severity: entry.kind === 'unreadable' ? 'blocker' : 'warning',
+      resource: entry.entryName,
+      message: entry.message,
+    });
+    if (automatic) canPrune = false;
+  }
+  const verified = entries
+    .filter((entry): entry is { kind: 'verified'; backup: BackupListing } => entry.kind === 'verified')
+    .map((entry) => entry.backup)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+  const removable = verified.filter((backup) => !protectedIds.has(backup.backupId));
+  const remove = removable.slice(keep).map((backup) => backup.backupId);
+  const removeSet = new Set(remove);
+  return {
+    keep: verified.filter((backup) => !removeSet.has(backup.backupId)).map((backup) => backup.backupId),
+    remove,
+    preserve,
+    warnings,
+    canPrune,
+  };
+}
+
 function parseKeep(flags: Flags) {
   const value = stringFlag(flags, 'keep') ?? String(BACKUP_RETENTION_KEEP);
   const keep = Number(value);
@@ -2151,27 +2650,69 @@ function parseKeep(flags: Flags) {
   return keep;
 }
 
-/**
- * Enforces bounded backup retention. Protected backups (the recorded rollback
- * point and any incomplete-operation backup) are exempt unless `force` is
- * passed. Prints each deleted backup id and path.
- */
-async function pruneBackups(directory: string, state: ManagedState, keep: number, force: boolean) {
-  const backups = await enumerateBackups(directory);
+type PruneResult = { removed: number; deferred: Diagnostic[] };
+
+function retentionProtectedIds(state: ManagedState) {
   const protectedIds = new Set<string>();
   if (state.rollback?.backupId) protectedIds.add(state.rollback.backupId);
-  if (state.incompleteOperation?.backupId) protectedIds.add(state.incompleteOperation.backupId);
-  const targets = selectPruneTargets(backups, keep, protectedIds, force);
-  if (force && targets.length > 0) {
-    console.log(`--force --yes will permanently delete: ${targets.join(', ')}`);
+  const pending = state.incompleteOperation;
+  if (pending?.backupId) protectedIds.add(pending.backupId);
+  if (pending?.previousBackupId) protectedIds.add(pending.previousBackupId);
+  return protectedIds;
+}
+
+/**
+ * Enforces bounded backup retention from a classified inventory. Automatic
+ * housekeeping defers (never deletes) when a suspect entry is present, and no
+ * path removes protected recovery sources. `force` (explicit, already
+ * confirmed) bypasses the suspect-entry deferral but not protection.
+ */
+async function pruneBackups(
+  directory: string,
+  state: ManagedState,
+  keep: number,
+  force: boolean,
+  options: { automatic?: boolean; log?: (message: string) => void; warn?: (message: string) => void } = {},
+): Promise<PruneResult> {
+  const automatic = options.automatic ?? !force;
+  const log = options.log ?? ((message: string) => console.log(message));
+  const warn = options.warn ?? ((message: string) => console.warn(message));
+  const inventory = await inventoryBackups(directory);
+  if (inventory.storeErrors.length > 0) {
+    if (automatic) return { removed: 0, deferred: inventory.storeErrors };
+    throw new Error(inventory.storeErrors.map((diagnostic) => diagnostic.message).join(' '));
   }
-  for (const backupId of targets) {
-    const backup = backups.find((entry) => entry.backupId === backupId);
+  const plan = planRetention(inventory.entries, keep, retentionProtectedIds(state), { automatic });
+  if (!plan.canPrune && !force) {
+    warn('Automatic backup pruning was deferred because the store contains entries that need inspection.');
+    for (const warning of plan.warnings) warn(`  ${warning.code}: ${warning.message}`);
+    return { removed: 0, deferred: plan.warnings };
+  }
+  const verified = new Map(
+    inventory.entries
+      .filter((entry): entry is { kind: 'verified'; backup: BackupListing } => entry.kind === 'verified')
+      .map((entry) => [entry.backup.backupId, entry.backup]),
+  );
+  if (force && plan.remove.length > 0) {
+    log(`--force --yes will permanently delete: ${plan.remove.join(', ')}`);
+  }
+  // Inventory once above, then revalidate only the selected entry immediately
+  // before its deletion. Re-inventorying the whole store per deletion rehashed
+  // every remaining archive, which is quadratic on large histories.
+  let removed = 0;
+  for (const backupId of plan.remove) {
+    const backup = verified.get(backupId);
     if (!backup) throw new Error(`Retention selected backup ${backupId}, but its verified path disappeared before deletion.`);
-    await removeEnumeratedBackupArtifact(directory, backup);
-    console.log(`Deleted backup ${backupId} at ${backup.path}`);
+    const revalidated = await inspectBackupEntry(deploymentPaths(directory).backups, backupId, directory);
+    const current = revalidated.kind === 'verified' ? revalidated.backup : undefined;
+    if (!current || current.path !== backup.path || current.dataSha256 !== backup.dataSha256) {
+      throw new Error(`Backup ${backupId} changed while pruning was in progress. Aborting retention before deletion.`);
+    }
+    await removeEnumeratedBackupArtifact(directory, current);
+    log(`Deleted backup ${backupId} at ${current.path}`);
+    removed += 1;
   }
-  return targets.length;
+  return { removed, deferred: plan.warnings };
 }
 
 function assertDeploymentIdentity(state: ManagedState, env: Record<string, string>) {
@@ -2590,6 +3131,7 @@ async function createBackup(
 }
 
 async function readManifest(backupPath: string, authenticatedForDirectory?: string) {
+  await lifecycleFaults.beforeArchiveRead?.();
   const manifestContents = await readText(join(backupPath, 'manifest.json'));
   if (authenticatedForDirectory) await assertBackupAuthentication(authenticatedForDirectory, backupPath, manifestContents);
   const manifest = JSON.parse(manifestContents) as BackupManifest;
@@ -2718,7 +3260,7 @@ async function restoreBackupData(
 
 export function stateFromEnv(directory: string, env: Record<string, string>, mode: Mode, operation: Operation, digest: string): ManagedState {
   return {
-    schemaVersion: 1,
+    schemaVersion: writeStateSchema(),
     mode,
     composeProject: env.OR3_COMPOSE_PROJECT,
     volumeName: env.OR3_VOLUME_NAME,
@@ -2742,16 +3284,16 @@ function help() {
 Usage:
   npx @or3/cloud init [directory] --local
   npx @or3/cloud init [directory] --public --domain <hostname>
-  npx @or3/cloud update [--to <exact-version>]
-  npx @or3/cloud backup [list|prune [--keep <n>]|export <backup-id> <destination-dir>]
+  npx @or3/cloud update [--to <exact-version>] [--dry-run] [--json]
+  npx @or3/cloud backup [list [--json]|prune [--keep <n>]|export <backup-id> <destination-dir>]
   npx @or3/cloud restore <backup-id-or-path> --yes
   npx @or3/cloud rollback --yes
   npx @or3/cloud credentials reset --yes [--owner-password-file <path> --admin-password-file <path>]
   npx @or3/cloud doctor
-  npx @or3/cloud verify [--public] [--verification-email <email> --verification-password-file <path>]
-  npx @or3/cloud recover
+  npx @or3/cloud verify [--read-only] [--public] [--verification-email <email> --verification-password-file <path>]
+  npx @or3/cloud recover [--dry-run | --finish | --restore --yes]
   npx @or3/cloud adopt --from <v1-directory> [directory]
-  npx @or3/cloud status
+  npx @or3/cloud status [--json]
   npx @or3/cloud logs [--tail <n>] [service]
   npx @or3/cloud start | stop | restart
   npx @or3/cloud remove [--purge-data --yes]
@@ -2769,6 +3311,11 @@ Options:
   --force                        Prune backups even when referenced by the rollback point
   --tail <n>                     Log lines to show (default: 200)
   --public                       Require verification through the public HTTPS origin
+  --read-only                    Verify without the lease, login, storage, or database writes
+  --dry-run                      Preview an update or recovery without changing anything
+  --finish                       Commit a proven completed replacement without restoring data
+  --restore                      Explicitly restore the recorded snapshot (requires --yes)
+  --json                         Emit one machine-readable result object on stdout
   --purge-data                   Remove data volumes and managed files (with remove)
   --yes                          Confirm a destructive restore, rollback, credentials reset, or purge
   --help                         Show this help
@@ -2855,7 +3402,8 @@ async function initCommand(positionals: string[], flags: Flags) {
     await startProject(directory, mode, runtimeEnv);
     await clearPending(directory, state);
     console.log(`\nOR3 Cloud ${version} is running at ${mode === 'public' ? `https://${domain}` : `http://127.0.0.1:${port}`}`);
-    console.log(`Credentials were written to ${join(directory, '.or3-initial-credentials')} (mode 0600). Save them, then remove that file.`);
+    console.log(`Credentials were written to ${join(directory, '.or3-initial-credentials')} (mode 0600). Move them to protected storage (a password manager), then remove that file.`);
+    console.log('The bootstrap owner signs in to the app; the admin account manages the deployment. Rotate either later with "npx @or3/cloud credentials reset --yes".');
     console.log(`\nCheck: cd ${quote(directory)} && npx @or3/cloud doctor`);
     if (operator) console.log('Dashboard updates are enabled for super admins in Operations.');
   } catch (error) {
@@ -2866,13 +3414,223 @@ async function initCommand(positionals: string[], flags: Flags) {
   }
 }
 
-async function loadManaged(directory = process.cwd()) {
+/**
+ * Refuses to mutate state written by a newer schema than this CLI is qualified
+ * to write. The bridge reads schema 2 but must not downgrade or edit it; the
+ * owner is directed to the compatible exact-target CLI instead.
+ */
+export function assertStateSchemaWritable(state: ManagedState) {
+  const writer = writeStateSchema();
+  if (state.schemaVersion > writer) {
+    throw new Error(`This CLI reads managed state schema ${state.schemaVersion} but is qualified to write schema ${writer}. Run the compatible exact-version @or3/cloud CLI for this deployment; do not edit or hand-migrate managed state.`);
+  }
+}
+
+async function loadManaged(directory = process.cwd(), options: { writable?: boolean } = {}) {
   const resolved = resolve(directory);
   const state = await readState(resolved);
+  if (options.writable !== false) assertStateSchemaWritable(state);
   const env = parseEnv(await readText(deploymentPaths(resolved).env));
   assertDeploymentIdentity(state, env);
   assertDeploymentDirectoryIdentity(resolved, state);
   return { directory: resolved, state, env };
+}
+
+export type LeaseObservation =
+  | { status: 'none' }
+  | { status: 'active'; owner: LeaseOwner }
+  | { status: 'stale'; owner: LeaseOwner }
+  | { status: 'unreadable' };
+
+/**
+ * Independent, non-mutating observations of one deployment. Each source is
+ * collected separately so a corrupt state file, a missing `.env`, an
+ * unreadable lease, or an unavailable Docker daemon still yields the evidence
+ * that is readable, instead of failing solely through `loadManaged`.
+ */
+export type DeploymentObservation = {
+  directory: string;
+  observedAt: string;
+  state: ManagedState | null;
+  stateError: string | null;
+  env: Record<string, string> | null;
+  envError: string | null;
+  lease: LeaseObservation;
+  docker: boolean;
+  recordedImageDigest: string | null;
+  actualImageDigest: string | null;
+  identityMatches: boolean | null;
+  backups: BackupInventory | null;
+  backupErrors: Diagnostic[];
+  /** True when a live lease or a state rewrite makes the snapshot non-authoritative. */
+  changing: boolean;
+  partial: boolean;
+};
+
+export async function observeDeployment(
+  directory: string,
+  options: { checkDocker?: boolean; checkImage?: boolean } = {},
+): Promise<DeploymentObservation> {
+  const resolved = resolve(directory);
+  const observedAt = now();
+  let state: ManagedState | null = null;
+  let stateError: string | null = null;
+  try {
+    state = await readState(resolved);
+  } catch (error) {
+    stateError = redact(error instanceof Error ? error.message : String(error));
+  }
+  let env: Record<string, string> | null = null;
+  let envError: string | null = null;
+  try {
+    env = parseEnv(await readText(deploymentPaths(resolved).env));
+  } catch (error) {
+    envError = redact(error instanceof Error ? error.message : String(error));
+  }
+  const leasePath = deploymentPaths(resolved).lease;
+  let lease: LeaseObservation = { status: 'none' };
+  if (await fileExists(leasePath)) {
+    const owner = await readLeaseOwner(leasePath);
+    if (!owner) lease = { status: 'unreadable' };
+    else if (cliLeaseOwnerIsGone(owner) || dashboardLeaseOwnerIsStale(owner)) lease = { status: 'stale', owner };
+    else lease = { status: 'active', owner };
+  }
+  let backups: BackupInventory | null = null;
+  const backupErrors: Diagnostic[] = [];
+  try {
+    backups = await inventoryBackups(resolved);
+    backupErrors.push(...backups.storeErrors);
+  } catch (error) {
+    backupErrors.push({ code: 'backup-store-unreadable', severity: 'blocker', message: redact(error instanceof Error ? error.message : String(error)) });
+  }
+
+  const checkDocker = options.checkDocker ?? true;
+  const checkImage = options.checkImage ?? true;
+  let docker = false;
+  let recordedImageDigest: string | null = state?.imageDigest ?? null;
+  let actualImageDigest: string | null = null;
+  let identityMatches: boolean | null = null;
+  if (checkDocker) {
+    try {
+      await ensureDocker();
+      docker = true;
+    } catch {
+      docker = false;
+    }
+  }
+  if (checkImage && docker && state?.image) {
+    try {
+      actualImageDigest = await runningContainerImageDigest(resolved, state.mode, state.image);
+      identityMatches = actualImageDigest === state.imageDigest;
+    } catch {
+      actualImageDigest = null;
+      identityMatches = null;
+    }
+  }
+  const partial = Boolean(stateError || envError || backupErrors.length > 0 || (checkDocker && !docker));
+  return {
+    directory: resolved,
+    observedAt,
+    state,
+    stateError,
+    env,
+    envError,
+    lease,
+    docker,
+    recordedImageDigest,
+    actualImageDigest,
+    identityMatches,
+    backups,
+    backupErrors,
+    changing: lease.status === 'active',
+    partial,
+  };
+}
+
+/**
+ * Repository digest of the image actually running the `or3` service. It resolves
+ * the running container's image id and then that image's repo digest, so a stale
+ * locally cached tag cannot masquerade as the observed running deployment. It
+ * falls back to the locally cached image only when no container is running.
+ */
+async function runningContainerImageDigest(directory: string, mode: Mode, fallbackImage: string): Promise<string> {
+  let containerId = '';
+  try {
+    const ps = await run('docker', composeArgs(directory, mode, ['ps', '-q', 'or3']), directory);
+    containerId = ps.ok ? ps.stdout.trim() : '';
+  } catch {
+    containerId = '';
+  }
+  if (!containerId) return await imageDigest(fallbackImage);
+  const image = await run('docker', ['inspect', '--format', '{{.Image}}', containerId], directory);
+  const imageId = image.ok ? image.stdout.trim() : '';
+  if (!imageId) throw new Error('Could not inspect the running OR3 container image.');
+  const digests = await run('docker', ['image', 'inspect', '--format', '{{json .RepoDigests}}', imageId], directory);
+  if (!digests.ok) throw new Error('Could not inspect repository digests for the running OR3 container.');
+  let values: string[];
+  try {
+    values = JSON.parse(digests.stdout.trim()) as string[];
+  } catch {
+    throw new Error('The running OR3 container has no readable repository digests.');
+  }
+  const match = values.map((value) => value.match(/@(sha256:[0-9a-f]{64})$/i)?.[1]).find((value): value is string => Boolean(value));
+  if (!match) throw new Error('The running OR3 container image is not digest-qualified.');
+  return match;
+}
+
+/**
+ * Explicit public projection of managed state for JSON output. It deliberately
+ * omits recovery secrets (for example `credentialReset.nextEnv`) and raw
+ * configuration, and reports only the safe identity/status fields an operator
+ * or automation needs. Never serialize `ManagedState` directly.
+ */
+export function publicStateProjection(state: ManagedState) {
+  const pending = state.incompleteOperation;
+  return {
+    schemaVersion: state.schemaVersion,
+    mode: state.mode,
+    appVersion: state.appVersion,
+    image: state.image,
+    imageDigest: state.imageDigest,
+    domain: state.domain ?? null,
+    port: state.port,
+    deploymentId: state.deploymentId ?? null,
+    lastSuccessfulOperation: state.lastSuccessfulOperation,
+    updatedAt: state.updatedAt,
+    rollback: state.rollback
+      ? { appVersion: state.rollback.appVersion, imageDigest: state.rollback.imageDigest, backupId: state.rollback.backupId, createdAt: state.rollback.createdAt }
+      : null,
+    incompleteOperation: pending
+      ? {
+          id: pending.id,
+          operation: pending.operation,
+          phase: pending.phase ?? null,
+          origin: pending.origin ?? null,
+          dashboardJobId: pending.dashboardJobId ?? null,
+          targetVersion: pending.targetVersion ?? null,
+          targetImageDigest: pending.targetImageDigest ?? null,
+          // Credential-reset recovery payloads and any environment snapshots are
+          // intentionally excluded.
+        }
+      : null,
+    lastReceipt: state.lastReceipt ?? null,
+    lastError: state.lastError ? redact(state.lastError) : null,
+  };
+}
+
+/** Diagnostic/summary rendering shared by status, doctor, and preview. */
+export function observationFindings(observation: DeploymentObservation): Diagnostic[] {
+  const findings: Diagnostic[] = [];
+  if (observation.stateError) findings.push({ code: 'state-unreadable', severity: 'blocker', resource: deploymentPaths(observation.directory).state, message: observation.stateError });
+  if (observation.envError) findings.push({ code: 'env-unreadable', severity: 'blocker', resource: deploymentPaths(observation.directory).env, message: observation.envError });
+  if (observation.lease.status === 'active') {
+    findings.push({ code: 'operation-in-progress', severity: 'info', message: `A ${observation.lease.owner.origin} operation (${observation.lease.owner.command}) is active; this observation is not authoritative.` });
+  }
+  if (observation.lease.status === 'unreadable') findings.push({ code: 'lease-unreadable', severity: 'warning', message: 'The deployment lease owner record is unreadable; run doctor before any mutation.' });
+  if (observation.identityMatches === false) {
+    findings.push({ code: 'image-digest-mismatch', severity: 'blocker', resource: observation.state?.image, message: `Recorded digest ${observation.recordedImageDigest} does not match the local image ${observation.actualImageDigest}.` });
+  }
+  return findings;
 }
 
 function operationToStateOperation(operation: PendingOperation['operation'], fallback: Operation): Operation {
@@ -2881,8 +3639,11 @@ function operationToStateOperation(operation: PendingOperation['operation'], fal
 }
 
 async function commitRecoveredState(directory: string, previous: ManagedState, next: ManagedState) {
-  await removeOperationRecord(directory, previous.incompleteOperation?.id);
+  // Terminal state is authoritative and must land before the redundant mirror
+  // is removed. Mirror cleanup is warning-only: an enclosing catch must not be
+  // able to turn a completed commit back into pending state.
   await writeState(directory, next);
+  await removeOperationRecordSafely(directory, previous.incompleteOperation?.id);
 }
 
 async function commitPreMutationRecovery(
@@ -2904,14 +3665,359 @@ async function commitPreMutationRecovery(
   return recovered;
 }
 
-async function recoverCommand(directory: string) {
-  await ensureDocker();
-  const loaded = await loadManaged(directory);
-  const pending = loaded.state.incompleteOperation;
+export type RecoveryDecision =
+  | { action: 'none'; detail: string }
+  | { action: 'resume'; detail: string }
+  | { action: 'finish'; detail: string }
+  | { action: 'require-explicit-restore'; detail: string; snapshotId?: string }
+  | { action: 'reconcile-handoff'; detail: string };
+
+/**
+ * Pure recovery policy. Finish is allowed only for an update that recorded a
+ * durable target-ready milestone; a deployment that may have replaced data
+ * without completion proof requires the operator to choose a destructive
+ * restore explicitly. Legacy ambiguity deliberately never becomes an implicit
+ * restore.
+ */
+export function decideRecoveryAction(state: ManagedState): RecoveryDecision {
+  const pending = state.incompleteOperation;
   if (!pending) {
-    console.log('No incomplete OR3 Cloud operation is recorded.');
+    // The application commit may already be complete while the privileged
+    // operator handoff is unfinished. Reconcile only that handoff; never
+    // replace application data.
+    const handoff = state.lastReceipt?.operatorHandoff;
+    if (handoff === 'pending' || handoff === 'needs-attention') {
+      return { action: 'reconcile-handoff', detail: `The application is complete but the dashboard operator handoff is ${handoff}. Reconcile only the recorded handoff.` };
+    }
+    return { action: 'none', detail: 'No incomplete operation is recorded.' };
+  }
+  if (pending.operation === 'update' && pending.phase === 'target-ready' && pending.evidence) {
+    return { action: 'finish', detail: 'A completed replacement carries durable target-ready evidence and can be committed without restoring data.' };
+  }
+  if (pending.phase === 'prepared' || pending.phase === 'snapshot-created') {
+    return { action: 'resume', detail: `The ${pending.operation} had not replaced data; resume the known-good source.` };
+  }
+  if (pending.operation === 'update' || pending.operation === 'restore' || pending.operation === 'rollback') {
+    const snapshotId = pending.operation === 'update' ? pending.backupId : (pending.previousBackupId ?? pending.backupId);
+    return {
+      action: 'require-explicit-restore',
+      detail: `The ${pending.operation} may have changed data and has no completion proof. Health alone cannot authorize adoption.`,
+      snapshotId,
+    };
+  }
+  return { action: 'resume', detail: `Resume the ${pending.operation} using its durable evidence.` };
+}
+
+function assertRecoverFlags(flags: Flags) {
+  const dryRun = boolFlag(flags, 'dry-run');
+  const finish = boolFlag(flags, 'finish');
+  const restore = boolFlag(flags, 'restore');
+  if (finish && restore) throw new Error('Use either --finish or --restore, not both.');
+  if (dryRun && (finish || restore)) throw new Error('--dry-run cannot be combined with --finish or --restore.');
+  if (restore && !boolFlag(flags, 'yes')) {
+    throw new Error('recover --restore replaces live data. Review `npx @or3/cloud recover --dry-run` first, then re-run with `recover --restore --yes`.');
+  }
+}
+
+/**
+ * Reconciles only the privileged operator handoff recorded for a completed
+ * application update. It never replaces application data: it reschedules the
+ * exact recorded job and leaves the receipt marked pending until the successor
+ * operator confirms it is running.
+ */
+async function reconcileOperatorHandoff(directory: string, state: ManagedState, report: (...args: unknown[]) => void = console.log) {
+  const env = parseEnv(await readText(deploymentPaths(directory).env));
+  if (env.OR3_DASHBOARD_UPDATES_ENABLED !== 'true') {
+    const detail = 'Dashboard updates are disabled in this deployment; no operator handoff needs reconciliation.';
+    report(detail);
+    return detail;
+  }
+  const receipt = state.lastReceipt;
+  const jobId = receipt?.dashboardJobId ?? process.env.OR3_DASHBOARD_UPDATE_JOB_ID?.trim();
+  if (!jobId) {
+    throw new Error('The completed update recorded no dashboard job for its operator handoff. Re-run the host CLI update, or disable dashboard updates until the operator is restored.');
+  }
+  await scheduleDashboardOperatorHandoff(directory, env, jobId);
+  if (receipt) {
+    receipt.operatorHandoff = 'pending';
+    await writeState(directory, state);
+    await exportTerminalReceipt(directory, receipt).catch(() => undefined);
+  }
+  const detail = `Rescheduled the dashboard operator handoff for job ${jobId.slice(0, 8)}. The successor operator marks it verified once it is running.`;
+  report(detail);
+  return detail;
+}
+
+/**
+ * Commits an update that already reached the target-ready milestone, without
+ * restoring data. Revalidates the recorded proof under the lease (exact image
+ * binding, configuration and managed assets unchanged since target-ready,
+ * authenticated rollback snapshot, deep health) before adopting the live
+ * target.
+ */
+/**
+ * Required completion-proof checks for a replaced target: the observed
+ * container binding, SQLite integrity/ownership, and public/local deep health.
+ * Reused when recording the milestone and when revalidating it at finish.
+ */
+async function collectTargetReadyChecks(
+  directory: string,
+  mode: Mode,
+  env: Record<string, string>,
+): Promise<{ containerId: string | undefined; checks: CheckResult[] }> {
+  const checks: CheckResult[] = [];
+  let containerId: string | undefined;
+  const container = await run('docker', composeArgs(directory, mode, ['ps', '-q', 'or3']), directory);
+  containerId = container.ok ? container.stdout.trim() || undefined : undefined;
+  checks.push(containerId
+    ? { code: 'container-binding', status: 'passed', detail: `Observed target container ${containerId}.` }
+    : { code: 'container-binding', status: 'failed', detail: 'Could not resolve the running target container.' });
+
+  const databaseCheck = await run('docker', [
+    ...composeArgs(directory, mode, ['exec', '-T', 'or3', ...containerNodeCommand(VERIFY_DATABASES_SCRIPT)]),
+  ], directory);
+  let databasesOk = false;
+  if (databaseCheck.ok) {
+    try {
+      const databases = JSON.parse(databaseCheck.stdout.trim()) as Array<{ path: string; quickCheck: string; tables: number }>;
+      databasesOk = databases.length === 2 && databases.every((entry) => entry.quickCheck === 'ok' && entry.tables >= 1);
+    } catch {
+      databasesOk = false;
+    }
+  }
+  checks.push(databasesOk
+    ? { code: 'database-integrity', status: 'passed', detail: 'auth.sqlite and sync.sqlite quick_check passed with managed ownership.' }
+    : { code: 'database-integrity', status: 'failed', detail: `SQLite integrity or ownership verification failed. ${redact(databaseCheck.stderr.trim(), secretValues(env))}` });
+
+  const baseUrl = new URL(mode === 'public' ? `https://${env.OR3_PUBLIC_DOMAIN}` : `http://127.0.0.1:${env.OR3_PORT}`);
+  try {
+    validateVerificationHealth(await verificationJson(baseUrl, '/api/health?deep=true'));
+    checks.push({ code: 'public-health', status: 'passed', detail: `${baseUrl.origin} deep health reports the managed profile.` });
+  } catch (error) {
+    checks.push({ code: 'public-health', status: 'failed', detail: redact(error instanceof Error ? error.message : String(error)) });
+  }
+  return { containerId, checks };
+}
+
+async function finishTargetReadyUpdate(
+  directory: string,
+  state: ManagedState,
+  env: Record<string, string>,
+  report: (...args: unknown[]) => void = console.log,
+): Promise<string> {
+  const pending = state.incompleteOperation;
+  if (!pending?.evidence || !pending.targetVersion || !pending.targetImage) {
+    throw new Error('recover --finish requires a recorded target-ready milestone; none is present.');
+  }
+  const targetEnv = parseEnv(await readText(deploymentPaths(directory).env));
+  if (targetEnv.OR3_VERSION !== pending.targetVersion || targetEnv.OR3_IMAGE !== pending.targetImage) {
+    throw new Error('The live .env no longer matches the recorded target-ready identities; refusing to finish.');
+  }
+  const expectedTargetDigest = pending.targetImageDigest ?? await imageDigest(targetEnv.OR3_IMAGE);
+  await pullAndRequireImage(targetEnv.OR3_IMAGE, expectedTargetDigest, 'Target deployment');
+  await assertRunningAppImage(directory, state.mode, targetEnv.OR3_IMAGE);
+  const actualDigest = await imageDigest(targetEnv.OR3_IMAGE);
+  if (actualDigest !== pending.evidence.imageDigest) {
+    throw new Error(`The running target image ${actualDigest} does not match the recorded target-ready proof ${pending.evidence.imageDigest}.`);
+  }
+  const configurationSha256 = await sha256File(deploymentPaths(directory).env);
+  if (configurationSha256 !== pending.evidence.configurationSha256) {
+    throw new Error('The managed configuration changed after the target-ready milestone; refusing to finish. Inspect the change, or run `recover --restore --yes` to return to the recorded snapshot.');
+  }
+  const assets = await installedManagedAssetChecksums(directory, state.mode);
+  for (const [name, expected] of Object.entries(pending.evidence.managedAssetSha256)) {
+    if (assets[name] !== expected) {
+      throw new Error(`Managed asset ${name} changed after the target-ready milestone; refusing to finish.`);
+    }
+  }
+  const expectedDeploymentId = targetEnv.OR3_DEPLOYMENT_ID ?? pending.targetDeploymentId;
+  if (pending.evidence.deploymentId && expectedDeploymentId && pending.evidence.deploymentId !== expectedDeploymentId) {
+    throw new Error('The recorded target-ready deployment identity no longer matches the live deployment.');
+  }
+  // The rollback source must still authenticate, even though we are not restoring it.
+  await recordedBackupPath(directory, pending);
+  // Required completion evidence must be present and re-proven. A milestone
+  // that omitted database integrity, public health, or the observed container
+  // binding cannot be finished from internal health alone.
+  for (const required of ['container-binding', 'database-integrity', 'public-health']) {
+    const recorded = pending.evidence.checks.find((check) => check.code === required);
+    if (!recorded || recorded.status !== 'passed') {
+      throw new Error(`The recorded target-ready proof is missing ${required}; refusing to finish. Run "npx @or3/cloud recover --restore --yes" to return to the recorded snapshot.`);
+    }
+  }
+  await waitForDeepHealth(directory, state.mode, secretValues(targetEnv));
+  const revalidated = await collectTargetReadyChecks(directory, state.mode, targetEnv);
+  if (!revalidated.containerId || revalidated.containerId !== pending.evidence.containerId) {
+    throw new Error('The running target container no longer matches the recorded target-ready proof; refusing to finish.');
+  }
+  const failedChecks = revalidated.checks.filter((check) => check.status !== 'passed');
+  if (failedChecks.length > 0) {
+    throw new Error(`Target verification failed at finish (${failedChecks.map((check) => check.code).join(', ')}); refusing to finish.`);
+  }
+
+  const sourceVersion = state.appVersion;
+  const sourceImage = state.image;
+  const sourceDigest = state.imageDigest;
+  const digest = actualDigest;
+  const recordedDashboardJobId = pending.dashboardJobId ?? (process.env.OR3_DASHBOARD_UPDATE_JOB_ID?.trim() || undefined);
+  const receipt: OperationReceipt = {
+    schemaVersion: 1,
+    operationId: pending.id,
+    dashboardJobId: recordedDashboardJobId,
+    cliVersion: PACKAGE_VERSION,
+    source: { appVersion: sourceVersion, image: sourceImage, imageDigest: sourceDigest, sourceRevision: packagedSourceRevision(sourceVersion), operatorImageDigest: expectedOperatorImageDigest(sourceVersion) },
+    target: { appVersion: pending.targetVersion, image: pending.targetImage, imageDigest: digest, sourceRevision: packagedSourceRevision(pending.targetVersion), operatorImageDigest: expectedOperatorImageDigest(pending.targetVersion) },
+    observed: { appVersion: pending.targetVersion, image: pending.targetImage, imageDigest: digest },
+    completedAt: now(),
+    rollbackBackupId: pending.backupId ?? '',
+    checks: revalidated.checks,
+    warnings: [],
+    phaseDurationsMs: {},
+    operatorHandoff: 'not-required',
+  };
+  const next = stateFromEnv(directory, targetEnv, state.mode, 'update', digest);
+  next.rollback = {
+    appVersion: sourceVersion,
+    image: sourceImage,
+    imageDigest: sourceDigest,
+    backupId: pending.backupId ?? '',
+    createdAt: now(),
+  };
+  next.lastError = undefined;
+  if (targetEnv.OR3_DASHBOARD_UPDATES_ENABLED === 'true' && recordedDashboardJobId) {
+    try {
+      await scheduleDashboardOperatorHandoff(directory, targetEnv, recordedDashboardJobId);
+      receipt.operatorHandoff = 'pending';
+    } catch (error) {
+      receipt.operatorHandoff = 'needs-attention';
+      receipt.warnings.push({ code: 'operator-handoff-schedule-failed', severity: 'warning', message: redact(error instanceof Error ? error.message : String(error), secretValues(targetEnv)) });
+    }
+  }
+  const commit = await commitTerminalState(directory, next, receipt);
+  await removeOperationRecordSafely(directory, commit.operationId);
+  const maintenance: Diagnostic[] = [];
+  const prune = await pruneBackups(directory, next, BACKUP_RETENTION_KEEP, false, {
+    automatic: true,
+    log: (message) => report(message),
+    warn: (message) => report(message),
+  }).catch((error) => {
+    // A prune failure is a maintenance warning, never a silent suppression.
+    maintenance.push({ code: 'retention-failed', severity: 'warning', message: redact(error instanceof Error ? error.message : String(error), secretValues(targetEnv)) });
+    return { removed: 0, deferred: [] as Diagnostic[] };
+  });
+  maintenance.push(...prune.deferred);
+  // Persist the post-commit maintenance warnings into the authoritative receipt
+  // so a reload, the dashboard, or a later `recover --finish` still sees them.
+  await persistReceiptWarnings(directory, next, maintenance);
+  const detail = `Finished the recorded update as OR3 ${pending.targetVersion}. Post-replacement writes were preserved.`;
+  report(detail);
+  for (const warning of [...receipt.warnings, ...maintenance]) report(`  ⚠ ${warning.code}: ${warning.message}`);
+  void env;
+  return detail;
+}
+
+async function recoverCommand(directory: string, flags: Flags = {}) {
+  assertRecoverFlags(flags);
+  const explicitRestore = boolFlag(flags, 'restore');
+  const finishRequested = boolFlag(flags, 'finish');
+  const dryRun = boolFlag(flags, 'dry-run');
+
+  if (dryRun) {
+    const observation = await observeDeployment(directory, { checkDocker: true, checkImage: true });
+    const state = observation.state;
+    const decision = state ? decideRecoveryAction(state) : { action: 'none' as const, detail: 'Managed state is unreadable; only diagnosis is available.' };
+    const pending = state?.incompleteOperation;
+    const payload = {
+      schemaVersion: 1,
+      kind: 'or3-recover-preview',
+      observedAt: observation.observedAt,
+      directory: observation.directory,
+      partial: observation.partial,
+      inProgress: observation.changing,
+      source: state ? { appVersion: state.appVersion, image: state.image, imageDigest: state.imageDigest } : null,
+      target: pending?.targetVersion ? { appVersion: pending.targetVersion, image: pending.targetImage ?? null, imageDigest: pending.targetImageDigest ?? null } : null,
+      phase: pending?.phase ?? null,
+      operation: pending?.operation ?? null,
+      decision,
+      dataLoss: decision.action === 'require-explicit-restore',
+      findings: observationFindings(observation),
+    };
+    if (boolFlag(flags, 'json')) console.log(JSON.stringify(payload, null, 2));
+    else {
+      console.log(`OR3 recovery preview for ${observation.directory}`);
+      console.log(`  source: ${payload.source ? `OR3 ${payload.source.appVersion} (${payload.source.imageDigest})` : 'unknown'}`);
+      console.log(`  target: ${payload.target ? `OR3 ${payload.target.appVersion}` : 'none'}`);
+      console.log(`  operation: ${payload.operation ?? 'none'}${payload.phase ? ` (${payload.phase})` : ''}`);
+      console.log(`  action: ${decision.action} — ${decision.detail}`);
+      if (payload.dataLoss) console.log('  data loss: yes — restoring the recorded snapshot discards writes made after it.');
+      for (const finding of payload.findings) console.log(`  [${finding.severity}] ${finding.code}: ${finding.message}`);
+      console.log('\nPreview only: nothing was changed.');
+    }
     return;
   }
+
+  const asJson = boolFlag(flags, 'json');
+  const report = (...args: unknown[]) => {
+    if (asJson) console.error(...args);
+    else console.log(...args);
+  };
+  await ensureDocker();
+  try {
+    const outcome = await runRecovery(directory, { explicitRestore, finishRequested, report });
+    if (asJson) emitOperationResult(outcome);
+  } catch (error) {
+    if (!asJson) throw error;
+    const message = redact(error instanceof Error ? error.message : String(error));
+    console.error(`OR3 Cloud failed: ${message}`);
+    emitOperationResult({ kind: 'blocked', findings: [{ code: 'recovery-failed', severity: 'blocker', message, nextCommand: 'npx @or3/cloud recover --dry-run' }] });
+    process.exitCode = 1;
+  }
+}
+
+/**
+ * Performs one non-dry-run recovery. Returns the terminal outcome so the JSON
+ * path can serialize exactly one result and the human path can print one
+ * summary; it never prints its own result document.
+ */
+async function runRecovery(
+  directory: string,
+  context: { explicitRestore: boolean; finishRequested: boolean; report: (...args: unknown[]) => void },
+): Promise<OperationOutcome> {
+  const { explicitRestore, finishRequested, report } = context;
+  const loaded = await loadManaged(directory);
+  const pending = loaded.state.incompleteOperation;
+  const decision = decideRecoveryAction(loaded.state);
+  // Handoff reconciliation is evaluated before the no-pending early return: an
+  // application commit can be complete while its privileged handoff is not, and
+  // that state records no pending operation.
+  if (decision.action === 'reconcile-handoff') {
+    if (explicitRestore) throw new Error('This deployment completed its application update; only the dashboard operator handoff needs reconciliation. Run `npx @or3/cloud recover --finish` without --restore.');
+    const detail = await reconcileOperatorHandoff(loaded.directory, loaded.state, report);
+    return { kind: 'recovered', operation: 'update', detail };
+  }
+  if (!pending) {
+    if (finishRequested) {
+      if (loaded.state.lastReceipt) {
+        const detail = `No incomplete operation is recorded; the last ${loaded.state.lastReceipt.operationId} completion remains authoritative. Nothing to finish.`;
+        report(detail);
+        return { kind: 'no-op', detail };
+      }
+      throw new Error('recover --finish requires an incomplete operation, but none is recorded.');
+    }
+    const detail = 'No incomplete OR3 Cloud operation is recorded.';
+    report(detail);
+    return { kind: 'no-op', detail };
+  }
+  if (finishRequested) {
+    if (decision.action !== 'finish') {
+      throw new Error(`recover --finish is not admissible: ${decision.detail} Run "npx @or3/cloud recover --dry-run" to inspect the supported actions.`);
+    }
+    const detail = await finishTargetReadyUpdate(loaded.directory, loaded.state, loaded.env, report);
+    return { kind: 'recovered', operation: 'update', detail };
+  }
+  // Plain recover finishes only proven non-destructive work. A deployment that
+  // may have replaced data requires the explicit `--restore --yes` choice.
+  const requiresExplicitRestore = decision.action === 'require-explicit-restore';
   try {
     if (pending.phase === 'prepared') {
       if (pending.operation === 'backup' || pending.operation === 'update' || pending.operation === 'adopt') {
@@ -2927,8 +4033,9 @@ async function recoverCommand(directory: string) {
       await applyCredentialReset(loaded.directory, loaded.state, nextEnv);
       loaded.state.lastError = undefined;
       await clearPending(loaded.directory, loaded.state);
-      console.log('Recovered the incomplete credential reset. Owner and admin credentials were verified inside the OR3 container.');
-      return;
+      const detail = 'Recovered the incomplete credential reset. Owner and admin credentials were verified inside the OR3 container.';
+      report(detail);
+      return { kind: 'recovered', operation: 'credentials-reset', detail };
     }
 
     if (pending.operation === 'restore' || pending.operation === 'rollback') {
@@ -2940,8 +4047,12 @@ async function recoverCommand(directory: string) {
         await startProject(loaded.directory, loaded.state.mode, loaded.env);
         loaded.state.lastError = undefined;
         await clearPending(loaded.directory, loaded.state);
-        console.log(`Recovered the incomplete ${pending.operation} before data replacement. OR3 ${loaded.state.appVersion} is deeply healthy.`);
-        return;
+        const detail = `Recovered the incomplete ${pending.operation} before data replacement. OR3 ${loaded.state.appVersion} is deeply healthy.`;
+        report(detail);
+        return { kind: 'recovered', operation: pending.operation, detail };
+      }
+      if (requiresExplicitRestore && !explicitRestore) {
+        throw new Error(`The incomplete ${pending.operation} may have replaced data and has no completion proof. Nothing was changed. Review "npx @or3/cloud recover --dry-run", then restore deliberately with "npx @or3/cloud recover --restore --yes" (this discards writes made after the recorded snapshot).`);
       }
       if (!pending.previousBackupPath && !pending.previousBackupId) {
         throw new Error(`The incomplete ${pending.operation} has no verified pre-mutation snapshot. Refusing to replay a target that may have been partially restored; inspect the deployment and restore an authenticated backup explicitly.`);
@@ -2952,8 +4063,9 @@ async function recoverCommand(directory: string) {
         loaded.state,
         `Interrupted ${pending.operation} was rolled back to pre-mutation snapshot ${previous.manifest.backupId}.`,
       );
-      console.log(`Recovered the incomplete ${pending.operation} by restoring pre-mutation snapshot ${previous.manifest.backupId}. OR3 ${recovered.appVersion} is deeply healthy.`);
-      return;
+      const detail = `Recovered the incomplete ${pending.operation} by restoring pre-mutation snapshot ${previous.manifest.backupId}. OR3 ${recovered.appVersion} is deeply healthy.`;
+      report(detail);
+      return { kind: 'recovered', operation: pending.operation, detail };
     }
 
     if (pending.operation === 'update') {
@@ -2964,8 +4076,19 @@ async function recoverCommand(directory: string) {
         recovered.rollback = loaded.state.rollback;
         recovered.lastError = undefined;
         await commitRecoveredState(loaded.directory, loaded.state, recovered);
-        console.log(`Recovered the incomplete update before the replacement was applied. OR3 ${recovered.appVersion} is deeply healthy.`);
-        return;
+        const detail = `Recovered the incomplete update before the replacement was applied. OR3 ${recovered.appVersion} is deeply healthy.`;
+        report(detail);
+        return { kind: 'recovered', operation: 'update', detail };
+      }
+      // A recorded target-ready milestone means the replacement succeeded; finish
+      // forward and preserve post-replacement writes. An explicit --restore
+      // request takes precedence so the advertised escape path always works.
+      if (decision.action === 'finish' && !explicitRestore) {
+        const detail = await finishTargetReadyUpdate(loaded.directory, loaded.state, loaded.env, report);
+        return { kind: 'recovered', operation: 'update', detail };
+      }
+      if (requiresExplicitRestore && !explicitRestore) {
+        throw new Error(`The incomplete update may have replaced data and has no completion proof. Nothing was changed. Review "npx @or3/cloud recover --dry-run", then restore deliberately with "npx @or3/cloud recover --restore --yes" (this discards writes made after the recorded pre-update snapshot).`);
       }
       if (!pending.backupPath && !pending.backupId) {
         throw new Error('The incomplete update has no verified pre-update snapshot. Refusing to guess which image or data should be live.');
@@ -2976,8 +4099,9 @@ async function recoverCommand(directory: string) {
         loaded.state,
         `Interrupted update was rolled back to pre-update snapshot ${previous.manifest.backupId}.`,
       );
-      console.log(`Recovered the incomplete update by restoring pre-update snapshot ${previous.manifest.backupId}. OR3 ${recovered.appVersion} is deeply healthy.`);
-      return;
+      const detail = `Recovered the incomplete update by restoring pre-update snapshot ${previous.manifest.backupId}. OR3 ${recovered.appVersion} is deeply healthy.`;
+      report(detail);
+      return { kind: 'recovered', operation: 'update', detail };
     }
 
     if (pending.operation === 'adopt') {
@@ -2999,8 +4123,9 @@ async function recoverCommand(directory: string) {
     if (pending.operation === 'backup' && pending.initialAppRunning === false) {
       loaded.state.lastError = undefined;
       await clearPending(loaded.directory, loaded.state);
-      console.log('Recovered the incomplete backup operation and preserved the intentionally stopped OR3 service.');
-      return;
+      const detail = 'Recovered the incomplete backup operation and preserved the intentionally stopped OR3 service.';
+      report(detail);
+      return { kind: 'recovered', operation: 'backup', detail };
     }
 
     // Init and backup keep the current .env as the intended deployment.
@@ -3042,7 +4167,9 @@ async function recoverCommand(directory: string) {
     recovered.rollback = loaded.state.rollback;
     recovered.lastError = undefined;
     await commitRecoveredState(loaded.directory, loaded.state, recovered);
-    console.log(`Recovered the incomplete ${pending.operation} operation. OR3 ${recovered.appVersion} is deeply healthy.`);
+    const detail = `Recovered the incomplete ${pending.operation} operation. OR3 ${recovered.appVersion} is deeply healthy.`;
+    report(detail);
+    return { kind: 'recovered', operation: pending.operation, detail };
   } catch (error) {
     const recoverySecrets = pending.operation === 'credentials-reset'
       ? secretValues(pending.credentialReset?.nextEnv ?? loaded.env)
@@ -3073,6 +4200,20 @@ function assertNoPending(state: ManagedState) {
   }
 }
 
+/**
+ * Explicit phase policy for container lifecycle commands (R4.AC4). Stopping is
+ * always safe. Starting or restarting while an interrupted operation is
+ * recorded would bypass recovery bookkeeping and can resurrect an ambiguous
+ * deployment, so it requires the operator to run recovery first.
+ */
+export function assertPhaseAllowsCommand(command: 'start' | 'stop' | 'restart', state: ManagedState) {
+  const pending = state.incompleteOperation;
+  if (!pending || command === 'stop') return;
+  throw new Error(
+    `An incomplete ${pending.operation}${pending.phase ? ` (${pending.phase})` : ''} is recorded. Refusing to ${command} an ambiguous deployment. Run "npx @or3/cloud recover --dry-run" to inspect the supported actions, then "npx @or3/cloud recover --finish" or "npx @or3/cloud recover --restore --yes".`,
+  );
+}
+
 async function backupCreateCommand(directory: string) {
   await ensureDocker();
   const loaded = await loadManaged(directory);
@@ -3096,9 +4237,12 @@ async function backupCreateCommand(directory: string) {
     // Retention is deliberately after the verified snapshot is committed and
     // OR3 is healthy. A corrupt older artifact must not turn a successful
     // backup into an incomplete operation or cause the new copy to be lost.
-    await pruneBackups(loaded.directory, loaded.state, BACKUP_RETENTION_KEEP, false);
+    const prune = await pruneBackups(loaded.directory, loaded.state, BACKUP_RETENTION_KEEP, false, { automatic: true });
     console.log(`Backup ${result.backupId} created at ${result.backupDir}`);
     console.log(`SHA-256: ${result.manifest.dataSha256}`);
+    if (prune.deferred.length > 0) {
+      console.warn(`Maintenance warning: ${prune.deferred.length} backup entr${prune.deferred.length === 1 ? 'y' : 'ies'} need inspection; all backups were preserved. Run "npx @or3/cloud backup list" for details.`);
+    }
   } catch (error) {
     loaded.state.lastError = redact(error instanceof Error ? error.message : String(error), secretValues(loaded.env));
     await writeState(loaded.directory, loaded.state);
@@ -3106,19 +4250,57 @@ async function backupCreateCommand(directory: string) {
   }
 }
 
-async function backupListCommand(directory: string) {
-  const loaded = await loadManaged(directory);
-  const backups = await enumerateBackups(loaded.directory);
-  if (backups.length === 0) {
-    console.log(`No authenticated backups are available for ${loaded.directory}. Run "npx @or3/cloud backup" to create one.`);
+async function backupListCommand(directory: string, flags: Flags = {}) {
+  const loaded = await loadManaged(directory, { writable: false });
+  const inventory = await inventoryBackups(loaded.directory);
+  const verified = inventory.entries
+    .filter((entry): entry is { kind: 'verified'; backup: BackupListing } => entry.kind === 'verified')
+    .map((entry) => entry.backup);
+  const findings = inventory.entries.filter((entry) => entry.kind !== 'verified');
+  if (boolFlag(flags, 'json')) {
+    // One versioned object on stdout; a store-level failure is reported in-band
+    // so automation can parse it without losing the diagnostic.
+    console.log(JSON.stringify({
+      schemaVersion: 1,
+      directory: loaded.directory,
+      backups: verified.map((backup) => ({
+        backupId: backup.backupId,
+        createdAt: backup.createdAt,
+        appVersion: backup.appVersion,
+        bytes: backup.bytes,
+        dataSha256: backup.dataSha256,
+        trust: 'verified',
+      })),
+      findings: findings.map((entry) => ({ entryName: entry.entryName, kind: entry.kind, code: entry.code, message: entry.message })),
+      storeErrors: inventory.storeErrors,
+    }, null, 2));
     return;
   }
-  console.log(`OR3 Cloud backups for ${loaded.directory} (${backups.length}):`);
-  console.log('backupId                      createdAt                      version  bytes     checksum');
-  for (const backup of backups) {
-    console.log(
-      `${backup.backupId.padEnd(30)} ${backup.createdAt.padEnd(30)} ${backup.appVersion.padEnd(8)} ${String(backup.bytes).padStart(9)}  ${backup.dataSha256.slice(0, 12)}`,
-    );
+  if (verified.length === 0 && findings.length === 0) {
+    console.log(`No backups are available for ${loaded.directory}. Run "npx @or3/cloud backup" to create one.`);
+    return;
+  }
+  if (verified.length === 0) {
+    console.log(`No authenticated backups are available for ${loaded.directory}.`);
+  } else {
+    console.log(`OR3 Cloud backups for ${loaded.directory} (${verified.length} verified):`);
+    console.log('backupId                      createdAt                      version  bytes     trust     checksum');
+    for (const backup of verified) {
+      console.log(
+        `${backup.backupId.padEnd(30)} ${backup.createdAt.padEnd(30)} ${backup.appVersion.padEnd(8)} ${String(backup.bytes).padStart(9)}  ${'verified'.padEnd(9)} ${backup.dataSha256.slice(0, 12)}`,
+      );
+    }
+  }
+  if (findings.length > 0) {
+    console.log(`\nPreserved history (${findings.length}; never trusted for restore):`);
+    for (const entry of findings) {
+      console.log(`  ${entry.entryName.padEnd(30)} ${entry.kind.padEnd(16)} ${entry.code}`);
+      console.log(`    ${entry.message}`);
+    }
+    console.log('\nTo obtain a trusted restore point, create a new backup of the current healthy deployment: npx @or3/cloud backup');
+  }
+  for (const diagnostic of inventory.storeErrors) {
+    console.log(`\nStore error (${diagnostic.severity}): ${diagnostic.message}`);
   }
   console.log('\nBackups contain credentials and secrets; keep them owner-only and export off-host.');
 }
@@ -3128,11 +4310,17 @@ async function backupPruneCommand(directory: string, flags: Flags) {
   assertNoPending(loaded.state);
   const keep = parseKeep(flags);
   const force = boolFlag(flags, 'force');
-  if (force && !boolFlag(flags, 'yes')) throw new Error('--force may delete the only rollback or recovery backup. Re-run with --force --yes after confirming the exact backups shown by `backup list`.');
-  const deleted = await pruneBackups(loaded.directory, loaded.state, keep, force);
-  console.log(deleted > 0
-    ? `Pruned ${deleted} backup(s); keeping the newest ${keep}.`
+  if (force && !boolFlag(flags, 'yes')) throw new Error('--force may delete backups beyond the retention count. Re-run with --force --yes after confirming the exact backups shown by `backup list`.');
+  const result = await pruneBackups(loaded.directory, loaded.state, keep, force, { automatic: !force });
+  if (!force && result.deferred.length > 0 && result.removed === 0) {
+    throw new Error(`Backup pruning is blocked because the store contains entries that need inspection:\n${result.deferred.map((diagnostic) => `  ${diagnostic.code}: ${diagnostic.message}`).join('\n')}\nNo backups were deleted. Run "npx @or3/cloud backup list" to inspect them, or re-run with --force --yes to prune only verified backups while preserving protected recovery sources.`);
+  }
+  console.log(result.removed > 0
+    ? `Pruned ${result.removed} backup(s); keeping the newest ${keep}.`
     : `Nothing to prune: keeping all backups (newest ${keep}).`);
+  if (result.deferred.length > 0) {
+    console.warn(`Preserved ${result.deferred.length} suspect or legacy entr${result.deferred.length === 1 ? 'y' : 'ies'} without deletion.`);
+  }
 }
 
 async function backupExportCommand(directory: string, backupId: string, destination: string) {
@@ -3211,8 +4399,9 @@ async function backupCommand(directory: string, positionals: string[], flags: Fl
   if (!subcommand) return await backupCreateCommand(directory);
   if (subcommand === 'list') {
     if (positionals.length > 1) throw new Error('backup list accepts no arguments.');
-    return await backupListCommand(directory);
+    return await backupListCommand(directory, flags);
   }
+  if (boolFlag(flags, 'json')) throw new Error('--json is supported only by `backup list`.');
   if (subcommand === 'prune') {
     if (positionals.length > 1) throw new Error('backup prune accepts no arguments.');
     return await backupPruneCommand(directory, flags);
@@ -3227,7 +4416,223 @@ async function backupCommand(directory: string, positionals: string[], flags: Fl
   throw new Error(`Unknown backup subcommand "${subcommand}". Use list, prune, export, or no subcommand to create a backup.`);
 }
 
+/** Stable explanatory fingerprint; never used as an authorization token. */
+export function stateFingerprint(state: ManagedState) {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      schema: state.schemaVersion,
+      appVersion: state.appVersion,
+      image: state.image,
+      imageDigest: state.imageDigest,
+      pending: state.incompleteOperation?.id ?? null,
+    }))
+    .digest('hex')
+    .slice(0, 16);
+}
+
+/**
+ * One shared update assessment used by both `update --dry-run` and the real
+ * update's execution-time revalidation. It performs no deployment or Docker
+ * mutation: assets are rendered in memory, disk space is read via statfs, and
+ * anything that would need a pull, writable probe, or fresh snapshot is marked
+ * deferred rather than passed.
+ */
+export async function assessUpdate(
+  directory: string,
+  targetVersion: string,
+  options: { inspectAssets?: boolean; checkDocker?: boolean; underLease?: boolean } = {},
+): Promise<UpdateAssessment> {
+  // `checkDocker` performs the read-only daemon/architecture probe when a caller
+  // wants live evidence (preview and execution). `underLease` tells the shared
+  // assessment that the active mutation lease is the caller's own, so its own
+  // in-progress state is not reported as a blocker.
+  const checkDocker = options.checkDocker ?? false;
+  const observation = await observeDeployment(directory, { checkDocker, checkImage: false });
+  const state = observation.state;
+  const checks: CheckResult[] = [];
+  const findings: Diagnostic[] = [...observationFindings(observation)];
+  const targetImage = imageFor(targetVersion);
+
+  if (!state) {
+    findings.push({ code: 'state-unreadable', severity: 'blocker', message: 'Managed state must be readable to preview an update.' });
+  } else if (state.incompleteOperation) {
+    findings.push({
+      code: 'operation-incomplete',
+      severity: 'blocker',
+      message: `An incomplete ${state.incompleteOperation.operation} is recorded. Run "npx @or3/cloud recover" before updating.`,
+      nextCommand: 'npx @or3/cloud recover',
+    });
+  }
+  if (observation.changing && !options.underLease) {
+    findings.push({ code: 'operation-in-progress', severity: 'blocker', message: 'A mutation lease is active; preview is non-executable until it settles.' });
+  }
+
+  let noOp = false;
+  if (state && targetVersion === state.appVersion && !state.incompleteOperation) {
+    noOp = true;
+    checks.push({ code: 'already-installed', status: 'passed', detail: `OR3 ${targetVersion} is already the installed release; execution is a no-op.` });
+  } else {
+    checks.push({ code: 'target-version', status: 'passed', detail: `Target OR3 ${targetVersion} (${targetImage}).` });
+  }
+
+  // Disk headroom on the backup filesystem (read-only statfs). The data volume
+  // requirement is deferred to execution-time validation.
+  try {
+    const stats = await statfs(deploymentPaths(directory).backups);
+    const freeBytes = Number(stats.bavail) * Number(stats.bsize);
+    checks.push({ code: 'backup-filesystem-space', status: 'passed', detail: `${freeBytes} bytes available on the backup filesystem.` });
+  } catch (error) {
+    checks.push({ code: 'backup-filesystem-space', status: 'unknown', detail: redact(error instanceof Error ? error.message : String(error)) });
+  }
+  checks.push({ code: 'data-volume-space', status: 'deferred', detail: 'The live data-volume requirement is validated after the snapshot, before downtime.' });
+  if (checkDocker) {
+    // Read-only daemon/architecture probe. It never pulls or changes images, so
+    // it is safe to run during preview instead of deferring the whole check.
+    if (observation.docker) {
+      try {
+        const architecture = await dockerDaemonArchitecture();
+        checks.push({ code: 'docker-availability', status: 'passed', detail: `Docker daemon is reachable (${architecture}).` });
+      } catch (error) {
+        checks.push({ code: 'docker-availability', status: 'failed', detail: redact(error instanceof Error ? error.message : String(error)) });
+      }
+    } else {
+      checks.push({ code: 'docker-availability', status: 'unknown', detail: 'The Docker daemon is not reachable from this host; it is revalidated at execution time.' });
+    }
+  } else {
+    checks.push({ code: 'docker-availability', status: 'deferred', detail: 'Docker availability and daemon architecture are revalidated at execution time.' });
+  }
+  checks.push({ code: 'image-pull', status: 'deferred', detail: 'The target image pull and architecture/provenance checks run at execution time.' });
+  checks.push({ code: 'fresh-snapshot', status: 'deferred', detail: 'A fresh authenticated snapshot is created at execution time.' });
+
+  // Retention plan: show what automatic pruning would keep/remove/preserve.
+  const plan = planRetention(
+    observation.backups?.entries ?? [],
+    BACKUP_RETENTION_KEEP,
+    state ? retentionProtectedIds(state) : new Set(),
+    { automatic: true },
+  );
+  checks.push({
+    code: 'retention',
+    status: plan.canPrune ? 'passed' : 'deferred',
+    detail: plan.canPrune
+      ? `Would keep ${plan.keep.length} verified backup(s) and prune ${plan.remove.length}.`
+      : `${plan.warnings.length} entry(ies) need inspection; automatic pruning is deferred and all backups are preserved.`,
+  });
+  for (const warning of plan.warnings) findings.push(warning);
+
+  // Asset changes: compare the installed generated files with the target CLI.
+  if (options.inspectAssets !== false) {
+    const changed: string[] = [];
+    for (const name of managedAssetNames(state?.mode ?? 'local')) {
+      // A required asset that this CLI cannot read is a hard blocker: without it
+      // the target deployment cannot be rendered, and silently reporting
+      // "assets unchanged" would hide the failure until execution.
+      let desired: Buffer;
+      try {
+        desired = await readFile(join(ASSET_ROOT, name));
+      } catch (error) {
+        findings.push({
+          code: 'managed-asset-unreadable',
+          severity: 'blocker',
+          resource: name,
+          message: `Required generated asset ${name} could not be read from this CLI: ${redact(error instanceof Error ? error.message : String(error))}`,
+        });
+        continue;
+      }
+      try {
+        const installedPath = join(directory, name);
+        if (!await fileExists(installedPath)) {
+          changed.push(`${name} (add)`);
+          continue;
+        }
+        const installed = await readFile(installedPath);
+        if (!installed.equals(desired)) changed.push(`${name} (update)`);
+      } catch (error) {
+        findings.push({
+          code: 'managed-asset-unreadable',
+          severity: 'blocker',
+          resource: name,
+          message: `Installed generated asset ${name} could not be read from ${directory}: ${redact(error instanceof Error ? error.message : String(error))}`,
+        });
+      }
+    }
+    checks.push(changed.length
+      ? { code: 'managed-assets', status: 'passed', detail: `Generated assets change: ${changed.join(', ')}.` }
+      : { code: 'managed-assets', status: 'passed', detail: 'Generated assets are unchanged.' });
+  }
+
+  // Compatibility: unknown/future schemas are refused before mutation.
+  try {
+    assertKnownStateSchema(state?.schemaVersion);
+    checks.push({ code: 'state-schema', status: 'passed', detail: `Managed state schema ${String(state?.schemaVersion)} is supported.` });
+  } catch (error) {
+    findings.push({ code: 'state-schema-unsupported', severity: 'blocker', message: error instanceof Error ? error.message : String(error) });
+  }
+
+  const blockers = findings.filter((finding) => finding.severity === 'blocker');
+  blockers.sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
+  return {
+    schemaVersion: 1,
+    observedAt: observation.observedAt,
+    source: state ? { appVersion: state.appVersion, image: state.image, imageDigest: state.imageDigest } : null,
+    target: { appVersion: targetVersion, image: targetImage, imageDigest: expectedImageDigest(targetVersion) ?? 'unknown' },
+    checks,
+    findings: [...blockers, ...findings.filter((finding) => finding.severity !== 'blocker')],
+    retention: plan,
+    stateFingerprint: state ? stateFingerprint(state) : 'unavailable',
+  };
+}
+
+async function updatePreviewCommand(directory: string, flags: Flags) {
+  const targetVersion = stringFlag(flags, 'to')?.trim() ?? PACKAGE_VERSION;
+  if (!isVersion(targetVersion)) throw new Error(`--to must be a complete semantic version such as ${PACKAGE_VERSION}.`);
+  if (targetVersion !== PACKAGE_VERSION) {
+    throw new Error(`This CLI contains deployment assets for OR3 ${PACKAGE_VERSION}. Preview the matching CLI with \`npx --yes @or3/cloud@${targetVersion} update --to ${targetVersion} --dry-run\`.`);
+  }
+  const assessment = await assessUpdate(directory, targetVersion, { checkDocker: true });
+  if (boolFlag(flags, 'json')) {
+    console.log(JSON.stringify({ ...assessment, kind: 'or3-update-preview' }, null, 2));
+  } else {
+    console.log(`OR3 update preview for ${directory}`);
+    console.log(`  source: ${assessment.source ? `OR3 ${assessment.source.appVersion} (${assessment.source.imageDigest})` : 'unknown'}`);
+    console.log(`  target: OR3 ${assessment.target.appVersion} (${assessment.target.imageDigest})`);
+    console.log(`  state fingerprint: ${assessment.stateFingerprint}`);
+    console.log();
+    for (const check of assessment.checks) console.log(`  [${check.status}] ${check.code}: ${check.detail}`);
+    console.log();
+    for (const finding of assessment.findings) console.log(`  [${finding.severity}] ${finding.code}: ${finding.message}`);
+    if (assessment.retention.preserve.length) {
+      console.log('\n  Preserved backups:');
+      for (const entry of assessment.retention.preserve) console.log(`    ${entry.entryName}: ${entry.reason}`);
+    }
+    console.log('\nDry run only: no state, assets, lease, images, services, snapshots, or backups were changed.');
+  }
+  if (assessment.findings.some((finding) => finding.severity === 'blocker')) process.exitCode = 1;
+}
+
 async function updateCommand(directory: string, flags: Flags) {
+  // With --json, stdout carries exactly one result object for every terminal
+  // path (success, no-op, blocked, or failure) and all progress goes to stderr.
+  const asJson = boolFlag(flags, 'json');
+  try {
+    return await runUpdateCommand(directory, flags, asJson);
+  } catch (error) {
+    if (!asJson) throw error;
+    const message = redact(error instanceof Error ? error.message : String(error));
+    console.error(`OR3 Cloud failed: ${message}`);
+    emitOperationResult({
+      kind: 'blocked',
+      findings: [{ code: 'update-failed', severity: 'blocker', message, nextCommand: 'npx @or3/cloud recover --dry-run' }],
+    });
+    process.exitCode = 1;
+  }
+}
+
+async function runUpdateCommand(directory: string, flags: Flags, asJson: boolean) {
+  const progress = (...args: unknown[]) => {
+    if (asJson) console.error(...args);
+    else console.log(...args);
+  };
   await ensureDocker();
   const loaded = await loadManaged(directory);
   const { state, env } = loaded;
@@ -3238,7 +4643,18 @@ async function updateCommand(directory: string, flags: Flags) {
   if (targetVersion !== PACKAGE_VERSION) {
     throw new Error(`This CLI contains deployment assets for OR3 ${PACKAGE_VERSION}. Run \`npx --yes @or3/cloud@${targetVersion} update --to ${targetVersion}\` so the image and generated assets match.`);
   }
-  if (targetVersion === state.appVersion) throw new Error(`The deployment is already on OR3 ${targetVersion}.`);
+  if (targetVersion === state.appVersion) {
+    if (asJson) emitOperationResult({ kind: 'no-op', detail: `OR3 ${targetVersion} is already installed.`, currentVersion: state.appVersion, targetVersion });
+    else progress(`OR3 ${targetVersion} is already installed. Nothing to do.`);
+    return;
+  }
+  // Shared preflight: the same assessment the dashboard previews now runs at
+  // execution time under the lease and blocks before any pull or data change.
+  const preflight = await assessUpdate(loaded.directory, targetVersion, { underLease: true, checkDocker: true });
+  const preflightBlockers = preflight.findings.filter((finding) => finding.severity === 'blocker');
+  if (preflightBlockers.length > 0) {
+    throw new Error(`Update to ${targetVersion} is blocked by preflight: ${preflightBlockers.map((finding) => `${finding.code} (${finding.message})`).join(' ')}`);
+  }
   const targetImageTag = imageFor(targetVersion);
   const targetDigest = await pullImage(targetImageTag, expectedImageDigest(targetVersion));
   await assertSupportedHostArchitecture(targetImageTag);
@@ -3261,21 +4677,42 @@ async function updateCommand(directory: string, flags: Flags) {
     phase: 'prepared',
   };
   await markPending(loaded.directory, state, pending);
+  const startedAtMs = Date.now();
   try {
+    // Resolve the dedicated operator runtime for every target version before
+    // downtime. Keeping an old privileged image after an application update
+    // defeats the digest binding and leaves security fixes behind. The app
+    // image was already pulled and provenance-checked above, so both artifacts
+    // are prepared while the source is still running.
+    const operator = await prepareVerifiedDashboardOperator(loaded.directory, targetVersion);
     const backup = await createBackup(loaded.directory, state, env, { restartAfter: false, backupId });
+    // The bridge release reads schema 2 but keeps writing schema 1. Only a
+    // release explicitly qualified to write schema 2 migrates, and only after
+    // the compatibility bridge is present (declared minimum source). Migration
+    // and the initial pending update share one atomic write, so an empty
+    // new-format state is never published on its own.
+    const writeSchema = writeStateSchema();
+    if (writeSchema >= 2) {
+      const minimumSource = packagedMinimumSourceVersion();
+      if (minimumSource && compareReleaseVersions(state.appVersion, minimumSource) < 0) {
+        throw new Error(`OR3 ${targetVersion} writes managed state schema 2, which requires the compatibility bridge (source ${minimumSource} or newer). Run the host CLI bridge update first, then retry this schema-2 release.`);
+      }
+      state.schemaVersion = writeSchema;
+    }
     await updatePending(loaded.directory, state, {
       backupId: backup.backupId,
       backupPath: backup.backupDir,
       backupDataSha256: backup.manifest.dataSha256,
       backupConfigSha256: backup.manifest.configSha256,
       phase: 'snapshot-created',
+      verifiedSnapshot: {
+        backupId: backup.backupId,
+        path: backup.backupDir,
+        dataSha256: backup.manifest.dataSha256,
+        configSha256: backup.manifest.configSha256 ?? '',
+        createdAt: backup.manifest.createdAt,
+      },
     });
-    // Resolve the dedicated operator runtime for every target version. Keeping
-    // an old privileged image after an application update defeats the digest
-    // binding and leaves security fixes behind. A host-CLI update can safely
-    // remove an unavailable bridge before changing the overlay; a dashboard
-    // update lets its current supervisor exit cleanly after the commit.
-    const operator = await prepareVerifiedDashboardOperator(loaded.directory, targetVersion);
     if (env.OR3_DASHBOARD_UPDATES_ENABLED === 'true' && !operator && !process.env.OR3_DASHBOARD_UPDATE_JOB_ID) {
       await removeDashboardOperator(loaded.directory, state.mode);
     }
@@ -3314,8 +4751,9 @@ async function updateCommand(directory: string, flags: Flags) {
       if (migrateLegacyVolume || recreateDataVolume) {
         await restoreVolumeArchive(loaded.directory, state.mode, nextEnv, backup.backupDir);
       }
-      await startProject(loaded.directory, state.mode, nextEnv);
     } catch (error) {
+      // Failure before the target can accept writes: the deployment is still
+      // the known-good source, so automatic restoration is safe.
       await updatePending(loaded.directory, state, { phase: 'restoring-previous' });
       try {
         if (!recreateDataVolume) await stopProject(loaded.directory, state.mode).catch(() => undefined);
@@ -3333,11 +4771,100 @@ async function updateCommand(directory: string, flags: Flags) {
       );
       throw new Error(recovered.lastError);
     }
+    // The target is about to start and may accept writes. Persist this boundary
+    // first; a failure from here must never silently discard those writes.
+    await updatePending(loaded.directory, state, { phase: 'starting-target' });
+    try {
+      await startProject(loaded.directory, state.mode, nextEnv);
+    } catch (error) {
+      throw new Error(`Update to ${targetVersion} started the target but it did not pass verification: ${redact(error instanceof Error ? error.message : String(error), secretValues(nextEnv))}. Writes may have been accepted, so the deployment was NOT restored automatically. Run "npx @or3/cloud recover --dry-run", then "npx @or3/cloud recover --finish" if the target is proven, or "npx @or3/cloud recover --restore --yes" to return to the pre-update snapshot.`);
+    }
     const digest = await requireImageDigest(targetImage, targetDigest, `OR3 ${targetVersion}`);
+    // Durable target-ready proof: the replacement boundary completed, the
+    // configuration and generated assets are bound, the observed container and
+    // image match, and the required database/public-health checks passed. A
+    // crash before this point cannot be inferred as success from health alone.
+    const targetChecks = await collectTargetReadyChecks(loaded.directory, state.mode, nextEnv);
+    const failedTargetChecks = targetChecks.checks.filter((check) => check.status !== 'passed');
+    if (!targetChecks.containerId || failedTargetChecks.length > 0) {
+      throw new Error(`Update to ${targetVersion} did not pass the required target checks (${failedTargetChecks.map((check) => check.code).join(', ') || 'container-binding'}). Writes may have been accepted, so the deployment was NOT restored automatically. Run "npx @or3/cloud recover --dry-run", then "npx @or3/cloud recover --restore --yes" to return to the pre-update snapshot.`);
+    }
+    const targetReadyEvidence: TargetReadyEvidence = {
+      checkedAt: now(),
+      deploymentId: targetDeploymentId,
+      deploymentRoot: resolve(loaded.directory),
+      containerId: targetChecks.containerId,
+      imageDigest: digest,
+      configurationSha256: await sha256File(deploymentPaths(loaded.directory).env),
+      managedAssetSha256: await installedManagedAssetChecksums(loaded.directory, state.mode),
+      dataReplacementCompleted: true,
+      checks: [
+        { code: 'image-digest', status: 'passed', detail: `${targetImage}@${digest}` },
+        { code: 'deep-health', status: 'passed', detail: 'OR3 deep health and running-image identity verified' },
+        ...targetChecks.checks,
+      ],
+    };
+    if (writeSchema >= 2) {
+      // Only a schema-2 writer records the target-ready milestone: a schema-1
+      // reader would misroute the new phase to its destructive restore path.
+      await updatePending(loaded.directory, state, { phase: 'target-ready', evidence: targetReadyEvidence });
+    }
+
+    const warnings: Diagnostic[] = [];
+    const hadDashboardJob = Boolean(process.env.OR3_DASHBOARD_UPDATE_JOB_ID);
+    let operatorHandoff: OperationReceipt['operatorHandoff'] = 'not-required';
+    // Schedule the privileged handoff while the lease/operation are still
+    // active; the helper waits on the authoritative terminal operation and job.
+    if (nextEnv.OR3_DASHBOARD_UPDATES_ENABLED === 'true' && hadDashboardJob) {
+      try {
+        await scheduleDashboardOperatorHandoff(loaded.directory, nextEnv);
+        operatorHandoff = 'pending';
+      } catch (error) {
+        operatorHandoff = 'needs-attention';
+        warnings.push({
+          code: 'operator-handoff-schedule-failed',
+          severity: 'warning',
+          resource: pending.id,
+          message: `The application is upgraded, but the dashboard operator handoff could not be scheduled: ${redact(error instanceof Error ? error.message : String(error), secretValues(nextEnv))}. Run "npx @or3/cloud recover --finish" on the host.`,
+          nextCommand: 'npx @or3/cloud recover --finish',
+        });
+      }
+    }
+
+    const sourceVersion = state.appVersion;
+    const sourceImage = state.image;
+    const sourceDigest = state.imageDigest;
+    const receipt: OperationReceipt = {
+      schemaVersion: 1,
+      operationId: pending.id,
+      dashboardJobId: process.env.OR3_DASHBOARD_UPDATE_JOB_ID?.trim() || undefined,
+      cliVersion: PACKAGE_VERSION,
+      source: {
+        appVersion: sourceVersion,
+        image: sourceImage,
+        imageDigest: sourceDigest,
+        sourceRevision: packagedSourceRevision(sourceVersion),
+        operatorImageDigest: expectedOperatorImageDigest(sourceVersion),
+      },
+      target: {
+        appVersion: targetVersion,
+        image: targetImage,
+        imageDigest: digest,
+        sourceRevision: packagedSourceRevision(targetVersion),
+        operatorImageDigest: expectedOperatorImageDigest(targetVersion),
+      },
+      observed: { appVersion: targetVersion, image: targetImage, imageDigest: digest },
+      completedAt: now(),
+      rollbackBackupId: backup.backupId,
+      checks: targetReadyEvidence.checks,
+      warnings,
+      phaseDurationsMs: { 'replace-and-verify': Date.now() - startedAtMs },
+      operatorHandoff,
+    };
     state.rollback = {
-      appVersion: state.appVersion,
-      image: state.image,
-      imageDigest: state.imageDigest,
+      appVersion: sourceVersion,
+      image: sourceImage,
+      imageDigest: sourceDigest,
       backupId: backup.backupId,
       createdAt: now(),
     };
@@ -3348,11 +4875,46 @@ async function updateCommand(directory: string, flags: Flags) {
     state.deploymentRoot = resolve(loaded.directory);
     state.lastSuccessfulOperation = 'update';
     state.lastError = undefined;
-    await pruneBackups(loaded.directory, state, BACKUP_RETENTION_KEEP, false);
-    await scheduleDashboardOperatorHandoff(loaded.directory, nextEnv);
-    await clearPending(loaded.directory, state);
-    console.log(`OR3 updated to ${targetVersion}. Image digest: ${digest}`);
-    console.log(`Rollback point: ${backup.backupId}. Keep it until login, chat, and file checks pass.`);
+    // Terminal commit before any cleanup: target identity, rollback reference,
+    // receipt, and absence of a pending operation land in one atomic write.
+    let commit: { committed: true; operationId?: string };
+    try {
+      commit = await commitTerminalState(loaded.directory, state, receipt);
+    } catch (error) {
+      throw new Error(`OR3 ${targetVersion} replaced the running release, but the terminal state write could not be confirmed. Recovery evidence was preserved; re-run status/doctor and "npx @or3/cloud recover" to resolve the durable outcome before any further mutation. ${redact(error instanceof Error ? error.message : String(error), secretValues(nextEnv))}`);
+    }
+    // The application commit has succeeded; the following are housekeeping and
+    // operational results only. They never reopen pending state.
+    try {
+      await removeOperationRecord(loaded.directory, commit.operationId);
+    } catch (error) {
+      warnings.push({ code: 'operation-mirror-delete-failed', severity: 'warning', resource: commit.operationId, message: redact(error instanceof Error ? error.message : String(error), secretValues(nextEnv)) });
+    }
+    const prune = await pruneBackups(loaded.directory, state, BACKUP_RETENTION_KEEP, false, { automatic: true, log: progress, warn: progress }).catch((error) => {
+      warnings.push({ code: 'retention-failed', severity: 'warning', message: redact(error instanceof Error ? error.message : String(error), secretValues(nextEnv)) });
+      return { removed: 0, deferred: [] } as PruneResult;
+    });
+    for (const diagnostic of prune.deferred) warnings.push(diagnostic);
+    progress(`OR3 updated to ${targetVersion}. Image digest: ${digest}`);
+    progress(`Rollback point: ${backup.backupId}. Keep it until login, chat, and file checks pass.`);
+    progress('Not checked: live OpenRouter authorization (complete it in the browser).');
+    if (warnings.length > 0) {
+      warnings.forEach((warning) => console.warn(`⚠ ${warning.code}: ${warning.message}`));
+    }
+    // Persist any post-commit maintenance warnings into the authoritative
+    // receipt before reporting, so a reload or the dashboard still sees them.
+    await persistReceiptWarnings(loaded.directory, state, warnings);
+    if (asJson) {
+      const outcome: OperationOutcome = warnings.length > 0
+        ? { kind: 'completed-with-warnings', receipt, warnings }
+        : { kind: 'completed', receipt };
+      emitOperationResult(outcome);
+    } else if (warnings.length > 0) {
+      console.log(`Update complete with ${warnings.length} maintenance warning(s).`);
+      console.log('Next: npx @or3/cloud backup list');
+    } else {
+      console.log('Update complete. No maintenance warnings.');
+    }
   } catch (error) {
     if (state.incompleteOperation) {
       state.lastError = redact(error instanceof Error ? error.message : String(error), secretValues(env));
@@ -3494,8 +5056,10 @@ async function restoreCommand(directory: string, flags: Flags, positionals: stri
     const digest = await imageDigest(restoredEnv.OR3_IMAGE);
     const nextState = stateFromEnv(loaded.directory, restoredEnv, loaded.state.mode, 'restore', digest);
     nextState.lastError = undefined;
-    await removeOperationRecord(loaded.directory, pending.id);
+    // Terminal state first; the redundant mirror is warning-only housekeeping so
+    // its failure cannot send a completed restore into the destructive handler.
     await writeState(loaded.directory, nextState);
+    await removeOperationRecordSafely(loaded.directory, pending.id);
     console.log(`Restored ${manifest.backupId}. Verify sign-in, a conversation, and a previously uploaded file.`);
   } catch (error) {
     const original = redact(error instanceof Error ? error.message : String(error), secretValues(loaded.env));
@@ -3587,8 +5151,10 @@ async function rollbackCommand(directory: string, flags: Flags) {
     const restoredEnv = parseEnv(await readText(deploymentPaths(loaded.directory).env));
     const nextState = stateFromEnv(loaded.directory, restoredEnv, loaded.state.mode, 'restore', await imageDigest(restoredEnv.OR3_IMAGE));
     nextState.rollback = undefined;
-    await removeOperationRecord(loaded.directory, pending.id);
+    // Terminal state first; the redundant mirror is warning-only housekeeping so
+    // its failure cannot send a completed rollback into the destructive handler.
     await writeState(loaded.directory, nextState);
+    await removeOperationRecordSafely(loaded.directory, pending.id);
     console.log(`Rolled back to OR3 ${nextState.appVersion}. Verify sign-in, chat, and file access.`);
   } catch (error) {
     const original = redact(error instanceof Error ? error.message : String(error), secretValues(loaded.env));
@@ -4163,6 +5729,73 @@ async function verifyCommand(directory: string, flags: Flags, positionals: strin
   console.log('✓ auth.sqlite and sync.sqlite quick_check passed with managed ownership');
   console.log('✓ Recent bounded logs contain no fatal, panic, unhandled, or OOM events');
   console.log('OR3 production verification passed.');
+}
+
+/**
+ * Explicitly read-only verification (R4.AC1–AC2). It never acquires or
+ * reclaims the lease, logs in, uploads probes, opens SQLite read/write, pulls
+ * images, creates helper containers, or repairs files. Checks that would
+ * require one of those are reported as deferred/unknown instead of passed.
+ */
+async function verifyReadOnlyCommand(directory: string, flags: Flags) {
+  const observation = await observeDeployment(directory, { checkDocker: true, checkImage: true });
+  const state = observation.state;
+  if (!state) {
+    throw new Error(`Read-only verification needs readable managed state.${observation.stateError ? ` ${observation.stateError}` : ''} Run "npx @or3/cloud doctor" for diagnostics.`);
+  }
+  if (boolFlag(flags, 'public') && state.mode !== 'public') throw new Error('--public requires a managed public deployment.');
+  const checks: CheckResult[] = [];
+  const findings = observationFindings(observation);
+
+  checks.push(observation.identityMatches === true
+    ? { code: 'image-digest', status: 'passed', detail: `Recorded digest matches the local image (${state.imageDigest}).` }
+    : observation.identityMatches === false
+      ? { code: 'image-digest', status: 'failed', detail: `Recorded ${observation.recordedImageDigest} does not match local ${observation.actualImageDigest}.` }
+      : { code: 'image-digest', status: 'unknown', detail: 'The managed image could not be inspected safely.' });
+
+  const baseUrl = new URL(
+    state.mode === 'public' ? `https://${state.domain}` : `http://127.0.0.1:${state.port}`,
+  );
+  try {
+    const root = await verificationFetch(baseUrl);
+    checks.push(root.status === 200
+      ? { code: 'http-root', status: 'passed', detail: `${baseUrl.origin} returned HTTP 200 without redirects.` }
+      : { code: 'http-root', status: 'failed', detail: `${baseUrl.origin} returned HTTP ${root.status}.` });
+  } catch (error) {
+    checks.push({ code: 'http-root', status: 'failed', detail: redact(error instanceof Error ? error.message : String(error)) });
+  }
+  try {
+    validateVerificationHealth(await verificationJson(baseUrl, '/api/health?deep=true'));
+    checks.push({ code: 'deep-health', status: 'passed', detail: 'Deep health reports the managed Basic Auth + SQLite + filesystem profile.' });
+  } catch (error) {
+    checks.push({ code: 'deep-health', status: 'failed', detail: redact(error instanceof Error ? error.message : String(error)) });
+  }
+  // Deliberately skipped (not failures): these require writes, credentials, or
+  // container exec, so read-only verification reports them as deferred and does
+  // not fail the run for them.
+  checks.push({ code: 'auth-and-storage-journey', status: 'deferred', detail: 'Sign-in, sync, and storage probes are excluded from read-only verification.' });
+  checks.push({ code: 'sqlite-integrity', status: 'deferred', detail: 'SQLite inspection is deferred because a safe read-only mechanism is unavailable.' });
+  checks.push({ code: 'bounded-logs', status: 'deferred', detail: 'Log scanning is deliberately skipped by read-only verification; run full verify for it.' });
+
+  if (boolFlag(flags, 'json')) {
+    console.log(JSON.stringify({
+      schemaVersion: 1,
+      kind: 'or3-verify-read-only',
+      observedAt: observation.observedAt,
+      directory: observation.directory,
+      readOnly: true,
+      checks,
+      findings,
+    }, null, 2));
+  } else {
+    for (const check of checks) console.log(`  [${check.status}] ${check.code}: ${check.detail}`);
+    for (const finding of findings) console.log(`  [${finding.severity}] ${finding.code}: ${finding.message}`);
+  }
+  // Only an actual failure is nonzero. Deliberately deferred/skipped checks and
+  // an inconclusive (unknown) observation must not fail a read-only run.
+  if (checks.some((check) => check.status === 'failed')) {
+    process.exitCode = 1;
+  }
 }
 
 async function readSourceVolume(sourceDirectory: string) {
@@ -4771,32 +6404,76 @@ async function credentialsCommand(directory: string, positionals: string[], flag
   return await credentialsResetCommand(directory, flags);
 }
 
-/** Reports deployment summary, container status, and a bounded deep-health probe. */
-async function statusCommand(directory: string) {
-  const loaded = await loadManaged(directory);
-  assertDeploymentDirectoryIdentity(directory, loaded.state);
-  const { state } = loaded;
-  console.log(`OR3 Cloud deployment: ${loaded.directory}`);
-  console.log(`  mode: ${state.mode}`);
-  console.log(`  version: ${state.appVersion}`);
-  if (state.domain) console.log(`  domain: ${state.domain}`);
-  console.log(`  port: ${state.port}`);
-  console.log(`  image digest: ${state.imageDigest}`);
-  console.log(`  last successful operation: ${state.lastSuccessfulOperation} (${state.updatedAt})`);
-  if (state.incompleteOperation) console.log(`  incomplete operation: ${state.incompleteOperation.operation} (${state.incompleteOperation.id})`);
-  if (state.lastError) console.log(`  last error: ${state.lastError}`);
-  console.log();
-  const ps = await run('docker', [...composeArgs(directory, state.mode, ['ps'])], directory);
-  if (ps.ok) {
-    console.log(ps.stdout.trim());
-  } else {
-    console.log(`Could not list containers: ${ps.stderr}`);
+/**
+ * Reports deployment summary, container status, and a bounded deep-health
+ * probe. Uses independent observations so a corrupt state/env/backup source
+ * still reports the evidence that is readable, and labels a live lease as
+ * in-progress rather than authoritative.
+ */
+async function statusCommand(directory: string, flags: Flags = {}) {
+  const observation = await observeDeployment(directory, { checkDocker: true, checkImage: true });
+  const findings = observationFindings(observation);
+  const state = observation.state;
+  if (boolFlag(flags, 'json')) {
+    console.log(JSON.stringify({
+      schemaVersion: 1,
+      kind: 'or3-deployment-status',
+      observedAt: observation.observedAt,
+      partial: observation.partial,
+      inProgress: observation.changing,
+      directory: observation.directory,
+      state: state ? publicStateProjection(state) : null,
+      stateError: observation.stateError,
+      envError: observation.envError,
+      lease: observation.lease.status,
+      docker: observation.docker,
+      recordedImageDigest: observation.recordedImageDigest,
+      actualImageDigest: observation.actualImageDigest,
+      identityMatches: observation.identityMatches,
+      lastReceipt: state?.lastReceipt ?? null,
+      backups: observation.backups,
+      findings,
+    }, null, 2));
+    return;
   }
-const health = await probeDeepHealth(directory, state.mode);
-  if (health === 'ok') console.log('Deep health: OK');
-  else if (health === 'degraded') console.log('Deep health: DEGRADED (the container is running but /api/health?deep=true is failing).');
-  else console.log('Deep health: unreachable (the or3 container is not running).');
-  await printMaintenanceSummary(directory, state.mode);
+  console.log(`OR3 Cloud deployment: ${observation.directory}`);
+  if (observation.changing) console.log('  status: in progress (a mutation lease is active; this observation is not authoritative)');
+  if (!state) {
+    console.log(`  state: unreadable${observation.stateError ? ` — ${observation.stateError}` : ''}`);
+  } else {
+    console.log(`  mode: ${state.mode}`);
+    console.log(`  version: ${state.appVersion}`);
+    if (state.domain) console.log(`  domain: ${state.domain}`);
+    console.log(`  port: ${state.port}`);
+    console.log(`  image digest: ${state.imageDigest}`);
+    console.log(`  last successful operation: ${state.lastSuccessfulOperation} (${state.updatedAt})`);
+    if (state.incompleteOperation) console.log(`  incomplete operation: ${state.incompleteOperation.operation} (${state.incompleteOperation.id})`);
+    if (state.lastError) console.log(`  last error: ${state.lastError}`);
+  }
+  if (observation.envError) console.log(`  environment: unreadable — ${observation.envError}`);
+  if (observation.identityMatches === false) console.log(`  image: MISMATCH (recorded ${observation.recordedImageDigest}, local ${observation.actualImageDigest})`);
+  else if (observation.identityMatches === true) console.log('  image: digest matches managed state');
+  console.log();
+  if (state && observation.docker && observation.env) {
+    try {
+      const ps = await run('docker', [...composeArgs(directory, state.mode, ['ps'])], directory);
+      console.log(ps.ok ? ps.stdout.trim() : `Could not list containers: ${ps.stderr}`);
+      const health = await probeDeepHealth(directory, state.mode);
+      if (health === 'ok') console.log('Deep health: OK');
+      else if (health === 'degraded') console.log('Deep health: DEGRADED (the container is running but /api/health?deep=true is failing).');
+      else console.log('Deep health: unreachable (the or3 container is not running).');
+      await printMaintenanceSummary(directory, state.mode);
+    } catch (error) {
+      // Compose needs the managed .env for the project name; a failure here is
+      // reported as a skipped check rather than failing the whole status.
+      console.log(`Container and health checks were skipped: ${redact(error instanceof Error ? error.message : String(error))}`);
+    }
+  } else if (state && !observation.docker) {
+    console.log('Docker is unavailable; container and health checks were skipped.');
+  } else if (state && !observation.env) {
+    console.log('The managed environment is unreadable; container and health checks were skipped.');
+  }
+  for (const finding of findings) console.log(`  [${finding.severity}] ${finding.code}: ${finding.message}`);
 }
 
 /** Renders the provider maintenance state (SQLite history GC) from deep health. */
@@ -4825,7 +6502,7 @@ async function printMaintenanceSummary(directory: string, mode: Mode) {
 }
 
 async function logsCommand(directory: string, flags: Flags, positionals: string[]) {
-  const loaded = await loadManaged(directory);
+  const loaded = await loadManaged(directory, { writable: false });
   assertDeploymentDirectoryIdentity(directory, loaded.state);
   if (positionals.length > 1) throw new Error('logs accepts at most one service name.');
   const tailValue = stringFlag(flags, 'tail') ?? '200';
@@ -4846,6 +6523,7 @@ async function startCommand(directory: string) {
   await ensureDocker();
   const loaded = await loadManaged(directory);
   assertDeploymentDirectoryIdentity(directory, loaded.state);
+  assertPhaseAllowsCommand('start', loaded.state);
   await startProject(directory, loaded.state.mode, loaded.env);
   const url = loaded.state.mode === 'public' ? `https://${loaded.state.domain}` : `http://127.0.0.1:${loaded.state.port}`;
   console.log(`OR3 started and is deeply healthy at ${url}.`);
@@ -4863,6 +6541,7 @@ async function restartCommand(directory: string) {
   await ensureDocker();
   const loaded = await loadManaged(directory);
   assertDeploymentDirectoryIdentity(directory, loaded.state);
+  assertPhaseAllowsCommand('restart', loaded.state);
   await compose(directory, loaded.state.mode, ['restart', 'or3']);
   await waitForDeepHealth(directory, loaded.state.mode, secretValues(loaded.env));
   console.log('OR3 restarted and is deeply healthy.');
@@ -5029,16 +6708,22 @@ async function main(argv = process.argv.slice(2)) {
     assertCommandPositionals(command, parsed.positionals);
     const dispatch = async () => {
       if (command === 'init') return await initCommand(parsed.positionals, parsed.flags);
-      if (command === 'update') return await updateCommand(process.cwd(), parsed.flags);
+      if (command === 'update') {
+        if (boolFlag(parsed.flags, 'dry-run')) return await updatePreviewCommand(process.cwd(), parsed.flags);
+        return await updateCommand(process.cwd(), parsed.flags);
+      }
       if (command === 'backup') return await backupCommand(process.cwd(), parsed.positionals, parsed.flags);
       if (command === 'restore') return await restoreCommand(process.cwd(), parsed.flags, parsed.positionals);
       if (command === 'rollback') return await rollbackCommand(process.cwd(), parsed.flags);
       if (command === 'credentials') return await credentialsCommand(process.cwd(), parsed.positionals, parsed.flags);
       if (command === 'doctor') return await doctorCommand(process.cwd());
-      if (command === 'verify') return await verifyCommand(process.cwd(), parsed.flags, parsed.positionals);
-      if (command === 'recover') return await recoverCommand(process.cwd());
+      if (command === 'verify') {
+        if (verifyIsReadOnly(parsed.flags)) return await verifyReadOnlyCommand(process.cwd(), parsed.flags);
+        return await verifyCommand(process.cwd(), parsed.flags, parsed.positionals);
+      }
+      if (command === 'recover') return await recoverCommand(process.cwd(), parsed.flags);
       if (command === 'adopt') return await adoptCommand(parsed.positionals, parsed.flags);
-      if (command === 'status') return await statusCommand(process.cwd());
+      if (command === 'status') return await statusCommand(process.cwd(), parsed.flags);
       if (command === 'logs') return await logsCommand(process.cwd(), parsed.flags, parsed.positionals);
       if (command === 'start') return await startCommand(process.cwd());
       if (command === 'stop') return await stopCommand(process.cwd());
@@ -5046,7 +6731,15 @@ async function main(argv = process.argv.slice(2)) {
       if (command === 'remove') return await removeCommand(process.cwd(), parsed.flags);
       throw new Error(`Unknown command "${command}". Run npx @or3/cloud --help.`);
     };
-    if (MUTATING_COMMANDS.has(command)) {
+    // Read-only previews and verification bypass the deployment lease entirely;
+    // they must never acquire, reclaim, or rewrite the single-writer lock.
+    const readOnlyInvocation = (command === 'verify' && verifyIsReadOnly(parsed.flags))
+      || (command === 'update' && boolFlag(parsed.flags, 'dry-run'))
+      || (command === 'recover' && boolFlag(parsed.flags, 'dry-run'))
+      // Backup inventory is an observation: it must not acquire or reclaim the
+      // mutation lease while an operation is pending.
+      || (command === 'backup' && parsed.positionals[0] === 'list');
+    if (!readOnlyInvocation && MUTATING_COMMANDS.has(command)) {
       return await withDeploymentLease(mutationDirectory(command, parsed.positionals, parsed.flags), command, dispatch);
     }
     return await dispatch();

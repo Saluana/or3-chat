@@ -203,6 +203,15 @@ jobs:
           test -n "$backup_id"
           (cd "$managed" && OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" restore "$backup_id" --yes)
           (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+          # Classified inventory plus a suspect entry must not block a fresh
+          # authenticated update, and explicit prune must preserve it.
+          (cd "$managed" && node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" backup list --json | node -e '
+            let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const parsed=JSON.parse(s);if(!Array.isArray(parsed.backups)||!Array.isArray(parsed.findings)||!Array.isArray(parsed.storeErrors))process.exit(1)});')
+          suspect="$managed/.or3-cloud/backups/backup-2026-08-09T00-00-00-000Z-suspect"
+          cp -r "$managed/.or3-cloud/backups/$backup_id" "$suspect"
+          printf 'invalid' > "$suspect/manifest.auth"
+          (cd "$managed" && node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" backup prune --keep 1 --force --yes)
+          test -f "$suspect/manifest.auth"
           (cd "$managed" && OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" update --to "$version")
           (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
           (cd "$managed" && OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" rollback --yes)
@@ -220,7 +229,14 @@ jobs:
           grep -q 'or3-cloud-unhealthy' "$RUNNER_TEMP/update-failed.log"
           grep -Eq 'container [0-9a-f]+ state:' "$RUNNER_TEMP/update-failed.log"
           ! grep -Fq "$captured_secret" "$RUNNER_TEMP/update-failed.log"
-          grep -q 'restored' "$RUNNER_TEMP/update-failed.log"
+          # Once the target may have accepted writes the CLI must not silently
+          # restore; recovery is an explicit operator choice.
+          grep -q 'NOT restored automatically' "$RUNNER_TEMP/update-failed.log"
+          (cd "$managed" && node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" recover --dry-run --json | node -e '
+            let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const p=JSON.parse(s);if(p.decision?.action!=="require-explicit-restore")process.exit(1)});')
+          if (cd "$managed" && node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" recover --finish >/dev/null 2>&1); then
+            echo "finish adopted a target without completion proof" >&2; exit 1; fi
+          (cd "$managed" && node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" recover --restore --yes)
           for attempt in $(seq 1 60); do
             curl --fail --silent "http://127.0.0.1:3017/api/health?deep=true" && break
             sleep 1

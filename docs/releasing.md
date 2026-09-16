@@ -82,6 +82,22 @@ validation** workflow owns full tests, browser suites, production asset
 budgets, compatibility checks, and performance baselines outside the Cloud
 release critical path.
 
+Add the read-only readiness check before launching expensive work:
+
+```bash
+bun run release:prepare -- --version <version> --repository
+```
+
+`--repository` uses the GitHub CLI to inspect, without changing anything:
+repository activity, the default-branch registration and enabled state of
+`.github/workflows/release-cloud.yml` and `release-cloud-candidate.yml`,
+required push permission, Actions enablement, registered runners, and the latest
+candidate run. It never dispatches a workflow, changes a setting, or touches
+billing. Facts it cannot read (including Actions billing/capacity) are reported
+as `unknown`, never inferred as available. Blocked stages include the supported
+administrator remedy. The result is recorded under `repositoryReadiness` in
+`output/release/preflight.json`.
+
 Then use GitHub Actions to manually run **Qualify OR3 Cloud Candidate** on the
 exact intended branch/commit and enter the same version. Do not create the tag
 yet. The workflow rejects used identities first, runs focused source checks,
@@ -146,6 +162,55 @@ The workflow's application and operator image digests are deployment identity
 inputs. Copy both into the release notes with the supported profile and any
 migration/rollback warnings.
 
+## Selecting and retaining deeper checks
+
+Deeper checks reuse the existing named suites and jobs; do not add a new
+workflow, job, schedule, required status context, image build, or cross-workflow
+gate. Choose by what changed in the base-to-target diff:
+
+| Change | Existing suite to run |
+| --- | --- |
+| Backup inventory/retention, managed state, schema or migration | **Extended validation → Complete Cloud deployment lifecycle**, plus the relevant historical/interruption cases |
+| Operator protocol, dashboard compatibility, app/CLI transition | **Extended validation** contract tests and the deployment lifecycle's operator cases |
+| Browser-facing Caddy/CSP, authentication, or OpenRouter connection flow | **Extended validation** browser/connection cases (or the same `scripts/release/smoke-browser.mjs` harness locally) |
+
+Bind each result to the exact source SHA and image/tarball digests through the
+existing run links and the candidate receipt; an unlinked or stale result is not
+evidence. Unrelated releases do not repeat the full added matrix, and existing
+schedules are not expanded. A missing comparison baseline is treated as a
+relevant change. The default candidate lane keeps essential regressions only;
+deeper history and browser combinations stay in Extended validation so a CLI
+fix is not gated on browser coverage it cannot affect.
+
+## Component release notes and publication receipt
+
+Release notes use a short component-change table so an operator can tell what
+actually changed:
+
+| Component | Changed? | Notes |
+| --- | --- | --- |
+| `@or3/cloud` CLI | yes/no | commands, state format, recovery |
+| application image | yes/no | runtime behavior |
+| generated assets (Compose/Caddy/operator) | yes/no | copied on update |
+| dependencies / image rebuild | yes/no | first-party versions |
+
+Include fixed-issue references validated against the diff, and an explicit
+no-change statement for unchanged components. An image-only rebuild is not a
+CLI bug fix.
+
+Record publication evidence separately from deployment/acceptance:
+
+- candidate qualification (workflow run + receipt),
+- tag workflow status,
+- npm exact version + integrity/shasum + clean-cache `npx`,
+- both public GHCR multi-architecture digests,
+- post-publication verification result,
+- production deployment result and owner acceptance (pending until a real
+  OpenRouter connection and persistence checks pass).
+
+A published artifact does not imply a deployed application. Keep a rollback ID
+and the previous deployment until acceptance passes.
+
 ## Failure handling
 
 If a candidate verifier fails after the image-build job succeeded, use
@@ -167,6 +232,25 @@ version.
 
 If a release needs a correction after publication, bump the version. The old
 image and package remain available for rollback and support.
+
+### Restoring CI capacity without bypasses
+
+Qualification needs working GitHub Actions capacity owned by the account
+administrator. When it is exhausted or misconfigured:
+
+1. Run `bun run release:prepare -- --version <version> --repository` to see the
+   blocked stage; the readiness result names what could not be verified.
+2. Restore capacity or workflow setup through the normal GitHub path
+   (account billing/actions limits, re-enabling a disabled workflow, or
+   confirming required permissions). These are administrator-owned actions the
+   CLI cannot change for you.
+3. Re-run the failed stage on the unchanged candidate so it reuses the same
+   immutable digests. Only a source change requires a new version.
+
+Do not bypass qualification with a manual `npm publish`, an unpinned
+installation, a self-hosted production runner, or a moved/immutable tag. If the
+tag workflow cannot run, the release waits; the local readiness report and
+results are retained meanwhile.
 
 ## Deprecating the old creator
 

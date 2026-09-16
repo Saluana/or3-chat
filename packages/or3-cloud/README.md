@@ -47,10 +47,14 @@ Run these from the deployment directory created by `init`:
 ```sh
 npx @or3/cloud doctor
 npx @or3/cloud verify
+npx @or3/cloud verify --read-only
 npx @or3/cloud backup
+npx @or3/cloud backup list
+npx @or3/cloud update --dry-run
 npx @or3/cloud update
 npx @or3/cloud rollback --yes
 npx @or3/cloud recover
+npx @or3/cloud recover --dry-run
 npx @or3/cloud status
 npx @or3/cloud logs --tail 200
 npx @or3/cloud start
@@ -94,15 +98,87 @@ command holds one deployment-wide lease; do not delete `.or3-cloud` lock or
 recovery files by hand.
 Update recovery reads the authenticated pre-update snapshot recorded in
 `backupPath`/`backupId`; restore and rollback recovery use their separate
-`previousBackupPath`/`previousBackupId` snapshot. Recovery restores that snapshot,
-including its data and release assets, before clearing the pending operation.
-Legacy `adopt-source-*` directories are preserved outside managed backup
-retention and are not treated as authenticated restore points.
-Backups from releases before authentication tags existed are also preserved:
-`backup list` and retention skip `backup-*` entries with no `manifest.auth` and
-print a warning. They do not sign, migrate, or delete those archives. An existing
-but invalid tag remains an error; restore, recovery, and export still require
-valid deployment authentication.
+`previousBackupPath`/`previousBackupId` snapshot. Recovery now separates the
+two outcomes explicitly:
+
+- `npx @or3/cloud recover --dry-run` explains the observed source/target, phase,
+  available evidence, the permitted actions, and each action's data-loss
+  boundary without changing anything.
+- `npx @or3/cloud recover --finish` commits an existing live target only when
+  the recorded target-ready milestone is proven (replacement completed, exact
+  image, configuration and assets unchanged since the milestone, authenticated
+  rollback snapshot, deep health). It preserves writes made after replacement.
+- `npx @or3/cloud recover --restore --yes` is the explicit destructive choice;
+  it names the snapshot and discards writes made after it.
+
+Plain `npx @or3/cloud recover` finishes only proven non-destructive work and
+otherwise prints the assessment; it never silently falls back to a restore.
+`recover --finish` is idempotent — repeating it after completion reports the
+recorded outcome without replaying replacement or deleting the rollback point.
+While any incomplete operation is recorded, `start` and `restart` refuse rather
+than resurrect an ambiguous deployment; `stop` remains available, and
+diagnostics, logs, and read-only verification stay usable throughout.
+An update commits its terminal state (target identity, rollback reference,
+receipt, and the absence of a pending operation) in one atomic write **before**
+optional retention and operation-mirror cleanup. If that housekeeping fails,
+the update still reports complete with a maintenance warning, exits 0, and
+never recreates a pending operation or restores old data. A crash during the
+final write is resolved on retry from durable state, not guessed from health.
+The same rule covers restore, rollback, and recovery completion: a cleanup
+failure after a terminal commit is a warning and never reopens the operation.
+
+Once an update has started the target (the point at which it may accept
+writes), a failed health check is **not** restored automatically. The journal is
+preserved and the operator must choose `recover --finish` (when a proven
+target-ready milestone exists) or `recover --restore --yes` (the explicit
+data-loss choice). `recover --restore --yes` works even for a target-ready
+journal, so the advertised escape path is always available.
+
+This release is the compatibility **bridge**: it reads managed state schema 1
+and 2 but writes schema 1. A release explicitly qualified to write schema 2
+sets `or3Cloud.stateSchema` in its package metadata, and only then may migrate a
+settled schema-1 deployment — and only when its source is at or above the
+declared `dashboardUpdateMinimumSourceVersion` bridge. A bridge CLI refuses to
+mutate state written by a newer schema and directs the owner to the compatible
+exact-target CLI. An unknown future schema is refused before any mutation.
+
+`npx @or3/cloud status --json` emits a bounded public projection: it never
+serializes credential-reset recovery payloads, raw configuration, or secret
+values. Status reports the digest of the image actually running the `or3`
+service, and it still reports readable state when the managed `.env` is
+unreadable instead of failing through Compose. `logs`, `verify --read-only`, and
+`backup list` are observation-only. Read-only verification reports checks it
+deliberately skips (login/storage probes, SQLite inspection, log scanning) as
+`deferred`; only an actual failed check is nonzero.
+
+`update --dry-run` and the real `update` share one assessment: execution runs the
+same checks under the lease and refuses before any pull or data change when a
+blocker (including an unreadable required asset) is present. `backup prune`
+inventories the store once and revalidates only the entry it is about to delete,
+so large histories are not rehashed quadratically.
+
+With `--json`, `update` and `recover` write exactly one
+`or3-operation-result` object to stdout for every terminal path (success, no-op,
+blocked, or failure) and route all progress to stderr. Post-commit maintenance
+warnings (a failed mirror delete, deferred or failed retention, a failed handoff
+schedule) are persisted into the authoritative receipt, so a reload or the
+dashboard still sees them.
+`backup list` classifies every backup-store entry instead of skipping or
+aborting on the unusual ones: `verified`, `legacy-unsigned` (no
+`manifest.auth`), `legacy-adoption` (`adopt-source-*`), `unsupported` (a newer
+manifest schema), `invalid`, and `unreadable`. Only `verified` entries count as
+authenticated restore points; the rest are preserved and clearly labelled.
+`backup list --json` returns the same classification as one parseable object
+and still exits successfully when a store contains unsupported or damaged
+entries. `backup prune` protects the rollback point, the pending update
+snapshot, and every restore/rollback source; it defers automatic pruning when a
+suspect entry is present and reports a specific blocked result instead of
+deleting anything. `--force --yes` bypasses the suspect-entry deferral but can
+never remove a protected recovery source. Retention never signs, migrates, or
+deletes historical archives, and restore, recovery, and export still require
+valid deployment authentication. To obtain a trusted restore point from a
+store that only contains legacy history, create a new backup of the current
+healthy deployment.
 Backup artifacts are allocated in that journal before archiving, fully
 revalidated before success is reported, and safely removed by `recover` if a
 hard interruption leaves an incomplete artifact. A standalone backup and a

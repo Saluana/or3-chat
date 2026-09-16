@@ -430,6 +430,102 @@ async function verifySecurityHeaders(page) {
         headers.contentSecurityPolicy?.includes("frame-ancestors 'none'"),
         'Content-Security-Policy does not deny framing',
     );
+    // The shipped Caddy CSP must allow only the OpenRouter origin for the
+    // connection flow; a restrictive connect-src is the negative control.
+    assert(
+        headers.contentSecurityPolicy?.includes("connect-src 'self' https://openrouter.ai"),
+        'Content-Security-Policy does not allow the OpenRouter connection origin',
+    );
+}
+
+/**
+ * Opt-in synthetic OpenRouter connection journey (OR3_SMOKE_CONNECTION=1).
+ * Intercepts only the external OpenRouter boundary, seeds deterministic PKCE
+ * markers, and proves the deployed callback code consumed the code (PKCE
+ * markers cleared) without creating a real key or making a paid request.
+ * Evidence is explicitly simulated.
+ */
+/**
+ * Negative control: a restrictive `connect-src 'self'` must block the
+ * OpenRouter connection request so the positive journey cannot pass merely
+ * because interception bypassed the CSP boundary.
+ */
+async function verifyRestrictiveCspControl(page) {
+    const control = await page.context().newPage();
+    let attempted = 0;
+    await control.route('https://openrouter.ai/**', async (route) => {
+        attempted += 1;
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            headers: { 'access-control-allow-origin': '*' },
+            body: '{}',
+        });
+    });
+    try {
+        await control.setContent(
+            '<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; connect-src \'self\'"><body></body>',
+            { waitUntil: 'domcontentloaded' },
+        );
+        const blocked = await control.evaluate(async () => {
+            try {
+                await fetch('https://openrouter.ai/api/v1/auth/keys', { method: 'POST' });
+                return false;
+            } catch {
+                return true;
+            }
+        });
+        assert(blocked, 'a restrictive connect-src did not block the OpenRouter request');
+        assert(attempted === 0, 'the restrictive-CSP control still reached the OpenRouter boundary');
+        console.log('PASS restrictive-CSP control blocks the OpenRouter connection');
+    } finally {
+        await control.unroute('https://openrouter.ai/**').catch(() => undefined);
+        await control.close();
+    }
+}
+
+async function verifyOpenRouterConnection(page) {
+    await verifyRestrictiveCspControl(page);
+    const state = randomUUID();
+    const verifier = randomUUID().replaceAll('-', '');
+    await page.evaluate(
+        ({ state: seededState, verifier: seededVerifier }) => {
+            for (const storage of [window.sessionStorage, window.localStorage]) {
+                storage.setItem('openrouter_state', seededState);
+                storage.setItem('openrouter_code_verifier', seededVerifier);
+                storage.setItem('openrouter_code_method', 'S256');
+            }
+        },
+        { state, verifier },
+    );
+    let intercepted = 0;
+    await page.route('https://openrouter.ai/**', async (route) => {
+        intercepted += 1;
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            headers: { 'access-control-allow-origin': '*' },
+            body: JSON.stringify({ key: 'sk-or-v1-simulated-smoke-key-000000000000' }),
+        });
+    });
+    try {
+        await page.goto(`${baseUrl}/openrouter-callback?code=simulated-code&state=${state}`, {
+            waitUntil: 'domcontentloaded',
+        });
+        await page.waitForURL((url) => !url.pathname.startsWith('/openrouter-callback'), {
+            timeout: NAV_TIMEOUT,
+        });
+        assert(intercepted > 0, 'the browser never attempted the simulated OpenRouter exchange');
+        const markersCleared = await page.evaluate(
+            () =>
+                !window.sessionStorage.getItem('openrouter_code_verifier') &&
+                !window.localStorage.getItem('openrouter_code_verifier'),
+        );
+        assert(markersCleared, 'callback success did not clear the PKCE markers');
+        console.log('PASS simulated OpenRouter connection (synthetic, no real key)');
+    } finally {
+        await page.unroute('https://openrouter.ai/**');
+    }
 }
 
 async function signOutOwner(page) {
@@ -480,6 +576,11 @@ async function main() {
         // 2. Owner sign-in via the UI.
         const ownerSession = await signInOwner(page, email, password);
         console.log('PASS owner sign-in via the UI');
+
+        if (process.env.OR3_SMOKE_CONNECTION === '1') {
+            await verifyOpenRouterConnection(page);
+            await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' });
+        }
 
         // 3. Admin access.
         await verifyAdminAccess(page, adminUsername, adminPassword);

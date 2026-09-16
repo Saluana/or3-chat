@@ -21,6 +21,22 @@ The command must complete successfully. It verifies:
   provider repository)
 - documentation and exact package contents
 
+Before launching expensive work, run the read-only readiness check and retain
+its `repositoryReadiness` evidence:
+
+```bash
+bun run release:prepare -- --version <version> --repository
+```
+
+It inspects default-branch workflow registration/enablement, required
+permissions, Actions enablement, registered runners, and the latest candidate
+run without changing any setting. Facts it cannot read (including billing/
+capacity) are reported as unknown, never assumed available. Record the
+per-component release notes (CLI/app/assets/dependency or image rebuild) and the
+publication receipt separately: candidate qualification, tag workflow, npm
+exact version/integrity, both public multi-architecture digests,
+post-publication verification, and deployment/acceptance.
+
 The candidate Docker build is the authoritative fixed-profile production
 build. Full tests, browser suites, compatibility matrices, production asset
 budgets, and broad performance baselines remain strict in the scheduled or
