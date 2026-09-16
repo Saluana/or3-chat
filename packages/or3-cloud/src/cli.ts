@@ -32,7 +32,7 @@ import { createGunzip } from 'node:zlib';
 const execFile = promisify(execFileCallback);
 const PACKAGE_ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
 
-export const PACKAGE_VERSION = '0.1.69';
+export const PACKAGE_VERSION = '0.1.70';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 /** Schema this bridge release writes by default; schema 2 is opt-in metadata. */
@@ -3789,12 +3789,26 @@ async function collectTargetReadyChecks(
     ? { code: 'database-integrity', status: 'passed', detail: 'auth.sqlite and sync.sqlite quick_check passed with managed ownership.' }
     : { code: 'database-integrity', status: 'failed', detail: `SQLite integrity or ownership verification failed. ${redact(databaseCheck.stderr.trim(), secretValues(env))}` });
 
-  const baseUrl = new URL(mode === 'public' ? `https://${env.OR3_PUBLIC_DOMAIN}` : `http://127.0.0.1:${env.OR3_PORT}`);
-  try {
-    validateVerificationHealth(await verificationJson(baseUrl, '/api/health?deep=true'));
-    checks.push({ code: 'public-health', status: 'passed', detail: `${baseUrl.origin} deep health reports the managed profile.` });
-  } catch (error) {
-    checks.push({ code: 'public-health', status: 'failed', detail: redact(error instanceof Error ? error.message : String(error)) });
+  // Deep health must be provable from the caller's network context. A public
+  // deployment is checked through its real HTTPS origin. A local deployment is
+  // proven from inside its own container, because the updater may run inside
+  // the dashboard operator container, where the host loopback port is not
+  // reachable (the operator has its own network namespace).
+  if (mode === 'public') {
+    const baseUrl = new URL(`https://${env.OR3_PUBLIC_DOMAIN}`);
+    try {
+      validateVerificationHealth(await verificationJson(baseUrl, '/api/health?deep=true'));
+      checks.push({ code: 'public-health', status: 'passed', detail: `${baseUrl.origin} deep health reports the managed profile.` });
+    } catch (error) {
+      checks.push({ code: 'public-health', status: 'failed', detail: redact(error instanceof Error ? error.message : String(error)) });
+    }
+  } else {
+    const internal = await run('docker', [
+      ...composeArgs(directory, mode, ['exec', '-T', 'or3', ...containerNodeCommand(HEALTH_SCRIPT)]),
+    ], directory);
+    checks.push(internal.ok
+      ? { code: 'public-health', status: 'passed', detail: 'Container-internal deep health reports the managed profile.' }
+      : { code: 'public-health', status: 'failed', detail: `Container-internal deep health failed. ${redact(internal.stderr.trim(), secretValues(env))}` });
   }
   return { containerId, checks };
 }
