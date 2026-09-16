@@ -13,16 +13,16 @@
             >
                 <div class="min-w-0">
                     <!-- VT323 keeps modal titles readable; Press Start at text-lg overflows the header. -->
-                    <h2
+                    <DialogTitle
                         class="m-0 truncate font-vt323 text-base font-semibold leading-tight"
                     >
                         System Prompts
-                    </h2>
-                    <p
+                    </DialogTitle>
+                    <DialogDescription
                         class="m-0 hidden text-xs leading-snug opacity-80 sm:block"
                     >
                         Browse, organize, edit, and apply system prompts.
-                    </p>
+                    </DialogDescription>
                 </div>
                 <div class="flex shrink-0 items-center gap-2">
                     <UButton
@@ -787,6 +787,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useMediaQuery } from '@vueuse/core';
+import { DialogDescription, DialogTitle } from 'reka-ui';
 import {
     createPrompt,
     listPrompts,
