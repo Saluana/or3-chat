@@ -32,7 +32,7 @@ import { createGunzip } from 'node:zlib';
 const execFile = promisify(execFileCallback);
 const PACKAGE_ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
 
-export const PACKAGE_VERSION = '0.1.68';
+export const PACKAGE_VERSION = '0.1.69';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 /** Schema this bridge release writes by default; schema 2 is opt-in metadata. */

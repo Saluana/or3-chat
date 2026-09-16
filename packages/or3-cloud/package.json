@@ -1,6 +1,6 @@
 {
   "name": "@or3/cloud",
-  "version": "0.1.68",
+  "version": "0.1.69",
   "description": "Install and operate the OR3 Cloud container distribution",
   "type": "module",
   "license": "GPL-3.0",
@@ -16,7 +16,7 @@
     "or3": "./dist/cli.mjs"
   },
   "or3Cloud": {
-    "dashboardUpdateProtocol": 2,
+    "dashboardUpdateProtocol": 1,
     "dashboardUpdateMinimumSourceVersion": "0.1.40",
     "stateSchema": 1
   },
