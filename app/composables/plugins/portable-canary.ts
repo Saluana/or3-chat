@@ -140,23 +140,20 @@ export async function runCandidateClientCanary(
         };
     }
 
-    // Bootstrap readiness is the pass condition: the sandbox imported the
-    // candidate and acknowledged the host bootstrap, so the browser ran these
-    // exact bytes in the contained realm.
-    const ready = started.runtime.bootstrapReady;
-    const failure = started.runtime.bootstrapFailure;
+    // `startPortableWorker` only answers 'started' once the plugin acknowledged
+    // the host bootstrap, so a browser pass means this browser ran the candidate's
+    // exact bytes in the contained realm and the module reached setup.
     const capabilities = [...started.runtime.capabilities];
+    const bootstrapReady = started.runtime.bootstrapReady;
     started.runtime.dispose();
 
-    if (!ready) {
+    if (!bootstrapReady) {
+        // Defensive: the contract above should make this unreachable, and a pass
+        // must never be recorded on an unanswered handshake.
         return {
             status: 'blocked',
             code: 'bootstrap-not-ready',
-            diagnostics: {
-                engine,
-                failure: failure ?? 'no bootstrap acknowledgement',
-                observed,
-            },
+            diagnostics: { engine, observed },
         };
     }
     return {

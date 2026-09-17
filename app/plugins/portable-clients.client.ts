@@ -61,7 +61,7 @@ export function isPortableClientDescriptor(
 // (the app tsconfig does not include the `.vue` shim) while still letting Vite
 // bundle it lazily. The lookup takes the single match by value: an alias-based
 // key is not stable, and an undefined component would break plugin startup.
-const PORTABLE_VIEW_MODULES = import.meta.glob('../../components/plugins/PortableClientView.vue');
+const PORTABLE_VIEW_MODULES = import.meta.glob('../components/plugins/PortableClientView.vue');
 
 const PORTABLE_CLIENT_VIEW: Component = (() => {
     const loader = Object.values(PORTABLE_VIEW_MODULES)[0] as

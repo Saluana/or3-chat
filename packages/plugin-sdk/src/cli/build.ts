@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { assertPackageRoot, materializePackTree, readJsonObject } from './shared';
 import { packV2Package, type PackCommandResult } from './pack';
@@ -13,6 +13,15 @@ export interface BuildCommandResult {
 /** Bare specifiers the contained sandbox cannot resolve at runtime. */
 const BARE_IMPORT = /(?:^|[^\w.])import\s*(?:[\s\S]*?from\s*)?['"]([^.'"][^'"]*)['"]/gm;
 
+/** The subset of Bun's bundler this step needs, so it is injectable in tests. */
+export interface ClientEntryBundler {
+    build(options: unknown): Promise<{
+        success: boolean;
+        outputs: { text(): Promise<string> }[];
+        logs: unknown[];
+    }>;
+}
+
 /**
  * Bundle the declared client entry so the packaged module is self-contained.
  *
@@ -24,7 +33,8 @@ const BARE_IMPORT = /(?:^|[^\w.])import\s*(?:[\s\S]*?from\s*)?['"]([^.'"][^'"]*)
  */
 export async function bundleClientEntry(
     sourceRoot: string,
-    buildRoot: string
+    buildRoot: string,
+    options: { readonly bundler?: ClientEntryBundler } = {}
 ): Promise<void> {
     const manifest = readJsonObject(resolve(sourceRoot, 'or3.manifest.json'));
     const runtime = manifest?.runtime;
@@ -38,17 +48,26 @@ export async function bundleClientEntry(
         throw new Error(`Refusing to bundle an unsafe client entry path: ${entry}`);
     }
 
-    // Bun is the supported package runtime. When it is unavailable (for example
-    // under a Node-only test runner) the copied tree is left untouched so the
-    // caller sees exactly what it packed.
-    const bun = (globalThis as { Bun?: { build: (options: unknown) => Promise<{
-        success: boolean;
-        outputs: { text(): Promise<string> }[];
-        logs: unknown[];
-    }> } }).Bun;
-    if (!bun) return;
+    // A self-contained entry needs no bundling, so packaging a hand-written
+    // single-file plugin keeps working without a bundler.
+    const source = readFileSync(resolve(sourceRoot, entry), 'utf8');
+    if (unresolvedBareImports(source).length === 0) return;
 
-    const result = await bun.build({
+    // Bundling needs Bun's bundler. The shipped executable has a Node shebang, so
+    // this is exactly where a Node run lands: fail with the reason instead of
+    // packing a package whose SDK import no sandbox can resolve.
+    const bundler =
+        options.bundler ??
+        (globalThis as { Bun?: ClientEntryBundler }).Bun;
+    if (!bundler) {
+        throw new Error(
+            `${entry} imports a bare specifier, so it must be bundled before it can be packed, ` +
+                'and bundling needs Bun. Run `bunx or3-plugin build` (Bun is the supported ' +
+                'package runtime), or bundle the entry yourself so it imports nothing at runtime.'
+        );
+    }
+
+    const result = await bundler.build({
         entrypoints: [resolve(sourceRoot, entry)],
         target: 'browser',
         format: 'esm',
@@ -64,13 +83,26 @@ export async function bundleClientEntry(
         );
     }
     const code = await result.outputs[0]!.text();
-    const remaining = [...code.matchAll(BARE_IMPORT)].map((match) => match[1]);
+    const remaining = unresolvedBareImports(code);
     if (remaining.length > 0) {
         throw new Error(
             `Bundled ${entry} still imports ${remaining.join(', ')}; the sandbox cannot resolve bare specifiers`
         );
     }
     writeFileSync(resolve(buildRoot, entry), code, 'utf8');
+}
+
+/** Bare specifiers that would survive into the sandbox. */
+export function unresolvedBareImports(source: string): readonly string[] {
+    const found = new Set<string>();
+    for (const match of source.matchAll(BARE_IMPORT)) {
+        const specifier = match[1];
+        if (!specifier) continue;
+        if (specifier.startsWith('.') || specifier.startsWith('/')) continue;
+        if (/^[a-z][a-z0-9+.-]*:/i.test(specifier)) continue;
+        found.add(specifier);
+    }
+    return Object.freeze([...found]);
 }
 
 /**

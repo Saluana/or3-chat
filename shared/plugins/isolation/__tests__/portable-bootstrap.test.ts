@@ -72,6 +72,28 @@ function createFrameHarness(
     const frameWindow = {
         postMessage(message: unknown) {
             outbound.push(message as HarnessMessage);
+            // A conformant plugin acknowledges the host bootstrap. The harness
+            // stands in for one so `startPortableWorker` exercises the same
+            // acknowledgement wait the real sandbox requires.
+            const envelope = parseRpcEnvelope((message as HarnessMessage)?.data);
+            if (
+                envelope.ok &&
+                envelope.envelope.kind === 'event' &&
+                envelope.envelope.name === 'runtime.bootstrap'
+            ) {
+                queueMicrotask(() =>
+                    emitFromFrame({
+                        [ENVELOPE]: FRAME_TO_HOST.rpc,
+                        data: {
+                            v: 1,
+                            kind: 'event',
+                            id: 'harness-bootstrap-ready',
+                            name: 'runtime.bootstrap.ready',
+                            payload: {},
+                        },
+                    })
+                );
+            }
         },
     };
     const port: HostFrameElementPort = {
@@ -268,6 +290,12 @@ describe('portable sandbox transport (4.1)', () => {
         if (envelope.ok && envelope.envelope.kind === 'event') {
             expect(envelope.envelope.name).toBe('runtime.bootstrap');
             expect(envelope.envelope.payload).toMatchObject({ abiVersion: HOST_ABI_VERSION });
+            // The sandbox has no other source for these, and the SDK builds its
+            // context from them rather than inventing or ignoring them.
+            expect(envelope.envelope.payload).toMatchObject({
+                features: [...input.abi.features],
+                grants: [...input.grants.approvedGrants],
+            });
         }
 
         if (result.status !== 'started') throw new Error('sandbox did not start');

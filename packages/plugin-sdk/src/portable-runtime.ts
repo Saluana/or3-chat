@@ -61,6 +61,16 @@ import type { PortableUiView } from './ui';
 /** Host→plugin bootstrap event; carries host-issued identity and negotiation. */
 export const PORTABLE_BOOTSTRAP_EVENT = 'runtime.bootstrap';
 
+/**
+ * Acknowledgement the host waits for. Posting the bootstrap message only means
+ * the sandbox is listening; this event means the plugin reached setup, so the
+ * host can treat "started" as true rather than assumed.
+ */
+export const PORTABLE_BOOTSTRAP_READY_EVENT = 'runtime.bootstrap.ready';
+
+/** Failure acknowledgement; the host records it instead of timing out. */
+export const PORTABLE_BOOTSTRAP_FAILED_EVENT = 'runtime.bootstrap.failed';
+
 /** Event name the host records plugin logs under. */
 export const PORTABLE_LOG_EVENT = 'runtime.log';
 
@@ -441,13 +451,19 @@ export function createPortablePlugin<const TManifest extends PluginManifestV2>(
             await definition.setup(context);
             for (const callback of activations) await callback();
             active = true;
+            // Acknowledge only after setup and activations succeed, so a host that
+            // waits for this never records a failed activation as ready.
+            client.emit(PORTABLE_BOOTSTRAP_READY_EVENT, {});
             resolveReady();
         } catch (error) {
             await runCleanups();
             rejectReady(error);
-            logger.error('Portable plugin activation failed', {
-                message: error instanceof Error ? error.message : String(error),
+            const message = error instanceof Error ? error.message : String(error);
+            client.emit(PORTABLE_BOOTSTRAP_FAILED_EVENT, {
+                code: 'activation-failed',
+                message,
             });
+            logger.error('Portable plugin activation failed', { message });
         }
     }
 

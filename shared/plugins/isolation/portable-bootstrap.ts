@@ -339,7 +339,8 @@ export function bootstrapSourceIsInert(source: string): boolean {
 export type PortableWorkerBlockCode =
     | HostQualificationCode
     | ServedByteFailureCode
-    | 'bootstrap-failed';
+    | 'bootstrap-failed'
+    | 'bootstrap-timeout';
 
 export type PortableWorkerStartResult =
     | {
@@ -533,12 +534,43 @@ export async function startPortableWorker(
         ...(input.defaultDeadlineMs === undefined
             ? {}
             : { defaultDeadlineMs: input.defaultDeadlineMs }),
-        bootstrapPayload: { abiVersion: input.abi.version, transport: PORTABLE_TRANSPORT },
+        bootstrapPayload: {
+            abiVersion: input.abi.version,
+            transport: PORTABLE_TRANSPORT,
+            // The plugin's advertised feature set and the grants this activation
+            // actually approved. The sandbox has no other way to learn them, and
+            // the broker's grant list is host-side only.
+            features: [...input.abi.features],
+            grants: [...input.grants.approvedGrants],
+        },
         onCrash: input.onCrash,
         now: input.now,
     });
 
     await runtime.start();
+
+    /**
+     * Posting the bootstrap is not the same as the plugin accepting it. Wait for
+     * the acknowledgement (or the failure) so "started" means the module actually
+     * reached setup - a browser canary and a user-facing activation both depend
+     * on that being true rather than assumed.
+     */
+    const bootstrap = await runtime.waitForBootstrap(
+        input.bootstrapTimeoutMs ?? DEFAULT_BOOTSTRAP_TIMEOUT_MS
+    );
+    if (!bootstrap.ready) {
+        const reason =
+            bootstrap.failure ??
+            (bootstrap.timedOut
+                ? `The plugin did not acknowledge the host bootstrap within ${input.bootstrapTimeoutMs ?? DEFAULT_BOOTSTRAP_TIMEOUT_MS} ms.`
+                : 'The plugin never acknowledged the host bootstrap.');
+        runtime.dispose();
+        return {
+            status: 'blocked',
+            codes: [bootstrap.timedOut ? 'bootstrap-timeout' : 'bootstrap-failed'],
+            message: reason,
+        };
+    }
 
     return {
         status: 'started',

@@ -78,6 +78,10 @@ export default defineConfig({
                 __dirname,
                 'packages/plugin-sdk/src/portable.ts'
             ),
+            '@or3/plugin-sdk/portable-runtime': path.resolve(
+                __dirname,
+                'packages/plugin-sdk/src/portable-runtime.ts'
+            ),
             '@or3/plugin-sdk/host': path.resolve(
                 __dirname,
                 'packages/plugin-sdk/src/host.ts'

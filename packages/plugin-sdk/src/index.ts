@@ -44,6 +44,8 @@ export { createPortableClient, PORTABLE_EVENT, PORTABLE_RPC_VERSION } from './po
 export {
     createPortablePlugin,
     PORTABLE_BOOTSTRAP_EVENT,
+    PORTABLE_BOOTSTRAP_FAILED_EVENT,
+    PORTABLE_BOOTSTRAP_READY_EVENT,
     PORTABLE_DASHBOARD_CONTRIBUTION_KIND,
     PORTABLE_LOG_EVENT,
 } from './portable-runtime';

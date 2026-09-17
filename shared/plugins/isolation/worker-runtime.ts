@@ -283,6 +283,7 @@ export class WorkerIsolationRuntime {
     #crashReports: WorkerCrashReport[] = [];
     #bootstrapReady = false;
     #bootstrapFailure: string | null = null;
+    #bootstrapWaiters = new Set<(outcome: { readonly ready: boolean; readonly failure: string | null }) => void>();
     #activationTimer: ReturnType<typeof setTimeout> | null = null;
     #budgetReason: string | null = null;
 
@@ -379,6 +380,52 @@ export class WorkerIsolationRuntime {
     /** True once the sandbox has acknowledged the host bootstrap message. */
     get bootstrapReady(): boolean {
         return this.#bootstrapReady;
+    }
+
+    /**
+     * Wait for the sandbox to answer the host bootstrap with ready or failed.
+     *
+     * `start()` only posts the bootstrap message; a plugin that never
+     * acknowledges it would otherwise look started. Callers that must know the
+     * plugin accepted the handshake (the canary, and every activation) await
+     * this with a bound.
+     */
+    async waitForBootstrap(timeoutMs: number): Promise<{
+        readonly ready: boolean;
+        readonly failure: string | null;
+        readonly timedOut: boolean;
+    }> {
+        if (this.#bootstrapReady) return { ready: true, failure: null, timedOut: false };
+        if (this.#bootstrapFailure) {
+            return { ready: false, failure: this.#bootstrapFailure, timedOut: false };
+        }
+        if (this.#disposed || !this.#worker) {
+            return { ready: false, failure: 'The sandbox is not running.', timedOut: false };
+        }
+        const settled = await new Promise<{
+            readonly ready: boolean;
+            readonly failure: string | null;
+            readonly timedOut: boolean;
+        }>((resolveWait) => {
+            let timer: ReturnType<typeof setTimeout> | null = null;
+            const finish = (outcome: {
+                readonly ready: boolean;
+                readonly failure: string | null;
+                readonly timedOut: boolean;
+            }): void => {
+                if (timer !== null) clearTimeout(timer);
+                this.#bootstrapWaiters.delete(waiter);
+                resolveWait(outcome);
+            };
+            const waiter = (outcome: { readonly ready: boolean; readonly failure: string | null }) =>
+                finish({ ...outcome, timedOut: false });
+            this.#bootstrapWaiters.add(waiter);
+            timer = setTimeout(
+                () => finish({ ready: false, failure: null, timedOut: true }),
+                Math.max(1, timeoutMs)
+            );
+        });
+        return settled;
     }
 
     /** Failure text reported by the sandbox bootstrap, if any. */
@@ -482,6 +529,10 @@ export class WorkerIsolationRuntime {
             this.#activationTimer = null;
         }
         // A terminated sandbox can never be accepted again: retire its session.
+        this.#settleBootstrapWaiters({
+            ready: false,
+            failure: this.#bootstrapFailure ?? `The sandbox stopped (${reason}).`,
+        });
         this.#sessionAuthority?.invalidate(reason);
         this.#withdrawContributions();
         this.#broker.dispose();
@@ -631,6 +682,7 @@ export class WorkerIsolationRuntime {
     #handleBootstrapEvent(event: { name: string; payload?: unknown }): boolean {
         if (event.name === BOOTSTRAP_READY_EVENT) {
             this.#bootstrapReady = true;
+            this.#settleBootstrapWaiters({ ready: true, failure: null });
             return true;
         }
         if (event.name === BOOTSTRAP_FAILED_EVENT) {
@@ -643,6 +695,10 @@ export class WorkerIsolationRuntime {
             const message =
                 typeof payload.message === 'string' ? `: ${payload.message}` : '';
             this.#bootstrapFailure = `Sandbox bootstrap failed (${code})${message}`;
+            this.#settleBootstrapWaiters({
+                ready: false,
+                failure: this.#bootstrapFailure,
+            });
             this.#reportCrash(`bootstrap-failed:${code}`, true);
             return true;
         }
@@ -723,6 +779,13 @@ export class WorkerIsolationRuntime {
             name: UI_WITHDRAW_EVENT,
             contributionIds: ids,
         });
+    }
+
+    #settleBootstrapWaiters(outcome: {
+        readonly ready: boolean;
+        readonly failure: string | null;
+    }): void {
+        for (const waiter of [...this.#bootstrapWaiters]) waiter(outcome);
     }
 
     #deliverEvent(event: HostPluginEvent): void {
