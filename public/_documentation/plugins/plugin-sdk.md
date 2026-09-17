@@ -1,6 +1,12 @@
 # `@or3/plugin-sdk`
 
-Stable Plugin Runtime V2 authoring surface. Import only this package (or documented subpaths: `/manifest`, `/host`, `/testing`).
+Stable Plugin Runtime V2 authoring surface. Import only this package (or documented subpaths: `/manifest`, `/host`, `/testing`, `/profile`, `/package-tree`, `/package-archive`, `/state-compatibility`).
+
+The package ships prebuilt ESM and type declarations plus an `or3-plugin` CLI.
+It is **not yet published to npm**; install it from a packed tarball (see
+[Plugin SDK CLI and Packaging](./plugin-sdk-cli)). The existing release
+workflows contain no SDK publication job, so publishing requires adding that
+release integration.
 
 The package is currently an authoring and compatibility-test surface. OR3's
 production workspace activation path does not yet call a V2 definition's

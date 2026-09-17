@@ -1,0 +1,16 @@
+{
+  "description": "Minimal sample workspace for the first action: one selected document, whole-document selection.",
+  "workspace": {
+    "root": "fixtures/workspace",
+    "document": "sample-document.md",
+    "selection": {
+      "kind": "whole-document",
+      "start": 0,
+      "end": "document-end"
+    }
+  },
+  "selection": {
+    "title": "Portable plugin runtime",
+    "content": "The portable client profile keeps plugin code inside an isolated worker. It forbids server routes, native modules, and runtime dependencies on other plugins. An unaware host rejects the package instead of running it in an unsupported mode.\n\nSelected-document utilities only need two host operations. documents.read supplies the current selection, and documents.write carries the derived result back to the editor. Everything else runs locally and deterministically.\n\nThis utility is deliberately small. It counts the selection, outlines one leading sentence per paragraph, and renders a short markdown digest. No API key, network call, or background job is involved.\n"
+  }
+}

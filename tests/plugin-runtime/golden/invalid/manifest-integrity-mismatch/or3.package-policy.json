@@ -1,0 +1,26 @@
+{
+  "connections": [],
+  "dataScopes": [
+    "settings.read"
+  ],
+  "destinations": [
+    {
+      "hosts": [
+        "api.example.com"
+      ],
+      "id": "example.api",
+      "methods": [
+        "GET"
+      ],
+      "scopes": [
+        "forecast.read"
+      ]
+    }
+  ],
+  "policyVersion": 1,
+  "profile": "or3-portable-client-v1",
+  "requiredFeatures": [
+    "or3-portable-client-v1"
+  ],
+  "writes": []
+}

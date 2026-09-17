@@ -16,8 +16,8 @@ Commands:
   validate <package-root>
   test <package-root> [-- <test-args...>]
   build <package-root>
-  pack <package-root> [--out <pack-dir>]
-  inspect <package-root>
+  pack <package-root> [--out <pack-dir>] [--archive <archive-path>]
+  inspect <package-root-or-archive>
 `;
 }
 
@@ -49,7 +49,7 @@ async function main(argv: string[]): Promise<number> {
         case 'validate': {
             const root = rest[0];
             if (!root) throw new Error('validate requires <package-root>');
-            const report = validateV2Package(root);
+            const report = await validateV2Package(root);
             process.stdout.write(formatValidationReport(report));
             return report.exitCode;
         }
@@ -79,7 +79,13 @@ async function main(argv: string[]): Promise<number> {
             const root = rest[0];
             if (!root) throw new Error('pack requires <package-root>');
             const out = rest.includes('--out') ? requireArg(rest, '--out') : undefined;
-            const result = await packV2Package(root, { outputDirectory: out });
+            const archive = rest.includes('--archive')
+                ? requireArg(rest, '--archive')
+                : undefined;
+            const result = await packV2Package(root, {
+                outputDirectory: out,
+                archivePath: archive,
+            });
             printJson({
                 status: 'packed',
                 sourceRoot: result.sourceRoot,
@@ -87,6 +93,7 @@ async function main(argv: string[]): Promise<number> {
                 files: result.files,
                 digest: result.verification.digest,
                 manifestDigest: result.verification.manifestDigest,
+                archivePath: result.archivePath,
             });
             return 0;
         }

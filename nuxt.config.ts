@@ -101,6 +101,34 @@ const localWorkflowCoreSource = resolve(
 const hasLocalWorkflowCoreSource =
     useLocalPackages && existsSync(localWorkflowCoreSource);
 
+// The SDK checkout exposes TypeScript source through its `exports`. Vite can
+// transpile that source, but Nitro's Rollup pipeline cannot parse TypeScript
+// inside `node_modules`, so point both at the workspace source (the same live
+// source Vitest aliases) whenever this is the OR3 source checkout. Generated
+// projects and deployment images without the workspace fall back to the
+// installed `@or3/plugin-sdk` package.
+const pluginSdkSourceRoot = resolve(__dirname, 'packages/plugin-sdk/src');
+const hasPluginSdkSource = existsSync(resolve(pluginSdkSourceRoot, 'index.ts'));
+const pluginSdkSourceAliases: Record<string, string> = hasPluginSdkSource
+    ? {
+          '@or3/plugin-sdk/package-tree': resolve(
+              pluginSdkSourceRoot,
+              'package-tree.ts',
+          ),
+          '@or3/plugin-sdk/state-compatibility': resolve(
+              pluginSdkSourceRoot,
+              'state-compatibility.ts',
+          ),
+          '@or3/plugin-sdk/package-archive': resolve(
+              pluginSdkSourceRoot,
+              'cli/archive.ts',
+          ),
+      }
+    : {};
+const pluginSdkViteAliases = Object.entries(pluginSdkSourceAliases).map(
+    ([find, replacement]) => ({ find, replacement }),
+);
+
 function isPackageInstalled(pkgName: string): boolean {
     return existsSync(resolve(__dirname, 'node_modules', pkgName));
 }
@@ -841,9 +869,12 @@ export default defineNuxtConfig({
     nitro: {
         // Keep server-side workflow execution on the same sibling source tree
         // that Vite uses for the editor during local multi-repo development.
-        alias: hasLocalWorkflowCoreSource
-            ? { 'or3-workflow-core': localWorkflowCoreSource }
-            : {},
+        alias: {
+            ...(hasLocalWorkflowCoreSource
+                ? { 'or3-workflow-core': localWorkflowCoreSource }
+                : {}),
+            ...pluginSdkSourceAliases,
+        },
         // Emit precompressed variants for the self-hosted Node server while
         // keeping the original assets for hosts that do their own compression.
         compressPublicAssets: true,
@@ -1148,7 +1179,7 @@ export default defineNuxtConfig({
             // Use sibling source checkouts during multi-repo development, but
             // fall back to installed registry packages in generated projects
             // and deployment images where those checkouts do not exist.
-            alias: localPackageAliases,
+            alias: [...pluginSdkViteAliases, ...localPackageAliases],
         },
         optimizeDeps: {
             // These packages are reached through lazy theme/editor/search

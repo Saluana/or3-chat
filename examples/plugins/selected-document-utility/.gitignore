@@ -1,0 +1,9 @@
+# ignore local build/pack output; hidden entries never ship in the package
+node_modules/
+dist/
+.or3-pack/
+.or3-pack-inspect/
+*.or3pkg
+*.zip
+bun.lock
+package-lock.json

@@ -1,93 +1,70 @@
-import { readFileSync, readdirSync } from 'node:fs';
-import { basename, extname, relative, resolve, sep } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { basename, relative, resolve } from 'node:path';
 import ts from 'typescript';
-import { satisfies, validRange } from 'semver';
+import { CORE_NUXT_AUTO_IMPORTS } from '../../packages/plugin-sdk/src/conformance-rules';
+import {
+    composeV2Conformance,
+    evaluateV2Conformance,
+    readPortableJson,
+    type V2ConformanceIssue,
+    type V2ConformanceIssueCode,
+    type V2ConformanceModule,
+    type V2ConformanceResult,
+} from '../../packages/plugin-sdk/src/conformance-engine';
+import { PACKAGE_POLICY_FILE, PACKAGE_SETUP_FILE } from '../../packages/plugin-sdk/src/profile';
+import { listArtifactFiles, listPackageFiles, posix } from './cli/shared';
 
-export type V2ConformanceIssueCode =
-    | 'manifest-invalid'
-    | 'sdk-dependency-missing'
-    | 'sdk-range-invalid'
-    | 'sdk-range-mismatch'
-    | 'plugin-api-range-invalid'
-    | 'plugin-api-range-mismatch'
-    | 'private-host-import'
-    | 'unresolved-bare-import'
-    | 'nuxt-auto-import';
+/**
+ * OR3 host reviewer for Plugin Runtime V2 packages.
+ *
+ * The decision itself is made by the shared SDK engine
+ * (`packages/plugin-sdk/src/conformance-engine.ts`) against the exact artifact,
+ * and the result is bound to that artifact's canonical digest.
+ *
+ * Only the host-specific inputs differ: the compatibility ledger expands the
+ * banned Nuxt auto-import set, the SDK version comes from this checkout, and the
+ * module graph is derived with the TypeScript parser (the standalone SDK falls
+ * back to its lexical scanner). Source review applies the packer's exclusions;
+ * artifact review scans every code file actually present, so filename-based
+ * exclusions cannot hide shipped code from the gate.
+ */
 
-export interface V2ConformanceIssue {
-    readonly code: V2ConformanceIssueCode;
-    readonly file: string;
-    readonly subject?: string;
-    readonly message: string;
+export type { V2ConformanceIssue, V2ConformanceIssueCode, V2ConformanceResult };
+
+export type ConformanceReviewMode = 'source' | 'artifact';
+
+const CODE_FILE = /\.[cm]?[jt]sx?$/;
+
+function readJsonOrNull(path: string): unknown | null {
+    try {
+        return JSON.parse(readFileSync(path, 'utf8')) as unknown;
+    } catch {
+        return null;
+    }
 }
 
-export type V2ConformanceResult =
-    | { readonly status: 'legacy-v1'; readonly issues: readonly [] }
-    | { readonly status: 'conformant'; readonly issues: readonly [] }
-    | { readonly status: 'nonconformant'; readonly issues: readonly V2ConformanceIssue[] };
-
-const PRIVATE_IMPORT_PREFIXES = [
-    '~/',
-    '~~/',
-    '@/',
-    '@@/',
-    '#imports',
-    '#app',
-    '#build',
-    '#internal',
-];
-const ALLOWED_BARE_IMPORTS = new Set([
-    '@or3/plugin-sdk',
-    '@or3/plugin-sdk/manifest',
-    'vue',
-]);
-const CORE_NUXT_AUTO_IMPORTS = new Set([
-    '$fetch',
-    'computed',
-    'defineNuxtComponent',
-    'defineNuxtPlugin',
-    'navigateTo',
-    'onMounted',
-    'onUnmounted',
-    'reactive',
-    'ref',
-    'useAsyncData',
-    'useCookie',
-    'useFetch',
-    'useNuxtApp',
-    'useRoute',
-    'useRouter',
-    'useRuntimeConfig',
-    'useState',
-    'watch',
-    'watchEffect',
-]);
-
-function posix(path: string): string {
-    return path.split(sep).join('/');
-}
-
-function codeFiles(root: string): string[] {
-    const result: string[] = [];
-    const visit = (directory: string) => {
-        for (const entry of readdirSync(directory, { withFileTypes: true })) {
-            if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
-            const path = resolve(directory, entry.name);
-            if (entry.isDirectory()) visit(path);
-            else if (
-                entry.isFile() &&
-                ['.js', '.mjs', '.cjs', '.ts', '.tsx'].includes(extname(path))
-            ) {
-                result.push(path);
-            }
-        }
+function autoImportNames(repoRoot: string): ReadonlySet<string> {
+    const names = new Set(CORE_NUXT_AUTO_IMPORTS);
+    const ledgerPath = resolve(
+        repoRoot,
+        'planning/complete/plugin-runtime-v2/compatibility-ledger.json'
+    );
+    const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as {
+        modules?: Array<{ exports?: Array<{ name?: string; nuxtAutoImport?: boolean }> }>;
     };
-    visit(root);
-    return result.sort();
+    for (const module of ledger.modules ?? []) {
+        for (const exported of module.exports ?? []) {
+            if (exported.nuxtAutoImport && exported.name) names.add(exported.name);
+        }
+    }
+    return names;
 }
 
-function isBareImport(specifier: string): boolean {
-    return !specifier.startsWith('.') && !specifier.startsWith('/') && !/^[a-z]+:/i.test(specifier);
+function sdkVersion(repoRoot: string): string {
+    const packageJson = JSON.parse(
+        readFileSync(resolve(repoRoot, 'packages/plugin-sdk/package.json'), 'utf8')
+    ) as { version: string };
+    return packageJson.version;
 }
 
 function bindingNames(name: ts.BindingName, result: Set<string>): void {
@@ -102,7 +79,7 @@ function bindingNames(name: ts.BindingName, result: Set<string>): void {
 
 function declaredNames(sourceFile: ts.SourceFile): Set<string> {
     const result = new Set<string>();
-    const visit = (node: ts.Node) => {
+    const visit = (node: ts.Node): void => {
         if (ts.isImportClause(node)) {
             if (node.name) result.add(node.name.text);
             if (node.namedBindings && ts.isNamespaceImport(node.namedBindings)) {
@@ -116,10 +93,7 @@ function declaredNames(sourceFile: ts.SourceFile): Set<string> {
             ts.isBindingElement(node)
         ) {
             bindingNames(node.name, result);
-        } else if (
-            (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) &&
-            node.name
-        ) {
+        } else if ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) && node.name) {
             result.add(node.name.text);
         }
         ts.forEachChild(node, visit);
@@ -149,23 +123,9 @@ function isIdentifierUse(node: ts.Identifier): boolean {
     return true;
 }
 
-function autoImportNames(repoRoot: string): Set<string> {
-    const names = new Set(CORE_NUXT_AUTO_IMPORTS);
-    const ledgerPath = resolve(repoRoot, 'planning/complete/plugin-runtime-v2/compatibility-ledger.json');
-    const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as {
-        modules?: Array<{ exports?: Array<{ name?: string; nuxtAutoImport?: boolean }> }>;
-    };
-    for (const module of ledger.modules ?? []) {
-        for (const exported of module.exports ?? []) {
-            if (exported.nuxtAutoImport && exported.name) names.add(exported.name);
-        }
-    }
-    return names;
-}
-
 function moduleSpecifiers(sourceFile: ts.SourceFile): string[] {
     const result: string[] = [];
-    const visit = (node: ts.Node) => {
+    const visit = (node: ts.Node): void => {
         if (
             (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
             node.moduleSpecifier &&
@@ -187,163 +147,86 @@ function moduleSpecifiers(sourceFile: ts.SourceFile): string[] {
     return result;
 }
 
-export function checkV2PackageConformance(
+function autoImportUses(
+    sourceFile: ts.SourceFile,
+    banned: ReadonlySet<string>
+): string[] {
+    const declared = declaredNames(sourceFile);
+    const found = new Set<string>();
+    const visit = (node: ts.Node): void => {
+        if (
+            ts.isIdentifier(node) &&
+            banned.has(node.text) &&
+            !declared.has(node.text) &&
+            isIdentifierUse(node)
+        ) {
+            found.add(node.text);
+        }
+        ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+    return [...found];
+}
+
+/**
+ * Derives per-module facts with the TypeScript parser. `source` mode applies the
+ * packer's exclusions (the directory is about to be packaged); `artifact` mode
+ * scans every code file present.
+ */
+function collectV2ModuleGraph(
+    root: string,
+    mode: ConformanceReviewMode,
+    banned: ReadonlySet<string>
+): V2ConformanceModule[] {
+    let files: string[];
+    try {
+        files =
+            mode === 'artifact'
+                ? listArtifactFiles(root)
+                : listPackageFiles(root, { shippableOnly: true });
+    } catch {
+        return [];
+    }
+    return files
+        .filter((file) => CODE_FILE.test(file))
+        .map((file) => {
+            const source = readFileSync(file, 'utf8');
+            const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+            return {
+                path: posix(relative(root, file)),
+                specifiers: moduleSpecifiers(sourceFile),
+                autoImportUses: autoImportUses(sourceFile, banned),
+            };
+        });
+}
+
+export async function checkV2PackageConformance(
     packageRoot: string,
-    options: { repoRoot?: string } = {}
-): V2ConformanceResult {
+    options: { repoRoot?: string; mode?: ConformanceReviewMode } = {}
+): Promise<V2ConformanceResult> {
     const root = resolve(packageRoot);
     const repoRoot = options.repoRoot ?? resolve(import.meta.dirname, '../..');
-    const manifestPath = resolve(root, 'or3.manifest.json');
-    const packageJsonPath = resolve(root, 'package.json');
-    const issues: V2ConformanceIssue[] = [];
-    const issue = (entry: V2ConformanceIssue) => issues.push(Object.freeze(entry));
-    let manifest: {
-        manifestVersion?: unknown;
-        engines?: { pluginApi?: unknown };
-    };
-    try {
-        manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as typeof manifest;
-    } catch {
-        return {
-            status: 'nonconformant',
-            issues: [
-                {
-                    code: 'manifest-invalid',
-                    file: 'or3.manifest.json',
-                    message: 'Package manifest is missing or invalid JSON',
-                },
-            ],
-        };
-    }
-    if ((manifest.manifestVersion ?? 1) !== 2) {
-        return { status: 'legacy-v1', issues: [] };
-    }
-    let packageJson: {
-        dependencies?: Record<string, string>;
-        peerDependencies?: Record<string, string>;
-    } = {};
-    let packageJsonLoaded = true;
-    try {
-        packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as typeof packageJson;
-    } catch {
-        packageJsonLoaded = false;
-        issue({
-            code: 'sdk-dependency-missing',
-            file: 'package.json',
-            subject: '@or3/plugin-sdk',
-            message: 'V2 package must declare an @or3/plugin-sdk dependency',
-        });
-    }
-    const sdkPackage = JSON.parse(
-        readFileSync(resolve(repoRoot, 'packages/plugin-sdk/package.json'), 'utf8')
-    ) as { version: string };
-    const sdkRange =
-        packageJson.dependencies?.['@or3/plugin-sdk'] ??
-        packageJson.peerDependencies?.['@or3/plugin-sdk'];
-    if (packageJsonLoaded && !sdkRange) {
-        issue({
-            code: 'sdk-dependency-missing',
-            file: 'package.json',
-            subject: '@or3/plugin-sdk',
-            message: 'V2 package must declare an @or3/plugin-sdk dependency',
-        });
-    } else if (!validRange(sdkRange)) {
-        issue({
-            code: 'sdk-range-invalid',
-            file: 'package.json',
-            subject: sdkRange,
-            message: 'The @or3/plugin-sdk dependency range is invalid',
-        });
-    } else if (!satisfies(sdkPackage.version, sdkRange)) {
-        issue({
-            code: 'sdk-range-mismatch',
-            file: 'package.json',
-            subject: sdkRange,
-            message: `SDK ${sdkPackage.version} is outside the package dependency range`,
-        });
-    }
-    const pluginApiRange = manifest.engines?.pluginApi;
-    if (typeof pluginApiRange !== 'string' || !validRange(pluginApiRange)) {
-        issue({
-            code: 'plugin-api-range-invalid',
-            file: 'or3.manifest.json',
-            subject: String(pluginApiRange),
-            message: 'Manifest plugin API engine range is invalid',
-        });
-    } else if (!satisfies(sdkPackage.version, pluginApiRange)) {
-        issue({
-            code: 'plugin-api-range-mismatch',
-            file: 'or3.manifest.json',
-            subject: pluginApiRange,
-            message: `SDK API ${sdkPackage.version} is outside the manifest range`,
-        });
-    }
-
-    const bannedAutoImports = autoImportNames(repoRoot);
-    for (const file of codeFiles(root)) {
-        const source = readFileSync(file, 'utf8');
-        const fileName = posix(relative(root, file));
-        const kind = file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
-        const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, kind);
-        const imports = moduleSpecifiers(sourceFile);
-        for (const specifier of imports) {
-            if (
-                PRIVATE_IMPORT_PREFIXES.some(
-                    (prefix) => specifier === prefix || specifier.startsWith(prefix)
-                )
-            ) {
-                issue({
-                    code: 'private-host-import',
-                    file: fileName,
-                    subject: specifier,
-                    message: `V2 packages cannot import OR3 private path ${specifier}`,
-                });
-            } else if (isBareImport(specifier) && !ALLOWED_BARE_IMPORTS.has(specifier)) {
-                issue({
-                    code: 'unresolved-bare-import',
-                    file: fileName,
-                    subject: specifier,
-                    message: `Bare import ${specifier} is not an allowed host external`,
-                });
-            }
-        }
-        const declared = declaredNames(sourceFile);
-        const reported = new Set<string>();
-        const visit = (node: ts.Node) => {
-            if (
-                ts.isIdentifier(node) &&
-                isIdentifierUse(node) &&
-                bannedAutoImports.has(node.text) &&
-                !declared.has(node.text) &&
-                !reported.has(node.text)
-            ) {
-                reported.add(node.text);
-                issue({
-                    code: 'nuxt-auto-import',
-                    file: fileName,
-                    subject: node.text,
-                    message: `V2 package uses Nuxt auto-import ${node.text}`,
-                });
-            }
-            ts.forEachChild(node, visit);
-        };
-        visit(sourceFile);
-    }
-    if (issues.length > 0) {
-        issues.sort((left, right) =>
-            `${left.file}:${left.code}:${left.subject ?? ''}`.localeCompare(
-                `${right.file}:${right.code}:${right.subject ?? ''}`
-            )
-        );
-        return { status: 'nonconformant', issues: Object.freeze(issues) };
-    }
-    return { status: 'conformant', issues: [] };
+    const policyPath = resolve(root, PACKAGE_POLICY_FILE);
+    const setupPath = resolve(root, PACKAGE_SETUP_FILE);
+    const banned = autoImportNames(repoRoot);
+    const decision = evaluateV2Conformance({
+        manifest: readJsonOrNull(resolve(root, 'or3.manifest.json')),
+        packageJson: readJsonOrNull(resolve(root, 'package.json')),
+        moduleGraph: collectV2ModuleGraph(root, options.mode ?? 'source', banned),
+        bannedAutoImports: banned,
+        sdkVersion: sdkVersion(repoRoot),
+        policy: readPortableJson(policyPath),
+        setup: readPortableJson(setupPath),
+        shipsPolicy: existsSync(policyPath),
+        shipsSetup: existsSync(setupPath),
+    });
+    return composeV2Conformance(root, decision);
 }
 
 if (import.meta.main) {
     const packageArg = process.argv[2];
     if (!packageArg) throw new Error('Usage: check-v2-package-conformance.ts <package-root>');
-    const result = checkV2PackageConformance(packageArg);
+    const result = await checkV2PackageConformance(packageArg, { mode: 'artifact' });
     if (result.status === 'nonconformant') {
         for (const entry of result.issues) {
             console.error(`[${entry.code}] ${entry.file}: ${entry.message}`);

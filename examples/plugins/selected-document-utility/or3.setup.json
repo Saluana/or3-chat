@@ -1,0 +1,44 @@
+{
+  "connections": [],
+  "fields": [
+    {
+      "choices": [
+        "bullets",
+        "prose"
+      ],
+      "default": "bullets",
+      "key": "summaryStyle",
+      "kind": "select",
+      "label": "Summary style",
+      "order": 1,
+      "required": false
+    },
+    {
+      "default": 5,
+      "key": "maxOutlineSentences",
+      "kind": "number",
+      "label": "Max outline sentences",
+      "order": 2,
+      "required": false
+    },
+    {
+      "default": true,
+      "key": "includeStatistics",
+      "kind": "toggle",
+      "label": "Include statistics",
+      "order": 3,
+      "required": false
+    }
+  ],
+  "firstAction": {
+    "label": "Summarize selected document",
+    "operationId": "documents.write",
+    "usesSampleContext": true
+  },
+  "settingsSchemaPath": "settings.schema.json",
+  "setupVersion": 1,
+  "testAction": {
+    "deadlineMs": 5000,
+    "operationId": "documents.read"
+  }
+}

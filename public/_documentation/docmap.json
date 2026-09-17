@@ -1337,7 +1337,25 @@
                     "name": "plugin-sdk.md",
                     "path": "/plugins/plugin-sdk",
                     "category": "Reference",
-                    "summary": "Stable Plugin Runtime V2 authoring surface. Import only this package (or documented subpaths: /manifest, /host, /testing). The package is currently an authoring and compatibility-test surface. OR3's"
+                    "summary": "Stable Plugin Runtime V2 authoring surface. Import only this package (or documented subpaths: /manifest, /host, /testing, /profile, /package-tree, /package-archive, /state-compatibility). The package is not yet published to npm; install it from a packed tarball. It is currently an authoring and compatibility-test surface. OR3's"
+                },
+                {
+                    "name": "plugin-sdk-cli.md",
+                    "path": "/plugins/plugin-sdk-cli",
+                    "category": "Reference",
+                    "summary": "@or3/plugin-sdk is not yet on npm: install it from a packed tarball. It provides prebuilt ESM + types under dist/ and a standalone or3-plugin CLI (create, validate, test, build, pack, inspect) that works without an OR3 checkout or private path aliases, plus the portable-v1 starter with a hidden .authoring/ generator. Publishing requires adding an SDK job to the release workflows."
+                },
+                {
+                    "name": "portable-profile.md",
+                    "path": "/plugins/portable-profile",
+                    "category": "Reference",
+                    "summary": "The or3-portable-client-v1 profile generates deterministic or3.package-policy.json and or3.setup.json descriptors from one authoring configuration, requires the or3-portable-client-v1 feature flag, and restricts packages to isolated browser-only code with no plugin dependencies, custom state migrations or install scripts."
+                },
+                {
+                    "name": "selected-document-utility.md",
+                    "path": "/plugins/selected-document-utility",
+                    "category": "Tutorial",
+                    "summary": "A complete free selected-document utility example: one host-mediated summarize command, a committed first-action fixture, a generated authoring profile, and a pinned Bun test container with a documented sample workspace."
                 },
                 {
                     "name": "runtime-v2-overview.md",

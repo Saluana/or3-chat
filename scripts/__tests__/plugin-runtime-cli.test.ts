@@ -45,14 +45,14 @@ describe('plugin-runtime CLI', () => {
         );
     });
 
-    it('validate reports stable conformance codes', () => {
+    it('validate reports stable conformance codes', async () => {
         const directory = resolve(tempDir('or3-cli-validate-'), 'plugin');
         createV2Package({
             pluginId: 'or3.validate-me',
             directory,
             repoRoot,
         });
-        const ok = validateV2Package(directory, { repoRoot });
+        const ok = await validateV2Package(directory, { repoRoot });
         expect(ok.result.status).toBe('conformant');
         expect(ok.exitCode).toBe(0);
 
@@ -60,7 +60,7 @@ describe('plugin-runtime CLI', () => {
             resolve(directory, 'client.mjs'),
             "import x from '~/private'; export default x;\n"
         );
-        const bad = validateV2Package(directory, { repoRoot });
+        const bad = await validateV2Package(directory, { repoRoot });
         expect(bad.result.status).toBe('nonconformant');
         expect(bad.exitCode).toBe(1);
         if (bad.result.status === 'nonconformant') {
@@ -85,6 +85,13 @@ describe('plugin-runtime CLI', () => {
         expect(report.stateCompatibility).toMatchObject({
             version: 1,
             rollback: 'safe',
+        });
+        expect(report.statePreflight).toMatchObject({
+            status: 'eligible',
+            code: 'state-initialization',
+            operation: 'install',
+            storedStateVersion: null,
+            mutatesState: false,
         });
         expect(report.moduleGraph.some((entry) => entry.file === 'client.mjs')).toBe(
             true

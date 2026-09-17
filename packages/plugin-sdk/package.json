@@ -1,34 +1,68 @@
 {
-  "name": "@or3/plugin-sdk",
-  "version": "2.0.0",
-  "type": "module",
-  "private": true,
-  "engines": {
-    "node": ">=24"
-  },
-  "sideEffects": false,
-  "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts"
+    "name": "@or3/plugin-sdk",
+    "version": "2.0.0",
+    "type": "module",
+    "license": "GPL-3.0",
+    "engines": {
+        "node": ">=24"
     },
-    "./manifest": {
-      "types": "./src/manifest.ts",
-      "import": "./src/manifest.ts"
+    "sideEffects": false,
+    "bin": {
+        "or3-plugin": "./bin/or3-plugin.mjs"
     },
-    "./host": {
-      "types": "./src/host.ts",
-      "import": "./src/host.ts"
+    "exports": {
+        ".": {
+            "types": "./src/index.ts",
+            "import": "./src/index.ts"
+        },
+        "./host": {
+            "types": "./src/host.ts",
+            "import": "./src/host.ts"
+        },
+        "./manifest": {
+            "types": "./src/manifest.ts",
+            "import": "./src/manifest.ts"
+        },
+        "./package-tree": {
+            "types": "./src/package-tree.ts",
+            "import": "./src/package-tree.ts"
+        },
+        "./profile": {
+            "types": "./src/profile.ts",
+            "import": "./src/profile.ts"
+        },
+        "./state-compatibility": {
+            "types": "./src/state-compatibility.ts",
+            "import": "./src/state-compatibility.ts"
+        },
+        "./package-archive": {
+            "types": "./src/cli/archive.ts",
+            "import": "./src/cli/archive.ts"
+        },
+        "./testing": {
+            "types": "./src/testing.ts",
+            "import": "./src/testing.ts"
+        }
     },
-    "./testing": {
-      "types": "./src/testing.ts",
-      "import": "./src/testing.ts"
+    "files": [
+        "bin",
+        "dist",
+        "src",
+        "templates",
+        "README.md",
+        "LICENSE",
+        "THIRD_PARTY_NOTICES"
+    ],
+    "publishConfig": {
+        "access": "public"
+    },
+    "scripts": {
+        "build": "bun run scripts/build.mjs",
+        "typecheck": "tsc --noEmit -p tsconfig.json",
+        "prepack": "bun run build && node scripts/publish-manifest.mjs --apply",
+        "postpack": "node scripts/publish-manifest.mjs --restore"
+    },
+    "devDependencies": {
+        "typescript": "^5.9.3"
     }
-  },
-  "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json"
-  },
-  "devDependencies": {
-    "typescript": "^5.9.3"
-  }
 }

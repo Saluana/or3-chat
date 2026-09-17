@@ -1,0 +1,15 @@
+{
+  "connections": [],
+  "dataScopes": [
+    "settings.read"
+  ],
+  "destinations": [],
+  "policyVersion": 1,
+  "profile": "or3-portable-client-v1",
+  "requiredFeatures": [
+    "or3-portable-client-v1"
+  ],
+  "writes": [
+    "settings.write"
+  ]
+}
