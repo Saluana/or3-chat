@@ -54,7 +54,9 @@ One selected code version is shared by every workspace. Before promotion, every 
 
 ## Freshness, advisories and revocation
 
-Quarantine decisions come from the signed advisory log, which is fetched and verified on every resolve: an advisory this host has not yet accepted that quarantines the release refuses the acquisition with `release-quarantined`, an advisory that cannot be verified refuses with `advisory-unverified`, and the newest seen sequence is returned so it can be recorded monotonically. A release's publication date is not freshness: an old but intact, non-quarantined release is still acquirable.
+Quarantine decisions come from the signed advisory log, which is fetched and verified on every resolve: a quarantined release is refused with `release-quarantined`, an advisory that cannot be verified refuses with `advisory-unverified`, and the newest seen sequence is recorded monotonically. A release's publication date is not freshness: an old but intact, non-quarantined release is still acquirable.
+
+The advisory sequence is a *freshness* cursor, not a filter for which scoped decisions still apply. Quarantines are recorded per release in the registry state (`<extensions>/.registry/state.json`) independently of that cursor, evaluated over every verified advisory including ones at or below it, and consulted before the registry log is read at all. Resolving any other release therefore cannot clear a quarantine this host has already accepted, and a recorded decision survives a registry log that no longer lists it. The ledger is monotonic per release, bounded, and written under the same exclusive lock as the cursor.
 
 ## Host capability requirement
 
