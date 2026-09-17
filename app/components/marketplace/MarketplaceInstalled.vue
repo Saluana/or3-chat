@@ -96,6 +96,44 @@ async function rollback(pluginId: string): Promise<void> {
     }
 }
 
+/** Redacted support report: no settings, secrets, content or signed URLs. */
+async function copyDiagnostics(): Promise<void> {
+    try {
+        const report = (await apiGet<Record<string, unknown>>('/api/plugins/diagnostics')) as Record<
+            string,
+            unknown
+        >;
+        const browser = {
+            activations: [...activations.entries()].map(([id, activation]) => ({
+                pluginId: id,
+                status: activation.status,
+                blockCode: activation.blockCode ?? null,
+                crashed: activation.crashed,
+                logCount: activation.logs.length,
+                contributionCount: activation.contributions.length,
+            })),
+        };
+        await navigator.clipboard.writeText(
+            JSON.stringify({ ...report, browser }, null, 2)
+        );
+        toast.add({
+            title: 'Diagnostics copied',
+            description: 'Settings, secrets, message content and signed URLs are not included.',
+            color: 'success',
+        });
+    } catch (error) {
+        toast.add({
+            title: 'Could not build the report',
+            description: error instanceof Error ? error.message : 'The request was refused.',
+            color: 'error',
+        });
+    }
+}
+
+async function apiGet<T>(url: string): Promise<T> {
+    return (await ($fetch as unknown as (input: string) => Promise<unknown>)(url)) as T;
+}
+
 async function apiPost<T>(
     url: string,
     options: { readonly body?: unknown; readonly adminIntent?: boolean } = {}
@@ -114,6 +152,19 @@ async function apiPost<T>(
     <div class="flex flex-col gap-5">
         <div v-if="installed.error.value" class="text-sm text-(--ui-text-muted)" data-testid="marketplace-installed-error">
             {{ installed.error.value }}
+        </div>
+
+        <div class="flex justify-end">
+            <UButton
+                size="sm"
+                color="neutral"
+                variant="ghost"
+                icon="i-lucide-clipboard-list"
+                data-testid="marketplace-copy-diagnostics"
+                @click="copyDiagnostics"
+            >
+                Copy diagnostics
+            </UButton>
         </div>
 
         <section class="flex flex-col gap-3" data-testid="marketplace-installed">

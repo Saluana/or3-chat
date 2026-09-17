@@ -157,6 +157,47 @@ describe('registry resolve (5.2)', () => {
         ).toMatchObject({ ok: false, failure: { code: 'advisory-stale' } });
     });
 
+    it('an older catalog cannot clear an accepted quarantine', async () => {
+        // The host recorded the advisory position of the signed quarantine. A
+        // replayed, older catalog must not be able to clear that block: the
+        // signed release metadata carries the catalog position it was published
+        // at, and the host refuses anything behind its accepted sequence.
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const quarantinedAtSeven = makeClient({
+            keys: [fixture.key],
+            acceptedAdvisorySequence: 7,
+            transport: fakeRegistryTransport({
+                fixture,
+                catalogAdvisorySequence: 6,
+            }),
+        });
+        expect(
+            await quarantinedAtSeven.resolveRelease({
+                expectation: { pluginId: 'alpha', version: '1.0.0' },
+                catalogAdvisorySequence: 6,
+                latestAdvisorySequence: 6,
+            })
+        ).toMatchObject({ ok: false, failure: { code: 'advisory-stale' } });
+
+        // And a catalog at or beyond the accepted position still resolves, so a
+        // registry that genuinely withdraws a quarantine is not stuck forever.
+        const currentAtSeven = makeClient({
+            keys: [fixture.key],
+            acceptedAdvisorySequence: 7,
+            transport: fakeRegistryTransport({
+                fixture,
+                catalogAdvisorySequence: 7,
+            }),
+        });
+        expect(
+            await currentAtSeven.resolveRelease({
+                expectation: { pluginId: 'alpha', version: '1.0.0' },
+                catalogAdvisorySequence: 7,
+                latestAdvisorySequence: 7,
+            })
+        ).toMatchObject({ ok: true });
+    });
+
     it('refuses a release the signed advisory log has quarantined', async () => {
         const fixture = await releaseFixture({ version: '1.0.0' });
         const advisory = await signAdvisoryForTest({
