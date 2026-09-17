@@ -381,3 +381,59 @@ describe('containment budgets (4.4)', () => {
         expect(hard.exceeded).toBe('message-bytes');
     });
 });
+
+describe('UI tree content budgets (review 13)', () => {
+    it('counts cell, label and field content, not just node.text', () => {
+        // 40 rows x 2 cells of 512 bytes: one "node with no text" previously, now
+        // well past the aggregate text ceiling.
+        const cell = 'x'.repeat(512);
+        const table = {
+            type: 'table',
+            columns: [
+                { key: 'a', label: 'A' },
+                { key: 'b', label: 'B' },
+            ],
+            rows: Array.from({ length: 40 }, () => ({ a: cell, b: cell })),
+        };
+        const breached = validateUiTreeBudgets(table);
+        expect(breached).toMatchObject({ ok: false, kind: 'ui-text-bytes' });
+    });
+
+    it('counts items so a huge data set cannot hide behind few nodes', () => {
+        const budgets = resolveContainmentBudgets({ maxUiTreeItems: 32 });
+        const list = {
+            type: 'list',
+            items: Array.from({ length: 40 }, (_, index) => ({ label: `item ${index}` })),
+        };
+        expect(validateUiTreeBudgets(list, budgets)).toMatchObject({
+            ok: false,
+            kind: 'ui-tree-items',
+        });
+    });
+
+    it('counts markdown, options, placeholders and field values', () => {
+        const budgets = resolveContainmentBudgets({ maxUiTextBytes: 40 });
+        const options = {
+            type: 'field.select',
+            id: 'choice',
+            label: 'Choice',
+            value: 'a',
+            options: [
+                { label: 'x'.repeat(32), value: 'a' },
+                { label: 'y'.repeat(32), value: 'b' },
+            ],
+        };
+        expect(validateUiTreeBudgets(options, budgets)).toMatchObject({
+            ok: false,
+            kind: 'ui-text-bytes',
+        });
+    });
+
+    it('still accepts a small tree and reports items', () => {
+        const result = validateUiTreeBudgets({
+            type: 'box',
+            children: [{ type: 'text', text: 'hello' }],
+        });
+        expect(result).toMatchObject({ ok: true, nodes: 2, depth: 2, textBytes: 5 });
+    });
+});

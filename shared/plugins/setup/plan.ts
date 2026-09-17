@@ -11,6 +11,9 @@
  *   optional settings are deferred to after first use.
  * - A successful connection test is bound to the connection revision, so a
  *   credential change returns the plugin to "needs setup".
+ * - A stored connection only satisfies a declared requirement through an
+ *   explicit slot binding, and only when the registered host provider supports
+ *   the declared mechanism, scopes and operations.
  * - `Needs setup` is never reported as `Ready`, and a package whose first action
  *   is unreachable is reported as blocked rather than ready.
  *
@@ -28,6 +31,7 @@ import type {
     Or3SetupField,
     PortableProfileFieldValue,
 } from '@or3/plugin-sdk/profile';
+import { isSetupValuePresent } from './values';
 
 export type SetupStatus = 'ready' | 'needs-setup' | 'blocked';
 
@@ -53,10 +57,13 @@ export interface SetupConnectionPlan {
     readonly scopes: readonly string[];
     readonly operationIds: readonly string[];
     readonly externalCost?: string;
-    /** Host record for this connection, when one exists. */
+    /** Host record bound to this declared slot, when one exists. */
     readonly connectionRef?: string;
     readonly satisfied: boolean;
+    /** True when the host can support this requirement at all. */
     readonly usable: boolean;
+    /** True when the host provably cannot satisfy it (wrong provider/mechanism). */
+    readonly unsupported: boolean;
     readonly blockedReason?: string;
 }
 
@@ -75,37 +82,53 @@ export interface SetupPlan {
     readonly blockers: readonly string[];
 }
 
+/**
+ * A host connection the plugin is bound to. `slotId` is the declared package
+ * connection id: the stored record's own id is host-generated, so without this
+ * binding the plan cannot tell which requirement a credential satisfies.
+ */
 export interface SetupConnectionState {
+    readonly slotId: string;
     readonly connectionId: string;
     readonly ref: string;
+    readonly providerId: string;
     readonly scopes: readonly string[];
     /** True only when the current revision passed its test. */
     readonly testPassed: boolean;
-    readonly mechanismSatisfied: boolean;
+}
+
+/**
+ * Capabilities of one registered host provider. The host capability list is the
+ * authority for what a declared requirement can use; there is no default that
+ * assumes browser and server support both exist.
+ */
+export interface HostConnectionCapability {
+    readonly provider: string;
+    readonly mechanism: Or3PackageConnection['mechanism'];
+    readonly scopes: readonly string[];
+    readonly operations: readonly string[];
 }
 
 export interface BuildSetupPlanInput {
     readonly setup: Or3SetupDescriptorV1;
     readonly policy: Pick<Or3PackagePolicyV1, 'connections'>;
-    /** Values the user already provided (settings UI state). */
+    /** Values the user already provided and that passed schema validation. */
     readonly values?: Readonly<Record<string, PortableProfileFieldValue>>;
     /** Connections the host has stored for this plugin and workspace. */
     readonly connectionStates?: readonly SetupConnectionState[];
-    /** Host-supported mechanisms; a package needs at least one it can use. */
-    readonly hostMechanisms?: readonly Or3PackageConnection['mechanism'][];
+    /**
+     * Registered host providers. Omitted means "no capabilities known", which
+     * fails closed rather than assuming a mechanism is supported.
+     */
+    readonly hostConnections?: readonly HostConnectionCapability[];
 }
-
-export const DEFAULT_HOST_MECHANISMS: readonly Or3PackageConnection['mechanism'][] = [
-    'server',
-    'browser',
-];
 
 /**
  * Build the setup plan. Required-but-unset fields and unavailable or untested
  * required connections appear as blockers; optional fields are deferred.
  */
 export function buildSetupPlan(input: BuildSetupPlanInput): SetupPlan {
-    const hostMechanisms = input.hostMechanisms ?? DEFAULT_HOST_MECHANISMS;
+    const hostConnections = input.hostConnections ?? [];
     const values = input.values ?? {};
     const connectionStates = input.connectionStates ?? [];
     const blockers: string[] = [];
@@ -113,7 +136,9 @@ export function buildSetupPlan(input: BuildSetupPlanInput): SetupPlan {
     const fields: SetupFieldPlan[] = [...input.setup.fields]
         .sort((left, right) => left.order - right.order)
         .map((field) => {
-            const provided = values[field.key] !== undefined;
+            // An empty string or a blank select is not "supplied": presence is
+            // decided by the same helper the save endpoint validates with.
+            const provided = isSetupValuePresent(field, values[field.key]);
             const hasDefault = field.default !== undefined;
             const missing = field.required && !provided && !hasDefault;
             // Optional settings are always configurable later, never blockers.
@@ -153,30 +178,59 @@ export function buildSetupPlan(input: BuildSetupPlanInput): SetupPlan {
                     operationIds: [],
                     satisfied: false,
                     usable: false,
+                    // A malformed package is reported as a blocker: it is not a
+                    // host capability gap, but the user cannot resolve it either.
+                    unsupported: false,
                     blockedReason: 'Connection is not declared by the package policy',
                 };
             }
 
-            const mechanismSupported = hostMechanisms.includes(declared.mechanism);
-            const state = connectionStates.find(
-                (candidate) => candidate.connectionId === declared.id
+            const host = hostConnections.find(
+                (candidate) => candidate.provider === declared.provider
             );
+            const mechanismSupported = host?.mechanism === declared.mechanism;
+            const missingOperations =
+                host === undefined
+                    ? [...declared.operations]
+                    : declared.operations.filter(
+                          (operation) => !host.operations.includes(operation)
+                      );
+            const missingProviderScopes =
+                host === undefined
+                    ? [...declared.scopes]
+                    : declared.scopes.filter((scope) => !host.scopes.includes(scope));
+            const capabilitySupported =
+                host !== undefined &&
+                mechanismSupported &&
+                missingOperations.length === 0 &&
+                missingProviderScopes.length === 0;
+
+            const state = connectionStates.find(
+                (candidate) => candidate.slotId === declared.id
+            );
+            const boundProviderMatches = state?.providerId === declared.provider;
             const scopesSatisfied = Boolean(
-                state && declared.scopes.every((scope) => state.scopes.includes(scope))
+                state &&
+                    boundProviderMatches &&
+                    declared.scopes.every((scope) => state.scopes.includes(scope))
             );
             const satisfied = Boolean(
-                mechanismSupported &&
-                    state &&
-                    state.testPassed &&
-                    scopesSatisfied &&
-                    state.mechanismSatisfied
+                capabilitySupported && scopesSatisfied && state?.testPassed
             );
 
             let blockedReason: string | undefined;
-            if (!mechanismSupported) {
-                blockedReason = `This host does not support the ${declared.mechanism} mechanism`;
+            if (host === undefined) {
+                blockedReason = `This host has no connection provider named "${declared.provider}"`;
+            } else if (!mechanismSupported) {
+                blockedReason = `This host does not support the ${declared.mechanism} mechanism for ${declared.provider}`;
+            } else if (missingOperations.length > 0) {
+                blockedReason = `The ${declared.provider} provider does not declare ${missingOperations.join(', ')}`;
+            } else if (missingProviderScopes.length > 0) {
+                blockedReason = `The ${declared.provider} provider does not declare the ${missingProviderScopes.join(', ')} scope`;
             } else if (!state) {
                 blockedReason = 'Not connected yet';
+            } else if (!boundProviderMatches) {
+                blockedReason = 'The connected credential belongs to another provider';
             } else if (!scopesSatisfied) {
                 blockedReason = 'Connected credential is missing a required scope';
             } else if (!state.testPassed) {
@@ -204,7 +258,8 @@ export function buildSetupPlan(input: BuildSetupPlanInput): SetupPlan {
                 satisfied,
                 // `usable` answers "can this host use this connection at all?";
                 // `satisfied` answers "is it connected and tested?".
-                usable: mechanismSupported,
+                usable: capabilitySupported,
+                unsupported: !capabilitySupported,
                 ...(blockedReason === undefined ? {} : { blockedReason }),
             };
         }
@@ -214,8 +269,12 @@ export function buildSetupPlan(input: BuildSetupPlanInput): SetupPlan {
         blockers.push('The package declares no first action');
     }
 
-    const status: SetupStatus =
-        blockers.length > 0 ? 'needs-setup' : 'ready';
+    const unsupported = connections.some((connection) => connection.unsupported);
+    const status: SetupStatus = unsupported
+        ? 'blocked'
+        : blockers.length > 0
+          ? 'needs-setup'
+          : 'ready';
 
     return Object.freeze({
         status,
@@ -241,11 +300,12 @@ export function describeSetupStatus(plan: SetupPlan): {
     readonly nextAction?: string;
     readonly blocked?: boolean;
 } {
-    if (plan.blockers.some((blocker) => blocker.includes('does not support'))) {
+    if (plan.status === 'blocked') {
         return {
             status: 'blocked',
             label: 'Unsupported on this host',
             blocked: true,
+            nextAction: plan.blockers[0],
         };
     }
     if (plan.status === 'ready') {
@@ -287,6 +347,8 @@ export interface FirstActionHandoff {
     readonly contextKind: 'selected' | 'sample';
     readonly ready: boolean;
     readonly reason?: string;
+    /** Machine-readable cause, so callers never match on the message text. */
+    readonly reasonCode?: 'setup-incomplete' | 'selection-required';
 }
 
 export function buildFirstActionHandoff(input: {
@@ -301,6 +363,7 @@ export function buildFirstActionHandoff(input: {
             contextKind: plan.firstAction.usesSampleContext ? 'sample' : 'selected',
             ready: false,
             reason: plan.blockers[0] ?? 'Setup is incomplete',
+            reasonCode: 'setup-incomplete',
         };
     }
     if (!plan.firstAction.usesSampleContext && !input.hasSelectedContext) {
@@ -310,6 +373,7 @@ export function buildFirstActionHandoff(input: {
             contextKind: 'selected',
             ready: false,
             reason: 'Select a document or message to run this plugin',
+            reasonCode: 'selection-required',
         };
     }
     return {

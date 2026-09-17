@@ -439,8 +439,13 @@ const adminConfig = {
      * AES-256-GCM key for plugin connection secrets. Held outside the database
      * (env/secret store); empty means connections are unavailable, never stored
      * in plaintext.
+     *
+     * Deliberately never read from the build environment: a prebuilt image must
+     * take it from the runtime override `NUXT_ADMIN_PLUGIN_CONNECTION_SECRET`
+     * (translated from `OR3_PLUGIN_CONNECTION_SECRET` by the container entrypoint)
+     * so the key is not baked into an image layer.
      */
-    pluginConnectionSecret: process.env.OR3_PLUGIN_CONNECTION_SECRET || '',
+    pluginConnectionSecret: '',
     rebuildCommand: or3CloudConfig.admin?.rebuildCommand || 'bun run build',
     extensionMaxZipBytes: or3CloudConfig.admin?.extensionMaxZipBytes
         ? String(or3CloudConfig.admin.extensionMaxZipBytes)

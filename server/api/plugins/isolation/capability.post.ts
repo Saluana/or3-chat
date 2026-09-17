@@ -45,6 +45,7 @@ import {
 } from '../../../utils/plugins/ai/plugin-invocation';
 import { createOpenRouterPluginProvider } from '../../../utils/plugins/ai/openrouter-client';
 import { CONNECTIONS_DISPATCH_METHOD } from '../../../utils/plugins/connections/broker-binding';
+import { retainSelectionAuthority } from '../../../utils/plugins/setup/selection-authority-registry';
 import { DEFAULT_CONTAINMENT_BUDGETS } from '~~/shared/plugins/isolation/budgets';
 import type { HostRpcHandlerContext } from '~~/shared/plugins/isolation/host-rpc-broker';
 
@@ -133,6 +134,11 @@ export default defineEventHandler(async (event) => {
             statusMessage: `Plugin access denied (${access.decision.reasons.join(', ')})`,
         });
     }
+
+    // An authenticated capability call proves this activation is live, so its
+    // selection-handle authority is retained for the first-action handoff to mint
+    // into. Nothing else can (or should) create a resolvable handle.
+    retainSelectionAuthority({ pluginId, workspaceId, generation });
 
     const context: HostRpcHandlerContext = {
         pluginId,

@@ -21,6 +21,24 @@ import { createMemoryPluginConnectionStore } from './store/memory';
  */
 let memoryStore: ReturnType<typeof createMemoryPluginConnectionStore> | null = null;
 
+/**
+ * The encryption key is read at runtime only. `admin.pluginConnectionSecret`
+ * carries the Nuxt runtime override (containers translate
+ * `OR3_PLUGIN_CONNECTION_SECRET` into `NUXT_ADMIN_PLUGIN_CONNECTION_SECRET` at
+ * startup); the documented variable is also honoured directly, since reading it
+ * here cannot bake it into a build.
+ */
+function connectionSecret(config: ConnectionRuntimeConfig): string | undefined {
+    const fromRuntimeConfig = config.admin?.pluginConnectionSecret;
+    if (typeof fromRuntimeConfig === 'string' && fromRuntimeConfig.trim().length > 0) {
+        return fromRuntimeConfig;
+    }
+    const fromEnvironment = process.env.OR3_PLUGIN_CONNECTION_SECRET;
+    return typeof fromEnvironment === 'string' && fromEnvironment.trim().length > 0
+        ? fromEnvironment
+        : undefined;
+}
+
 export interface ResolvedConnectionService {
     readonly service: PluginConnectionService;
     readonly storeId: string;
@@ -42,7 +60,7 @@ function activeProviderId(config: ConnectionRuntimeConfig): string | null {
 export function resolveConnectionService(
     config: ConnectionRuntimeConfig = useRuntimeConfig() as ConnectionRuntimeConfig
 ): ResolvedConnectionService {
-    const secret = config.admin?.pluginConnectionSecret;
+    const secret = connectionSecret(config);
     const providerId = activeProviderId(config);
     const registered = providerId ? getPluginConnectionStore(providerId) : null;
 

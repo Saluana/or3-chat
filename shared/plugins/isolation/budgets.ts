@@ -41,6 +41,8 @@ export interface ContainmentBudgets {
     readonly maxUiTreeDepth: number;
     readonly maxUiTreeNodes: number;
     readonly maxUiTextBytes: number;
+    /** Array entries and object members a UI tree may contain in total. */
+    readonly maxUiTreeItems: number;
     /** Plugin-attributed AI/model spend ceiling per activation (USD). */
     readonly maxAiSpendUsd: number;
     /** Output token ceiling for a single plugin-attributed model call. */
@@ -63,6 +65,7 @@ export const DEFAULT_CONTAINMENT_BUDGETS: ContainmentBudgets = Object.freeze({
     maxUiTreeDepth: 8,
     maxUiTreeNodes: 200,
     maxUiTextBytes: 16 * 1024,
+    maxUiTreeItems: 2048,
     maxAiSpendUsd: 1,
     maxAiOutputTokens: 4096,
 });
@@ -305,11 +308,16 @@ export type UiTreeValidation =
           readonly nodes: number;
           readonly depth: number;
           readonly textBytes: number;
+          readonly items: number;
       }
     | {
           readonly ok: false;
           readonly code: 'budget-exceeded';
-          readonly kind: 'ui-tree-depth' | 'ui-tree-nodes' | 'ui-text-bytes';
+          readonly kind:
+              | 'ui-tree-depth'
+              | 'ui-tree-nodes'
+              | 'ui-text-bytes'
+              | 'ui-tree-items';
           readonly message: string;
       };
 
@@ -327,8 +335,14 @@ function childNodesOf(node: BudgetedNode): readonly BudgetedNode[] {
 }
 
 /**
- * Validate a declarative UI tree against depth, node and text budgets.
- * Runs in addition to (never instead of) schema validation.
+ * Validate a declarative UI tree against depth, node, item and text budgets.
+ *
+ * One bounded pass: every string the renderer can show counts (text, markdown,
+ * captions, table cells, list labels/descriptions, option labels, placeholders and
+ * field values), and every array entry and object member counts toward the item
+ * budget, so a table full of large cells cannot hide behind "one node with no
+ * text". Traversal stops at the first breach. Runs in addition to (never instead
+ * of) schema validation.
  */
 export function validateUiTreeBudgets(
     tree: BudgetedNode,
@@ -336,39 +350,94 @@ export function validateUiTreeBudgets(
 ): UiTreeValidation {
     let nodes = 0;
     let textBytes = 0;
+    let items = 0;
     let maxDepth = 0;
 
-    const walk = (node: BudgetedNode, depth: number): UiTreeValidation | null => {
+    type Failure = Extract<UiTreeValidation, { ok: false }>;
+
+    const exceed = (
+        kind: Failure['kind'],
+        message: string
+    ): Failure => ({ ok: false, code: 'budget-exceeded', kind, message });
+
+    const addItems = (count: number): Failure | null => {
+        items += count;
+        if (items > budgets.maxUiTreeItems) {
+            return exceed(
+                'ui-tree-items',
+                `UI tree has more than ${budgets.maxUiTreeItems} items`
+            );
+        }
+        return null;
+    };
+
+    const addText = (value: string): Failure | null => {
+        textBytes += utf8Bytes(value);
+        if (textBytes > budgets.maxUiTextBytes) {
+            return exceed(
+                'ui-text-bytes',
+                `UI tree text exceeds ${budgets.maxUiTextBytes} bytes`
+            );
+        }
+        return null;
+    };
+
+    /** Walks any value the renderer may read; returns the first breach. */
+    const walkData = (value: unknown): Failure | null => {
+        if (typeof value === 'string') return addText(value);
+        if (Array.isArray(value)) {
+            const counted = addItems(value.length);
+            if (counted) return counted;
+            for (const entry of value) {
+                const failure = walkData(entry);
+                if (failure) return failure;
+            }
+            return null;
+        }
+        if (typeof value === 'object' && value !== null) {
+            const entries = Object.entries(value as Record<string, unknown>);
+            const counted = addItems(entries.length);
+            if (counted) return counted;
+            for (const [, entry] of entries) {
+                const failure = walkData(entry);
+                if (failure) return failure;
+            }
+            return null;
+        }
+        return null;
+    };
+
+    const walk = (node: BudgetedNode, depth: number): Failure | null => {
         if (depth > budgets.maxUiTreeDepth) {
-            return {
-                ok: false,
-                code: 'budget-exceeded',
-                kind: 'ui-tree-depth',
-                message: `UI tree depth exceeds ${budgets.maxUiTreeDepth}`,
-            };
+            return exceed(
+                'ui-tree-depth',
+                `UI tree depth exceeds ${budgets.maxUiTreeDepth}`
+            );
         }
         maxDepth = Math.max(maxDepth, depth);
         nodes += 1;
         if (nodes > budgets.maxUiTreeNodes) {
-            return {
-                ok: false,
-                code: 'budget-exceeded',
-                kind: 'ui-tree-nodes',
-                message: `UI tree has more than ${budgets.maxUiTreeNodes} nodes`,
-            };
+            return exceed(
+                'ui-tree-nodes',
+                `UI tree has more than ${budgets.maxUiTreeNodes} nodes`
+            );
         }
-        if (typeof node.text === 'string') {
-            textBytes += utf8Bytes(node.text);
-            if (textBytes > budgets.maxUiTextBytes) {
-                return {
-                    ok: false,
-                    code: 'budget-exceeded',
-                    kind: 'ui-text-bytes',
-                    message: `UI tree text exceeds ${budgets.maxUiTextBytes} bytes`,
-                };
+
+        let children: readonly BudgetedNode[] = [];
+        for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+            // `type` is the structural discriminator, not rendered content.
+            if (key === 'children') {
+                children = childNodesOf(node);
+                continue;
             }
+            if (key === 'type') continue;
+            const failure = walkData(value);
+            if (failure) return failure;
         }
-        for (const child of childNodesOf(node)) {
+
+        const counted = addItems(children.length);
+        if (counted) return counted;
+        for (const child of children) {
             const failure = walk(child, depth + 1);
             if (failure) return failure;
         }
@@ -377,7 +446,7 @@ export function validateUiTreeBudgets(
 
     const failure = walk(tree as BudgetedNode, 1);
     if (failure) return failure;
-    return { ok: true, nodes, depth: maxDepth, textBytes };
+    return { ok: true, nodes, depth: maxDepth, textBytes, items };
 }
 
 /**

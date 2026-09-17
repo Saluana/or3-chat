@@ -97,6 +97,13 @@ setDefault(
     'NUXT_BACKGROUND_JOBS_ENCRYPTION_KEY',
     firstDefined(env.OR3_BACKGROUND_ENCRYPTION_KEY)
 );
+// Plugin connection credential key. It is a runtime secret, never a build
+// default: a prebuilt image must receive it here, and rotating it makes existing
+// ciphertexts undecryptable, so credentials must be re-entered after a change.
+setDefault(
+    'NUXT_ADMIN_PLUGIN_CONNECTION_SECRET',
+    firstDefined(env.OR3_PLUGIN_CONNECTION_SECRET)
+);
 
 const [command, ...args] = process.argv.slice(2);
 if (!command) throw new Error('A server command is required.');

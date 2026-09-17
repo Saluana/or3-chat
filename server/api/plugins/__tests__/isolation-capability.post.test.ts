@@ -93,7 +93,7 @@ vi.mock('../../../utils/plugins/setup/load-descriptors', () => ({
     toConnectionDispatchPolicy: () => null,
 }));
 
-const aiFactoryMock = vi.fn();
+const aiFactoryMock = vi.fn((_input: unknown) => undefined as never);
 vi.mock('../../../utils/plugins/ai/plugin-invocation', () => ({
     PLUGIN_AI_COMPLETE_METHOD: 'ai.complete',
     createPluginAiCompleteMethod: aiFactoryMock as any,

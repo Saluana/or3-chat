@@ -561,6 +561,34 @@ describe('connection ownership and identifiers (findings 12, 20)', () => {
             scopes: ['read:items'],
             credential: 'tok_other',
         });
-        expect(collision).toMatchObject({ status: 'denied', code: 'invalid-input' });
+        // Insert-only creation: the collision is refused (and retryable), and the
+        // existing record's owner is untouched.
+        expect(collision).toMatchObject({ status: 'denied', code: 'conflict' });
+        const stored = await service.list({ ownerUserId: 'user_1', workspaceId: 'ws_1' });
+        expect(stored).toHaveLength(1);
+        expect(stored[0]?.id).toBe('conn1');
+    });
+
+    it('inserts only: a second create with a fresh id never touches the first record', async () => {
+        let counter = 0;
+        const service = new PluginConnectionService({
+            store: createMemoryPluginConnectionStore(),
+            secret: SECRET,
+            now: () => 1_000,
+            generateId: () => `conn${(counter += 1)}`,
+        });
+        const first = await storedConnection(service);
+        const second = await storedConnection(service, { ownerUserId: 'user_2' });
+        expect(first.view.id).toBe('conn1');
+        expect(second.view.id).toBe('conn2');
+        const reloaded = await service.resolve({
+            ref: first.view.ref,
+            pluginId: 'example.plugin',
+            workspaceId: 'ws_1',
+            ownerUserId: 'user_1',
+        });
+        expect(reloaded.status).toBe('resolved');
+        if (reloaded.status !== 'resolved') return;
+        expect(reloaded.connection.ownerUserId).toBe('user_1');
     });
 });

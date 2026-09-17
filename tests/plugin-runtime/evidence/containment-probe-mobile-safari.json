@@ -1,11 +1,11 @@
 {
-  "recordedAt": "2026-09-17T15:10:00.936Z",
+  "recordedAt": "2026-09-17T16:44:19.919Z",
   "project": "mobile-safari",
   "targets": {
     "hostOrigin": "http://127.0.0.1:3121",
     "http": "http://127.0.0.1:3121/or3-containment/target",
     "script": "http://127.0.0.1:3121/or3-containment/target.js",
-    "socket": "ws://127.0.0.1:55046/"
+    "socket": "ws://127.0.0.1:60224/"
   },
   "control": [
     {

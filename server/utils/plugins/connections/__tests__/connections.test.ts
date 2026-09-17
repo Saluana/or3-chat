@@ -522,3 +522,169 @@ describe('provider declaration', () => {
         expect(provider.operations.every((operation) => operation.host.length > 0)).toBe(true);
     });
 });
+
+describe('connection write concurrency (findings 1, 2)', () => {
+    it('binds a created credential to its declared package slot', async () => {
+        const service = createService();
+        const created = await service.create({
+            ownerUserId: 'user_1',
+            workspaceId: 'ws_1',
+            pluginId: 'example.plugin',
+            providerId: FAKE_CONNECTION_PROVIDER.id,
+            slotId: 'docs',
+            label: 'Fake provider',
+            scopes: ['read:items'],
+            credential: 'tok_live_123',
+        });
+        if (created.status !== 'created') throw new Error('expected created connection');
+        expect(created.view.slotId).toBe('docs');
+        const reloaded = await service.resolve({
+            ref: created.view.ref,
+            pluginId: 'example.plugin',
+            workspaceId: 'ws_1',
+            ownerUserId: 'user_1',
+        });
+        expect(reloaded.status).toBe('resolved');
+        if (reloaded.status !== 'resolved') return;
+        expect(reloaded.connection.slotId).toBe('docs');
+    });
+
+    it('refuses a rotation that loses the revision compare-and-swap', async () => {
+        const store = createMemoryPluginConnectionStore();
+        const service = new PluginConnectionService({
+            store,
+            secret: SECRET,
+            now: () => 1_000,
+            generateId: () => 'conn1',
+        });
+        const created = await createConnection(service);
+
+        // Another process lands its own rotation of the same revision first.
+        expect(
+            await store.update({
+                id: created.view.id,
+                expectedRevision: 1,
+                revision: 2,
+                updatedAt: 2_000,
+                secretCiphertext: 'winner-ciphertext',
+            })
+        ).toBe(true);
+        // A write that still believes revision 1 is current must not land.
+        expect(
+            await store.update({
+                id: created.view.id,
+                expectedRevision: 1,
+                revision: 2,
+                updatedAt: 3_000,
+                secretCiphertext: 'loser-ciphertext',
+            })
+        ).toBe(false);
+        expect((await store.get(created.view.id))?.secretCiphertext).toBe('winner-ciphertext');
+    });
+
+    it('retries a lost rotation and reports a conflict rather than a false success', async () => {
+        const base = createMemoryPluginConnectionStore();
+        const racing = { ...base, update: async () => false };
+        const service = new PluginConnectionService({
+            store: racing,
+            secret: SECRET,
+            now: () => 1_000,
+            generateId: () => 'conn1',
+        });
+        const created = await createConnection(service);
+        const result = await service.rotate({
+            connectionId: created.view.id,
+            ownerUserId: 'user_1',
+            credential: 'tok_live_next',
+        });
+        expect(result).toMatchObject({ status: 'denied', code: 'conflict' });
+        // Nothing was written: the stored revision and ciphertext are untouched.
+        const stored = await base.get(created.view.id);
+        expect(stored?.revision).toBe(1);
+        expect(stored?.secretCiphertext).toBe(
+            (await base.get(created.view.id))?.secretCiphertext
+        );
+        expect(await service.isTestCurrent(created.view.id)).toBe(false);
+    });
+
+    it('drops a late test result for a revision that is no longer current', async () => {
+        const service = createService();
+        const created = await createConnection(service);
+        await service.rotate({
+            connectionId: created.view.id,
+            ownerUserId: 'user_1',
+            credential: 'tok_live_next',
+        });
+        const accepted = await service.recordTest({
+            connectionId: created.view.id,
+            revision: 1,
+            operationId: 'items.list',
+            ok: true,
+            checkedAt: 9_999_999,
+        });
+        expect(accepted).toBe(false);
+        expect(await service.isTestCurrent(created.view.id)).toBe(false);
+    });
+
+    it('does not let an older completion replace newer evidence for the same revision', async () => {
+        const service = createService();
+        const created = await createConnection(service);
+        expect(
+            await service.recordTest({
+                connectionId: created.view.id,
+                revision: 1,
+                operationId: 'items.list',
+                ok: true,
+                checkedAt: 2_000,
+            })
+        ).toBe(true);
+        expect(
+            await service.recordTest({
+                connectionId: created.view.id,
+                revision: 1,
+                operationId: 'items.list',
+                ok: false,
+                code: 'bad-credentials',
+                checkedAt: 1_000,
+            })
+        ).toBe(false);
+        expect(await service.isTestCurrent(created.view.id)).toBe(true);
+    });
+
+    it('fails closed when the encryption key is absent', async () => {
+        const store = createMemoryPluginConnectionStore();
+        const configured = new PluginConnectionService({
+            store,
+            secret: SECRET,
+            now: () => 1_000,
+            generateId: () => 'conn1',
+        });
+        const missingKey = new PluginConnectionService({
+            store,
+            secret: undefined,
+            now: () => 1_000,
+            generateId: () => 'conn1',
+        });
+        const created = await createConnection(configured);
+        expect(missingKey.available).toBe(false);
+
+        const fresh = await missingKey.create({
+            ownerUserId: 'user_1',
+            workspaceId: 'ws_1',
+            pluginId: 'example.plugin',
+            providerId: FAKE_CONNECTION_PROVIDER.id,
+            label: 'Fake provider',
+            scopes: ['read:items'],
+            credential: 'tok_live_new',
+        });
+        expect(fresh).toMatchObject({ status: 'denied', code: 'secret-unavailable' });
+
+        const rotated = await missingKey.rotate({
+            connectionId: created.view.id,
+            ownerUserId: 'user_1',
+            credential: 'tok_live_next',
+        });
+        expect(rotated).toMatchObject({ status: 'denied', code: 'secret-unavailable' });
+        expect((await store.get(created.view.id))?.revision).toBe(1);
+    });
+});

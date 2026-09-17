@@ -96,13 +96,17 @@ plugins is `createPortableClient` in `@or3/plugin-sdk/portable`.
 | Concurrent calls | 8 |
 | Per-call deadline | 10 s |
 | Activation wall clock | 120 s |
-| UI tree depth / nodes / text | 8 / 200 / 16 KiB |
+| UI tree depth / nodes / text / items | 8 / 200 / 16 KiB / 2048 items |
 | AI spend per activation | $1.00 |
 | AI output per call | 4096 tokens |
 
 One ledger per activation is owned by the runtime and charged at each boundary:
 inbound messages, outbound results/states, admitted calls (host-clamped deadlines)
-and UI updates. A host timer ends the activation when its wall-clock budget is
+and UI updates. A UI tree is measured in one bounded pass over *everything the
+renderer can show* — text, markdown, captions, table cells, list labels and
+descriptions, option labels, placeholders and field values — plus its nodes, depth
+and total array entries/object members, so a table full of large cells cannot hide
+behind "one node with no text". A host timer ends the activation when its wall-clock budget is
 spent, even if the sandbox has gone quiet, and a terminal breach terminates the
 worker and cancels its outstanding work instead of only failing one call. These
 are host limits, not OS-level memory or CPU isolation.
@@ -115,6 +119,14 @@ fields, tables, lists, progress, buttons, results and open-document/open-pane).
 Markdown is sanitized by escaping every publisher character before a small
 supported subset is emitted. Functions, component handles and unknown node types
 are rejected.
+
+Form buttons keep the action they declare: only a button whose action is `submit`
+submits the form, and it does so through the form's own submit event so native
+`required` validation runs first. Cancel and Delete therefore stay distinguishable
+from Save and never submit implicitly. Field values are host-owned: a declarative
+update initializes newly introduced fields, leaves what you typed alone, follows
+the plugin's value for untouched fields, and drops state only when the field
+disappears. The host can replace or reset values explicitly.
 
 ## Permissions and consent
 
@@ -141,15 +153,37 @@ can never authorize a purchase, a permission or a destructive write.
 Setup is host-generated from the package's own `or3.setup.json` and
 `or3.package-policy.json`:
 
-* required settings without a safe default must be provided;
-* optional settings are deferred and listed separately;
-* required connections must be connected **and** pass their test;
+* required settings without a safe default must be provided. Values are validated
+  against the installed package's own field schema on save: unknown keys are
+  refused, select values must be one of the declared choices, numbers are
+  normalized, and an empty required value does not count as supplied — so the
+  plan's "missing" flag and the save endpoint agree;
+* optional settings are configurable from the same form (under "Optional
+  settings"); they are deferrable, not hidden;
+* saved settings live in the workspace settings store. The form hydrates from the
+  *validated saved values*, and saving sends a patch of only the fields you
+  edited, so a refresh can never replace stored values with defaults you never
+  touched;
+* required connections must be bound to the slot the package declares, connected
+  **and** pass their test. A stored credential satisfies only the slot it was
+  created for, and a slot is refused when the registered provider does not
+  implement its declared mechanism, scopes or operations;
+* the setup page can connect the account: it stores the credential for a declared
+  slot (the provider and scopes come from the package policy, not the request) and
+  then tests it. When the host has no encryption key, the page says so and
+  disables connecting instead of failing silently;
+* the setup test's operation and URL are resolved on the server from the
+  provider's approved operation and the release policy for the bound slot; the
+  page never constructs a privileged dispatch target;
+* readiness and the first-action handoff are built from the same server state, so
+  a plan cannot report `Ready` while the handoff refuses;
 * `Needs setup` is never reported as `Ready`, and an unsupported mechanism is
   reported as blocked rather than attempted;
-* saved settings live in the workspace settings store, so setup survives
-  navigation and reload;
 * the first action runs on your selection or on the package sample — never with a
-  `.env` file, a terminal command or a manual archive extraction.
+  `.env` file, a terminal command or a manual archive extraction. A selection is
+  carried into the setup page by the host UI, and a handle is minted only into a
+  live activation's own generation; with no live activation the host reports the
+  handoff as pending instead of returning a handle nothing could resolve.
 
 ## Provider costs
 

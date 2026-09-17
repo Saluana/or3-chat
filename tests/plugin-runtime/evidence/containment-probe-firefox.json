@@ -1,11 +1,11 @@
 {
-  "recordedAt": "2026-09-17T15:09:37.111Z",
+  "recordedAt": "2026-09-17T16:43:56.735Z",
   "project": "firefox",
   "targets": {
     "hostOrigin": "http://127.0.0.1:3121",
     "http": "http://127.0.0.1:3121/or3-containment/target",
     "script": "http://127.0.0.1:3121/or3-containment/target.js",
-    "socket": "ws://127.0.0.1:54766/"
+    "socket": "ws://127.0.0.1:59968/"
   },
   "control": [
     {
@@ -123,7 +123,7 @@
     {
       "channel": "network.webSocket",
       "outcome": "blocked",
-      "note": "[Exception... \"The load for this content was blocked.\"  nsresult: \"0x805e0006 (NS_ERROR_CONTENT_BLOCKED)\"  location: \"JS frame :: blob:null/12db9954-aa34-445a-94e2-cfc16ef17a82 :: probe/</< :: line 10"
+      "note": "[Exception... \"The load for this content was blocked.\"  nsresult: \"0x805e0006 (NS_ERROR_CONTENT_BLOCKED)\"  location: \"JS frame :: blob:null/e58572e9-b2be-408f-8b5d-7130b46b0b49 :: probe/</< :: line 10"
     },
     {
       "channel": "imports.importScripts",

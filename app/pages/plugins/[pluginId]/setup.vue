@@ -4,7 +4,8 @@
  *
  * Everything on this page is host-generated from the package descriptors and the
  * workspace's stored connections: the plugin supplies data, the host renders and
- * mediates every action.
+ * mediates every action. Readiness, settings hydration and the first-action
+ * handoff all come from the same server state the setup plan is built from.
  */
 import PluginSetupPanel from '~/components/plugins/PluginSetupPanel.vue';
 import type { SetupPlan } from '~~/shared/plugins/setup/plan';
@@ -18,6 +19,7 @@ type SetupPlanResponse = {
         contextKind: 'selected' | 'sample';
         ready: boolean;
         reason?: string;
+        reasonCode?: 'setup-incomplete' | 'selection-required';
     };
     problems: readonly string[];
     destinations: readonly {
@@ -27,10 +29,26 @@ type SetupPlanResponse = {
         scopes: readonly string[];
     }[];
     durableConnections: boolean;
+    credentialsAvailable: boolean;
+    settings: {
+        values: Record<string, string | number | boolean>;
+        errors: readonly { key: string; message: string }[];
+    };
 };
 
 const route = useRoute();
 const pluginId = computed(() => String(route.params.pluginId ?? ''));
+
+/**
+ * A context selected in the host UI is carried here as query parameters: the
+ * setup route has no selection of its own, and the server decides what a
+ * selection means.
+ */
+const selectedContext = computed(() => {
+    const documentId = typeof route.query.documentId === 'string' ? route.query.documentId : '';
+    const messageId = typeof route.query.messageId === 'string' ? route.query.messageId : '';
+    return { documentId, messageId };
+});
 
 const { data, error, refresh } = await useFetch<SetupPlanResponse>(
     () => `/api/plugins/${encodeURIComponent(pluginId.value)}/setup-plan`,
@@ -39,53 +57,68 @@ const { data, error, refresh } = await useFetch<SetupPlanResponse>(
 
 const busy = ref(false);
 const message = ref<string | null>(null);
+const saveState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle');
+const fieldErrors = ref<Record<string, string>>({});
+const storedConnections = ref(0);
 
-async function saveSettings(values: Record<string, string | number | boolean>): Promise<void> {
-    busy.value = true;
+function mutationHeaders(): Record<string, string> {
+    // The host mutation guard requires an explicit intent header.
+    return { 'x-or3-plugin-intent': 'plugin' };
+}
+
+function captureFieldErrors(payload: unknown): void {
+    const errors =
+        (payload as { data?: { fieldErrors?: { key: string; message: string }[] } })?.data
+            ?.fieldErrors ?? [];
+    fieldErrors.value = Object.fromEntries(
+        errors.map((error) => [error.key, error.message])
+    );
+}
+
+async function refreshConnections(): Promise<void> {
     try {
-        await $fetch(`/api/plugins/${encodeURIComponent(pluginId.value)}/setup-values`, {
-            method: 'POST',
-            // The host mutation guard requires an explicit intent header.
-            headers: { 'x-or3-plugin-intent': 'plugin' },
-            body: { values },
-        });
-        message.value = 'Settings saved.';
-        await refresh();
+        const result = await $fetch<{ connections: readonly unknown[] }>(
+            '/api/plugins/connections'
+        );
+        storedConnections.value = result.connections.length;
     } catch {
-        message.value = 'Settings could not be saved.';
-    } finally {
-        busy.value = false;
+        storedConnections.value = 0;
     }
 }
 
-/** The test URL is derived from the signed package destinations, not user input. */
-function connectionUrl(connectionId: string): string {
-    const destination =
-        data.value?.destinations.find((entry) => entry.id === connectionId) ??
-        data.value?.destinations[0];
-    const host = destination?.hosts[0] ?? '';
-    return `https://${host}/`;
+async function saveSettings(
+    patch: Record<string, string | number | boolean | null>
+): Promise<void> {
+    saveState.value = 'saving';
+    fieldErrors.value = {};
+    try {
+        await $fetch(`/api/plugins/${encodeURIComponent(pluginId.value)}/setup-values`, {
+            method: 'POST',
+            headers: mutationHeaders(),
+            body: { values: patch },
+        });
+        saveState.value = 'saved';
+        message.value = 'Settings saved.';
+        await refresh();
+    } catch (caught) {
+        saveState.value = 'error';
+        captureFieldErrors(caught);
+        message.value = 'Settings could not be saved.';
+    }
 }
 
-async function testConnection(connection: {
-    id: string;
-    connectionRef?: string;
-}): Promise<void> {
-    const action = data.value?.plan?.testAction;
-    if (!connection.connectionRef || !action) return;
+async function testConnection(connection: { id: string; connectionRef?: string }): Promise<void> {
+    if (!connection.connectionRef) return;
     busy.value = true;
     try {
-        const result = await $fetch<{ status?: string; code?: string }>(
+        // The operation and URL are resolved by the server from the release's
+        // approved operations; the caller only names the stored reference.
+        const result = await $fetch<{ status?: string; code?: string; message?: string }>(
             '/api/plugins/connections/test',
             {
                 method: 'POST',
-                headers: { 'x-or3-plugin-intent': 'plugin' },
-                body: {
-                    ref: connection.connectionRef,
-                    pluginId: pluginId.value,
-                    operationId: action.operationId,
-                    url: connectionUrl(connection.id),
-                },
+                headers: mutationHeaders(),
+                body: { ref: connection.connectionRef, pluginId: pluginId.value },
             }
         );
         message.value =
@@ -93,8 +126,38 @@ async function testConnection(connection: {
                 ? 'Connection works.'
                 : `Connection test failed (${result.code ?? 'unknown'}).`;
         await refresh();
-    } catch {
-        message.value = 'Connection test could not run.';
+    } catch (caught) {
+        const statusMessage = (caught as { statusMessage?: string })?.statusMessage;
+        message.value = statusMessage
+            ? `Connection test could not run: ${statusMessage}`
+            : 'Connection test could not run.';
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function connectConnection(input: { slotId: string; credential: string }): Promise<void> {
+    busy.value = true;
+    try {
+        await $fetch('/api/plugins/connections', {
+            method: 'POST',
+            headers: mutationHeaders(),
+            body: {
+                pluginId: pluginId.value,
+                // The slot names the requirement; provider and scopes come from
+                // the package policy on the server.
+                slotId: input.slotId,
+                credential: input.credential,
+            },
+        });
+        message.value = 'Credential stored. Test it to finish setup.';
+        await refresh();
+        await refreshConnections();
+    } catch (caught) {
+        const statusMessage = (caught as { statusMessage?: string })?.statusMessage;
+        message.value = statusMessage
+            ? `Credential was not stored: ${statusMessage}`
+            : 'Credential was not stored.';
     } finally {
         busy.value = false;
     }
@@ -106,24 +169,45 @@ async function runFirstAction(): Promise<void> {
         const result = await $fetch<{
             status: string;
             handoff?: { label: string; contextKind: string };
-            handle?: { handleId: string };
+            reason?: string;
         }>(`/api/plugins/${encodeURIComponent(pluginId.value)}/first-action`, {
             method: 'POST',
-            headers: { 'x-or3-plugin-intent': 'plugin' },
-            body: {},
+            headers: mutationHeaders(),
+            body: {
+                ...(selectedContext.value.documentId
+                    ? { documentId: selectedContext.value.documentId }
+                    : {}),
+                ...(selectedContext.value.messageId
+                    ? { messageId: selectedContext.value.messageId }
+                    : {}),
+            },
         });
+        if (result.status === 'ready') {
+            message.value = `${result.handoff?.label ?? 'First action'} is ready on the ${
+                result.handoff?.contextKind === 'sample' ? 'package sample' : 'selection'
+            }.`;
+            return;
+        }
+        if (result.status === 'pending-activation') {
+            message.value =
+                result.reason ?? 'Open the plugin first, then run its first action.';
+            return;
+        }
         message.value =
-            result.status === 'ready'
-                ? `${result.handoff?.label ?? 'First action'} is ready on the ${
-                      result.handoff?.contextKind === 'sample' ? 'package sample' : 'selection'
-                  }.`
+            result.status === 'needs-selection'
+                ? 'Select a document or message in OR3, then open this plugin from there.'
                 : 'Finish setup before running the first action.';
-    } catch {
-        message.value = 'The first action could not be started.';
+    } catch (caught) {
+        const statusMessage = (caught as { statusMessage?: string })?.statusMessage;
+        message.value = statusMessage ?? 'The first action could not be started.';
     } finally {
         busy.value = false;
     }
 }
+
+onMounted(async () => {
+    await refreshConnections();
+});
 </script>
 
 <template>
@@ -150,14 +234,25 @@ async function runFirstAction(): Promise<void> {
             :status="data.status"
             :first-action="data.firstAction"
             :durable-connections="data.durableConnections"
+            :credentials-available="data.credentialsAvailable"
+            :settings="data.settings"
+            :save-state="saveState"
+            :field-errors="fieldErrors"
+            :stored-connections="storedConnections"
             @save-settings="saveSettings"
             @test-connection="testConnection"
+            @connect-connection="connectConnection"
             @run-first-action="runFirstAction"
         />
 
         <p v-else class="text-sm">
             No setup is available for this plugin on this deployment.
         </p>
+
+        <div v-if="data && !data.firstAction.ready && data.firstAction.reasonCode === 'selection-required'" class="text-xs opacity-70" role="note">
+            This plugin runs on a selected document or message. Open it from a selection
+            (the host carries the selection into this page) and try again.
+        </div>
 
         <ul v-if="data?.problems?.length" class="text-xs opacity-70">
             <li v-for="problem in data.problems" :key="problem">{{ problem }}</li>

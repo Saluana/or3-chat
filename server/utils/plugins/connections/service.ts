@@ -34,9 +34,14 @@ export type ConnectionServiceFailure = {
         | 'reference-malformed'
         | 'reference-stale'
         | 'secret-unavailable'
-        | 'invalid-input';
+        | 'invalid-input'
+        /** A concurrent writer won; the caller may retry the request. */
+        | 'conflict';
     readonly message: string;
 };
+
+/** Bounded retries: an id collision or a lost compare-and-swap is transient. */
+const MAX_WRITE_ATTEMPTS = 3;
 
 export type CreateConnectionResult =
     | { readonly status: 'created'; readonly view: PluginConnectionView; readonly secret: string }
@@ -103,6 +108,8 @@ export class PluginConnectionService {
         readonly workspaceId: string;
         readonly pluginId: string;
         readonly providerId: string;
+        /** Declared package slot this credential satisfies, when there is one. */
+        readonly slotId?: string;
         readonly label: string;
         readonly scopes: readonly string[];
         readonly credential: string;
@@ -124,34 +131,37 @@ export class PluginConnectionService {
         }
 
         const now = this.#now();
-        const id = this.#generateId();
-        if (await this.#store.get(id)) {
-            // A generated id that already exists must never be upserted over:
-            // refusing is safer than overwriting another owner's record.
-            return {
-                status: 'denied',
-                code: 'invalid-input',
-                message: 'Connection id collision; retry with a new id',
+        const secretCiphertext = encryptConnectionSecret(input.credential, this.#secret);
+        // Insert-only creation: a generated id that already exists fails the
+        // insert instead of overwriting someone else's record, so a collision is
+        // retried with a fresh id rather than repaired with an upsert.
+        for (let attempt = 0; attempt < MAX_WRITE_ATTEMPTS; attempt += 1) {
+            const connection: StoredPluginConnection = {
+                id: this.#generateId(),
+                ownerUserId: input.ownerUserId,
+                workspaceId: input.workspaceId,
+                pluginId: input.pluginId,
+                providerId: input.providerId,
+                ...(input.slotId === undefined ? {} : { slotId: input.slotId }),
+                label: input.label,
+                scopes: [...input.scopes],
+                revision: 1,
+                secretCiphertext,
+                createdAt: now,
+                updatedAt: now,
             };
+            if (await this.#store.insert(connection)) {
+                return {
+                    status: 'created',
+                    view: await this.#toView(connection),
+                    secret: input.credential,
+                };
+            }
         }
-        const connection: StoredPluginConnection = {
-            id,
-            ownerUserId: input.ownerUserId,
-            workspaceId: input.workspaceId,
-            pluginId: input.pluginId,
-            providerId: input.providerId,
-            label: input.label,
-            scopes: [...input.scopes],
-            revision: 1,
-            secretCiphertext: encryptConnectionSecret(input.credential, this.#secret),
-            createdAt: now,
-            updatedAt: now,
-        };
-        await this.#store.upsert(connection);
         return {
-            status: 'created',
-            view: await this.#toView(connection),
-            secret: input.credential,
+            status: 'denied',
+            code: 'conflict',
+            message: 'Could not allocate a unique connection id; retry the request',
         };
     }
 
@@ -165,43 +175,83 @@ export class PluginConnectionService {
         readonly credential: string;
         readonly scopes?: readonly string[];
     }): Promise<CreateConnectionResult> {
-        const existing = await this.#store.get(input.connectionId);
-        if (!existing) {
+        if (!this.available) {
             return {
                 status: 'denied',
-                code: 'connection-not-found',
-                message: 'Connection not found',
+                code: 'secret-unavailable',
+                message:
+                    'OR3_PLUGIN_CONNECTION_SECRET is not configured; credentials cannot be stored',
             };
         }
-        if (existing.ownerUserId !== input.ownerUserId) {
+        if (!input.credential || input.credential.trim().length === 0) {
             return {
                 status: 'denied',
-                code: 'connection-foreign',
-                message: 'Connection belongs to another user',
+                code: 'invalid-input',
+                message: 'A credential value is required',
             };
         }
-        const updated: StoredPluginConnection = {
-            ...existing,
-            scopes: input.scopes ? [...input.scopes] : existing.scopes,
-            revision: existing.revision + 1,
-            secretCiphertext: encryptConnectionSecret(input.credential, this.#secret),
-            updatedAt: this.#now(),
-        };
-        await this.#store.upsert(updated);
-        // A credential change invalidates the previous test evidence.
-        await this.#store.setTestEvidence({
-            connectionId: updated.id,
-            revision: updated.revision,
-            operationId: 'invalidated',
-            ok: false,
-            code: 'bad-credentials',
-            checkedAt: this.#now(),
-            detail: 'Credential changed; re-test required',
-        });
+
+        const secretCiphertext = encryptConnectionSecret(input.credential, this.#secret);
+        // Compare-and-swap on the revision that was read: two concurrent
+        // rotations must not share a revision, or the first credential's test
+        // evidence would appear to vouch for the second credential.
+        for (let attempt = 0; attempt < MAX_WRITE_ATTEMPTS; attempt += 1) {
+            const existing = await this.#store.get(input.connectionId);
+            if (!existing) {
+                return {
+                    status: 'denied',
+                    code: 'connection-not-found',
+                    message: 'Connection not found',
+                };
+            }
+            if (existing.ownerUserId !== input.ownerUserId) {
+                return {
+                    status: 'denied',
+                    code: 'connection-foreign',
+                    message: 'Connection belongs to another user',
+                };
+            }
+            const revision = existing.revision + 1;
+            const updatedAt = this.#now();
+            const next: StoredPluginConnection = {
+                ...existing,
+                scopes: input.scopes === undefined ? existing.scopes : [...input.scopes],
+                revision,
+                secretCiphertext,
+                updatedAt,
+            };
+            const swapped = await this.#store.update({
+                id: existing.id,
+                expectedRevision: existing.revision,
+                revision,
+                updatedAt,
+                secretCiphertext,
+                ...(input.scopes === undefined ? {} : { scopes: [...input.scopes] }),
+            });
+            if (!swapped) continue;
+
+            // A credential change invalidates the previous test evidence. The
+            // write is bound to the revision that just became current, so a test
+            // finishing late cannot reinstate the old revision's evidence.
+            await this.#store.setTestEvidence({
+                connectionId: next.id,
+                revision,
+                operationId: 'invalidated',
+                ok: false,
+                code: 'bad-credentials',
+                checkedAt: this.#now(),
+                detail: 'Credential changed; re-test required',
+            });
+            return {
+                status: 'created',
+                view: await this.#toView(next),
+                secret: input.credential,
+            };
+        }
         return {
-            status: 'created',
-            view: await this.#toView(updated),
-            secret: input.credential,
+            status: 'denied',
+            code: 'conflict',
+            message: 'Credential rotation conflicted with a concurrent change; retry the request',
         };
     }
 
@@ -295,8 +345,12 @@ export class PluginConnectionService {
         }
     }
 
-    async recordTest(evidence: ConnectionTestEvidence): Promise<void> {
-        await this.#store.setTestEvidence(evidence);
+    /**
+     * Records test evidence. `false` means the store refused it as stale: the
+     * credential changed, or a newer result already exists for that revision.
+     */
+    async recordTest(evidence: ConnectionTestEvidence): Promise<boolean> {
+        return await this.#store.setTestEvidence(evidence);
     }
 
     async testEvidence(connectionId: string): Promise<ConnectionTestEvidence | null> {
@@ -343,6 +397,7 @@ export class PluginConnectionService {
             pluginId: connection.pluginId,
             workspaceId: connection.workspaceId,
             providerId: connection.providerId,
+            ...(connection.slotId === undefined ? {} : { slotId: connection.slotId }),
             label: connection.label,
             scopes: [...connection.scopes],
             revision: connection.revision,

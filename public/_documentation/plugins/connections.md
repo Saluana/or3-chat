@@ -10,9 +10,17 @@ supported yet.
 ## How it works
 
 1. You open the plugin's setup page (`/plugins/<pluginId>/setup`) and enter the
-   provider credential once.
+   provider credential once, against the connection slot the package declares.
+   The binding is explicit: the provider, scopes and operations come from the
+   package policy and are validated against the registered provider, so a stored
+   credential only satisfies the slot it was created for.
 2. OR3 encrypts it (AES-256-GCM) with a key held **outside** the database
-   (`OR3_PLUGIN_CONNECTION_SECRET`) and stores only the ciphertext.
+   (`OR3_PLUGIN_CONNECTION_SECRET`) and stores only the ciphertext. The key is
+   never a build default: a prebuilt container reads it at startup, where
+   `OR3_PLUGIN_CONNECTION_SECRET` is translated into
+   `NUXT_ADMIN_PLUGIN_CONNECTION_SECRET`. Changing the key makes existing
+   ciphertexts undecryptable, so credentials must be entered again afterwards;
+   keep the key in the deployment's secret store so it survives restarts.
 3. The plugin receives an opaque reference such as `orc_ab12_r1`. It never
    receives the secret, and the reference alone grants nothing.
 4. When the plugin asks to run an operation, the host checks the acting owner,
@@ -120,8 +128,15 @@ provider directly with your credential.
 * Installing marketplace packages and running their first action end to end is
   the installer/lifecycle track; today the setup page renders the plan, saves
   settings, tests connections and reports what the first action needs.
-* Connections need `OR3_PLUGIN_CONNECTION_SECRET` to be configured. Without it,
-  the setup page explains that credentials cannot be stored instead of storing
-  them in plaintext.
+* Connections need `OR3_PLUGIN_CONNECTION_SECRET` (or the runtime override
+  `NUXT_ADMIN_PLUGIN_CONNECTION_SECRET`) to be configured. Without it, the setup
+  page explains that credentials cannot be stored instead of storing them in
+  plaintext.
+* Connection ids are random and creation is insert-only: a collision fails and is
+  retried with a fresh id, and an update can never change a record's owner,
+  workspace, plugin, provider or slot. Credential rotation uses a revision
+  compare-and-swap, and test evidence is stored only for the connection's current
+  revision, so two rotations cannot share a revision and a late test cannot
+  reinstate an old result.
 * On a provider without durable storage (for example Cloudflare D1), connections
   are held in memory for the session and the setup page says so.

@@ -32,7 +32,8 @@ const stubs = {
     UButton: {
         props: ['color', 'variant', 'size', 'disabled'],
         emits: ['click'],
-        template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+        template:
+            '<button :type="$attrs.type ?? \'button\'" :data-action="$attrs[\'data-action\']" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
     },
 };
 
@@ -92,13 +93,13 @@ describe('PortableUiTree host renderer (4.5)', () => {
                 id: 'settings',
                 children: [
                     { type: 'field.text', id: 'name', label: 'Name', value: 'start' },
-                    { type: 'button', id: 'save', label: 'Save', action: 'save' },
+                    { type: 'button', id: 'save', label: 'Save', action: 'submit' },
                 ],
             },
         ]);
 
         await wrapper.find('input#portable-name').setValue('changed');
-        await wrapper.find('button').trigger('click');
+        await wrapper.find('form').trigger('submit');
 
         const events = wrapper.emitted('ui-event');
         expect(events).toBeTruthy();
@@ -108,6 +109,140 @@ describe('PortableUiTree host renderer (4.5)', () => {
             formId: 'settings',
             values: { name: 'changed' },
         });
+    });
+
+    it('keeps the declared action of a form button instead of rewriting it to submit', async () => {
+        const wrapper = mountTree([
+            {
+                type: 'form',
+                id: 'settings',
+                children: [
+                    { type: 'field.text', id: 'name', label: 'Name', value: 'start' },
+                    { type: 'button', id: 'save', label: 'Save', action: 'save' },
+                    { type: 'button', id: 'cancel', label: 'Cancel', action: 'cancel' },
+                    { type: 'button', id: 'delete', label: 'Delete', action: 'delete' },
+                ],
+            },
+        ]);
+
+        await wrapper.find('input#portable-name').setValue('changed');
+        const buttons = wrapper.findAll('button');
+        // Only the declaring `submit` button is a submitter; nothing here submits.
+        expect(buttons[0]!.attributes('type')).toBe('button');
+        await buttons[1]!.trigger('click');
+        await buttons[2]!.trigger('click');
+
+        const events = wrapper.emitted('ui-event');
+        expect(events?.[0]?.[0]).toMatchObject({
+            kind: 'action',
+            action: 'cancel',
+            values: { name: 'changed' },
+        });
+        expect(events?.[1]?.[0]).toMatchObject({
+            kind: 'action',
+            action: 'delete',
+            values: { name: 'changed' },
+        });
+    });
+
+    it('submits through the form, carrying the declaring submit action and values', async () => {
+        const wrapper = mountTree([
+            {
+                type: 'form',
+                id: 'settings',
+                children: [
+                    { type: 'field.text', id: 'name', label: 'Name', value: 'start' },
+                    { type: 'button', id: 'save', label: 'Save', action: 'submit' },
+                ],
+            },
+        ]);
+
+        await wrapper.find('input#portable-name').setValue('changed');
+        await wrapper.find('form').trigger('submit');
+
+        expect(wrapper.emitted('ui-event')?.[0]?.[0]).toMatchObject({
+            kind: 'action',
+            action: 'submit',
+            formId: 'settings',
+            values: { name: 'changed' },
+        });
+    });
+
+    it('preserves typed values across declarative node updates (review 12)', async () => {
+        const base = {
+            type: 'form' as const,
+            id: 'settings',
+            children: [
+                { type: 'field.text' as const, id: 'name', label: 'Name', value: 'start' },
+                { type: 'progress' as const, value: 1, max: 10 },
+            ],
+        };
+        const wrapper = mountTree([base]);
+        await wrapper.find('input#portable-name').setValue('typed');
+
+        // A progress update replaces the nodes array with an unrelated change.
+        await wrapper.setProps({
+            nodes: [
+                {
+                    ...base,
+                    children: [
+                        base.children[0]!,
+                        { type: 'progress' as const, value: 7, max: 10 },
+                    ],
+                },
+            ],
+        });
+        expect((wrapper.find('input#portable-name').element as HTMLInputElement).value).toBe(
+            'typed'
+        );
+
+        // An untouched field still follows the plugin's declarative value.
+        await wrapper.setProps({
+            nodes: [
+                {
+                    ...base,
+                    children: [
+                        { type: 'field.text' as const, id: 'name', label: 'Name', value: 'from-plugin' },
+                        { type: 'progress' as const, value: 8, max: 10 },
+                    ],
+                },
+            ],
+        });
+        expect((wrapper.find('input#portable-name').element as HTMLInputElement).value).toBe(
+            'typed'
+        );
+
+        // Explicit replacement is a host decision and wins.
+        (wrapper.vm as unknown as { replaceValues: (next: Record<string, string>) => void })
+            .replaceValues({ name: 'replaced' });
+        await wrapper.vm.$nextTick();
+        expect((wrapper.find('input#portable-name').element as HTMLInputElement).value).toBe(
+            'replaced'
+        );
+    });
+
+    it('drops field state when the field is removed from the tree', async () => {
+        const wrapper = mountTree([
+            {
+                type: 'form',
+                id: 'settings',
+                children: [{ type: 'field.text', id: 'gone', label: 'Gone', value: 'x' }],
+            },
+        ]);
+        await wrapper.setProps({ nodes: [{ type: 'text', text: 'no fields' }] });
+        // Re-introducing the field starts from its declared value again.
+        await wrapper.setProps({
+            nodes: [
+                {
+                    type: 'form',
+                    id: 'settings',
+                    children: [{ type: 'field.text', id: 'gone', label: 'Gone', value: 'fresh' }],
+                },
+            ],
+        });
+        expect((wrapper.find('input#portable-gone').element as HTMLInputElement).value).toBe(
+            'fresh'
+        );
     });
 
     it('raises open-document and open-pane as host events', async () => {

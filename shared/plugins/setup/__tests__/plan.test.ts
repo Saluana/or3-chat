@@ -10,6 +10,7 @@ import {
     buildFirstActionHandoff,
     buildSetupPlan,
     describeSetupStatus,
+    type HostConnectionCapability,
 } from '../plan';
 import {
     loadPackageDescriptors,
@@ -40,6 +41,16 @@ const policy: Pick<Or3PackagePolicyV1, 'connections'> = {
         },
     ],
 };
+
+/** The host capability list the plan validates declared requirements against. */
+const hostConnections: HostConnectionCapability[] = [
+    {
+        provider: 'fake',
+        mechanism: 'server',
+        scopes: ['read:items'],
+        operations: ['items.list'],
+    },
+];
 
 const setup: Or3SetupDescriptorV1 = {
     setupVersion: 1,
@@ -80,7 +91,7 @@ const setup: Or3SetupDescriptorV1 = {
 
 describe('setup plan (4.10)', () => {
     it('reports needs-setup while a required field is unset', () => {
-        const plan = buildSetupPlan({ setup, policy });
+        const plan = buildSetupPlan({ setup, policy, hostConnections });
         expect(plan.status).toBe('needs-setup');
         const workspace = plan.fields.find((field) => field.key === 'workspace');
         expect(workspace).toMatchObject({ required: true, missing: true });
@@ -96,6 +107,7 @@ describe('setup plan (4.10)', () => {
         const plan = buildSetupPlan({
             setup,
             policy,
+            hostConnections,
             values: { workspace: 'Team notes' },
         });
         const tone = plan.fields.find((field) => field.key === 'tone');
@@ -108,6 +120,7 @@ describe('setup plan (4.10)', () => {
         const plan = buildSetupPlan({
             setup,
             policy,
+            hostConnections,
             values: { workspace: 'Team notes' },
         });
         expect(plan.status).toBe('needs-setup');
@@ -121,14 +134,16 @@ describe('setup plan (4.10)', () => {
         const plan = buildSetupPlan({
             setup,
             policy,
+            hostConnections,
             values: { workspace: 'Team notes' },
             connectionStates: [
                 {
-                    connectionId: 'docs',
-                    ref: 'orc_1_r1',
+                    slotId: 'docs',
+                    connectionId: 'conn-1',
+                    ref: 'orc_conn-1_r1',
+                    providerId: 'fake',
                     scopes: ['read:items'],
                     testPassed: true,
-                    mechanismSatisfied: true,
                 },
             ],
         });
@@ -141,17 +156,20 @@ describe('setup plan (4.10)', () => {
         const base = {
             setup,
             policy,
+            hostConnections,
             values: { workspace: 'Team notes' },
         };
         const missingScope = buildSetupPlan({
             ...base,
+            hostConnections,
             connectionStates: [
                 {
-                    connectionId: 'docs',
-                    ref: 'orc_1_r1',
+                    slotId: 'docs',
+                    connectionId: 'conn-1',
+                    ref: 'orc_conn-1_r1',
+                    providerId: 'fake',
                     scopes: [],
                     testPassed: true,
-                    mechanismSatisfied: true,
                 },
             ],
         });
@@ -162,13 +180,15 @@ describe('setup plan (4.10)', () => {
 
         const failedTest = buildSetupPlan({
             ...base,
+            hostConnections,
             connectionStates: [
                 {
-                    connectionId: 'docs',
-                    ref: 'orc_1_r1',
+                    slotId: 'docs',
+                    connectionId: 'conn-1',
+                    ref: 'orc_conn-1_r1',
+                    providerId: 'fake',
                     scopes: ['read:items'],
                     testPassed: false,
-                    mechanismSatisfied: true,
                 },
             ],
         });
@@ -180,14 +200,22 @@ describe('setup plan (4.10)', () => {
             setup,
             policy,
             values: { workspace: 'Team notes' },
-            hostMechanisms: ['browser'],
+            hostConnections: [
+                {
+                    provider: 'fake',
+                    mechanism: 'browser',
+                    scopes: ['read:items'],
+                    operations: ['items.list'],
+                },
+            ],
             connectionStates: [
                 {
-                    connectionId: 'docs',
-                    ref: 'orc_1_r1',
+                    slotId: 'docs',
+                    connectionId: 'conn-1',
+                    ref: 'orc_conn-1_r1',
+                    providerId: 'fake',
                     scopes: ['read:items'],
                     testPassed: true,
-                    mechanismSatisfied: true,
                 },
             ],
         });
@@ -195,10 +223,109 @@ describe('setup plan (4.10)', () => {
         expect(describeSetupStatus(plan)).toMatchObject({ status: 'blocked', blocked: true });
     });
 
+    it('treats an empty required value as unsupplied (review 4.5)', () => {
+        const plan = buildSetupPlan({
+            setup,
+            policy,
+            hostConnections,
+            values: { workspace: '   ' },
+        });
+        expect(plan.fields.find((field) => field.key === 'workspace')).toMatchObject({
+            missing: true,
+        });
+        expect(plan.status).toBe('needs-setup');
+    });
+
+    it('satisfies a declared slot only through an explicit binding (review 4.1)', () => {
+        // A stored, tested connection with no slot binding satisfies nothing: the
+        // policy's connection ids are symbolic, the stored id is host-generated.
+        const unbound = buildSetupPlan({
+            setup,
+            policy,
+            hostConnections,
+            values: { workspace: 'Team notes' },
+            connectionStates: [
+                {
+                    slotId: 'some-other-slot',
+                    connectionId: 'conn-1',
+                    ref: 'orc_conn-1_r1',
+                    providerId: 'fake',
+                    scopes: ['read:items'],
+                    testPassed: true,
+                },
+            ],
+        });
+        expect(unbound.status).toBe('needs-setup');
+        expect(
+            unbound.connections.find((connection) => connection.id === 'docs')?.blockedReason
+        ).toBe('Not connected yet');
+    });
+
+    it('refuses a binding whose stored provider is not the declared provider', () => {
+        const plan = buildSetupPlan({
+            setup,
+            policy,
+            hostConnections,
+            values: { workspace: 'Team notes' },
+            connectionStates: [
+                {
+                    slotId: 'docs',
+                    connectionId: 'conn-1',
+                    ref: 'orc_conn-1_r1',
+                    providerId: 'other',
+                    scopes: ['read:items'],
+                    testPassed: true,
+                },
+            ],
+        });
+        expect(plan.status).toBe('needs-setup');
+        expect(
+            plan.connections.find((connection) => connection.id === 'docs')?.blockedReason
+        ).toBe('The connected credential belongs to another provider');
+    });
+
+    it('blocks when the registered provider does not declare a required operation (review 4.9)', () => {
+        const plan = buildSetupPlan({
+            setup,
+            policy,
+            hostConnections: [
+                {
+                    provider: 'fake',
+                    mechanism: 'server',
+                    scopes: ['read:items'],
+                    operations: [],
+                },
+            ],
+            values: { workspace: 'Team notes' },
+        });
+        expect(plan.status).toBe('blocked');
+        expect(describeSetupStatus(plan)).toMatchObject({
+            status: 'blocked',
+            blocked: true,
+        });
+        expect(
+            plan.connections.find((connection) => connection.id === 'docs')?.blockedReason
+        ).toContain('does not declare items.list');
+    });
+
+    it('blocks when no registered provider can serve a declared requirement', () => {
+        const plan = buildSetupPlan({
+            setup,
+            policy,
+            hostConnections: [],
+            values: { workspace: 'Team notes' },
+        });
+        expect(plan.status).toBe('blocked');
+        expect(
+            plan.connections.find((connection) => connection.id === 'docs')?.blockedReason
+        ).toContain('no connection provider named "fake"');
+    });
+
     it('reports a connection declared by setup but missing from the policy', () => {
         const plan = buildSetupPlan({
             setup: { ...setup, connections: ['docs', 'ghost'] },
             policy,
+            hostConnections,
             values: { workspace: 'Team notes' },
         });
         expect(plan.blockers.some((blocker) => blocker.includes('ghost'))).toBe(true);
@@ -209,14 +336,16 @@ describe('setup plan (4.10)', () => {
         const ready = buildSetupPlan({
             setup,
             policy,
+            hostConnections,
             values: { workspace: 'Team notes' },
             connectionStates: [
                 {
-                    connectionId: 'docs',
-                    ref: 'orc_1_r1',
+                    slotId: 'docs',
+                    connectionId: 'conn-1',
+                    ref: 'orc_conn-1_r1',
+                    providerId: 'fake',
                     scopes: ['read:items'],
                     testPassed: true,
-                    mechanismSatisfied: true,
                 },
             ],
         });
@@ -240,14 +369,16 @@ describe('setup plan (4.10)', () => {
                 },
             },
             policy,
+            hostConnections,
             values: { workspace: 'Team notes' },
             connectionStates: [
                 {
-                    connectionId: 'docs',
-                    ref: 'orc_1_r1',
+                    slotId: 'docs',
+                    connectionId: 'conn-1',
+                    ref: 'orc_conn-1_r1',
+                    providerId: 'fake',
                     scopes: ['read:items'],
                     testPassed: true,
-                    mechanismSatisfied: true,
                 },
             ],
         });
@@ -255,7 +386,7 @@ describe('setup plan (4.10)', () => {
             buildFirstActionHandoff({ plan: samplePlan, hasSelectedContext: false })
         ).toMatchObject({ ready: true, contextKind: 'sample' });
 
-        const notReady = buildSetupPlan({ setup, policy });
+        const notReady = buildSetupPlan({ setup, policy, hostConnections });
         expect(
             buildFirstActionHandoff({ plan: notReady, hasSelectedContext: true }).ready
         ).toBe(false);

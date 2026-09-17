@@ -598,7 +598,8 @@ test('runtime entrypoint preserves explicit Nuxt settings while translating OR3 
     'NUXT_BACKGROUND_JOBS_MAX_CONCURRENT_JOBS',
     'NUXT_BACKGROUND_JOBS_MAX_CONCURRENT_JOBS_PER_USER',
     'NUXT_BACKGROUND_JOBS_JOB_TIMEOUT_MS',
-    'NUXT_BACKGROUND_JOBS_ENCRYPTION_KEY'
+    'NUXT_BACKGROUND_JOBS_ENCRYPTION_KEY',
+    'NUXT_ADMIN_PLUGIN_CONNECTION_SECRET'
   ];
   const result = spawnSync(process.execPath, [
     RUNTIME_ENTRYPOINT,
@@ -623,6 +624,7 @@ test('runtime entrypoint preserves explicit Nuxt settings while translating OR3 
       OR3_BACKGROUND_JOB_TIMEOUT: '45',
       OR3_BASIC_AUTH_JWT_SECRET: 'basic-auth-secret',
       OR3_BACKGROUND_ENCRYPTION_KEY: 'runtime-background-secret-at-least-32-characters',
+      OR3_PLUGIN_CONNECTION_SECRET: 'runtime-plugin-connection-secret',
       NUXT_ADMIN_AUTH_JWT_SECRET: 'explicit-admin-secret',
       NUXT_AUTH_PROVIDER: 'custom'
     }
@@ -645,7 +647,8 @@ test('runtime entrypoint preserves explicit Nuxt settings while translating OR3 
     NUXT_BACKGROUND_JOBS_MAX_CONCURRENT_JOBS: '8',
     NUXT_BACKGROUND_JOBS_MAX_CONCURRENT_JOBS_PER_USER: '3',
     NUXT_BACKGROUND_JOBS_JOB_TIMEOUT_MS: '45000',
-    NUXT_BACKGROUND_JOBS_ENCRYPTION_KEY: 'runtime-background-secret-at-least-32-characters'
+    NUXT_BACKGROUND_JOBS_ENCRYPTION_KEY: 'runtime-background-secret-at-least-32-characters',
+    NUXT_ADMIN_PLUGIN_CONNECTION_SECRET: 'runtime-plugin-connection-secret'
   });
 });
 

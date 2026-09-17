@@ -1,18 +1,23 @@
 import { createError, defineEventHandler, getRouterParam } from 'h3';
-import { getWorkspaceSettingsStore } from '../../../admin/stores/registry';
 import { requireCan, requireSession } from '../../../auth/can';
 import { resolveSessionContext } from '../../../auth/session';
 import { readLimitedJsonBody } from '../../../utils/security/limited-json-body';
 import { requirePluginMutation } from '../../../utils/plugins/connections/api-context';
+import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
+import { listInstalledExtensions } from '../../../admin/extensions/extension-manager';
+import { loadPackageDescriptors } from '../../../utils/plugins/setup/load-descriptors';
+import { readSetupValues, writeSetupValues } from '../../../utils/plugins/setup/settings-store';
+import { applySetupValuesPatch } from '~~/shared/plugins/setup/values';
 
 type ValuesBody = { readonly values?: unknown };
 
-const MAX_VALUE_BYTES = 8 * 1024;
-
 /**
  * Persists non-secret setup values for one plugin in the active workspace.
- * Values are validated to a bounded primitive map; secrets belong in a
- * connection record, never here.
+ *
+ * The installed package's field schema is the validator: unknown keys are
+ * refused, each value must satisfy its field kind (choice membership, numeric
+ * normalization, required non-empty), and the merged document is validated as a
+ * whole. Secrets belong in a connection record, never here.
  */
 export default defineEventHandler(async (event) => {
     requirePluginMutation(event);
@@ -29,39 +34,51 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'pluginId is required' });
     }
 
-    const body = await readLimitedJsonBody<ValuesBody>(event);
-    const raw = body?.values;
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    const body = await readLimitedJsonBody<ValuesBody | undefined>(event);
+    const patch = body?.values;
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
         throw createError({ statusCode: 400, statusMessage: 'values must be an object' });
     }
 
-    const values: Record<string, string | number | boolean> = {};
-    for (const [key, value] of Object.entries(raw)) {
-        if (key.length > 128) {
-            throw createError({ statusCode: 400, statusMessage: 'Setting name is too long' });
-        }
-        if (typeof value === 'string') {
-            if (Buffer.byteLength(value, 'utf8') > MAX_VALUE_BYTES) {
-                throw createError({ statusCode: 400, statusMessage: `Setting ${key} is too large` });
-            }
-            values[key] = value;
-            continue;
-        }
-        if (typeof value === 'number' && Number.isFinite(value)) {
-            values[key] = value;
-            continue;
-        }
-        if (typeof value === 'boolean') {
-            values[key] = value;
-            continue;
-        }
+    const installed = (await listInstalledExtensions()).find(
+        (extension) => extension.kind === 'plugin' && extension.id === pluginId
+    );
+    if (!installed) {
+        throw createError({ statusCode: 404, statusMessage: 'Plugin is not installed' });
+    }
+    const descriptors = await loadPackageDescriptors({
+        extensionsBaseDir: EXTENSIONS_BASE_DIR,
+        packagePath: installed.path,
+    });
+    if (!descriptors.setup) {
         throw createError({
-            statusCode: 400,
-            statusMessage: `Setting ${key} must be a string, number or boolean`,
+            statusCode: 409,
+            statusMessage: `This package's ${descriptors.problems.join('; ') || 'setup descriptor'} cannot validate settings`,
         });
     }
 
-    const store = getWorkspaceSettingsStore(event);
-    await store.set(workspaceId, `plugin:${pluginId}:setup-values`, JSON.stringify(values));
-    return { ok: true, keys: Object.keys(values) };
+    const current = await readSetupValues(event, workspaceId, pluginId);
+    const result = applySetupValuesPatch({
+        fields: descriptors.setup.fields,
+        current,
+        patch: patch as Readonly<Record<string, unknown>>,
+    });
+
+    if (result.unknownKeys.length > 0) {
+        throw createError({
+            statusCode: 400,
+            statusMessage: `Unknown setting${result.unknownKeys.length > 1 ? 's' : ''}: ${result.unknownKeys.join(', ')}`,
+            data: { fieldErrors: result.unknownKeys.map((key) => ({ key, message: 'Unknown setting' })) },
+        });
+    }
+    if (result.errors.length > 0) {
+        throw createError({
+            statusCode: 400,
+            statusMessage: result.errors.map((error) => error.message).join('; '),
+            data: { fieldErrors: result.errors },
+        });
+    }
+
+    await writeSetupValues(event, workspaceId, pluginId, { ...result.values });
+    return { ok: true, values: result.values, keys: Object.keys(result.values).sort() };
 });

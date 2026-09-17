@@ -1,20 +1,17 @@
-import { createError, defineEventHandler, getRouterParam, getQuery } from 'h3';
-import { getWorkspaceSettingsStore } from '../../../admin/stores/registry';
+import { createError, defineEventHandler, getQuery, getRouterParam } from 'h3';
 import { requireCan, requireSession } from '../../../auth/can';
 import { resolveSessionContext } from '../../../auth/session';
-import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
-import { listInstalledExtensions } from '../../../admin/extensions/extension-manager';
 import { resolveConnectionService } from '../../../utils/plugins/connections/resolve';
-import { resolveSetupPlan } from '../../../utils/plugins/setup/setup-plan';
-import { loadPackageDescriptors } from '../../../utils/plugins/setup/load-descriptors';
-import { buildFirstActionHandoff, describeSetupStatus } from '~~/shared/plugins/setup/plan';
+import { loadSetupState } from '../../../utils/plugins/setup/state';
+import { readSetupValues } from '../../../utils/plugins/setup/settings-store';
 
 /**
  * Returns the host-rendered setup plan for one installed package in the active
- * workspace: required settings, connection state, test action and first action.
+ * workspace: required settings, connection bindings, test action and first action.
  *
- * The plan is derived from the package's own descriptors and the workspace's
- * stored connections; nothing is invented when a descriptor is missing.
+ * This endpoint and the first-action endpoint build their view from the same
+ * loader, so a GET cannot report Ready while the POST refuses for a required
+ * field that has no value.
  */
 export default defineEventHandler(async (event) => {
     const session = await resolveSessionContext(event);
@@ -27,76 +24,42 @@ export default defineEventHandler(async (event) => {
     requireCan(session, 'workspace.read', { kind: 'workspace', id: workspaceId });
 
     const pluginId = getRouterParam(event, 'pluginId') ?? '';
+    if (!pluginId || pluginId.length > 128) {
+        throw createError({ statusCode: 400, statusMessage: 'pluginId is required' });
+    }
+    // The host UI carries a selection into this page the same way the first-action
+    // handoff receives it, so readiness and the handoff agree.
     const query = getQuery(event);
-
-    const installed = (await listInstalledExtensions()).find(
-        (extension) => extension.kind === 'plugin' && extension.id === pluginId
-    );
-    if (!installed) {
-        throw createError({ statusCode: 404, statusMessage: 'Plugin is not installed' });
-    }
-
-    // Saved settings live in the workspace settings store, keyed per plugin.
-    let values: Record<string, string | number | boolean> = {};
-    const store = getWorkspaceSettingsStore(event);
-    const rawValues = await store.get(workspaceId, `plugin:${pluginId}:setup-values`);
-    if (rawValues) {
-        try {
-            const parsed = JSON.parse(rawValues) as unknown;
-            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                values = parsed as Record<string, string | number | boolean>;
-            }
-        } catch {
-            values = {};
-        }
-    }
+    const hasSelectedContext =
+        (typeof query.documentId === 'string' && query.documentId.length > 0) ||
+        (typeof query.messageId === 'string' && query.messageId.length > 0);
 
     const { service, durable } = resolveConnectionService();
-    const resolved = await resolveSetupPlan({
-        extensionsBaseDir: EXTENSIONS_BASE_DIR,
-        packagePath: installed.path,
+    const state = await loadSetupState({
         pluginId,
         workspaceId,
         ownerUserId: userId,
+        hasSelectedContext,
         service,
-        values,
+        durableConnections: durable,
+        storedValues: await readSetupValues(event, workspaceId, pluginId),
     });
 
-    // Destinations come from the signed package policy, never from the caller,
-    // so a connection test cannot be pointed at another origin.
-    const descriptors = await loadPackageDescriptors({
-        extensionsBaseDir: EXTENSIONS_BASE_DIR,
-        packagePath: installed.path,
-    });
-    const destinations = (descriptors.policy?.destinations ?? []).map((destination) => ({
-        id: destination.id,
-        hosts: destination.hosts,
-        methods: destination.methods,
-        scopes: destination.scopes,
-    }));
-
-    if (!resolved.plan) {
-        return {
-            plan: null,
-            status: { status: 'blocked' as const, label: 'Setup unavailable', blocked: true },
-            problems: resolved.problems,
-            destinations,
-            durableConnections: durable,
-        };
+    if (!state.installed) {
+        throw createError({ statusCode: 404, statusMessage: 'Plugin is not installed' });
     }
 
-    const hasSelectedContext =
-        typeof query.hasSelection === 'string' ? query.hasSelection === 'true' : false;
-
     return {
-        plan: resolved.plan,
-        status: describeSetupStatus(resolved.plan),
-        firstAction: buildFirstActionHandoff({
-            plan: resolved.plan,
-            hasSelectedContext,
-        }),
-        problems: resolved.problems,
-        destinations,
-        durableConnections: durable,
+        plan: state.plan,
+        status: state.status,
+        firstAction: state.firstAction,
+        problems: state.problems,
+        destinations: state.destinations,
+        durableConnections: state.durableConnections,
+        credentialsAvailable: state.credentialsAvailable,
+        // Hydration source: validated saved settings, plus field-level problems.
+        settings: { values: state.values, errors: state.settingsErrors },
+        selectionRequired:
+            state.plan !== null && !state.plan.firstAction.usesSampleContext,
     };
 });

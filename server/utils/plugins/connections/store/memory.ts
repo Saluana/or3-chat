@@ -32,8 +32,24 @@ export function createMemoryPluginConnectionStore(): PluginConnectionStore {
             const connection = connections.get(id);
             return connection ? { ...connection } : null;
         },
-        async upsert(connection) {
+        async insert(connection) {
+            if (connections.has(connection.id)) return false;
             connections.set(connection.id, { ...connection });
+            return true;
+        },
+        async update(update) {
+            const existing = connections.get(update.id);
+            if (!existing || existing.revision !== update.expectedRevision) return false;
+            // Identity fields are intentionally not part of an update.
+            connections.set(update.id, {
+                ...existing,
+                revision: update.revision,
+                updatedAt: update.updatedAt,
+                secretCiphertext: update.secretCiphertext,
+                scopes: update.scopes === undefined ? existing.scopes : [...update.scopes],
+                label: update.label === undefined ? existing.label : update.label,
+            });
+            return true;
         },
         async delete(id) {
             connections.delete(id);
@@ -43,7 +59,23 @@ export function createMemoryPluginConnectionStore(): PluginConnectionStore {
             return evidence.get(connectionId) ?? null;
         },
         async setTestEvidence(entry) {
+            const connection = connections.get(entry.connectionId);
+            // Evidence only counts for the revision that is current right now.
+            if (!connection || connection.revision !== entry.revision) return false;
+            const existing = evidence.get(entry.connectionId);
+            // A higher revision always wins (a rotation invalidates evidence even
+            // if clocks disagree); within a revision, a newer completion wins.
+            if (existing) {
+                if (existing.revision > entry.revision) return false;
+                if (
+                    existing.revision === entry.revision &&
+                    existing.checkedAt > entry.checkedAt
+                ) {
+                    return false;
+                }
+            }
             evidence.set(entry.connectionId, { ...entry });
+            return true;
         },
     };
 }

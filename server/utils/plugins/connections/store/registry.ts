@@ -9,6 +9,7 @@
 
 import type {
     ConnectionTestEvidence,
+    PluginConnectionUpdate,
     StoredPluginConnection,
 } from '~~/shared/plugins/connections/contracts';
 
@@ -19,10 +20,25 @@ export interface PluginConnectionStore {
         readonly pluginId?: string;
     }): Promise<readonly StoredPluginConnection[]>;
     get(id: string): Promise<StoredPluginConnection | null>;
-    upsert(connection: StoredPluginConnection): Promise<void>;
+    /**
+     * Insert-only creation. `false` means the id already exists: the caller must
+     * retry with a fresh id (or fail), never write over the existing record.
+     */
+    insert(connection: StoredPluginConnection): Promise<boolean>;
+    /**
+     * Compare-and-swap update keyed on the revision the caller read. `false`
+     * means the record is gone or the revision moved, so a concurrent rotation
+     * cannot be silently overwritten.
+     */
+    update(update: PluginConnectionUpdate): Promise<boolean>;
     delete(id: string): Promise<void>;
     getTestEvidence(connectionId: string): Promise<ConnectionTestEvidence | null>;
-    setTestEvidence(evidence: ConnectionTestEvidence): Promise<void>;
+    /**
+     * Records evidence only when it belongs to the connection's current revision
+     * and is not older than the stored record. `false` means the write was
+     * rejected as stale (a rotation or a newer test won).
+     */
+    setTestEvidence(evidence: ConnectionTestEvidence): Promise<boolean>;
 }
 
 export interface PluginConnectionStoreRegistryItem {

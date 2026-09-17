@@ -13,19 +13,22 @@ import {
     loadPackageDescriptors,
     toConnectionDispatchPolicy,
 } from '../../../utils/plugins/setup/load-descriptors';
+import { resolveSetupTestTarget } from '../../../utils/plugins/setup/test-target';
 
 type TestBody = {
     readonly ref?: unknown;
     readonly pluginId?: unknown;
-    readonly operationId?: unknown;
-    readonly url?: unknown;
 };
 
 /**
  * Runs the bounded, read-only test action for a connection and records
- * revision-bound evidence. Non-idempotent or write operations are refused by
- * the setup-test module, not by the caller's choice of operation, and the
- * request must also fall inside the release's approved connection policy.
+ * revision-bound evidence.
+ *
+ * The operation and its URL are resolved here from the provider's approved
+ * operation and the release policy for the connection's bound slot; the caller
+ * supplies only the opaque reference. Non-idempotent or write operations are
+ * refused by the setup-test module, and dispatch re-validates the request against
+ * the release's approved destinations.
  */
 export default defineEventHandler(async (event) => {
     requirePluginMutation(event);
@@ -34,13 +37,10 @@ export default defineEventHandler(async (event) => {
 
     const ref = typeof body.ref === 'string' ? body.ref : '';
     const pluginId = typeof body.pluginId === 'string' ? body.pluginId.trim() : '';
-    const operationId = typeof body.operationId === 'string' ? body.operationId : '';
-    const url = typeof body.url === 'string' ? body.url : '';
-
-    if (!ref || !pluginId || !operationId || !url) {
+    if (!ref || !pluginId) {
         throw createError({
             statusCode: 400,
-            statusMessage: 'ref, pluginId, operationId and url are required',
+            statusMessage: 'ref and pluginId are required',
         });
     }
 
@@ -53,33 +53,47 @@ export default defineEventHandler(async (event) => {
     if (resolved.status === 'denied') {
         throw createError({ statusCode: 403, statusMessage: resolved.message });
     }
-    const provider = requireConnectionProvider(resolved.connection.providerId);
+    const connection = resolved.connection;
+    const provider = requireConnectionProvider(connection.providerId);
 
-    // The release's own descriptor is the approved-operation source of truth.
     const installed = (await listInstalledExtensions()).find(
         (extension) => extension.kind === 'plugin' && extension.id === pluginId
     );
-    let policy = null;
-    if (installed) {
-        const descriptors = await loadPackageDescriptors({
-            extensionsBaseDir: EXTENSIONS_BASE_DIR,
-            packagePath: installed.path,
+    if (!installed) {
+        throw createError({ statusCode: 404, statusMessage: 'Plugin is not installed' });
+    }
+    const descriptors = await loadPackageDescriptors({
+        extensionsBaseDir: EXTENSIONS_BASE_DIR,
+        packagePath: installed.path,
+    });
+    if (!descriptors.setup) {
+        throw createError({
+            statusCode: 409,
+            statusMessage: 'The package setup descriptor is unavailable',
         });
-        policy = toConnectionDispatchPolicy(descriptors.policy);
     }
 
-    const result = await runConnectionSetupTest({
+    const target = resolveSetupTestTarget({
+        setup: descriptors.setup,
+        policy: descriptors.policy,
+        provider,
+        slotId: connection.slotId,
+    });
+    if (!target.ok) {
+        throw createError({ statusCode: 409, statusMessage: target.message });
+    }
+
+    return await runConnectionSetupTest({
         service: context.service,
         provider,
         ref,
         pluginId,
         workspaceId: context.workspaceId,
         ownerUserId: context.userId,
-        operationId,
-        url,
+        operationId: target.target.operationId,
+        url: target.target.url,
+        deadlineMs: target.target.deadlineMs,
         transport: createFetchConnectionTransport(),
-        policy,
+        policy: toConnectionDispatchPolicy(descriptors.policy),
     });
-
-    return result;
 });
