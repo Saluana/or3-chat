@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -212,5 +212,78 @@ describe('acquisition operation records (5.1)', () => {
         await expect(
             store.create(createInput({ pluginId: '../escape' }))
         ).rejects.toMatchObject({ code: 'operation-invalid' });
+    });
+});
+
+describe('store concurrency and retention (5.1)', () => {
+    it('creates only one record per plugin when two creations race', async () => {
+        const { store } = await makeStore();
+        const results = await Promise.allSettled([
+            store.create(createInput()),
+            store.create(createInput()),
+        ]);
+        const fulfilled = results.filter((entry) => entry.status === 'fulfilled');
+        expect(fulfilled).toHaveLength(1);
+        expect((await store.list()).length).toBe(1);
+    });
+
+    it('refuses a retry for the same plugin while another run is active', async () => {
+        const { store } = await makeStore();
+        const first = await store.create(createInput());
+        const running = await store.update(first.operationId, first.revision, {
+            status: 'running',
+        });
+        expect(await store.findActiveForPlugin('acme.sample')).toMatchObject({
+            operationId: running.operationId,
+        });
+        await expect(store.create(createInput())).rejects.toMatchObject({
+            code: 'operation-conflict',
+        });
+    });
+
+    it('refuses a second runner for the same plugin and lets it run again afterwards', async () => {
+        const { store } = await makeStore();
+        const record = await store.create(createInput());
+        let started: () => void = () => undefined;
+        const gate = new Promise<void>((resolve) => {
+            started = resolve;
+        });
+        const held = store.withRunnerLock(record.pluginId, async () => {
+            started();
+            await new Promise((resolve) => setTimeout(resolve, 50));
+        });
+        await gate;
+        await expect(store.retry(record.operationId)).rejects.toMatchObject({
+            code: 'operation-conflict',
+        });
+        await held;
+        const retried = await store.retry(record.operationId);
+        expect(retried.status).toBe('pending');
+        expect(retried.attempts).toBe(1);
+    });
+
+    it('keeps only operation records and stages nothing for a permanent failure', async () => {
+        const { store, root } = await makeStore();
+        const record = await store.create(createInput());
+        const staging = join(root, '.operations', 'staging', record.operationId);
+        await writeFile(
+            join(root, '.operations', 'registry-state.json'),
+            JSON.stringify({ schemaVersion: 1, acceptedAdvisorySequence: 4, updatedAt: 1 })
+        );
+        await mkdir(staging, { recursive: true });
+        await writeFile(join(staging, 'package.or3pkg'), 'bytes');
+        expect(await store.list()).toHaveLength(1);
+
+        const failed = await store.update(record.operationId, record.revision, {
+            status: 'failed',
+            failure: {
+                code: 'package-policy-mismatch',
+                stage: 'verified',
+                message: 'refused',
+                retryable: false,
+            },
+        });
+        expect(failed.status).toBe('failed');
+        expect(await readdir(staging).catch(() => [])).toEqual([]);
     });
 });

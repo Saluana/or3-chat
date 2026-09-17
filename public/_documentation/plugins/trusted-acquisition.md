@@ -2,6 +2,8 @@
 
 Reviewed acquisition installs a package that a configured marketplace registry published and signed. It never accepts a package URL: a request names a plugin (and optionally a version) and the host resolves it from the registry origin it already trusts.
 
+The host speaks the marketplace's real public trust contract: release metadata from `/api/v1/catalog/trust/releases/{pluginId}/{version}/metadata` (the signed document inside the `{ releaseId, document }` wrapper), the signed advisory log from `/api/v1/catalog/trust/advisories` and `/api/v1/catalog/trust/advisories/{sequence}`, and the package bytes from the content-addressed `/api/v1/catalog/trust/artifacts/{archiveSha256}`. The artifact URL is derived from the signed archive digest, never taken from a caller or from the document.
+
 The owner-only raw-ZIP upload path (`/api/admin/extensions/install`) is separate and unchanged. Enabling registry acquisition does not enable arbitrary uploads.
 
 ## Configuration
@@ -19,7 +21,8 @@ An instance with no origin or no release key refuses every acquisition with `reg
 
 ## Routes
 
-- `POST /api/admin/plugins/acquisitions` — start (or refuse) an acquisition. Body: `{ pluginId, version?, workspaceId? }`. Bounded per-admin rate limit.
+- `POST /api/admin/plugins/acquisitions` — start (or refuse) an acquisition. Body: `{ pluginId, version?, workspaceId? }`. Bounded per-admin rate limit. Answers `202` with the durable operation as soon as it is recorded, before the long-running work, so the id can be polled and cancelled.
+- `GET /api/admin/plugins/acquisitions` — list recorded operations (optionally `?pluginId=`), so an id is recoverable if the start response was lost.
 - `GET /api/admin/plugins/acquisitions/{operationId}/status` — the recorded status view.
 - `POST /api/admin/plugins/acquisitions/{operationId}/retry` — continue from the recorded stage.
 - `POST /api/admin/plugins/acquisitions/{operationId}/cancel` — cancel before activation.
@@ -34,9 +37,12 @@ Resolution happens before the durable record exists, because it is read-only; fr
 
 - Downloads enforce the byte ceiling while streaming, verify the archive digest against the signed metadata, and keep partial bytes so a retry resumes.
 - Verification uses the canonical package archive reader and tree verifier; the tree, manifest and package identity must match the signed release metadata before any pointer is touched.
-- The candidate is recorded through the existing candidate service. A first install whose package declares setup pauses as `needsSetup` instead of claiming an activation.
+- The signed profile is validated against the package that was actually staged. A release that claims the portable client profile must be an `isolated-client`, browser-only package: trust mode, client isolation, the absence of server code and the generated policy/setup descriptors are all checked with the same validator the marketplace reviewer uses, and the signed authority digest must equal the canonical policy revision of the packaged descriptors.
+- The candidate is recorded through the existing candidate service. Setup readiness is the host's own plan (settings and stored connections), re-evaluated before the canary and again before promotion, so a package that declares setup pauses as `needsSetup` and a retry cannot promote it with nothing saved.
+- A profile that requires a client runtime needs a real client canary pass; with no client canary runner configured the operation blocks with `client-canary-unavailable` instead of recording a skipped browser check as evidence.
 - The health check is the existing candidate canary: stored package verification, declared server routes, and the recorded grant review.
-- Promotion is conditional on the recorded candidate digest and pointer revision, so a racing admin or a stale candidate blocks instead of overwriting the winner.
+- Promotion is conditional on the recorded candidate digest and pointer revision, so a racing admin or a stale candidate blocks instead of overwriting the winner. The instance-wide preflight is re-run at that boundary, and if the workspace set changed the operation restages so the canary is re-run rather than reused.
+- A crash between the pointer write and the recorded `promoted` stage is reconciled from the committed pointer, so a live installation is never reported as `pointer-conflict`.
 
 ## Instance-wide preflight
 
@@ -44,4 +50,12 @@ One selected code version is shared by every workspace. Before promotion, every 
 
 ## Recovery
 
-`retry` resumes from the recorded stage, so an expired download link, a partial download, a temporary registry outage, a since-disabled blocking workspace or newly saved setup all continue the same operation. `cancel` stops the pipeline before the next side effect and never promotes, so the previous selected version keeps running. Both are reported through the status view (`percentComplete`, `needsSetup`, `retryable`, `canceled`, `failure`).
+`retry` resumes from the recorded stage, so an expired download link, a partial download, a temporary registry outage, a since-disabled blocking workspace or newly saved setup all continue the same operation. Only one runner advances a plugin at a time (an exclusive runner lock), and a retry refuses while another operation for the same plugin is active or a runner is live, so two runs cannot share one staging directory. Host policy is re-read on every resumed stage: disabling installation or removing a trust key stops a downloaded candidate before activation. `cancel` stops the pipeline before the next side effect; once the pointer has been committed the operation finishes as completed rather than reporting "canceled before activation", because the installation is live. Both are reported through the status view (`percentComplete`, `needsSetup`, `retryable`, `canceled`, `failure`).
+
+## Freshness, advisories and revocation
+
+Quarantine decisions come from the signed advisory log, which is fetched and verified on every resolve: an advisory this host has not yet accepted that quarantines the release refuses the acquisition with `release-quarantined`, an advisory that cannot be verified refuses with `advisory-unverified`, and the newest seen sequence is returned so it can be recorded monotonically. A release's publication date is not freshness: an old but intact, non-quarantined release is still acquirable.
+
+## Host capability requirement
+
+The pipeline presents the host's declared package capabilities (`supportedTrustModes`, `supportedFeatures`, `supportedGrants`) and never widens them for a release. Acquiring a profile therefore requires the host to declare everything that profile needs. The current host declares `trusted-host` only, so the portable client profile the marketplace publishes is refused with `release-profile-unsupported` until a host release declares and runs `isolated-client` packages (including a client canary runner). That gap is deliberate and fail-closed.

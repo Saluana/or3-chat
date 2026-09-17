@@ -33,22 +33,30 @@ import { createHash } from 'node:crypto';
 import { sha256Identity } from '~~/shared/plugins/digest';
 import type { Sha256 } from '~~/shared/plugins/runtime-descriptor';
 import {
+    encodeAdvisoryDocument,
+    evaluateAdvisories,
     encodeReleaseMetadata,
     evaluateArtifactDigest,
     evaluateArtifactUrl,
     evaluateDownloadBounds,
     evaluateFreshness,
     evaluateReleaseMetadata,
+    parseAdvisoryDocument,
     parseReleaseMetadata,
     type RegistryTrustRoot,
     type ReleaseMetadataDocument,
     type ReleaseMetadataExpectation,
     type ReleaseMetadataRefusal,
 } from '~~/shared/plugins/acquisition/release-metadata';
-import { verifyReleaseMetadataSignature } from './release-verify';
+import {
+    verifyAdvisorySignature,
+    verifyReleaseMetadataSignature,
+} from './release-verify';
 
 export interface RegistryClientOptions {
     readonly registryOrigin: string;
+    /** Profiles the host can run; a signed profile outside this set is refused. */
+    readonly supportedProfiles: readonly string[];
     readonly trustRoot: Omit<RegistryTrustRoot, 'registryOrigin'>;
     readonly maxArtifactBytes: number;
     /** Free-space headroom kept for the running instance while staging. */
@@ -76,6 +84,8 @@ export type RegistryFailureCode =
     | 'release-engine-unsupported'
     | 'catalog-stale'
     | 'advisory-stale'
+    | 'advisory-unverified'
+    | 'release-quarantined'
     | 'download-url-invalid'
     | 'download-url-expired'
     | 'download-over-limit'
@@ -195,17 +205,24 @@ export class RegistryClient {
             );
         }
 
-        const path =
-            input.expectation.releaseId !== undefined
-                ? `/v1/releases/${encodeURIComponent(input.expectation.releaseId)}/metadata`
-                : `/v1/plugins/${encodeURIComponent(input.expectation.pluginId)}/versions/${encodeURIComponent(
-                      input.expectation.version ?? 'latest'
-                  )}/metadata`;
+        const version = input.expectation.version;
+        if (version === undefined) {
+            return failure(
+                'release-metadata-invalid',
+                'A registry release is addressed by plugin id and version.'
+            );
+        }
+        // The marketplace addresses releases by plugin id and version; a
+        // re-resolution after a restart resolves the same way and the returned
+        // release id is then checked against the recorded one.
+        const path = `/api/v1/catalog/trust/releases/${encodeURIComponent(
+            input.expectation.pluginId
+        )}/${encodeURIComponent(version)}/metadata`;
 
         const fetched = await this.#getJson(path);
         if (!fetched.ok) return fetched;
 
-        const parsed = parseReleaseMetadata(fetched.value);
+        const parsed = parseReleaseMetadata(unwrapMetadataDocument(fetched.value));
         if (!parsed.document) {
             return failure(
                 'release-metadata-invalid',
@@ -220,7 +237,11 @@ export class RegistryClient {
 
         const decision = evaluateReleaseMetadata({
             document: parsed.document,
-            trustRoot: { ...this.#options.trustRoot, registryOrigin: this.#options.registryOrigin },
+            trustRoot: {
+                ...this.#options.trustRoot,
+                registryOrigin: this.#options.registryOrigin,
+                supportedProfiles: this.#options.supportedProfiles,
+            },
             expectation: input.expectation,
             signatureValid,
             now: this.#now(),
@@ -239,6 +260,12 @@ export class RegistryClient {
             if (freshness) return refusalToFailure(freshness);
         }
 
+        // The signed advisory log decides whether this exact release is still
+        // acquirable. It is fetched and verified here, not left to the caller:
+        // freshness that is only checked "when supplied" is not checked at all.
+        const advisories = await this.#verifyAdvisories(parsed.document);
+        if (!advisories.ok) return advisories;
+
         const metadataSha256 = await releaseMetadataDigest(parsed.document);
         const artifact = this.#artifactReference(parsed.document.archiveSha256);
         if (!artifact.ok) return artifact;
@@ -249,9 +276,80 @@ export class RegistryClient {
                 document: parsed.document,
                 metadataSha256,
                 artifactUrl: artifact.url,
-                advisorySequence: input.latestAdvisorySequence ?? 0,
+                advisorySequence: advisories.value,
             },
         };
+    }
+
+    /**
+     * Fetch the public signed advisory log, verify the advisories that apply to
+     * this release, and refuse when one quarantines it. The newest sequence seen
+     * is returned so the host can record it monotonically.
+     */
+    async #verifyAdvisories(
+        document: ReleaseMetadataDocument
+    ): Promise<RegistryResult<number>> {
+        const fetched = await this.#getJson('/api/v1/catalog/trust/advisories');
+        if (!fetched.ok) return fetched;
+        const entries = advisoryListEntries(fetched.value);
+        if (!entries) {
+            return failure('advisory-unverified', 'The registry returned an unreadable advisory log.');
+        }
+        const accepted = this.#acceptedAdvisorySequence();
+        const applicable = entries
+            .filter((entry) => entry.sequence > accepted)
+            .filter(
+                (entry) =>
+                    entry.releaseId === document.releaseId ||
+                    (entry.pluginId === document.pluginId && entry.version === document.version)
+            )
+            .sort((left, right) => right.sequence - left.sequence);
+
+        const parsedAdvisories = [];
+        for (const entry of applicable) {
+            const raw = await this.#getJson(
+                `/api/v1/catalog/trust/advisories/${encodeURIComponent(String(entry.sequence))}`
+            );
+            if (!raw.ok) return raw;
+            const unwrapped = unwrapAdvisoryDocument(raw.value);
+            const parsed = parseAdvisoryDocument(unwrapped);
+            if (!parsed.document) {
+                return failure(
+                    'advisory-unverified',
+                    `Advisory ${entry.sequence} is unreadable: ${parsed.problems.join('; ')}`
+                );
+            }
+            const signatureValid = await verifyAdvisorySignature({
+                document: parsed.document,
+                trustRoot: this.#options.trustRoot.releaseKeys,
+            });
+            if (
+                !signatureValid ||
+                !this.#options.trustRoot.releaseKeys.some(
+                    (key) => key.keyId === parsed.document?.signature?.keyId
+                )
+            ) {
+                return failure(
+                    'advisory-unverified',
+                    `Advisory ${entry.sequence} is not signed by a trusted release key.`
+                );
+            }
+            parsedAdvisories.push(parsed.document);
+        }
+
+        const decision = evaluateAdvisories({
+            advisories: parsedAdvisories,
+            hostAcceptedAdvisorySequence: accepted,
+            releaseId: document.releaseId,
+            pluginId: document.pluginId,
+            version: document.version,
+        });
+        const latest = Math.max(
+            decision.latestSequence,
+            entries.reduce((highest, entry) => Math.max(highest, entry.sequence), accepted)
+        );
+        if (decision.refusal) return refusalToFailure(decision.refusal);
+        return { ok: true, value: latest };
     }
 
     /**
@@ -260,7 +358,10 @@ export class RegistryClient {
      * says. Only same-origin HTTPS is accepted.
      */
     #artifactReference(digest: Sha256): { ok: true; url: string } | { ok: false; failure: RegistryFailure } {
-        const url = joinOrigin(this.#options.registryOrigin, `/v1/artifacts/${digest}/package.or3pkg`);
+        const url = joinOrigin(
+            this.#options.registryOrigin,
+            `/api/v1/catalog/trust/artifacts/${encodeURIComponent(digest)}`
+        );
         const refusal = evaluateArtifactUrl({ url, registryOrigin: this.#options.registryOrigin });
         if (refusal) return failure(refusal.code as RegistryFailureCode, refusal.message);
         return { ok: true, url };
@@ -308,9 +409,15 @@ export class RegistryClient {
         if (response.status === 404) {
             return failure('release-not-found', 'The registry no longer serves this artifact.', true);
         }
-        if (resumeFrom > 0 && response.status !== 206) {
-            // The registry ignored the range; start over rather than corrupting.
+        // A server that answers 200 to a Range request ignored it. The staged
+        // prefix is discarded and the full body is consumed in one attempt, so a
+        // retry cannot loop forever re-sending the same Range request.
+        const rangeIgnored = resumeFrom > 0 && response.status === 200;
+        if (resumeFrom > 0 && response.status !== 206 && !rangeIgnored) {
             return failure('download-failed', 'The registry did not honour the resume request.', true);
+        }
+        if (rangeIgnored) {
+            await fs.rm(input.stagingPath, { force: true }).catch(() => undefined);
         }
         if (!response.ok) {
             return failure('download-failed', `The registry answered ${response.status}.`, response.status >= 500);
@@ -321,12 +428,17 @@ export class RegistryClient {
 
         // `Content-Length` is an early hint only; the streamed byte count below is
         // the enforcement, so a lying header cannot smuggle an oversized artifact.
+        // The free-space budget is measured independently of the header and
+        // includes the extraction and immutable-copy headroom the artifact will
+        // need after it lands, not just its own size.
         const declared = Number(response.headers.get('content-length') ?? Number.NaN);
+        const freeDiskBytes = await this.#freeDisk(input.stagingPath);
         const bounds = evaluateDownloadBounds({
-            declaredBytes: Number.isFinite(declared) && declared > 0 ? declared : 1,
+            declaredBytes:
+                Number.isFinite(declared) && declared > 0 && !rangeIgnored ? declared : 1,
             bounds: {
                 maxBytes: this.#options.maxArtifactBytes,
-                remainingDiskBytes: await this.#freeDisk(input.stagingPath),
+                remainingDiskBytes: freeDiskBytes,
                 reserveBytes: this.#options.reserveBytes,
             },
         });
@@ -335,12 +447,12 @@ export class RegistryClient {
             return refusalToFailure(bounds.refusal);
         }
 
-        let written = resumeFrom;
+        let written = rangeIgnored ? 0 : resumeFrom;
         // A resume cannot re-hash the already-staged prefix safely, so the digest
         // is always computed over the completed file before it is accepted.
         const handle = await fs.open(
             input.stagingPath,
-            resumeFrom > 0 ? 'a' : 'w',
+            resumeFrom > 0 && !rangeIgnored ? 'a' : 'w',
             0o600
         );
         try {
@@ -355,6 +467,17 @@ export class RegistryClient {
                     return failure(
                         'download-over-limit',
                         `The artifact exceeds the ${this.#options.maxArtifactBytes}-byte acquisition ceiling.`
+                    );
+                }
+                // Extraction and the immutable copy each need room for the same
+                // bytes, so the streamed total is budgeted at three times its own
+                // size plus the instance reserve. This does not depend on any
+                // header, so an undeclared or lying size cannot exhaust the disk.
+                if (written * 3 + this.#options.reserveBytes > freeDiskBytes) {
+                    await reader.cancel('storage-unavailable');
+                    return failure(
+                        'storage-unavailable',
+                        'Staging this package would leave the instance without reserved free space.'
                     );
                 }
                 await handle.write(value);
@@ -386,6 +509,65 @@ export class RegistryClient {
         const info = await statfs(dirname(resolve(path)));
         return Number(info.bavail) * Number(info.bsize);
     }
+}
+
+/**
+ * The marketplace answers a metadata request with `{ releaseId, document }`.
+ * The document is what is signed, so it is unwrapped here and the wrapper's
+ * release id is checked by the expectation when the caller records one. A bare
+ * document is accepted too, because the same policy must cover a plain document.
+ */
+function unwrapMetadataDocument(value: unknown): unknown {
+    if (value && typeof value === 'object' && !Array.isArray(value) && 'document' in value) {
+        const wrapper = value as { document?: unknown };
+        if (wrapper.document && typeof wrapper.document === 'object') return wrapper.document;
+    }
+    return value;
+}
+
+function unwrapAdvisoryDocument(value: unknown): unknown {
+    if (value && typeof value === 'object' && !Array.isArray(value) && 'document' in value) {
+        const wrapper = value as { document?: unknown };
+        if (wrapper.document && typeof wrapper.document === 'object') return wrapper.document;
+    }
+    return value;
+}
+
+interface AdvisoryListEntry {
+    readonly sequence: number;
+    readonly releaseId: string;
+    readonly pluginId: string;
+    readonly version: string;
+}
+
+/** Shape of the marketplace's public advisory log (newest first). */
+function advisoryListEntries(value: unknown): AdvisoryListEntry[] | null {
+    if (!value || typeof value !== 'object') return null;
+    const advisories = (value as { advisories?: unknown }).advisories;
+    if (!Array.isArray(advisories)) return null;
+    const entries: AdvisoryListEntry[] = [];
+    for (const entry of advisories) {
+        if (!entry || typeof entry !== 'object') continue;
+        const record = entry as Record<string, unknown>;
+        const sequence = record.sequence;
+        if (
+            typeof sequence !== 'number' ||
+            !Number.isSafeInteger(sequence) ||
+            sequence <= 0 ||
+            typeof record.releaseId !== 'string' ||
+            typeof record.pluginId !== 'string' ||
+            typeof record.version !== 'string'
+        ) {
+            continue;
+        }
+        entries.push({
+            sequence,
+            releaseId: record.releaseId,
+            pluginId: record.pluginId,
+            version: record.version,
+        });
+    }
+    return entries;
 }
 
 /** Digest identity of the exact canonical metadata bytes that were signed. */

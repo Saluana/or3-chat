@@ -10,13 +10,17 @@
  * - Owner-only, super-admin-only mutation, rate limited per acting admin.
  * - Refusals that happen before the durable record exists are reported with the
  *   policy failure code and leave nothing behind.
+ * - The durable operation id is returned before the pipeline does its long
+ *   running work (a download can take minutes), so the caller can poll and cancel
+ *   it; the run itself continues in this process and is picked up by `retry`
+ *   after a restart.
  * - The response is the pipeline status view, never package bytes.
  *
  * Constraints:
  * - Never accepts a package URL: the request names a plugin (and optionally a
  *   version) and the registry client resolves it.
  */
-import { createError, defineEventHandler, readBody } from 'h3';
+import { createError, defineEventHandler, readBody, setResponseStatus } from 'h3';
 import { z } from 'zod';
 import { requireAdminApiContext } from '../../../../admin/api';
 import { resolveAdminWorkspaceTarget } from '../../../../admin/workspace-target';
@@ -65,7 +69,7 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const service = await acquisitionServiceFor(event);
+    const service = await acquisitionServiceFor(event, requester);
     const started = await service.start({
         pluginId: body.data.pluginId,
         ...(body.data.version === undefined ? {} : { version: body.data.version }),
@@ -79,14 +83,24 @@ export default defineEventHandler(async (event) => {
             statusMessage: started.failure.message,
         });
     }
-    if (started.operation.status === 'completed') {
-        await event.context.adminHooks?.doAction('admin.plugin:action:acquired', {
-            id: started.operation.pluginId,
-            workspaceId,
-            operationId: started.operation.operationId,
-            packageDigest: started.operation.candidateDigest,
-        });
-    }
+    // Long-running work continues after the id has been handed back. The run is
+    // durable: a crash or a restart leaves the record at its stage, and the same
+    // id can be retried or observed.
+    const operationId = started.operation.operationId;
+    setResponseStatus(event, 202);
+    void service
+        .advance(operationId)
+        .then(async (finished) => {
+            if (finished.status !== 'completed') return;
+            await event.context.adminHooks?.doAction('admin.plugin:action:acquired', {
+                id: finished.pluginId,
+                workspaceId,
+                operationId: finished.operationId,
+                packageDigest: finished.candidateDigest,
+            });
+        })
+        .catch(() => undefined);
+
     return {
         ok: true,
         workspaceId,

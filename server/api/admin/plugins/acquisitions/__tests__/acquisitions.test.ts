@@ -4,10 +4,14 @@ import type { H3Event } from 'h3';
 const readBodyMock = vi.fn();
 const getRouterParamMock = vi.fn();
 
+const setResponseStatusMock = vi.fn();
+
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
     readBody: readBodyMock,
     getRouterParam: getRouterParamMock,
+    setResponseStatus: setResponseStatusMock,
+    getQuery: () => ({}),
     createError: (opts: { statusCode: number; statusMessage?: string }) => {
         const err = new Error(opts.statusMessage ?? 'Error') as Error & {
             statusCode: number;
@@ -77,6 +81,9 @@ describe('acquisition routes', () => {
             status: statusMock,
             retry: vi.fn(),
             cancel: vi.fn(),
+            // The start route hands the id back before doing the work; the run
+            // itself continues in the background.
+            advance: vi.fn().mockResolvedValue({ status: 'completed' }),
         });
         startMock.mockReset();
         statusMock.mockReset();

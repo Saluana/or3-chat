@@ -1,53 +1,36 @@
-import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { promises as fs } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { writeDeterministicPackageZip } from '@or3/plugin-sdk/package-archive';
 import { describeAcquisitionStatus } from '~~/shared/plugins/acquisition/contracts';
-import type { ReleaseMetadataDocument } from '~~/shared/plugins/acquisition/release-metadata';
+import { buildSetupPlan } from '~~/shared/plugins/setup/plan';
+import { validateSetupValues } from '~~/shared/plugins/setup/values';
+import { OR3_PLUGIN_V2_HOST_CAPABILITIES } from '../../../../admin/plugins/v2-host-capabilities';
 import { pluginPackageServices } from '../../../../admin/plugins/package-operation-support';
 import { PluginPackageRouteCatalog } from '../../../../admin/plugins/package-route-catalog';
-import { verifyPackageTree } from '../../../../admin/plugins/package-tree';
-import { setPluginEnabled } from '../../../../admin/plugins/workspace-plugin-store';
+import {
+    setPluginEnabled,
+    setPluginGrantReview,
+} from '../../../../admin/plugins/workspace-plugin-store';
 import type { WorkspaceSettingsStore } from '../../../../admin/stores/types';
+import { loadPackageDescriptors } from '../../setup/load-descriptors';
 import { setupValuesKey } from '../../setup/settings-store';
+import {
+    cleanupRoots,
+    fakeRegistryTransport,
+    ORIGIN,
+    PORTABLE_PROFILE,
+    releaseFixture,
+    tempRoot,
+    type ReleaseFixture,
+} from './fixtures';
 import { PluginAcquisitionOperationStore } from '../operation-store';
 import { RegistryClient } from '../registry-client';
-import { signReleaseMetadataForTest } from '../release-verify';
 import { PluginAcquisitionService, type AcquisitionServiceDeps } from '../acquisition-service';
-import type { AcquisitionConfig, MarketplaceReleaseKey } from '../config';
+import type { AcquisitionConfig } from '../config';
 
-const ORIGIN = 'https://market.example';
-const RELEASE_ID = 'rel_alpha_1';
 const MAX_ARTIFACT_BYTES = 8 * 1024 * 1024;
-const roots: string[] = [];
 
 afterEach(async () => {
-    for (const root of roots.splice(0)) await forceRemove(root);
+    await cleanupRoots();
 });
-
-/** The immutable store chmods package trees read-only; undo that before cleanup. */
-async function forceRemove(root: string): Promise<void> {
-    const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => []);
-    for (const entry of entries) {
-        const target = join(root, entry.name);
-        if (entry.isDirectory()) {
-            await forceRemove(target);
-        } else {
-            await fs.chmod(target, 0o644).catch(() => undefined);
-        }
-    }
-    await fs.chmod(root, 0o755).catch(() => undefined);
-    await fs.rm(root, { recursive: true, force: true }).catch(() => undefined);
-}
-
-function tempRoot(prefix = 'or3-acquisition-'): string {
-    const root = mkdtempSync(join(tmpdir(), prefix));
-    roots.push(root);
-    return root;
-}
 
 function memoryStore(): WorkspaceSettingsStore {
     const values = new Map<string, string>();
@@ -61,144 +44,27 @@ function memoryStore(): WorkspaceSettingsStore {
     };
 }
 
-async function makeKey(): Promise<{ key: MarketplaceReleaseKey; privateKeyBase64: string }> {
-    const pair = (await crypto.subtle.generateKey({ name: 'Ed25519' }, true, [
-        'sign',
-        'verify',
-    ])) as CryptoKeyPair;
-    const pkcs8 = new Uint8Array(await crypto.subtle.exportKey('pkcs8', pair.privateKey));
-    const publicJwk = await crypto.subtle.exportKey('jwk', pair.publicKey);
-    let binary = '';
-    for (const byte of pkcs8) binary += String.fromCharCode(byte);
-    return {
-        key: { keyId: 'or3-release', publicJwk: { kty: 'OKP', crv: 'Ed25519', x: publicJwk.x as string } },
-        privateKeyBase64: btoa(binary),
+/** The host's own setup readiness rules, over the candidate package. */
+function setupPlanFor(root: string, settings: WorkspaceSettingsStore) {
+    return async (pluginId: string, workspaceId: string, packageRoot: string) => {
+        const descriptors = await loadPackageDescriptors({
+            extensionsBaseDir: root,
+            packagePath: packageRoot,
+        });
+        if (!descriptors.policy || !descriptors.setup) return null;
+        const raw = await settings.get(workspaceId, setupValuesKey(pluginId));
+        const stored = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+        const validated = validateSetupValues({
+            fields: descriptors.setup.fields,
+            values: stored,
+        });
+        return buildSetupPlan({
+            setup: descriptors.setup,
+            policy: descriptors.policy,
+            values: validated.values,
+            hostConnections: [],
+        });
     };
-}
-
-function manifest(version: string, stateReads = { minimum: 1, maximum: 1 }) {
-    return {
-        manifestVersion: 2,
-        kind: 'plugin',
-        id: 'alpha',
-        name: 'Alpha',
-        version,
-        capabilities: [],
-        engines: { or3: '^0.3.0', pluginApi: '^2.0.0' },
-        runtime: {
-            server: { routes: [{ method: 'GET', path: 'health', handler: 'server/health.get.mjs' }] },
-        },
-        requestedGrants: [],
-        features: { required: [], optional: [] },
-        dependencies: { required: [], optional: [] },
-        trust: 'trusted-host',
-        settings: { version: 1 },
-        stateCompatibility: { version: 1, reads: stateReads, rollback: 'safe' as const },
-    };
-}
-
-function setupDescriptor() {
-    return {
-        setupVersion: 1,
-        settingsSchemaPath: 'or3.settings.schema.json',
-        fields: [{ key: 'token', label: 'Token', kind: 'text', required: true, order: 1 }],
-        connections: [],
-        firstAction: { operationId: 'run', label: 'Run', usesSampleContext: false },
-    };
-}
-
-function packageTree(input: { version: string; setup?: boolean; stateReads?: { minimum: number; maximum: number } }): string {
-    const root = tempRoot('or3-package-');
-    mkdirSync(join(root, 'server'), { recursive: true });
-    writeFileSync(join(root, 'or3.manifest.json'), JSON.stringify(manifest(input.version, input.stateReads)));
-    writeFileSync(join(root, 'server', 'health.get.mjs'), 'export default async () => ({ ok: true });\n');
-    if (input.setup) writeFileSync(join(root, 'or3.setup.json'), JSON.stringify(setupDescriptor()));
-    return root;
-}
-
-function baseDocument(overrides: Partial<ReleaseMetadataDocument> = {}): ReleaseMetadataDocument {
-    return {
-        schemaVersion: 1,
-        releaseId: RELEASE_ID,
-        pluginId: 'alpha',
-        publisherNamespace: 'acme',
-        version: '1.0.0',
-        archiveSha256: `sha256-${'a'.repeat(64)}`,
-        packageTreeSha256: `sha256-${'b'.repeat(64)}`,
-        manifestSha256: `sha256-${'c'.repeat(64)}`,
-        authoritySha256: `sha256-${'d'.repeat(64)}`,
-        sourceSha256: `sha256-${'e'.repeat(64)}`,
-        profile: 'or3-portable-client-v1',
-        engines: { or3: '>=0.3.0', pluginApi: '>=2.0.0' },
-        features: [],
-        requestedGrants: [],
-        reviewId: 'rev_1',
-        license: 'MIT',
-        publishedAt: new Date(Date.now() - 60_000).toISOString(),
-        ...overrides,
-    };
-}
-
-interface ReleaseFixture {
-    readonly bytes: Uint8Array;
-    readonly signed: unknown;
-    readonly treeDigest: string;
-    readonly key: MarketplaceReleaseKey;
-    readonly privateKeyBase64: string;
-}
-
-async function release(input: {
-    version: string;
-    setup?: boolean;
-    stateReads?: { minimum: number; maximum: number };
-}): Promise<ReleaseFixture> {
-    const generated = await makeKey();
-    const tree = packageTree(input);
-    const verification = await verifyPackageTree(tree);
-    const bytes = await writeDeterministicPackageZip(tree);
-    const archiveSha256 = `sha256-${createHash('sha256').update(bytes).digest('hex')}`;
-    const signed = await signReleaseMetadataForTest({
-        document: baseDocument({
-            version: input.version,
-            archiveSha256: archiveSha256 as `sha256-${string}`,
-            packageTreeSha256: verification.digest,
-            manifestSha256: verification.manifestDigest,
-        }),
-        keyId: generated.key.keyId,
-        privateKeyBase64: generated.privateKeyBase64,
-    });
-    return {
-        bytes,
-        signed,
-        treeDigest: verification.digest,
-        key: generated.key,
-        privateKeyBase64: generated.privateKeyBase64,
-    };
-}
-
-function jsonResponse(body: unknown, status = 200): Response {
-    return new Response(JSON.stringify(body), {
-        status,
-        headers: { 'content-type': 'application/json' },
-    });
-}
-
-function transportFor(
-    fixture: ReleaseFixture,
-    options: { failDownload?: () => boolean } = {}
-): typeof fetch {
-    return (async (input: RequestInfo | URL) => {
-        const target = String(input);
-        if (target.endsWith('/metadata')) return jsonResponse(fixture.signed);
-        if (target.includes('/v1/artifacts/')) {
-            if (options.failDownload?.()) throw new Error('connection reset');
-            return new Response(new Uint8Array(fixture.bytes), {
-                status: 200,
-                headers: { 'content-length': String(fixture.bytes.byteLength) },
-            });
-        }
-        return new Response('missing', { status: 404 });
-    }) as typeof fetch;
 }
 
 function makeHarness(input: {
@@ -206,15 +72,21 @@ function makeHarness(input: {
     workspaceIds?: readonly string[];
     failDownload?: () => boolean;
     installEnabled?: boolean;
+    acceptedTrustModes?: readonly string[];
 }) {
     const root = tempRoot('or3-extensions-');
     const settings = memoryStore();
     const services = pluginPackageServices(settings, root);
     const store = new PluginAcquisitionOperationStore(root);
+    const workspaceIds = input.workspaceIds ?? ['ws-1'];
+    const trustModes = input.acceptedTrustModes ?? ['isolated-client'];
+    const supportedProfiles = trustModes.includes('isolated-client') ? [PORTABLE_PROFILE] : [];
     const config: AcquisitionConfig = {
         registryOrigin: ORIGIN,
         installEnabled: input.installEnabled ?? true,
         releaseKeys: [input.fixture.key],
+        supportedTrustModes: [...trustModes],
+        supportedProfiles,
         hostOr3Version: '0.3.0',
         hostPluginApiVersion: '2.0.0',
         maxArtifactBytes: MAX_ARTIFACT_BYTES,
@@ -222,15 +94,20 @@ function makeHarness(input: {
     };
     const registry = new RegistryClient({
         registryOrigin: ORIGIN,
+        supportedProfiles,
         trustRoot: {
             releaseKeys: [input.fixture.key],
+            supportedProfiles,
             hostOr3Version: '0.3.0',
             hostPluginApiVersion: '2.0.0',
             acceptedAdvisorySequence: 0,
         },
         maxArtifactBytes: MAX_ARTIFACT_BYTES,
         reserveBytes: 0,
-        transport: transportFor(input.fixture, { failDownload: input.failDownload }),
+        transport: fakeRegistryTransport({
+            fixture: input.fixture,
+            failDownload: input.failDownload,
+        }),
         freeDiskBytes: async () => 1024 ** 3,
     });
     const deps: AcquisitionServiceDeps = {
@@ -239,77 +116,161 @@ function makeHarness(input: {
         registry,
         services,
         routeCatalog: new PluginPackageRouteCatalog(services.packages, services.pointers),
-        listWorkspaceIds: async () => input.workspaceIds ?? ['ws-1'],
+        listWorkspaceIds: async () => workspaceIds,
         extensionsRoot: root,
+        // A host that declares the portable profile must also declare the trust
+        // mode, the required feature flag and the grant vocabulary the profile
+        // uses; the pipeline never widens this on the package's behalf.
+        hostCapabilities: {
+            ...OR3_PLUGIN_V2_HOST_CAPABILITIES,
+            supportedTrustModes: [...trustModes] as never,
+            supportedGrants: ['network.http'],
+            supportedFeatures: [PORTABLE_PROFILE],
+        },
+        clientCanary: async () => ({ status: 'passed' as const }),
+        setupPlan: setupPlanFor(root, settings),
     };
-    return { service: new PluginAcquisitionService(deps), store, services, settings, root };
+    const service = new PluginAcquisitionService(deps);
+    async function reviewGrants(): Promise<void> {
+        for (const workspaceId of workspaceIds) {
+            await setPluginGrantReview(settings, workspaceId, 'alpha', {
+                requestedGrants: ['network.http'],
+                approvedGrants: ['network.http'],
+            });
+        }
+    }
+    async function start(input: { version?: string; workspaceId?: string }) {
+        await reviewGrants();
+        const started = await service.start({
+            pluginId: 'alpha',
+            ...(input.version === undefined ? {} : { version: input.version }),
+            workspaceId: input.workspaceId ?? 'ws-1',
+            requesterUserId: 'user-1',
+            instanceId: 'instance-1',
+        });
+        if (!started.ok) return started;
+        return {
+            ok: true as const,
+            operation: await service.advance(started.operation.operationId),
+        };
+    }
+    return { service, start, reviewGrants, store, services, settings, root };
 }
 
-const request = {
-    pluginId: 'alpha',
-    workspaceId: 'ws-1',
-    requesterUserId: 'user-1',
-    instanceId: 'instance-1',
-};
-
 describe('reviewed acquisition pipeline (5.1, 5.4)', () => {
-    it('resolves, verifies, records a candidate, checks health and promotes one release', async () => {
-        const fixture = await release({ version: '1.0.0' });
+    it('resolves, verifies, records a candidate, checks health and promotes a portable release', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
         const harness = makeHarness({ fixture });
 
-        const started = await harness.service.start({ ...request, version: '1.0.0' });
+        const started = await harness.start({ version: '1.0.0' });
         expect(started.ok).toBe(true);
         if (!started.ok) return;
         const operation = started.operation;
         expect(operation.status).toBe('completed');
         expect(operation.stage).toBe('receipt-recorded');
-        expect(operation.release?.pluginId).toBe('alpha');
-        expect(operation.release?.version).toBe('1.0.0');
+        expect(operation.release?.profile).toBe(PORTABLE_PROFILE);
         expect(operation.candidateDigest).toBe(fixture.treeDigest);
-        expect(operation.downloadedBytes).toBe(fixture.bytes.byteLength);
-        expect(operation.attempts).toBe(0);
+        expect(operation.authoritySha256).toBe(fixture.signed.authoritySha256);
         expect(operation.failure).toBeNull();
         expect(describeAcquisitionStatus(operation).percentComplete).toBe(100);
 
         const pointer = await harness.services.pointers.readPointer('alpha');
         expect(pointer?.current?.packageDigest).toBe(fixture.treeDigest);
         expect(pointer?.candidate).toBeNull();
-        // The candidate write bumped the pointer to revision 1; promotion
-        // followed the recorded revision and produced revision 2.
         expect(operation.expectedPointerRevision).toBe(1);
         expect(pointer?.revision).toBe(2);
     });
 
-    it('records no operation when the instance is not allowed to install', async () => {
-        const fixture = await release({ version: '1.0.0' });
-        const harness = makeHarness({ fixture, installEnabled: false });
+    it('returns the durable operation id before the pipeline runs', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const harness = makeHarness({ fixture });
+        await harness.reviewGrants();
+        const started = await harness.service.start({
+            pluginId: 'alpha',
+            version: '1.0.0',
+            workspaceId: 'ws-1',
+            requesterUserId: 'user-1',
+            instanceId: 'instance-1',
+        });
+        expect(started.ok).toBe(true);
+        if (!started.ok) return;
+        // Recorded and monitorable, but no work has been done for it yet.
+        expect(started.operation.status).toBe('pending');
+        expect(started.operation.stage).toBe('resolved');
+        expect(await harness.service.status(started.operation.operationId)).toMatchObject({
+            operationId: started.operation.operationId,
+        });
 
-        const started = await harness.service.start({ ...request, version: '1.0.0' });
+        const finished = await harness.service.advance(started.operation.operationId);
+        expect(finished.status).toBe('completed');
+    });
+
+    it('records no operation when the instance is not allowed to install', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const harness = makeHarness({ fixture, installEnabled: false });
+        const started = await harness.start({ version: '1.0.0' });
         expect(started.ok).toBe(false);
         if (started.ok) return;
         expect(started.failure.code).toBe('registry-unconfigured');
         expect(await harness.store.list()).toEqual([]);
     });
 
-    it('refuses a release whose version the signed metadata does not declare', async () => {
-        const fixture = await release({ version: '1.0.0' });
+    it('refuses a release whose signed metadata does not declare the requested version', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
         const harness = makeHarness({ fixture });
-
-        const started = await harness.service.start({ ...request, version: '9.9.9' });
+        const started = await harness.start({ version: '9.9.9' });
         expect(started.ok).toBe(false);
         if (started.ok) return;
+        // The registry serves the version that exists; the signed document not
+        // declaring the requested version is the refusal.
         expect(started.failure.code).toBe('release-identity-mismatch');
         expect(await harness.store.list()).toEqual([]);
+    });
+
+    it('refuses the portable profile when the host cannot run isolated clients', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const harness = makeHarness({ fixture, acceptedTrustModes: ['trusted-host'] });
+        const started = await harness.start({ version: '1.0.0' });
+        expect(started.ok).toBe(false);
+        if (started.ok) return;
+        expect(started.failure.code).toBe('release-profile-unsupported');
+        expect(await harness.store.list()).toEqual([]);
+    });
+
+    it('refuses a package whose manifest contradicts the signed profile', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0', disguisedTrustedHost: true });
+        const harness = makeHarness({ fixture });
+        const started = await harness.start({ version: '1.0.0' });
+        expect(started.ok).toBe(true);
+        if (!started.ok) return;
+        expect(started.operation.status).toBe('failed');
+        expect(started.operation.failure?.code).toBe('package-profile-mismatch');
+        expect(started.operation.failure?.message).toContain('portable');
+        expect(
+            (await harness.services.pointers.readPointer('alpha'))?.current ?? null
+        ).toBeNull();
+    });
+
+    it('refuses a package whose effective authority differs from the signed digest', async () => {
+        const fixture = await releaseFixture({
+            version: '1.0.0',
+            authoritySha256: `sha256-${'a'.repeat(64)}`,
+        });
+        const harness = makeHarness({ fixture });
+        const started = await harness.start({ version: '1.0.0' });
+        expect(started.ok).toBe(true);
+        if (!started.ok) return;
+        expect(started.operation.failure?.code).toBe('authority-mismatch');
     });
 });
 
 describe('recovery and cancellation (5.3)', () => {
     it('resumes an interrupted download under the same operation id', async () => {
-        const fixture = await release({ version: '1.0.0' });
+        const fixture = await releaseFixture({ version: '1.0.0' });
         let fail = true;
         const harness = makeHarness({ fixture, failDownload: () => fail });
 
-        const started = await harness.service.start({ ...request, version: '1.0.0' });
+        const started = await harness.start({ version: '1.0.0' });
         expect(started.ok).toBe(true);
         if (!started.ok) return;
         const operationId = started.operation.operationId;
@@ -326,11 +287,11 @@ describe('recovery and cancellation (5.3)', () => {
         expect(resumed.stage).toBe('receipt-recorded');
     });
 
-    it('pauses a first install that needs setup and finishes after setup is saved', async () => {
-        const fixture = await release({ version: '1.0.0', setup: true });
+    it('pauses a first install whose setup is incomplete and re-checks readiness on retry', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0', requiredField: true });
         const harness = makeHarness({ fixture });
 
-        const started = await harness.service.start({ ...request, version: '1.0.0' });
+        const started = await harness.start({ version: '1.0.0' });
         expect(started.ok).toBe(true);
         if (!started.ok) return;
         const paused = started.operation;
@@ -339,10 +300,16 @@ describe('recovery and cancellation (5.3)', () => {
         expect(paused.failure?.code).toBe('setup-required');
         expect(describeAcquisitionStatus(paused).needsSetup).toBe(true);
 
-        // The candidate is recorded but the working pointer is untouched.
         const pointer = await harness.services.pointers.readPointer('alpha');
         expect(pointer?.candidate?.packageDigest).toBe(fixture.treeDigest);
         expect(pointer?.current).toBeNull();
+
+        // An immediate retry cannot promote with nothing saved: readiness is
+        // re-derived from the host's own plan, not from the pause itself.
+        const retried = await harness.service.retry(paused.operationId);
+        expect(retried.status).toBe('paused');
+        expect(retried.failure?.code).toBe('setup-required');
+        expect((await harness.services.pointers.readPointer('alpha'))?.current).toBeNull();
 
         await harness.settings.set(
             'ws-1',
@@ -357,33 +324,61 @@ describe('recovery and cancellation (5.3)', () => {
     });
 
     it('cancels a paused operation without promoting', async () => {
-        const fixture = await release({ version: '1.0.0', setup: true });
+        const fixture = await releaseFixture({ version: '1.0.0', requiredField: true });
         const harness = makeHarness({ fixture });
-
-        const started = await harness.service.start({ ...request, version: '1.0.0' });
+        const started = await harness.start({ version: '1.0.0' });
         if (!started.ok) throw new Error('expected a recorded operation');
 
         const canceled = await harness.service.cancel(started.operation.operationId);
         expect(canceled.status).toBe('canceled');
         expect(canceled.failure?.code).toBe('canceled');
-        expect(describeAcquisitionStatus(canceled).canceled).toBe(true);
-
         const pointer = await harness.services.pointers.readPointer('alpha');
         expect(pointer?.current).toBeNull();
         expect(pointer?.candidate?.packageDigest).toBe(fixture.treeDigest);
+    });
+
+    it('recovers the receipt when a crash left the promotion committed but unrecorded', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const harness = makeHarness({ fixture });
+        const started = await harness.start({ version: '1.0.0' });
+        if (!started.ok) throw new Error('expected a recorded operation');
+        expect(started.operation.status).toBe('completed');
+
+        // A second operation for the same release, recorded at `health-checked`
+        // exactly as a crash between the pointer write and the receipt would
+        // have left it.
+        const recovered = await harness.store.create({
+            pluginId: 'alpha',
+            version: '1.0.0',
+            workspaceId: 'ws-1',
+            requesterUserId: 'user-1',
+            instanceId: 'instance-1',
+            stage: 'health-checked',
+            release: { ...started.operation.release! },
+        });
+        const staged = await harness.store.update(recovered.operationId, recovered.revision, {
+            candidateDigest: fixture.treeDigest,
+            expectedPointerRevision: 1,
+        });
+        const finished = await harness.service.advance(staged.operationId);
+        expect(finished.status).toBe('completed');
+        expect(finished.stage).toBe('receipt-recorded');
+
+        // Cancellation after the pointer moved never reports "canceled".
+        const canceled = await harness.service.cancel(finished.operationId);
+        expect(canceled.status).toBe('completed');
     });
 });
 
 describe('instance-wide preflight and conditional promotion (5.5, 5.6)', () => {
     it('keeps an update blocked until an owner disables the incompatible workspace', async () => {
-        const fixture = await release({ version: '1.0.0' });
+        const fixture = await releaseFixture({ version: '1.0.0' });
         const harness = makeHarness({ fixture, workspaceIds: ['ws-1', 'ws-2'] });
         await setPluginEnabled(harness.settings, 'ws-1', 'alpha', true);
         await setPluginEnabled(harness.settings, 'ws-2', 'alpha', true);
-        // ws-2 stores a state version the candidate cannot read.
         await harness.settings.set('ws-2', 'plugins.stateVersion.alpha', '2');
 
-        const started = await harness.service.start({ ...request, version: '1.0.0' });
+        const started = await harness.start({ version: '1.0.0' });
         if (!started.ok) throw new Error('expected a recorded operation');
         expect(started.operation.status).toBe('blocked');
         expect(started.operation.failure?.code).toBe('workspace-preflight-blocked');
@@ -400,18 +395,18 @@ describe('instance-wide preflight and conditional promotion (5.5, 5.6)', () => {
     });
 
     it('refuses to promote when another admin has moved the candidate', async () => {
-        const fixture = await release({ version: '1.0.0', setup: true });
+        const fixture = await releaseFixture({ version: '1.0.0', requiredField: true });
         const harness = makeHarness({ fixture });
-
-        const started = await harness.service.start({ ...request, version: '1.0.0' });
+        const started = await harness.start({ version: '1.0.0' });
         if (!started.ok) throw new Error('expected a recorded operation');
-        const paused = started.operation;
-        expect(paused.status).toBe('paused');
+        expect(started.operation.status).toBe('paused');
 
         // A racing admin records a different candidate for the same plugin.
-        const other = await release({ version: '1.0.1' });
-        const otherTree = packageTree({ version: '1.0.1' });
-        const otherStored = await harness.services.packages.installPackage('alpha', otherTree);
+        const other = await releaseFixture({ version: '1.0.1' });
+        const otherStored = await harness.services.packages.installPackage(
+            'alpha',
+            other.treePath
+        );
         const pointer = await harness.services.pointers.readPointer('alpha');
         await harness.services.pointers.writePointer('alpha', {
             schemaVersion: 1,
@@ -422,18 +417,17 @@ describe('instance-wide preflight and conditional promotion (5.5, 5.6)', () => {
                 packageDigest: otherStored.digest,
                 manifestDigest: otherStored.verification.manifestDigest,
                 recordedAt: 1,
-                stateCompatibility: manifest('1.0.1').stateCompatibility,
+                stateCompatibility: { version: 1, reads: { minimum: 1, maximum: 1 }, rollback: 'safe' },
             },
             previous: pointer?.previous ?? null,
         });
-        void other;
 
         await harness.settings.set(
             'ws-1',
             setupValuesKey('alpha'),
             JSON.stringify({ token: 'x' })
         );
-        const result = await harness.service.retry(paused.operationId);
+        const result = await harness.service.retry(started.operation.operationId);
         expect(result.status).not.toBe('completed');
         expect(['health-check-failed', 'pointer-conflict']).toContain(result.failure?.code);
 

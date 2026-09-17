@@ -11,11 +11,15 @@
  * - Records are JSON files under `<extensions>/.operations/<operationId>.json`,
  *   written atomically (temp file → fsync → rename → directory fsync), exactly
  *   like the package pointer store.
- * - Every update is a compare-and-swap on the recorded revision, so two admins
- *   (or two tabs) cannot silently overwrite each other's progress.
+ * - Every update is a compare-and-swap on the recorded revision, taken under an
+ *   exclusive store lock, so two admins (or two processes) cannot silently
+ *   overwrite each other's progress.
  * - A terminal record is immutable except for a retry, and a retry clears the
  *   failure and increments `attempts` rather than starting a new record.
- * - At most one active operation per plugin is allowed.
+ * - At most one active operation per plugin is allowed, and at most one runner
+ *   advances a plugin at a time: both invariants are enforced with exclusive lock
+ *   files, so two requests (or two processes) cannot interleave a download, a
+ *   promotion or a retry.
  *
  * Constraints:
  * - No network, no plugin code. Secrets and signed URLs are never persisted.
@@ -27,11 +31,12 @@
 import { constants } from 'node:fs';
 import { promises as fs } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { resolve, sep } from 'node:path';
+import { dirname, resolve, sep } from 'node:path';
 import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
 import type { Sha256 } from '~~/shared/plugins/runtime-descriptor';
 import {
     PLUGIN_ACQUISITION_STAGES,
+    acquisitionStageIndex,
     isActiveAcquisitionStatus,
     isTerminalAcquisitionStatus,
     type PluginAcquisitionOperation,
@@ -46,6 +51,10 @@ export type OperationStoreErrorCode =
     | 'operation-conflict'
     | 'operation-id-invalid'
     | 'operation-directory-unavailable';
+
+/** Lock files are held for one mutation or one pipeline run, never longer. */
+const LOCK_STALE_MS = 30_000;
+const LOCK_WAIT_MS = 5_000;
 
 export class PluginAcquisitionOperationError extends Error {
     constructor(
@@ -79,6 +88,13 @@ export interface AcquisitionOperationPatch {
     readonly attempts?: number;
     readonly cancelRequested?: boolean;
     readonly completedAt?: number | null;
+    /**
+     * Explicitly move a recorded stage backwards. Only the invalidation paths
+     * use it (stale canary evidence or a changed preflight must re-run the
+     * stages that produced the evidence), and it never moves to an earlier
+     * stage than the recorded evidence still supports by itself.
+     */
+    readonly restage?: PluginAcquisitionStage;
 }
 
 export interface CreateOperationInput {
@@ -158,14 +174,128 @@ export class PluginAcquisitionOperationStore {
         return path;
     }
 
+    #stagingDir(operationId: string): string {
+        this.#operationPath(operationId);
+        return resolve(this.#root, 'staging', operationId);
+    }
+
     async #ensureDirectory(): Promise<void> {
         await fs.mkdir(this.#root, { recursive: true, mode: 0o700 });
     }
 
-    async #write(record: PluginAcquisitionOperation): Promise<void> {
+    /**
+     * Take an exclusive lock file. The lock is a file created with `O_EXCL`, so
+     * it is atomic across processes and it cannot be fooled by a torn write. A
+     * lock older than the stale window is assumed abandoned (a crashed process
+     * cannot release its own lock) and is replaced.
+     */
+    async #acquire(path: string, staleMs: number, waitMs: number): Promise<() => Promise<void>> {
+        await fs.mkdir(dirname(path), { recursive: true, mode: 0o700 });
+        const deadline = Date.now() + waitMs;
+        for (;;) {
+            try {
+                const handle = await fs.open(path, 'wx', 0o600);
+                try {
+                    await handle.writeFile(String(process.pid), 'utf8');
+                } finally {
+                    await handle.close();
+                }
+                return async () => {
+                    await fs.rm(path, { force: true }).catch(() => undefined);
+                };
+            } catch (error) {
+                if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+                try {
+                    const stat = await fs.stat(path);
+                    if (Date.now() - stat.mtimeMs > staleMs) {
+                        await fs.rm(path, { force: true }).catch(() => undefined);
+                        continue;
+                    }
+                } catch {
+                    continue;
+                }
+                if (Date.now() >= deadline) {
+                    throw new PluginAcquisitionOperationError(
+                        'operation-conflict',
+                        'The acquisition store is busy; retry shortly.'
+                    );
+                }
+                await new Promise((resolveWait) => setTimeout(resolveWait, 10 + Math.floor(Math.random() * 20)));
+            }
+        }
+    }
+
+    #withLock<T>(fn: () => Promise<T>): Promise<T> {
+        return this.#under(this.#lockPath(), fn);
+    }
+
+    async #under<T>(path: string, fn: () => Promise<T>): Promise<T> {
+        const release = await this.#acquire(path, LOCK_STALE_MS, LOCK_WAIT_MS);
+        try {
+            return await fn();
+        } finally {
+            await release();
+        }
+    }
+
+    #lockPath(): string {
+        return resolve(this.#root, '.lock');
+    }
+
+    #runnerLockPath(pluginId: string): string {
+        assertPluginId(pluginId);
+        return resolve(this.#root, 'runners', `${pluginId}.lock`);
+    }
+
+    /**
+     * Run one pipeline for a plugin, holding a per-plugin runner lock. A second
+     * runner (another request, tab or process) is refused rather than allowed to
+     * advance the same staging bytes, and a retry of a crashed run can proceed
+     * once the stale lock is replaced.
+     */
+    async withRunnerLock<T>(pluginId: string, fn: () => Promise<T>): Promise<T> {
+        return await this.#under(this.#runnerLockPath(pluginId), fn);
+    }
+
+    /** Whether a runner currently holds the plugin's pipeline lock. */
+    async isRunnerActive(pluginId: string): Promise<boolean> {
+        const path = this.#runnerLockPath(pluginId);
+        try {
+            const stat = await fs.stat(path);
+            return Date.now() - stat.mtimeMs <= LOCK_STALE_MS;
+        } catch {
+            return false;
+        }
+    }
+
+    async #write(record: PluginAcquisitionOperation, exclusive = false): Promise<void> {
         await this.#ensureDirectory();
         const target = this.#operationPath(record.operationId);
         const temporary = resolve(this.#root, `.${record.operationId}.${randomUUID()}.tmp`);
+        if (exclusive) {
+            // A new record is created with O_EXCL: an existing file means another
+            // creator won, which is a conflict, not an overwrite.
+            let handle;
+            try {
+                handle = await fs.open(target, 'wx', 0o600);
+            } catch (error) {
+                if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+                    throw new PluginAcquisitionOperationError(
+                        'operation-conflict',
+                        `Operation ${record.operationId} already exists.`
+                    );
+                }
+                throw error;
+            }
+            try {
+                await handle.writeFile(`${JSON.stringify(record)}\n`, 'utf8');
+                await handle.sync();
+            } finally {
+                await handle.close();
+            }
+            await this.#fsyncDirectory();
+            return;
+        }
         const handle = await fs.open(temporary, 'wx', 0o600);
         try {
             await handle.writeFile(`${JSON.stringify(record)}\n`, 'utf8');
@@ -174,9 +304,16 @@ export class PluginAcquisitionOperationStore {
             await handle.close();
         }
         await fs.rename(temporary, target);
+        await this.#fsyncDirectory();
+    }
+
+    async #fsyncDirectory(): Promise<void> {
         const directory = await fs.open(this.#root, constants.O_RDONLY);
         try {
             await directory.sync();
+        } catch (error) {
+            const code = (error as NodeJS.ErrnoException).code;
+            if (code !== 'EINVAL' && code !== 'ENOTSUP') throw error;
         } finally {
             await directory.close();
         }
@@ -226,8 +363,13 @@ export class PluginAcquisitionOperationStore {
         }
         const records: PluginAcquisitionOperation[] = [];
         for (const entry of entries) {
+            // Only operation records are read here. Anything else the directory
+            // holds (locks, staging, registry state) is not an operation, and a
+            // file that merely ends in `.json` must not fail enumeration.
             if (!entry.endsWith('.json') || entry.startsWith('.')) continue;
-            const record = await this.read(entry.slice(0, -'.json'.length));
+            const operationId = entry.slice(0, -'.json'.length);
+            if (!OPERATION_ID_PATTERN.test(operationId)) continue;
+            const record = await this.read(operationId);
             if (!record) continue;
             if (pluginId === undefined || record.pluginId === pluginId) records.push(record);
         }
@@ -243,13 +385,6 @@ export class PluginAcquisitionOperationStore {
 
     async create(input: CreateOperationInput): Promise<PluginAcquisitionOperation> {
         assertPluginId(input.pluginId);
-        const active = await this.findActiveForPlugin(input.pluginId);
-        if (active) {
-            throw new PluginAcquisitionOperationError(
-                'operation-conflict',
-                `Operation ${active.operationId} is already in progress for ${input.pluginId}.`
-            );
-        }
         const now = this.#now();
         const stage = input.stage ?? 'requested';
         if (!PLUGIN_ACQUISITION_STAGES.includes(stage)) {
@@ -285,91 +420,153 @@ export class PluginAcquisitionOperationStore {
             updatedAt: now,
             completedAt: null,
         };
-        await this.#write(record);
-        return record;
+        return await this.#withLock(async () => {
+            // The active-operation check and the write share one critical
+            // section, so two concurrent starts cannot both observe "no active
+            // operation" and both create one.
+            const active = await this.findActiveForPlugin(input.pluginId);
+            if (active) {
+                throw new PluginAcquisitionOperationError(
+                    'operation-conflict',
+                    `Operation ${active.operationId} is already in progress for ${input.pluginId}.`
+                );
+            }
+            await this.#write(record, true);
+            return record;
+        });
     }
 
     /**
      * Compare-and-swap update. The caller's `expectedRevision` must match the
-     * recorded revision; anything else is a conflict, which is what stops two
-     * admins from interleaving a promotion.
+     * recorded revision; the read, the comparison and the write happen under the
+     * store lock, so a concurrent writer cannot slip between them.
      */
     async update(
         operationId: string,
         expectedRevision: number,
         patch: AcquisitionOperationPatch
     ): Promise<PluginAcquisitionOperation> {
-        const current = await this.requireRecord(operationId);
-        if (current.revision !== expectedRevision) {
-            throw new PluginAcquisitionOperationError(
-                'operation-conflict',
-                `Operation ${operationId} moved from revision ${expectedRevision} to ${current.revision}.`
-            );
-        }
-        const now = this.#now();
-        const next: PluginAcquisitionOperation = {
-            ...current,
-            ...(patch.stage === undefined ? {} : { stage: patch.stage }),
-            ...(patch.status === undefined ? {} : { status: patch.status }),
-            ...(patch.failure === undefined ? {} : { failure: patch.failure }),
-            ...(patch.release === undefined ? {} : { release: patch.release }),
-            ...(patch.candidateDigest === undefined ? {} : { candidateDigest: patch.candidateDigest }),
-            ...(patch.expectedPointerRevision === undefined
-                ? {}
-                : { expectedPointerRevision: patch.expectedPointerRevision }),
-            ...(patch.setupRevision === undefined ? {} : { setupRevision: patch.setupRevision }),
-            ...(patch.authoritySha256 === undefined ? {} : { authoritySha256: patch.authoritySha256 }),
-            ...(patch.acceptedAdvisorySequence === undefined
-                ? {}
-                : { acceptedAdvisorySequence: patch.acceptedAdvisorySequence }),
-            ...(patch.downloadedBytes === undefined ? {} : { downloadedBytes: patch.downloadedBytes }),
-            ...(patch.stagingObject === undefined ? {} : { stagingObject: patch.stagingObject }),
-            ...(patch.downloadUrlExpiresAt === undefined
-                ? {}
-                : { downloadUrlExpiresAt: patch.downloadUrlExpiresAt }),
-            ...(patch.attempts === undefined ? {} : { attempts: patch.attempts }),
-            ...(patch.cancelRequested === undefined ? {} : { cancelRequested: patch.cancelRequested }),
-            ...(patch.completedAt === undefined ? {} : { completedAt: patch.completedAt }),
-            revision: current.revision + 1,
-            updatedAt: now,
-        };
-        if (isTerminalAcquisitionStatus(current.status) && !isTerminalAcquisitionStatus(next.status)) {
-            // A terminal operation only restarts through `retry`.
-            if (next.status !== 'pending' || patch.attempts === undefined) {
+        return await this.#withLock(async () =>
+            await this.#updateUnlocked(operationId, expectedRevision, patch)
+        );
+    }
+
+    async #updateUnlocked(
+        operationId: string,
+        expectedRevision: number,
+        patch: AcquisitionOperationPatch
+    ): Promise<PluginAcquisitionOperation> {
+        {
+            const current = await this.requireRecord(operationId);
+            if (current.revision !== expectedRevision) {
                 throw new PluginAcquisitionOperationError(
                     'operation-conflict',
-                    `Operation ${operationId} is ${current.status} and can only be retried.`
+                    `Operation ${operationId} moved from revision ${expectedRevision} to ${current.revision}.`
                 );
             }
+            const now = this.#now();
+            const next: PluginAcquisitionOperation = {
+                ...current,
+                ...(patch.stage === undefined ? {} : { stage: patch.stage }),
+                ...(patch.restage === undefined ? {} : { stage: patch.restage }),
+                ...(patch.status === undefined ? {} : { status: patch.status }),
+                ...(patch.failure === undefined ? {} : { failure: patch.failure }),
+                ...(patch.release === undefined ? {} : { release: patch.release }),
+                ...(patch.candidateDigest === undefined ? {} : { candidateDigest: patch.candidateDigest }),
+                ...(patch.expectedPointerRevision === undefined
+                    ? {}
+                    : { expectedPointerRevision: patch.expectedPointerRevision }),
+                ...(patch.setupRevision === undefined ? {} : { setupRevision: patch.setupRevision }),
+                ...(patch.authoritySha256 === undefined ? {} : { authoritySha256: patch.authoritySha256 }),
+                ...(patch.acceptedAdvisorySequence === undefined
+                    ? {}
+                    : { acceptedAdvisorySequence: patch.acceptedAdvisorySequence }),
+                ...(patch.downloadedBytes === undefined ? {} : { downloadedBytes: patch.downloadedBytes }),
+                ...(patch.stagingObject === undefined ? {} : { stagingObject: patch.stagingObject }),
+                ...(patch.downloadUrlExpiresAt === undefined
+                    ? {}
+                    : { downloadUrlExpiresAt: patch.downloadUrlExpiresAt }),
+                ...(patch.attempts === undefined ? {} : { attempts: patch.attempts }),
+                ...(patch.cancelRequested === undefined ? {} : { cancelRequested: patch.cancelRequested }),
+                ...(patch.completedAt === undefined ? {} : { completedAt: patch.completedAt }),
+                revision: current.revision + 1,
+                updatedAt: now,
+            };
+            if (patch.restage !== undefined) {
+                if (
+                    acquisitionStageIndex(patch.restage) >= acquisitionStageIndex(current.stage) ||
+                    !PLUGIN_ACQUISITION_STAGES.includes(patch.restage)
+                ) {
+                    throw new PluginAcquisitionOperationError(
+                        'operation-invalid',
+                        `Operation ${operationId} cannot restage from ${current.stage} to ${patch.restage}.`
+                    );
+                }
+            }
+            if (isTerminalAcquisitionStatus(current.status) && !isTerminalAcquisitionStatus(next.status)) {
+                // A terminal operation only restarts through `retry`.
+                if (next.status !== 'pending' || patch.attempts === undefined) {
+                    throw new PluginAcquisitionOperationError(
+                        'operation-conflict',
+                        `Operation ${operationId} is ${current.status} and can only be retried.`
+                    );
+                }
+            }
+            await this.#write(next);
+            if (isTerminalAcquisitionStatus(next.status) && !next.failure?.retryable) {
+                // A run that ended for good keeps no staged bytes: only a
+                // retryable stop may still need its staging to resume.
+                await this.#removeStaging(operationId);
+            }
+            return next;
         }
-        await this.#write(next);
-        return next;
     }
 
     /**
      * Retry a failed or blocked operation: keeps the identity and stage, clears
-     * the failure, and records that another attempt is beginning.
+     * the failure, and records that another attempt is beginning. Another active
+     * operation for the plugin, or a live runner on this one, refuses the retry
+     * instead of letting two runs share one staging directory.
      */
     async retry(operationId: string): Promise<PluginAcquisitionOperation> {
-        const current = await this.requireRecord(operationId);
-        if (current.status === 'completed') {
-            throw new PluginAcquisitionOperationError(
-                'operation-conflict',
-                `Operation ${operationId} already completed.`
+        return await this.#withLock(async () => {
+            const current = await this.requireRecord(operationId);
+            if (current.status === 'completed') {
+                throw new PluginAcquisitionOperationError(
+                    'operation-conflict',
+                    `Operation ${operationId} already completed.`
+                );
+            }
+            if (current.status === 'canceled' && !current.cancelRequested) {
+                throw new PluginAcquisitionOperationError(
+                    'operation-conflict',
+                    `Operation ${operationId} was canceled.`
+                );
+            }
+            const other = (await this.list(current.pluginId)).find(
+                (candidate) =>
+                    candidate.operationId !== current.operationId &&
+                    isActiveAcquisitionStatus(candidate.status)
             );
-        }
-        if (current.status === 'canceled' && !current.cancelRequested) {
-            throw new PluginAcquisitionOperationError(
-                'operation-conflict',
-                `Operation ${operationId} was canceled.`
-            );
-        }
-        return await this.update(operationId, current.revision, {
-            status: 'pending',
-            failure: null,
-            cancelRequested: false,
-            attempts: current.attempts + 1,
-            completedAt: null,
+            if (other) {
+                throw new PluginAcquisitionOperationError(
+                    'operation-conflict',
+                    `Operation ${other.operationId} is already in progress for ${current.pluginId}.`
+                );
+            }
+            if (isActiveAcquisitionStatus(current.status) && (await this.isRunnerActive(current.pluginId))) {
+                throw new PluginAcquisitionOperationError(
+                    'operation-conflict',
+                    `Operation ${operationId} is already being run.`
+                );
+            }
+            return await this.#updateUnlocked(operationId, current.revision, {
+                status: 'pending',
+                failure: null,
+                cancelRequested: false,
+                attempts: current.attempts + 1,
+                completedAt: null,
+            });
         });
     }
 
@@ -378,38 +575,56 @@ export class PluginAcquisitionOperationStore {
      * effect, so cancellation is observed between stages rather than mid-write.
      */
     async requestCancel(operationId: string): Promise<PluginAcquisitionOperation> {
-        const current = await this.requireRecord(operationId);
-        if (isTerminalAcquisitionStatus(current.status)) return current;
-        return await this.update(operationId, current.revision, { cancelRequested: true });
+        return await this.#withLock(async () => {
+            const current = await this.requireRecord(operationId);
+            if (isTerminalAcquisitionStatus(current.status)) return current;
+            return await this.#updateUnlocked(operationId, current.revision, {
+                cancelRequested: true,
+            });
+        });
+    }
+
+    /** Remove the staged bytes of one operation; safe when there are none. */
+    async removeStaging(operationId: string): Promise<void> {
+        await this.#removeStaging(operationId);
+    }
+
+    async #removeStaging(operationId: string): Promise<void> {
+        await fs
+            .rm(this.#stagingDir(operationId), { recursive: true, force: true })
+            .catch(() => undefined);
     }
 
     /** Retention: keep the newest `keep` runs per plugin, terminal first. */
     async gc(keep = MAX_OPERATION_RECORDS_PER_PLUGIN): Promise<number> {
-        const records = await this.list();
-        const byPlugin = new Map<string, PluginAcquisitionOperation[]>();
-        for (const record of records) {
-            const bucket = byPlugin.get(record.pluginId) ?? [];
-            bucket.push(record);
-            byPlugin.set(record.pluginId, bucket);
-        }
-        let removed = 0;
-        for (const bucket of byPlugin.values()) {
-            // Never garbage-collect an active run.
-            const active = bucket.filter((record) => isActiveAcquisitionStatus(record.status));
-            const terminal = bucket
-                .filter((record) => !isActiveAcquisitionStatus(record.status))
-                .sort((left, right) => right.createdAt - left.createdAt);
-            const excess = [...active, ...terminal].slice(keep);
-            for (const record of excess) {
-                if (isActiveAcquisitionStatus(record.status)) continue;
-                try {
-                    await fs.rm(this.#operationPath(record.operationId));
-                    removed += 1;
-                } catch {
-                    // Already gone.
+        return await this.#withLock(async () => {
+            const records = await this.list();
+            const byPlugin = new Map<string, PluginAcquisitionOperation[]>();
+            for (const record of records) {
+                const bucket = byPlugin.get(record.pluginId) ?? [];
+                bucket.push(record);
+                byPlugin.set(record.pluginId, bucket);
+            }
+            let removed = 0;
+            for (const bucket of byPlugin.values()) {
+                // Never garbage-collect an active run.
+                const active = bucket.filter((record) => isActiveAcquisitionStatus(record.status));
+                const terminal = bucket
+                    .filter((record) => !isActiveAcquisitionStatus(record.status))
+                    .sort((left, right) => right.createdAt - left.createdAt);
+                const excess = [...active, ...terminal].slice(keep);
+                for (const record of excess) {
+                    if (isActiveAcquisitionStatus(record.status)) continue;
+                    try {
+                        await fs.rm(this.#operationPath(record.operationId));
+                        await this.#removeStaging(record.operationId);
+                        removed += 1;
+                    } catch {
+                        // Already gone.
+                    }
                 }
             }
-        }
-        return removed;
+            return removed;
+        });
     }
 }

@@ -29,6 +29,7 @@ import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
 import {
     OR3_PLUGIN_V2_HOST_CAPABILITIES,
 } from '../../../admin/plugins/v2-host-capabilities';
+import { supportedAcquisitionProfiles } from '~~/shared/plugins/acquisition/release-metadata';
 
 export interface MarketplaceReleaseKey {
     readonly keyId: string;
@@ -44,6 +45,10 @@ export interface AcquisitionConfig {
     readonly registryOrigin: string;
     readonly installEnabled: boolean;
     readonly releaseKeys: readonly MarketplaceReleaseKey[];
+    /** Package trust modes this host can actually run. */
+    readonly supportedTrustModes: readonly string[];
+    /** Profiles the host can acquire, derived from `supportedTrustModes`. */
+    readonly supportedProfiles: readonly string[];
     readonly hostOr3Version: string;
     readonly hostPluginApiVersion: string;
     readonly maxArtifactBytes: number;
@@ -109,10 +114,13 @@ function positiveInt(raw: string | undefined, fallback: number): number {
 }
 
 export function resolveAcquisitionConfig(env: NodeJS.ProcessEnv = process.env): AcquisitionConfig {
+    const supportedTrustModes = [...OR3_PLUGIN_V2_HOST_CAPABILITIES.supportedTrustModes];
     return {
         registryOrigin: httpsOrigin(env.OR3_MARKETPLACE_REGISTRY_ORIGIN),
         installEnabled: env.OR3_MARKETPLACE_INSTALL_ENABLED?.trim().toLowerCase() === 'true',
         releaseKeys: parseReleaseKeys(env.OR3_MARKETPLACE_RELEASE_KEYS),
+        supportedTrustModes,
+        supportedProfiles: supportedAcquisitionProfiles(supportedTrustModes),
         hostOr3Version: OR3_PLUGIN_V2_HOST_CAPABILITIES.or3Version,
         hostPluginApiVersion: OR3_PLUGIN_V2_HOST_CAPABILITIES.pluginApiVersion,
         maxArtifactBytes: positiveInt(

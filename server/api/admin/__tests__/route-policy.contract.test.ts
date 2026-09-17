@@ -29,6 +29,22 @@ describe('admin route policy contracts', () => {
         }
     });
 
+    it('guards every acquisition route with the owner-only super-admin policy', async () => {
+        const files = [
+            'server/api/admin/plugins/acquisitions/index.post.ts',
+            'server/api/admin/plugins/acquisitions/index.get.ts',
+            'server/api/admin/plugins/acquisitions/[operationId]/status.get.ts',
+            'server/api/admin/plugins/acquisitions/[operationId]/retry.post.ts',
+            'server/api/admin/plugins/acquisitions/[operationId]/cancel.post.ts',
+        ] as const;
+
+        for (const file of files) {
+            const source = await read(file);
+            expect(source).toContain('ownerOnly: true');
+            expect(source).toContain('superAdminOnly: true');
+        }
+    });
+
     it('enforces super-admin policy on global workspace operations', async () => {
         const files = [
             'server/api/admin/workspaces.get.ts',

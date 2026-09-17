@@ -8,8 +8,9 @@
  * Behavior:
  * - Monotonic: a lower sequence is refused, so a replayed catalog can never clear
  *   a revocation the host already saw.
- * - Atomic writes under `<extensions>/.operations/`, the same directory and the
- *   same write discipline as the operation store.
+ * - Atomic writes under `<extensions>/.registry/`, kept out of the operation
+ *   directory so registry state can never be mistaken for an operation record,
+ *   with the check-and-write taken under an exclusive lock.
  *
  * Constraints:
  * - No network and no registry identity beyond the sequence number.
@@ -21,7 +22,9 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
 
-const STATE_FILENAME = 'registry-state.json';
+const STATE_FILENAME = 'state.json';
+const LOCK_FILENAME = '.lock';
+const LOCK_STALE_MS = 30_000;
 const MAX_STATE_BYTES = 8 * 1024;
 
 export interface RegistryState {
@@ -56,7 +59,7 @@ export class RegistryStateStore {
     readonly #directory: string;
 
     constructor(root = EXTENSIONS_BASE_DIR) {
-        this.#directory = resolve(root, '.operations');
+        this.#directory = resolve(root, '.registry');
     }
 
     statePath(): string {
@@ -88,24 +91,59 @@ export class RegistryStateStore {
         if (!Number.isSafeInteger(sequence) || sequence < 0) {
             throw new TypeError('Advisory sequence must be a non-negative integer');
         }
-        const current = await this.read();
-        if (sequence <= current.acceptedAdvisorySequence) return current;
-
-        const next: RegistryState = {
-            schemaVersion: 1,
-            acceptedAdvisorySequence: sequence,
-            updatedAt: now,
-        };
         await fs.mkdir(this.#directory, { recursive: true, mode: 0o700 });
-        const temporary = resolve(this.#directory, `.${STATE_FILENAME}.${randomUUID()}.tmp`);
-        const handle = await fs.open(temporary, 'wx', 0o600);
+        const release = await this.#acquireLock(now);
         try {
-            await handle.writeFile(`${JSON.stringify(next)}\n`, 'utf8');
-            await handle.sync();
+            const current = await this.read();
+            if (sequence <= current.acceptedAdvisorySequence) return current;
+
+            const next: RegistryState = {
+                schemaVersion: 1,
+                acceptedAdvisorySequence: sequence,
+                updatedAt: now,
+            };
+            const temporary = resolve(this.#directory, `.${STATE_FILENAME}.${randomUUID()}.tmp`);
+            const handle = await fs.open(temporary, 'wx', 0o600);
+            try {
+                await handle.writeFile(`${JSON.stringify(next)}\n`, 'utf8');
+                await handle.sync();
+            } finally {
+                await handle.close();
+            }
+            await fs.rename(temporary, this.statePath());
+            return next;
         } finally {
-            await handle.close();
+            await release();
         }
-        await fs.rename(temporary, this.statePath());
-        return next;
+    }
+
+    /** Exclusive lock so two processes cannot both read one sequence and write two. */
+    async #acquireLock(now: number): Promise<() => Promise<void>> {
+        const path = resolve(this.#directory, LOCK_FILENAME);
+        const deadline = now + 5_000;
+        for (;;) {
+            try {
+                const handle = await fs.open(path, 'wx', 0o600);
+                await handle.close();
+                return async () => {
+                    await fs.rm(path, { force: true }).catch(() => undefined);
+                };
+            } catch (error) {
+                if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+                try {
+                    const stat = await fs.stat(path);
+                    if (Date.now() - stat.mtimeMs > LOCK_STALE_MS) {
+                        await fs.rm(path, { force: true }).catch(() => undefined);
+                        continue;
+                    }
+                } catch {
+                    continue;
+                }
+                if (Date.now() >= deadline) {
+                    throw new Error('The registry state lock is held; retry shortly.');
+                }
+                await new Promise((resolveWait) => setTimeout(resolveWait, 10 + Math.floor(Math.random() * 20)));
+            }
+        }
     }
 }

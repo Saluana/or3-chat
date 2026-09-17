@@ -23,6 +23,10 @@
 import type { H3Event } from 'h3';
 import { getWorkspaceAccessStore, getWorkspaceSettingsStore } from '../../../admin/stores/registry';
 import { listInstalledExtensions } from '../../../admin/extensions/extension-manager';
+import { OR3_PLUGIN_V2_HOST_CAPABILITIES } from '../../../admin/plugins/v2-host-capabilities';
+import { resolveConnectionService } from '../connections/resolve';
+import { loadSetupState } from '../setup/state';
+import { readSetupValues } from '../setup/settings-store';
 import { pluginPackageServices } from '../../../admin/plugins/package-operation-support';
 import { PluginPackageRouteCatalog } from '../../../admin/plugins/package-route-catalog';
 import type { AcquisitionConfig } from './config';
@@ -41,7 +45,9 @@ export function registryClientFor(
 ): RegistryClient {
     return new RegistryClient({
         registryOrigin: config.registryOrigin,
+        supportedProfiles: config.supportedProfiles,
         trustRoot: {
+            supportedProfiles: config.supportedProfiles,
             releaseKeys: config.releaseKeys,
             hostOr3Version: config.hostOr3Version,
             hostPluginApiVersion: config.hostPluginApiVersion,
@@ -71,7 +77,32 @@ export async function listAllWorkspaceIds(event: H3Event): Promise<readonly stri
     return ids;
 }
 
-export async function acquisitionServiceFor(event: H3Event): Promise<PluginAcquisitionService> {
+/**
+ * Setup readiness for the candidate package, using the same host plan (settings
+ * and stored connections) the setup page renders. Returns `null` when the package
+ * declares no setup at all.
+ */
+async function setupPlanFor(event: H3Event, requesterUserId: string) {
+    return async (pluginId: string, workspaceId: string, packageRoot: string) => {
+        void packageRoot;
+        const { service, durable } = resolveConnectionService();
+        const state = await loadSetupState({
+            pluginId,
+            workspaceId,
+            ownerUserId: requesterUserId,
+            hasSelectedContext: false,
+            service,
+            durableConnections: durable,
+            storedValues: await readSetupValues(event, workspaceId, pluginId),
+        });
+        return state.plan;
+    };
+}
+
+export async function acquisitionServiceFor(
+    event: H3Event,
+    requesterUserId = ''
+): Promise<PluginAcquisitionService> {
     const config = acquisitionConfig();
     const settings = getWorkspaceSettingsStore(event);
     const services = pluginPackageServices(settings);
@@ -83,6 +114,8 @@ export async function acquisitionServiceFor(event: H3Event): Promise<PluginAcqui
         registry: registryClientFor(config, state.acceptedAdvisorySequence),
         services,
         routeCatalog: new PluginPackageRouteCatalog(services.packages, services.pointers),
+        hostCapabilities: OR3_PLUGIN_V2_HOST_CAPABILITIES,
+        setupPlan: await setupPlanFor(event, requesterUserId),
         listWorkspaceIds: () => listAllWorkspaceIds(event),
         listInstalledExtensionIds: async () =>
             (await listInstalledExtensions())

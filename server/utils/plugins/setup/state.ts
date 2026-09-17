@@ -27,10 +27,10 @@ import type {
     PortableProfileFieldValue,
 } from '@or3/plugin-sdk/profile';
 import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
-import { listInstalledExtensions } from '../../../admin/extensions/extension-manager';
 import type { PluginConnectionService } from '../connections/service';
 import { listConnectionProviders } from '../connections/providers/registry';
 import { loadPackageDescriptors } from './load-descriptors';
+import { resolvePluginPackage } from './discovery';
 
 export interface SetupDestinationView {
     readonly id: string;
@@ -81,9 +81,9 @@ export function hostConnectionCapabilities(): readonly HostConnectionCapability[
 }
 
 export async function loadSetupState(input: LoadSetupStateInput): Promise<SetupState> {
-    const installed = (await listInstalledExtensions()).find(
-        (extension) => extension.kind === 'plugin' && extension.id === input.pluginId
-    );
+    // The resolved package may be an immutable candidate awaiting setup (an
+    // acquisition), not only a legacy extension directory.
+    const installed = await resolvePluginPackage(input.pluginId);
 
     const destinations: SetupDestinationView[] = [];
     if (!installed) {

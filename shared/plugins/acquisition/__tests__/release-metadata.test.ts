@@ -9,7 +9,6 @@ import {
     evaluateFreshness,
     evaluateReleaseMetadata,
     parseReleaseMetadata,
-    RELEASE_METADATA_MAX_AGE_MS,
     releaseMetadataSha256,
     type RegistryTrustRoot,
     type ReleaseMetadataDocument,
@@ -46,6 +45,7 @@ const trustRoot: RegistryTrustRoot = {
     releaseKeys: [
         { keyId: 'or3-release', publicJwk: { kty: 'OKP', crv: 'Ed25519', x: 'x' } },
     ],
+    supportedProfiles: ['or3-portable-client-v1'],
     hostOr3Version: '4.5.1',
     hostPluginApiVersion: '2.0.0',
     acceptedAdvisorySequence: 0,
@@ -156,14 +156,11 @@ describe('release metadata validation (5.2)', () => {
         });
     });
 
-    it('refuses stale metadata but accepts it within the freshness window', () => {
-        const stale = new Date(NOW - RELEASE_METADATA_MAX_AGE_MS - 1000).toISOString();
-        expect(evaluate({ publishedAt: stale })).toMatchObject({
-            ok: false,
-            refusal: { code: 'release-expired' },
-        });
-        const fresh = new Date(NOW - 60_000).toISOString();
-        expect(evaluate({ publishedAt: fresh }).ok).toBe(true);
+    it('accepts an old but intact release: age is not freshness', () => {
+        // Quarantine decisions come from the signed advisory log, so a release
+        // published long ago is not refused for being old.
+        const old = new Date(NOW - 400 * 24 * 60 * 60 * 1000).toISOString();
+        expect(evaluate({ publishedAt: old }).ok).toBe(true);
     });
 
     it('accepts a document that passes every check', () => {

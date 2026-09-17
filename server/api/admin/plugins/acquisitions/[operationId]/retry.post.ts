@@ -15,10 +15,13 @@ import { createError, defineEventHandler, getRouterParam } from 'h3';
 import { requireAdminApiContext } from '../../../../../admin/api';
 import { describeAcquisitionStatus } from '~~/shared/plugins/acquisition/contracts';
 import { acquisitionServiceFor } from '../../../../../utils/plugins/acquisition/route-support';
-import { acquisitionErrorStatus } from '../../../../../utils/plugins/acquisition/route-identity';
+import {
+    acquisitionErrorStatus,
+    requesterIdentity,
+} from '../../../../../utils/plugins/acquisition/route-identity';
 
 export default defineEventHandler(async (event) => {
-    await requireAdminApiContext(event, {
+    const context = await requireAdminApiContext(event, {
         ownerOnly: true,
         mutation: true,
         superAdminOnly: true,
@@ -27,7 +30,9 @@ export default defineEventHandler(async (event) => {
     if (!operationId) {
         throw createError({ statusCode: 400, statusMessage: 'Missing operation id' });
     }
-    const service = await acquisitionServiceFor(event);
+    // A retry re-evaluates setup readiness, so the host plan is built for the
+    // acting admin's view of the target workspace.
+    const service = await acquisitionServiceFor(event, requesterIdentity(context));
     try {
         const operation = await service.retry(operationId);
         return { ok: true, operation: describeAcquisitionStatus(operation) };

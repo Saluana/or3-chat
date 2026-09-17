@@ -4,7 +4,7 @@ import { resolveSessionContext } from '../../../auth/session';
 import { readLimitedJsonBody } from '../../../utils/security/limited-json-body';
 import { requirePluginMutation } from '../../../utils/plugins/connections/api-context';
 import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
-import { listInstalledExtensions } from '../../../admin/extensions/extension-manager';
+import { resolvePluginPackage } from '../../../utils/plugins/setup/discovery';
 import { loadPackageDescriptors } from '../../../utils/plugins/setup/load-descriptors';
 import { readSetupValues, writeSetupValues } from '../../../utils/plugins/setup/settings-store';
 import { applySetupValuesPatch } from '~~/shared/plugins/setup/values';
@@ -40,9 +40,10 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'values must be an object' });
     }
 
-    const installed = (await listInstalledExtensions()).find(
-        (extension) => extension.kind === 'plugin' && extension.id === pluginId
-    );
+    // An acquisition records its candidate in the package pointer store before
+    // setup, so the save endpoint must resolve the selected package as well as a
+    // legacy extension directory.
+    const installed = await resolvePluginPackage(pluginId);
     if (!installed) {
         throw createError({ statusCode: 404, statusMessage: 'Plugin is not installed' });
     }

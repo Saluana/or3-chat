@@ -13,7 +13,10 @@
  * - A document is accepted only when it is schema-valid, signed by a key in the
  *   host's trust root, and consistent with what was requested.
  * - Freshness is monotonic: an advisory sequence lower than the highest already
- *   accepted is refused, so a replayed catalog cannot clear a revocation.
+ *   accepted is refused, so a replayed catalog cannot clear a revocation. A
+ *   release's own publication date is *not* freshness: an immutable release does
+ *   not become unsafe because it is old, so a quarantine decision is carried by
+ *   the signed advisory log instead of an age limit.
  * - Profile, engines and digests are checked here, before any byte is fetched.
  *
  * Constraints:
@@ -60,6 +63,12 @@ export interface RegistryTrustRoot {
         readonly keyId: string;
         readonly publicJwk: { readonly kty: string; readonly crv: string; readonly x: string };
     }[];
+    /**
+     * Profiles this host can actually run. Derived from the host's declared
+     * package capabilities, so a signed profile the host cannot execute is
+     * refused here rather than being handed to a loader that cannot honour it.
+     */
+    readonly supportedProfiles: readonly string[];
     /** The host's own OR3 engine version, used for the engine range check. */
     readonly hostOr3Version: string;
     readonly hostPluginApiVersion: string;
@@ -75,8 +84,9 @@ export type ReleaseMetadataRefusalCode =
     | 'release-digest-mismatch'
     | 'release-profile-unsupported'
     | 'release-engine-unsupported'
-    | 'release-expired'
     | 'advisory-stale'
+    | 'advisory-unverified'
+    | 'release-quarantined'
     | 'catalog-stale'
     | 'download-over-limit'
     | 'download-url-invalid'
@@ -96,8 +106,6 @@ export type ReleaseMetadataDecision =
 const SHA256_PATTERN = /^sha256-[a-f0-9]{64}$/;
 const ID_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
-/** Metadata older than this is refused: acquisition always needs fresh metadata. */
-export const RELEASE_METADATA_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 
 function refusal(code: ReleaseMetadataRefusalCode, message: string): ReleaseMetadataDecision {
     return { ok: false, refusal: { code, message } };
@@ -228,10 +236,51 @@ export function compareVersions(left: string, right: string): number {
 }
 
 /**
- * The host only accepts profiles it can actually run, and only the ones phase 2
- * qualified. An unknown profile is a refusal, not a fallback.
+ * What a signed profile requires the package to actually be. A profile is not a
+ * label: a document that claims the portable client profile must describe a
+ * package that really is an isolated browser-only package, and the host must be
+ * able to run that shape before the profile is accepted at all.
  */
-export const SUPPORTED_ACQUISITION_PROFILES: readonly string[] = ['or3-portable-client-v1'];
+export interface AcquisitionProfileRequirement {
+    readonly profile: string;
+    /** Trust mode the signed profile requires `manifest.trust` to declare. */
+    readonly trust: string;
+    readonly clientRuntime: 'required' | 'forbidden';
+    readonly serverRuntime: 'allowed' | 'forbidden';
+    /** Client isolation modes the profile allows, when it needs a client runtime. */
+    readonly clientIsolation?: readonly string[];
+}
+
+export const ACQUISITION_PROFILE_REQUIREMENTS: readonly AcquisitionProfileRequirement[] =
+    Object.freeze([
+        Object.freeze({
+            profile: 'or3-portable-client-v1',
+            trust: 'isolated-client',
+            clientRuntime: 'required' as const,
+            serverRuntime: 'forbidden' as const,
+            clientIsolation: Object.freeze(['worker', 'iframe'] as const),
+        }),
+    ]);
+
+export function acquisitionProfileRequirement(
+    profile: string
+): AcquisitionProfileRequirement | null {
+    return ACQUISITION_PROFILE_REQUIREMENTS.find((entry) => entry.profile === profile) ?? null;
+}
+
+/**
+ * The profiles this host may acquire, given the package trust modes it declares.
+ * A profile whose required trust mode is not declared is not supported: there is
+ * no "try it and see" path, because the loader that would run it is not there.
+ */
+export function supportedAcquisitionProfiles(
+    supportedTrustModes: readonly string[]
+): readonly string[] {
+    const declared = new Set(supportedTrustModes);
+    return ACQUISITION_PROFILE_REQUIREMENTS.filter((entry) => declared.has(entry.trust)).map(
+        (entry) => entry.profile
+    );
+}
 
 export function evaluateReleaseMetadata(input: {
     readonly document: ReleaseMetadataDocument;
@@ -280,10 +329,13 @@ export function evaluateReleaseMetadata(input: {
         );
     }
 
-    if (!SUPPORTED_ACQUISITION_PROFILES.includes(document.profile)) {
+    if (!trustRoot.supportedProfiles.includes(document.profile)) {
+        const requirement = acquisitionProfileRequirement(document.profile);
         return refusal(
             'release-profile-unsupported',
-            `This host does not support profile ${document.profile}.`
+            requirement
+                ? `Profile ${document.profile} requires trust mode ${requirement.trust}, which this host does not support.`
+                : `This host does not support profile ${document.profile}.`
         );
     }
 
@@ -306,14 +358,6 @@ export function evaluateReleaseMetadata(input: {
         return refusal(
             'release-engine-unsupported',
             `The release requires plugin API ${document.engines.pluginApi}; this host provides ${trustRoot.hostPluginApiVersion}.`
-        );
-    }
-
-    const publishedAt = Date.parse(document.publishedAt);
-    if (input.now - publishedAt > RELEASE_METADATA_MAX_AGE_MS) {
-        return refusal(
-            'release-expired',
-            `Release metadata is older than ${Math.round(RELEASE_METADATA_MAX_AGE_MS / (24 * 60 * 60 * 1000))} days and cannot be used for a new acquisition.`
         );
     }
 
@@ -432,4 +476,114 @@ export function evaluateArtifactUrl(input: {
         };
     }
     return null;
+}
+
+/** The pinned shape of a signed advisory document (the marketplace's advisory log). */
+export interface AdvisoryDocument {
+    readonly schemaVersion: 1;
+    readonly sequence: number;
+    readonly kind: 'quarantine' | 'repair-available' | 'notice';
+    readonly releaseId: string;
+    readonly pluginId: string;
+    readonly version: string;
+    readonly archiveSha256: string | null;
+    readonly reason: string;
+    readonly issuedBy: string;
+    readonly issuedAt: string;
+    readonly signature?: {
+        readonly keyId: string;
+        readonly algorithm: 'ed25519';
+        readonly value: string;
+    };
+}
+
+export interface ParseAdvisoryResult {
+    readonly document: AdvisoryDocument | null;
+    readonly problems: readonly string[];
+}
+
+export function parseAdvisoryDocument(input: unknown): ParseAdvisoryResult {
+    if (!isRecord(input)) return { document: null, problems: ['advisory must be an object'] };
+    const problems: string[] = [];
+    const at = (field: string, message: string) => problems.push(`${field}: ${message}`);
+    if (input.schemaVersion !== 1) at('schemaVersion', 'must be 1');
+    if (typeof input.sequence !== 'number' || !Number.isSafeInteger(input.sequence) || input.sequence <= 0) {
+        at('sequence', 'must be a positive integer');
+    }
+    if (input.kind !== 'quarantine' && input.kind !== 'repair-available' && input.kind !== 'notice') {
+        at('kind', 'must be quarantine, repair-available or notice');
+    }
+    for (const field of ['releaseId', 'pluginId', 'version', 'reason', 'issuedBy'] as const) {
+        if (typeof input[field] !== 'string' || String(input[field]).length === 0) {
+            at(field, 'must be a non-empty string');
+        }
+    }
+    if (typeof input.issuedAt !== 'string' || Number.isNaN(Date.parse(input.issuedAt))) {
+        at('issuedAt', 'must be an ISO timestamp');
+    }
+    if (input.archiveSha256 !== null && !isSha256(input.archiveSha256)) {
+        at('archiveSha256', 'must be null or a sha256- digest');
+    }
+    if (input.signature !== undefined) {
+        if (!isRecord(input.signature)) at('signature', 'must be an object');
+        else {
+            if (typeof input.signature.keyId !== 'string') at('signature.keyId', 'must be a string');
+            if (input.signature.algorithm !== 'ed25519') at('signature.algorithm', 'must be ed25519');
+            if (typeof input.signature.value !== 'string' || input.signature.value.length === 0) {
+                at('signature.value', 'must be base64');
+            }
+        }
+    }
+    if (problems.length > 0) return { document: null, problems };
+    return { document: input as unknown as AdvisoryDocument, problems: [] };
+}
+
+/** Canonical bytes a signed advisory covers: the document without its signature. */
+export function encodeAdvisoryDocument(document: AdvisoryDocument): Uint8Array {
+    const { signature: _signature, ...unsigned } = document;
+    return encodeReleaseMetadata(unsigned);
+}
+
+export interface AdvisoryDecision {
+    readonly latestSequence: number;
+    /** Newest sequence that applies to this release and was accepted. */
+    readonly refusal: ReleaseMetadataRefusal | null;
+}
+
+/**
+ * Apply the signed advisory log to one release. A quarantine that this host has
+ * not yet accepted refuses the acquisition; the newest seen sequence is returned
+ * so the host can record it monotonically. Advisories for other releases only
+ * advance the sequence, and an already-accepted (or older) advisory is history.
+ */
+export function evaluateAdvisories(input: {
+    readonly advisories: readonly AdvisoryDocument[];
+    readonly hostAcceptedAdvisorySequence: number;
+    readonly releaseId: string;
+    readonly pluginId: string;
+    readonly version: string;
+}): AdvisoryDecision {
+    let latestSequence = input.hostAcceptedAdvisorySequence;
+    for (const advisory of input.advisories) {
+        if (advisory.sequence > latestSequence) latestSequence = advisory.sequence;
+    }
+    const applicable = input.advisories
+        .filter((advisory) => advisory.sequence > input.hostAcceptedAdvisorySequence)
+        .filter(
+            (advisory) =>
+                advisory.releaseId === input.releaseId ||
+                (advisory.pluginId === input.pluginId && advisory.version === input.version)
+        )
+        .sort((left, right) => right.sequence - left.sequence);
+    const quarantine = applicable.find((advisory) => advisory.kind === 'quarantine');
+    if (quarantine) {
+        return {
+            latestSequence,
+            refusal: {
+                code: 'release-quarantined',
+                message: `${quarantine.pluginId} ${quarantine.version} was quarantined at advisory sequence ${quarantine.sequence}: ${quarantine.reason}`,
+            },
+        };
+    }
+    return { latestSequence, refusal: null };
 }
