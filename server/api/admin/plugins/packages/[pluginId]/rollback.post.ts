@@ -4,33 +4,12 @@ import { requireAdminApiContext } from '../../../../../admin/api';
 import { resolveAdminWorkspaceTarget } from '../../../../../admin/workspace-target';
 import { getWorkspaceSettingsStore } from '../../../../../admin/stores/registry';
 import {
-    getPluginSettings,
-    replacePluginSettings,
-} from '../../../../../admin/plugins/workspace-plugin-store';
-import { PluginSettingsMigrationService } from '../../../../../admin/plugins/settings-migration';
-import { ImmutablePluginPackageStore } from '../../../../../admin/plugins/package-store';
-import { PluginPackagePointerStore } from '../../../../../admin/plugins/package-pointer-store';
-import { PluginPackagePromotionService } from '../../../../../admin/plugins/package-promotion';
-import type { CandidateStateValue } from '../../../../../admin/plugins/package-candidate-canary';
+    pluginPackageServices,
+    readPluginStateSnapshot,
+    restorePluginStateSnapshot,
+} from '../../../../../admin/plugins/package-operation-support';
 
 const BodySchema = z.object({ workspaceId: z.string().min(1).optional() });
-
-type StateSnapshot = {
-    readonly settings: Record<string, unknown>;
-    readonly stateVersion: number | null;
-};
-
-function isStateSnapshot(value: unknown): value is StateSnapshot {
-    if (value === null || typeof value !== 'object') return false;
-    const record = value as Record<string, unknown>;
-    return (
-        record.settings !== null &&
-        typeof record.settings === 'object' &&
-        !Array.isArray(record.settings) &&
-        (record.stateVersion === null ||
-            (Number.isSafeInteger(record.stateVersion) && (record.stateVersion as number) >= 0))
-    );
-}
 
 export default defineEventHandler(async (event) => {
     const context = await requireAdminApiContext(event, {
@@ -44,30 +23,13 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Invalid request' });
     }
     const workspaceId = resolveAdminWorkspaceTarget(context, body.data.workspaceId);
-    const store = getWorkspaceSettingsStore(event);
-    const migration = new PluginSettingsMigrationService(store);
-    const packages = new ImmutablePluginPackageStore();
-    const pointers = new PluginPackagePointerStore(undefined, packages);
-    const promotion = new PluginPackagePromotionService(packages, pointers);
-    const result = await promotion.rollback({
+    const services = pluginPackageServices(getWorkspaceSettingsStore(event));
+    const result = await services.promotion.rollback({
         pluginId,
-        storedStateVersion: await migration.getStateVersion(workspaceId, pluginId),
-        snapshotState: async () =>
-            JSON.parse(
-                JSON.stringify({
-                    settings: await getPluginSettings(store, workspaceId, pluginId),
-                    stateVersion: await migration.getStateVersion(workspaceId, pluginId),
-                })
-            ) as CandidateStateValue,
-        restoreState: async (snapshot) => {
-            if (!isStateSnapshot(snapshot)) throw new Error('Invalid settings snapshot');
-            await replacePluginSettings(store, workspaceId, pluginId, snapshot.settings);
-            await store.set(
-                workspaceId,
-                `plugins.stateVersion.${pluginId}`,
-                snapshot.stateVersion === null ? '' : String(snapshot.stateVersion)
-            );
-        },
+        storedStateVersion: await services.migration.getStateVersion(workspaceId, pluginId),
+        snapshotState: () => readPluginStateSnapshot(services, workspaceId, pluginId),
+        restoreState: (snapshot) =>
+            restorePluginStateSnapshot(services, workspaceId, pluginId, snapshot),
     });
     if (result.status === 'rolled-back') {
         await event.context.adminHooks?.doAction('admin.plugin:action:rolled-back', {

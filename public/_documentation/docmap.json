@@ -1378,8 +1378,14 @@
                 {
                     "name": "trust-and-safe-mode.md",
                     "path": "/plugins/trust-and-safe-mode",
-                    "category": "Operations",
-                    "summary": "# Trust Model and Safe Mode"
+                    "category": "Reference",
+                    "summary": "Package pointer rollback runs on the server promotion service and is gated by state preflight. A successful code rollback does not claim incompatible migrated state was restored. Disable, uninstall, GC, and data deletion remain separate."
+                },
+                {
+                    "name": "trusted-acquisition.md",
+                    "path": "/plugins/trusted-acquisition",
+                    "category": "Reference",
+                    "summary": "Reviewed acquisition installs a package published and signed by a configured marketplace registry. It refuses arbitrary package URLs, verifies signed metadata, archive and canonical tree digests before any pointer changes, requires every enabled workspace to preflight an instance-wide update, and is resumable under one operation id."
                 },
                 {
                     "name": "v1-support-and-migration.md",

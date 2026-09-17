@@ -18,6 +18,9 @@ describe('admin route policy contracts', () => {
             'server/api/admin/workspaces/[id]/soft-delete.post.ts',
             'server/api/admin/admin-users/grant.post.ts',
             'server/api/admin/admin-users/revoke.post.ts',
+            'server/api/admin/plugins/acquisitions/index.post.ts',
+            'server/api/admin/plugins/acquisitions/[operationId]/retry.post.ts',
+            'server/api/admin/plugins/acquisitions/[operationId]/cancel.post.ts',
         ] as const;
 
         for (const file of files) {

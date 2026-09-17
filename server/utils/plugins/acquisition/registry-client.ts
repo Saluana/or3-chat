@@ -370,7 +370,7 @@ export class RegistryClient {
         }
 
         // Verify the completed file against the signed archive digest.
-        const digest = (`sha256-${await sha256HexOfFile(input.stagingPath)}`) as Sha256;
+        const digest = await sha256FileIdentity(input.stagingPath);
         const mismatch = evaluateArtifactDigest({
             expected: input.resolved.document.archiveSha256,
             actual: digest,
@@ -407,4 +407,13 @@ async function sha256HexOfFile(path: string): Promise<string> {
     } finally {
         await handle.close();
     }
+}
+
+/**
+ * Digest identity of a staged artifact file. Used to decide whether an already
+ * downloaded file still matches the signed archive digest, so an interrupted
+ * operation reuses verified bytes instead of downloading them again.
+ */
+export async function sha256FileIdentity(path: string): Promise<Sha256> {
+    return `sha256-${await sha256HexOfFile(path)}`;
 }

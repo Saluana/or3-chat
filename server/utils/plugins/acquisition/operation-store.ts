@@ -31,6 +31,7 @@ import { resolve, sep } from 'node:path';
 import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
 import type { Sha256 } from '~~/shared/plugins/runtime-descriptor';
 import {
+    PLUGIN_ACQUISITION_STAGES,
     isActiveAcquisitionStatus,
     isTerminalAcquisitionStatus,
     type PluginAcquisitionOperation,
@@ -88,6 +89,13 @@ export interface CreateOperationInput {
     readonly requesterUserId: string;
     readonly instanceId: string;
     readonly release: PluginAcquisitionReleaseIdentity;
+    /**
+     * Stage the record starts at. Resolution is read-only and happens before the
+     * record exists, so a start created straight from resolved metadata records
+     * `resolved` rather than claiming work that never needed durability.
+     */
+    readonly stage?: PluginAcquisitionStage;
+    readonly acceptedAdvisorySequence?: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -243,6 +251,13 @@ export class PluginAcquisitionOperationStore {
             );
         }
         const now = this.#now();
+        const stage = input.stage ?? 'requested';
+        if (!PLUGIN_ACQUISITION_STAGES.includes(stage)) {
+            throw new PluginAcquisitionOperationError(
+                'operation-invalid',
+                `Unknown acquisition stage: ${stage}`
+            );
+        }
         const record: PluginAcquisitionOperation = {
             schemaVersion: 1,
             operationId: input.operationId ?? `acq_${randomUUID().replace(/-/g, '')}`,
@@ -253,14 +268,14 @@ export class PluginAcquisitionOperationStore {
             requesterUserId: input.requesterUserId,
             instanceId: input.instanceId,
             release: input.release,
-            stage: 'requested',
+            stage,
             status: 'pending',
             failure: null,
             candidateDigest: null,
             expectedPointerRevision: null,
             setupRevision: null,
             authoritySha256: input.release.authoritySha256,
-            acceptedAdvisorySequence: 0,
+            acceptedAdvisorySequence: input.acceptedAdvisorySequence ?? 0,
             downloadedBytes: 0,
             stagingObject: null,
             downloadUrlExpiresAt: null,
