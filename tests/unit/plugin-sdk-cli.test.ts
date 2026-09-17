@@ -123,11 +123,47 @@ describe('@or3/plugin-sdk standalone CLI', () => {
             )
         ).toBe(true);
 
+        // `build` bundles the entry (Bun in production, injected here), so its
+        // tree is self-contained and legitimately differs from the source pack.
+        const bundler = {
+            async build() {
+                return {
+                    success: true,
+                    outputs: [
+                        {
+                            text: async () =>
+                                'const ready = true;\nexport { ready };\nexport default ready;\n',
+                        },
+                    ],
+                    logs: [],
+                };
+            },
+        };
         const build = await buildV2Package(directory, {
             buildDirectory: resolve(output, 'dist-build'),
             packDirectory: resolve(output, 'pack-build'),
+            bundler,
         });
-        expect(build.pack.verification.digest).toBe(first.verification.digest);
+        const rebuilt = await buildV2Package(directory, {
+            buildDirectory: resolve(output, 'dist-build-2'),
+            packDirectory: resolve(output, 'pack-build-2'),
+            bundler,
+        });
+        expect(build.pack.verification.digest).toBe(rebuilt.pack.verification.digest);
+        expect(
+            readFileSync(resolve(output, 'dist-build', 'client.mjs'), 'utf8')
+        ).not.toContain("from '@or3/plugin-sdk'");
+    });
+
+    it('refuses to build a bare entry without a bundler', async () => {
+        const directory = createPortable('or3-sdk-cli-nobundler-');
+        const output = tempDir('or3-sdk-cli-nobundler-out-');
+        await expect(
+            buildV2Package(directory, {
+                buildDirectory: resolve(output, 'dist-none'),
+                packDirectory: resolve(output, 'pack-none'),
+            })
+        ).rejects.toThrow(/Bun/);
     });
 
     it('repacking to the same archive destination is byte-identical and never nests the archive', async () => {

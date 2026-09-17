@@ -114,12 +114,16 @@ export async function buildV2Package(
     options: {
         readonly buildDirectory?: string;
         readonly packDirectory?: string;
+        /** Test seam; production uses Bun's bundler. */
+        readonly bundler?: ClientEntryBundler;
     } = {}
 ): Promise<BuildCommandResult> {
     const sourceRoot = assertPackageRoot(packageRoot);
     const buildRoot = resolve(options.buildDirectory ?? resolve(sourceRoot, 'dist'));
     const files = materializePackTree(sourceRoot, buildRoot);
-    await bundleClientEntry(sourceRoot, buildRoot);
+    await bundleClientEntry(sourceRoot, buildRoot, {
+        ...(options.bundler ? { bundler: options.bundler } : {}),
+    });
     const pack = await packV2Package(buildRoot, {
         outputDirectory: options.packDirectory ?? resolve(sourceRoot, '.or3-pack'),
     });
