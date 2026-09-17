@@ -15,6 +15,7 @@ import { setupValuesKey } from '../../setup/settings-store';
 import {
     cleanupRoots,
     fakeRegistryTransport,
+    makeKey,
     ORIGIN,
     PORTABLE_PROFILE,
     releaseFixture,
@@ -367,6 +368,65 @@ describe('recovery and cancellation (5.3)', () => {
         // Cancellation after the pointer moved never reports "canceled".
         const canceled = await harness.service.cancel(finished.operationId);
         expect(canceled.status).toBe('completed');
+    });
+});
+
+describe('operational drills (6.7)', () => {
+    it('a registry download outage fails retryably, promotes nothing and recovers on retry', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        // The drill flips the outage on and off, as a real registry would.
+        let outage = true;
+        const harness = makeHarness({ fixture, failDownload: () => outage });
+
+        const started = await harness.start({ version: '1.0.0' });
+        if (!started.ok) throw new Error('expected a recorded operation');
+        expect(started.operation.status).toBe('failed');
+        expect(started.operation.failure?.retryable).toBe(true);
+        // Nothing was promoted and no selected version was replaced.
+        expect((await harness.services.pointers.readPointer('alpha')) ?? null).toBeNull();
+        expect((await harness.services.pointers.readStartupSelection('alpha')).selected).toBeNull();
+
+        outage = false;
+        const recovered = await harness.service.retry(started.operation.operationId);
+        expect(recovered.status).toBe('completed');
+        expect(recovered.failure).toBeNull();
+        expect(
+            (await harness.services.pointers.readPointer('alpha'))?.current?.packageDigest
+        ).toBe(fixture.treeDigest);
+    });
+
+    it('a rotated release key is refused until the host trusts it', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        // A different key signs the same document: a rotation the host has not
+        // been configured for must not be accepted.
+        const rotated = await makeKey('or3-release-rotated');
+        const harness = makeHarness({ fixture });
+        const foreign = new RegistryClient({
+            registryOrigin: ORIGIN,
+            supportedProfiles: [PORTABLE_PROFILE],
+            trustRoot: {
+                releaseKeys: [rotated.key],
+                supportedProfiles: [PORTABLE_PROFILE],
+                hostOr3Version: '0.3.0',
+                hostPluginApiVersion: '2.0.0',
+                acceptedAdvisorySequence: 0,
+            },
+            maxArtifactBytes: MAX_ARTIFACT_BYTES,
+            reserveBytes: 0,
+            transport: fakeRegistryTransport({ fixture }),
+            freeDiskBytes: async () => 1024 ** 3,
+        });
+        expect(
+            await foreign.resolveRelease({ expectation: { pluginId: 'alpha', version: '1.0.0' } })
+        ).toMatchObject({ ok: false, failure: { code: 'release-key-untrusted' } });
+        // The host's configured key still resolves the same release, so a
+        // rotation only ever affects what the operator has not adopted yet.
+        const trusted = await harness.start({ version: '1.0.0' });
+        if (!trusted.ok) throw new Error('expected the trusted key to resolve');
+        expect(trusted.operation.status).toBe('completed');
+        expect(
+            (await harness.services.pointers.readPointer('alpha'))?.current?.packageDigest
+        ).toBe(fixture.treeDigest);
     });
 });
 
