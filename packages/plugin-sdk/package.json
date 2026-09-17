@@ -50,6 +50,10 @@
         "./portable": {
             "types": "./src/portable.ts",
             "import": "./src/portable.ts"
+        },
+        "./portable-runtime": {
+            "types": "./src/portable-runtime.ts",
+            "import": "./src/portable-runtime.ts"
         }
     },
     "files": [

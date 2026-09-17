@@ -18,7 +18,8 @@
   },
   "requestedGrants": [
     "settings.read",
-    "settings.write"
+    "settings.write",
+    "ui.dashboard.register"
   ],
   "features": {
     "required": [

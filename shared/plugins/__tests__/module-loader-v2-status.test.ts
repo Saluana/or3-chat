@@ -16,6 +16,8 @@ function descriptor(): PackageV2PluginDescriptor {
         manifestVersion: 2,
         source: 'package',
         trust: 'trusted-host',
+        name: 'Alpha',
+        effectiveGrants: [],
         artifact: {
             kind: 'package-v2',
             packageDigest: `sha256-${'a'.repeat(64)}`,

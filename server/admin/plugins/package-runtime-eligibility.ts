@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3';
 import type { PluginGateDecision } from '../../../shared/plugins/access-policy';
+import type { PluginGrantReviewSnapshot } from '../../../shared/plugins/grant-review';
 import type { ModuleV2RuntimeDecision } from '../../../shared/plugins/module-v2-runtime-policy';
 import type { PluginRuntimeManifestBlockCode } from '../../../shared/plugins/runtime-manifest';
 import { resolvePluginV2DependencyGraph } from '../../../shared/plugins/v2-dependency-graph';
@@ -20,6 +21,7 @@ export interface SelectedPackageRuntimeEligibility {
     readonly status: 'ready' | 'blocked';
     readonly blockCode?: PluginRuntimeManifestBlockCode;
     readonly access: PluginGateDecision;
+    readonly grants: PluginGrantReviewSnapshot;
     readonly grantsRevision: string;
     readonly resolvedDependencyIds: readonly string[];
 }
@@ -30,11 +32,18 @@ export interface EvaluateSelectedPackageRuntimeEligibilityInput {
     readonly settingsStore: WorkspaceSettingsStore;
     readonly selectedPackages: readonly ReadySelectedPackageRouteCatalog[];
     readonly packageRuntimeDecision: ModuleV2RuntimeDecision;
+    /**
+     * Plugins enabled for this workspace. A package that is not enabled here is
+     * never ready, whatever its own policy says, so a disabled plugin cannot
+     * stay executable through a manifest or asset route.
+     */
+    readonly enabledPluginIds?: readonly string[];
 }
 
 type BaseEligibility = {
     readonly catalog: ReadySelectedPackageRouteCatalog;
     readonly access: PluginGateDecision;
+    readonly grants: PluginGrantReviewSnapshot;
     readonly grantsRevision: string;
     readonly blockCode?: PluginRuntimeManifestBlockCode;
     readonly dependencies: readonly string[];
@@ -92,6 +101,11 @@ export async function evaluateSelectedPackageRuntimeEligibility(
             let blockCode: PluginRuntimeManifestBlockCode | undefined;
             if (!input.packageRuntimeDecision.allowed) {
                 blockCode = input.packageRuntimeDecision.code;
+            } else if (
+                input.enabledPluginIds !== undefined &&
+                !input.enabledPluginIds.includes(catalog.pluginId)
+            ) {
+                blockCode = 'package-disabled';
             } else if (!access.decision.allowed) {
                 blockCode = 'package-policy-denied';
             } else if (!dependencyResolution || dependencyGraph.blocked[catalog.pluginId]) {
@@ -109,15 +123,23 @@ export async function evaluateSelectedPackageRuntimeEligibility(
                 if (compatibility.status === 'blocked') {
                     blockCode = compatibilityBlockCode(compatibility);
                 } else if (catalog.manifest.runtime.client) {
-                    // The production host currently supports server-only V2
-                    // packages. No client package is executable or asset-readable
-                    // until the separate client ABI release lands.
-                    blockCode = 'trusted-host-ui-abi-unproven';
+                    // A client package may only run through the contained
+                    // portable profile. Trust mode, feature and grants are already
+                    // checked above, so what remains is the execution boundary:
+                    // `host` isolation would run publisher code in the host window.
+                    const client = catalog.manifest.runtime.client;
+                    if (
+                        catalog.manifest.trust !== 'isolated-client' ||
+                        client.isolation === 'host'
+                    ) {
+                        blockCode = 'trusted-host-ui-abi-unproven';
+                    }
                 }
             }
             return {
                 catalog,
                 access: access.decision,
+                grants: review,
                 grantsRevision: review.revision,
                 blockCode,
                 dependencies: dependencyResolution?.required ?? [],
@@ -174,6 +196,7 @@ export async function evaluateSelectedPackageRuntimeEligibility(
                 status: ready ? 'ready' : 'blocked',
                 ...(blockCode ? { blockCode } : {}),
                 access: entry.access,
+                grants: entry.grants,
                 grantsRevision: entry.grantsRevision,
                 resolvedDependencyIds,
             });

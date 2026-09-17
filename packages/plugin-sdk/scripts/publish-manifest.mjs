@@ -22,6 +22,7 @@ const SUBPATHS = {
     './package-archive': 'cli/archive',
     './ui': 'ui',
     './portable': 'portable',
+    './portable-runtime': 'portable-runtime',
 };
 
 function distExports() {

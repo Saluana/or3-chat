@@ -239,6 +239,7 @@ describe('portable sandbox transport (4.1)', () => {
         expect(harness.attributes.get('sandbox')).toBe(PORTABLE_FRAME_SANDBOX);
         expect(harness.attributes.get('sandbox')).not.toContain('allow-same-origin');
         expect(harness.removed()).toBe(false);
+        if (result.status !== 'started') throw new Error('sandbox did not start');
         result.runtime.dispose();
     });
 
@@ -269,6 +270,7 @@ describe('portable sandbox transport (4.1)', () => {
             expect(envelope.envelope.payload).toMatchObject({ abiVersion: HOST_ABI_VERSION });
         }
 
+        if (result.status !== 'started') throw new Error('sandbox did not start');
         result.runtime.dispose();
     });
 
@@ -309,6 +311,7 @@ describe('portable sandbox transport (4.1)', () => {
             });
         }
         await expect(call).resolves.toMatchObject({ ok: true, result: { echoed: true } });
+        if (result.status !== 'started') throw new Error('sandbox did not start');
         result.runtime.dispose();
     });
 
@@ -399,6 +402,7 @@ describe('portable sandbox transport (4.1)', () => {
         });
 
         // Termination retires the session: the same request can never be replayed.
+        if (result.status !== 'started') throw new Error('sandbox did not start');
         result.runtime.dispose();
         const before = harness.outbound.length;
         harness.emitFromFrame({
@@ -441,6 +445,7 @@ describe('portable sandbox transport (4.1)', () => {
             });
         }
         await expect(call).resolves.toMatchObject({ ok: true, result: 'own' });
+        if (result.status !== 'started') throw new Error('sandbox did not start');
         result.runtime.dispose();
     });
 
@@ -564,6 +569,7 @@ describe('portable sandbox transport (4.1)', () => {
         expect(result.status).toBe('started');
         if (result.status !== 'started') return;
 
+        if (result.status !== 'started') throw new Error('sandbox did not start');
         result.runtime.dispose();
         expect(harness.removed()).toBe(true);
         const terminate = harness.outbound.find(

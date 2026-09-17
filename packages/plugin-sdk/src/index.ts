@@ -41,6 +41,18 @@ export type {
     PortableUiView,
 } from './ui';
 export { createPortableClient, PORTABLE_EVENT, PORTABLE_RPC_VERSION } from './portable';
+export {
+    createPortablePlugin,
+    PORTABLE_BOOTSTRAP_EVENT,
+    PORTABLE_DASHBOARD_CONTRIBUTION_KIND,
+    PORTABLE_LOG_EVENT,
+} from './portable-runtime';
+export type {
+    CreatePortablePluginOptions,
+    PortableBootstrapPayload,
+    PortablePluginContext,
+    PortablePluginHandle,
+} from './portable-runtime';
 export type {
     PortableClient,
     PortableHostEvent,

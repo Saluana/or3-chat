@@ -20,7 +20,19 @@ export interface BundledV1ArtifactIdentity {
     /** Package-only fields are forbidden even through structurally wider values. */
     readonly packageDigest?: never;
     readonly clientEntry?: never;
+    readonly client?: never;
     readonly serverRoutes?: never;
+}
+
+/**
+ * The digest-addressed client entry a contained sandbox will run. The digest is
+ * the host's own hash of the immutable stored bytes, so the browser can verify
+ * what it was served instead of trusting the package or the network.
+ */
+export interface PackageV2ClientEntry {
+    readonly entry: string;
+    readonly isolation: 'iframe' | 'worker';
+    readonly digest: Sha256;
 }
 
 /** Executable identity for a verified, digest-addressed runtime package. */
@@ -28,6 +40,7 @@ export interface PackageV2ArtifactIdentity {
     readonly kind: 'package-v2';
     readonly packageDigest: Sha256;
     readonly clientEntry?: string;
+    readonly client?: PackageV2ClientEntry;
     readonly serverRoutes: readonly ResolvedServerRoute[];
 
     /** Bundled-only fields must never be used to imply a runtime package identity. */
@@ -69,6 +82,15 @@ export interface PackageV2PluginDescriptor extends PluginDescriptorBase {
     readonly manifestVersion: 2;
     readonly source: 'package';
     readonly trust: PluginTrustMode;
+    /** Display name from the reviewed manifest, for host UI labels. */
+    readonly name: string;
+    readonly description?: string;
+    /**
+     * Grants the workspace actually approved for this plugin. The contained
+     * client registers a capability only when its grant appears here, so the
+     * browser enforces the same authority the server does.
+     */
+    readonly effectiveGrants: readonly string[];
     readonly artifact: PackageV2ArtifactIdentity;
 }
 

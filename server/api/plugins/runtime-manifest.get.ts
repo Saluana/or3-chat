@@ -17,6 +17,7 @@ import { resolveBundledPluginArtifact } from '../../../shared/plugins/bundled-pl
 import { mergePluginGatePolicy } from '../../../shared/plugins/access-policy';
 import type {
     BundledV1PluginDescriptor,
+    PackageV2ClientEntry,
     PackageV2PluginDescriptor,
     PluginDescriptorIdentity,
 } from '../../../shared/plugins/runtime-descriptor';
@@ -32,6 +33,10 @@ import { createModuleV2RuntimePolicy } from '../../../shared/plugins/module-v2-r
 import type { Or3ExtensionManifestV2 } from '../../admin/extensions/types';
 import { evaluateSelectedPackageRuntimeEligibility } from '../../admin/plugins/package-runtime-eligibility';
 import { OR3_PLUGIN_V2_HOST_CAPABILITIES } from '../../admin/plugins/v2-host-capabilities';
+import {
+    PluginPackageClientEntryError,
+    readPackageClientEntry,
+} from '../../admin/plugins/package-client-entry';
 
 export type { PluginRuntimeManifestResponse } from '../../../shared/plugins/runtime-manifest';
 
@@ -283,6 +288,7 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
         settingsStore,
         selectedPackages,
         packageRuntimeDecision,
+        enabledPluginIds: configuredEnabled,
     });
     const resolvedPackages = await Promise.all(
         packageEligibility.map(async (eligibility) => {
@@ -313,6 +319,33 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
                 };
             }
 
+            // A client package is only executable once the host has hashed the
+            // exact entry bytes it will serve. A missing or unreadable entry is a
+            // block, never a silently absent descriptor.
+            let clientEntryIdentity: PackageV2ClientEntry | undefined;
+            if (manifest.runtime.client) {
+                try {
+                    clientEntryIdentity = await readPackageClientEntry({
+                        pluginId: catalog.pluginId,
+                        packageDigest: catalog.packageDigest,
+                        manifest,
+                    });
+                } catch (error) {
+                    return {
+                        id: catalog.pluginId,
+                        loadAllowed: false,
+                        entry: {
+                            ...base,
+                            descriptorStatus: 'blocked' as const,
+                            blockCode:
+                                error instanceof PluginPackageClientEntryError
+                                    ? ('client-entry-unresolvable' as const)
+                                    : ('client-entry-unavailable' as const),
+                        },
+                    };
+                }
+            }
+
             const identity: PluginDescriptorIdentity = {
                 id: catalog.pluginId,
                 version: manifest.version,
@@ -321,8 +354,13 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
                 source: 'package',
                 trust: manifest.trust,
                 workspaceId,
+                name: manifest.name,
+                ...(manifest.description === undefined
+                    ? {}
+                    : { description: manifest.description }),
                 policyRevision: createPluginPolicyRevision(access.effectivePolicy),
                 grantsRevision: eligibility.grantsRevision,
+                effectiveGrants: [...eligibility.grants.approvedGrants],
                 // A descriptor only includes dependencies that passed the same
                 // workspace/request readiness gate as the package itself.
                 resolvedDependencyKeys: eligibility.resolvedDependencyIds.map(
@@ -331,6 +369,7 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
                 artifact: {
                     kind: 'package-v2',
                     packageDigest: catalog.packageDigest,
+                    ...(clientEntryIdentity ? { client: clientEntryIdentity } : {}),
                     serverRoutes: manifest.runtime.server?.routes.map((route) => ({
                         method: route.method,
                         path: route.path,

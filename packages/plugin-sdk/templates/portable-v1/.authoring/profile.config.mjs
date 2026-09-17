@@ -74,7 +74,7 @@ export const baseManifest = Object.freeze({
             isolation: 'worker',
         },
     },
-    requestedGrants: ['settings.read', 'settings.write'],
+    requestedGrants: ['settings.read', 'settings.write', 'ui.dashboard.register'],
     features: { required: [], optional: [] },
     dependencies: { required: [], optional: [] },
     trust: 'isolated-client',

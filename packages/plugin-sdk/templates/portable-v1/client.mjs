@@ -1,4 +1,4 @@
-import { defineOr3Plugin } from '@or3/plugin-sdk';
+import { createPortablePlugin, defineOr3Plugin, definePortableUi, ui } from '@or3/plugin-sdk';
 
 export const exampleManifest = Object.freeze({
     manifestVersion: 2,
@@ -16,7 +16,7 @@ export const exampleManifest = Object.freeze({
             isolation: 'worker',
         },
     },
-    requestedGrants: ['settings.read', 'settings.write'],
+    requestedGrants: ['settings.read', 'settings.write', 'ui.dashboard.register'],
     features: { required: ['or3-portable-client-v1'], optional: [] },
     dependencies: { required: [], optional: [] },
     trust: 'isolated-client',
@@ -28,20 +28,53 @@ export const exampleManifest = Object.freeze({
     },
 });
 
-export default defineOr3Plugin({
-    manifest: exampleManifest,
-    async setup(context) {
-        const greeting = await context.settings.get('greeting');
-        await context.settings.set(
-            'lastActivation',
-            new Date().toISOString()
-        );
-        context.logger.info('portable plugin ready', {
-            generation: context.generation,
-            greeting: greeting.ok ? greeting.value : null,
-        });
-        context.onCleanup(() => {
-            context.logger.info('portable plugin cleanup');
-        });
-    },
-});
+/**
+ * The sandbox imports this module and never calls into it, so activation is
+ * started by `createPortablePlugin` at module scope. Everything the plugin can
+ * do arrives through the host bootstrap: identity, features and grants.
+ */
+export default createPortablePlugin(
+    defineOr3Plugin({
+        manifest: exampleManifest,
+        async setup(context) {
+            const stored = await context.settings.get('greeting');
+            const greeting =
+                stored.ok && typeof stored.value === 'string' && stored.value.length > 0
+                    ? stored.value
+                    : 'Hello from OR3';
+
+            const saved = await context.settings.set('lastActivation', new Date().toISOString());
+            context.logger.info('portable plugin ready', {
+                generation: context.generation,
+                greeting,
+                settingsWritable: saved.ok,
+            });
+
+            context.contributions.register({
+                kind: 'ui.dashboard.card',
+                id: 'or3.example-plugin.greeting',
+                definition: definePortableUi({
+                    title: 'Example Plugin',
+                    nodes: [ui.text(greeting)],
+                }),
+            });
+            context.render(
+                definePortableUi({
+                    title: 'Example Plugin',
+                    nodes: [
+                        ui.text(`Greeting: ${greeting}`),
+                        ui.text(
+                            saved.ok
+                                ? 'Settings are writable for this workspace.'
+                                : 'Settings are read-only: this workspace has not approved settings.write.'
+                        ),
+                    ],
+                })
+            );
+
+            context.onCleanup(() => {
+                context.logger.info('portable plugin cleanup');
+            });
+        },
+    })
+);

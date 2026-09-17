@@ -97,6 +97,15 @@ export function descriptorIdentityPayload(identity: PluginDescriptorIdentity): C
         workspaceId: identity.workspaceId,
         policyRevision: identity.policyRevision,
         grantsRevision: identity.grantsRevision,
+        ...(identity.manifestVersion === 2
+            ? {
+                  name: identity.name,
+                  ...(identity.description === undefined
+                      ? {}
+                      : { description: identity.description }),
+                  effectiveGrants: [...identity.effectiveGrants].sort(),
+              }
+            : {}),
         resolvedDependencyKeys: [...identity.resolvedDependencyKeys],
         artifact: artifactPayload(identity.artifact),
     };

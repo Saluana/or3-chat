@@ -51,6 +51,10 @@ export interface PortableInboundEnvelope {
     readonly kind: string;
     readonly id: string;
     readonly name?: string;
+    /** Host refusal code; the SDK client also accepts the legacy `name` field. */
+    readonly code?: string;
+    readonly method?: string;
+    readonly params?: Readonly<Record<string, unknown>>;
     readonly result?: unknown;
     readonly message?: string;
     readonly payload?: Readonly<Record<string, unknown>>;
@@ -81,10 +85,16 @@ export type PortableHostEvent = {
 };
 
 export interface PortableClient {
+    /** Emit a host-visible named event (logs, diagnostics, progress notes). */
+    emit(name: string, payload?: Readonly<Record<string, unknown>>): void;
     /** Render a host-rendered view in the plugin's surface. */
     render(view: PortableUiView): void;
-    /** Register a contribution in a host slot. */
-    contribute(slot: 'dashboard' | 'command-palette', id: string, view: PortableUiView): void;
+    /**
+     * Register a contribution in a host slot. The first portable profile
+     * renders the dashboard slot; the command-palette slot is not advertised
+     * until the host has a mediated command surface for it.
+     */
+    contribute(slot: 'dashboard', id: string, view: PortableUiView): void;
     /** Withdraw one contribution, or every contribution when called with no id. */
     withdraw(id?: string): void;
     /** Call an approved host capability (for example `ai.complete`). */
@@ -95,6 +105,15 @@ export interface PortableClient {
     ): Promise<PortableHostResult<T>>;
     /** Subscribe to host→plugin events. */
     onEvent(listener: (event: PortableHostEvent) => void): () => void;
+    /**
+     * Answer host→plugin requests. The host never invokes plugin code directly:
+     * it sends a named request and the plugin decides what to do, so a refusal
+     * is explicit rather than a silent no-op.
+     */
+    onRequest(
+        method: string,
+        handler: (params: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>
+    ): () => void;
 }
 
 let portableIdCounter = 0;
@@ -118,6 +137,10 @@ export function createPortableClient(
         { resolve: (result: PortableHostResult<unknown>) => void }
     >();
     const eventListeners = new Set<(event: PortableHostEvent) => void>();
+    const requestHandlers = new Map<
+        string,
+        (params: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>
+    >();
 
     const receive = (raw: unknown) => {
         // The host serializes envelopes before they cross the sandbox boundary,
@@ -144,14 +167,47 @@ export function createPortableClient(
             const waiter = pending.get(envelope.id);
             if (!waiter) return;
             pending.delete(envelope.id);
+            const code =
+                typeof envelope.code === 'string'
+                    ? envelope.code
+                    : typeof envelope.name === 'string'
+                      ? envelope.name
+                      : 'internal';
             waiter.resolve({
                 ok: false,
-                code: typeof envelope.name === 'string' ? envelope.name : 'internal',
+                code,
                 message:
                     typeof envelope.message === 'string'
                         ? envelope.message
                         : 'Host refused the call',
             });
+            return;
+        }
+        if (envelope.kind === 'request' && typeof envelope.method === 'string') {
+            // Host→plugin requests are answered by the plugin's registered
+            // handlers; an unknown method is refused explicitly so the host
+            // never treats silence as success.
+            const requestId = envelope.id;
+            const handler = requestHandlers.get(envelope.method);
+            const params = envelope.params ?? {};
+            const respond = (result: unknown) =>
+                post({ v: PORTABLE_RPC_VERSION, kind: 'response', id: requestId, ok: true, result });
+            const refuse = (code: string, message: string) =>
+                post({ v: PORTABLE_RPC_VERSION, kind: 'error', id: requestId, code, message });
+            if (!handler) {
+                refuse('not-found', `No handler is registered for ${envelope.method}`);
+                return;
+            }
+            void Promise.resolve()
+                .then(() => handler(params))
+                .then(
+                    (result) => respond(result),
+                    (error) =>
+                        refuse(
+                            'internal',
+                            error instanceof Error ? error.message : String(error)
+                        )
+                );
             return;
         }
         if (envelope.kind === 'event' && typeof envelope.name === 'string') {
@@ -183,6 +239,9 @@ export function createPortableClient(
     };
 
     return {
+        emit(name, payload) {
+            emit(name, payload ?? {});
+        },
         render(view) {
             emit(PORTABLE_EVENT.render, {
                 ...(view.title === undefined ? {} : { title: view.title }),
@@ -226,6 +285,12 @@ export function createPortableClient(
         onEvent(listener) {
             eventListeners.add(listener);
             return () => eventListeners.delete(listener);
+        },
+        onRequest(method, handler) {
+            requestHandlers.set(method, handler);
+            return () => {
+                if (requestHandlers.get(method) === handler) requestHandlers.delete(method);
+            };
         },
     };
 }
