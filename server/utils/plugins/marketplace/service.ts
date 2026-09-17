@@ -155,6 +155,27 @@ function block(
  * own state. Coverage and payment are phase 3 and are reported as not applicable
  * rather than guessed.
  */
+/**
+ * The newest published version of one plugin, from the public catalog entry.
+ * The registry addresses releases by plugin id *and* version, so a caller that
+ * did not name a version has to be given the current one rather than being
+ * refused with `release-metadata-invalid`.
+ */
+export async function readLatestPublishedVersion(pluginId: string): Promise<string | null> {
+    const entry = (await readCatalogEntry(pluginId)) as {
+        readonly releases?: readonly { readonly version?: unknown }[];
+        readonly latestRelease?: { readonly version?: unknown };
+    } | null;
+    if (!entry) return null;
+    for (const release of entry.releases ?? []) {
+        if (typeof release?.version === 'string' && release.version.length > 0) {
+            return release.version;
+        }
+    }
+    const latest = entry.latestRelease?.version;
+    return typeof latest === 'string' && latest.length > 0 ? latest : null;
+}
+
 export async function preflightMarketplaceInstall(input: {
     readonly pluginId: string;
     readonly version?: string;
@@ -167,9 +188,25 @@ export async function preflightMarketplaceInstall(input: {
     const state = await registryState.read();
     const blocks: MarketplaceBlock[] = [];
 
+    // Resolve the version first: everything below addresses an exact release.
+    // An unconfigured instance reports that, not a version it cannot look up.
+    let requestedVersion = input.version;
+    if (requestedVersion === undefined && marketplaceRegistryConfigured()) {
+        requestedVersion = (await readLatestPublishedVersion(input.pluginId)) ?? undefined;
+        if (requestedVersion === undefined) {
+            blocks.push(
+                block(
+                    'release-not-found',
+                    'No published version of this plugin could be resolved from the catalog.',
+                    'browse-catalog'
+                )
+            );
+        }
+    }
+
     const base: Omit<MarketplacePreflightResult, 'status' | 'blocks' | 'release' | 'advisories' | 'storage'> = {
         pluginId: input.pluginId,
-        requestedVersion: input.version ?? null,
+        requestedVersion: requestedVersion ?? null,
         registry: {
             configured: marketplaceRegistryConfigured(),
             installEnabled: config.installEnabled,
@@ -217,12 +254,17 @@ export async function preflightMarketplaceInstall(input: {
         }, null, input.enabledPluginIds.includes(input.pluginId));
     }
 
-    const client = registryClientFor(config, state.acceptedAdvisorySequence);
+    if (requestedVersion === undefined) {
+        return finish(base, blocks, null, {
+            latestSequence: state.acceptedAdvisorySequence,
+            acceptedSequence: state.acceptedAdvisorySequence,
+            quarantined: false,
+        }, null);
+    }
+
+    const client = registryClientFor(config, state.acceptedAdvisorySequence, registryState);
     const resolved = await client.resolveRelease({
-        expectation: {
-            pluginId: input.pluginId,
-            ...(input.version === undefined ? {} : { version: input.version }),
-        },
+        expectation: { pluginId: input.pluginId, version: requestedVersion },
     });
     if (!resolved.ok) {
         blocks.push(

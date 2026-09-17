@@ -28,6 +28,22 @@ function makeClient(options: {
     maxArtifactBytes?: number;
     supportedProfiles?: readonly string[];
     registryOrigin?: string;
+    /** Release-scoped quarantine ledger, so the scoped-decision path is testable. */
+    quarantinedReleases?: () => Readonly<
+        Record<
+            string,
+            { pluginId: string; version: string; sequence: number; reason: string }
+        >
+    >;
+    recordQuarantines?: (
+        entries: readonly {
+            releaseId: string;
+            pluginId: string;
+            version: string;
+            sequence: number;
+            reason: string;
+        }[]
+    ) => void;
 }) {
     const accepted = options.acceptedAdvisorySequence ?? 0;
     return new RegistryClient({
@@ -45,6 +61,12 @@ function makeClient(options: {
         acceptedAdvisorySequence: accepted,
         transport: options.transport,
         freeDiskBytes: async () => options.freeDiskBytes ?? 1024 ** 3,
+        ...(options.quarantinedReleases
+            ? { quarantinedReleases: options.quarantinedReleases }
+            : {}),
+        ...(options.recordQuarantines
+            ? { recordQuarantines: options.recordQuarantines }
+            : {}),
         now: () => Date.now(),
     });
 }
@@ -256,6 +278,92 @@ describe('registry resolve (5.2)', () => {
         });
         expect(resolved.ok).toBe(true);
         if (resolved.ok) expect(resolved.value.advisorySequence).toBe(9);
+    });
+
+    it('keeps a quarantine after an unrelated advisory advances the cursor', async () => {
+        const alpha = await releaseFixture({ version: '1.0.0' });
+        const quarantine = await signAdvisoryForTest({
+            document: {
+                schemaVersion: 1,
+                sequence: 7,
+                kind: 'quarantine',
+                releaseId: alpha.releaseId,
+                pluginId: 'alpha',
+                version: '1.0.0',
+                archiveSha256: alpha.signed.archiveSha256,
+                reason: 'exfiltrates unrelated documents',
+                issuedBy: 'or3-marketplace',
+                issuedAt: new Date().toISOString(),
+            },
+            keyId: alpha.key.keyId,
+            privateKeyBase64: alpha.privateKeyBase64,
+        });
+
+        // The host records the decision while resolving alpha.
+        const ledger: Record<
+            string,
+            { pluginId: string; version: string; sequence: number; reason: string }
+        > = {};
+        const quarantineLedger = {
+            quarantinedReleases: () => ledger,
+            recordQuarantines: (entries: readonly {
+                releaseId: string;
+                pluginId: string;
+                version: string;
+                sequence: number;
+                reason: string;
+            }[]) => {
+                for (const entry of entries) ledger[entry.releaseId] = entry;
+            },
+        };
+        const first = makeClient({
+            keys: [alpha.key],
+            transport: fakeRegistryTransport({ fixture: alpha, advisories: [quarantine] }),
+            ...quarantineLedger,
+        });
+        expect(
+            await first.resolveRelease({ expectation: { pluginId: 'alpha', version: '1.0.0' } })
+        ).toMatchObject({ ok: false, failure: { code: 'release-quarantined' } });
+        expect(ledger[alpha.releaseId]?.sequence).toBe(7);
+
+        // A later resolve of another release advances the cursor past 7. The
+        // registry's log no longer mentions alpha's quarantine at all.
+        const otherNotice = await signAdvisoryForTest({
+            document: {
+                schemaVersion: 1,
+                sequence: 9,
+                kind: 'notice',
+                releaseId: 'rel_other',
+                pluginId: 'other',
+                version: '2.0.0',
+                archiveSha256: null,
+                reason: 'maintenance window',
+                issuedBy: 'or3-marketplace',
+                issuedAt: new Date().toISOString(),
+            },
+            keyId: alpha.key.keyId,
+            privateKeyBase64: alpha.privateKeyBase64,
+        });
+        const afterCursor = makeClient({
+            keys: [alpha.key],
+            acceptedAdvisorySequence: 9,
+            transport: fakeRegistryTransport({ fixture: alpha, advisories: [otherNotice] }),
+            ...quarantineLedger,
+        });
+        expect(
+            await afterCursor.resolveRelease({ expectation: { pluginId: 'alpha', version: '1.0.0' } })
+        ).toMatchObject({ ok: false, failure: { code: 'release-quarantined' } });
+
+        // Even with no ledger, a scoped quarantine below the cursor is verified
+        // and enforced rather than skipped as history.
+        const noLedger = makeClient({
+            keys: [alpha.key],
+            acceptedAdvisorySequence: 9,
+            transport: fakeRegistryTransport({ fixture: alpha, advisories: [quarantine] }),
+        });
+        expect(
+            await noLedger.resolveRelease({ expectation: { pluginId: 'alpha', version: '1.0.0' } })
+        ).toMatchObject({ ok: false, failure: { code: 'release-quarantined' } });
     });
 
     it('refuses an unreadable or missing release', async () => {

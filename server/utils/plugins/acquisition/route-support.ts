@@ -44,7 +44,12 @@ const MAX_WORKSPACE_PAGES = 100;
 
 export function registryClientFor(
     config: AcquisitionConfig,
-    acceptedAdvisorySequence: number
+    acceptedAdvisorySequence: number,
+    /**
+     * The registry stores the release-scoped quarantine ledger, so a decision
+     * recorded by one resolve is visible to every later resolve on this host.
+     */
+    quarantineLedger?: RegistryStateStore
 ): RegistryClient {
     return new RegistryClient({
         registryOrigin: config.registryOrigin,
@@ -59,6 +64,15 @@ export function registryClientFor(
         maxArtifactBytes: config.maxArtifactBytes,
         reserveBytes: config.reserveBytes,
         acceptedAdvisorySequence,
+        ...(quarantineLedger
+            ? {
+                  quarantinedReleases: async () =>
+                      (await quarantineLedger.read()).quarantinedReleases,
+                  recordQuarantines: async (entries) => {
+                      await quarantineLedger.recordQuarantines(entries);
+                  },
+              }
+            : {}),
     });
 }
 
@@ -114,7 +128,7 @@ export async function acquisitionServiceFor(
     return new PluginAcquisitionService({
         config,
         store: new PluginAcquisitionOperationStore(),
-        registry: registryClientFor(config, state.acceptedAdvisorySequence),
+        registry: registryClientFor(config, state.acceptedAdvisorySequence, registryState),
         services,
         routeCatalog: new PluginPackageRouteCatalog(services.packages, services.pointers),
         hostCapabilities: OR3_PLUGIN_V2_HOST_CAPABILITIES,

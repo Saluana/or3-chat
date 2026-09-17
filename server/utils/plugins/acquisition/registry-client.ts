@@ -41,8 +41,10 @@ import {
     evaluateDownloadBounds,
     evaluateFreshness,
     evaluateReleaseMetadata,
+    findApplicableQuarantine,
     parseAdvisoryDocument,
     parseReleaseMetadata,
+    recordedQuarantineRefusal,
     type RegistryTrustRoot,
     type ReleaseMetadataDocument,
     type ReleaseMetadataExpectation,
@@ -67,6 +69,46 @@ export interface RegistryClientOptions {
     readonly freeDiskBytes?: (path: string) => Promise<number>;
     /** Highest advisory sequence already accepted by this host. Defaults to 0. */
     readonly acceptedAdvisorySequence?: number;
+    /**
+     * Release-scoped quarantine decisions this host already recorded. Read live
+     * so a decision made by another resolve is visible here immediately, and
+     * consulted independently of the advisory cursor.
+     */
+    readonly quarantinedReleases?: () =>
+        | Readonly<
+              Record<
+                  string,
+                  {
+                      readonly pluginId: string;
+                      readonly version: string;
+                      readonly sequence: number;
+                      readonly reason: string;
+                  }
+              >
+          >
+        | Promise<
+              Readonly<
+                  Record<
+                      string,
+                      {
+                          readonly pluginId: string;
+                          readonly version: string;
+                          readonly sequence: number;
+                          readonly reason: string;
+                      }
+                  >
+              >
+          >;
+    /** Persist verified quarantine decisions for individual releases. */
+    readonly recordQuarantines?: (
+        entries: readonly {
+            readonly releaseId: string;
+            readonly pluginId: string;
+            readonly version: string;
+            readonly sequence: number;
+            readonly reason: string;
+        }[]
+    ) => Promise<void> | void;
     readonly now?: () => number;
 }
 
@@ -285,10 +327,20 @@ export class RegistryClient {
      * Fetch the public signed advisory log, verify the advisories that apply to
      * this release, and refuse when one quarantines it. The newest sequence seen
      * is returned so the host can record it monotonically.
+     *
+     * Quarantine decisions are release-scoped, so they are evaluated against the
+     * host's recorded decisions and against *every* applicable entry - including
+     * ones at or below the advisory cursor, which only measures freshness.
      */
     async #verifyAdvisories(
         document: ReleaseMetadataDocument
     ): Promise<RegistryResult<number>> {
+        // A quarantine this host already recorded still applies even if the
+        // registry's current log no longer lists it.
+        const ledger = await this.#options.quarantinedReleases?.();
+        const recorded = ledger?.[document.releaseId];
+        if (recorded) return refusalToFailure(recordedQuarantineRefusal(recorded));
+
         const fetched = await this.#getJson('/api/v1/catalog/trust/advisories');
         if (!fetched.ok) return fetched;
         const entries = advisoryListEntries(fetched.value);
@@ -296,13 +348,15 @@ export class RegistryClient {
             return failure('advisory-unverified', 'The registry returned an unreadable advisory log.');
         }
         const accepted = this.#acceptedAdvisorySequence();
-        const applicable = entries
-            .filter((entry) => entry.sequence > accepted)
-            .filter(
-                (entry) =>
-                    entry.releaseId === document.releaseId ||
-                    (entry.pluginId === document.pluginId && entry.version === document.version)
-            )
+        const scoped = entries.filter(
+            (entry) =>
+                entry.releaseId === document.releaseId ||
+                (entry.pluginId === document.pluginId && entry.version === document.version)
+        );
+        // Verify new advisories, and every scoped quarantine however old: a
+        // lower sequence must not hide a decision that still applies.
+        const applicable = scoped
+            .filter((entry) => entry.sequence > accepted || entry.kind === 'quarantine')
             .sort((left, right) => right.sequence - left.sequence);
 
         const parsedAdvisories = [];
@@ -335,6 +389,19 @@ export class RegistryClient {
                 );
             }
             parsedAdvisories.push(parsed.document);
+        }
+
+        // Scoped quarantine decision over every verified advisory, recorded before
+        // the refusal returns so a later resolve of this release still sees it.
+        const quarantine = findApplicableQuarantine({
+            advisories: parsedAdvisories,
+            releaseId: document.releaseId,
+            pluginId: document.pluginId,
+            version: document.version,
+        });
+        if (quarantine) {
+            await this.#options.recordQuarantines?.([quarantine]);
+            return refusalToFailure(recordedQuarantineRefusal(quarantine));
         }
 
         const decision = evaluateAdvisories({
@@ -538,6 +605,12 @@ interface AdvisoryListEntry {
     readonly releaseId: string;
     readonly pluginId: string;
     readonly version: string;
+    /**
+     * The marketplace's log carries the kind, which lets the client verify a
+     * scoped quarantine that sits at or below the freshness cursor without
+     * fetching every historical advisory.
+     */
+    readonly kind?: string;
 }
 
 /** Shape of the marketplace's public advisory log (newest first). */
@@ -561,6 +634,7 @@ function advisoryListEntries(value: unknown): AdvisoryListEntry[] | null {
             continue;
         }
         entries.push({
+            ...(typeof record.kind === 'string' ? { kind: record.kind } : {}),
             sequence,
             releaseId: record.releaseId,
             pluginId: record.pluginId,

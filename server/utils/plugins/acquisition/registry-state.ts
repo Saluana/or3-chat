@@ -3,11 +3,15 @@
  *
  * Purpose:
  * The small amount of durable state the acquisition track keeps about a registry:
- * the highest advisory sequence this host has accepted.
+ * the highest advisory sequence this host has accepted, and the quarantine
+ * decisions it has seen for individual releases.
  *
  * Behavior:
  * - Monotonic: a lower sequence is refused, so a replayed catalog can never clear
  *   a revocation the host already saw.
+ * - Quarantines are stored per release, separately from the sequence cursor. The
+ *   cursor only measures freshness; filtering scoped decisions with it would let
+ *   an unrelated release's advisory clear a quarantine.
  * - Atomic writes under `<extensions>/.registry/`, kept out of the operation
  *   directory so registry state can never be mistaken for an operation record,
  *   with the check-and-write taken under an exclusive lock.
@@ -25,20 +29,66 @@ import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
 const STATE_FILENAME = 'state.json';
 const LOCK_FILENAME = '.lock';
 const LOCK_STALE_MS = 30_000;
-const MAX_STATE_BYTES = 8 * 1024;
+const MAX_STATE_BYTES = 256 * 1024;
+/** Bound the ledger so a hostile registry cannot grow the state file forever. */
+const MAX_QUARANTINED_RELEASES = 500;
+
+export interface StoredQuarantine {
+    readonly releaseId: string;
+    readonly pluginId: string;
+    readonly version: string;
+    /** Advisory sequence that recorded it; only a higher one may replace it. */
+    readonly sequence: number;
+    readonly reason: string;
+    readonly recordedAt: number;
+}
 
 export interface RegistryState {
     readonly schemaVersion: 1;
     /** Highest advisory sequence accepted from the configured registry. */
     readonly acceptedAdvisorySequence: number;
+    /** Release-scoped quarantine decisions, keyed by release id. */
+    readonly quarantinedReleases: Readonly<Record<string, StoredQuarantine>>;
     readonly updatedAt: number;
 }
 
 const EMPTY_STATE: RegistryState = {
     schemaVersion: 1,
     acceptedAdvisorySequence: 0,
+    quarantinedReleases: {},
     updatedAt: 0,
 };
+
+function parseQuarantines(value: unknown): Record<string, StoredQuarantine> {
+    if (typeof value !== 'object' || value === null) return {};
+    const out: Record<string, StoredQuarantine> = {};
+    let count = 0;
+    for (const [releaseId, entry] of Object.entries(value as Record<string, unknown>)) {
+        if (count >= MAX_QUARANTINED_RELEASES) break;
+        if (typeof entry !== 'object' || entry === null) continue;
+        const record = entry as Record<string, unknown>;
+        if (
+            typeof record.pluginId !== 'string' ||
+            typeof record.version !== 'string' ||
+            typeof record.sequence !== 'number' ||
+            !Number.isSafeInteger(record.sequence) ||
+            record.sequence < 0 ||
+            typeof record.reason !== 'string'
+        ) {
+            continue;
+        }
+        out[releaseId] = {
+            releaseId,
+            pluginId: record.pluginId,
+            version: record.version,
+            sequence: record.sequence,
+            reason: record.reason,
+            recordedAt: typeof record.recordedAt === 'number' ? record.recordedAt : 0,
+        };
+        count += 1;
+    }
+    return out;
+}
 
 function parseState(value: unknown): RegistryState {
     if (typeof value !== 'object' || value === null) return EMPTY_STATE;
@@ -51,6 +101,7 @@ function parseState(value: unknown): RegistryState {
     return {
         schemaVersion: 1,
         acceptedAdvisorySequence: sequence,
+        quarantinedReleases: parseQuarantines(record.quarantinedReleases),
         updatedAt: typeof record.updatedAt === 'number' ? record.updatedAt : 0,
     };
 }
@@ -100,6 +151,7 @@ export class RegistryStateStore {
             const next: RegistryState = {
                 schemaVersion: 1,
                 acceptedAdvisorySequence: sequence,
+                quarantinedReleases: current.quarantinedReleases,
                 updatedAt: now,
             };
             const temporary = resolve(this.#directory, `.${STATE_FILENAME}.${randomUUID()}.tmp`);
@@ -112,6 +164,64 @@ export class RegistryStateStore {
             }
             await fs.rename(temporary, this.statePath());
             return next;
+        } finally {
+            await release();
+        }
+    }
+
+    /**
+     * Record verified quarantine decisions for individual releases.
+     *
+     * Quarantines are kept until a *higher* sequence replaces the entry for the
+     * same release, so an unrelated resolve that advances the advisory cursor
+     * cannot erase this release's decision.
+     */
+    async recordQuarantines(
+        entries: readonly Omit<StoredQuarantine, 'recordedAt'>[],
+        now: number = Date.now()
+    ): Promise<RegistryState> {
+        if (entries.length === 0) return await this.read();
+        await fs.mkdir(this.#directory, { recursive: true, mode: 0o700 });
+        const release = await this.#acquireLock(now);
+        try {
+            const current = await this.read();
+            const next: Record<string, StoredQuarantine> = { ...current.quarantinedReleases };
+            let changed = false;
+            for (const entry of entries) {
+                const existing = next[entry.releaseId];
+                if (existing && existing.sequence >= entry.sequence) continue;
+                next[entry.releaseId] = { ...entry, recordedAt: now };
+                changed = true;
+            }
+            // Bound the ledger deterministically: keep the highest sequences.
+            const bounded = Object.fromEntries(
+                Object.entries(next)
+                    .sort((left, right) => right[1].sequence - left[1].sequence)
+                    .slice(0, MAX_QUARANTINED_RELEASES)
+            );
+            if (
+                Object.keys(bounded).length !== Object.keys(current.quarantinedReleases).length
+            ) {
+                changed = true;
+            }
+            if (!changed) return current;
+
+            const state: RegistryState = {
+                schemaVersion: 1,
+                acceptedAdvisorySequence: current.acceptedAdvisorySequence,
+                quarantinedReleases: bounded,
+                updatedAt: now,
+            };
+            const temporary = resolve(this.#directory, `.${STATE_FILENAME}.${randomUUID()}.tmp`);
+            const handle = await fs.open(temporary, 'wx', 0o600);
+            try {
+                await handle.writeFile(`${JSON.stringify(state)}\n`, 'utf8');
+                await handle.sync();
+            } finally {
+                await handle.close();
+            }
+            await fs.rename(temporary, this.statePath());
+            return state;
         } finally {
             await release();
         }

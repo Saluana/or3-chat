@@ -551,6 +551,65 @@ export interface AdvisoryDecision {
 }
 
 /**
+ * A quarantine decision scoped to one release, independent of the cursor. The
+ * host stamps `recordedAt` when it persists the decision.
+ */
+export interface ScopedQuarantine {
+    readonly releaseId: string;
+    readonly pluginId: string;
+    readonly version: string;
+    readonly sequence: number;
+    readonly reason: string;
+}
+
+/**
+ * Find the newest verified quarantine that applies to one release, considering
+ * *every* provided advisory rather than only those above the host's advisory
+ * cursor.
+ *
+ * The cursor answers "how fresh is this host's view of the log", not "which
+ * scoped decisions still apply". Using it to filter scoped advisories lets an
+ * unrelated release's advisory advance the cursor past a quarantine and so clear
+ * it. Quarantine decisions are therefore evaluated here and persisted per
+ * release, separately from the cursor.
+ */
+export function findApplicableQuarantine(input: {
+    readonly advisories: readonly AdvisoryDocument[];
+    readonly releaseId: string;
+    readonly pluginId: string;
+    readonly version: string;
+}): ScopedQuarantine | null {
+    const applicable = input.advisories
+        .filter(
+            (advisory) =>
+                advisory.releaseId === input.releaseId ||
+                (advisory.pluginId === input.pluginId && advisory.version === input.version)
+        )
+        .sort((left, right) => right.sequence - left.sequence);
+    const quarantine = applicable.find((advisory) => advisory.kind === 'quarantine');
+    if (!quarantine) return null;
+    return {
+        releaseId: quarantine.releaseId,
+        pluginId: quarantine.pluginId,
+        version: quarantine.version,
+        sequence: quarantine.sequence,
+        reason: quarantine.reason,
+    };
+}
+
+/** Refusal for a quarantine this host has already recorded for the release. */
+export function recordedQuarantineRefusal(quarantine: {
+    readonly pluginId: string;
+    readonly version: string;
+    readonly reason: string;
+}): ReleaseMetadataRefusal {
+    return {
+        code: 'release-quarantined',
+        message: `${quarantine.pluginId} ${quarantine.version} is quarantined: ${quarantine.reason}`,
+    };
+}
+
+/**
  * Apply the signed advisory log to one release. A quarantine that this host has
  * not yet accepted refuses the acquisition; the newest seen sequence is returned
  * so the host can record it monotonically. Advisories for other releases only

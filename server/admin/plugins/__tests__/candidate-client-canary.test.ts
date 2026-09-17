@@ -53,6 +53,73 @@ describe('client canary tickets', () => {
         expect(await store.redeemTicket(report, 1_002)).toBeNull();
     });
 
+    it('refuses a crafted ticket id instead of touching a file outside the ticket directory', async () => {
+        const root = mkdtempSync(resolve(tmpdir(), 'or3-canary-'));
+        const store = new PluginClientCanaryStore(root);
+        // A file the attacker would like deleted, outside the ticket directory.
+        const registryDirectory = resolve(root, '.registry');
+        mkdirSync(registryDirectory, { recursive: true });
+        writeFileSync(
+            resolve(registryDirectory, 'state.json'),
+            JSON.stringify({ schemaVersion: 1, acceptedAdvisorySequence: 9, updatedAt: 1 })
+        );
+
+        for (const crafted of [
+            '../../.registry/state',
+            '../.registry/state',
+            'cct_../../.registry/state',
+            'cct_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/../../state',
+            'cct_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        ]) {
+            expect(await store.readTicket(crafted)).toBeNull();
+            expect(
+                await store.redeemTicket({
+                    ticketId: crafted,
+                    nonce: '0'.repeat(32),
+                    browser: 'chromium',
+                    abiVersion: 1,
+                    status: 'passed',
+                })
+            ).toBeNull();
+        }
+        // The unrelated file is untouched.
+        expect(JSON.parse(readFileSync(resolve(registryDirectory, 'state.json'), 'utf8'))).toMatchObject({
+            acceptedAdvisorySequence: 9,
+        });
+    });
+
+    it('keeps a ticket usable when a forged report reuses its id', async () => {
+        const store = new PluginClientCanaryStore(mkdtempSync(resolve(tmpdir(), 'or3-canary-')));
+        const ticket = await store.issueTicket(ticketRequest(), 1_000);
+        // Wrong nonce: the ticket must survive, so an attacker cannot burn it.
+        expect(
+            await store.redeemTicket(
+                {
+                    ticketId: ticket.ticketId,
+                    nonce: 'a'.repeat(32),
+                    browser: 'chromium',
+                    abiVersion: 1,
+                    status: 'passed',
+                },
+                1_001
+            )
+        ).toBeNull();
+        expect(await store.readTicket(ticket.ticketId)).not.toBeNull();
+        // The real holder can still spend it exactly once.
+        expect(
+            (await store.redeemTicket(
+                {
+                    ticketId: ticket.ticketId,
+                    nonce: ticket.nonce,
+                    browser: 'chromium',
+                    abiVersion: 1,
+                    status: 'passed',
+                },
+                1_002
+            ))?.ticketId
+        ).toBe(ticket.ticketId);
+    });
+
     it('records tickets with owner-only permissions', async () => {
         const store = new PluginClientCanaryStore(mkdtempSync(resolve(tmpdir(), 'or3-canary-')));
         const ticket = await store.issueTicket(ticketRequest(), 1_000);
