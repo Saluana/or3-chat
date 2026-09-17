@@ -59,14 +59,23 @@ export function isPortableClientDescriptor(
  */
 // `import.meta.glob` keeps the view path out of TypeScript's module resolution
 // (the app tsconfig does not include the `.vue` shim) while still letting Vite
-// bundle it lazily.
-const PORTABLE_VIEW_MODULES = import.meta.glob(
-    '~/components/plugins/PortableClientView.vue'
-) as Record<string, () => Promise<unknown>>;
+// bundle it lazily. The lookup takes the single match by value: an alias-based
+// key is not stable, and an undefined component would break plugin startup.
+const PORTABLE_VIEW_MODULES = import.meta.glob('../../components/plugins/PortableClientView.vue');
 
-const PORTABLE_CLIENT_VIEW = defineAsyncComponent(
-    PORTABLE_VIEW_MODULES['~/components/plugins/PortableClientView.vue'] as never
-);
+const PORTABLE_CLIENT_VIEW: Component = (() => {
+    const loader = Object.values(PORTABLE_VIEW_MODULES)[0] as
+        | (() => Promise<unknown>)
+        | undefined;
+    if (!loader) {
+        return {
+            name: 'PortableClientViewUnavailable',
+            render: () =>
+                h('div', { class: 'text-sm' }, 'This plugin surface is unavailable in this build.'),
+        };
+    }
+    return defineAsyncComponent(() => loader() as never);
+})();
 
 function createSurfacePage(
     descriptor: PackageV2PluginDescriptor

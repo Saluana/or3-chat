@@ -6,28 +6,35 @@
  * navigation, theme and components. No iframe and no central-site embedding: it
  * reads the local server's own marketplace endpoints.
  */
-import { defineAsyncComponent, type Component } from 'vue';
+import { h, type Component } from 'vue';
 import { registerDashboardPlugin } from '~/composables/dashboard/useDashboardPlugins';
 
 /**
  * `import.meta.glob` keeps these paths out of TypeScript's module resolution
  * (the app tsconfig does not include the `.vue` shim) while still letting Vite
- * bundle each page lazily.
+ * bundle each page lazily. A missing page is reported in place rather than
+ * throwing during plugin registration, which would break the whole dashboard.
  */
-const MARKETPLACE_PAGES = import.meta.glob('../components/marketplace/*.vue', {
-    import: 'default',
-}) as Record<string, () => Promise<Component>>;
+const DISCOVER = import.meta.glob('../components/marketplace/MarketplaceDiscover.vue');
+const INSTALLED = import.meta.glob('../components/marketplace/MarketplaceInstalled.vue');
+const UPDATES = import.meta.glob('../components/marketplace/MarketplaceUpdates.vue');
 
-function lazyPage(path: string): Component {
-    const loader = MARKETPLACE_PAGES[path];
-    if (!loader) throw new Error(`Missing marketplace page component: ${path}`);
-    return defineAsyncComponent(async () => await loader());
+function lazyPage(modules: Record<string, unknown>, label: string): Component {
+    const loader = Object.values(modules)[0] as (() => Promise<unknown>) | undefined;
+    if (!loader) {
+        return {
+            name: `MarketplacePageUnavailable:${label}`,
+            render: () =>
+                h('div', { class: 'p-4 text-sm' }, `${label} is unavailable in this build.`),
+        };
+    }
+    return loader as never;
 }
 
 export default defineNuxtPlugin(() => {
-    const runtimeConfig = useRuntimeConfig();
-    if (!runtimeConfig.public?.ssrAuthEnabled) return;
-
+    // Registered in every profile: a static/local instance must still be able to
+    // browse and must say that installation is unsupported there, rather than
+    // hiding the surface and leaving the user to guess.
     registerDashboardPlugin({
         id: 'marketplace',
         icon: 'i-lucide-store',
@@ -41,21 +48,21 @@ export default defineNuxtPlugin(() => {
                 title: 'Discover',
                 icon: 'i-lucide-search',
                 description: 'Browse published plugins and check what an install needs.',
-                component: lazyPage('../components/marketplace/MarketplaceDiscover.vue'),
+                component: lazyPage(DISCOVER, 'Discover'),
             },
             {
                 id: 'installed',
                 title: 'Installed',
                 icon: 'i-lucide-package',
                 description: 'Open, configure, disable or remove installed plugins.',
-                component: lazyPage('../components/marketplace/MarketplaceInstalled.vue'),
+                component: lazyPage(INSTALLED, 'Installed'),
             },
             {
                 id: 'updates',
                 title: 'Updates',
                 icon: 'i-lucide-refresh-cw',
                 description: 'Review and activate waiting updates.',
-                component: lazyPage('../components/marketplace/MarketplaceUpdates.vue'),
+                component: lazyPage(UPDATES, 'Updates'),
             },
         ],
     });

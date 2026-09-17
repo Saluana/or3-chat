@@ -8,7 +8,7 @@
  * misleading action.
  */
 import { computed, onMounted, ref } from 'vue';
-import { useToast } from '#imports';
+import { useRuntimeConfig, useToast } from '#imports';
 import {
     useMarketplaceAccount,
     useMarketplaceCatalog,
@@ -26,6 +26,9 @@ const account = useMarketplaceAccount();
 
 const selectedPluginId = ref<string | null>(null);
 const adminRequestCopied = ref(false);
+// A static or local build cannot install: acquisition needs the host server.
+const runtimeConfig = useRuntimeConfig();
+const installSupported = computed(() => runtimeConfig.public?.ssrAuthEnabled === true);
 
 onMounted(async () => {
     await Promise.all([catalog.load(), account.load()]);
@@ -242,9 +245,18 @@ function blockActionLabel(block: { action: string }): string | null {
                 data-testid="marketplace-block"
             />
 
+            <UAlert
+                v-if="!installSupported"
+                color="info"
+                variant="subtle"
+                title="Installation is not available in this mode"
+                description="Discovery works anywhere, but installing needs an OR3 Cloud instance with the marketplace registry configured."
+                data-testid="marketplace-install-unsupported"
+            />
+
             <div class="flex flex-wrap items-center gap-2">
                 <UButton
-                    v-if="account.canInstall.value"
+                    v-if="installSupported && account.canInstall.value"
                     :disabled="preflight.result.value?.status !== 'installable' || install.running.value"
                     :loading="install.running.value"
                     icon="i-lucide-download"
@@ -253,7 +265,7 @@ function blockActionLabel(block: { action: string }): string | null {
                 >
                     Install
                 </UButton>
-                <template v-else-if="canRequestFromAdmin">
+                <template v-else-if="installSupported && canRequestFromAdmin">
                     <UButton
                         color="neutral"
                         variant="soft"
