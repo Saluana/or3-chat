@@ -27,7 +27,10 @@ import { OR3_PLUGIN_V2_HOST_CAPABILITIES } from '../../../admin/plugins/v2-host-
 import { resolveConnectionService } from '../connections/resolve';
 import { loadSetupState } from '../setup/state';
 import { readSetupValues } from '../setup/settings-store';
-import { pluginPackageServices } from '../../../admin/plugins/package-operation-support';
+import {
+    pluginPackageServices,
+} from '../../../admin/plugins/package-operation-support';
+import { CLIENT_CANARY_PENDING_CODE } from '../../../admin/plugins/candidate-client-canary';
 import { PluginPackageRouteCatalog } from '../../../admin/plugins/package-route-catalog';
 import type { AcquisitionConfig } from './config';
 import { acquisitionConfig } from './config';
@@ -116,6 +119,20 @@ export async function acquisitionServiceFor(
         routeCatalog: new PluginPackageRouteCatalog(services.packages, services.pointers),
         hostCapabilities: OR3_PLUGIN_V2_HOST_CAPABILITIES,
         setupPlan: await setupPlanFor(event, requesterUserId),
+        // A client profile is only satisfied by evidence a real browser
+        // recorded for this candidate; a server process cannot produce it.
+        clientCanary: async (input) => {
+            const evidence = await services.clientCanary.readEvidence(
+                input.pluginId,
+                input.packageDigest,
+                input.workspaceId
+            );
+            if (!evidence) return { status: 'blocked', code: CLIENT_CANARY_PENDING_CODE };
+            if (evidence.status === 'blocked') {
+                return { status: 'blocked', code: evidence.code ?? 'client-canary-blocked' };
+            }
+            return { status: 'passed' };
+        },
         listWorkspaceIds: () => listAllWorkspaceIds(event),
         listInstalledExtensionIds: async () =>
             (await listInstalledExtensions())

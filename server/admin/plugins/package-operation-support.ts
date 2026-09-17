@@ -39,13 +39,21 @@ import { PluginPackageCandidateService } from './package-candidate';
 import { PluginPackagePromotionService } from './package-promotion';
 import {
     PluginPackageCandidateCanaryService,
+    type CandidateClientCanaryContext,
+    type CandidateCanaryStepResult,
     type CandidateDryRunContext,
     type CandidateStateValue,
 } from './package-candidate-canary';
+import {
+    CLIENT_CANARY_PENDING_CODE,
+    PluginClientCanaryStore,
+} from './candidate-client-canary';
 import { verifyPackageServerRouteHandlers } from './server-module-resolver';
 
 export interface PluginPackageServices {
     readonly packages: ImmutablePluginPackageStore;
+    /** Browser canary tickets and evidence for contained client packages. */
+    readonly clientCanary: PluginClientCanaryStore;
     readonly pointers: PluginPackagePointerStore;
     readonly candidates: PluginPackageCandidateService;
     readonly canary: PluginPackageCandidateCanaryService;
@@ -66,6 +74,7 @@ export function pluginPackageServices(
     return {
         packages,
         pointers,
+        clientCanary: new PluginClientCanaryStore(extensionsRoot),
         candidates: new PluginPackageCandidateService(packages, pointers),
         canary,
         promotion: new PluginPackagePromotionService(packages, pointers, canary),
@@ -169,4 +178,45 @@ export async function serverCandidateDryRun(
     } catch {
         return { status: 'blocked' as const, code: 'server-handler-invalid' };
     }
+}
+
+/**
+ * The client canary step for a candidate, satisfied only by evidence a real
+ * browser recorded for this exact plugin/digest/workspace. Without that
+ * evidence the operation stays pending: a portable package is never promoted on
+ * the strength of a server-side check alone.
+ */
+export function clientCanaryStepFromEvidence(
+    store: PluginClientCanaryStore,
+    input: {
+        readonly pluginId: string;
+        readonly packageDigest: Sha256;
+        readonly workspaceId: string;
+    }
+): (context: CandidateClientCanaryContext) => Promise<CandidateCanaryStepResult> {
+    return async (context) => {
+        // The stored manifest decides whether a browser has to run this
+        // candidate; the caller cannot claim a client profile it did not ship.
+        let requiresClient = false;
+        try {
+            const manifest = await readPackageManifest(context.packagePath);
+            requiresClient =
+                manifest.trust === 'isolated-client' && Boolean(manifest.runtime.client);
+        } catch {
+            return { status: 'blocked', code: 'client-profile-unknown' };
+        }
+        if (!requiresClient) {
+            return { status: 'skipped', code: 'server-only-profile' };
+        }
+        const evidence = await store.readEvidence(
+            input.pluginId,
+            input.packageDigest,
+            input.workspaceId
+        );
+        if (!evidence) return { status: 'blocked', code: CLIENT_CANARY_PENDING_CODE };
+        if (evidence.status === 'blocked') {
+            return { status: 'blocked', code: evidence.code ?? 'client-canary-blocked' };
+        }
+        return { status: 'passed' };
+    };
 }

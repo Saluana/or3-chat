@@ -901,9 +901,15 @@ export class PluginAcquisitionService {
             clientHiddenPrepare: (context) => this.#clientCanary(record, context),
         });
         if (canary.status !== 'passed') {
+            // A pending browser check is its own code: the marketplace UI runs
+            // the hidden activation and retries the same operation.
+            const code =
+                canary.stage === 'client-canary' && canary.code === 'client-canary-pending'
+                    ? 'client-canary-pending'
+                    : 'health-check-failed';
             return await this.#fail(
                 record,
-                'health-check-failed',
+                code,
                 `The candidate health check was blocked at ${canary.stage}: ${canary.code}`,
                 true
             );
@@ -1292,8 +1298,9 @@ export class PluginAcquisitionService {
 
     /**
      * The client half of the canary. A profile that requires a client runtime
-     * cannot be promoted on a skipped check: with no client canary runner
-     * configured this reports the gap as a block.
+     * cannot be promoted on a skipped check. The runner is satisfied only by
+     * evidence a real browser recorded for this exact candidate; until then the
+     * operation stays pending and a browser-driven retry can complete it.
      */
     async #clientCanary(
         record: PluginAcquisitionOperation,
@@ -1304,7 +1311,7 @@ export class PluginAcquisitionService {
             return { status: 'skipped', code: 'server-only-profile' };
         }
         if (!this.#deps.clientCanary) {
-            return { status: 'blocked', code: 'client-canary-unavailable' };
+            return { status: 'blocked', code: 'client-canary-pending' };
         }
         return await this.#deps.clientCanary({
             pluginId: record.pluginId,

@@ -17,15 +17,24 @@ export async function readPackageClientEntry(input: {
     readonly packageDigest: Sha256;
     readonly manifest: Or3ExtensionManifestV2;
     readonly reader?: PluginPackageAssetReader;
+    /**
+     * Selected packages are the normal case. A canary reads the candidate
+     * instead, which is authorized by a single-use ticket rather than selection.
+     */
+    readonly requireSelected?: boolean;
 }): Promise<PackageV2ClientEntry | undefined> {
     const client = input.manifest.runtime.client;
     if (!client) return undefined;
     const reader = input.reader ?? createPackageAssetReader();
-    const asset = await reader.readSelectedAsset({
+    const request = {
         pluginId: input.pluginId,
         packageDigest: input.packageDigest,
         requestPath: client.entry,
-    });
+    };
+    const asset =
+        input.requireSelected === false
+            ? await reader.readAsset(request)
+            : await reader.readSelectedAsset(request);
     const source = new TextDecoder().decode(asset.bytes);
     const bareImports = unresolvedBareImports(source);
     if (bareImports.length > 0) {

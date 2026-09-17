@@ -76,7 +76,7 @@ export const PLUGIN_ACQUISITION_FAILURE_CODES = [
     'package-policy-mismatch',
     'package-profile-mismatch',
     'authority-mismatch',
-    'client-canary-unavailable',
+    'client-canary-pending',
     'candidate-blocked',
     'workspace-preflight-blocked',
     'health-check-failed',
