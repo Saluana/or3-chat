@@ -123,6 +123,13 @@ const pluginSdkSourceAliases: Record<string, string> = hasPluginSdkSource
               pluginSdkSourceRoot,
               'cli/archive.ts',
           ),
+          // Server-side setup descriptors are parsed with the shared SDK
+          // parser, so the package profile source must resolve to the
+          // transformable source in a checkout build.
+          '@or3/plugin-sdk/profile': resolve(
+              pluginSdkSourceRoot,
+              'profile.ts',
+          ),
       }
     : {};
 const pluginSdkViteAliases = Object.entries(pluginSdkSourceAliases).map(
@@ -423,6 +430,17 @@ const adminConfig = {
         or3CloudConfig.admin?.pluginZipInstallEnabled !== false,
     pluginRouteDispatcherEnabled:
         or3CloudConfig.admin?.pluginRouteDispatcherEnabled !== false,
+    /**
+     * Serves the host-owned containment probe assets used by real-browser
+     * qualification (task 4.13). Off by default and never required at runtime.
+     */
+    containmentProbeEnabled: process.env.OR3_CONTAINMENT_PROBE_ENABLED === 'true',
+    /**
+     * AES-256-GCM key for plugin connection secrets. Held outside the database
+     * (env/secret store); empty means connections are unavailable, never stored
+     * in plaintext.
+     */
+    pluginConnectionSecret: process.env.OR3_PLUGIN_CONNECTION_SECRET || '',
     rebuildCommand: or3CloudConfig.admin?.rebuildCommand || 'bun run build',
     extensionMaxZipBytes: or3CloudConfig.admin?.extensionMaxZipBytes
         ? String(or3CloudConfig.admin.extensionMaxZipBytes)
@@ -649,6 +667,12 @@ export default defineNuxtConfig({
         },
         public: {
             appVersion: process.env.npm_package_version || '0.1.0',
+            /**
+             * Mirrors the server-side probe flag so the qualification harness can
+             * exercise the real startup API from a page. Off in every other profile.
+             */
+            containmentProbeEnabled:
+                process.env.OR3_CONTAINMENT_PROBE_ENABLED === 'true',
             // Declaring these keys makes NUXT_PUBLIC_OPENROUTER_* available to
             // the client instead of silently falling back to the current URL.
             openRouterRedirectUri:

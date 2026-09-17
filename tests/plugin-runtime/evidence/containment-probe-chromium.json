@@ -1,0 +1,144 @@
+{
+  "recordedAt": "2026-09-17T15:09:26.797Z",
+  "project": "chromium",
+  "targets": {
+    "hostOrigin": "http://127.0.0.1:3121",
+    "http": "http://127.0.0.1:3121/or3-containment/target",
+    "script": "http://127.0.0.1:3121/or3-containment/target.js",
+    "socket": "ws://127.0.0.1:54668/"
+  },
+  "control": [
+    {
+      "channel": "struct.document",
+      "outcome": "blocked",
+      "note": "self.document"
+    },
+    {
+      "channel": "struct.frameElement",
+      "outcome": "blocked",
+      "note": "self.frameElement"
+    },
+    {
+      "channel": "struct.cookie",
+      "outcome": "blocked",
+      "note": "self.cookie"
+    },
+    {
+      "channel": "struct.localStorage",
+      "outcome": "blocked",
+      "note": "self.localStorage"
+    },
+    {
+      "channel": "struct.sessionStorage",
+      "outcome": "blocked",
+      "note": "self.sessionStorage"
+    },
+    {
+      "channel": "storage.indexedDB",
+      "outcome": "reachable",
+      "note": "opened"
+    },
+    {
+      "channel": "network.fetch",
+      "outcome": "reachable",
+      "note": "status 200"
+    },
+    {
+      "channel": "network.fetch-same-origin",
+      "outcome": "reachable",
+      "note": "status 200"
+    },
+    {
+      "channel": "network.xmlHttpRequest",
+      "outcome": "reachable",
+      "note": "status 200"
+    },
+    {
+      "channel": "network.webSocket",
+      "outcome": "inconclusive",
+      "note": "the harness did not supply a socket target for this run"
+    },
+    {
+      "channel": "imports.importScripts",
+      "outcome": "reachable",
+      "note": "imported"
+    },
+    {
+      "channel": "imports.dynamicRemote",
+      "outcome": "reachable",
+      "note": "imported:0"
+    },
+    {
+      "channel": "workers.nested",
+      "outcome": "reachable",
+      "note": "{\"settled\":2,\"expected\":2,\"fetch\":\"denied:TypeError\",\"indexedDbOpen\":\"opened\"}"
+    }
+  ],
+  "sandbox": [
+    {
+      "channel": "struct.document",
+      "outcome": "blocked",
+      "note": "self.document"
+    },
+    {
+      "channel": "struct.frameElement",
+      "outcome": "blocked",
+      "note": "self.frameElement"
+    },
+    {
+      "channel": "struct.cookie",
+      "outcome": "blocked",
+      "note": "self.cookie"
+    },
+    {
+      "channel": "struct.localStorage",
+      "outcome": "blocked",
+      "note": "self.localStorage"
+    },
+    {
+      "channel": "struct.sessionStorage",
+      "outcome": "blocked",
+      "note": "self.sessionStorage"
+    },
+    {
+      "channel": "storage.indexedDB",
+      "outcome": "blocked",
+      "note": "Failed to execute 'open' on 'IDBFactory': access to the Indexed Database API is denied in this context."
+    },
+    {
+      "channel": "network.fetch",
+      "outcome": "blocked",
+      "note": "Failed to fetch"
+    },
+    {
+      "channel": "network.fetch-same-origin",
+      "outcome": "blocked",
+      "note": "Failed to fetch"
+    },
+    {
+      "channel": "network.xmlHttpRequest",
+      "outcome": "blocked",
+      "note": "xhr error"
+    },
+    {
+      "channel": "network.webSocket",
+      "outcome": "blocked",
+      "note": "socket error"
+    },
+    {
+      "channel": "imports.importScripts",
+      "outcome": "blocked",
+      "note": "Failed to execute 'importScripts' on 'WorkerGlobalScope': The script at 'http://127.0.0.1:3121/or3-containment/target.js' failed to load."
+    },
+    {
+      "channel": "imports.dynamicRemote",
+      "outcome": "blocked",
+      "note": "Failed to fetch dynamically imported module: http://127.0.0.1:3121/or3-containment/target.js"
+    },
+    {
+      "channel": "workers.nested",
+      "outcome": "blocked",
+      "note": "{\"settled\":2,\"expected\":2,\"indexedDbOpen\":\"denied:SecurityError\",\"fetch\":\"denied:TypeError\"}"
+    }
+  ]
+}

@@ -13,6 +13,7 @@ import {
     type IsolatedIframePort,
 } from '../iframe-runtime';
 import type { HostRpcHandler } from '../host-rpc-broker';
+import { HostSessionAuthority } from '../session-authority';
 
 function grants(
     approved: readonly string[] = ['ui.dashboard.register']
@@ -369,6 +370,145 @@ describe('iframe-runtime (8.7-8.9)', () => {
             pluginId: 'iso.iframe',
             generation: 3,
         });
+        runtime.dispose();
+    });
+});
+
+describe('iframe-runtime host session binding (4.2)', () => {
+    it('sends the host session in the bootstrap payload and requires it back', async () => {
+        const inbox: Array<{ message: unknown; origin: string }> = [];
+        const fake = createFakeIframe(inbox);
+        const handler = vi.fn(async () => ({ ok: true }));
+        const authority = new HostSessionAuthority({
+            pluginId: 'iso.iframe',
+            workspaceId: 'ws_1',
+            generation: 3,
+            sourceId: 'frame_1',
+            generateSessionId: () => 'session-frame-1',
+        });
+
+        const runtime = new IframeIsolationRuntime({
+            pluginId: 'iso.iframe',
+            workspaceId: 'ws_1',
+            generation: 3,
+            src: '/plugin-frame.html',
+            origin: 'https://cloud.example',
+            grants: grants(),
+            createIframe: () => fake.port,
+            sessionAuthority: authority,
+            services: { contributeUi: handler },
+        });
+        await runtime.start();
+
+        const bootstrap = inbox.find(
+            ({ message }) => parseRpcEnvelope(message).ok
+        );
+        const parsedBootstrap = parseRpcEnvelope(bootstrap!.message);
+        expect(parsedBootstrap.ok).toBe(true);
+        if (parsedBootstrap.ok && parsedBootstrap.envelope.kind === 'event') {
+            expect(parsedBootstrap.envelope.payload).toMatchObject({
+                session: {
+                    sessionId: 'session-frame-1',
+                    sourceId: 'frame_1',
+                    generation: 3,
+                },
+            });
+        }
+
+        // A request without the host session is denied.
+        runtime.ingestFromIframe(
+            serializeRpcEnvelope(
+                createRpcRequest({
+                    id: 'no-session',
+                    method: 'ui.contribute',
+                    params: { node: { type: 'text', text: 'hi' } },
+                })
+            )
+        );
+        await vi.waitFor(() => {
+            expect(runtime.crashReports.length).toBe(0);
+        });
+        expect(handler).not.toHaveBeenCalled();
+
+        // A request echoing the host session from an opaque origin is accepted.
+        runtime.ingestFromIframe(
+            serializeRpcEnvelope(
+                createRpcRequest({
+                    id: 'with-session',
+                    method: 'ui.contribute',
+                    params: { node: { type: 'text', text: 'hi' } },
+                    ...authority.echoFields,
+                })
+            ),
+            'null'
+        );
+        await vi.waitFor(() => {
+            expect(handler).toHaveBeenCalledOnce();
+        });
+
+        runtime.dispose();
+        expect(authority.invalidated).toBe('host dispose');
+    });
+
+    it('aborts the running handler when the iframe cancels its own request (finding 7)', async () => {
+        const inbox: Array<{ message: unknown; origin: string }> = [];
+        const fake = createFakeIframe(inbox);
+        let running = false;
+        let aborted = false;
+        const handler: HostRpcHandler = async (_params, context) => {
+            running = true;
+            await new Promise<void>((resolve) => {
+                context.signal.addEventListener('abort', () => {
+                    aborted = true;
+                    resolve();
+                });
+            });
+            return { ok: true };
+        };
+        const authority = new HostSessionAuthority({
+            pluginId: 'iso.iframe',
+            workspaceId: 'ws_1',
+            generation: 1,
+            sourceId: 'frame_1',
+            generateSessionId: () => 'session-frame-cancel',
+        });
+
+        const runtime = new IframeIsolationRuntime({
+            pluginId: 'iso.iframe',
+            workspaceId: 'ws_1',
+            generation: 1,
+            src: '/plugin-frame.html',
+            origin: 'https://cloud.example',
+            grants: grants(),
+            createIframe: () => fake.port,
+            sessionAuthority: authority,
+            services: { contributeUi: handler },
+        });
+        await runtime.start();
+
+        runtime.ingestFromIframe(
+            serializeRpcEnvelope(
+                createRpcRequest({
+                    id: 'plugin-call-1',
+                    method: 'ui.contribute',
+                    params: { node: { type: 'text', text: 'hi' } },
+                    ...authority.echoFields,
+                })
+            )
+        );
+        await vi.waitFor(() => {
+            expect(running).toBe(true);
+        });
+
+        // The cancel is routed to the broker that owns this plugin→host request,
+        // so the handler's signal is aborted rather than a host call being settled.
+        runtime.ingestFromIframe(
+            serializeRpcEnvelope({ v: 1, kind: 'cancel', id: 'plugin-call-1' })
+        );
+        await vi.waitFor(() => {
+            expect(aborted).toBe(true);
+        });
+
         runtime.dispose();
     });
 });

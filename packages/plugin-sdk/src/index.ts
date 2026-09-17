@@ -33,3 +33,16 @@ export type {
     PluginTrustMode,
 } from './manifest';
 export type { PluginError, PluginErrorCode, PluginResult } from './results';
+export { definePortableUi, ui } from './ui';
+export type {
+    PortableButton,
+    PortableFormField,
+    PortableUiNode,
+    PortableUiView,
+} from './ui';
+export { createPortableClient, PORTABLE_EVENT, PORTABLE_RPC_VERSION } from './portable';
+export type {
+    PortableClient,
+    PortableHostEvent,
+    PortableHostResult,
+} from './portable';

@@ -42,6 +42,14 @@
         "./testing": {
             "types": "./src/testing.ts",
             "import": "./src/testing.ts"
+        },
+        "./ui": {
+            "types": "./src/ui.ts",
+            "import": "./src/ui.ts"
+        },
+        "./portable": {
+            "types": "./src/portable.ts",
+            "import": "./src/portable.ts"
         }
     },
     "files": [

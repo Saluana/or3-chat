@@ -1352,6 +1352,18 @@
                     "summary": "The or3-portable-client-v1 profile generates deterministic or3.package-policy.json and or3.setup.json descriptors from one authoring configuration, requires the or3-portable-client-v1 feature flag, and restricts packages to isolated browser-only code with no plugin dependencies, custom state migrations or install scripts."
                 },
                 {
+                    "name": "connections.md",
+                    "path": "/plugins/connections",
+                    "category": "Reference",
+                    "summary": "Connect a plugin to an external service without giving it your credential: AES-256-GCM storage with the key outside the database, opaque orc_ references, owner-scoped listing and resolution, an operation allowlist intersected with the release's own approved operations and destinations, exact-origin and segment-bounded path checks, host-minted approvals for external/commercial/destructive operations, credential injection after every check, no redirect forwarding, bounded response reads with allowlisted headers and recursive secret refusal, same-origin mutation guards, setup tests restricted to read-only idempotent operations and bound to the connection revision, and the one supported provider (OpenRouter) whose paid completion is routed through the governed AI capability."
+                },
+                {
+                    "name": "portable-containment-and-setup.md",
+                    "path": "/plugins/portable-containment-and-setup",
+                    "category": "Reference",
+                    "summary": "What the portable client sandbox can and cannot reach (parent DOM, cookies, web storage, IndexedDB, fetch/WebSocket/imports/nested workers, navigation) proved by an uncontained control worker against reachable targets, the measured wire bounds and the one-ledger-plus-watchdog budgets, mandatory host-minted session binding stamped by the frame shim with generation invalidation, the granted-capability registry and authenticated server capability bridge, the host-rendered UI primitives and markdown sanitizer with validated ui.render/ui.contribute events, effective-authority hashing with release-bound consent, action approvals that only the host UI can mint so AI cannot authorize purchases or destructive writes, and how host-generated setup reaches a first useful action."
+                },
+                {
                     "name": "selected-document-utility.md",
                     "path": "/plugins/selected-document-utility",
                     "category": "Tutorial",

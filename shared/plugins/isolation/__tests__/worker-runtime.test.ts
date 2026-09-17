@@ -225,6 +225,107 @@ describe('worker-runtime (8.4-8.6)', () => {
         runtime.dispose();
     });
 
+    it('charges the activation ledger and stops on a terminal breach (finding 2)', async () => {
+        const inbox: RpcEnvelope[] = [];
+        const fake = createFakeWorkerFactory(inbox);
+        const crashes: string[] = [];
+        const runtime = new WorkerIsolationRuntime({
+            pluginId: 'iso.worker',
+            workspaceId: 'ws-1',
+            generation: 1,
+            moduleUrl: 'https://plugins.local/worker.mjs',
+            grants: grants(['storage.read']),
+            createWorker: fake.factory,
+            services: { storage: { get: () => ({ value: 1 }) } },
+            budgets: {
+                maxCallsPerActivation: 1,
+                maxMessageBytes: 256 * 1024,
+                maxActivationMs: 60_000,
+            },
+            onCrash: (report) => crashes.push(report.reason),
+        });
+        await runtime.start();
+
+        fake.emit(
+            serializeRpcEnvelope(
+                createRpcRequest({ id: 'call-1', method: 'storage.get', params: {} })
+            )
+        );
+        await vi.waitFor(() => {
+            expect(inbox.some((e) => e.kind === 'response' && e.id === 'call-1')).toBe(true);
+        });
+        expect(runtime.budgetSnapshot.calls).toBe(1);
+
+        // The second call exceeds the activation call budget and stops the plugin.
+        fake.emit(
+            serializeRpcEnvelope(
+                createRpcRequest({ id: 'call-2', method: 'storage.get', params: {} })
+            )
+        );
+        await vi.waitFor(() => {
+            expect(
+                inbox.some(
+                    (e) => e.kind === 'error' && e.id === 'call-2' && e.code === 'budget-exceeded'
+                )
+            ).toBe(true);
+        });
+        expect(runtime.active).toBe(false);
+        expect(runtime.budgetTerminationReason).toContain('calls');
+        expect(crashes.some((reason) => reason.startsWith('budget-exceeded'))).toBe(true);
+    });
+
+    it('refuses an oversized inbound object before it reaches a handler (finding 3)', async () => {
+        const inbox: RpcEnvelope[] = [];
+        const fake = createFakeWorkerFactory(inbox);
+        const handler = vi.fn(() => ({ value: 1 }));
+        const runtime = new WorkerIsolationRuntime({
+            pluginId: 'iso.worker',
+            workspaceId: 'ws-1',
+            generation: 1,
+            moduleUrl: 'https://plugins.local/worker.mjs',
+            grants: grants(['storage.read']),
+            createWorker: fake.factory,
+            services: { storage: { get: handler } },
+            budgets: { maxMessageBytes: 512, maxActivationMs: 60_000 },
+        });
+        await runtime.start();
+
+        // A structured-clone object, not a pre-serialized string: the size check
+        // must measure the object itself.
+        fake.emit(
+            createRpcRequest({
+                id: 'huge-1',
+                method: 'storage.get',
+                params: { key: 'x'.repeat(4096) },
+            })
+        );
+        await vi.waitFor(() => {
+            expect(runtime.active).toBe(false);
+        });
+        expect(handler).not.toHaveBeenCalled();
+        expect(runtime.budgetTerminationReason).toContain('message-bytes');
+    });
+
+    it('stops a quiet sandbox when the activation wall-clock budget is spent', async () => {
+        const fake = createFakeWorkerFactory([]);
+        const runtime = new WorkerIsolationRuntime({
+            pluginId: 'iso.worker',
+            workspaceId: 'ws-1',
+            generation: 1,
+            moduleUrl: 'https://plugins.local/worker.mjs',
+            grants: grants(),
+            createWorker: fake.factory,
+            services: {},
+            budgets: { maxActivationMs: 30 },
+        });
+        await runtime.start();
+        await vi.waitFor(() => {
+            expect(runtime.active).toBe(false);
+        });
+        expect(runtime.budgetTerminationReason).toContain('activation-ms');
+        expect(fake.terminated()).toBe(true);
+    });
+
     it('adversarial: forbids host globals/DOM/network, revoked grants, and enforces deadlines', async () => {
         expect(WORKER_FORBIDDEN_CAPABILITIES).toEqual(
             expect.arrayContaining([

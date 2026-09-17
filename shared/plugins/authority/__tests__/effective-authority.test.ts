@@ -1,0 +1,368 @@
+import { describe, expect, it } from 'vitest';
+import {
+    compareAuthority,
+    computeAuthorityHash,
+    evaluateConsent,
+    SelectionHandleAuthority,
+    type AuthorityConsent,
+    type EffectiveAuthority,
+} from '../effective-authority';
+
+function authority(
+    overrides: Partial<EffectiveAuthority> = {}
+): EffectiveAuthority {
+    return {
+        trust: 'isolated-client',
+        grants: ['storage.read', 'storage.write'],
+        features: ['or3-portable-client-v1'],
+        engines: ['or3>=1.0.0'],
+        destinations: [
+            {
+                host: 'api.example.com',
+                methods: ['GET'],
+                pathPrefixes: ['/v1/'],
+                connection: 'example',
+            },
+        ],
+        connectionScopes: ['read:notes'],
+        dataScopes: ['documents.read'],
+        setupHooks: ['test-connection', 'summarize'],
+        dependencies: [],
+        ...overrides,
+    };
+}
+
+describe('effective authority (4.6)', () => {
+    it('hashes canonically regardless of set ordering', async () => {
+        const left = await computeAuthorityHash(
+            authority({ grants: ['storage.write', 'storage.read'] })
+        );
+        const right = await computeAuthorityHash(
+            authority({ grants: ['storage.read', 'storage.write'] })
+        );
+        expect(left).toBe(right);
+        expect(left).toMatch(/^sha256-[a-f0-9]{64}$/);
+    });
+
+    it('changes the hash when only a destination method changes', async () => {
+        const readOnly = await computeAuthorityHash(authority());
+        const writable = await computeAuthorityHash(
+            authority({
+                destinations: [
+                    {
+                        host: 'api.example.com',
+                        methods: ['GET', 'POST'],
+                        pathPrefixes: ['/v1/'],
+                        connection: 'example',
+                    },
+                ],
+            })
+        );
+        expect(readOnly).not.toBe(writable);
+    });
+
+    it('requires fresh consent when authority expands without a new grant string (IN12)', () => {
+        const comparison = compareAuthority(
+            authority(),
+            authority({
+                destinations: [
+                    {
+                        host: 'api.example.com',
+                        methods: ['GET', 'POST'],
+                        pathPrefixes: ['/v1/', '/v2/'],
+                        connection: 'example',
+                    },
+                    { host: 'files.example.com', methods: ['GET'], pathPrefixes: ['/'] },
+                ],
+                dataScopes: ['documents.read', 'documents.write'],
+            })
+        );
+
+        expect(comparison.expanded).toBe(true);
+        expect(comparison.requiresFreshConsent).toBe(true);
+        expect(comparison.expansions).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ kind: 'method-added', detail: 'api.example.com POST' }),
+                expect.objectContaining({ kind: 'path-added', detail: 'api.example.com /v2/' }),
+                expect.objectContaining({ kind: 'host-added', detail: 'files.example.com' }),
+                expect.objectContaining({
+                    kind: 'data-scope-added',
+                    detail: 'documents.write',
+                }),
+            ])
+        );
+    });
+
+    it('treats narrowing as technical review without redundant broad consent', () => {
+        const comparison = compareAuthority(
+            authority({
+                destinations: [
+                    {
+                        host: 'api.example.com',
+                        methods: ['GET', 'POST'],
+                        pathPrefixes: ['/v1/'],
+                        connection: 'example',
+                    },
+                ],
+                dataScopes: ['documents.read', 'documents.write'],
+            }),
+            authority()
+        );
+
+        expect(comparison.narrowed).toBe(true);
+        expect(comparison.expanded).toBe(false);
+        expect(comparison.requiresFreshConsent).toBe(false);
+        expect(comparison.requiresTechnicalReview).toBe(true);
+    });
+
+    it('treats a changed connection identity as an expansion, not identity (IN12)', () => {
+        const comparison = compareAuthority(
+            authority(),
+            authority({
+                destinations: [
+                    {
+                        host: 'api.example.com',
+                        methods: ['GET'],
+                        pathPrefixes: ['/v1/'],
+                        connection: 'other-account',
+                    },
+                ],
+            })
+        );
+
+        expect(comparison.identical).toBe(false);
+        expect(comparison.expanded).toBe(true);
+        expect(comparison.requiresFreshConsent).toBe(true);
+        expect(comparison.expansions).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ kind: 'connection-changed' }),
+            ])
+        );
+    });
+
+    it('keeps several destinations for one host instead of collapsing them', () => {
+        const twoAccountsForOneHost: EffectiveAuthority = authority({
+            destinations: [
+                {
+                    host: 'api.example.com',
+                    methods: ['GET'],
+                    pathPrefixes: ['/v1/'],
+                    connection: 'account-a',
+                },
+                {
+                    host: 'api.example.com',
+                    methods: ['GET'],
+                    pathPrefixes: ['/v1/'],
+                    connection: 'account-b',
+                },
+            ],
+        });
+
+        expect(compareAuthority(twoAccountsForOneHost, twoAccountsForOneHost)).toMatchObject({
+            identical: true,
+        });
+
+        const widenedSecondEntry = compareAuthority(twoAccountsForOneHost, {
+            ...twoAccountsForOneHost,
+            destinations: [
+                twoAccountsForOneHost.destinations[0]!,
+                {
+                    host: 'api.example.com',
+                    methods: ['GET', 'POST'],
+                    pathPrefixes: ['/v1/'],
+                    connection: 'account-b',
+                },
+            ],
+        });
+        expect(widenedSecondEntry.expanded).toBe(true);
+        expect(widenedSecondEntry.expansions).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ kind: 'method-added', detail: 'api.example.com POST' }),
+            ])
+        );
+    });
+
+    it('reports engine changes, which participate in the hash', () => {
+        const comparison = compareAuthority(authority(), authority({ engines: ['or3>=2.0.0'] }));
+        expect(comparison.identical).toBe(false);
+        expect(comparison.expansions).toEqual(
+            expect.arrayContaining([expect.objectContaining({ kind: 'engine-added' })])
+        );
+    });
+
+    it('reports identical authority for an unchanged update', () => {
+        const comparison = compareAuthority(authority(), authority());
+        expect(comparison).toMatchObject({ identical: true, expanded: false, narrowed: false });
+    });
+
+    it('denies missing, stale and mismatched consent (IN11)', () => {
+        const hash = 'sha256-' + 'a'.repeat(64);
+        const candidate = {
+            pluginId: 'example.plugin',
+            releaseId: 'rel_2',
+            workspaceId: 'ws_1',
+            generation: 2,
+            authorityHash: hash,
+        };
+
+        expect(evaluateConsent({ consent: null, candidate })).toMatchObject({
+            status: 'denied',
+            code: 'consent-missing',
+        });
+
+        const consent: AuthorityConsent = {
+            subjectId: 'user_1',
+            workspaceId: 'ws_1',
+            pluginId: 'example.plugin',
+            releaseId: 'rel_1',
+            generation: 2,
+            authorityHash: hash,
+            approvedAt: 1,
+            approvedBy: 'user_1',
+        };
+        expect(evaluateConsent({ consent, candidate })).toMatchObject({
+            status: 'denied',
+            code: 'consent-release-changed',
+        });
+
+        expect(
+            evaluateConsent({
+                consent: { ...consent, releaseId: 'rel_2', generation: 3 },
+                candidate,
+            })
+        ).toMatchObject({ status: 'denied', code: 'consent-stale-generation' });
+
+        expect(
+            evaluateConsent({
+                consent: { ...consent, releaseId: 'rel_2', generation: 2 },
+                candidate,
+            })
+        ).toMatchObject({ status: 'allowed' });
+
+        expect(
+            evaluateConsent({
+                consent: { ...consent, releaseId: 'rel_2', generation: 2, workspaceId: 'ws_2' },
+                candidate,
+            })
+        ).toMatchObject({ status: 'denied', code: 'consent-workspace-mismatch' });
+
+        expect(
+            evaluateConsent({
+                consent: {
+                    ...consent,
+                    releaseId: 'rel_2',
+                    generation: 2,
+                    authorityHash: 'sha256-' + 'b'.repeat(64),
+                },
+                candidate,
+            })
+        ).toMatchObject({ status: 'denied', code: 'consent-authority-expanded' });
+    });
+
+    it('denies consent whose recorded authority no longer covers the candidate', async () => {
+        const previous = authority();
+        const next = authority({
+            destinations: [{ host: 'api.example.com', methods: ['GET'], pathPrefixes: ['/'] }],
+        });
+        const consent: AuthorityConsent = {
+            subjectId: 'user_1',
+            workspaceId: 'ws_1',
+            pluginId: 'example.plugin',
+            releaseId: 'rel_1',
+            generation: 1,
+            authorityHash: 'sha256-' + 'a'.repeat(64),
+            approvedAt: 1,
+            approvedBy: 'user_1',
+        };
+        const decision = evaluateConsent({
+            consent,
+            candidate: {
+                pluginId: 'example.plugin',
+                releaseId: 'rel_1',
+                workspaceId: 'ws_1',
+                generation: 1,
+                authorityHash: 'sha256-' + 'a'.repeat(64),
+            },
+            consentedAuthority: previous,
+            candidateAuthority: next,
+        });
+        expect(decision).toMatchObject({ status: 'denied', code: 'consent-authority-expanded' });
+
+        const allowed = evaluateConsent({
+            consent,
+            candidate: {
+                pluginId: 'example.plugin',
+                releaseId: 'rel_1',
+                workspaceId: 'ws_1',
+                generation: 1,
+                authorityHash: 'sha256-' + 'a'.repeat(64),
+            },
+            consentedAuthority: previous,
+            candidateAuthority: previous,
+        });
+        expect(allowed).toMatchObject({ status: 'allowed' });
+    });
+});
+
+describe('selection handles (4.6)', () => {
+    it('mints host-created handles and resolves only for the owner', () => {
+        const handles = new SelectionHandleAuthority({
+            pluginId: 'example.plugin',
+            workspaceId: 'ws_1',
+            generation: 3,
+        });
+        const handle = handles.mint({ kind: 'document', contextId: 'doc_1' });
+        expect(handle.handleId).toMatch(/^sel_/);
+
+        expect(
+            handles.resolve(handle.handleId, {
+                pluginId: 'example.plugin',
+                workspaceId: 'ws_1',
+            })
+        ).toMatchObject({ status: 'resolved' });
+
+        expect(
+            handles.resolve(handle.handleId, {
+                pluginId: 'other.plugin',
+                workspaceId: 'ws_1',
+            })
+        ).toMatchObject({ status: 'denied', code: 'handle-foreign' });
+
+        expect(
+            handles.resolve(handle.handleId, {
+                pluginId: 'example.plugin',
+                workspaceId: 'ws_2',
+            })
+        ).toMatchObject({ status: 'denied', code: 'handle-foreign' });
+    });
+
+    it('invalidates handles on generation rotation', () => {
+        const handles = new SelectionHandleAuthority({
+            pluginId: 'example.plugin',
+            workspaceId: 'ws_1',
+            generation: 1,
+        });
+        const handle = handles.mint({ kind: 'message', contextId: 'msg_1' });
+        handles.rotateGeneration(2);
+        expect(
+            handles.resolve(handle.handleId, {
+                pluginId: 'example.plugin',
+                workspaceId: 'ws_1',
+            })
+        ).toMatchObject({ status: 'denied', code: 'handle-stale' });
+    });
+
+    it('denies handles the host never minted', () => {
+        const handles = new SelectionHandleAuthority({
+            pluginId: 'example.plugin',
+            workspaceId: 'ws_1',
+            generation: 1,
+        });
+        expect(
+            handles.resolve('sel_forged', {
+                pluginId: 'example.plugin',
+                workspaceId: 'ws_1',
+            })
+        ).toMatchObject({ status: 'denied', code: 'handle-stale' });
+    });
+});

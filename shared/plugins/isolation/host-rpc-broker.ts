@@ -36,9 +36,32 @@ export type HostRpcHandler = (
 export interface HostRpcHandlerContext {
     readonly pluginId: string;
     readonly workspaceId: string;
+    /** Host-resolved acting user for this activation; never plugin-supplied. */
+    readonly userId?: string;
     readonly generation: number;
     readonly requestId: string;
     readonly signal: AbortSignal;
+    /** Deadline the host actually applied after clamping. */
+    readonly deadlineMs: number;
+}
+
+export interface HostRpcBudgetPort {
+    /** Admit or refuse one inbound call; the runtime owns the ledger. */
+    admitCall(): {
+        readonly ok: boolean;
+        readonly kind?: string;
+        readonly message?: string;
+        readonly terminate?: boolean;
+    };
+    releaseCall(): void;
+    /** Clamp a plugin-requested deadline to the host ceiling. */
+    clampDeadlineMs(requestedMs: number | undefined): number;
+    /** Called when an admitted call must end the activation. */
+    onTerminalBreach?(input: {
+        readonly kind: string;
+        readonly message: string;
+        readonly requestId: string;
+    }): void;
 }
 
 export interface HostRpcMethodSpec {
@@ -51,9 +74,29 @@ export interface HostRpcBrokerOptions {
     readonly pluginId: string;
     readonly workspaceId: string;
     readonly generation: number;
+    /** Host-resolved acting user, when the activation is user-scoped. */
+    readonly userId?: string;
     readonly grants: PluginGrantReviewSnapshot;
     readonly methods: readonly HostRpcMethodSpec[];
     readonly send: (envelope: RpcEnvelope) => void;
+    /**
+     * Host-side budget port. When supplied, every admitted call is charged, the
+     * deadline is clamped to the host ceiling, and a terminal breach terminates
+     * the activation instead of only failing the single request.
+     */
+    readonly budget?: HostRpcBudgetPort;
+    /**
+     * Host-issued session verification. When supplied, a request whose session,
+     * source or generation does not match host state is denied before any
+     * handler runs, so disable/update/workspace-switch cannot leave late effects.
+     */
+    readonly verifyInbound?: (request: RpcRequestEnvelope) => {
+        readonly status: 'authorized' | 'denied';
+        readonly code?: string;
+        readonly message?: string;
+    };
+    /** Reject inbound requests that do not echo host session identity. */
+    readonly requireHostSession?: boolean;
     readonly maxInFlight?: number;
     readonly now?: () => number;
 }
@@ -77,11 +120,15 @@ export class HostRpcBroker {
     readonly #pluginId: string;
     readonly #workspaceId: string;
     readonly #generation: number;
+    readonly #userId: string | undefined;
     readonly #send: (envelope: RpcEnvelope) => void;
     readonly #methods = new Map<string, HostRpcMethodSpec>();
     readonly #session: RpcSession;
     readonly #controllers = new Map<string, AbortController>();
     readonly #maxInFlight: number;
+    readonly #verifyInbound: HostRpcBrokerOptions['verifyInbound'];
+    readonly #requireHostSession: boolean;
+    readonly #budget: HostRpcBudgetPort | undefined;
     #grants: PluginGrantReviewSnapshot;
     #disposed = false;
 
@@ -89,9 +136,13 @@ export class HostRpcBroker {
         this.#pluginId = options.pluginId;
         this.#workspaceId = options.workspaceId;
         this.#generation = options.generation;
+        this.#userId = options.userId;
         this.#grants = options.grants;
         this.#send = options.send;
+        this.#verifyInbound = options.verifyInbound;
+        this.#requireHostSession = options.requireHostSession ?? false;
         this.#maxInFlight = options.maxInFlight ?? DEFAULT_BROKER_MAX_IN_FLIGHT;
+        this.#budget = options.budget;
         for (const spec of options.methods) {
             this.#methods.set(spec.method, spec);
         }
@@ -178,6 +229,46 @@ export class HostRpcBroker {
         this.#session.dispose('broker disposed');
     }
 
+    /**
+     * Host-issued session check. Runs before grant evaluation, backpressure and
+     * any handler side effect, so a stale or forged call leaves nothing behind.
+     */
+    #checkAuthority(
+        request: RpcRequestEnvelope
+    ): HostRpcDispatchOutcome | null {
+        if (this.#verifyInbound) {
+            const decision = this.#verifyInbound(request);
+            if (decision.status === 'authorized') {
+                return null;
+            }
+
+            const code = decision.code ?? 'policy-denied';
+            const message = decision.message ?? 'Inbound request is not authorized';
+            this.#send(
+                respondError(request, 'policy-denied', message, { authority: code })
+            );
+            return { status: 'rejected', code, message };
+        }
+
+        if (this.#requireHostSession) {
+            const missing =
+                typeof request.sessionId !== 'string' ||
+                typeof request.sourceId !== 'string' ||
+                typeof request.generation !== 'number';
+            if (missing) {
+                const message = 'Request is missing host-issued session identity';
+                this.#send(
+                    respondError(request, 'policy-denied', message, {
+                        authority: 'session-missing',
+                    })
+                );
+                return { status: 'rejected', code: 'policy-denied', message };
+            }
+        }
+
+        return null;
+    }
+
     async #handleRequest(
         request: RpcRequestEnvelope
     ): Promise<HostRpcDispatchOutcome> {
@@ -193,6 +284,11 @@ export class HostRpcBroker {
                 code: 'replay',
                 message: `Duplicate RPC request id: ${request.id}`,
             };
+        }
+
+        const authority = this.#checkAuthority(request);
+        if (authority !== null) {
+            return authority;
         }
 
         if (this.#controllers.size >= this.#maxInFlight) {
@@ -250,14 +346,27 @@ export class HostRpcBroker {
         const controller = new AbortController();
         this.#controllers.set(request.id, controller);
 
+        const admitted = this.#budget?.admitCall() ?? { ok: true };
+        if (!admitted.ok) {
+            this.#controllers.delete(request.id);
+            const message = admitted.message ?? 'Containment budget exceeded';
+            this.#send(respondError(request, 'budget-exceeded', message));
+            if (admitted.terminate) {
+                this.#budget?.onTerminalBreach?.({
+                    kind: admitted.kind ?? 'unknown',
+                    message,
+                    requestId: request.id,
+                });
+            }
+            return { status: 'rejected', code: 'budget-exceeded', message };
+        }
+
+        const deadlineMs = this.#clampDeadline(request.deadlineMs);
         let deadlineTimer: ReturnType<typeof setTimeout> | null = null;
-        if (
-            typeof request.deadlineMs === 'number' &&
-            request.deadlineMs > 0
-        ) {
+        if (deadlineMs > 0) {
             deadlineTimer = setTimeout(() => {
                 controller.abort('deadline-exceeded');
-            }, request.deadlineMs);
+            }, deadlineMs);
         }
 
         try {
@@ -275,9 +384,11 @@ export class HostRpcBroker {
             const result = await spec.handler(request.params, {
                 pluginId: this.#pluginId,
                 workspaceId: this.#workspaceId,
+                ...(this.#userId === undefined ? {} : { userId: this.#userId }),
                 generation: this.#generation,
                 requestId: request.id,
                 signal: controller.signal,
+                deadlineMs,
             });
 
             if (controller.signal.aborted) {
@@ -339,7 +450,17 @@ export class HostRpcBroker {
                 clearTimeout(deadlineTimer);
             }
             this.#controllers.delete(request.id);
+            this.#budget?.releaseCall();
         }
+    }
+
+    #clampDeadline(requestedMs: number | undefined): number {
+        const requested =
+            typeof requestedMs === 'number' && Number.isFinite(requestedMs) && requestedMs > 0
+                ? requestedMs
+                : undefined;
+        if (!this.#budget) return requested ?? 0;
+        return this.#budget.clampDeadlineMs(requested);
     }
 }
 

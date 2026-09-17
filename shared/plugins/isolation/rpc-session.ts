@@ -24,6 +24,11 @@ export interface RpcSessionOptions {
     readonly send: (envelope: RpcEnvelope) => void;
     readonly onEvent?: (event: RpcEventEnvelope) => void;
     readonly generateId?: () => string;
+    /**
+     * Prefix for the ids this session generates. Direction-scoped prefixes keep
+     * a cancellation from being mistaken for a call owned by the other side.
+     */
+    readonly idPrefix?: string;
 }
 
 export type RpcCallFailure = {
@@ -56,6 +61,18 @@ function defaultGenerateId(): string {
 }
 
 /**
+ * Build the id generator for one session. A prefix makes ownership explicit:
+ * a `cancel` frame for a host-issued id can never resolve a plugin-issued call.
+ */
+export function prefixedIdGenerator(prefix: string): () => string {
+    let counter = 0;
+    return () => {
+        counter += 1;
+        return `${prefix}-${Date.now().toString(36)}-${counter.toString(36)}`;
+    };
+}
+
+/**
  * Client-side or host-side session that tracks outstanding request/response pairs.
  */
 export class RpcSession {
@@ -77,11 +94,18 @@ export class RpcSession {
         this.#maxInFlight = options.maxInFlight ?? 32;
         this.#defaultDeadlineMs = options.defaultDeadlineMs ?? 10_000;
         this.#now = options.now ?? (() => Date.now());
-        this.#generateId = options.generateId ?? defaultGenerateId;
+        this.#generateId =
+            options.generateId ??
+            (options.idPrefix ? prefixedIdGenerator(options.idPrefix) : defaultGenerateId);
     }
 
     get inFlightCount(): number {
         return this.#pending.size;
+    }
+
+    /** True when this session owns an outstanding call with this id. */
+    hasPending(id: string): boolean {
+        return this.#pending.has(id);
     }
 
     get disposed(): boolean {

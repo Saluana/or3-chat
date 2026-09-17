@@ -20,6 +20,8 @@ const SUBPATHS = {
     './profile': 'profile',
     './state-compatibility': 'state-compatibility',
     './package-archive': 'cli/archive',
+    './ui': 'ui',
+    './portable': 'portable',
 };
 
 function distExports() {

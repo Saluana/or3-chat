@@ -125,6 +125,7 @@
         "plugin-runtime:server-module-resolver:check": "bun x vitest run server/admin/plugins/__tests__/server-module-resolver.test.ts server/api/plugins/__tests__/dispatcher.test.ts",
         "plugin-runtime:package-promotion:check": "bun x vitest run server/admin/plugins/__tests__/package-promotion.test.ts server/admin/plugins/__tests__/settings-migration.test.ts server/admin/plugins/__tests__/package-lifecycle.test.ts server/admin/plugins/__tests__/package-promotion-e2e.test.ts",
         "plugin-runtime:isolation:check": "bun x vitest run shared/plugins/isolation/__tests__ server/admin/plugins/isolation/__tests__",
+        "plugin-runtime:containment:qualify": "bun run scripts/plugin-runtime/qualify-containment.ts",
         "plugin-runtime:runtime-controls:check": "bun x vitest run shared/plugins/__tests__/runtime-controls.test.ts",
         "plugin-runtime:cli:check": "bun x vitest run scripts/__tests__/plugin-runtime-cli.test.ts scripts/__tests__/plugin-runtime-v1-codemod.test.ts",
         "dev:offline": "tsx scripts/cli/dev.ts --or3-offline"

@@ -11,6 +11,8 @@ const entries = [
     'src/manifest.ts',
     'src/host.ts',
     'src/testing.ts',
+    'src/ui.ts',
+    'src/portable.ts',
     'src/profile.ts',
     'src/package-tree.ts',
     'src/state-compatibility.ts',

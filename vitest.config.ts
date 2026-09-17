@@ -70,6 +70,14 @@ export default defineConfig({
                 __dirname,
                 'packages/plugin-sdk/src/manifest.ts'
             ),
+            '@or3/plugin-sdk/ui': path.resolve(
+                __dirname,
+                'packages/plugin-sdk/src/ui.ts'
+            ),
+            '@or3/plugin-sdk/portable': path.resolve(
+                __dirname,
+                'packages/plugin-sdk/src/portable.ts'
+            ),
             '@or3/plugin-sdk/host': path.resolve(
                 __dirname,
                 'packages/plugin-sdk/src/host.ts'
