@@ -9,11 +9,16 @@
  */
 import { computed, onMounted, ref } from 'vue';
 import { useToast } from '#imports';
-import { useMarketplaceInstalled } from '~/composables/marketplace/useMarketplace';
+import {
+    resumableOperationFor,
+    useMarketplaceInstall,
+    useMarketplaceInstalled,
+} from '~/composables/marketplace/useMarketplace';
 import { reportCandidateClientCanary } from '~/composables/plugins/portable-canary';
 
 const toast = useToast();
 const installed = useMarketplaceInstalled();
+const install = useMarketplaceInstall();
 const busyPluginId = ref<string | null>(null);
 const canaryNote = ref<Record<string, string>>({});
 
@@ -22,6 +27,28 @@ onMounted(() => installed.load());
 const candidates = computed(() =>
     installed.packages.value.filter((entry) => Boolean(entry.pointer?.candidate))
 );
+
+function reportOutcome(
+    pluginId: string,
+    status: string | undefined,
+    message: string | undefined
+): void {
+    if (status === 'completed') {
+        canaryNote.value = { ...canaryNote.value, [pluginId]: 'activated' };
+        toast.add({
+            title: 'Updated',
+            description: 'The reviewed version is now the selected one.',
+            color: 'success',
+        });
+        return;
+    }
+    canaryNote.value = { ...canaryNote.value, [pluginId]: status ?? 'pending' };
+    toast.add({
+        title: status === 'paused' ? 'Setup required' : 'The update is still pending',
+        description: message ?? 'Resume the install when the blocker is cleared.',
+        color: 'warning',
+    });
+}
 
 async function apiPost<T>(
     url: string,
@@ -38,13 +65,30 @@ async function apiPost<T>(
 
 async function activate(entry: {
     readonly pluginId: string;
-    readonly pointer: { readonly candidate?: { readonly packageDigest?: string } } | null;
+    readonly pointer: {
+        readonly candidate?: { readonly packageDigest?: string; readonly version?: string };
+    } | null;
 }): Promise<void> {
     const candidateDigest = entry.pointer?.candidate?.packageDigest;
     if (!candidateDigest) return;
+    const candidateVersion = entry.pointer?.candidate?.version ?? '';
     busyPluginId.value = entry.pluginId;
     canaryNote.value = { ...canaryNote.value, [entry.pluginId]: 'checking' };
     try {
+        // A candidate the acquisition pipeline staged belongs to that operation:
+        // resume it, so preflight, setup readiness and the browser canary all
+        // still apply. Promoting it here would be a side door around them.
+        const resumable = resumableOperationFor(
+            await install.listOperations(entry.pluginId),
+            candidateVersion
+        );
+        if (resumable) {
+            canaryNote.value = { ...canaryNote.value, [entry.pluginId]: 'resuming install' };
+            const finished = await install.adopt(entry.pluginId, resumable.operationId);
+            reportOutcome(entry.pluginId, finished?.status, finished?.failure?.message);
+            await installed.load();
+            return;
+        }
         const runCanary = () =>
             apiPost<{
                 ok?: boolean;
@@ -83,9 +127,26 @@ async function activate(entry: {
             return;
         }
 
-        await apiPost(`/api/admin/plugins/packages/${entry.pluginId}/promote`, {
-            body: { candidateDigest },
-        });
+        try {
+            await apiPost(`/api/admin/plugins/packages/${entry.pluginId}/promote`, {
+                body: { candidateDigest },
+            });
+        } catch (promotionError) {
+            // The promotion boundary refuses a candidate that an install
+            // operation owns; resume that operation instead of reporting failure.
+            const data = (promotionError as { data?: { code?: string; operationId?: string } }).data;
+            if (data?.code === 'acquisition-required' && data.operationId) {
+                canaryNote.value = {
+                    ...canaryNote.value,
+                    [entry.pluginId]: 'resuming install',
+                };
+                const finished = await install.adopt(entry.pluginId, data.operationId);
+                reportOutcome(entry.pluginId, finished?.status, finished?.failure?.message);
+                await installed.load();
+                return;
+            }
+            throw promotionError;
+        }
         toast.add({
             title: 'Updated',
             description: 'The reviewed version is now the selected one.',

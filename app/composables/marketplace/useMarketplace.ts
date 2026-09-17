@@ -90,27 +90,43 @@ export interface MarketplacePreflight {
     };
 }
 
-export interface AcquisitionStatusView {
-    readonly operationId: string;
-    readonly pluginId: string;
-    readonly version: string;
-    readonly stage: string;
-    readonly status: 'running' | 'paused' | 'failed' | 'completed' | 'canceled' | 'blocked';
-    readonly percentComplete: number;
-    readonly needsSetup: boolean;
-    readonly retryable: boolean;
-    readonly canceled: boolean;
-    readonly failure: {
-        readonly code: string;
-        readonly stage: string;
-        readonly message: string;
-        readonly retryable: boolean;
-    } | null;
+/** The shape `describeAcquisitionStatus()` returns; the UI never invents one. */
+export type AcquisitionStatusView = import('~~/shared/plugins/acquisition/contracts').AcquisitionStatusView;
+
+/** Response envelope of the acquisition routes: the view is always nested. */
+interface AcquisitionResponse {
+    readonly ok: boolean;
+    readonly pluginId?: string;
+    readonly workspaceId?: string;
+    readonly operation: AcquisitionStatusView;
 }
 
+interface AcquisitionListResponse {
+    readonly ok: boolean;
+    readonly operations: readonly AcquisitionStatusView[];
+}
+
+/**
+ * The admin session route returns `{ authenticated, kind }`: the principal kind,
+ * not a role. Only `super_admin` passes the acquisition routes' `superAdminOnly`
+ * gate, so that is what "can install" means.
+ */
 interface AdminSessionView {
     readonly authenticated?: boolean;
-    readonly role?: string;
+    readonly kind?: string;
+}
+
+export const SUPER_ADMIN_KIND = 'super_admin';
+
+/**
+ * The one place a response envelope is unwrapped. Both the start and status
+ * routes answer `{ ok, ..., operation }`; reading a top-level `operationId` or a
+ * bare status view loses the operation the server just recorded.
+ */
+function unwrapAcquisitionOperation(response: AcquisitionResponse | null): AcquisitionStatusView | null {
+    if (!response || typeof response !== 'object') return null;
+    if (!response.operation || typeof response.operation.operationId !== 'string') return null;
+    return response.operation;
 }
 
 /**
@@ -118,26 +134,28 @@ interface AdminSessionView {
  * uses it only to decide between an install action and the request-an-admin path.
  */
 export function useMarketplaceAccount() {
-    const role = ref<string | null>(null);
+    const kind = ref<string | null>(null);
     const checked = ref(false);
 
     const load = async (): Promise<void> => {
         if (checked.value) return;
         try {
             const session = await apiGet<AdminSessionView>('/api/admin/auth/session');
-            role.value = session.authenticated === false ? null : (session.role ?? null);
+            kind.value = session.authenticated === false ? null : (session.kind ?? null);
         } catch {
-            role.value = null;
+            // A member without admin authority is refused by the route, which is
+            // exactly the "ask an administrator" case.
+            kind.value = null;
         } finally {
             checked.value = true;
         }
     };
 
     return {
-        role,
+        kind,
         checked,
         load,
-        canInstall: computed(() => role.value === 'owner' || role.value === 'admin'),
+        canInstall: computed(() => kind.value === SUPER_ADMIN_KIND),
     };
 }
 
@@ -249,11 +267,22 @@ export function useMarketplaceInstall() {
 
     const poll = async (): Promise<AcquisitionStatusView | null> => {
         if (!operationId.value) return null;
-        const view = await apiGet<AcquisitionStatusView>(
+        const response = await apiGet<AcquisitionResponse>(
             `/api/admin/plugins/acquisitions/${operationId.value}/status`
         );
+        const view = unwrapAcquisitionOperation(response);
         status.value = view;
         return view;
+    };
+
+    /** Acquisition operations for one plugin, newest first as the server lists them. */
+    const listOperations = async (
+        pluginId: string
+    ): Promise<readonly AcquisitionStatusView[]> => {
+        const response = await apiGet<AcquisitionListResponse>(
+            `/api/admin/plugins/acquisitions?pluginId=${encodeURIComponent(pluginId)}`
+        );
+        return Array.isArray(response.operations) ? response.operations : [];
     };
 
     /** Complete a pending browser canary for the operation's candidate. */
@@ -309,7 +338,7 @@ export function useMarketplaceInstall() {
         error.value = null;
         canaryStatus.value = null;
         try {
-            const response = await apiPost<{ operationId: string }>(
+            const response = await apiPost<AcquisitionResponse>(
                 '/api/admin/plugins/acquisitions',
                 {
                     body: {
@@ -319,7 +348,13 @@ export function useMarketplaceInstall() {
                     },
                 }
             );
-            operationId.value = response.operationId;
+            const started = unwrapAcquisitionOperation(response);
+            if (!started) {
+                error.value = 'The server did not return an operation for this install.';
+                return null;
+            }
+            operationId.value = started.operationId;
+            status.value = started;
             return await waitForSettled(input.pluginId);
         } catch (caught) {
             error.value =
@@ -334,7 +369,11 @@ export function useMarketplaceInstall() {
         if (!operationId.value) return null;
         running.value = true;
         try {
-            await apiPost(`/api/admin/plugins/acquisitions/${operationId.value}/retry`);
+            const response = await apiPost<AcquisitionResponse>(
+                `/api/admin/plugins/acquisitions/${operationId.value}/retry`
+            );
+            const view = unwrapAcquisitionOperation(response);
+            if (view) status.value = view;
             return await waitForSettled(pluginId);
         } catch (caught) {
             error.value = caught instanceof Error ? caught.message : 'The retry was refused.';
@@ -346,8 +385,31 @@ export function useMarketplaceInstall() {
 
     const cancel = async (): Promise<void> => {
         if (!operationId.value) return;
-        await apiPost(`/api/admin/plugins/acquisitions/${operationId.value}/cancel`);
-        await poll();
+        const response = await apiPost<AcquisitionResponse>(
+            `/api/admin/plugins/acquisitions/${operationId.value}/cancel`
+        );
+        const view = unwrapAcquisitionOperation(response);
+        if (view) status.value = view;
+        else await poll();
+    };
+
+    /**
+     * Adopt an operation the server already recorded (for example an update a
+     * previous install left pending) and follow it to completion. This is how the
+     * Updates view resumes the pipeline instead of promoting around it.
+     */
+    const adopt = async (
+        pluginId: string,
+        recordedOperationId: string
+    ): Promise<AcquisitionStatusView | null> => {
+        running.value = true;
+        error.value = null;
+        operationId.value = recordedOperationId;
+        try {
+            return await waitForSettled(pluginId);
+        } finally {
+            running.value = false;
+        }
     };
 
     return {
@@ -360,7 +422,28 @@ export function useMarketplaceInstall() {
         retry,
         cancel,
         poll,
+        adopt,
+        listOperations,
     };
+}
+
+/**
+ * The operation an update should resume: an unfinished acquisition that already
+ * staged this candidate version. Matching on the version keeps the UI honest
+ * about which record it is continuing.
+ */
+export function resumableOperationFor(
+    operations: readonly AcquisitionStatusView[],
+    version: string
+): AcquisitionStatusView | null {
+    return (
+        operations.find(
+            (operation) =>
+                operation.version === version &&
+                operation.status !== 'completed' &&
+                operation.status !== 'canceled'
+        ) ?? null
+    );
 }
 
 export interface InstalledPackageView {

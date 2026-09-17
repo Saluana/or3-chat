@@ -34,9 +34,31 @@ onMounted(async () => {
     await Promise.all([catalog.load(), account.load()]);
 });
 
+/**
+ * The registry addresses releases by plugin id *and* version, so the detail is
+ * loaded first and its newest release version is what preflight and the install
+ * are asked about. Asking without a version would be refused as
+ * `release-metadata-invalid` for every plugin.
+ */
 async function openDetail(pluginId: string): Promise<void> {
     selectedPluginId.value = pluginId;
-    await Promise.all([detail.load(pluginId), preflight.run(pluginId)]);
+    await detail.load(pluginId);
+    const version = resolveLatestVersion();
+    await preflight.run(pluginId, version);
+}
+
+/** Newest published version of the selected plugin, as the catalog orders them. */
+function resolveLatestVersion(): string | undefined {
+    const releases = detail.entry.value?.releases;
+    if (Array.isArray(releases)) {
+        for (const release of releases) {
+            const version = (release as { version?: unknown })?.version;
+            if (typeof version === 'string' && version.length > 0) return version;
+        }
+    }
+    const latestRelease = detail.entry.value?.latestRelease;
+    const latest = (latestRelease as { version?: unknown } | undefined)?.version;
+    return typeof latest === 'string' && latest.length > 0 ? latest : undefined;
 }
 
 function pluginIdOf(card: Record<string, unknown>): string {
@@ -60,7 +82,9 @@ const releases = computed(() => {
 });
 
 const latestVersion = computed(() => {
-    const release = preflight.result?.release;
+    // The preflight answer is authoritative: it is the version the server
+    // actually resolved and verified.
+    const release = preflight.result.value?.release;
     if (release) return release.version;
     const first = releases.value[0];
     return first && typeof first.version === 'string' ? first.version : undefined;
