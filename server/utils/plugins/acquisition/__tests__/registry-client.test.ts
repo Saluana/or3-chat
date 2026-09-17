@@ -166,10 +166,7 @@ describe('registry resolve (5.2)', () => {
         const quarantinedAtSeven = makeClient({
             keys: [fixture.key],
             acceptedAdvisorySequence: 7,
-            transport: fakeRegistryTransport({
-                fixture,
-                catalogAdvisorySequence: 6,
-            }),
+            transport: fakeRegistryTransport({ fixture }),
         });
         expect(
             await quarantinedAtSeven.resolveRelease({
@@ -184,10 +181,7 @@ describe('registry resolve (5.2)', () => {
         const currentAtSeven = makeClient({
             keys: [fixture.key],
             acceptedAdvisorySequence: 7,
-            transport: fakeRegistryTransport({
-                fixture,
-                catalogAdvisorySequence: 7,
-            }),
+            transport: fakeRegistryTransport({ fixture }),
         });
         expect(
             await currentAtSeven.resolveRelease({

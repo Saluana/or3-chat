@@ -79,6 +79,16 @@ vi.mock('../../../utils/plugins/acquisition/registry-state', () => ({
     },
 }));
 
+interface DiagnosticsReport {
+    readonly host: { readonly appVersion: string };
+    readonly marketplace: { readonly acceptedAdvisorySequence: number };
+    readonly workspace: {
+        readonly installedPackages: readonly Record<string, unknown>[];
+    };
+    readonly operations: readonly Record<string, unknown>[];
+    readonly redaction: { readonly omitted: readonly string[] };
+}
+
 describe('GET /api/plugins/diagnostics', () => {
     beforeEach(() => {
         requireAdminMock.mockReset().mockResolvedValue({
@@ -100,7 +110,7 @@ describe('GET /api/plugins/diagnostics', () => {
 
     it('reports state and operation ids while omitting secrets and content', async () => {
         const handler = (await import('../diagnostics.get')).default;
-        const report = (await handler({} as never)) as Record<string, never>;
+        const report = (await handler({} as never)) as unknown as DiagnosticsReport;
 
         expect(report.host.appVersion).toBe('0.1.70');
         expect(report.marketplace.acceptedAdvisorySequence).toBe(4);
