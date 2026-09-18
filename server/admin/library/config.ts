@@ -7,10 +7,8 @@
  * back to storing a credential in plaintext.
  */
 import { useRuntimeConfig } from '#imports';
-import {
-    acquisitionInstanceId,
-    httpsOrigin,
-} from '../../utils/plugins/acquisition/config';
+import { deploymentIdentity } from '../deployment-identity';
+import { httpsOrigin } from '../../utils/plugins/acquisition/config';
 
 export interface LibraryLinkConfig {
     /** Central marketplace origin, or '' when no registry is configured. */
@@ -44,14 +42,16 @@ function librarySecret(config: LibraryRuntimeConfig): string | undefined {
         : undefined;
 }
 
-export function resolveLibraryLinkConfig(
+export async function resolveLibraryLinkConfig(
     config: LibraryRuntimeConfig = useRuntimeConfig() as LibraryRuntimeConfig,
     env: NodeJS.ProcessEnv = process.env
-): LibraryLinkConfig {
+): Promise<LibraryLinkConfig> {
     return {
         registryOrigin: httpsOrigin(env.OR3_MARKETPLACE_REGISTRY_ORIGIN),
         secret: librarySecret(config),
-        instanceId: acquisitionInstanceId(),
+        // A durable deployment identity, never the hostname: managed containers
+        // are recreated with new hostnames while the data volume survives.
+        instanceId: await deploymentIdentity(),
         requestTimeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
     };
 }

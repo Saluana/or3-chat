@@ -9,16 +9,20 @@
  *   credential; the browser only ever sees the comparison code, the verification
  *   URL and the linked account summary.
  * - While a pairing waits for approval the composable re-checks on the interval
- *   the server reported, and stops on its own once the attempt is terminal.
- * - Disconnect stops the local server first and reports whether central
- *   revocation is still outstanding.
+ *   the server reported; while a revocation is still unconfirmed it retries on a
+ *   slow schedule, so "retried automatically" is true for a page left open.
+ * - State belongs to one local user: switching the signed-in user resets it and
+ *   any in-flight response for the previous user is discarded.
+ * - Disposal cancels outstanding work; a request that finishes during teardown
+ *   cannot schedule another poll.
  *
  * Constraints:
  * - Client only. The link belongs to the signed-in local user; another local
  *   user reads a different binding and never sees this one.
  */
 
-import { computed, onScopeDispose, ref } from 'vue';
+import { computed, onScopeDispose, ref, watch } from 'vue';
+import { useSessionContext } from '~/composables/auth/useSessionContext';
 
 export type LibraryLinkState =
     | 'unlinked'
@@ -43,6 +47,7 @@ export interface LibraryLinkedSummary {
     readonly scopes: readonly string[];
     readonly expiresAt: string;
     readonly account?: string;
+    readonly accountId?: string;
     readonly lastVerifiedAt?: string;
 }
 
@@ -64,6 +69,8 @@ export interface LibraryLinkFailure {
 
 /** Never poll faster than a second; the server decides the real interval. */
 const MIN_POLL_MS = 1_000;
+/** How often an unconfirmed revocation is retried while the page is open. */
+const REVOCATION_RETRY_MS = 60_000;
 
 const KNOWN_STATES: readonly LibraryLinkState[] = [
     'unlinked',
@@ -122,6 +129,9 @@ function normalizeStatus(raw: unknown): LibraryLinkStatus {
                   ...(stringField(linkSource, 'account')
                       ? { account: stringField(linkSource, 'account') }
                       : {}),
+                  ...(stringField(linkSource, 'accountId')
+                      ? { accountId: stringField(linkSource, 'accountId') }
+                      : {}),
                   ...(stringField(linkSource, 'lastVerifiedAt')
                       ? { lastVerifiedAt: stringField(linkSource, 'lastVerifiedAt') }
                       : {}),
@@ -177,11 +187,17 @@ async function apiPost<T>(url: string, body?: unknown): Promise<T> {
 }
 
 export function useLibraryLink() {
+    const session = useSessionContext();
+    const userId = computed(() => session.data.value?.session?.user?.id ?? null);
+
     const status = ref<LibraryLinkStatus | null>(null);
     const loading = ref(false);
     const busy = ref(false);
     const failure = ref<LibraryLinkFailure | null>(null);
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let disposed = false;
+    /** Invalidates in-flight responses when the identity or scope changes. */
+    let generation = 0;
 
     const state = computed<LibraryLinkState>(() => status.value?.state ?? 'unlinked');
     const configured = computed(() => status.value?.configured !== false);
@@ -196,59 +212,100 @@ export function useLibraryLink() {
     }
 
     function schedule(): void {
+        if (disposed) return;
         clearTimer();
         const current = status.value;
-        if (!current || current.state !== 'pending' || !current.pairing) return;
-        const delay = Math.max(current.pairing.retryAfterMs, MIN_POLL_MS);
+        if (!current) return;
+        const pairingState = current.state === 'pending' ? current.pairing : null;
+        let delay: number;
+        if (pairingState) {
+            delay = Math.max(pairingState.retryAfterMs, MIN_POLL_MS);
+        } else if (current.centralRevokePending === true) {
+            // Disconnect during an outage must keep retrying, not stop polling
+            // because the record is no longer `pending`.
+            delay = REVOCATION_RETRY_MS;
+        } else {
+            return;
+        }
         timer = setTimeout(() => {
             timer = null;
             void load();
         }, delay);
     }
 
+    async function run(request: (current: number) => Promise<void>): Promise<void> {
+        if (disposed) return;
+        const current = generation;
+        try {
+            await request(current);
+        } finally {
+            if (!disposed && generation === current) schedule();
+        }
+    }
+
     async function load(): Promise<void> {
         loading.value = true;
         try {
-            const result = await apiGet<unknown>('/api/plugins/library/link');
-            status.value = normalizeStatus(result);
-            failure.value = null;
+            await run(async (current) => {
+                const result = await apiGet<unknown>('/api/plugins/library/link');
+                if (disposed || generation !== current) return;
+                status.value = normalizeStatus(result);
+                failure.value = null;
+            });
         } catch (error) {
             failure.value = failureFrom(error);
         } finally {
             loading.value = false;
-            schedule();
         }
     }
 
     async function connect(): Promise<void> {
         busy.value = true;
         try {
-            const result = await apiPost<unknown>('/api/plugins/library/link');
-            status.value = normalizeStatus(result);
-            failure.value = null;
+            await run(async (current) => {
+                const result = await apiPost<unknown>('/api/plugins/library/link');
+                if (disposed || generation !== current) return;
+                status.value = normalizeStatus(result);
+                failure.value = null;
+            });
         } catch (error) {
             failure.value = failureFrom(error);
         } finally {
             busy.value = false;
-            schedule();
         }
     }
 
     async function disconnect(): Promise<void> {
         busy.value = true;
         try {
-            const result = await apiPost<unknown>('/api/plugins/library/link/disconnect');
-            status.value = normalizeStatus(result);
-            failure.value = null;
+            await run(async (current) => {
+                const result = await apiPost<unknown>('/api/plugins/library/link/disconnect');
+                if (disposed || generation !== current) return;
+                status.value = normalizeStatus(result);
+                failure.value = null;
+            });
         } catch (error) {
             failure.value = failureFrom(error);
         } finally {
             busy.value = false;
-            schedule();
         }
     }
 
-    onScopeDispose(clearTimer);
+    /** A response that arrives after the identity changed is discarded. */
+    watch(userId, (next, previous) => {
+        if (next === previous) return;
+        generation += 1;
+        clearTimer();
+        status.value = null;
+        failure.value = null;
+        if (next) void load();
+    });
+
+    onScopeDispose(() => {
+        disposed = true;
+        generation += 1;
+        clearTimer();
+    });
 
     return {
         status,

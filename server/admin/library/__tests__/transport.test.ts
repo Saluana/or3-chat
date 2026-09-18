@@ -23,13 +23,14 @@ function calls(): FetchCall[] {
     }));
 }
 
+/** A real Response, so the transport reads real body streams. */
 function respond(status: number, body: unknown): void {
-    fetchMock.mockResolvedValueOnce({
-        ok: status >= 200 && status < 300,
-        status,
-        json: async () => body,
-        text: async () => (typeof body === 'string' ? body : JSON.stringify(body)),
-    });
+    fetchMock.mockResolvedValueOnce(
+        new Response(typeof body === 'string' ? body : JSON.stringify(body), {
+            status,
+            headers: { 'content-type': 'application/json' },
+        })
+    );
 }
 
 /** Exactly the shape the deployed Worker returned in the phase-7 smoke run. */
@@ -80,6 +81,41 @@ describe('library link transport', () => {
         });
     });
 
+    it('passes a replacement proof through unchanged', async () => {
+        respond(200, startedResponse());
+        const transport = createHttpLibraryLinkTransport(CONFIG);
+        await transport.start({
+            label: 'or3.smoke.test',
+            origin: 'https://or3.smoke.test',
+            replace: { pairingId: `prs_${'b'.repeat(32)}`, secret: 'pss_previous' },
+        });
+        expect(JSON.parse(String(calls()[0]?.init.body))).toEqual({
+            label: 'or3.smoke.test',
+            origin: 'https://or3.smoke.test',
+            replace: { pairingId: `prs_${'b'.repeat(32)}`, secret: 'pss_previous' },
+        });
+    });
+
+    it('refuses a verification URL that is not this deployment’s own link page', async () => {
+        const transport = createHttpLibraryLinkTransport(CONFIG);
+        const variants = [
+            'https://evil.example.test/link?code=ZRAY-ASH2',
+            'https://marketplace.example.test/sign-in?code=ZRAY-ASH2',
+            'https://marketplace.example.test/link?code=OTHER-CODE',
+            'http://marketplace.example.test/link?code=ZRAY-ASH2',
+            'not-a-url',
+        ];
+        for (const verificationUrl of variants) {
+            const body = startedResponse();
+            (body.pairing as Record<string, unknown>).verificationUrl = verificationUrl;
+            respond(200, body);
+            expect(await transport.start({ label: 'host', origin: 'https://host.test' })).toMatchObject({
+                ok: false,
+                failure: { code: 'invalid-response' },
+            });
+        }
+    });
+
     it('rejects a start response whose secret or code is not the agreed shape', async () => {
         const transport = createHttpLibraryLinkTransport(CONFIG);
         respond(200, { ...startedResponse(), secret: undefined });
@@ -98,9 +134,9 @@ describe('library link transport', () => {
         });
     });
 
-    it('polls with the secret in a header and accepts only a valid token shape', async () => {
+    it('polls with the secret in a header and requires link and account with a token', async () => {
         const transport = createHttpLibraryLinkTransport(CONFIG);
-        respond(200, {
+        const consumed = {
             pairing: {
                 id: `prs_${'a'.repeat(32)}`,
                 status: 'consumed',
@@ -118,11 +154,15 @@ describe('library link transport', () => {
                 expiresAt: '2026-12-17T01:15:32.186Z',
                 revokedAt: null,
             },
-        });
-
+            user: { id: 'usr_1' },
+        };
+        respond(200, consumed);
         const result = await transport.poll(`prs_${'a'.repeat(32)}`, 'pss_secret_value');
         expect(result.ok).toBe(true);
-        if (result.ok) expect(result.value.token).toBe(TOKEN);
+        if (result.ok) {
+            expect(result.value.token).toBe(TOKEN);
+            expect(result.value.user?.id).toBe('usr_1');
+        }
 
         const [call] = calls();
         expect(call?.url).not.toContain('pss_secret_value');
@@ -130,15 +170,14 @@ describe('library link transport', () => {
             'pss_secret_value'
         );
 
-        respond(200, {
-            pairing: {
-                id: `prs_${'a'.repeat(32)}`,
-                status: 'consumed',
-                expiresAt: '2026-09-18T01:25:32.186Z',
-                retryAfterMs: 0,
-            },
-            token: 'not-a-token',
+        // A token without the link and account it belongs to is unusable.
+        respond(200, { pairing: consumed.pairing, token: TOKEN });
+        expect(await transport.poll(`prs_${'a'.repeat(32)}`, 'pss_secret_value')).toMatchObject({
+            ok: false,
+            failure: { code: 'invalid-response' },
         });
+
+        respond(200, { ...consumed, token: 'not-a-token' });
         expect(await transport.poll(`prs_${'a'.repeat(32)}`, 'pss_secret_value')).toMatchObject({
             ok: false,
             failure: { code: 'invalid-response' },
@@ -178,7 +217,16 @@ describe('library link transport', () => {
         });
     });
 
-    it('maps marketplace failures to the small state machine the service acts on', async () => {
+    it('reads the Nitro error envelope so precise states survive', async () => {
+        // Exactly how `server/utils/errors.ts:fail()` serializes.
+        const envelope = (status: number, code: string) =>
+            respond(status, {
+                error: true,
+                statusCode: status,
+                statusMessage: code,
+                message: 'nope',
+                data: { error: { code, message: 'nope', retryable: false } },
+            });
         const transport = createHttpLibraryLinkTransport(CONFIG);
         const cases: [number, string, string, boolean][] = [
             [401, 'link-revoked', 'link-revoked', false],
@@ -193,10 +241,19 @@ describe('library link transport', () => {
             [409, 'pairing-not-approvable', 'central-rejected', false],
         ];
         for (const [status, code, expected, retryable] of cases) {
-            respond(status, { error: { code, message: 'nope', retryable } });
-            const result = await transport.verify(TOKEN);
-            expect(result).toMatchObject({ ok: false, failure: { code: expected, retryable } });
+            envelope(status, code);
+            expect(await transport.verify(TOKEN)).toMatchObject({
+                ok: false,
+                failure: { code: expected, retryable },
+            });
         }
+
+        // A body with only a status message still maps by status.
+        respond(401, { statusMessage: 'link-revoked' });
+        expect(await transport.verify(TOKEN)).toMatchObject({
+            ok: false,
+            failure: { code: 'link-revoked' },
+        });
     });
 
     it('treats a network failure, a redirect and an oversized body as bounded failures', async () => {
@@ -215,6 +272,13 @@ describe('library link transport', () => {
         });
 
         respond(200, 'x'.repeat(70 * 1024));
+        expect(await transport.verify(TOKEN)).toMatchObject({
+            ok: false,
+            failure: { code: 'invalid-response' },
+        });
+
+        // Error bodies are bounded too, not parsed as an unbounded JSON read.
+        respond(500, 'x'.repeat(70 * 1024));
         expect(await transport.verify(TOKEN)).toMatchObject({
             ok: false,
             failure: { code: 'invalid-response' },

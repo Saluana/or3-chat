@@ -23,8 +23,8 @@ export interface ResolvedLibraryLink {
     readonly configured: boolean;
 }
 
-export function libraryLinkServiceFor(event: H3Event): ResolvedLibraryLink {
-    const config = resolveLibraryLinkConfig(
+export async function libraryLinkServiceFor(event: H3Event): Promise<ResolvedLibraryLink> {
+    const config = await resolveLibraryLinkConfig(
         useRuntimeConfig(event) as LibraryRuntimeConfig
     );
     return {

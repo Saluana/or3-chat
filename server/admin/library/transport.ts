@@ -2,9 +2,11 @@
  * Bounded HTTPS client for the central Library endpoints.
  *
  * The browser never talks to the central marketplace: the local server does.
- * Every response is validated before it is trusted, redirects are refused, the
- * body is size-limited and failures are mapped to the small set of states the
- * service and UI act on. No secret ever appears in a URL.
+ * Every response is validated before it is trusted — including the verification
+ * URL, which must be the configured marketplace origin's own `/link` page —
+ * redirects are refused, bodies are size-limited while streaming, and failures
+ * are mapped to the small set of states the service and UI act on. No secret
+ * ever appears in a URL.
  */
 import type { LibraryLinkConfig } from './config';
 
@@ -53,14 +55,6 @@ export type RemotePairingStatus =
     | 'expired'
     | 'canceled';
 
-export interface PolledPairingPayload {
-    readonly status: RemotePairingStatus;
-    readonly expiresAt: string;
-    readonly retryAfterMs: number;
-    readonly token?: string;
-    readonly link?: RemoteLinkSummary;
-}
-
 export interface RemoteLinkSummary {
     readonly id: string;
     readonly label: string;
@@ -72,9 +66,23 @@ export interface RemoteLinkSummary {
     readonly revokedAt: string | null;
 }
 
+export interface RemoteLinkedUser {
+    readonly id: string;
+    readonly displayName?: string;
+}
+
+export interface PolledPairingPayload {
+    readonly status: RemotePairingStatus;
+    readonly expiresAt: string;
+    readonly retryAfterMs: number;
+    readonly token?: string;
+    readonly link?: RemoteLinkSummary;
+    readonly user?: RemoteLinkedUser;
+}
+
 export interface LinkedSessionPayload {
     readonly link: RemoteLinkSummary;
-    readonly user: { readonly id: string; readonly displayName?: string };
+    readonly user: RemoteLinkedUser;
     readonly scopes: readonly string[];
 }
 
@@ -82,6 +90,7 @@ export interface LibraryLinkTransport {
     start(input: {
         readonly label: string;
         readonly origin: string;
+        readonly replace?: { readonly pairingId: string; readonly secret: string };
     }): Promise<TransportResult<StartedPairingPayload>>;
     poll(pairingId: string, secret: string): Promise<TransportResult<PolledPairingPayload>>;
     verify(token: string): Promise<TransportResult<LinkedSessionPayload>>;
@@ -123,18 +132,29 @@ function parseLinkSummary(value: unknown): RemoteLinkSummary | null {
     const status = stringField(value, 'status');
     const createdAt = stringField(value, 'createdAt');
     const expiresAt = stringField(value, 'expiresAt');
-    const scopes = Array.isArray(value.scopes) && value.scopes.every((entry) => typeof entry === 'string')
-        ? (value.scopes as string[])
-        : null;
+    const scopes =
+        Array.isArray(value.scopes) && value.scopes.every((entry) => typeof entry === 'string')
+            ? (value.scopes as string[])
+            : null;
     if (!id || !label || !origin || !status || !createdAt || !expiresAt || !scopes) return null;
     if (status !== 'active' && status !== 'revoked') return null;
-    const revokedAt = value.revokedAt === null || typeof value.revokedAt === 'string' ? value.revokedAt : null;
+    const revokedAt =
+        value.revokedAt === null || typeof value.revokedAt === 'string' ? value.revokedAt : null;
     return { id, label, origin, status, scopes, createdAt, expiresAt, revokedAt };
 }
 
-function parseStartedPairing(value: unknown): StartedPairingPayload | null {
-    const pairing = isRecord(value) ? value.pairing : null;
-    if (!isRecord(pairing) || !isRecord(value)) return null;
+function parseLinkedUser(value: unknown): RemoteLinkedUser | null {
+    if (!isRecord(value)) return null;
+    const id = stringField(value, 'id');
+    if (!id) return null;
+    const displayName = stringField(value, 'displayName');
+    return { id, ...(displayName ? { displayName } : {}) };
+}
+
+function parseStartedPairing(value: unknown, marketplaceOrigin: string): StartedPairingPayload | null {
+    if (!isRecord(value)) return null;
+    const pairing = value.pairing;
+    if (!isRecord(pairing)) return null;
     const pairingId = stringField(pairing, 'id');
     const code = stringField(pairing, 'code');
     const verificationUrl = stringField(pairing, 'verificationUrl');
@@ -143,14 +163,34 @@ function parseStartedPairing(value: unknown): StartedPairingPayload | null {
     const secret = stringField(value, 'secret');
     if (!pairingId || !PAIRING_ID_PATTERN.test(pairingId)) return null;
     if (!code || !CODE_PATTERN.test(code)) return null;
-    if (!verificationUrl || !/^https?:\/\//.test(verificationUrl)) return null;
     if (!expiresAt || retryAfterMs === null || !secret) return null;
-    return { pairingId, code, verificationUrl, expiresAt, retryAfterMs, secret };
+    // The URL is presented to the user as "Open the marketplace", so it must be
+    // this deployment's configured origin's own verification page — not any
+    // http(s) string an upstream response happens to contain.
+    if (!verificationUrl) return null;
+    let parsedUrl: URL;
+    try {
+        parsedUrl = new URL(verificationUrl);
+    } catch {
+        return null;
+    }
+    if (parsedUrl.origin !== marketplaceOrigin) return null;
+    if (parsedUrl.pathname !== '/link') return null;
+    if (parsedUrl.searchParams.get('code') !== code) return null;
+    return {
+        pairingId,
+        code,
+        verificationUrl: parsedUrl.toString(),
+        expiresAt,
+        retryAfterMs,
+        secret,
+    };
 }
 
 function parsePolledPairing(value: unknown): PolledPairingPayload | null {
-    const pairing = isRecord(value) ? value.pairing : null;
-    if (!isRecord(pairing) || !isRecord(value)) return null;
+    if (!isRecord(value)) return null;
+    const pairing = value.pairing;
+    if (!isRecord(pairing)) return null;
     const status = stringField(pairing, 'status');
     const expiresAt = stringField(pairing, 'expiresAt');
     const retryAfterMs = positiveNumber(pairing, 'retryAfterMs');
@@ -166,26 +206,45 @@ function parsePolledPairing(value: unknown): PolledPairingPayload | null {
     if (token !== null && !TOKEN_PATTERN.test(token)) return null;
     const link = value.link === undefined ? undefined : parseLinkSummary(value.link);
     if (value.link !== undefined && !link) return null;
+    const user = value.user === undefined ? undefined : parseLinkedUser(value.user);
+    if (value.user !== undefined && !user) return null;
+    if (token && (!link || !user)) return null;
     return {
         status: status as RemotePairingStatus,
         expiresAt,
         retryAfterMs,
         ...(token ? { token } : {}),
         ...(link ? { link } : {}),
+        ...(user ? { user } : {}),
     };
 }
 
 function parseLinkedSession(value: unknown): LinkedSessionPayload | null {
     if (!isRecord(value)) return null;
     const link = parseLinkSummary(value.link);
-    const user = isRecord(value.user) ? value.user : null;
-    const userId = user ? stringField(user, 'id') : null;
-    const scopes = Array.isArray(value.scopes) && value.scopes.every((entry) => typeof entry === 'string')
-        ? (value.scopes as string[])
-        : null;
-    if (!link || !userId || !scopes) return null;
-    const displayName = user ? stringField(user, 'displayName') : null;
-    return { link, user: { id: userId, ...(displayName ? { displayName } : {}) }, scopes };
+    const user = parseLinkedUser(value.user);
+    const scopes =
+        Array.isArray(value.scopes) && value.scopes.every((entry) => typeof entry === 'string')
+            ? (value.scopes as string[])
+            : null;
+    if (!link || !user || !scopes) return null;
+    return { link, user, scopes };
+}
+
+/**
+ * Nitro serializes `createError` as `{ statusCode, statusMessage, message,
+ * data: { error: { code, … } } }`. Reading only one shape would silently turn
+ * precise states (account deleted, link revoked) into generic rejections.
+ */
+function errorCodeFrom(body: unknown): string | null {
+    if (!isRecord(body)) return null;
+    const data = body.data;
+    if (isRecord(data) && isRecord(data.error) && typeof data.error.code === 'string') {
+        return data.error.code;
+    }
+    if (isRecord(body.error) && typeof body.error.code === 'string') return body.error.code;
+    if (typeof body.statusMessage === 'string' && body.statusMessage.length > 0) return body.statusMessage;
+    return null;
 }
 
 function mapHttpFailure(status: number, code: string | null): LibraryTransportFailure {
@@ -215,6 +274,40 @@ function mapHttpFailure(status: number, code: string | null): LibraryTransportFa
     return failure('central-rejected', 'The marketplace rejected the request.');
 }
 
+/**
+ * Reads at most `limit` bytes from the body stream. `response.text()` would
+ * buffer an arbitrarily large body before the length check, so the limit is
+ * enforced while reading. Returns null when the limit is exceeded.
+ */
+async function readBoundedText(response: Response, limit: number): Promise<string | null> {
+    const body = response.body;
+    if (!body) {
+        const buffer = await response.arrayBuffer();
+        if (buffer.byteLength > limit) return null;
+        return new TextDecoder().decode(buffer);
+    }
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let received = 0;
+    let text = '';
+    try {
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            received += value.byteLength;
+            if (received > limit) {
+                await reader.cancel().catch(() => undefined);
+                return null;
+            }
+            text += decoder.decode(value, { stream: true });
+        }
+        text += decoder.decode();
+        return text;
+    } finally {
+        reader.releaseLock();
+    }
+}
+
 export function createHttpLibraryLinkTransport(
     config: Pick<LibraryLinkConfig, 'registryOrigin' | 'requestTimeoutMs'>
 ): LibraryLinkTransport {
@@ -236,47 +329,69 @@ export function createHttpLibraryLinkTransport(
                 redirect: 'error',
             });
         } catch {
-            return { ok: false, failure: failure('central-unreachable', 'The marketplace could not be reached.') };
+            return {
+                ok: false,
+                failure: failure('central-unreachable', 'The marketplace could not be reached.'),
+            };
+        }
+
+        const text = await readBoundedText(response, MAX_RESPONSE_BYTES);
+        if (text === null) {
+            return {
+                ok: false,
+                failure: failure('invalid-response', 'The marketplace response was too large.'),
+            };
+        }
+
+        let parsed: unknown = null;
+        try {
+            parsed = text.length > 0 ? JSON.parse(text) : null;
+        } catch {
+            parsed = null;
         }
 
         if (!response.ok) {
-            let code: string | null = null;
-            try {
-                const parsed = (await response.json()) as unknown;
-                if (isRecord(parsed) && isRecord(parsed.error) && typeof parsed.error.code === 'string') {
-                    code = parsed.error.code;
-                }
-            } catch {
-                code = null;
-            }
-            return { ok: false, failure: mapHttpFailure(response.status, code) };
+            return { ok: false, failure: mapHttpFailure(response.status, errorCodeFrom(parsed)) };
         }
-
-        try {
-            const text = await response.text();
-            if (text.length > MAX_RESPONSE_BYTES) {
-                return { ok: false, failure: failure('invalid-response', 'The marketplace response was too large.') };
-            }
-            return { ok: true, value: JSON.parse(text) as unknown };
-        } catch {
-            return { ok: false, failure: failure('invalid-response', 'The marketplace response was not valid JSON.') };
+        if (parsed === null) {
+            return {
+                ok: false,
+                failure: failure('invalid-response', 'The marketplace response was not valid JSON.'),
+            };
         }
+        return { ok: true, value: parsed };
     }
 
     return {
         async start(input) {
-            const result = await request('/api/v1/connect/pairings', { method: 'POST', body: input });
+            const result = await request('/api/v1/connect/pairings', {
+                method: 'POST',
+                body: {
+                    label: input.label,
+                    origin: input.origin,
+                    ...(input.replace ? { replace: input.replace } : {}),
+                },
+            });
             if (!result.ok) return result;
-            const parsed = parseStartedPairing(result.value);
+            const parsed = parseStartedPairing(result.value, config.registryOrigin);
             if (!parsed) {
-                return { ok: false, failure: failure('invalid-response', 'The marketplace sent an unexpected pairing response.') };
+                return {
+                    ok: false,
+                    failure: failure(
+                        'invalid-response',
+                        'The marketplace sent an unexpected pairing response.'
+                    ),
+                };
             }
             return { ok: true, value: parsed };
         },
 
         async poll(pairingId, secret) {
             if (!PAIRING_ID_PATTERN.test(pairingId)) {
-                return { ok: false, failure: failure('pairing-not-found', 'This pairing is unknown or was replaced.') };
+                return {
+                    ok: false,
+                    failure: failure('pairing-not-found', 'This pairing is unknown or was replaced.'),
+                };
             }
             const result = await request(`/api/v1/connect/pairings/${pairingId}/poll`, {
                 method: 'POST',
@@ -285,7 +400,13 @@ export function createHttpLibraryLinkTransport(
             if (!result.ok) return result;
             const parsed = parsePolledPairing(result.value);
             if (!parsed) {
-                return { ok: false, failure: failure('invalid-response', 'The marketplace sent an unexpected pairing state.') };
+                return {
+                    ok: false,
+                    failure: failure(
+                        'invalid-response',
+                        'The marketplace sent an unexpected pairing state.'
+                    ),
+                };
             }
             return { ok: true, value: parsed };
         },
@@ -298,7 +419,13 @@ export function createHttpLibraryLinkTransport(
             if (!result.ok) return result;
             const parsed = parseLinkedSession(result.value);
             if (!parsed) {
-                return { ok: false, failure: failure('invalid-response', 'The marketplace sent an unexpected session response.') };
+                return {
+                    ok: false,
+                    failure: failure(
+                        'invalid-response',
+                        'The marketplace sent an unexpected session response.'
+                    ),
+                };
             }
             return { ok: true, value: parsed };
         },
@@ -310,7 +437,13 @@ export function createHttpLibraryLinkTransport(
             });
             if (!result.ok) return result;
             if (!isRecord(result.value) || result.value.revoked !== true) {
-                return { ok: false, failure: failure('invalid-response', 'The marketplace did not confirm the revocation.') };
+                return {
+                    ok: false,
+                    failure: failure(
+                        'invalid-response',
+                        'The marketplace did not confirm the revocation.'
+                    ),
+                };
             }
             return { ok: true, value: { revoked: true } };
         },

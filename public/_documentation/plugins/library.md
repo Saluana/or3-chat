@@ -13,11 +13,11 @@ The link belongs to the signed-in local user. Another local user reads a differe
 
 The key is a runtime secret: containers translate `OR3_LIBRARY_LINK_SECRET` into `NUXT_ADMIN_LIBRARY_LINK_SECRET` at startup, so a prebuilt image never bakes it into a layer. Rotating the key makes existing bindings undecryptable; the affected user is asked to reconnect, which is the intended failure mode.
 
-Binding files live under `<OR3_ADMIN_DATA_DIR>/library-links/<localUserId>.json`, are owner-only (`0600`) and contain only ciphertext.
+Binding files live under `<OR3_ADMIN_DATA_DIR>/library-links/<localUserId>.json`, are owner-only (`0600`) and contain only ciphertext. The per-deployment binding identity is persisted once at `<OR3_ADMIN_DATA_DIR>/deployment-identity`, so recreating a container (a new hostname) does not invalidate links while the data volume survives.
 
 ## The pairing flow
 
-1. The local user presses **Connect marketplace account**. The local server asks the marketplace for a pairing and keeps a high-entropy polling secret; the browser receives only the short comparison code, its expiry and the canonical verification link.
+1. The local user presses **Connect marketplace account**. The local server asks the marketplace for a pairing and keeps a high-entropy polling secret; the browser receives only the short comparison code, its expiry and the canonical verification link. Starting again replaces an earlier pending attempt only by presenting that attempt's polling secret, so one user of a host can never cancel another user's approval.
 2. The user opens the marketplace, signs in there (top-level, on the canonical site) and approves the code. The marketplace shows the claimed host label and origin as *untrusted context* and lists exactly the two scopes below. It never contacts this server.
 3. This server polls with its secret. Approval and secret possession are checked together, once, and the single successful poll receives an opaque credential with a fixed 90-day lifetime — never a refresh path, and no plaintext recovery if the response is lost (the user simply connects again).
 4. The credential is encrypted locally, bound to the initiating local user and instance, and is never exposed to the browser, to plugin state or to logs.
@@ -35,7 +35,7 @@ Installed plugins keep working when a link expires, is revoked or is unreachable
 
 ## Disconnect, rotation and restore
 
-- **Disconnect** in Dashboard > Library stops this server first (the local record is revoked immediately) and then asks the marketplace to revoke the credential. If the marketplace is unreachable the local stop still holds and the confirmation is retried automatically; the page says so.
+- **Disconnect** in Dashboard > Library stops this server first (the local record is revoked immediately) and then asks the marketplace to revoke the credential. If the marketplace is unreachable the local stop still holds; while the page is open the confirmation is retried on its own schedule, and the pending state is reported until central confirms it. A credential is only forgotten once central has revoked it or proven it already unusable.
 - **Connect again** rotates the credential: the replaced credential is revoked immediately and the new one has its own fixed lifetime.
 - **Restore**: after the local server is restored from a backup, the first status check re-verifies a linked credential against the marketplace. A revoked, expired, restricted or deleted authority ends the link locally and asks the user to reconnect. A network failure never ends a working link.
 - **Account deletion or restriction** on the marketplace revokes the links for that account; a later unban still requires a fresh pairing.

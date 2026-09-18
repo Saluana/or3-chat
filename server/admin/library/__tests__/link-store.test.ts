@@ -4,12 +4,15 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
     createFileLibraryLinkStore,
+    LibraryLinkStoreConflictError,
     type LibraryLinkRecord,
+    type LibraryLinkWriteOptions,
 } from '../link-store';
 
 function recordFor(userId: string): LibraryLinkRecord {
     return {
         version: 1,
+        revision: 0,
         userId,
         instanceId: 'inst-1',
         state: 'linked',
@@ -36,30 +39,58 @@ describe('per-user library link binding files', () => {
         return createFileLibraryLinkStore({ directory });
     }
 
-    it('keeps one binding per user, owner-only, without temporary leftovers', async () => {
+    it('keeps one binding per user, owner-only, with a monotonic revision', async () => {
         const directory = testDirectory();
         const bindings = store(directory);
 
-        await bindings.write(recordFor('user-1'));
-        await bindings.write({ ...recordFor('user-2'), state: 'pending', comparisonCode: 'ABCD-EFGH' });
+        const first = await bindings.write(recordFor('user-1'), { expectRevision: null });
+        expect(first.revision).toBe(1);
+        await bindings.write(
+            { ...recordFor('user-2'), state: 'pending', comparisonCode: 'ABCD-EFGH' },
+            { expectRevision: null }
+        );
 
         const files = readdirSync(directory).sort();
         expect(files).toEqual(['user-1.json', 'user-2.json']);
         expect(statSync(join(directory, 'user-1.json')).mode & 0o777).toBe(0o600);
 
-        expect((await bindings.read('user-1'))?.state).toBe('linked');
-        expect((await bindings.read('user-2'))?.comparisonCode).toBe('ABCD-EFGH');
+        const second = await bindings.write(
+            { ...recordFor('user-1'), state: 'revoked' },
+            { expectRevision: 1 }
+        );
+        expect(second.revision).toBe(2);
+        expect((await bindings.read('user-1'))?.state).toBe('revoked');
         expect(await bindings.read('user-3')).toBeNull();
     });
 
-    it('overwrites atomically and returns the latest binding', async () => {
+    it('rejects a write based on an obsolete revision instead of overwriting', async () => {
         const directory = testDirectory();
         const bindings = store(directory);
-        await bindings.write(recordFor('user-1'));
-        await bindings.write({ ...recordFor('user-1'), state: 'revoked', reason: 'disconnected' });
+        await bindings.write(recordFor('user-1'), { expectRevision: null });
 
-        expect((await bindings.read('user-1'))?.state).toBe('revoked');
-        expect(readdirSync(directory)).toEqual(['user-1.json']);
+        // Another writer advanced the binding from revision 1 to 2.
+        await bindings.write({ ...recordFor('user-1'), state: 'linked' }, { expectRevision: 1 });
+
+        await expect(
+            bindings.write({ ...recordFor('user-1'), state: 'lost' }, { expectRevision: 1 })
+        ).rejects.toBeInstanceOf(LibraryLinkStoreConflictError)
+        expect((await bindings.read('user-1'))?.state).toBe('linked')
+    });
+
+    it('refuses to create over an existing binding', async () => {
+        const directory = testDirectory();
+        const bindings = store(directory);
+        await bindings.write(recordFor('user-1'), { expectRevision: null });
+        await expect(bindings.write(recordFor('user-1'), { expectRevision: null })).rejects.toBeInstanceOf(
+            LibraryLinkStoreConflictError
+        );
+    });
+
+    it('refuses to update a binding that does not exist', async () => {
+        const bindings = store(testDirectory());
+        await expect(bindings.write(recordFor('user-1'), { expectRevision: 3 })).rejects.toBeInstanceOf(
+            LibraryLinkStoreConflictError
+        );
     });
 
     it('preserves an unreadable binding instead of silently overwriting it', async () => {
@@ -76,7 +107,8 @@ describe('per-user library link binding files', () => {
 
     it('refuses an id that could escape the binding directory', async () => {
         const bindings = store(testDirectory());
+        const options: LibraryLinkWriteOptions = { expectRevision: null };
         await expect(bindings.read('../escape')).rejects.toThrow(/simple identifier/);
-        await expect(bindings.write(recordFor('../escape'))).rejects.toThrow(/simple identifier/);
+        await expect(bindings.write(recordFor('../escape'), options)).rejects.toThrow(/simple identifier/);
     });
 });

@@ -57,7 +57,7 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const { service } = libraryLinkServiceFor(event);
+    const { service } = await libraryLinkServiceFor(event);
     const result = await service.start(userId, {
         label: host,
         origin: `${protocol}://${host}`,

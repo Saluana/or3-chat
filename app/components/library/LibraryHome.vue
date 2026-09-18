@@ -57,6 +57,16 @@ async function copyVerificationUrl(): Promise<void> {
     }
 }
 
+/**
+ * Publishers have a display name; everyone else is identified by an opaque
+ * marketplace account reference, which is enough to tell two accounts apart.
+ */
+function accountLabel(link: { account?: string; accountId?: string }): string {
+    if (link.account) return link.account;
+    if (link.accountId) return `Marketplace account ${link.accountId.slice(-8)}`;
+    return 'Marketplace account';
+}
+
 function scopeLabel(scope: string): string {
     if (scope === 'library:read') return 'Read this account’s Library';
     if (scope === 'downloads:acquire') return 'Download releases the account is entitled to';
@@ -209,7 +219,7 @@ const terminalReason = computed(() => {
                             Connected account
                         </h2>
                         <p class="mt-1 text-sm text-slate-700">
-                            {{ library.link.value.account ?? 'Marketplace account' }}
+                            {{ accountLabel(library.link.value) }}
                         </p>
                         <p class="mt-1 break-all text-xs text-slate-500">
                             {{ library.link.value.label }} · {{ library.link.value.origin }}

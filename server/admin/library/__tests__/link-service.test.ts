@@ -1,11 +1,18 @@
 import { mkdtempSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { LibraryLinkService } from '../link-service';
-import { createFileLibraryLinkStore, type LibraryLinkRecord } from '../link-store';
+import {
+    createFileLibraryLinkStore,
+    LibraryLinkStoreConflictError,
+    type LibraryLinkRecord,
+    type LibraryLinkStore,
+    type LibraryLinkWriteOptions,
+} from '../link-store';
 import type {
     LibraryLinkTransport,
+    LibraryTransportFailureCode,
     LinkedSessionPayload,
     PolledPairingPayload,
     StartedPairingPayload,
@@ -13,11 +20,15 @@ import type {
 } from '../transport';
 
 const KEY = 'library-link-secret-for-tests';
-const INSTANCE = 'inst-1';
+const INSTANCE = 'or3dep_inst_test';
 const USER = 'user-1';
 const NOW = Date.parse('2026-09-17T12:00:00.000Z');
 const TOKEN = `lkl_${'t'.repeat(43)}`;
 const TOKEN_2 = `lkl_${'u'.repeat(43)}`;
+
+function failure(code: LibraryTransportFailureCode, retryable = false) {
+    return { ok: false as const, failure: { code, message: code, retryable } };
+}
 
 function started(overrides: Partial<StartedPairingPayload> = {}): StartedPairingPayload {
     return {
@@ -61,7 +72,7 @@ interface Harness {
     readonly directory: string;
     readonly service: LibraryLinkService;
     readonly calls: {
-        start: { label: string; origin: string }[];
+        start: { label: string; origin: string; replace?: { pairingId: string; secret: string } }[];
         poll: { pairingId: string; secret: string }[];
         verify: string[];
         revoke: string[];
@@ -71,10 +82,12 @@ interface Harness {
     verifyResults: TransportResult<LinkedSessionPayload>[];
     revokeResults: TransportResult<{ revoked: true }>[];
     advance(ms: number): void;
+    holdPoll(): { release: () => void };
     record(userId?: string): LibraryLinkRecord;
+    store: LibraryLinkStore;
 }
 
-function harness(overrides: { configured?: boolean; encryptionKey?: string; userId?: string } = {}): Harness {
+function createHarness(overrides: { configured?: boolean; encryptionKey?: string } = {}): Harness {
     const directory = mkdtempSync(join(tmpdir(), 'or3-library-link-service-'));
     const calls: Harness['calls'] = { start: [], poll: [], verify: [], revoke: [] };
     const state = {
@@ -84,6 +97,7 @@ function harness(overrides: { configured?: boolean; encryptionKey?: string; user
         revokeResults: [] as TransportResult<{ revoked: true }>[],
     };
     let now = NOW;
+    let pollGate: Promise<void> | null = null;
 
     const transport: LibraryLinkTransport = {
         async start(input) {
@@ -92,6 +106,7 @@ function harness(overrides: { configured?: boolean; encryptionKey?: string; user
         },
         async poll(pairingId, secret) {
             calls.poll.push({ pairingId, secret });
+            if (pollGate) await pollGate;
             const result = state.pollResults.shift();
             if (!result) throw new Error('unexpected poll');
             return result;
@@ -124,6 +139,7 @@ function harness(overrides: { configured?: boolean; encryptionKey?: string; user
         directory,
         service,
         calls,
+        store,
         get startResult() {
             return state.startResult;
         },
@@ -151,10 +167,18 @@ function harness(overrides: { configured?: boolean; encryptionKey?: string; user
         advance(ms: number) {
             now += ms;
         },
-        record(userId = overrides.userId ?? USER): LibraryLinkRecord {
-            return JSON.parse(
-                readFileSync(join(directory, `${userId}.json`), 'utf8')
-            ) as LibraryLinkRecord;
+        holdPoll() {
+            let release: () => void = () => undefined;
+            pollGate = new Promise<void>((resolve) => {
+                release = () => {
+                    pollGate = null;
+                    resolve();
+                };
+            });
+            return { release: () => release() };
+        },
+        record(userId = USER): LibraryLinkRecord {
+            return JSON.parse(readFileSync(join(directory, `${userId}.json`), 'utf8')) as LibraryLinkRecord;
         },
     };
 }
@@ -172,7 +196,7 @@ async function toLinked(h: Harness): Promise<void> {
     h.pollResults = [
         {
             ok: true,
-            value: polled({ status: 'consumed', token: TOKEN, link: linkedSession().link }),
+            value: polled({ status: 'consumed', token: TOKEN, link: linkedSession().link, user: linkedSession().user }),
         },
     ];
     h.advance(5_000);
@@ -181,12 +205,8 @@ async function toLinked(h: Harness): Promise<void> {
 }
 
 describe('library link service', () => {
-    beforeEach(() => {
-        // Each test builds its own harness.
-    });
-
     it('reports an unlinked user without touching the marketplace', async () => {
-        const h = harness();
+        const h = createHarness();
         const status = await h.service.status(USER);
         expect(status).toEqual({ configured: true, state: 'unlinked' });
         expect(h.calls.start).toHaveLength(0);
@@ -194,7 +214,7 @@ describe('library link service', () => {
     });
 
     it('reports itself unconfigured instead of storing anything', async () => {
-        const h = harness({ configured: false, encryptionKey: undefined });
+        const h = createHarness({ configured: false, encryptionKey: undefined });
         const status = await h.service.status(USER);
         expect(status.configured).toBe(false);
 
@@ -206,7 +226,7 @@ describe('library link service', () => {
     });
 
     it('stores the polling secret encrypted and never in the browser view', async () => {
-        const h = harness();
+        const h = createHarness();
         await toPending(h);
 
         const file = readFileSync(join(h.directory, `${USER}.json`), 'utf8');
@@ -220,8 +240,26 @@ describe('library link service', () => {
         expect(h.calls.start[0]).toEqual({ label: 'or3.example.test', origin: 'https://or3.example.test' });
     });
 
+    it('proves possession of the previous attempt before replacing it', async () => {
+        const h = createHarness();
+        await toPending(h);
+
+        await h.service.start(USER, {
+            label: 'or3.example.test',
+            origin: 'https://or3.example.test',
+        });
+        expect(h.calls.start[1]?.replace).toEqual({
+            pairingId: `prs_${'a'.repeat(32)}`,
+            secret: 'pss_polling_secret',
+        });
+
+        const fresh = createHarness();
+        await fresh.service.start(USER, { label: 'host', origin: 'https://host.test' });
+        expect(fresh.calls.start[0]).not.toHaveProperty('replace');
+    });
+
     it('polls only when the marketplace interval says so', async () => {
-        const h = harness();
+        const h = createHarness();
         await toPending(h);
 
         const early = await h.service.status(USER);
@@ -237,8 +275,8 @@ describe('library link service', () => {
         expect(due.pairing?.retryAfterMs).toBe(5_000);
     });
 
-    it('becomes linked once, storing the token encrypted and dropping the pairing', async () => {
-        const h = harness();
+    it('becomes linked once, storing the token encrypted and identifying the account', async () => {
+        const h = createHarness();
         await toLinked(h);
 
         const record = h.record();
@@ -246,16 +284,64 @@ describe('library link service', () => {
         expect(record.tokenCiphertext?.startsWith('llv1.')).toBe(true);
         expect(record.pollingSecretCiphertext).toBeUndefined();
         expect(record.comparisonCode).toBeUndefined();
+        expect(record.accountId).toBe('central-user');
         expect(readFileSync(join(h.directory, `${USER}.json`), 'utf8')).not.toContain(TOKEN);
 
         const status = await h.service.status(USER);
         expect(status.link?.label).toBe('or3.example.test');
+        expect(status.link?.account).toBe('Example Publisher');
+        expect(status.link?.accountId).toBe('central-user');
         expect(status.link?.scopes).toEqual(['library:read', 'downloads:acquire']);
         expect(JSON.stringify(status)).not.toContain(TOKEN);
     });
 
+    it('serializes concurrent status calls so the credential is consumed once', async () => {
+        const h = createHarness();
+        await toPending(h);
+        h.pollResults = [
+            {
+                ok: true,
+                value: polled({ status: 'consumed', token: TOKEN, link: linkedSession().link, user: linkedSession().user }),
+            },
+        ];
+        h.advance(5_000);
+
+        const [first, second] = await Promise.all([h.service.status(USER), h.service.status(USER)]);
+        expect(h.calls.poll).toHaveLength(1);
+        expect([first.state, second.state].every((state) => state === 'linked')).toBe(true);
+        expect(h.record().state).toBe('linked');
+    });
+
+    it('never lets a slow poll overwrite a Disconnect that landed meanwhile', async () => {
+        const h = createHarness();
+        await toPending(h);
+        h.pollResults = [
+            {
+                ok: true,
+                value: polled({ status: 'consumed', token: TOKEN, link: linkedSession().link, user: linkedSession().user }),
+            },
+        ];
+        h.advance(5_000);
+        h.revokeResults = [{ ok: true, value: { revoked: true } }];
+
+        const held = h.holdPoll();
+        const polling = h.service.status(USER);
+        // The Disconnect is requested while the poll is still in flight. It must
+        // not read the stale (pending) binding and then be overwritten by the
+        // poll's result; the credential the poll receives must be revoked.
+        const disconnecting = h.service.disconnect(USER);
+        await Promise.resolve();
+        held.release();
+
+        const [polledView, disconnected] = await Promise.all([polling, disconnecting]);
+        expect(polledView.state).toBe('linked');
+        expect(disconnected.ok).toBe(true);
+        expect(h.record().state).toBe('revoked');
+        expect(h.calls.revoke).toEqual([TOKEN]);
+    });
+
     it('treats a lost one-time response as unrecoverable and stops polling', async () => {
-        const h = harness();
+        const h = createHarness();
         await toPending(h);
         h.pollResults = [{ ok: true, value: polled({ status: 'consumed' }) }];
         h.advance(5_000);
@@ -270,23 +356,21 @@ describe('library link service', () => {
     });
 
     it('reports denial, replacement and expiry as terminal states', async () => {
-        const denied = harness();
+        const denied = createHarness();
         await toPending(denied);
         denied.pollResults = [{ ok: true, value: polled({ status: 'denied' }) }];
         denied.advance(5_000);
         expect((await denied.service.status(USER)).state).toBe('denied');
 
-        const replaced = harness();
+        const replaced = createHarness();
         await toPending(replaced);
-        replaced.pollResults = [
-            { ok: false, failure: { code: 'pairing-not-found', message: 'gone', retryable: false } },
-        ];
+        replaced.pollResults = [failure('pairing-not-found')];
         replaced.advance(5_000);
         const replacedStatus = await replaced.service.status(USER);
         expect(replacedStatus.state).toBe('expired');
         expect(replacedStatus.reason).toBe('pairing-replaced');
 
-        const stale = harness();
+        const stale = createHarness();
         await toPending(stale);
         stale.advance(11 * 60_000);
         expect((await stale.service.status(USER)).state).toBe('expired');
@@ -294,11 +378,9 @@ describe('library link service', () => {
     });
 
     it('keeps waiting through a marketplace outage and retries later', async () => {
-        const h = harness();
+        const h = createHarness();
         await toPending(h);
-        h.pollResults = [
-            { ok: false, failure: { code: 'central-unreachable', message: 'down', retryable: true } },
-        ];
+        h.pollResults = [failure('central-unreachable', true)];
         h.advance(5_000);
         const status = await h.service.status(USER);
         expect(status.state).toBe('pending');
@@ -310,7 +392,7 @@ describe('library link service', () => {
     });
 
     it('re-verifies a linked session only after the interval and refreshes metadata', async () => {
-        const h = harness();
+        const h = createHarness();
         await toLinked(h);
         h.advance(60_000);
         await h.service.status(USER);
@@ -326,29 +408,25 @@ describe('library link service', () => {
     });
 
     it('a marketplace revocation ends private authority and drops the credential', async () => {
-        const h = harness();
+        const h = createHarness();
         await toLinked(h);
-        h.verifyResults = [
-            { ok: false, failure: { code: 'link-revoked', message: 'revoked', retryable: false } },
-        ];
+        h.verifyResults = [failure('link-revoked')];
         h.advance(10 * 60_000);
         const status = await h.service.status(USER);
         expect(status.state).toBe('revoked');
         expect(status.reason).toBe('marketplace-revocation');
         expect(h.record().tokenCiphertext).toBeUndefined();
+        expect(h.record().pendingRevocations).toBeUndefined();
 
-        // Already terminal: no further marketplace calls are made.
         h.advance(10 * 60_000);
         await h.service.status(USER);
         expect(h.calls.verify).toHaveLength(1);
     });
 
     it('an outage during verification never ends a working link', async () => {
-        const h = harness();
+        const h = createHarness();
         await toLinked(h);
-        h.verifyResults = [
-            { ok: false, failure: { code: 'central-unreachable', message: 'down', retryable: true } },
-        ];
+        h.verifyResults = [failure('central-unreachable', true)];
         h.advance(10 * 60_000);
         const status = await h.service.status(USER);
         expect(status.state).toBe('linked');
@@ -357,7 +435,7 @@ describe('library link service', () => {
     });
 
     it('expires a linked session locally at its fixed lifetime', async () => {
-        const h = harness();
+        const h = createHarness();
         await toLinked(h);
         h.advance(90 * 24 * 60 * 60_000 + 1);
         const status = await h.service.status(USER);
@@ -368,33 +446,47 @@ describe('library link service', () => {
     });
 
     it('disconnecting stops locally first and retries central revocation', async () => {
-        const h = harness();
+        const h = createHarness();
         await toLinked(h);
-        h.revokeResults = [
-            { ok: false, failure: { code: 'central-unreachable', message: 'down', retryable: true } },
-        ];
+        h.revokeResults = [failure('central-unreachable', true)];
         const disconnected = await h.service.disconnect(USER);
         expect(disconnected.ok).toBe(true);
         expect(h.calls.revoke).toEqual([TOKEN]);
         expect(h.record().state).toBe('revoked');
         expect(h.record().centralRevokePending).toBe(true);
-        expect(h.record().tokenCiphertext).toBeDefined();
+        expect(h.record().pendingRevocations).toHaveLength(1);
+        if (disconnected.ok) expect(disconnected.value.centralRevokePending).toBe(true);
 
         h.revokeResults = [{ ok: true, value: { revoked: true } }];
         const settled = await h.service.status(USER);
         expect(settled.state).toBe('revoked');
         expect(settled.centralRevokePending).toBeUndefined();
         expect(h.record().centralRevokePending).toBe(false);
-        expect(h.record().tokenCiphertext).toBeUndefined();
+        expect(h.record().pendingRevocations).toBeUndefined();
 
-        // Idempotent: nothing left to revoke.
         h.revokeResults = [];
         await h.service.disconnect(USER);
         expect(h.calls.revoke).toHaveLength(2);
     });
 
+    it('settles a revocation only on confirmation or proof it is already invalid', async () => {
+        const h = createHarness();
+        await toLinked(h);
+        h.revokeResults = [failure('central-rejected')];
+        await h.service.disconnect(USER);
+        // An unexpected rejection proves nothing: the credential is kept and the
+        // obligation stays visible instead of being reported as done.
+        expect(h.record().pendingRevocations).toHaveLength(1);
+        expect(h.record().centralRevokePending).toBe(true);
+
+        h.revokeResults = [failure('link-invalid')];
+        const settled = await h.service.status(USER);
+        expect(settled.centralRevokePending).toBeUndefined();
+        expect(h.record().pendingRevocations).toBeUndefined();
+    });
+
     it('cancels a pending attempt locally without any marketplace call', async () => {
-        const h = harness();
+        const h = createHarness();
         await toPending(h);
         const canceled = await h.service.disconnect(USER);
         expect(canceled.ok).toBe(true);
@@ -408,10 +500,13 @@ describe('library link service', () => {
     });
 
     it('reconnect rotates the credential and revokes the replaced one immediately', async () => {
-        const h = harness();
+        const h = createHarness();
         await toLinked(h);
 
-        h.startResult = { ok: true, value: started({ pairingId: `prs_${'c'.repeat(32)}`, code: 'ZZZZ-9999' }) };
+        h.startResult = {
+            ok: true,
+            value: started({ pairingId: `prs_${'c'.repeat(32)}`, code: 'ZZZZ-9999' }),
+        };
         h.revokeResults = [{ ok: true, value: { revoked: true } }];
         const restarted = await h.service.start(USER, {
             label: 'or3.example.test',
@@ -422,54 +517,193 @@ describe('library link service', () => {
         expect(h.calls.revoke).toEqual([TOKEN]);
         const record = h.record();
         expect(record.state).toBe('pending');
-        expect(record.previousTokenCiphertext).toBeUndefined();
+        expect(record.pendingRevocations).toBeUndefined();
         expect(record.tokenCiphertext).toBeUndefined();
 
         h.pollResults = [
-            { ok: true, value: polled({ status: 'consumed', token: TOKEN_2, link: linkedSession().link }) },
+            {
+                ok: true,
+                value: polled({ status: 'consumed', token: TOKEN_2, link: linkedSession().link, user: linkedSession().user }),
+            },
         ];
         h.advance(5_000);
         expect((await h.service.status(USER)).state).toBe('linked');
-        expect(h.calls.verify).toHaveLength(0);
     });
 
-    it('a failed rotation revocation is retried instead of forgotten', async () => {
-        const h = harness();
+    it('repeated rotation never forgets a credential that still needs revocation', async () => {
+        const h = createHarness();
         await toLinked(h);
-        h.startResult = { ok: true, value: started() };
-        h.revokeResults = [
-            { ok: false, failure: { code: 'central-unreachable', message: 'down', retryable: true } },
-        ];
+
+        // Every revocation attempt fails retryably: one for the first rotation,
+        // one for the retry that runs with the consume, and two more for the
+        // second rotation.
+        h.revokeResults = Array.from({ length: 5 }, () => failure('central-unreachable', true));
+
+        // First rotation: the old credential's revocation fails retryably.
         await h.service.start(USER, { label: 'or3.example.test', origin: 'https://or3.example.test' });
-        expect(h.record().previousTokenCiphertext).toBeDefined();
+        expect(h.record().pendingRevocations).toHaveLength(1);
 
-        h.revokeResults = [{ ok: true, value: { revoked: true } }];
-        await h.service.status(USER);
-        expect(h.record().previousTokenCiphertext).toBeUndefined();
+        // Second rotation while the first obligation is still open: both the
+        // replaced credential and the new one must be retained.
+        h.pollResults = [
+            {
+                ok: true,
+                value: polled({ status: 'consumed', token: TOKEN_2, link: linkedSession().link, user: linkedSession().user }),
+            },
+        ];
+        h.advance(5_000);
+        expect((await h.service.status(USER)).state).toBe('linked');
+        h.startResult = { ok: true, value: started({ pairingId: `prs_${'d'.repeat(32)}`, code: 'YYYY-8888' }) };
+        await h.service.start(USER, { label: 'or3.example.test', origin: 'https://or3.example.test' });
+
+        const queue = h.record().pendingRevocations ?? [];
+        expect(queue).toHaveLength(2);
+        expect([...new Set(queue)]).toHaveLength(2);
     });
 
-    it('requires reconnect when the encryption key no longer decrypts the binding', async () => {
-        const h = harness();
+    it('preserves an undecryptable binding and can still revoke it after the key returns', async () => {
+        const h = createHarness();
         await toLinked(h);
-        const rotated = new LibraryLinkService({
+
+        const wrongKey = new LibraryLinkService({
             store: createFileLibraryLinkStore({ directory: h.directory }),
             transport: {
-                start: async () => ({ ok: false, failure: { code: 'central-unreachable', message: '', retryable: true } }),
-                poll: async () => ({ ok: false, failure: { code: 'central-unreachable', message: '', retryable: true } }),
-                verify: async () => ({ ok: false, failure: { code: 'central-unreachable', message: '', retryable: true } }),
-                revoke: async () => ({ ok: false, failure: { code: 'central-unreachable', message: '', retryable: true } }),
+                start: async () => failure('central-unreachable', true),
+                poll: async () => failure('central-unreachable', true),
+                verify: async () => failure('central-unreachable', true),
+                revoke: async () => failure('central-unreachable', true),
             },
             encryptionKey: 'a-completely-different-key',
             instanceId: INSTANCE,
             now: () => NOW + 11 * 60_000,
         });
-        const status = await rotated.status(USER);
-        expect(status.state).toBe('lost');
-        expect(status.reason).toBe('binding-undecryptable');
+        const lost = await wrongKey.status(USER);
+        expect(lost.state).toBe('lost');
+        expect(lost.reason).toBe('binding-undecryptable');
+        // The ciphertext is preserved (the file still contains it) even though
+        // this key cannot read it, and the obligation stays visible.
+        expect(h.record().pendingRevocations).toHaveLength(1);
+        expect(readFileSync(join(h.directory, `${USER}.json`), 'utf8')).toContain('llv1.');
+
+        h.advance(11 * 60_000);
+        h.verifyResults = [{ ok: true, value: linkedSession() }];
+        h.revokeResults = [{ ok: true, value: { revoked: true } }];
+        const recovered = await h.service.status(USER);
+        expect(h.calls.revoke).toEqual([TOKEN]);
+        expect(h.record().pendingRevocations).toBeUndefined();
+        expect(recovered).toBeTruthy();
+    });
+
+    it('reports the fresh binding when another writer advanced it', async () => {
+        const h = createHarness();
+        await toLinked(h);
+
+        // A second writer (another replica) revokes the binding between this
+        // service's read and its write. The stale operation must not overwrite
+        // that decision.
+        const racing: LibraryLinkStore = {
+            read: (userId) => h.store.read(userId),
+            async write(record: LibraryLinkRecord, options: LibraryLinkWriteOptions) {
+                const current = (await h.store.read(record.userId)) as LibraryLinkRecord;
+                if (current.state === 'linked') {
+                    await h.store.write(
+                        {
+                            ...current,
+                            state: 'revoked',
+                            reason: 'disconnected',
+                            tokenCiphertext: undefined,
+                            pendingRevocations: undefined,
+                            centralRevokePending: false,
+                        },
+                        { expectRevision: current.revision }
+                    );
+                }
+                return await h.store.write(record, options);
+            },
+        };
+        const service = new LibraryLinkService({
+            store: racing,
+            transport: {
+                start: async () => failure('central-unreachable', true),
+                poll: async () => failure('central-unreachable', true),
+                verify: async () => failure('central-unreachable', true),
+                revoke: async () => ({ ok: true, value: { revoked: true } }),
+            },
+            encryptionKey: KEY,
+            instanceId: INSTANCE,
+            now: () => NOW,
+        });
+
+        const result = await service.disconnect(USER);
+        expect(result.ok).toBe(true);
+        if (result.ok) expect(result.value.state).toBe('revoked');
+        expect(h.record().state).toBe('revoked');
+    });
+
+    it('never leaves an orphan credential when the link write loses a race', async () => {
+        const h = createHarness();
+        await toPending(h);
+        h.pollResults = [
+            {
+                ok: true,
+                value: polled({ status: 'consumed', token: TOKEN, link: linkedSession().link, user: linkedSession().user }),
+            },
+        ];
+        h.advance(5_000);
+
+        // The binding changes (another replica) between the poll and the write.
+        // The token this poll received was never handed to anyone else, so it
+        // must be revoked rather than dropped.
+        const racing: LibraryLinkStore = {
+            read: (userId) => h.store.read(userId),
+            async write(record: LibraryLinkRecord, options: LibraryLinkWriteOptions) {
+                const current = (await h.store.read(record.userId)) as LibraryLinkRecord;
+                await h.store.write(
+                    {
+                        ...current,
+                        state: 'revoked',
+                        reason: 'disconnected',
+                        updatedAt: new Date().toISOString(),
+                    },
+                    { expectRevision: current.revision }
+                );
+                return await h.store.write(record, options);
+            },
+        };
+        h.revokeResults = [{ ok: true, value: { revoked: true } }];
+        const service = new LibraryLinkService({
+            store: racing,
+            transport: {
+                start: async () => failure('central-unreachable', true),
+                poll: async (_pairingId, _secret) => ({
+                    ok: true,
+                    value: polled({
+                        status: 'consumed',
+                        token: TOKEN,
+                        link: linkedSession().link,
+                        user: linkedSession().user,
+                    }),
+                }),
+                verify: async () => failure('central-unreachable', true),
+                revoke: async (token) => {
+                    h.calls.revoke.push(token);
+                    const result = h.revokeResults.shift();
+                    if (!result) throw new Error('unexpected revoke');
+                    return result;
+                },
+            },
+            encryptionKey: KEY,
+            instanceId: INSTANCE,
+            now: () => NOW + 5_000,
+        });
+
+        const status = await service.status(USER);
+        expect(h.calls.revoke).toEqual([TOKEN]);
+        expect(status.state).toBe('revoked');
     });
 
     it('never destroys a binding just because configuration is missing', async () => {
-        const h = harness();
+        const h = createHarness();
         await toLinked(h);
 
         const unconfigured = new LibraryLinkService({
@@ -499,50 +733,13 @@ describe('library link service', () => {
         expect(status.state).toBe('linked');
         expect(h.record().tokenCiphertext).toBeDefined();
 
-        // Restoring the key restores the link without a reconnect.
         h.verifyResults = [{ ok: true, value: linkedSession() }];
         h.advance(60 * 60_000);
         expect((await h.service.status(USER)).state).toBe('linked');
     });
 
-    it('never forgets a credential it cannot decrypt while revoking', async () => {
-        const h = harness();
-        await toLinked(h);
-        const unconfigured = new LibraryLinkService({
-            store: createFileLibraryLinkStore({ directory: h.directory }),
-            transport: {
-                start: async () => {
-                    throw new Error('must not be called');
-                },
-                poll: async () => {
-                    throw new Error('must not be called');
-                },
-                verify: async () => {
-                    throw new Error('must not be called');
-                },
-                revoke: async () => {
-                    throw new Error('must not be called');
-                },
-            },
-            encryptionKey: undefined,
-            instanceId: INSTANCE,
-            configured: false,
-            now: () => NOW,
-        });
-
-        const result = await unconfigured.disconnect(USER);
-        expect(result.ok).toBe(true);
-        if (result.ok) {
-            expect(result.value.state).toBe('revoked');
-            expect(result.value.centralRevokePending).toBe(true);
-        }
-        const record = h.record();
-        expect(record.centralRevokePending).toBe(true);
-        expect(record.tokenCiphertext).toBeDefined();
-    });
-
     it('keeps each local user’s binding separate', async () => {
-        const h = harness();
+        const h = createHarness();
         await toPending(h);
 
         const other = await h.service.status('user-2');
@@ -551,7 +748,10 @@ describe('library link service', () => {
         expect(h.record().state).toBe('pending');
 
         h.pollResults = [
-            { ok: true, value: polled({ status: 'consumed', token: TOKEN, link: linkedSession().link }) },
+            {
+                ok: true,
+                value: polled({ status: 'consumed', token: TOKEN, link: linkedSession().link, user: linkedSession().user }),
+            },
         ];
         h.advance(5_000);
         expect((await h.service.status(USER)).state).toBe('linked');

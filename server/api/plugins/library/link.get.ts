@@ -22,6 +22,6 @@ export default defineEventHandler(async (event) => {
     requireCan(session, 'workspace.read', { kind: 'workspace', id: workspaceId });
     setResponseHeader(event, 'Cache-Control', 'no-store');
 
-    const { service } = libraryLinkServiceFor(event);
+    const { service } = await libraryLinkServiceFor(event);
     return await service.status(userId);
 });

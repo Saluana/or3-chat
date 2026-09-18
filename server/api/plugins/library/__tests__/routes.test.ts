@@ -22,7 +22,7 @@ const statusMock = vi.fn();
 const startMock = vi.fn();
 const disconnectMock = vi.fn();
 vi.mock('../../../../admin/library/route-support', () => ({
-    libraryLinkServiceFor: () => ({
+    libraryLinkServiceFor: async () => ({
         configured: true,
         config: {
             registryOrigin: 'https://marketplace.example.test',
