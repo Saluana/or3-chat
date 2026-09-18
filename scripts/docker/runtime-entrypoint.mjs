@@ -104,6 +104,13 @@ setDefault(
     'NUXT_ADMIN_PLUGIN_CONNECTION_SECRET',
     firstDefined(env.OR3_PLUGIN_CONNECTION_SECRET)
 );
+// Library link credential key. Runtime secret like the connection key: a
+// prebuilt image must receive it here, and rotating it invalidates existing
+// links so the user reconnects.
+setDefault(
+    'NUXT_ADMIN_LIBRARY_LINK_SECRET',
+    firstDefined(env.OR3_LIBRARY_LINK_SECRET)
+);
 
 const [command, ...args] = process.argv.slice(2);
 if (!command) throw new Error('A server command is required.');

@@ -1394,6 +1394,12 @@
                     "summary": "Dashboard > Marketplace is the native user surface for discovery, install, updates and management: it browses the configured registry through the authenticated local server, answers with actionable preflight block codes instead of a boolean, installs through the durable acquisition operation, completes a pending browser canary for contained client packages, and reports a redacted support report. Discovery works anywhere; installing needs a Cloud profile with a configured registry, and a member without install authority gets a copyable administrator request."
                 },
                 {
+                    "name": "library.md",
+                    "path": "/plugins/library",
+                    "category": "Guide",
+                    "summary": "Dashboard > Library connects one local user to that person's marketplace account through a bounded device-style pairing: the browser sees only a comparison code and the canonical verification link, the local server keeps the polling secret and an encrypted credential bound to that user and instance, and the link carries exactly library:read and downloads:acquire with a fixed 90-day lifetime. Disconnect stops the local server first and retries central revocation; revoked, expired or restored authority asks for a reconnect while installed software keeps running."
+                },
+                {
                     "name": "v1-support-and-migration.md",
                     "path": "/plugins/v1-support-and-migration",
                     "category": "Guide",

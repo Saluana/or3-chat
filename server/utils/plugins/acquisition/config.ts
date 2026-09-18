@@ -60,7 +60,8 @@ export const DEFAULT_RESERVE_BYTES = 64 * 1024 * 1024;
 
 const BASE64URL = /^[A-Za-z0-9_-]{43,86}$/;
 
-function httpsOrigin(raw: string | undefined): string {
+/** Absolute https origin with no path/query; anything else disables the client. */
+export function httpsOrigin(raw: string | undefined): string {
     const value = raw?.trim();
     if (!value) return '';
     try {

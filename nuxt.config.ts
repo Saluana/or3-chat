@@ -446,6 +446,13 @@ const adminConfig = {
      * so the key is not baked into an image layer.
      */
     pluginConnectionSecret: '',
+    /**
+     * AES-256-GCM key for the personal Library link credential
+     * (`OR3_LIBRARY_LINK_SECRET`). Held outside the database and never read from
+     * the build environment; empty means linking is unavailable rather than
+     * storing a polling secret or token in plaintext.
+     */
+    libraryLinkSecret: '',
     rebuildCommand: or3CloudConfig.admin?.rebuildCommand || 'bun run build',
     extensionMaxZipBytes: or3CloudConfig.admin?.extensionMaxZipBytes
         ? String(or3CloudConfig.admin.extensionMaxZipBytes)
