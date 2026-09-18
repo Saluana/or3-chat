@@ -67,6 +67,8 @@ export const authoringConfig = Object.freeze({
         operationId: 'documents.write',
         label: 'Summarize selected document',
         usesSampleContext: true,
+        // Explicit sample the host runs the first action on; no filename guessing.
+        samplePath: 'fixtures/workspace/sample-document.md',
     },
 });
 

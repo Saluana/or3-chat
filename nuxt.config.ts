@@ -436,6 +436,27 @@ const adminConfig = {
      */
     containmentProbeEnabled: process.env.OR3_CONTAINMENT_PROBE_ENABLED === 'true',
     /**
+     * Approved models a plugin may use, and their trusted prices (USD per 1M
+     * tokens). Both are operator configuration; an unpriced model is refused
+     * rather than recorded as free, and an empty allowlist means plugins have no
+     * approved models at all. Parsed strictly at the boundary
+     * (`shared/plugins/ai/model-catalog.ts`).
+     */
+    pluginAllowedModels: (process.env.OR3_PLUGIN_ALLOWED_MODELS ?? '')
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean),
+    pluginModelPrices: (() => {
+        const raw = (process.env.OR3_PLUGIN_MODEL_PRICES ?? '').trim();
+        if (!raw) return {};
+        try {
+            const parsed: unknown = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+        } catch {
+            return {};
+        }
+    })(),
+    /**
      * AES-256-GCM key for plugin connection secrets. Held outside the database
      * (env/secret store); empty means connections are unavailable, never stored
      * in plaintext.

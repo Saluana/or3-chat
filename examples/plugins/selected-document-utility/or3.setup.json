@@ -33,6 +33,7 @@
   "firstAction": {
     "label": "Summarize selected document",
     "operationId": "documents.write",
+    "samplePath": "fixtures/workspace/sample-document.md",
     "usesSampleContext": true
   },
   "settingsSchemaPath": "settings.schema.json",

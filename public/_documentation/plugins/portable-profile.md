@@ -117,3 +117,11 @@ actionable findings using the conformance shape (`severity`, `code`, `subject`,
 The same validator runs in `plugin-runtime:v2-conformance:check` whenever a
 package declares `or3-portable-client-v1` or ships either descriptor file. See
 [Plugin Manifest V2](./manifest-v2) and the [Plugin SDK](./plugin-sdk).
+
+## First-action samples
+
+`or3.setup.json` → `firstAction` may declare `samplePath`: a package-relative
+path (no leading slash, no `..`) to the sample the host runs the first action on.
+The rule is enforced both ways: `usesSampleContext: true` requires `samplePath`,
+and `samplePath` is refused when `usesSampleContext` is false. The host resolves
+it inside the package directory with a size bound and never guesses a filename.

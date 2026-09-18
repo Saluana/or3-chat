@@ -69,6 +69,12 @@ export interface Or3SetupFirstAction {
     readonly operationId: string;
     readonly label: string;
     readonly usesSampleContext: boolean;
+    /**
+     * Package-relative path to the sample the host runs the first action on.
+     * Required when `usesSampleContext` is true, so the host never has to guess
+     * a filename; refused when it is false.
+     */
+    readonly samplePath?: string;
 }
 
 export interface Or3SetupDescriptorV1 {
@@ -451,10 +457,33 @@ export function parseSetupDescriptor(input: unknown): DescriptorShapeResult<Or3S
             'firstAction must be an object with string operationId and label plus a boolean usesSampleContext.'
         );
     } else {
+        const usesSample = input.firstAction.usesSampleContext;
+        const rawSamplePath = input.firstAction.samplePath;
+        let samplePath: string | undefined;
+        if (rawSamplePath !== undefined) {
+            if (typeof rawSamplePath !== 'string' || !isSafeSamplePath(rawSamplePath)) {
+                at(
+                    '.firstAction.samplePath',
+                    'samplePath must be a package-relative path without ".." or a leading slash.'
+                );
+            } else {
+                samplePath = rawSamplePath;
+            }
+        }
+        if (usesSample && samplePath === undefined) {
+            at(
+                '.firstAction.samplePath',
+                'samplePath is required when usesSampleContext is true, so the host can resolve the sample.'
+            );
+        }
+        if (!usesSample && samplePath !== undefined) {
+            at('.firstAction.samplePath', 'samplePath is only valid when usesSampleContext is true.');
+        }
         firstAction = {
             operationId: input.firstAction.operationId,
             label: input.firstAction.label,
-            usesSampleContext: input.firstAction.usesSampleContext,
+            usesSampleContext: usesSample,
+            ...(samplePath === undefined ? {} : { samplePath }),
         };
     }
 
@@ -479,6 +508,18 @@ const ALLOWED_PACKAGE_DEPENDENCIES = new Set(['@or3/plugin-sdk']);
 const READ_GRANTS = ['documents.read', 'storage.read', 'settings.read'] as const;
 const WRITE_GRANTS = ['documents.write', 'storage.write', 'settings.write'] as const;
 const NETWORK_GRANT = 'network.http';
+
+/**
+ * A sample path must stay inside the package: relative, forward slashes only,
+ * no traversal and no absolute or home-relative forms.
+ */
+export function isSafeSamplePath(value: string): boolean {
+    if (value.length === 0 || value.length > 128) return false;
+    if (value.startsWith('/') || value.startsWith('~') || value.startsWith('\\')) return false;
+    if (/^[A-Za-z]:/.test(value)) return false;
+    if (value.includes('\\')) return false;
+    return !value.split('/').some((segment) => segment === '..' || segment === '');
+}
 
 function compareText(left: string, right: string): number {
     return left < right ? -1 : left > right ? 1 : 0;
@@ -618,6 +659,9 @@ export function defineOr3PortableProfile(config: Or3PortableProfileConfig): Or3P
             operationId: config.firstAction.operationId,
             label: config.firstAction.label,
             usesSampleContext: config.firstAction.usesSampleContext,
+            ...(config.firstAction.samplePath === undefined
+                ? {}
+                : { samplePath: config.firstAction.samplePath }),
         },
     };
     const policyBytes = stableJson(policy);

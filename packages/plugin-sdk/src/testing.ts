@@ -17,6 +17,8 @@ import { createHostPluginContext, type HostPluginScope } from './host';
 import type { PluginError, PluginErrorCode, PluginResult } from './results';
 import { pluginError, pluginOk } from './results';
 import type { PluginGrant } from './manifest';
+import type { PortableClient, PortableHostResult } from './portable';
+import type { PortableUiView } from './ui';
 
 export type PluginTestCapability = 'settings' | 'storage';
 
@@ -382,4 +384,182 @@ export class PluginTestHost {
 
 export function createPluginTestHost(options: PluginTestHostOptions = {}): PluginTestHost {
     return new PluginTestHost(options);
+}
+
+/* ---------------------------------------------------------------------------
+ * Portable profile test host
+ * ------------------------------------------------------------------------ */
+
+export interface PortableTestCall {
+    readonly method: string;
+    readonly params: Readonly<Record<string, unknown>>;
+    readonly deadlineMs?: number;
+}
+
+export type PortableTestResponse = unknown | ((params: Readonly<Record<string, unknown>>) => unknown);
+
+export interface PortableTestHostOptions {
+    readonly approvedGrants?: readonly PluginGrant[];
+    readonly supportedFeatures?: readonly string[];
+    readonly pluginId?: string;
+    readonly generation?: number;
+    /** Canned capability answers: `ai.models`, `ai.complete`, custom methods. */
+    readonly responses?: Readonly<Record<string, PortableTestResponse>>;
+    readonly initialSettings?: Readonly<Record<string, PluginJsonValue>>;
+    readonly initialStorage?: Readonly<Record<string, PluginJsonValue>>;
+}
+
+export interface PortableTestHost {
+    readonly client: PortableClient;
+    readonly bootstrap: {
+        readonly pluginId: string;
+        readonly abiVersion: number;
+        readonly features: readonly string[];
+        readonly grants: readonly string[];
+        readonly session: { readonly sessionId: string; readonly sourceId: string; readonly generation: number };
+    };
+    readonly calls: PortableTestCall[];
+    readonly renders: PortableUiView[];
+    readonly contributions: readonly { readonly slot: string; readonly id: string; readonly view: PortableUiView }[];
+    readonly events: readonly { readonly name: string; readonly payload: Readonly<Record<string, unknown>> }[];
+    readonly settings: Map<string, PluginJsonValue>;
+    readonly storage: Map<string, PluginJsonValue>;
+    /** Deliver a host→plugin request exactly as the runtime would. */
+    invokeRequest(method: string, params?: Readonly<Record<string, unknown>>): Promise<unknown>;
+    /** True when a request handler is registered for the method. */
+    hasRequestHandler(method: string): boolean;
+}
+
+/**
+ * A portable-profile host stand-in for package tests.
+ *
+ * It implements the same `PortableClient` contract the sandbox shim provides, so
+ * a package's `client.mjs` runs through the real `createPortablePlugin()` path
+ * with canned capability answers and captured renders — no browser, no worker.
+ */
+export function createPortableTestHost(options: PortableTestHostOptions = {}): PortableTestHost {
+    const calls: PortableTestCall[] = [];
+    const renders: PortableUiView[] = [];
+    const contributions: { slot: string; id: string; view: PortableUiView }[] = [];
+    const events: { name: string; payload: Readonly<Record<string, unknown>> }[] = [];
+    const requestHandlers = new Map<
+        string,
+        (params: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>
+    >();
+    const settings = new Map<string, PluginJsonValue>(Object.entries(options.initialSettings ?? {}));
+    const storage = new Map<string, PluginJsonValue>(Object.entries(options.initialStorage ?? {}));
+    const responses = options.responses ?? {};
+    const pluginId = options.pluginId ?? 'or3.test-plugin';
+    const generation = options.generation ?? 1;
+
+    const client: PortableClient = {
+        emit(name, payload = {}) {
+            events.push({ name, payload });
+        },
+        render(view) {
+            renders.push(view);
+        },
+        contribute(slot, id, view) {
+            contributions.push({ slot, id, view });
+        },
+        withdraw(id) {
+            if (id === undefined) {
+                contributions.length = 0;
+                return;
+            }
+            const kept = contributions.filter((entry) => entry.id !== id);
+            contributions.length = 0;
+            contributions.push(...kept);
+        },
+        async call<T = unknown>(
+            method: string,
+            params: Readonly<Record<string, unknown>> = {},
+            callOptions: { readonly deadlineMs?: number } = {}
+        ): Promise<PortableHostResult<T>> {
+            calls.push({
+                method,
+                params,
+                ...(callOptions.deadlineMs === undefined ? {} : { deadlineMs: callOptions.deadlineMs }),
+            });
+            // The host-owned stores behave like the real ones, so a package's
+            // settings/storage code is exercised without canned responses.
+            const store = method.startsWith('settings.') ? settings : method.startsWith('storage.') ? storage : null;
+            const key = typeof params.key === 'string' ? params.key : '';
+            if (store) {
+                if (method.endsWith('.get')) {
+                    return { ok: true, result: { value: store.get(key) ?? null } as T };
+                }
+                if (method.endsWith('.set')) {
+                    store.set(key, (params.value ?? null) as PluginJsonValue);
+                    return { ok: true, result: {} as T };
+                }
+                if (method.endsWith('.delete')) {
+                    store.delete(key);
+                    return { ok: true, result: {} as T };
+                }
+                if (method.endsWith('.list')) {
+                    const prefix = typeof params.prefix === 'string' ? params.prefix : '';
+                    const entries = [...store.entries()]
+                        .filter(([entryKey]) => entryKey.startsWith(prefix))
+                        .map(([entryKey, value]) => ({
+                            key: entryKey,
+                            sizeBytes: JSON.stringify(value ?? null).length,
+                            updatedAt: 0,
+                        }));
+                    return {
+                        ok: true,
+                        result: (method.startsWith('settings.')
+                            ? { values: Object.fromEntries(store.entries()) }
+                            : { entries }) as T,
+                    };
+                }
+            }
+            const configured = responses[method];
+            if (configured === undefined) {
+                return { ok: false, code: 'not-found', message: `No test response for ${method}` };
+            }
+            const value: unknown =
+                typeof configured === 'function'
+                    ? await (configured as (params: Readonly<Record<string, unknown>>) => unknown)(params)
+                    : configured;
+            // A canned refusal is returned verbatim, so failure paths are tested
+            // through the same shape the real transport uses.
+            if (value && typeof value === 'object' && (value as { ok?: unknown }).ok === false) {
+                return value as PortableHostResult<T>;
+            }
+            return { ok: true, result: value as T };
+        },
+        onEvent() {
+            return () => undefined;
+        },
+        onRequest(method, handler) {
+            requestHandlers.set(method, handler);
+            return () => {
+                requestHandlers.delete(method);
+            };
+        },
+    };
+
+    return {
+        client,
+        bootstrap: {
+            pluginId,
+            abiVersion: 1,
+            features: options.supportedFeatures ?? ['or3-portable-client-v1'],
+            grants: options.approvedGrants ?? [],
+            session: { sessionId: 'test-session', sourceId: 'test-source', generation },
+        },
+        calls,
+        renders,
+        contributions,
+        events,
+        settings,
+        storage,
+        hasRequestHandler: (method) => requestHandlers.has(method),
+        async invokeRequest(method, params = {}) {
+            const handler = requestHandlers.get(method);
+            if (!handler) throw new Error(`No request handler registered for ${method}`);
+            return await handler(params);
+        },
+    };
 }

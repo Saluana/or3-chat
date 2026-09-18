@@ -43,11 +43,20 @@ import {
     createPluginAiCompleteMethod,
     PLUGIN_AI_COMPLETE_METHOD,
 } from '../../../utils/plugins/ai/plugin-invocation';
+import { buildPluginModelCatalog } from '~~/shared/plugins/ai/model-catalog';
+import {
+    resolveAllowedModels,
+    resolveHostModelPrices,
+} from '../../../utils/plugins/ai/model-catalog';
 import { createOpenRouterPluginProvider } from '../../../utils/plugins/ai/openrouter-client';
 import { CONNECTIONS_DISPATCH_METHOD } from '../../../utils/plugins/connections/broker-binding';
+import { REMOTE_CAPABILITY_METHODS } from '~~/shared/plugins/isolation/capability-bridge';
 import { retainSelectionAuthority } from '../../../utils/plugins/setup/selection-authority-registry';
 import { DEFAULT_CONTAINMENT_BUDGETS } from '~~/shared/plugins/isolation/budgets';
 import type { HostRpcHandlerContext } from '~~/shared/plugins/isolation/host-rpc-broker';
+
+/** Capability method that discloses the approved models (phase 9). */
+const AI_MODELS_METHOD = REMOTE_CAPABILITY_METHODS.aiModels;
 
 type CapabilityBody = {
     readonly pluginId?: unknown;
@@ -149,6 +158,19 @@ export default defineEventHandler(async (event) => {
         signal: new AbortController().signal,
         deadlineMs: DEFAULT_CONTAINMENT_BUDGETS.defaultCallDeadlineMs,
     };
+
+    if (method === AI_MODELS_METHOD) {
+        // A disclosure, not an authority: the allowlist, its prices and the
+        // enforced limits. Unconfigured hosts answer explicitly instead of
+        // appearing to offer models that every call would refuse.
+        return {
+            ok: true,
+            result: buildPluginModelCatalog({
+                allowed: resolveAllowedModels(config),
+                prices: resolveHostModelPrices(config),
+            }),
+        };
+    }
 
     if (method === PLUGIN_AI_COMPLETE_METHOD) {
         const apiKey = config.openrouterApiKey || process.env.OPENROUTER_API_KEY || '';
@@ -268,38 +290,6 @@ export default defineEventHandler(async (event) => {
         statusMessage: `Unknown capability method: ${method}`,
     });
 });
-
-/**
- * Trusted model prices. The host configuration supplies them; a model without a
- * configured price is refused by the governor rather than treated as free.
- */
-function resolveHostModelPrices(config: unknown): Record<
-    string,
-    { promptPerMillion: number; completionPerMillion: number }
-> {
-    const admin = (config as { admin?: { pluginModelPrices?: unknown } }).admin;
-    const raw = admin?.pluginModelPrices;
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
-    const prices: Record<string, { promptPerMillion: number; completionPerMillion: number }> = {};
-    for (const [model, value] of Object.entries(raw as Record<string, unknown>)) {
-        if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
-        const entry = value as { promptPerMillion?: unknown; completionPerMillion?: unknown };
-        const prompt = Number(entry.promptPerMillion);
-        const completion = Number(entry.completionPerMillion);
-        if (!Number.isFinite(prompt) || !Number.isFinite(completion)) continue;
-        if (prompt < 0 || completion < 0) continue;
-        prices[model] = { promptPerMillion: prompt, completionPerMillion: completion };
-    }
-    return prices;
-}
-
-/** Allowlist of models plugins may use; empty means the host has none approved. */
-function resolveAllowedModels(config: unknown): string[] {
-    const admin = (config as { admin?: { pluginAllowedModels?: unknown } }).admin;
-    const raw = admin?.pluginAllowedModels;
-    if (!Array.isArray(raw)) return [];
-    return raw.filter((value): value is string => typeof value === 'string');
-}
 
 function asCapabilityError(error: unknown) {
     const message = error instanceof Error ? error.message : 'Capability call failed';

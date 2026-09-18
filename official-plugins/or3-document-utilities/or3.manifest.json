@@ -1,0 +1,49 @@
+{
+  "manifestVersion": 2,
+  "kind": "plugin",
+  "id": "or3.document-utilities",
+  "name": "Document Utilities",
+  "version": "1.0.0",
+  "description": "Transform selected content and preview the result before writing anything.",
+  "engines": {
+    "or3": "^0.3.0",
+    "pluginApi": "^2.0.0"
+  },
+  "runtime": {
+    "client": {
+      "entry": "client.mjs",
+      "format": "esm",
+      "isolation": "worker"
+    }
+  },
+  "requestedGrants": [
+    "documents.read",
+    "documents.write",
+    "network.http",
+    "settings.read",
+    "settings.write"
+  ],
+  "features": {
+    "required": [
+      "or3-portable-client-v1"
+    ],
+    "optional": []
+  },
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "trust": "isolated-client",
+  "settings": {
+    "version": 1,
+    "schema": "settings.schema.json"
+  },
+  "stateCompatibility": {
+    "version": 1,
+    "reads": {
+      "minimum": 1,
+      "maximum": 1
+    },
+    "rollback": "safe"
+  }
+}

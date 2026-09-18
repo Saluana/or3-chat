@@ -1,0 +1,32 @@
+{
+  "connections": [
+    {
+      "externalCost": "Model calls are billed by the host model provider per token and attributed to this plugin; OR3 adds no fee.",
+      "id": "models",
+      "label": "OpenRouter models (host-provided)",
+      "mechanism": "server",
+      "operations": [
+        "chat.completions.create",
+        "models.list"
+      ],
+      "provider": "openrouter",
+      "required": false,
+      "scopes": [
+        "chat:completion",
+        "models:read"
+      ]
+    }
+  ],
+  "dataScopes": [
+    "settings.read"
+  ],
+  "destinations": [],
+  "policyVersion": 1,
+  "profile": "or3-portable-client-v1",
+  "requiredFeatures": [
+    "or3-portable-client-v1"
+  ],
+  "writes": [
+    "settings.write"
+  ]
+}

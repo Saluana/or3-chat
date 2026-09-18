@@ -34,6 +34,8 @@ import type {
 
 /** Methods the host exposes to sandboxes through the server bridge. */
 export const REMOTE_CAPABILITY_METHODS = {
+    /** The approved model allowlist and its disclosed prices/limits. */
+    aiModels: 'ai.models',
     aiComplete: 'ai.complete',
     connectionsDispatch: 'connections.dispatch',
 } as const;
@@ -52,6 +54,7 @@ const REMOTE_FAILURE_RPC_CODES: Readonly<Record<string, string>> = Object.freeze
 export const REMOTE_CAPABILITY_GRANTS: Readonly<
     Record<RemoteCapabilityMethod, HostRpcMethodGrant>
 > = Object.freeze({
+        [REMOTE_CAPABILITY_METHODS.aiModels]: 'network.http',
         [REMOTE_CAPABILITY_METHODS.aiComplete]: 'network.http',
         [REMOTE_CAPABILITY_METHODS.connectionsDispatch]: 'network.http',
     });

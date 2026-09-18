@@ -202,6 +202,51 @@ describe('POST /api/plugins/isolation/capability', () => {
         expect(aiFactoryMock).not.toHaveBeenCalled();
     });
 
+    it('discloses the approved models with prices and limits (phase 9)', async () => {
+        configMock.mockReturnValue({
+            auth: { enabled: true },
+            openrouterApiKey: 'sk-or-host',
+            admin: {
+                pluginModelPrices: { m: { promptPerMillion: 1, completionPerMillion: 2 } },
+                pluginAllowedModels: ['m'],
+            },
+        })
+        readBodyMock.mockResolvedValue({
+            pluginId: 'example.plugin',
+            generation: 4,
+            method: 'ai.models',
+            requestId: 'rpc-models',
+        })
+        await expect(handler(makeEvent())).resolves.toMatchObject({
+            ok: true,
+            result: {
+                configured: true,
+                models: [
+                    {
+                        id: 'm',
+                        label: 'm',
+                        priced: true,
+                        promptPerMillion: 1,
+                        completionPerMillion: 2,
+                    },
+                ],
+            },
+        })
+    })
+
+    it('reports an unconfigured model allowlist without refusing the disclosure', async () => {
+        readBodyMock.mockResolvedValue({
+            pluginId: 'example.plugin',
+            generation: 5,
+            method: 'ai.models',
+            requestId: 'rpc-models-empty',
+        })
+        await expect(handler(makeEvent())).resolves.toMatchObject({
+            ok: true,
+            result: { configured: false, models: [] },
+        })
+    })
+
     it('routes ai.complete through the governed factory with host prices', async () => {
         configMock.mockReturnValue({
             auth: { enabled: true },

@@ -1334,10 +1334,16 @@
                     "summary": "V2 packages ship or3.manifest.json with manifestVersion: 2. The owner-only standard extension install endpoint dispatches a V2 ZIP to the immutable candidate store. After a canary and explicit promotion, an enabled"
                 },
                 {
+                    "name": "official-products.md",
+                    "path": "/plugins/official-products",
+                    "category": "Guide",
+                    "summary": "Three first-party plugins — Model Compare, Prompt Workbench and Document Utilities — ship as ordinary portable packages: the same SDK, profile, review lane and setup flow as community plugins. Model calls go through the host's governed ai.models/ai.complete capabilities (operator allowlist and prices, plugin-attributed spend, no credential in the plugin), writes happen only through host-rendered actions the user clicks, and the declared first action resolves on the selected document or the package's own sample file."
+                },
+                {
                     "name": "plugin-sdk.md",
                     "path": "/plugins/plugin-sdk",
                     "category": "Reference",
-                    "summary": "Stable Plugin Runtime V2 authoring surface. Import only this package (or documented subpaths: /manifest, /host, /testing, /profile, /package-tree, /package-archive, /state-compatibility). The package is not yet published to npm; install it from a packed tarball. It is currently an authoring and compatibility-test surface. OR3's"
+                    "summary": "Stable Plugin Runtime V2 authoring surface. Import only this package (or documented subpaths: /manifest, /host, /testing, /profile, /package-tree, /package-archive, /state-compatibility). Host capability helpers (ai.models, ai.complete) and a portable-profile test host make model-backed packages testable without a browser; a setup first action may declare a package sample path. The package is not yet published to npm; install it from a packed tarball. It is currently an authoring and compatibility-test surface. OR3's"
                 },
                 {
                     "name": "plugin-sdk-cli.md",

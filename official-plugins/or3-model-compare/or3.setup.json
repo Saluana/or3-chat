@@ -1,0 +1,39 @@
+{
+  "connections": [],
+  "fields": [
+    {
+      "key": "defaultModels",
+      "kind": "text",
+      "label": "Default models to compare",
+      "order": 1,
+      "required": false
+    },
+    {
+      "default": 512,
+      "key": "maxOutputTokens",
+      "kind": "number",
+      "label": "Maximum output tokens per answer",
+      "order": 2,
+      "required": false
+    },
+    {
+      "key": "systemPrompt",
+      "kind": "text",
+      "label": "Extra instruction (optional)",
+      "order": 3,
+      "required": false
+    }
+  ],
+  "firstAction": {
+    "label": "Compare models on the sample prompt",
+    "operationId": "chat.completions.create",
+    "samplePath": "fixtures/sample-prompt.md",
+    "usesSampleContext": true
+  },
+  "settingsSchemaPath": "settings.schema.json",
+  "setupVersion": 1,
+  "testAction": {
+    "deadlineMs": 10000,
+    "operationId": "models.list"
+  }
+}

@@ -38,6 +38,17 @@ export type {
 } from './ui';
 export { createPortableClient, PORTABLE_EVENT, PORTABLE_RPC_VERSION } from './portable';
 export {
+    HOST_CAPABILITY_METHODS,
+    completeWithHostModel,
+    listHostModels,
+} from './host-capabilities';
+export type {
+    HostCall,
+    HostCompletion,
+    HostModelCatalog,
+    HostModelInfo,
+} from './host-capabilities';
+export {
     createPortablePlugin,
     PORTABLE_BOOTSTRAP_EVENT,
     PORTABLE_BOOTSTRAP_FAILED_EVENT,

@@ -1,0 +1,47 @@
+{
+  "manifestVersion": 2,
+  "kind": "plugin",
+  "id": "or3.model-compare",
+  "name": "Model Compare",
+  "version": "1.0.0",
+  "description": "Send one prompt to several host models and continue the best answer in chat.",
+  "engines": {
+    "or3": "^0.3.0",
+    "pluginApi": "^2.0.0"
+  },
+  "runtime": {
+    "client": {
+      "entry": "client.mjs",
+      "format": "esm",
+      "isolation": "worker"
+    }
+  },
+  "requestedGrants": [
+    "network.http",
+    "settings.read",
+    "settings.write"
+  ],
+  "features": {
+    "required": [
+      "or3-portable-client-v1"
+    ],
+    "optional": []
+  },
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "trust": "isolated-client",
+  "settings": {
+    "version": 1,
+    "schema": "settings.schema.json"
+  },
+  "stateCompatibility": {
+    "version": 1,
+    "reads": {
+      "minimum": 1,
+      "maximum": 1
+    },
+    "rollback": "safe"
+  }
+}
