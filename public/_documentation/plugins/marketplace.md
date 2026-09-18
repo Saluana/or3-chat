@@ -57,9 +57,19 @@ A release that declares a contained client runtime needs a real browser canary. 
 
 Updates are recorded candidates on the same lifecycle, and an update a previous install recorded is resumed rather than re-implemented: when a candidate is owned by an unfinished install operation, Updates continues that operation so the pipeline's preflight, setup readiness and browser canary all still apply. The promotion boundary enforces this for every caller: it refuses a candidate an unfinished install operation owns (answering with the operation id), and it runs the instance-wide workspace preflight for any promotion, whatever created the candidate. Expanded authority needs fresh workspace consent before the check can pass. Rollback, pin and uninstall keep their existing package operations, and plugin data is kept unless deletion is requested explicitly.
 
+A durable operation outlives the page: opening a plugin's detail restores the unfinished operation the server recorded (matching version first, otherwise the newest), so an operator who reloaded or stepped away can continue or cancel it instead of losing it. A setup pause is reported as `resumable` and rendered as Continue, and completed operations reconcile the running plugin runtime so enabled code starts, disabled code stops and an update replaces the sandbox.
+
+Every mutation the views perform — enabling, disabling, removing, rolling back and completing an install — emits the workspace plugin reconciliation signal the runtime already listens to. The UI never leaves a mutation's effect waiting for the next reload.
+
+## Permission consent
+
+A release that asks for authority cannot install, canary or be promoted until the workspace has recorded explicit consent. The detail view lists the exact `requestedGrants` from the signed release metadata, requires an explicit approval, and persists it with `POST /api/admin/plugins/packages/{pluginId}/grants` before the install operation starts. The server never takes the requested set from the caller: it reads the staged candidate's own manifest when one exists and otherwise re-derives it from the signed release metadata, so approval can only narrow what the release asked for. An update that expands authority leaves the existing review stale, which blocks the promotion until consent is recorded again.
+
 ## Member access
 
 Browsing needs only a workspace session. Installing needs an owner or super admin, so a member sees the detail and a copyable administrator request link instead of an install action. There is no ticket system and no misleading purchase step.
+
+The request link is a supported deep link: `/?dashboard=marketplace&plugin=<pluginId>`. Opening it opens the dashboard's Marketplace app and selects that plugin, so the administrator lands on the request instead of the catalog.
 
 ## Diagnostics
 

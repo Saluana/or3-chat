@@ -10,7 +10,6 @@
 import { computed, onMounted, ref } from 'vue';
 import { useToast } from '#imports';
 import {
-    resumableOperationFor,
     useMarketplaceInstall,
     useMarketplaceInstalled,
 } from '~/composables/marketplace/useMarketplace';
@@ -65,24 +64,32 @@ async function apiPost<T>(
 
 async function activate(entry: {
     readonly pluginId: string;
+    readonly display?: {
+        readonly candidateDigest: string | null;
+        readonly candidateVersion: string | null;
+    };
     readonly pointer: {
-        readonly candidate?: { readonly packageDigest?: string; readonly version?: string };
+        readonly candidate?: { readonly packageDigest?: string } | null;
     } | null;
 }): Promise<void> {
-    const candidateDigest = entry.pointer?.candidate?.packageDigest;
+    const candidateDigest = entry.display?.candidateDigest ?? entry.pointer?.candidate?.packageDigest;
     if (!candidateDigest) return;
-    const candidateVersion = entry.pointer?.candidate?.version ?? '';
+    const candidateVersion = entry.display?.candidateVersion ?? '';
     busyPluginId.value = entry.pluginId;
     canaryNote.value = { ...canaryNote.value, [entry.pluginId]: 'checking' };
     try {
         // A candidate the acquisition pipeline staged belongs to that operation:
         // resume it, so preflight, setup readiness and the browser canary all
         // still apply. Promoting it here would be a side door around them.
-        const resumable = resumableOperationFor(
-            await install.listOperations(entry.pluginId),
-            candidateVersion
-        );
-        if (resumable) {
+        const resumable = await install.restore(entry.pluginId, {
+            version: candidateVersion,
+            ...(installed.workspaceId.value === null
+                ? {}
+                : { workspaceId: installed.workspaceId.value }),
+        });
+        // Only resume the operation that staged *this* candidate; an unrelated
+        // unfinished install must not be adopted to activate a different version.
+        if (resumable && resumable.version === candidateVersion && resumable.status !== 'completed') {
             canaryNote.value = { ...canaryNote.value, [entry.pluginId]: 'resuming install' };
             const finished = await install.adopt(entry.pluginId, resumable.operationId);
             reportOutcome(entry.pluginId, finished?.status, finished?.failure?.message);
@@ -131,6 +138,7 @@ async function activate(entry: {
             await apiPost(`/api/admin/plugins/packages/${entry.pluginId}/promote`, {
                 body: { candidateDigest },
             });
+            installed.reconcile('manifest-revision-change');
         } catch (promotionError) {
             // The promotion boundary refuses a candidate that an install
             // operation owns; resume that operation instead of reporting failure.
@@ -180,10 +188,10 @@ async function activate(entry: {
                 <div class="flex flex-wrap items-center gap-2">
                     <span class="font-medium">{{ entry.pluginId }}</span>
                     <UBadge color="info" variant="subtle">
-                        candidate {{ entry.pointer?.candidate?.version ?? entry.pointer?.candidate?.packageDigest }}
+                        candidate {{ entry.display?.candidateVersion ?? entry.display?.candidateDigest }}
                     </UBadge>
                     <span class="text-xs text-(--ui-text-muted)">
-                        current {{ entry.pointer?.selected?.version ?? 'none' }}
+                        current {{ entry.display?.version ?? 'none' }}
                     </span>
                 </div>
                 <p class="text-xs text-(--ui-text-muted)">

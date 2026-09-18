@@ -459,7 +459,14 @@ import {
     type SidebarLayoutApi,
 } from '~/utils/sidebarLayoutApi';
 import { setWorkspaceResourceNavigationApi } from '~/utils/workspaceResourceNavigation';
-import { useDashboardNavigation } from '~/composables/dashboard/useDashboardPlugins';
+import {
+    dashboardDeepLinkPageId,
+    parseDashboardDeepLink,
+} from '~/utils/dashboardDeepLink';
+import {
+    listDashboardPluginPages,
+    useDashboardNavigation,
+} from '~/composables/dashboard/useDashboardPlugins';
 import {
     setPaletteHostContext,
     useCommandPalette,
@@ -1872,6 +1879,23 @@ function setDashboardOpen(open: boolean) {
     showDashboardModal.value = open;
 }
 
+/**
+ * Supported deep link for dashboard apps: `?dashboard=<pluginId>&page=<pageId>`
+ * (the page defaults to the app's first). The marketplace request link uses it,
+ * and any other app can: this is the one place the modal is opened from a URL.
+ */
+async function consumeDashboardDeepLink(): Promise<void> {
+    if (!dashboardEnabled.value) return;
+    const link = parseDashboardDeepLink(route.query);
+    if (!link) return;
+    const pageId = dashboardDeepLinkPageId(
+        link,
+        listDashboardPluginPages(link.pluginId).map((page) => page.id)
+    );
+    if (!pageId) return;
+    await openDashboardPage(link.pluginId, pageId);
+}
+
 async function openDashboardPage(pluginId: string, pageId: string) {
     setDashboardOpen(true);
     await nextTick();
@@ -1952,7 +1976,18 @@ onMounted(() => {
                 openSystemPromptsFromPalette({ mode: 'new' }),
         },
     });
+
+    // A deep link opens its dashboard app once the shell is ready; a later
+    // navigation to another link is handled by the watcher below.
+    void consumeDashboardDeepLink();
 });
+
+watch(
+    () => [route.query.dashboard, route.query.page],
+    () => {
+        void consumeDashboardDeepLink();
+    }
+);
 
 onUnmounted(() => {
     closeCommandPalette();

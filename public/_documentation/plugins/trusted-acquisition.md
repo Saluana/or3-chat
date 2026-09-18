@@ -52,6 +52,12 @@ One selected code version is shared by every workspace. Before promotion, every 
 
 `retry` resumes from the recorded stage, so an expired download link, a partial download, a temporary registry outage, a since-disabled blocking workspace or newly saved setup all continue the same operation. Only one runner advances a plugin at a time (an exclusive runner lock), and a retry refuses while another operation for the same plugin is active or a runner is live, so two runs cannot share one staging directory. Host policy is re-read on every resumed stage: disabling installation or removing a trust key stops a downloaded candidate before activation. `cancel` stops the pipeline before the next side effect; once the pointer has been committed the operation finishes as completed rather than reporting "canceled before activation", because the installation is live. Both are reported through the status view (`percentComplete`, `needsSetup`, `retryable`, `canceled`, `failure`).
 
+Every operation is reported with the workspace it installs into, and a paused operation is reported as `resumable` in addition to `needsSetup`, so a caller can tell "waiting on you" from "waiting on the registry" and offer to continue it.
+
+## Permission consent
+
+A candidate whose release asks for authority is refused until the workspace has a *current* reviewed-grant record: `prepare` reports `grant-review-unreviewed` (no record, or a record this release did not write) or `grant-review-stale` (the release now asks for a different set). Consent is recorded per workspace with `POST /api/admin/plugins/packages/{pluginId}/grants`, which derives the requested set from the staged candidate's manifest or the signed release metadata and stores only an approved subset of it. The promotion boundary re-checks the same record, and the instance-wide preflight refuses a promotion while any enabled workspace lacks a current one.
+
 ## Freshness, advisories and revocation
 
 Quarantine decisions come from the signed advisory log, which is fetched and verified on every resolve: a quarantined release is refused with `release-quarantined`, an advisory that cannot be verified refuses with `advisory-unverified`, and the newest seen sequence is recorded monotonically. A release's publication date is not freshness: an old but intact, non-quarantined release is still acquirable.

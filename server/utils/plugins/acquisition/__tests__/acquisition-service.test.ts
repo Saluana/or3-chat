@@ -299,7 +299,13 @@ describe('recovery and cancellation (5.3)', () => {
         expect(paused.status).toBe('paused');
         expect(paused.stage).toBe('candidate-recorded');
         expect(paused.failure?.code).toBe('setup-required');
-        expect(describeAcquisitionStatus(paused).needsSetup).toBe(true);
+        const pausedView = describeAcquisitionStatus(paused);
+        expect(pausedView.needsSetup).toBe(true);
+        expect(pausedView.resumable).toBe(true);
+        // A setup pause carries a retryable pause failure: the operator must see
+        // a way to continue it, not a dead operation.
+        expect(pausedView.retryable).toBe(true);
+        expect(pausedView.workspaceId).toBe('ws-1');
 
         const pointer = await harness.services.pointers.readPointer('alpha');
         expect(pointer?.candidate?.packageDigest).toBe(fixture.treeDigest);

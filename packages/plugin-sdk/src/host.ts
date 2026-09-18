@@ -1,8 +1,4 @@
-import type {
-    PluginHttpClient,
-    PluginSettingsClient,
-    PluginStorageClient,
-} from './clients';
+import type { PluginSettingsClient, PluginStorageClient } from './clients';
 import {
     hostCreatedPluginContext,
     type PluginContext,
@@ -25,7 +21,6 @@ export interface HostPluginScope {
 export interface HostPluginClientFactories {
     createSettingsClient(scope: HostPluginScope): PluginSettingsClient;
     createStorageClient(scope: HostPluginScope): PluginStorageClient;
-    createHttpClient(scope: HostPluginScope): PluginHttpClient;
 }
 
 export interface CreateHostPluginContextInput {
@@ -92,7 +87,6 @@ export function createHostPluginContext(input: CreateHostPluginContextInput): Pl
         contributions: input.contributions,
         settings: input.clients.createSettingsClient(scope),
         storage: input.clients.createStorageClient(scope),
-        http: input.clients.createHttpClient(scope),
         onCleanup: input.onCleanup,
         onActivate: input.onActivate,
     });

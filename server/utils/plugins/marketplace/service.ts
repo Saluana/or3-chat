@@ -75,6 +75,8 @@ export interface MarketplacePreflightResult {
         readonly publishedAt: string;
         readonly license: string;
         readonly sourceSha256: string;
+        /** Authority the signed release metadata requests, for explicit consent. */
+        readonly requestedGrants: readonly string[];
     } | null;
     readonly advisories: {
         readonly latestSequence: number;
@@ -338,6 +340,7 @@ export async function preflightMarketplaceInstall(input: {
         publishedAt: document.publishedAt,
         license: document.license,
         sourceSha256: document.sourceSha256,
+        requestedGrants: document.requestedGrants,
     }, advisories, storage);
 }
 

@@ -27,25 +27,3 @@ export interface PluginStorageClient {
     delete(key: string): Promise<PluginResult<void>>;
     list(prefix?: string): Promise<PluginResult<readonly PluginStorageListEntry[]>>;
 }
-
-export type PluginHttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-
-export interface PluginHttpRequest {
-    readonly url: string;
-    readonly method?: PluginHttpMethod;
-    readonly headers?: Readonly<Record<string, string>>;
-    readonly body?: PluginJsonValue | string;
-    readonly timeoutMs?: number;
-}
-
-export interface PluginHttpResponse<T = PluginJsonValue> {
-    readonly status: number;
-    readonly headers: Readonly<Record<string, string>>;
-    readonly body: T;
-}
-
-export interface PluginHttpClient {
-    request<T = PluginJsonValue>(
-        request: PluginHttpRequest
-    ): Promise<PluginResult<PluginHttpResponse<T>>>;
-}

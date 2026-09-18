@@ -49,7 +49,7 @@ Two capabilities exist **only** through host methods, never as browser APIs:
 
 | Capability | Host method |
 |---|---|
-| Outbound network | `http.request` (grant-gated, destination-checked) |
+| Outbound network | `connections.dispatch` and `ai.complete`, both grant-gated and policy-checked server-side |
 | Plugin state | `storage.get` / `storage.set` |
 
 ### Message identity

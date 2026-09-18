@@ -23,6 +23,7 @@
  */
 
 import { computed, ref } from 'vue';
+import { requestWorkspacePluginReconcile } from '~/composables/plugins/bundled-v1-manager-runtime';
 
 /**
  * Nuxt's typed routes cannot express runtime-composed API paths, so every call
@@ -78,6 +79,8 @@ export interface MarketplacePreflight {
         readonly profile: string;
         readonly publishedAt: string;
         readonly license: string;
+        /** Authority this release asks for, as signed in its release metadata. */
+        readonly requestedGrants: readonly string[];
     } | null;
     readonly advisories: {
         readonly latestSequence: number;
@@ -117,6 +120,16 @@ interface AdminSessionView {
 }
 
 export const SUPER_ADMIN_KIND = 'super_admin';
+
+/**
+ * The shareable request an administrator can actually open: the app shell
+ * consumes `dashboard`/`plugin` from the query, opens Marketplace and selects
+ * the plugin. A link no code reads is not a deep link.
+ */
+export function marketplacePluginDeepLink(origin: string, pluginId: string): string {
+    const params = new URLSearchParams({ dashboard: 'marketplace', plugin: pluginId });
+    return `${origin}/?${params.toString()}`;
+}
 
 /**
  * The one place a response envelope is unwrapped. Both the start and status
@@ -285,6 +298,32 @@ export function useMarketplaceInstall() {
         return Array.isArray(response.operations) ? response.operations : [];
     };
 
+    /**
+     * Pick up an unfinished operation the server already recorded, so a page
+     * reload or a trip to the setup page does not lose the durable install the
+     * operator can still resume or cancel.
+     */
+    const restore = async (
+        pluginId: string,
+        options: { readonly version?: string; readonly workspaceId?: string } = {}
+    ): Promise<AcquisitionStatusView | null> => {
+        const operations = await listOperations(pluginId);
+        const unfinished = operations.filter(
+            (operation) =>
+                operation.status !== 'completed' &&
+                operation.status !== 'canceled' &&
+                (options.workspaceId === undefined || operation.workspaceId === options.workspaceId)
+        );
+        const relevant =
+            (options.version === undefined
+                ? null
+                : resumableOperationFor(unfinished, options.version)) ?? unfinished[0] ?? null;
+        if (!relevant) return null;
+        operationId.value = relevant.operationId;
+        status.value = relevant;
+        return relevant;
+    };
+
     /** Complete a pending browser canary for the operation's candidate. */
     const completeCanary = async (pluginId: string): Promise<boolean> => {
         canaryStatus.value = 'checking';
@@ -329,6 +368,18 @@ export function useMarketplaceInstall() {
         return status.value;
     };
 
+    /**
+     * A completed operation has selected (or updated) the package, so the
+     * running plugin runtime must be reconciled before the UI reports success.
+     */
+    const settle = async (pluginId: string): Promise<AcquisitionStatusView | null> => {
+        const view = await waitForSettled(pluginId);
+        if (view?.status === 'completed') {
+            requestWorkspacePluginReconcile('manifest-revision-change');
+        }
+        return view;
+    };
+
     const start = async (input: {
         readonly pluginId: string;
         readonly version?: string;
@@ -355,7 +406,7 @@ export function useMarketplaceInstall() {
             }
             operationId.value = started.operationId;
             status.value = started;
-            return await waitForSettled(input.pluginId);
+            return await settle(input.pluginId);
         } catch (caught) {
             error.value =
                 caught instanceof Error ? caught.message : 'The installation could not start.';
@@ -374,7 +425,7 @@ export function useMarketplaceInstall() {
             );
             const view = unwrapAcquisitionOperation(response);
             if (view) status.value = view;
-            return await waitForSettled(pluginId);
+            return await settle(pluginId);
         } catch (caught) {
             error.value = caught instanceof Error ? caught.message : 'The retry was refused.';
             return null;
@@ -406,7 +457,7 @@ export function useMarketplaceInstall() {
         error.value = null;
         operationId.value = recordedOperationId;
         try {
-            return await waitForSettled(pluginId);
+            return await settle(pluginId);
         } finally {
             running.value = false;
         }
@@ -423,8 +474,46 @@ export function useMarketplaceInstall() {
         cancel,
         poll,
         adopt,
+        restore,
         listOperations,
     };
+}
+
+/**
+ * Record the operator's explicit consent to a release's requested authority.
+ * The server re-derives the requested grants from the signed release metadata
+ * (or the staged candidate's manifest), so this only narrows what the package
+ * asked for and never widens it.
+ */
+export function useMarketplaceConsent() {
+    const saving = ref(false);
+    const error = ref<string | null>(null);
+
+    const approve = async (input: {
+        readonly pluginId: string;
+        readonly approvedGrants: readonly string[];
+        readonly version?: string;
+    }): Promise<boolean> => {
+        saving.value = true;
+        error.value = null;
+        try {
+            await apiPost(`/api/admin/plugins/packages/${input.pluginId}/grants`, {
+                body: {
+                    approvedGrants: [...input.approvedGrants],
+                    ...(input.version === undefined ? {} : { version: input.version }),
+                },
+            });
+            return true;
+        } catch (caught) {
+            error.value =
+                caught instanceof Error ? caught.message : 'The consent could not be recorded.';
+            return false;
+        } finally {
+            saving.value = false;
+        }
+    };
+
+    return { saving, error, approve };
 }
 
 /**
@@ -446,18 +535,34 @@ export function resumableOperationFor(
     );
 }
 
+/**
+ * The server's deliberate display DTO for one installed package. Pointer slots
+ * hold digests only, so the version is read server-side from the stored manifest
+ * of the exact slot; the UI renders this instead of inventing `pointer.selected.version`.
+ */
+export interface InstalledPackageDisplay {
+    readonly version: string | null;
+    readonly selectedDigest: string | null;
+    readonly candidateVersion: string | null;
+    readonly candidateDigest: string | null;
+    readonly canOpen: boolean;
+}
+
 export interface InstalledPackageView {
     readonly pluginId: string;
     readonly workspaceEnabled: boolean;
     readonly pointer: {
-        readonly selected?: { readonly packageDigest?: string; readonly version?: string };
-        readonly candidate?: { readonly packageDigest?: string; readonly version?: string };
+        readonly current?: { readonly packageDigest?: string } | null;
+        readonly candidate?: { readonly packageDigest?: string } | null;
+        readonly previous?: { readonly packageDigest?: string } | null;
     } | null;
     readonly startup: {
         readonly status: string;
+        readonly selectedSlot?: string | null;
         readonly selectedDigest: string | null;
         readonly issueCodes: readonly string[];
     };
+    readonly display?: InstalledPackageDisplay;
 }
 
 /** Installed packages, enabled state and pending candidates for one workspace. */
@@ -496,10 +601,32 @@ export function useMarketplaceInstalled() {
         }
     };
 
+    /**
+     * Every mutation that changes what should run reconciles the workspace
+     * plugin runtime afterwards, so disabled code stops, enabled code starts and
+     * an update replaces the sandbox instead of leaving the old one active.
+     */
+    const reconcile = (reason: 'local-admin-change' | 'manifest-revision-change') => {
+        requestWorkspacePluginReconcile(reason);
+    };
+
     const setEnabled = async (pluginId: string, enable: boolean): Promise<void> => {
         await apiPost('/api/admin/plugins/workspace-enable', {
             body: { pluginId, enabled: enable },
         });
+        reconcile('local-admin-change');
+        await load();
+    };
+
+    const uninstall = async (pluginId: string): Promise<void> => {
+        await apiPost(`/api/admin/plugins/packages/${pluginId}/uninstall`, { body: {} });
+        reconcile('manifest-revision-change');
+        await load();
+    };
+
+    const rollback = async (pluginId: string): Promise<void> => {
+        await apiPost(`/api/admin/plugins/packages/${pluginId}/rollback`, { body: {} });
+        reconcile('manifest-revision-change');
         await load();
     };
 
@@ -508,5 +635,19 @@ export function useMarketplaceInstalled() {
         packages.value.filter((entry) => Boolean(entry.pointer?.candidate))
     );
 
-    return { loading, error, role, workspaceId, plugins, packages, enabled, updates, load, setEnabled };
+    return {
+        loading,
+        error,
+        role,
+        workspaceId,
+        plugins,
+        packages,
+        enabled,
+        updates,
+        load,
+        setEnabled,
+        uninstall,
+        rollback,
+        reconcile,
+    };
 }

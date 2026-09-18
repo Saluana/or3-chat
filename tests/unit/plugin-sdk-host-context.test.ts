@@ -3,7 +3,6 @@ import type {
     PluginContributions,
     PluginFeatureNegotiation,
     PluginHooks,
-    PluginHttpClient,
     PluginLogger,
     PluginSettingsClient,
     PluginStorageClient,
@@ -43,9 +42,6 @@ describe('host-created PluginContext', () => {
         const scopes: HostPluginScope[] = [];
         const settingsGet = vi.fn(async () => pluginOk('host-value'));
         const storageSet = vi.fn(async () => pluginOk(undefined));
-        const httpRequest = vi.fn(async () =>
-            pluginOk({ status: 200, headers: {}, body: { ok: true } })
-        );
         const settings = {
             get: settingsGet,
             list: async () => pluginOk({}),
@@ -58,7 +54,6 @@ describe('host-created PluginContext', () => {
             set: storageSet,
             delete: async () => pluginOk(undefined),
         } as PluginStorageClient;
-        const http = { request: httpRequest } as PluginHttpClient;
         const capture = (scope: HostPluginScope) => {
             scopes.push(scope);
             return scope;
@@ -81,10 +76,6 @@ describe('host-created PluginContext', () => {
                     capture(scope);
                     return storage;
                 },
-                createHttpClient: (scope) => {
-                    capture(scope);
-                    return http;
-                },
             },
             onCleanup: () => undefined,
             onActivate: () => undefined,
@@ -95,7 +86,7 @@ describe('host-created PluginContext', () => {
         expect(context.generation).toBe(7);
         expect(context.grants.has('settings.read')).toBe(true);
         expect('add' in context.grants).toBe(false);
-        expect(scopes).toHaveLength(3);
+        expect(scopes).toHaveLength(2);
         expect(scopes.every((scope) => scope.pluginId === 'acme.safe')).toBe(true);
         expect(scopes.every(Object.isFrozen)).toBe(true);
         expect(() => {
@@ -104,10 +95,8 @@ describe('host-created PluginContext', () => {
 
         await context.settings.get('key');
         await context.storage.set('key', 'value');
-        await context.http.request({ url: 'https://example.invalid' });
         expect(settingsGet).toHaveBeenCalledWith('key');
         expect(storageSet).toHaveBeenCalledWith('key', 'value');
-        expect(httpRequest).toHaveBeenCalledWith({ url: 'https://example.invalid' });
     });
 
     it('returns stable immutable success and error results', () => {

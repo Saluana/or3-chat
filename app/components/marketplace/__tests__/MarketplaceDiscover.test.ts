@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import MarketplaceDiscover from '../MarketplaceDiscover.vue';
 
@@ -12,7 +12,8 @@ const stubs = {
     UButton: {
         props: ['disabled', 'loading', 'to'],
         emits: ['click'],
-        template: '<button type="button" @click="$emit(\'click\')"><slot /></button>',
+        template:
+            '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
     },
     UAlert: {
         props: ['title', 'description'],
@@ -90,13 +91,39 @@ function responseFor(url: string): unknown {
             },
         };
     }
+    if (url.startsWith('/api/admin/plugins/acquisitions')) {
+        return { ok: true, operations: [] };
+    }
     return {};
+}
+
+function acquisitionOperation(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+        operationId: 'op-1',
+        pluginId: 'or3.sample-utility',
+        workspaceId: 'ws-1',
+        version: '1.0.0',
+        stage: 'candidate-recorded',
+        status: 'paused',
+        percentComplete: 60,
+        needsSetup: true,
+        resumable: true,
+        retryable: true,
+        canceled: false,
+        failure: { code: 'setup-required', message: 'Finish setup', retryable: true },
+        updatedAt: 0,
+        ...overrides,
+    };
 }
 
 describe('MarketplaceDiscover', () => {
     beforeEach(() => {
         fetchMock.mockReset();
         fetchMock.mockImplementation((url: string) => Promise.resolve(responseFor(url)));
+    });
+
+    afterEach(() => {
+        window.history.replaceState({}, '', '/');
     });
 
     it('lists published plugins from the local server', async () => {
@@ -158,6 +185,111 @@ describe('MarketplaceDiscover', () => {
         const installButton = wrapper.get('[data-testid="marketplace-install"]');
         expect(installButton.attributes('disabled')).toBeUndefined();
         expect(installButton.text()).toContain('Install');
+    });
+
+    it('renders the detail identity and asks preflight for its resolved version', async () => {
+        const wrapper = mount(MarketplaceDiscover, { global: { stubs } });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await wrapper.get('[data-testid="marketplace-card"]').trigger('click');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        // `detail.entry` is a ref; a script computation that reads it without
+        // `.value` silently loses the name and summary.
+        expect(wrapper.text()).toContain('Sample Utility');
+        expect(wrapper.text()).toContain('Summarise a document.');
+        expect(wrapper.text()).toContain('1.0.0');
+    });
+
+    it('selects the plugin named by a request deep link', async () => {
+        window.history.replaceState(
+            {},
+            '',
+            '/?dashboard=marketplace&plugin=or3.sample-utility'
+        );
+        const wrapper = mount(MarketplaceDiscover, { global: { stubs } });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const preflightCall = fetchMock.mock.calls.find((call) =>
+            String(call[0]).startsWith('/api/plugins/marketplace/preflight')
+        );
+        expect(preflightCall?.[1]).toMatchObject({ body: { pluginId: 'or3.sample-utility' } });
+        // The deep link selected the plugin: its detail action is on screen.
+        expect(
+            wrapper.find('[data-testid="marketplace-install"], [data-testid="marketplace-copy-request"]').exists()
+        ).toBe(true);
+    });
+
+    it('restores a durable operation and offers Continue for a setup pause', async () => {
+        fetchMock.mockImplementation((url: string) => {
+            if (String(url).startsWith('/api/admin/plugins/acquisitions?')) {
+                return Promise.resolve({ ok: true, operations: [acquisitionOperation()] });
+            }
+            return Promise.resolve(responseFor(url));
+        });
+        const wrapper = mount(MarketplaceDiscover, { global: { stubs } });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await wrapper.get('[data-testid="marketplace-card"]').trigger('click');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(wrapper.text()).toContain('setup-required');
+        expect(wrapper.get('[data-testid="marketplace-continue"]').text()).toContain('Continue');
+    });
+
+    it('requires explicit consent before installing a release that asks for grants', async () => {
+        fetchMock.mockImplementation((url: string, init?: { method?: string }) => {
+            if (url.startsWith('/api/plugins/marketplace/preflight')) {
+                return Promise.resolve(
+                    preflightResponse({
+                        status: 'installable',
+                        blocks: [],
+                        registry: {
+                            configured: true,
+                            installEnabled: true,
+                            origin: 'https://r',
+                            keys: 1,
+                        },
+                        release: {
+                            ...(preflightResponse().release as Record<string, unknown>),
+                            requestedGrants: ['settings.read', 'settings.write'],
+                        },
+                    })
+                );
+            }
+            if (url.startsWith('/api/admin/plugins/packages/or3.sample-utility/grants')) {
+                return Promise.resolve({ ok: true });
+            }
+            if (url.startsWith('/api/admin/plugins/acquisitions') && init?.method === 'POST') {
+                return Promise.resolve({ ok: true, operation: acquisitionOperation({ status: 'completed', failure: null }) });
+            }
+            return Promise.resolve(responseFor(url));
+        });
+
+        const wrapper = mount(MarketplaceDiscover, { global: { stubs } });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await wrapper.get('[data-testid="marketplace-card"]').trigger('click');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(wrapper.get('[data-testid="marketplace-grant-consent"]').text()).toContain(
+            'settings.read'
+        );
+        expect(wrapper.get('[data-testid="marketplace-install"]').attributes('disabled')).toBeDefined();
+
+        await wrapper.get('[data-testid="marketplace-grant-approve"]').setValue(true);
+        expect(wrapper.get('[data-testid="marketplace-install"]').attributes('disabled')).toBeUndefined();
+
+        await wrapper.get('[data-testid="marketplace-install"]').trigger('click');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const grantsAt = fetchMock.mock.calls.findIndex((call) =>
+            String(call[0]).startsWith('/api/admin/plugins/packages/or3.sample-utility/grants')
+        );
+        const installAt = fetchMock.mock.calls.findIndex(
+            (call) =>
+                String(call[0]).startsWith('/api/admin/plugins/acquisitions') &&
+                (call[1] as { method?: string } | undefined)?.method === 'POST'
+        );
+        expect(grantsAt).toBeGreaterThan(-1);
+        expect(installAt).toBeGreaterThan(grantsAt);
     });
 
     it('offers a copyable admin request when the account cannot install', async () => {

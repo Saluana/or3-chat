@@ -10,8 +10,10 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRuntimeConfig, useToast } from '#imports';
 import {
+    marketplacePluginDeepLink,
     useMarketplaceAccount,
     useMarketplaceCatalog,
+    useMarketplaceConsent,
     useMarketplaceDetail,
     useMarketplaceInstall,
     useMarketplacePreflight,
@@ -22,16 +24,26 @@ const catalog = useMarketplaceCatalog();
 const detail = useMarketplaceDetail();
 const preflight = useMarketplacePreflight();
 const install = useMarketplaceInstall();
+const consent = useMarketplaceConsent();
 const account = useMarketplaceAccount();
 
 const selectedPluginId = ref<string | null>(null);
 const adminRequestCopied = ref(false);
+/** Explicit approval of the authority the selected release asks for. */
+const grantsApproved = ref(false);
 // A static or local build cannot install: acquisition needs the host server.
 const runtimeConfig = useRuntimeConfig();
 const installSupported = computed(() => runtimeConfig.public?.ssrAuthEnabled === true);
 
 onMounted(async () => {
     await Promise.all([catalog.load(), account.load()]);
+    // A request link selects one plugin: open it rather than dropping the reader
+    // on the catalog. The dashboard query is read from the document URL because
+    // the marketplace runs inside the shell's modal, not on a route of its own.
+    const requested = new URLSearchParams(window.location.search).get('plugin');
+    if (requested && /^[a-z0-9][a-z0-9._-]{0,127}$/.test(requested)) {
+        await openDetail(requested);
+    }
 });
 
 /**
@@ -42,9 +54,17 @@ onMounted(async () => {
  */
 async function openDetail(pluginId: string): Promise<void> {
     selectedPluginId.value = pluginId;
+    grantsApproved.value = false;
     await detail.load(pluginId);
     const version = resolveLatestVersion();
     await preflight.run(pluginId, version);
+    // A durable operation outlives this page: pick it up so the operator can
+    // resume or cancel it instead of losing it on reload.
+    try {
+        await install.restore(pluginId, version === undefined ? {} : { version });
+    } catch {
+        // Restoring is a convenience: a refused list must not break discovery.
+    }
 }
 
 /** Newest published version of the selected plugin, as the catalog orders them. */
@@ -66,17 +86,18 @@ function pluginIdOf(card: Record<string, unknown>): string {
 }
 
 const detailName = computed(() => {
-    const entry = detail.entry;
+    // `detail.entry` is a ref: reading it inside script does not auto-unwrap.
+    const entry = detail.entry.value;
     return entry && typeof entry.name === 'string' ? entry.name : selectedPluginId.value ?? '';
 });
 
 const summary = computed(() => {
-    const entry = detail.entry;
+    const entry = detail.entry.value;
     return entry && typeof entry.summary === 'string' ? entry.summary : '';
 });
 
 const releases = computed(() => {
-    const entry = detail.entry;
+    const entry = detail.entry.value;
     const value = entry?.releases;
     return Array.isArray(value) ? (value as readonly Record<string, unknown>[]) : [];
 });
@@ -94,9 +115,25 @@ const canRequestFromAdmin = computed(
     () => account.checked.value && !account.canInstall.value
 );
 
+/** The authority the selected release asks for, as signed in its metadata. */
+const requestedGrants = computed(() => {
+    const release = preflight.result.value?.release;
+    return Array.isArray(release?.requestedGrants) ? release.requestedGrants : [];
+});
+
+/**
+ * Consent is required before the pipeline may stage, canary or promote a
+ * release that asks for authority; the checkbox is the operator's explicit
+ * approval of exactly this list.
+ */
+const consentRequired = computed(() => requestedGrants.value.length > 0);
+const consentOutstanding = computed(() => consentRequired.value && !grantsApproved.value);
+
 async function copyAdminRequest(): Promise<void> {
-    const origin = window.location.origin;
-    const url = `${origin}/dashboard?panel=marketplace&plugin=${selectedPluginId.value ?? ''}`;
+    const url = marketplacePluginDeepLink(
+        window.location.origin,
+        selectedPluginId.value ?? ''
+    );
     try {
         await navigator.clipboard.writeText(url);
         adminRequestCopied.value = true;
@@ -117,6 +154,23 @@ async function copyAdminRequest(): Promise<void> {
 async function runInstall(): Promise<void> {
     const pluginId = selectedPluginId.value;
     if (!pluginId) return;
+    // Persist the reviewed authority before anything is staged, so the pipeline
+    // sees a current review instead of pausing at `grant-review-unreviewed`.
+    if (consentRequired.value) {
+        const recorded = await consent.approve({
+            pluginId,
+            approvedGrants: requestedGrants.value,
+            ...(latestVersion.value === undefined ? {} : { version: latestVersion.value }),
+        });
+        if (!recorded) {
+            toast.add({
+                title: 'The permissions were not recorded',
+                description: consent.error.value ?? 'The consent request was refused.',
+                color: 'error',
+            });
+            return;
+        }
+    }
     const result = await install.start({
         pluginId,
         ...(latestVersion.value === undefined ? {} : { version: latestVersion.value }),
@@ -135,6 +189,7 @@ async function runInstall(): Promise<void> {
             description: `${detailName.value} is ready to use.`,
             color: 'success',
         });
+        grantsApproved.value = false;
         await preflight.run(pluginId);
         return;
     }
@@ -172,6 +227,8 @@ function blockActionLabel(block: { action: string }): string | null {
             return 'Open instance settings';
         case 'free-space':
             return 'Free disk space on the server';
+        case 'review-grants':
+            return 'Review the permissions below';
         case 'retry':
             return 'Try again';
         default:
@@ -278,11 +335,35 @@ function blockActionLabel(block: { action: string }): string | null {
                 data-testid="marketplace-install-unsupported"
             />
 
+            <div
+                v-if="installSupported && account.canInstall.value && consentRequired"
+                class="flex flex-col gap-2 rounded-lg border border-(--ui-border) p-3"
+                data-testid="marketplace-grant-consent"
+            >
+                <p class="text-sm font-medium">Permissions this plugin asks for</p>
+                <p class="text-xs text-(--ui-text-muted)">
+                    It cannot run without your approval of these permissions in this workspace.
+                </p>
+                <ul class="list-disc pl-5 text-sm">
+                    <li v-for="grant in requestedGrants" :key="grant">
+                        <code>{{ grant }}</code>
+                    </li>
+                </ul>
+                <label class="flex items-center gap-2 text-sm">
+                    <input
+                        v-model="grantsApproved"
+                        type="checkbox"
+                        data-testid="marketplace-grant-approve"
+                    />
+                    I approve these permissions for this workspace.
+                </label>
+            </div>
+
             <div class="flex flex-wrap items-center gap-2">
                 <UButton
                     v-if="installSupported && account.canInstall.value"
-                    :disabled="preflight.result.value?.status !== 'installable' || install.running.value"
-                    :loading="install.running.value"
+                    :disabled="preflight.result.value?.status !== 'installable' || install.running.value || consentOutstanding"
+                    :loading="install.running.value || consent.saving.value"
                     icon="i-lucide-download"
                     data-testid="marketplace-install"
                     @click="runInstall"
@@ -323,9 +404,10 @@ function blockActionLabel(block: { action: string }): string | null {
                         color="neutral"
                         variant="soft"
                         icon="i-lucide-rotate-ccw"
+                        data-testid="marketplace-continue"
                         @click="retryInstall"
                     >
-                        Retry
+                        {{ install.status.value.resumable ? 'Continue' : 'Retry' }}
                     </UButton>
                     <UButton
                         v-if="install.status.value.status !== 'completed'"

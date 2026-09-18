@@ -191,23 +191,18 @@ describe('Plugin SDK test harness', () => {
         expect(host.snapshot()).toMatchObject({ active: false, cleanupCount: 0 });
     });
 
-    it('uses a fake HTTP handler bound to the host-created identity', async () => {
-        const scopes: string[] = [];
-        let response: unknown;
-        const host = createPluginTestHost({
-            approvedGrants: ['network.http'],
-            httpHandler: async (_request, scope) => {
-                scopes.push(`${scope.pluginId}:${scope.generation}`);
-                return pluginOk({ status: 200, headers: {}, body: { ok: true } });
-            },
-        });
+    it('exposes no outbound HTTP client on the plugin context', async () => {
+        // Outbound network is a host-mediated capability (approved connections
+        // and governed model calls), never a client the sandbox calls directly.
+        let context: unknown;
+        const host = createPluginTestHost({ approvedGrants: ['network.http'] });
         await host.activate(
-            plugin(async (context) => {
-                response = await context.http.request({ url: 'https://example.invalid' });
+            plugin(async (value) => {
+                context = value;
             }, ['network.http'])
         );
 
-        expect(scopes).toEqual(['sample.harness:1']);
-        expect(response).toMatchObject({ ok: true, value: { status: 200 } });
+        expect(context).toBeTruthy();
+        expect('http' in (context as Record<string, unknown>)).toBe(false);
     });
 });

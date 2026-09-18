@@ -15,6 +15,20 @@ export type PackageRuntimeRouteDef = {
     readonly permission?: string;
 };
 
+export type PackageManifestRead =
+    | {
+          readonly status: 'ready';
+          readonly pluginId: string;
+          readonly packageDigest: Sha256;
+          readonly manifest: Or3ExtensionManifestV2;
+      }
+    | { readonly status: 'inactive'; readonly pluginId: string }
+    | {
+          readonly status: 'blocked';
+          readonly pluginId: string;
+          readonly blockCode: 'package-manifest-invalid';
+      };
+
 export type SelectedPackageRouteCatalog =
     | {
           readonly status: 'ready';
@@ -49,6 +63,39 @@ export class PluginPackageRouteCatalog {
         this.pointers = pointers ?? new PluginPackagePointerStore(undefined, packages);
     }
 
+    /**
+     * Read the manifest of one stored package by digest. Used for display (the
+     * version a pointer slot actually holds) as well as routing.
+     */
+    async readManifest(pluginId: string, packageDigest: Sha256): Promise<PackageManifestRead> {
+        try {
+            const packageRoot = this.packages.packagePath(pluginId, packageDigest);
+            const raw = JSON.parse(
+                await fs.readFile(resolve(packageRoot, 'or3.manifest.json'), 'utf8')
+            ) as unknown;
+            const parsed = Or3ExtensionManifestV2Schema.safeParse(raw);
+            if (!parsed.success) {
+                return Object.freeze({
+                    status: 'blocked',
+                    pluginId,
+                    blockCode: 'package-manifest-invalid',
+                });
+            }
+            return Object.freeze({
+                status: 'ready',
+                pluginId,
+                packageDigest,
+                manifest: parsed.data,
+            });
+        } catch {
+            return Object.freeze({
+                status: 'blocked',
+                pluginId,
+                blockCode: 'package-manifest-invalid',
+            });
+        }
+    }
+
     async readSelected(pluginId: string): Promise<SelectedPackageRouteCatalog> {
         let selection: Awaited<ReturnType<PluginPackagePointerStore['readStartupSelection']>>;
         try {
@@ -70,31 +117,15 @@ export class PluginPackageRouteCatalog {
         if (!selection.selected) {
             return Object.freeze({ status: 'inactive', pluginId });
         }
-        let parsed: ReturnType<typeof Or3ExtensionManifestV2Schema.safeParse>;
-        try {
-            const packageRoot = this.packages.packagePath(
-                pluginId,
-                selection.selected.packageDigest
-            );
-            const raw = JSON.parse(
-                await fs.readFile(resolve(packageRoot, 'or3.manifest.json'), 'utf8')
-            ) as unknown;
-            parsed = Or3ExtensionManifestV2Schema.safeParse(raw);
-        } catch {
+        const read = await this.readManifest(pluginId, selection.selected.packageDigest);
+        if (read.status !== 'ready') {
             return Object.freeze({
                 status: 'blocked',
                 pluginId,
                 blockCode: 'package-manifest-invalid',
             });
         }
-        if (!parsed.success) {
-            return Object.freeze({
-                status: 'blocked',
-                pluginId,
-                blockCode: 'package-manifest-invalid',
-            });
-        }
-        const routes = (parsed.data.runtime.server?.routes ?? []).map((route) =>
+        const routes = (read.manifest.runtime.server?.routes ?? []).map((route) =>
             Object.freeze({
                 method: route.method,
                 path: route.path,
@@ -106,7 +137,7 @@ export class PluginPackageRouteCatalog {
             status: 'ready',
             pluginId,
             packageDigest: selection.selected.packageDigest,
-            manifest: parsed.data,
+            manifest: read.manifest,
             routes: Object.freeze(routes),
         });
     }

@@ -41,8 +41,6 @@ import type {
 import { hostCreatedPluginContext } from './contracts';
 import type { PluginManifestV2 } from './manifest';
 import type {
-    PluginHttpClient,
-    PluginHttpResponse,
     PluginJsonValue,
     PluginSettingsClient,
     PluginStorageClient,
@@ -342,27 +340,6 @@ export function createPortablePlugin<const TManifest extends PluginManifestV2>(
         };
     }
 
-    function createHttpClient(grants: ReadonlySet<string>): PluginHttpClient {
-        return {
-            async request<T = PluginJsonValue>(request: {
-                readonly url: string;
-                readonly method?: string;
-                readonly headers?: Readonly<Record<string, string>>;
-                readonly body?: PluginJsonValue | string;
-                readonly timeoutMs?: number;
-            }): Promise<PluginResult<PluginHttpResponse<T>>> {
-                const denied = grantGuard(grants, 'network.http');
-                if (denied) return { ok: false, error: denied };
-                return await call<PluginHttpResponse<T>>(
-                    client,
-                    'network.http',
-                    { ...request } as Readonly<Record<string, unknown>>,
-                    request.timeoutMs === undefined ? {} : { deadlineMs: request.timeoutMs }
-                );
-            },
-        };
-    }
-
     function buildContext(bootstrap: PortableBootstrapPayload): PortablePluginContext {
         const grants = new Set(bootstrap.grants ?? []);
         const features = new Set(bootstrap.features ?? []);
@@ -399,7 +376,6 @@ export function createPortablePlugin<const TManifest extends PluginManifestV2>(
             contributions: createContributions(grants),
             settings: createSettingsClient(grants),
             storage: createStorageClient(grants),
-            http: createHttpClient(grants),
             onCleanup(callback: () => void | Promise<void>) {
                 cleanups.push(callback);
             },

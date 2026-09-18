@@ -1,10 +1,6 @@
 export { defineOr3Plugin } from './contracts';
 export { pluginError, pluginOk } from './results';
 export type {
-    PluginHttpClient,
-    PluginHttpMethod,
-    PluginHttpRequest,
-    PluginHttpResponse,
     PluginJsonValue,
     PluginSettingsClient,
     PluginStorageClient,

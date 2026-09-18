@@ -7,7 +7,7 @@
  * list filters the same entries down to those with a recorded candidate so a
  * release is reviewed, health-checked and activated through the same services.
  */
-import { computed, onMounted, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useToast } from '#imports';
 import { useMarketplaceInstalled } from '~/composables/marketplace/useMarketplace';
 import { usePortableActivations } from '~/composables/plugins/portable-client-runtime';
@@ -31,12 +31,6 @@ function activationFor(pluginId: string) {
     return activations.get(`portable:${pluginId}`) ?? activations.get(pluginId) ?? null;
 }
 
-const installedEntries = computed(() =>
-    installed.packages.value.filter((entry) =>
-        Boolean(entry.pointer?.selected ?? installed.plugins.value.find((plugin) => plugin.id === entry.pluginId))
-    )
-);
-
 async function toggle(pluginId: string): Promise<void> {
     busyPluginId.value = pluginId;
     try {
@@ -55,16 +49,12 @@ async function toggle(pluginId: string): Promise<void> {
 async function uninstall(pluginId: string): Promise<void> {
     busyPluginId.value = pluginId;
     try {
-        await apiPost(`/api/admin/plugins/packages/${pluginId}/uninstall`, {
-            body: {},
-            adminIntent: true,
-        });
+        await installed.uninstall(pluginId);
         toast.add({
             title: 'Plugin removed',
             description: 'Its data is kept unless you delete it explicitly.',
             color: 'success',
         });
-        await installed.load();
     } catch (error) {
         toast.add({
             title: 'Could not remove the plugin',
@@ -79,12 +69,8 @@ async function uninstall(pluginId: string): Promise<void> {
 async function rollback(pluginId: string): Promise<void> {
     busyPluginId.value = pluginId;
     try {
-        await apiPost(`/api/admin/plugins/packages/${pluginId}/rollback`, {
-            body: {},
-            adminIntent: true,
-        });
+        await installed.rollback(pluginId);
         toast.add({ title: 'Rolled back to the previous version', color: 'success' });
-        await installed.load();
     } catch (error) {
         toast.add({
             title: 'Rollback was refused',
@@ -133,19 +119,6 @@ async function copyDiagnostics(): Promise<void> {
 async function apiGet<T>(url: string): Promise<T> {
     return (await ($fetch as unknown as (input: string) => Promise<unknown>)(url)) as T;
 }
-
-async function apiPost<T>(
-    url: string,
-    options: { readonly body?: unknown; readonly adminIntent?: boolean } = {}
-): Promise<T> {
-    return (await (
-        $fetch as unknown as (input: string, init: Record<string, unknown>) => Promise<unknown>
-    )(url, {
-        method: 'POST',
-        ...(options.adminIntent === false ? {} : { headers: { 'x-or3-admin-intent': 'admin' } }),
-        ...(options.body === undefined ? {} : { body: options.body }),
-    })) as T;
-}
 </script>
 
 <template>
@@ -182,7 +155,7 @@ async function apiPost<T>(
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="font-medium">{{ entry.pluginId }}</span>
                         <UBadge color="neutral" variant="subtle">
-                            {{ entry.pointer?.selected?.version ?? 'no version selected' }}
+                            {{ entry.display?.version ?? 'no version selected' }}
                         </UBadge>
                         <UBadge v-if="isEnabled(entry.pluginId)" color="success" variant="subtle">Enabled</UBadge>
                         <UBadge v-else color="neutral" variant="subtle">Disabled</UBadge>
@@ -196,7 +169,7 @@ async function apiPost<T>(
                     </div>
                     <div class="flex flex-wrap gap-2">
                         <UButton
-                            v-if="entry.pointer?.selected"
+                            v-if="entry.display?.canOpen"
                             size="sm"
                             color="primary"
                             variant="soft"

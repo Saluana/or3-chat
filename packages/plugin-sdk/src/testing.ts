@@ -1,7 +1,4 @@
 import type {
-    PluginHttpClient,
-    PluginHttpRequest,
-    PluginHttpResponse,
     PluginJsonValue,
     PluginSettingsClient,
     PluginStorageClient,
@@ -21,17 +18,13 @@ import type { PluginError, PluginErrorCode, PluginResult } from './results';
 import { pluginError, pluginOk } from './results';
 import type { PluginGrant } from './manifest';
 
-export type PluginTestCapability = 'settings' | 'storage' | 'http';
+export type PluginTestCapability = 'settings' | 'storage';
 
 export interface PluginTestHostOptions {
     readonly approvedGrants?: readonly PluginGrant[];
     readonly supportedFeatures?: readonly string[];
     readonly initialSettings?: Readonly<Record<string, PluginJsonValue>>;
     readonly initialStorage?: Readonly<Record<string, PluginJsonValue>>;
-    readonly httpHandler?: (
-        request: PluginHttpRequest,
-        scope: HostPluginScope
-    ) => Promise<PluginResult<PluginHttpResponse<unknown>>>;
 }
 
 export interface PluginTestHostSnapshot {
@@ -68,7 +61,6 @@ export class PluginTestHost {
     readonly #settings = new Map<string, PluginJsonValue>();
     readonly #storage = new Map<string, PluginJsonValue>();
     readonly #supportedFeatures: Set<string>;
-    readonly #httpHandler?: PluginTestHostOptions['httpHandler'];
     readonly #failures = new Map<PluginTestCapability, PluginError>();
     #approvedGrants: Set<PluginGrant>;
     #generation = 0;
@@ -87,7 +79,6 @@ export class PluginTestHost {
     constructor(options: PluginTestHostOptions = {}) {
         this.#approvedGrants = new Set(options.approvedGrants ?? []);
         this.#supportedFeatures = new Set(options.supportedFeatures ?? []);
-        this.#httpHandler = options.httpHandler;
         for (const [key, value] of Object.entries(options.initialSettings ?? {})) {
             this.#settings.set(key, value);
         }
@@ -250,7 +241,6 @@ export class PluginTestHost {
             clients: {
                 createSettingsClient: (scope) => this.#createSettingsClient(scope),
                 createStorageClient: (scope) => this.#createStorageClient(scope),
-                createHttpClient: (scope) => this.#createHttpClient(scope),
             },
             onCleanup: (callback) => cleanups.push(callback),
             onActivate: (callback) => activations.push(callback),
@@ -385,23 +375,6 @@ export class PluginTestHost {
                             updatedAt: 0,
                         }))
                 );
-            },
-        });
-    }
-
-    #createHttpClient(scope: HostPluginScope): PluginHttpClient {
-        return Object.freeze({
-            request: async <T>(request: PluginHttpRequest) => {
-                const denied = this.#guard(scope, 'network.http', 'http');
-                if (denied) return asFailure<PluginHttpResponse<T>>(denied);
-                if (!this.#httpHandler) {
-                    return asFailure<PluginHttpResponse<T>>(
-                        errorResult('host-unavailable', 'No fake HTTP handler is configured')
-                    );
-                }
-                return (await this.#httpHandler(request, scope)) as PluginResult<
-                    PluginHttpResponse<T>
-                >;
             },
         });
     }

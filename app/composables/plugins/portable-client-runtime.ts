@@ -96,6 +96,8 @@ export interface PortableActivation {
 
 interface InternalActivation extends PortableActivation {
     runtime: WorkerIsolationRuntime | null;
+    /** The epoch this activation owns; a superseded epoch may not publish. */
+    epoch: number;
 }
 
 const MAX_LOGS = 50;
@@ -103,9 +105,33 @@ const MAX_LOGS = 50;
 /** Rendered UI is display-only until a host request answers an action. */
 export const PORTABLE_UI_EVENT_REQUEST = 'runtime.ui-event';
 
-const activations = reactive(new Map<string, InternalActivation>());
+// Reactive so components re-render on plugin events; the cast keeps the stored
+// activation type exact (the reactive wrapper would otherwise unwrap it).
+const activations = reactive(
+    new Map<string, InternalActivation>()
+) as Map<string, InternalActivation>;
 let generationCounter = 0;
 let listenerInstalled = false;
+
+/**
+ * Per-plugin activation epochs. Starting, blocking or stopping an activation
+ * claims the next epoch, and every asynchronous completion - a slow start, a
+ * plugin event, a crash - must still hold it before it may publish or mutate
+ * state. Without this, a workspace switch that starts a replacement could be
+ * overwritten by the previous start's late completion, and a stale caller's
+ * `deactivatePortableClient()` could dispose the wrong sandbox.
+ */
+const activationEpochs = new Map<string, number>();
+
+function claimActivationEpoch(pluginId: string): number {
+    const next = (activationEpochs.get(pluginId) ?? 0) + 1;
+    activationEpochs.set(pluginId, next);
+    return next;
+}
+
+function holdsActivationEpoch(pluginId: string, epoch: number): boolean {
+    return activationEpochs.get(pluginId) === epoch;
+}
 
 /** Engine detection drives `assessPortableHost`; unqualified engines stay blocked. */
 export function detectBrowserEngine(userAgent?: string): string {
@@ -158,10 +184,12 @@ export function createPortableSettingsServices(pluginId: string): {
         // A plain `string` URL keeps Nuxt's typed-route inference out of a
         // runtime-composed path.
         const url: string = `/api/plugins/${pluginId}/setup-plan`;
+        // The route answers `{ settings: { values }, ... }`; reading a top-level
+        // `values` made every saved setting look unset.
         const plan = (await ($fetch as unknown as (input: string) => Promise<unknown>)(
             url
-        )) as { values?: Record<string, unknown> };
-        return plan.values ?? {};
+        )) as { settings?: { values?: Record<string, unknown> } };
+        return plan.settings?.values ?? {};
     };
     return {
         settings: {
@@ -217,17 +245,24 @@ function readGrants(descriptor: PackageV2PluginDescriptor) {
     };
 }
 
-function update(pluginId: string, patch: Partial<InternalActivation>): void {
+/**
+ * Mutate the activation only while it still owns its epoch. The entry check
+ * catches a replacement, and the epoch check also catches a stop, which claims
+ * the next epoch while leaving the stopped entry in place.
+ */
+function update(pluginId: string, epoch: number, patch: Partial<InternalActivation>): void {
+    if (!holdsActivationEpoch(pluginId, epoch)) return;
     const current = activations.get(pluginId);
-    if (!current) return;
+    if (!current || current.epoch !== epoch) return;
     Object.assign(current, patch);
 }
 
-function recordEvent(pluginId: string, event: HostPluginEvent): void {
+function recordEvent(pluginId: string, epoch: number, event: HostPluginEvent): void {
+    if (!holdsActivationEpoch(pluginId, epoch)) return;
     const current = activations.get(pluginId);
-    if (!current) return;
+    if (!current || current.epoch !== epoch) return;
     if (event.status === 'rendered') {
-        update(pluginId, { view: { title: event.title, nodes: event.nodes } });
+        update(pluginId, epoch, { view: { title: event.title, nodes: event.nodes } });
         return;
     }
     if (event.status === 'contributed') {
@@ -240,12 +275,12 @@ function recordEvent(pluginId: string, event: HostPluginEvent): void {
             title: contribution.title,
             nodes: contribution.nodes,
         });
-        update(pluginId, { contributions: next });
+        update(pluginId, epoch, { contributions: next });
         return;
     }
     if (event.status === 'withdrawn') {
         const removed = new Set(event.contributionIds);
-        update(pluginId, {
+        update(pluginId, epoch, {
             contributions: current.contributions.filter((entry) => !removed.has(entry.id)),
         });
         return;
@@ -258,7 +293,7 @@ function recordEvent(pluginId: string, event: HostPluginEvent): void {
             ...current.logs,
             { level, message, at: Date.now() },
         ].slice(-MAX_LOGS);
-        update(pluginId, { logs });
+        update(pluginId, epoch, { logs });
     }
 }
 
@@ -278,6 +313,9 @@ export async function activatePortableClient(
 ): Promise<PortableActivation> {
     const { descriptor, workspaceId } = input;
     const pluginId = descriptor.id;
+    // This activation claims the plugin's next epoch before any await, so a
+    // replacement started while it is still resolving supersedes it cleanly.
+    const epoch = claimActivationEpoch(pluginId);
 
     if (input.runtimeEntry !== undefined) {
         const resolution = await resolvePackageDescriptor({
@@ -286,21 +324,26 @@ export async function activatePortableClient(
             runtimeEntry: input.runtimeEntry,
             requireClientEntry: true,
         });
+        if (!holdsActivationEpoch(pluginId, epoch)) return currentActivationOr(pluginId, descriptor, workspaceId, epoch);
         if (resolution.status === 'blocked') {
-            return recordBlocked(pluginId, descriptor, workspaceId, resolution.failure.code, resolution.failure.message);
+            return recordBlocked(pluginId, descriptor, workspaceId, resolution.failure.code, resolution.failure.message, epoch);
         }
     }
 
     const clientEntry = descriptor.artifact.client;
     if (!clientEntry) {
+        if (!holdsActivationEpoch(pluginId, epoch)) return currentActivationOr(pluginId, descriptor, workspaceId, epoch);
         return recordBlocked(
             pluginId,
             descriptor,
             workspaceId,
             'catalog-artifact-mismatch',
-            'The selected package has no digest-addressed client entry'
+            'The selected package has no digest-addressed client entry',
+            epoch
         );
     }
+
+    if (!holdsActivationEpoch(pluginId, epoch)) return currentActivationOr(pluginId, descriptor, workspaceId, epoch);
 
     generationCounter += 1;
     const generation = generationCounter;
@@ -309,6 +352,7 @@ export async function activatePortableClient(
         version: descriptor.version,
         workspaceId,
         generation,
+        epoch,
         descriptorKey: descriptor.descriptorKey,
         status: 'starting',
         blockCode: null,
@@ -381,11 +425,11 @@ export async function activatePortableClient(
         csp: PORTABLE_FRAME_CSP,
         // Session identity is captured for the capability echo below; the
         // sandbox stamps its own copy on every request.
-        onEvent: (event) => recordEvent(pluginId, event),
+        onEvent: (event) => recordEvent(pluginId, epoch, event),
         onCrash: (report) => {
             // A fatal crash terminates the sandbox, so the activation is no
             // longer active; a non-fatal containment violation is recorded.
-            update(pluginId, {
+            update(pluginId, epoch, {
                 crashed: report.fatal,
                 ...(report.fatal
                     ? {
@@ -398,6 +442,14 @@ export async function activatePortableClient(
         },
     });
 
+    // The start is asynchronous, so the plugin may have been stopped or
+    // re-activated meanwhile. A superseded start disposes its own sandbox and
+    // leaves the replacement's state untouched.
+    if (!holdsActivationEpoch(pluginId, epoch)) {
+        if (started.status !== 'blocked') started.runtime.dispose();
+        return currentActivationOr(pluginId, descriptor, workspaceId, epoch);
+    }
+
     if (started.status === 'blocked') {
         return recordBlocked(
             pluginId,
@@ -405,17 +457,50 @@ export async function activatePortableClient(
             workspaceId,
             started.codes[0] ?? 'bootstrap-failed',
             started.message,
-            generation
+            epoch
         );
     }
 
     session = started.session;
-    update(pluginId, {
+    update(pluginId, epoch, {
         status: 'active',
         runtime: started.runtime,
         capabilities: started.runtime.capabilities,
     });
     return snapshot(pluginId);
+}
+
+/**
+ * The activation to report for a completion that no longer owns the plugin: the
+ * live one when something replaced it, otherwise the superseded activation
+ * marked stopped. Throws for nobody's plugin only if the caller never had one.
+ */
+function currentActivationOr(
+    pluginId: string,
+    descriptor: PackageV2PluginDescriptor,
+    workspaceId: string,
+    epoch: number
+): PortableActivation {
+    const current = activations.get(pluginId);
+    if (current) return snapshot(pluginId);
+    return snapshotOf({
+        pluginId,
+        version: descriptor.version,
+        workspaceId,
+        generation: 0,
+        epoch,
+        descriptorKey: descriptor.descriptorKey,
+        status: 'stopped',
+        blockCode: null,
+        blockMessage: null,
+        view: null,
+        contributions: [],
+        capabilities: [],
+        logs: [],
+        crashed: false,
+        startedAt: null,
+        runtime: null,
+    });
 }
 
 function recordBlocked(
@@ -424,13 +509,14 @@ function recordBlocked(
     workspaceId: string,
     blockCode: string,
     blockMessage: string,
-    generation = 0
+    epoch: number
 ): PortableActivation {
     const activation: InternalActivation = {
         pluginId,
         version: descriptor.version,
         workspaceId,
-        generation,
+        generation: 0,
+        epoch,
         descriptorKey: descriptor.descriptorKey,
         status: 'blocked',
         blockCode,
@@ -447,11 +533,22 @@ function recordBlocked(
     return snapshot(pluginId);
 }
 
+/**
+ * Stop the current activation. Claims the next epoch first, so an in-flight
+ * start for the stopped activation cannot publish afterwards, and a caller that
+ * lost the race cannot dispose a newer sandbox.
+ */
 export async function deactivatePortableClient(pluginId: string): Promise<void> {
+    claimActivationEpoch(pluginId);
     const current = activations.get(pluginId);
     if (!current) return;
     const runtime = current.runtime;
-    update(pluginId, { runtime: null, status: 'stopped', contributions: [], view: null });
+    Object.assign(current, {
+        runtime: null,
+        status: 'stopped',
+        contributions: [],
+        view: null,
+    });
     runtime?.dispose();
 }
 
@@ -508,6 +605,10 @@ export function usePortableActivations(): ReadonlyMap<string, InternalActivation
 function snapshot(pluginId: string): PortableActivation {
     const entry = activations.get(pluginId);
     if (!entry) throw new Error(`No activation for ${pluginId}`);
+    return snapshotOf(entry);
+}
+
+function snapshotOf(entry: InternalActivation): PortableActivation {
     return Object.freeze({
         pluginId: entry.pluginId,
         version: entry.version,

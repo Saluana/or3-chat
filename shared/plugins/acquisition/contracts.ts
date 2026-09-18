@@ -217,11 +217,15 @@ export function shouldResumeDownload(operation: PluginAcquisitionOperation): boo
 export interface AcquisitionStatusView {
     readonly operationId: string;
     readonly pluginId: string;
+    /** The workspace this operation installs into. */
+    readonly workspaceId: string;
     readonly version: string;
     readonly stage: PluginAcquisitionStage;
     readonly status: PluginAcquisitionStatus;
     readonly percentComplete: number;
     readonly needsSetup: boolean;
+    /** An unfinished operation this caller can pick up again from its stage. */
+    readonly resumable: boolean;
     readonly retryable: boolean;
     readonly canceled: boolean;
     readonly failure: PluginAcquisitionFailure | null;
@@ -230,7 +234,8 @@ export interface AcquisitionStatusView {
 
 /**
  * A status the dashboard can render without knowing the pipeline: the percentage
- * is stage-based, and `needsSetup` is the paused first-install stop.
+ * is stage-based, `needsSetup` is the paused first-install stop, and `resumable`
+ * says the operation is waiting on the caller rather than dead.
  */
 export function describeAcquisitionStatus(
     operation: PluginAcquisitionOperation
@@ -240,14 +245,21 @@ export function describeAcquisitionStatus(
     return {
         operationId: operation.operationId,
         pluginId: operation.pluginId,
+        workspaceId: operation.workspaceId,
         version: operation.version,
         stage: operation.stage,
         status: operation.status,
         percentComplete: total === 0 ? 100 : Math.round((index / total) * 100),
         needsSetup: operation.status === 'paused' && operation.failure?.code === 'setup-required',
+        resumable: operation.status === 'paused',
+        // A paused operation carries a retryable pause failure (for example
+        // `setup-required`); hiding Retry behind the failed/blocked statuses
+        // left the operator with a durable operation and no way to continue it.
         retryable:
             operation.failure?.retryable === true &&
-            (operation.status === 'failed' || operation.status === 'blocked'),
+            (operation.status === 'failed' ||
+                operation.status === 'blocked' ||
+                operation.status === 'paused'),
         canceled: operation.cancelRequested || operation.status === 'canceled',
         failure: operation.failure,
         updatedAt: operation.updatedAt,
