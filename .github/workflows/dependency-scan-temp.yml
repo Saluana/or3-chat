@@ -1,4 +1,4 @@
-name: Temporary dependency updater
+name: Temporary dependency verification
 
 on:
   push:
@@ -6,12 +6,33 @@ on:
       - chore/dependency-upkeep-2026-09-18
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  update:
-    if: github.event.head_commit.message == '[Chore] Run dependency updater'
+  verify:
+    if: github.event.head_commit.message == '[Chore] Verify dependency updates'
     runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CI: '1'
+      SSR_AUTH_ENABLED: 'true'
+      AUTH_PROVIDER: basic-auth
+      OR3_AUTH_PROVIDER: basic-auth
+      OR3_GUEST_ACCESS_ENABLED: 'false'
+      OR3_AUTH_REGISTRATION_MODE: invite_only
+      OR3_AUTH_AUTO_PROVISION: 'false'
+      OR3_BASIC_AUTH_JWT_SECRET: ci-only-jwt-secret-0123456789abcdef0123456789abcdef
+      OR3_BASIC_AUTH_DB_PATH: .data/or3-basic-auth.sqlite
+      OR3_SYNC_ENABLED: 'true'
+      OR3_CLOUD_SYNC_ENABLED: 'true'
+      OR3_SYNC_PROVIDER: sqlite
+      OR3_SQLITE_DB_PATH: .data/sync.sqlite
+      OR3_STORAGE_ENABLED: 'true'
+      OR3_CLOUD_STORAGE_ENABLED: 'true'
+      NUXT_PUBLIC_STORAGE_PROVIDER: fs
+      OR3_STORAGE_FS_ROOT: ${{ github.workspace }}/.data/storage
+      OR3_STORAGE_FS_TOKEN_SECRET: ci-only-storage-secret-0123456789abcdef0123456789abcdef
+      OR3_BACKGROUND_STREAMING_ENABLED: 'false'
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -19,47 +40,40 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
-      - name: Update runtime dependencies
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Typecheck
+        id: typecheck
+        continue-on-error: true
+        run: bun run type-check
+      - name: Lint
+        id: lint
+        continue-on-error: true
+        run: bun run lint
+      - name: Core tests
+        id: tests
+        continue-on-error: true
+        run: bun run test
+      - name: Provider compatibility
+        id: providers
+        continue-on-error: true
+        run: bun run test:cloud:provider-compatibility
+      - name: Production build
+        id: build
+        continue-on-error: true
+        run: bun run build
+      - name: Remaining outdated dependencies
+        run: bun outdated || true
+      - name: Require critical checks
         run: |
-          bun add \
-            '@noble/hashes@^2.4.0' \
-            '@nuxt/ui@4.11.1' \
-            '@openrouter/sdk@^1.2.145' \
-            '@vueuse/core@14.4.0' \
-            'dexie@~4.4.6' \
-            'dexie-export-import@^4.4.1' \
-            'nuxt@4.5.2' \
-            'reka-ui@2.10.4' \
-            'vue@3.5.43' \
-            'vue-router@^5.3.1' \
-            'zod@^4.6.5'
-      - name: Update development dependencies
-        run: |
-          bun add -d \
-            '@iconify-json/carbon@^1.2.27' \
-            '@iconify-json/lucide@^1.2.134' \
-            '@iconify-json/pixelarticons@^1.2.9' \
-            '@iconify-json/tabler@^1.2.38' \
-            '@playwright/test@^1.63.0' \
-            '@tailwindcss/typography@^0.5.20' \
-            '@types/node@^24.13.5' \
-            '@types/semver@^7.8.0' \
-            '@typescript-eslint/eslint-plugin@^8.70.0' \
-            '@typescript-eslint/parser@^8.70.0' \
-            '@vitejs/plugin-vue@6.0.9' \
-            '@vitest/coverage-v8@4.1.11' \
-            '@vue/test-utils@^2.5.1' \
-            'convex@1.46.0' \
-            'eslint@^9.39.5' \
-            'tsx@^4.23.13' \
-            'vite@8.3.0' \
-            'vitest@4.1.11' \
-            'vue-tsc@3.3.11'
-      - name: Commit dependency updates
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add package.json bun.lock
-          git diff --cached --quiet && exit 0
-          git commit -m '[Deps] Refresh stable dependencies'
-          git push
+          echo 'typecheck=${{ steps.typecheck.outcome }}'
+          echo 'lint=${{ steps.lint.outcome }}'
+          echo 'tests=${{ steps.tests.outcome }}'
+          echo 'providers=${{ steps.providers.outcome }}'
+          echo 'build=${{ steps.build.outcome }}'
+          if [ '${{ steps.typecheck.outcome }}' != 'success' ] || \
+             [ '${{ steps.tests.outcome }}' != 'success' ] || \
+             [ '${{ steps.providers.outcome }}' != 'success' ] || \
+             [ '${{ steps.build.outcome }}' != 'success' ]; then
+            exit 1
+          fi
