@@ -102,6 +102,12 @@ const stubs = {
         template:
             '<div class="modal-stub"><slot name="header" /><slot name="body" /></div>',
     },
+    DialogTitle: {
+        template: '<h2><slot /></h2>',
+    },
+    DialogDescription: {
+        template: '<p><slot /></p>',
+    },
     UButton: {
         inheritAttrs: false,
         emits: ['click'],
@@ -109,13 +115,16 @@ const stubs = {
             '<button v-bind="$attrs" @click="$emit(\'click\', $event)"><slot /></button>',
     },
     UInput: {
-        props: ['modelValue'],
+        props: ['modelValue', 'size'],
         emits: ['update:modelValue'],
         template:
             '<input :value="modelValue" v-bind="$attrs" @input="$emit(\'update:modelValue\', $event.target.value)" />',
     },
     USelectMenu: {
         template: '<select />',
+    },
+    UDropdownMenu: {
+        template: '<div><slot /></div>',
     },
     UPopover: {
         template: '<div><slot /><slot name="content" /></div>',
