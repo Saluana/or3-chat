@@ -6,9 +6,11 @@ import {
 } from '@or3/plugin-sdk';
 import {
     COMPARE_LIMITS,
+    abbreviateAnswer,
     buildComparisonPrompt,
     classifyFailure,
     comparisonTableRows,
+    fitPortableView,
     formatAnswerMarkdown,
     normalizeCompareOptions,
     parseDefaultModels,
@@ -33,7 +35,13 @@ export const MODEL_COMPARE_MANIFEST = Object.freeze({
     description: 'Send one prompt to several host models and continue the best answer in chat.',
     engines: { or3: '^0.3.0', pluginApi: '^2.0.0' },
     runtime: { client: { entry: 'client.mjs', format: 'esm', isolation: 'worker' } },
-    requestedGrants: ['network.http', 'settings.read', 'settings.write'],
+    requestedGrants: [
+        'documents.read',
+        'documents.write',
+        'network.http',
+        'settings.read',
+        'settings.write',
+    ],
     features: { required: ['or3-portable-client-v1'], optional: [] },
     dependencies: { required: [], optional: [] },
     trust: 'isolated-client',
@@ -58,7 +66,7 @@ function resultNode(index, result) {
         direction: 'column',
         children: [
             { type: 'text', text: `${result.label} · $${result.spendUsd.toFixed(4)}` },
-            { type: 'markdown', markdown: result.text },
+            { type: 'markdown', markdown: abbreviateAnswer(result.text) },
             {
                 type: 'button',
                 id: `choose-${index}`,
@@ -173,11 +181,13 @@ export function createModelCompare(options = {}) {
             children.push({
                 type: 'stack',
                 direction: 'row',
-                children: state.models.map((model) => ({
+                children: state.models.map((model, index) => ({
                     type: 'button',
-                    id: `remove-${model}`,
+                    // Index-based: a provider-qualified model id contains `/`,
+                    // which the host's identifier validator forbids.
+                    id: `remove-${index}`,
                     label: `Remove ${model}`,
-                    action: `${ACTIONS.removePrefix}${model}`,
+                    action: `${ACTIONS.removePrefix}${index}`,
                     variant: 'secondary',
                 })),
             });
@@ -187,7 +197,10 @@ export function createModelCompare(options = {}) {
                 label: state.running ? 'Comparing…' : `Compare ${state.models.length} models`,
                 action: ACTIONS.run,
                 variant: 'primary',
-                disabled: state.running || !state.prompt.trim(),
+                // Typing only updates the host field store, so enablement cannot
+                // depend on plugin state; the submitted prompt is validated at
+                // submit time instead.
+                disabled: state.running,
             });
         }
 
@@ -258,7 +271,13 @@ export function createModelCompare(options = {}) {
             children.push({ type: 'button', id: 'reset', label: 'Clear results', action: ACTIONS.reset });
         }
 
-        contextRender({ title: 'Model Compare', nodes: [{ type: 'stack', direction: 'column', children }] });
+        contextRender({
+            title: 'Model Compare',
+            nodes: fitPortableView(
+                [{ type: 'stack', direction: 'column', children }],
+                'This comparison is too large to display safely. Use fewer models or a shorter prompt.'
+            ),
+        });
     }
 
     let contextRender = () => undefined;
@@ -363,12 +382,14 @@ export function createModelCompare(options = {}) {
             if (content) state.prompt = content;
             observe({ kind: 'first-action', hasContent: Boolean(content) });
             render();
-            return { ok: true };
+            return content ? { ok: true, fieldValues: { prompt: state.prompt } } : { ok: true };
         }
         if (action === ACTIONS.reset) {
             reset(false);
             render();
-            return { ok: true };
+            // Clear is a user-requested replacement: the host must reset the
+            // editor field, not leave the cleared prompt visible.
+            return { ok: true, fieldValues: { prompt: state.prompt } };
         }
         if (action === ACTIONS.addModel) {
             const model = typeof values.model === 'string' ? values.model : '';
@@ -378,11 +399,15 @@ export function createModelCompare(options = {}) {
             }
             if (typeof values.prompt === 'string') state.prompt = values.prompt;
             render();
-            return { ok: true };
+            // Adding a model mirrors the prompt the user typed into plugin
+            // state; the host owns the field, so it performs the replacement.
+            return { ok: true, fieldValues: { prompt: state.prompt } };
         }
         if (action.startsWith(ACTIONS.removePrefix)) {
-            const model = action.slice(ACTIONS.removePrefix.length);
-            state.models = state.models.filter((entry) => entry !== model);
+            const index = Number.parseInt(action.slice(ACTIONS.removePrefix.length), 10);
+            if (Number.isInteger(index) && index >= 0 && index < state.models.length) {
+                state.models.splice(index, 1);
+            }
             render();
             return { ok: true };
         }

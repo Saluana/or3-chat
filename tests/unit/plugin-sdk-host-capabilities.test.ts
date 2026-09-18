@@ -91,6 +91,40 @@ describe('plugin SDK host capabilities', () => {
         expect(refused.error.message).toBe('no budget')
     })
 
+    it('maps every structured host refusal to its own SDK error, never all to permission-denied', async () => {
+        const cases: ReadonlyArray<[string, string, boolean]> = [
+            ['permission-denied', 'permission-denied', false],
+            ['policy-denied', 'permission-denied', false],
+            ['invalid-input', 'invalid-input', false],
+            ['not-found', 'not-found', false],
+            ['conflict', 'conflict', false],
+            ['internal', 'internal', false],
+            ['deadline-exceeded', 'timeout', true],
+            ['cancelled', 'aborted', false],
+            ['network-failure', 'network-error', true],
+            ['unavailable', 'host-unavailable', true],
+        ]
+        for (const [hostCode, sdkCode, retryable] of cases) {
+            const { call } = fakeCall({
+                [HOST_CAPABILITY_METHODS.complete]: { ok: false, code: hostCode, message: hostCode },
+            })
+            const refused = await completeWithHostModel(call, { model: 'vendor/alpha', prompt: 'Hi' })
+            expect(refused.ok).toBe(false)
+            if (refused.ok) continue
+            expect(refused.error, hostCode).toMatchObject({ code: sdkCode, retryable })
+        }
+    })
+
+    it('maps an unrecognized host code to internal rather than a permission problem', async () => {
+        const { call } = fakeCall({
+            [HOST_CAPABILITY_METHODS.models]: { ok: false, code: 'who-knows', message: 'odd' },
+        })
+        const result = await listHostModels(call)
+        expect(result.ok).toBe(false)
+        if (result.ok) return
+        expect(result.error.code).toBe('internal')
+    })
+
     it('refuses an unusable completion rather than reporting success', async () => {
         const { call } = fakeCall({
             [HOST_CAPABILITY_METHODS.complete]: { ok: true, result: { text: 'Hello' } },

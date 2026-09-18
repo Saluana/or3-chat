@@ -56,13 +56,31 @@ export interface RawModelPrice {
     readonly completionPerMillion?: unknown;
 }
 
-function usablePrice(price: RawModelPrice | undefined): { prompt: number; completion: number } | null {
-    if (!price) return null;
-    const prompt = Number(price.promptPerMillion);
-    const completion = Number(price.completionPerMillion);
-    if (!Number.isFinite(prompt) || !Number.isFinite(completion)) return null;
-    if (prompt < 0 || completion < 0) return null;
-    return { prompt, completion };
+export interface UsableModelPrice {
+    readonly promptPerMillion: number;
+    readonly completionPerMillion: number;
+}
+
+/**
+ * The one usable-price predicate shared by catalog disclosure and the AI
+ * governor. A price is usable only when both rates are actual finite numbers
+ * (not `null`, `false` or `''`, which `Number()` would coerce to zero), are
+ * non-negative, and at least one is positive — an all-zero price would be
+ * accounted as free, which the governor refuses to spend against.
+ */
+export function isUsablePluginModelPrice(price: unknown): price is UsableModelPrice {
+    if (!price || typeof price !== 'object' || Array.isArray(price)) return false;
+    const record = price as RawModelPrice;
+    const prompt = record.promptPerMillion;
+    const completion = record.completionPerMillion;
+    if (typeof prompt !== 'number' || typeof completion !== 'number') return false;
+    if (!Number.isFinite(prompt) || !Number.isFinite(completion)) return false;
+    if (prompt < 0 || completion < 0) return false;
+    return prompt > 0 || completion > 0;
+}
+
+function usablePrice(price: RawModelPrice | undefined): UsableModelPrice | null {
+    return isUsablePluginModelPrice(price) ? price : null;
 }
 
 /**
@@ -107,7 +125,10 @@ export function parseModelPrices(value: unknown): Record<string, { promptPerMill
         if (!MODEL_ID_PATTERN.test(id)) continue;
         const price = usablePrice(entry);
         if (!price) continue;
-        prices[id] = { promptPerMillion: price.prompt, completionPerMillion: price.completion };
+        prices[id] = {
+            promptPerMillion: price.promptPerMillion,
+            completionPerMillion: price.completionPerMillion,
+        };
     }
     return prices;
 }

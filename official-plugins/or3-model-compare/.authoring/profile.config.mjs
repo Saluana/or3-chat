@@ -33,8 +33,8 @@ export const authoringConfig = Object.freeze({
                 'Model calls are billed by the host model provider per token and attributed to this plugin; OR3 adds no fee.',
         },
     ],
-    dataScopes: ['settings.read'],
-    writes: ['settings.write'],
+    dataScopes: ['documents.read', 'settings.read'],
+    writes: ['documents.write', 'settings.write'],
     features: [],
     settingsSchemaPath: 'settings.schema.json',
     fields: [
@@ -83,6 +83,8 @@ export const baseManifest = Object.freeze({
         client: { entry: 'client.mjs', format: 'esm', isolation: 'worker' },
     },
     requestedGrants: [
+        'documents.read',
+        'documents.write',
         'network.http',
         'settings.read',
         'settings.write',

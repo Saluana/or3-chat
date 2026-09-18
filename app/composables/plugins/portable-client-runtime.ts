@@ -53,6 +53,8 @@ import {
     createRemoteCapabilityMethods,
 } from '~~/shared/plugins/isolation/capability-bridge';
 import { resolvePackageDescriptor } from '~~/shared/plugins/descriptor-resolver';
+import { getKvByName, hardDeleteKvByName, setKvByName } from '~/db/kv';
+import { getDb } from '~/db/client';
 
 export type PortableActivationStatus =
     | 'starting'
@@ -89,6 +91,8 @@ export interface PortableActivation {
     readonly view: PortableRenderedView | null;
     readonly contributions: readonly PortableContributionView[];
     readonly capabilities: readonly string[];
+    /** Grants the workspace actually approved for this activation. */
+    readonly approvedGrants: readonly string[];
     readonly logs: readonly PortableLogEntry[];
     readonly crashed: boolean;
     readonly startedAt: number | null;
@@ -171,6 +175,11 @@ export function addWindowMessageListener(
 /**
  * Settings are workspace-scoped package settings: the same validated document
  * the setup page edits, so a plugin cannot invent keys or write secrets.
+ *
+ * Storage is workspace/plugin-scoped persistent key/value data (the Dexie `kv`
+ * table, namespaced by plugin id). It is the only storage the production
+ * runtime offers sandboxes: without it a plugin's `storage.*` calls are
+ * refused, so a product that persists presets must not pretend otherwise.
  */
 export function createPortableSettingsServices(pluginId: string): {
     readonly settings: {
@@ -178,6 +187,12 @@ export function createPortableSettingsServices(pluginId: string): {
         readonly set: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
         readonly list: () => Promise<unknown>;
         readonly delete: () => Promise<unknown>;
+    };
+    readonly storage: {
+        readonly get: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
+        readonly set: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
+        readonly list: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
+        readonly delete: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
     };
 } {
     const loadValues = async (): Promise<Record<string, unknown>> => {
@@ -191,6 +206,19 @@ export function createPortableSettingsServices(pluginId: string): {
         )) as { settings?: { values?: Record<string, unknown> } };
         return plan.settings?.values ?? {};
     };
+
+    const storagePrefix = `plugin-storage:${pluginId}:`;
+    const invalid = (message: string) =>
+        Object.assign(new Error(message), { rpcCode: 'invalid-input' });
+    const readStorageKey = (params: Readonly<Record<string, unknown>>): string => {
+        const key = typeof params.key === 'string' ? params.key : '';
+        if (!key || key.length > 200 || key.includes('\u0000')) {
+            throw invalid('storage calls require a key of 1–200 characters');
+        }
+        return key;
+    };
+    const MAX_STORAGE_VALUE_BYTES = 32 * 1024;
+
     return {
         settings: {
             async get(params) {
@@ -231,6 +259,50 @@ export function createPortableSettingsServices(pluginId: string): {
                     new Error('Portable plugins cannot delete settings yet'),
                     { rpcCode: 'permission-denied' }
                 );
+            },
+        },
+        storage: {
+            async get(params) {
+                const key = readStorageKey(params);
+                const row = await getKvByName(`${storagePrefix}${key}`);
+                if (!row || row.value === null || row.value === undefined) {
+                    return { value: null };
+                }
+                try {
+                    return { value: JSON.parse(row.value) as unknown };
+                } catch {
+                    return { value: null };
+                }
+            },
+            async set(params) {
+                const key = readStorageKey(params);
+                const value = params.value ?? null;
+                const serialized = JSON.stringify(value);
+                if (new TextEncoder().encode(serialized).byteLength > MAX_STORAGE_VALUE_BYTES) {
+                    throw invalid(`storage values must be at most ${MAX_STORAGE_VALUE_BYTES} bytes`);
+                }
+                await setKvByName(`${storagePrefix}${key}`, serialized);
+                return { ok: true };
+            },
+            async list(params) {
+                const prefix = typeof params.prefix === 'string' ? params.prefix : '';
+                if (prefix.length > 200) throw invalid('storage.list prefix is too long');
+                const rows = await getDb()
+                    .kv.where('name')
+                    .startsWith(`${storagePrefix}${prefix}`)
+                    .toArray();
+                return {
+                    entries: rows.map((row) => ({
+                        key: row.name.slice(storagePrefix.length),
+                        sizeBytes: typeof row.value === 'string' ? row.value.length : 0,
+                        updatedAt: row.updated_at * 1000,
+                    })),
+                };
+            },
+            async delete(params) {
+                const key = readStorageKey(params);
+                await hardDeleteKvByName(`${storagePrefix}${key}`);
+                return { ok: true };
             },
         },
     };
@@ -360,6 +432,7 @@ export async function activatePortableClient(
         view: null,
         contributions: [],
         capabilities: [],
+        approvedGrants: [...descriptor.effectiveGrants],
         logs: [],
         crashed: false,
         startedAt: Date.now(),
@@ -496,6 +569,7 @@ function currentActivationOr(
         view: null,
         contributions: [],
         capabilities: [],
+        approvedGrants: [...descriptor.effectiveGrants],
         logs: [],
         crashed: false,
         startedAt: null,
@@ -524,6 +598,7 @@ function recordBlocked(
         view: null,
         contributions: [],
         capabilities: [],
+        approvedGrants: [...descriptor.effectiveGrants],
         logs: [],
         crashed: false,
         startedAt: null,
@@ -531,6 +606,55 @@ function recordBlocked(
     };
     activations.set(pluginId, activation);
     return snapshot(pluginId);
+}
+
+/**
+ * Verified manifest sources for demand-driven activation. The manifest sync
+ * records what may run; a surface starts its plugin when the user opens it,
+ * because a contained activation has a hard wall-clock budget and eagerly
+ * starting every plugin would consume it before anyone used the plugin.
+ */
+export interface PortableClientSource {
+    readonly descriptor: PackageV2PluginDescriptor;
+    readonly workspaceId: string;
+    readonly runtimeEntry: unknown;
+}
+
+const clientSources = new Map<string, PortableClientSource>();
+
+export function setPortableClientSource(source: PortableClientSource): void {
+    clientSources.set(source.descriptor.id, source);
+}
+
+export function removePortableClientSource(pluginId: string): void {
+    clientSources.delete(pluginId);
+}
+
+export function clearPortableClientSources(): void {
+    clientSources.clear();
+}
+
+export function getPortableClientSource(pluginId: string): PortableClientSource | null {
+    return clientSources.get(pluginId) ?? null;
+}
+
+export function listPortableClientSources(): readonly PortableClientSource[] {
+    return [...clientSources.values()];
+}
+
+/**
+ * Demand-driven activation: start (or restart) the plugin from the last
+ * verified manifest source. An active or starting activation is returned as is;
+ * a blocked activation is reported rather than retried in a loop.
+ */
+export async function ensurePortableClientActivation(
+    pluginId: string
+): Promise<PortableActivation | null> {
+    const current = activations.get(pluginId);
+    if (current && current.status !== 'stopped') return snapshot(pluginId);
+    const source = clientSources.get(pluginId);
+    if (!source) return current ? snapshot(pluginId) : null;
+    return await activatePortableClient(source);
 }
 
 /**
@@ -621,6 +745,7 @@ function snapshotOf(entry: InternalActivation): PortableActivation {
         view: entry.view,
         contributions: Object.freeze([...entry.contributions]),
         capabilities: Object.freeze([...entry.capabilities]),
+        approvedGrants: Object.freeze([...entry.approvedGrants]),
         logs: Object.freeze([...entry.logs]),
         crashed: entry.crashed,
         startedAt: entry.startedAt,

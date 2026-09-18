@@ -8,11 +8,13 @@ import {
     PROMPT_LIMITS,
     buildPreview,
     classifyFailure,
+    fitPortableView,
     migratePresetStore,
     parseTemplate,
     presetStore,
     removePreset,
     renderTemplate,
+    storageFailureCopy,
     upsertPreset,
 } from './lib/prompt.mjs';
 
@@ -33,7 +35,15 @@ export const PROMPT_WORKBENCH_MANIFEST = Object.freeze({
     description: 'Build reusable prompts with variables, preview them, and save versioned presets.',
     engines: { or3: '^0.3.0', pluginApi: '^2.0.0' },
     runtime: { client: { entry: 'client.mjs', format: 'esm', isolation: 'worker' } },
-    requestedGrants: ['network.http', 'settings.read', 'settings.write', 'storage.read', 'storage.write'],
+    requestedGrants: [
+        'documents.read',
+        'documents.write',
+        'network.http',
+        'settings.read',
+        'settings.write',
+        'storage.read',
+        'storage.write',
+    ],
     features: { required: ['or3-portable-client-v1'], optional: [] },
     dependencies: { required: [], optional: [] },
     trust: 'isolated-client',
@@ -43,6 +53,15 @@ export const PROMPT_WORKBENCH_MANIFEST = Object.freeze({
 
 const UI_EVENT_REQUEST = 'runtime.ui-event';
 const PRESET_STORAGE_KEY = 'presets';
+
+/**
+ * Variable field ids are namespaced so a placeholder named `template`, `model`
+ * or `presetName` cannot collide with a host control of the same action, and a
+ * name beginning with `_` stays a valid host identifier.
+ */
+function variableFieldId(name) {
+    return `variable:${name}`;
+}
 
 const ACTIONS = Object.freeze({
     preview: 'workbench.preview',
@@ -94,8 +113,16 @@ export function createPromptWorkbench(options = {}) {
         if (typeof values.template === 'string') state.template = values.template;
         refreshVariables();
         for (const name of state.variableFields) {
-            if (typeof values[name] === 'string') state.values[name] = values[name];
+            const value = values[variableFieldId(name)];
+            if (typeof value === 'string') state.values[name] = value;
         }
+    }
+
+    /** The variable fields as the host renders them, for host-side replacement. */
+    function variableFieldValues() {
+        return Object.fromEntries(
+            state.variableFields.map((name) => [variableFieldId(name), state.values[name] ?? '']),
+        );
     }
 
     function computePreview() {
@@ -141,7 +168,7 @@ export function createPromptWorkbench(options = {}) {
                 id: 'variables',
                 children: state.variableFields.map((name) => ({
                     type: 'field.text',
-                    id: name,
+                    id: variableFieldId(name),
                     label: name,
                     value: state.values[name] ?? '',
                 })),
@@ -226,6 +253,15 @@ export function createPromptWorkbench(options = {}) {
             id: 'preset',
             children: [
                 { type: 'field.text', id: 'presetName', label: 'Preset name', value: '' },
+            ],
+        });
+        // Outside the form: the host submits the whole field store with it, so
+        // Save preset sees the template currently in the editor instead of only
+        // the preset-name form's fields.
+        children.push({
+            type: 'stack',
+            direction: 'row',
+            children: [
                 { type: 'button', id: 'save-preset', label: 'Save preset', action: ACTIONS.savePreset },
             ],
         });
@@ -244,7 +280,13 @@ export function createPromptWorkbench(options = {}) {
             });
         }
 
-        contextRender({ title: 'Prompt Workbench', nodes: [{ type: 'stack', direction: 'column', children }] });
+        contextRender({
+            title: 'Prompt Workbench',
+            nodes: fitPortableView(
+                [{ type: 'stack', direction: 'column', children }],
+                'This view is too large to display safely. Shorten the template or its variable values and try again.'
+            ),
+        });
     }
 
     async function loadState(context) {
@@ -273,8 +315,11 @@ export function createPromptWorkbench(options = {}) {
         }
     }
 
+    /** Persist presets, reporting a refusal instead of pretending success. */
     async function persistPresets(context) {
-        await context.storage.set(PRESET_STORAGE_KEY, presetStore(state.presets));
+        const saved = await context.storage.set(PRESET_STORAGE_KEY, presetStore(state.presets));
+        if (!saved.ok) return { ok: false, message: storageFailureCopy(saved.error) };
+        return { ok: true };
     }
 
     async function run(context) {
@@ -328,11 +373,22 @@ export function createPromptWorkbench(options = {}) {
             const incoming = params.context && typeof params.context === 'object' ? params.context : {};
             if (typeof incoming.content === 'string' && incoming.content.length > 0) {
                 state.values.selection = incoming.content;
-                if (!state.template) {
+                const seededTemplate = !state.template;
+                if (seededTemplate) {
                     state.template = 'Summarize the following selection in {{style}} style:\n\n{{selection}}';
                 }
                 refreshVariables();
                 computePreview();
+                render();
+                // Context replacement is a user-requested load: the host must
+                // overwrite the editor fields, not leave stale typing in place.
+                // Only fields the action actually changed are replaced, so an
+                // edited template is not discarded when one exists.
+                const replacements = seededTemplate ? { template: state.template } : {};
+                if (state.variableFields.includes('selection')) {
+                    replacements[variableFieldId('selection')] = state.values.selection ?? '';
+                }
+                return { ok: true, fieldValues: replacements };
             }
             render();
             return { ok: true };
@@ -353,18 +409,29 @@ export function createPromptWorkbench(options = {}) {
             return { ok: true };
         }
         if (action === ACTIONS.savePreset) {
-            if (typeof values.template === 'string') state.template = values.template;
+            // The host submits the whole field store with a button outside every
+            // form; fall back to plugin state for hosts that submit only a form.
+            const template = typeof values.template === 'string' ? values.template : state.template;
+            state.template = template;
             const upserted = upsertPreset(state.presets, {
                 name: typeof values.presetName === 'string' ? values.presetName : '',
-                template: state.template,
+                template,
             });
             if (!upserted.ok) {
                 state.failures = [{ message: upserted.message }];
             } else {
+                // Commit the UI only after storage accepted the write: a preset
+                // that cannot persist must not appear saved.
+                const previous = state.presets;
                 state.presets = upserted.value;
-                state.failures = [];
-                await persistPresets(context);
-                observe({ kind: 'preset-saved', total: state.presets.length });
+                const persisted = await persistPresets(context);
+                if (!persisted.ok) {
+                    state.presets = previous;
+                    state.failures = [{ message: persisted.message }];
+                } else {
+                    state.failures = [];
+                    observe({ kind: 'preset-saved', total: state.presets.length });
+                }
             }
             render();
             return { ok: true };
@@ -376,13 +443,25 @@ export function createPromptWorkbench(options = {}) {
                 state.template = preset.template;
                 refreshVariables();
                 computePreview();
+                render();
+                // The host replaces the editor and variable fields explicitly:
+                // a declarative re-render alone would leave dirty values typed
+                // over the preset.
+                return { ok: true, fieldValues: { template: state.template, ...variableFieldValues() } };
             }
             render();
             return { ok: true };
         }
         if (action.startsWith(ACTIONS.deletePrefix)) {
+            const previous = state.presets;
             state.presets = removePreset(state.presets, action.slice(ACTIONS.deletePrefix.length));
-            await persistPresets(context);
+            const persisted = await persistPresets(context);
+            if (!persisted.ok) {
+                state.presets = previous;
+                state.failures = [{ message: persisted.message }];
+            } else {
+                state.failures = [];
+            }
             render();
             return { ok: true };
         }

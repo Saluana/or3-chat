@@ -30,6 +30,7 @@ import {
     ContainmentBudgetLedger,
     type ContainmentBudgets,
 } from '../isolation/budgets';
+import { isUsablePluginModelPrice } from './model-catalog';
 
 export interface PluginAiUsageRecord {
     readonly pluginId: string;
@@ -82,14 +83,7 @@ function estimateMaxSpend(input: {
 }
 
 function isUsablePrice(price: ModelPrice | undefined): price is ModelPrice {
-    if (!price) return false;
-    return (
-        Number.isFinite(price.promptPerMillion) &&
-        Number.isFinite(price.completionPerMillion) &&
-        price.promptPerMillion >= 0 &&
-        price.completionPerMillion >= 0 &&
-        (price.promptPerMillion > 0 || price.completionPerMillion > 0)
-    );
+    return isUsablePluginModelPrice(price);
 }
 
 /** Conservative token estimate used for the pre-dispatch reservation. */

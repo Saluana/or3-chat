@@ -215,6 +215,20 @@ describe('plugin AI invocation (4.11)', () => {
         ).rejects.toThrow(/No trusted price/);
     });
 
+    it('refuses an all-zero price instead of spending against a model billed as free', async () => {
+        const fetchImpl = vi.fn() as unknown as typeof fetch;
+        const provider = createOpenRouterPluginProvider({
+            apiKey: 'sk-or-host-key',
+            baseUrl: 'https://openrouter.ai/api/v1',
+            fetchImpl,
+            prices: { 'vendor/free': { promptPerMillion: 0, completionPerMillion: 0 } },
+        });
+        await expect(
+            provider.complete({ model: 'vendor/free', prompt: 'hi' }, { timeoutMs: 100 })
+        ).rejects.toThrow(/No trusted price/);
+        expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
     it('fails closed when the provider reports no usable usage', async () => {
         const fetchImpl = vi.fn(async () =>
             new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), {

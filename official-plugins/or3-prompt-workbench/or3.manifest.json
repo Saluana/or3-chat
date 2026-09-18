@@ -17,6 +17,8 @@
     }
   },
   "requestedGrants": [
+    "documents.read",
+    "documents.write",
     "network.http",
     "settings.read",
     "settings.write",

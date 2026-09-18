@@ -8,12 +8,30 @@
  */
 
 export const DOCUMENT_LIMITS = Object.freeze({
-    maxContentChars: 24_000,
+    /**
+     * The renderer caps one field value at 8 KiB (UTF-8) and the whole tree at
+     * 16 KiB. A selection is shown in one textarea, so it is bounded in bytes
+     * well below that ceiling; every accepted selection must render.
+     */
+    maxContentBytes: 6000,
     minContentChars: 40,
     maxTitleChars: 200,
+    /**
+     * A model result is displayed as one markdown node (8 KiB ceiling). Longer
+     * results are abbreviated in the preview only; the write payload keeps the
+     * full text.
+     */
+    maxPreviewBytes: 6000,
     maxOutputTokens: 1024,
     defaultOutputTokens: 700,
 });
+
+const encoder = new TextEncoder();
+
+/** UTF-8 byte length, the unit the host renderer budgets in. */
+export function utf8Bytes(value) {
+    return encoder.encode(String(value ?? '')).byteLength;
+}
 
 export const TRANSFORMS = Object.freeze([
     {
@@ -72,7 +90,10 @@ export function transformById(id) {
 
 /**
  * Validate the selected content the host handed in. The bounds exist so a whole
- * library cannot be pushed through one call, and the reason is explicit.
+ * library cannot be pushed through one call, and the reason is explicit. The
+ * content ceiling is measured in UTF-8 bytes because that is what the host
+ * renderer and RPC budgets count; a character count would accept a multibyte
+ * selection the host refuses to render.
  */
 export function validateSelection(input) {
     const content = typeof input?.content === 'string' ? input.content.trim() : '';
@@ -87,11 +108,12 @@ export function validateSelection(input) {
             message: `The selection is too short to transform (at least ${DOCUMENT_LIMITS.minContentChars} characters).`,
         };
     }
-    if (content.length > DOCUMENT_LIMITS.maxContentChars) {
+    const contentBytes = utf8Bytes(content);
+    if (contentBytes > DOCUMENT_LIMITS.maxContentBytes) {
         return {
             ok: false,
             code: 'selection-too-large',
-            message: `The selection is larger than ${DOCUMENT_LIMITS.maxContentChars} characters; select a smaller part.`,
+            message: `The selection is larger than ${DOCUMENT_LIMITS.maxContentBytes} bytes; select a smaller part.`,
         };
     }
     return { ok: true, value: { content, title } };
@@ -143,6 +165,98 @@ export function formatTransformPreview({ transform, title, output }) {
     const label = definition?.label ?? 'Transform';
     const heading = title && title.length > 0 ? title : 'Selection';
     return `## ${label}: ${heading}\n\n${String(output ?? '').trim()}`;
+}
+
+/**
+ * Bound the rendered markdown to the host's single-string budget, with an
+ * explicit notice. Display only: the write payload keeps the untruncated text.
+ */
+export function abbreviatePreview(markdown) {
+    const text = String(markdown ?? '');
+    if (utf8Bytes(text) <= DOCUMENT_LIMITS.maxPreviewBytes) return text;
+    const notice = '\n\n…(preview abbreviated; the full result is written when you approve)';
+    let slice = text.slice(0, DOCUMENT_LIMITS.maxPreviewBytes);
+    while (utf8Bytes(slice) + utf8Bytes(notice) > DOCUMENT_LIMITS.maxPreviewBytes && slice.length > 0) {
+        slice = slice.slice(0, -1);
+    }
+    return `${slice}${notice}`;
+}
+
+/**
+ * Render guard: the host caps one string at 8 KiB and the whole tree at 16 KiB.
+ * Whatever the user pasted or the provider returned, the rendered tree must
+ * stay valid, so this reduces display text, field values and option lists until
+ * it fits, falling back to an explicit notice only as a last resort.
+ */
+export const UI_TEXT_BUDGET = 15 * 1024;
+
+function viewTextBytes(value) {
+    if (typeof value === 'string') return utf8Bytes(value);
+    if (Array.isArray(value)) return value.reduce((sum, entry) => sum + viewTextBytes(entry), 0);
+    if (value && typeof value === 'object') {
+        let sum = 0;
+        for (const [key, entry] of Object.entries(value)) {
+            if (key === 'type') continue;
+            sum += viewTextBytes(entry);
+        }
+        return sum;
+    }
+    return 0;
+}
+
+function mapNodes(nodes, transform) {
+    return nodes.map((node) => {
+        const mapped = transform(node);
+        if (Array.isArray(mapped.children)) {
+            return { ...mapped, children: mapNodes(mapped.children, transform) };
+        }
+        return mapped;
+    });
+}
+
+function truncateToBytes(value, max) {
+    if (utf8Bytes(value) <= max) return value;
+    let slice = value.slice(0, max);
+    while (utf8Bytes(slice) > max && slice.length > 0) slice = slice.slice(0, -1);
+    return `${slice}…`;
+}
+
+export function fitPortableView(nodes, message) {
+    let current = nodes;
+    const fits = () => viewTextBytes(current) <= UI_TEXT_BUDGET;
+    if (fits()) return current;
+    current = mapNodes(current, (node) => {
+        if (node.type === 'markdown' && utf8Bytes(node.markdown) > 1500) {
+            return { ...node, markdown: truncateToBytes(node.markdown, 1490) };
+        }
+        if ((node.type === 'result' || node.type === 'text') && utf8Bytes(node.text) > 1500) {
+            return { ...node, text: truncateToBytes(node.text, 1490) };
+        }
+        return node;
+    });
+    if (fits()) return current;
+    current = mapNodes(current, (node) =>
+        typeof node.value === 'string' && utf8Bytes(node.value) > 500
+            ? { ...node, value: truncateToBytes(node.value, 500) }
+            : node
+    );
+    if (fits()) return current;
+    current = mapNodes(current, (node) => {
+        if (node.type !== 'field.select' || !Array.isArray(node.options) || node.options.length <= 8) {
+            return node;
+        }
+        const selected = node.options.filter((option) => option.value === node.value);
+        const rest = node.options
+            .filter((option) => option.value !== node.value)
+            .slice(0, Math.max(0, 8 - selected.length));
+        return {
+            ...node,
+            options: [...selected, ...rest],
+            description: 'Only the first approved models are shown to keep the view within host limits.',
+        };
+    });
+    if (fits()) return current;
+    return [{ type: 'text', text: message }];
 }
 
 /** Markdown written to a document or chat when the user approves a result. */

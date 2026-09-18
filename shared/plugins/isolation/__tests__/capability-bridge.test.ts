@@ -52,12 +52,14 @@ describe('server capability bridge (finding 4)', () => {
             calls.push(call as unknown as Record<string, unknown>);
             return { ok: true as const, result: { text: 'ok' } };
         });
-        const [aiSpec, connectionSpec] = createRemoteCapabilityMethods({
+        const specs = createRemoteCapabilityMethods({
             transport,
             session: () => session,
             grants: grants(['network.http']),
         });
-        expect(aiSpec).toBeTruthy();
+        const completeSpec = specs.find((spec) => spec.method === 'ai.complete');
+        const connectionSpec = specs.find((spec) => spec.method === 'connections.dispatch');
+        expect(completeSpec).toBeTruthy();
         expect(connectionSpec).toBeTruthy();
 
         const context = {
@@ -68,7 +70,7 @@ describe('server capability bridge (finding 4)', () => {
             signal: new AbortController().signal,
             deadlineMs: 5_000,
         };
-        const result = await aiSpec!.handler(
+        const result = await completeSpec!.handler(
             { model: 'm', prompt: 'hi', approval: { approvalId: 'forged' } },
             context
         );
@@ -154,6 +156,79 @@ describe('server capability bridge (finding 4)', () => {
             deadlineMs: 5_000,
         });
         expect(response).toMatchObject({ ok: false, message: 'Plugin access denied' });
+    });
+
+    it('preserves the structured rpcCode a spent budget returns with HTTP 429', async () => {
+        const fetchImpl = vi.fn(async () =>
+            new Response(
+                JSON.stringify({
+                    statusCode: 429,
+                    statusMessage: 'Budget exhausted',
+                    data: { rpcCode: 'budget-exceeded' },
+                }),
+                { status: 429, headers: { 'content-type': 'application/json' } }
+            )
+        );
+        const transport = createHttpCapabilityTransport({
+            fetchImpl: fetchImpl as unknown as typeof fetch,
+        });
+        const response = await transport({
+            method: REMOTE_CAPABILITY_METHODS.aiComplete,
+            params: {},
+            session,
+            requestId: 'rpc-3',
+            deadlineMs: 5_000,
+        });
+        expect(response).toMatchObject({
+            ok: false,
+            code: 'budget-exceeded',
+            message: 'Budget exhausted',
+        });
+
+        // The bridge passes the server's own code to the RPC error envelope.
+        const [aiSpec] = createRemoteCapabilityMethods({
+            transport: async () => response,
+            session: () => session,
+            grants: grants(['network.http']),
+        });
+        await expect(
+            aiSpec!.handler(
+                { model: 'm', prompt: 'hi' },
+                {
+                    pluginId: 'example.plugin',
+                    workspaceId: 'ws_1',
+                    generation: 3,
+                    requestId: 'rpc-4',
+                    signal: new AbortController().signal,
+                    deadlineMs: 5_000,
+                }
+            )
+        ).rejects.toMatchObject({ rpcCode: 'budget-exceeded' });
+    });
+
+    it('derives a refusal code from the HTTP status when no rpcCode is present', async () => {
+        const cases: ReadonlyArray<[number, string]> = [
+            [429, 'budget-exceeded'],
+            [499, 'cancelled'],
+            [503, 'unavailable'],
+            [504, 'deadline-exceeded'],
+        ];
+        for (const [status, expectedCode] of cases) {
+            const fetchImpl = vi.fn(async () =>
+                new Response('nope', { status, headers: { 'content-type': 'text/plain' } })
+            );
+            const transport = createHttpCapabilityTransport({
+                fetchImpl: fetchImpl as unknown as typeof fetch,
+            });
+            const response = await transport({
+                method: REMOTE_CAPABILITY_METHODS.aiComplete,
+                params: {},
+                session,
+                requestId: `rpc-status-${status}`,
+                deadlineMs: 5_000,
+            });
+            expect(response, String(status)).toMatchObject({ ok: false, code: expectedCode });
+        }
     });
 });
 

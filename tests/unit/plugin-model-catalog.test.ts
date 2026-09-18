@@ -31,6 +31,22 @@ describe('plugin model catalog', () => {
         expect(parseModelPrices('')).toEqual({})
     })
 
+    it('refuses malformed values that Number() would coerce to free', () => {
+        // `Number(null)`, `Number(false)` and `Number('')` are all 0: accepting
+        // them would account the affected token category as free.
+        expect(parseModelPrices('{"vendor/alpha":{"promptPerMillion":null,"completionPerMillion":15}}')).toEqual({})
+        expect(parseModelPrices('{"vendor/alpha":{"promptPerMillion":false,"completionPerMillion":15}}')).toEqual({})
+        expect(parseModelPrices('{"vendor/alpha":{"promptPerMillion":"","completionPerMillion":15}}')).toEqual({})
+        expect(parseModelPrices('{"vendor/alpha":{"promptPerMillion":true,"completionPerMillion":15}}')).toEqual({})
+        // All-zero prices are not usable: the governor refuses them, so the
+        // catalog must not advertise them as priced.
+        expect(parseModelPrices('{"vendor/alpha":{"promptPerMillion":0,"completionPerMillion":0}}')).toEqual({})
+        // A genuinely free prompt side with a paid completion side is usable.
+        expect(
+            parseModelPrices('{"vendor/alpha":{"promptPerMillion":0,"completionPerMillion":15}}'),
+        ).toEqual({ 'vendor/alpha': { promptPerMillion: 0, completionPerMillion: 15 } })
+    })
+
     it('reports priced and unpriced models with the enforced limits', () => {
         const catalog = buildPluginModelCatalog({
             allowed: 'vendor/alpha,vendor/beta',

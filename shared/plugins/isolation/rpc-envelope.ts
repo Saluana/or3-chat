@@ -41,6 +41,7 @@ export type RpcErrorCode =
     | 'runtime-crash'
     | 'policy-denied'
     | 'budget-exceeded'
+    | 'unavailable'
     | 'internal';
 
 export interface RpcRequestEnvelope {

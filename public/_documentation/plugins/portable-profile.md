@@ -121,7 +121,13 @@ package declares `or3-portable-client-v1` or ships either descriptor file. See
 ## First-action samples
 
 `or3.setup.json` → `firstAction` may declare `samplePath`: a package-relative
-path (no leading slash, no `..`) to the sample the host runs the first action on.
-The rule is enforced both ways: `usesSampleContext: true` requires `samplePath`,
-and `samplePath` is refused when `usesSampleContext` is false. The host resolves
-it inside the package directory with a size bound and never guesses a filename.
+path (no leading slash, no `..`) to the sample the host runs the first action on
+when the user has not opened the plugin on a document or message. Selected
+context always wins; the sample is a fallback, never an override.
+
+`samplePath` is optional. A package that declares `usesSampleContext: true`
+without one remains valid (the pre-sample v1 contract): its first action simply
+requires a selection instead of falling back. `samplePath` is refused when
+`usesSampleContext` is false. When a path is declared, the host resolves it
+inside the package directory with a size bound and never guesses a filename; a
+declared path missing from the archive fails package validation and packing.

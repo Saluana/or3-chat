@@ -60,6 +60,8 @@ export default defineEventHandler(async (event) => {
         // Hydration source: validated saved settings, plus field-level problems.
         settings: { values: state.values, errors: state.settingsErrors },
         selectionRequired:
-            state.plan !== null && !state.plan.firstAction.usesSampleContext,
+            state.plan !== null &&
+            !(typeof state.plan.firstAction.samplePath === 'string' &&
+              state.plan.firstAction.samplePath.length > 0),
     };
 });

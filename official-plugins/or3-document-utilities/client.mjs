@@ -3,8 +3,10 @@ import { createPortablePlugin, completeWithHostModel, listHostModels } from '@or
 import {
     DOCUMENT_LIMITS,
     TRANSFORMS,
+    abbreviatePreview,
     buildTransformPrompt,
     classifyFailure,
+    fitPortableView,
     formatTransformPreview,
     formatWritePayload,
     runLocalTransform,
@@ -158,7 +160,7 @@ export function createDocumentUtilities(options = {}) {
 
         if (state.output) {
             children.push({ type: 'text', text: state.output.provenance });
-            children.push({ type: 'markdown', markdown: state.output.preview });
+            children.push({ type: 'markdown', markdown: abbreviatePreview(state.output.preview) });
             children.push({
                 type: 'stack',
                 direction: 'row',
@@ -174,7 +176,13 @@ export function createDocumentUtilities(options = {}) {
             });
         }
 
-        contextRender({ title: 'Document Utilities', nodes: [{ type: 'stack', direction: 'column', children }] });
+        contextRender({
+            title: 'Document Utilities',
+            nodes: fitPortableView(
+                [{ type: 'stack', direction: 'column', children }],
+                'This view is too large to display safely. Select a smaller part of the document and try again.'
+            ),
+        });
     }
 
     async function loadState(context) {
@@ -196,7 +204,14 @@ export function createDocumentUtilities(options = {}) {
         }
     }
 
+    /**
+     * Every run gets a token; clear, reset and a context replacement advance it
+     * so a superseded response is discarded instead of reviving old state.
+     */
+    let runToken = 0;
+
     async function transform(context) {
+        const token = ++runToken;
         const selection = validateSelection({ content: state.content, title: state.title });
         if (!selection.ok) {
             state.selectionError = selection.message;
@@ -215,16 +230,19 @@ export function createDocumentUtilities(options = {}) {
         }
 
         if (!definition.usesModel) {
-            const local = runLocalTransform({ transform: state.transform, content: selection.value.content });
+            const local = runLocalTransform({ transform: definition.id, content: selection.value.content });
+            if (token !== runToken) return;
             state.output = local.ok
                 ? {
                       text: local.value.text,
                       provenance: 'Computed offline in the plugin worker; no model was called.',
                       preview: formatTransformPreview({
-                          transform: state.transform,
+                          transform: definition.id,
                           title: selection.value.title,
                           output: local.value.text,
                       }),
+                      transform: definition.id,
+                      title: selection.value.title,
                   }
                 : null;
             render();
@@ -238,7 +256,7 @@ export function createDocumentUtilities(options = {}) {
         }
         state.running = true;
         render();
-        const prompt = buildTransformPrompt({ transform: state.transform, content: selection.value.content });
+        const prompt = buildTransformPrompt({ transform: definition.id, content: selection.value.content });
         const hostMax = state.hostMaxOutputTokens;
         const ceiling =
             typeof hostMax === 'number' && hostMax > 0
@@ -249,6 +267,8 @@ export function createDocumentUtilities(options = {}) {
             prompt,
             maxOutputTokens: ceiling,
         }).catch((error) => ({ ok: false, error: classifyFailure(error) }));
+        // A response for a superseded run must not touch the live state.
+        if (token !== runToken) return;
         state.running = false;
         if (!answer.ok) {
             const failure = classifyFailure(answer.error);
@@ -257,16 +277,20 @@ export function createDocumentUtilities(options = {}) {
             render();
             return;
         }
+        // The output carries its own transform/title: preview and write payload
+        // are derived from this immutable result, never from a later transform.
         state.output = {
             text: answer.value.text,
             provenance: `Model ${answer.value.model} · $${answer.value.usage.spendUsd.toFixed(4)} (separate provider cost)`,
             preview: formatTransformPreview({
-                transform: state.transform,
+                transform: definition.id,
                 title: selection.value.title,
                 output: answer.value.text,
             }),
+            transform: definition.id,
+            title: selection.value.title,
         };
-        observe({ kind: 'transformed', transform: state.transform, spendUsd: answer.value.usage.spendUsd });
+        observe({ kind: 'transformed', transform: definition.id, spendUsd: answer.value.usage.spendUsd });
         render();
     }
 
@@ -275,6 +299,8 @@ export function createDocumentUtilities(options = {}) {
         const values = params.values && typeof params.values === 'object' ? params.values : {};
 
         if (action === ACTIONS.firstAction) {
+            runToken += 1;
+            state.running = false;
             const incoming = params.context && typeof params.context === 'object' ? params.context : {};
             if (typeof incoming.content === 'string') state.content = incoming.content;
             if (typeof incoming.title === 'string') state.title = incoming.title;
@@ -282,41 +308,61 @@ export function createDocumentUtilities(options = {}) {
             state.failures = [];
             state.selectionError = null;
             render();
-            return { ok: true };
+            // Context replacement is a user-requested load: the host replaces
+            // the rendered field explicitly instead of leaving stale typing.
+            return { ok: true, fieldValues: { content: state.content } };
         }
         if (action === ACTIONS.reset) {
+            runToken += 1;
+            state.running = false;
             state.content = '';
             state.title = '';
             state.output = null;
             state.failures = [];
             state.selectionError = null;
             render();
-            return { ok: true };
+            return { ok: true, fieldValues: { content: '' } };
         }
         if (action === ACTIONS.transform) {
             if (typeof values.content === 'string') state.content = values.content;
-            if (typeof values.transform === 'string' && transformById(values.transform)) {
-                state.transform = values.transform;
+            const requested =
+                typeof values.transform === 'string' && transformById(values.transform)
+                    ? values.transform
+                    : state.transform;
+            const requestedDefinition = transformById(requested);
+            if (requested !== state.transform && requestedDefinition?.usesModel) {
+                // Switching to a payable transformation is a deliberate state
+                // update: render the model selector and its prices first. The
+                // next click runs; a single click can never incur a charge.
+                // The previous result stays, still labeled by its own metadata.
+                state.transform = requested;
+                if (typeof values.model === 'string' && state.models.includes(values.model)) {
+                    state.model = values.model;
+                }
+                state.model = state.model || state.models[0] || '';
+                state.failures = [];
+                state.selectionError = null;
+                render();
+                return {
+                    ok: true,
+                    fieldValues: {
+                        transform: state.transform,
+                        ...(state.model ? { model: state.model } : {}),
+                    },
+                };
             }
+            state.transform = requested;
             if (typeof values.model === 'string' && state.models.includes(values.model)) {
                 state.model = values.model;
             }
             await transform(context);
             return { ok: true };
         }
-        if (action === 'host.chat.continue' || action === 'host.document.create') {
+        if (action === 'host.chat.continue' || action === 'host.document.create' || action === 'host.document.replace') {
             if (!state.output) return { title: '', content: '' };
             return formatWritePayload({
-                transform: state.transform,
-                title: state.title,
-                output: state.output.text,
-            });
-        }
-        if (action === 'host.document.replace') {
-            if (!state.output) return { title: '', content: '' };
-            return formatWritePayload({
-                transform: state.transform,
-                title: state.title,
+                transform: state.output.transform,
+                title: state.output.title,
                 output: state.output.text,
             });
         }

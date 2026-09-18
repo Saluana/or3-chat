@@ -10,7 +10,7 @@
  * runtime code and can be used from a sandboxed worker.
  */
 
-import { pluginOk, type PluginResult } from './results';
+import { pluginOk, type PluginErrorCode, type PluginResult } from './results';
 
 /** Host capability method names. Identity is always stamped by the host. */
 export const HOST_CAPABILITY_METHODS = {
@@ -56,22 +56,53 @@ export interface HostCompletion {
     };
 }
 
+/**
+ * Complete mapping from host RPC refusal codes to the SDK's error codes. An
+ * unknown code becomes `internal`, never `permission-denied`: collapsing a
+ * provider or budget failure into a permission problem destroys the actionable
+ * copy a plugin UI is expected to show.
+ */
+const HOST_RPC_ERROR_CODES: Readonly<Record<string, PluginErrorCode>> = Object.freeze({
+    'permission-denied': 'permission-denied',
+    'policy-denied': 'permission-denied',
+    'grant-denied': 'permission-denied',
+    'not-found': 'not-found',
+    'invalid-input': 'invalid-input',
+    'invalid-envelope': 'invalid-input',
+    oversized: 'invalid-input',
+    conflict: 'conflict',
+    replay: 'conflict',
+    'budget-exceeded': 'quota-exceeded',
+    'quota-exceeded': 'quota-exceeded',
+    'deadline-exceeded': 'timeout',
+    timeout: 'timeout',
+    cancelled: 'aborted',
+    aborted: 'aborted',
+    'network-failure': 'network-error',
+    'network-error': 'network-error',
+    unavailable: 'host-unavailable',
+    'host-unavailable': 'host-unavailable',
+    backpressure: 'host-unavailable',
+    internal: 'internal',
+});
+
+const RETRYABLE_RPC_CODES: ReadonlySet<string> = new Set([
+    'network-failure',
+    'network-error',
+    'unavailable',
+    'host-unavailable',
+    'backpressure',
+    'deadline-exceeded',
+    'timeout',
+]);
+
 function toResultError(code: string, message: string): PluginResult<never> {
     return {
         ok: false,
         error: {
-            code:
-                code === 'budget-exceeded'
-                    ? 'quota-exceeded'
-                    : code === 'deadline-exceeded'
-                      ? 'timeout'
-                      : code === 'cancelled'
-                        ? 'aborted'
-                        : code === 'network-failure' || code === 'unavailable'
-                          ? 'network-error'
-                          : 'permission-denied',
+            code: HOST_RPC_ERROR_CODES[code] ?? 'internal',
             message,
-            retryable: code === 'network-failure' || code === 'unavailable',
+            retryable: RETRYABLE_RPC_CODES.has(code),
         },
     };
 }

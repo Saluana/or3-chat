@@ -116,6 +116,11 @@ spent, even if the sandbox has gone quiet, and a terminal breach terminates the
 worker and cancels its outstanding work instead of only failing one call. These
 are host limits, not OS-level memory or CPU isolation.
 
+Because the budget is finite, activation is demand-driven: a package starts when
+its surface opens, not for every enabled plugin during manifest synchronization. A
+stopped package offers a restart from its surface, and the last rendered tree plus
+the host field store survive the stop so typed values are not lost.
+
 ## Grantable UI primitives
 
 Plugins describe UI as data; the host renders it with host components (text,
@@ -205,7 +210,11 @@ per activation:
 * a provider response without usable token usage fails closed instead of being
   accounted as zero;
 * a failed or cancelled call releases its concurrency slot exactly once, so
-  repeated failures cannot exhaust the activation.
+  repeated failures cannot exhaust the activation;
+* a refusal keeps the server's own structured code end to end — an exhausted
+  budget arrives as `budget-exceeded`, a provider outage as `unavailable`, an
+  internal failure as `internal` — instead of every non-2xx becoming a
+  permission problem.
 
 Paid completions are not reachable through generic connection dispatch: that
 operation is declared as governed by `ai.complete`, so there is only one policy

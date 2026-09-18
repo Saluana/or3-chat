@@ -38,9 +38,30 @@ export type HostActionId = (typeof HOST_ACTIONS)[keyof typeof HOST_ACTIONS];
 
 const HOST_ACTION_IDS: readonly string[] = Object.values(HOST_ACTIONS);
 
+/**
+ * Canonical host wording for reserved actions. A plugin's own button label is
+ * presentation only; the host renders and reports the operation under its own
+ * name so a plugin cannot disguise a host-owned write.
+ */
+export const HOST_ACTION_LABELS: Readonly<Record<HostActionId, string>> = Object.freeze({
+    [HOST_ACTIONS.createDocument]: 'Create document',
+    [HOST_ACTIONS.replaceDocument]: 'Replace selected document',
+    [HOST_ACTIONS.continueInChat]: 'Continue in chat',
+});
+
+/** The grant an approved host write requires from the current activation. */
+export const HOST_ACTION_WRITE_GRANT = 'documents.write';
+
 /** Bounds: a plugin result that a person is expected to review, not a data dump. */
 export const MAX_HOST_ACTION_TITLE_CHARS = 200;
 export const MAX_HOST_ACTION_CONTENT_CHARS = 64 * 1024;
+/**
+ * The host hands a first-action selection to a sandbox as a bounded text
+ * payload. The bound is the largest selection any official product accepts, so
+ * a valid workflow is never refused here and an oversized selection is refused
+ * before it crosses into the worker.
+ */
+export const MAX_FIRST_ACTION_CONTENT_BYTES = 6000;
 
 export function isHostAction(action: string): boolean {
     return action.startsWith(HOST_ACTION_PREFIX);
@@ -165,12 +186,56 @@ export function planHostAction(input: {
 }
 
 /**
+ * Read the plugin's answer to a host-action payload request.
+ *
+ * `WorkerIsolationRuntime.callPlugin()` resolves to an RPC envelope
+ * (`{ ok: true, result }` / `{ ok: false, code, message }`), never the raw
+ * handler payload. Unwrapping here — and refusing a missing `result` — is what
+ * keeps a successful call from looking like an empty payload.
+ */
+export type HostActionPayloadRead =
+    | { readonly ok: true; readonly payload: HostActionPayload }
+    | { readonly ok: false; readonly code: string; readonly message: string }
+
+export function readHostActionRpcPayload(response: unknown): HostActionPayloadRead {
+    if (!response || typeof response !== 'object' || Array.isArray(response)) {
+        return { ok: false, code: 'payload-required', message: 'The plugin returned no result to write.' }
+    }
+    const envelope = response as { ok?: unknown; result?: unknown; code?: unknown; message?: unknown }
+    if (envelope.ok === false) {
+        return {
+            ok: false,
+            code: typeof envelope.code === 'string' ? envelope.code : 'plugin-refused',
+            message:
+                typeof envelope.message === 'string'
+                    ? envelope.message
+                    : 'The plugin refused to provide a result.',
+        }
+    }
+    const result = envelope.result
+    if (!result || typeof result !== 'object' || Array.isArray(result)) {
+        return { ok: false, code: 'payload-required', message: 'The plugin returned no result to write.' }
+    }
+    const record = result as { title?: unknown; content?: unknown }
+    if (typeof record.content !== 'string') {
+        return { ok: false, code: 'payload-required', message: 'The plugin returned no result to write.' }
+    }
+    return {
+        ok: true,
+        payload: {
+            title: typeof record.title === 'string' ? record.title : '',
+            content: record.content,
+        },
+    }
+}
+
+/**
  * Convert a stored TipTap document into plain text for a plugin's first action.
  *
  * Deliberately structural and dependency-free: headings keep their level, list
- * items keep a marker, and every other block is separated by a blank line, so a
- * plugin receives readable content without the host shipping an editor into the
- * plugin surface.
+ * items keep a marker, every other block is separated by a blank line, and hard
+ * breaks become newlines, so a plugin receives readable content without the host
+ * shipping an editor into the plugin surface.
  */
 export function tipTapToText(node: unknown): string {
     const lines: string[] = []
@@ -223,11 +288,36 @@ function inlineOf(children: readonly unknown[]): string {
             parts.push(record.text)
             continue
         }
+        if (record.type === 'hardBreak') {
+            parts.push('\n')
+            continue
+        }
+        if (record.type === 'bulletList' || record.type === 'orderedList') {
+            const nested = listText(record)
+            if (nested.length > 0) parts.push(parts.length > 0 ? `\n${nested}` : nested)
+            continue
+        }
         if (Array.isArray(record.content)) {
-            parts.push(inlineOf(record.content))
+            const nested = inlineOf(record.content)
+            if (nested.length > 0) parts.push(parts.length > 0 ? `\n${nested}` : nested)
         }
     }
     return parts.join('').trim()
+}
+
+/** Render a nested list with its own markers, keeping nesting legible as text. */
+function listText(list: { type?: unknown; content?: unknown }): string {
+    const ordered = list.type === 'orderedList'
+    const items = Array.isArray(list.content) ? list.content : []
+    return items
+        .map((item, index) => {
+            if (!item || typeof item !== 'object') return ''
+            const record = item as { content?: unknown }
+            const text = Array.isArray(record.content) ? inlineOf(record.content) : ''
+            return `${ordered ? `${index + 1}.` : '-'} ${text}`
+        })
+        .filter((line) => line.length > 0)
+        .join('\n')
 }
 
 function appendInline(lines: string[], text: string): void {

@@ -111,6 +111,19 @@ setDefault(
     'NUXT_ADMIN_LIBRARY_LINK_SECRET',
     firstDefined(env.OR3_LIBRARY_LINK_SECRET)
 );
+// Plugin model allowlist and trusted prices. These are operator configuration
+// for prebuilt images: without the translation the server resolver would read
+// an empty runtime config even though the operator set the documented OR3_
+// variables. The shared parsers accept the comma-separated list and the JSON
+// price table as strings.
+setDefault(
+    'NUXT_ADMIN_PLUGIN_ALLOWED_MODELS',
+    firstDefined(env.OR3_PLUGIN_ALLOWED_MODELS)
+);
+setDefault(
+    'NUXT_ADMIN_PLUGIN_MODEL_PRICES',
+    firstDefined(env.OR3_PLUGIN_MODEL_PRICES)
+);
 
 const [command, ...args] = process.argv.slice(2);
 if (!command) throw new Error('A server command is required.');

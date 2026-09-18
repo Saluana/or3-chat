@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+    createPortablePlugin,
     defineOr3Plugin,
     pluginOk,
     type Or3PluginDefinition,
@@ -7,7 +8,13 @@ import {
     type PluginGrant,
     type PluginManifestV2,
 } from '../../packages/plugin-sdk/src/index';
-import { createPluginTestHost } from '../../packages/plugin-sdk/src/testing';
+import {
+    assertValidPortableTestView,
+    createPluginTestHost,
+    createPortableTestHost,
+} from '../../packages/plugin-sdk/src/testing';
+import { validateRenderPayload } from '../../shared/plugins/isolation/worker-runtime';
+import type { PortableUiNode } from '../../packages/plugin-sdk/src/ui';
 
 function manifest(requestedGrants: readonly PluginGrant[] = []): PluginManifestV2 {
     return {
@@ -204,5 +211,153 @@ describe('Plugin SDK test harness', () => {
 
         expect(context).toBeTruthy();
         expect('http' in (context as Record<string, unknown>)).toBe(false);
+    });
+});
+
+/* ---------------------------------------------------------------------------
+ * Portable profile test host contracts
+ * ------------------------------------------------------------------------ */
+
+function portableManifest(): PluginManifestV2 {
+    return {
+        manifestVersion: 2,
+        kind: 'plugin',
+        id: 'sample.portable',
+        name: 'Portable Harness Sample',
+        version: '2.0.0',
+        engines: { or3: '^0.3.0', pluginApi: '^2.0.0' },
+        runtime: {
+            client: { entry: 'client.mjs', format: 'esm', isolation: 'worker' },
+        },
+        requestedGrants: ['storage.read', 'storage.write'],
+        features: { required: [], optional: [] },
+        dependencies: { required: [], optional: [] },
+        trust: 'isolated-client',
+        settings: { version: 1, schema: 'settings.schema.json' },
+        stateCompatibility: {
+            version: 1,
+            reads: { minimum: 1, maximum: 1 },
+            rollback: 'safe',
+        },
+    };
+}
+
+function portablePlugin(setup: Or3PluginDefinition['setup']) {
+    return defineOr3Plugin({ manifest: portableManifest(), setup });
+}
+
+async function activatePortable(
+    options: Parameters<typeof createPortableTestHost>[0],
+    setup: Or3PluginDefinition['setup']
+) {
+    const host = createPortableTestHost({
+        approvedGrants: ['storage.read', 'storage.write'],
+        supportedFeatures: ['or3-portable-client-v1'],
+        ...options,
+    });
+    const definition = portablePlugin(setup);
+    const handle = createPortablePlugin(definition, {
+        client: host.client,
+        bootstrap: host.bootstrap,
+    });
+    await handle.ready;
+    return host;
+}
+
+describe('portable test host contracts', () => {
+    it('refuses to record an invalid render instead of hiding the contract error', () => {
+        const invalid = {
+            nodes: [
+                { type: 'button', id: 'remove-openai/gpt', label: 'Remove', action: 'compare.remove' },
+            ],
+        } as unknown as Parameters<typeof assertValidPortableTestView>[0];
+        expect(() => assertValidPortableTestView(invalid, 'render')).toThrow(/button\.id/);
+        const host = createPortableTestHost();
+        expect(() => host.client.render(invalid)).toThrow(/button\.id/);
+        expect(host.renders).toHaveLength(0);
+    });
+
+    const agreementCases: ReadonlyArray<readonly [string, readonly PortableUiNode[]]> = [
+        ['a valid tree', [{ type: 'button', id: 'ok', label: 'Ok', action: 'plugin.ok' }]],
+        [
+            'an identifier with a slash',
+            [{ type: 'button', id: 'remove-a/b', label: 'Remove', action: 'remove:a/b' }],
+        ],
+        ['an identifier starting with underscore', [{ type: 'field.text', id: '_secret', label: 'Secret' }]],
+        ['a string over 8 KiB', [{ type: 'markdown', markdown: 'x'.repeat(9 * 1024) }]],
+        ['a select with no options', [{ type: 'field.select', id: 'pick', label: 'Pick', options: [] }]],
+        ['an unsupported node type', [{ type: 'flashy', id: 'x' } as unknown as PortableUiNode]],
+        ['a link that is not https', [{ type: 'link', label: 'Docs', href: 'http://example.com' }]],
+        ['a text over the whole-tree budget', [{ type: 'markdown', markdown: 'x'.repeat(5000) }, { type: 'result', label: 'r', text: 'y'.repeat(12000) }]],
+        ['a stack without a direction', [{ type: 'stack', children: [] } as unknown as PortableUiNode]],
+        ['a list of 201 items', [{ type: 'list', items: Array.from({ length: 201 }, (_, index) => ({ label: `item-${index}` })) }]],
+        ['a list of exactly 200 items', [{ type: 'list', items: Array.from({ length: 200 }, (_, index) => ({ label: `item-${index}` })) }]],
+        [
+            'a table of 13 columns',
+            [
+                {
+                    type: 'table',
+                    columns: Array.from({ length: 13 }, (_, index) => ({ key: `c${index}`, label: `C${index}` })),
+                    rows: [],
+                },
+            ],
+        ],
+        [
+            'a table of 201 rows',
+            [
+                {
+                    type: 'table',
+                    columns: [{ key: 'c', label: 'C' }],
+                    rows: Array.from({ length: 201 }, () => ({ c: 'x' })),
+                },
+            ],
+        ],
+        [
+            'a select of 101 options',
+            [
+                {
+                    type: 'field.select',
+                    id: 'pick',
+                    label: 'Pick',
+                    options: Array.from({ length: 101 }, (_, index) => ({ value: `v${index}`, label: `V${index}` })),
+                },
+            ],
+        ],
+        ['a boolean value on a text field', [{ type: 'field.text', id: 'name', label: 'Name', value: true } as unknown as PortableUiNode]],
+        ['a valid toggle', [{ type: 'field.toggle', id: 'on', label: 'On', value: true }]],
+    ];
+
+    it.each(agreementCases)('agrees with production validation on %s', (_label, nodes) => {
+        const production = validateRenderPayload({ nodes });
+        let sdkRejected = false;
+        try {
+            assertValidPortableTestView({ nodes }, 'render');
+        } catch {
+            sdkRejected = true;
+        }
+        expect(sdkRejected).toBe(!production.ok);
+    });
+
+    it('returns the RPC response envelope rather than the raw handler payload', async () => {
+        const host = await activatePortable({}, (context) => {
+            context.onRequest('runtime.ui-event', () => ({ title: 'Result', content: '# Body' }));
+        });
+        const response = await host.invokeRequest('runtime.ui-event', { action: 'x' });
+        expect(response).toEqual({
+            ok: true,
+            result: { title: 'Result', content: '# Body' },
+        });
+    });
+
+    it('refuses an unavailable capability like an unregistered production method', async () => {
+        let stored: unknown;
+        const host = await activatePortable(
+            { unavailableCapabilities: ['storage'] },
+            async (context) => {
+                stored = await context.storage.get('presets');
+            }
+        );
+        expect(stored).toMatchObject({ ok: false, error: { code: 'not-found' } });
+        expect(host.calls.some((call) => call.method === 'storage.get')).toBe(true);
     });
 });

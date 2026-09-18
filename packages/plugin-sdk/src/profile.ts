@@ -68,11 +68,18 @@ export interface Or3SetupTestAction {
 export interface Or3SetupFirstAction {
     readonly operationId: string;
     readonly label: string;
+    /**
+     * True when the first action may use the package sample as a fallback.
+     * Selected context always wins; the sample is only used when the user has
+     * not opened the plugin on a document or message.
+     */
     readonly usesSampleContext: boolean;
     /**
-     * Package-relative path to the sample the host runs the first action on.
-     * Required when `usesSampleContext` is true, so the host never has to guess
-     * a filename; refused when it is false.
+     * Package-relative path to the sample the host runs the first action on when
+     * no selection exists. Optional: a package that declares
+     * `usesSampleContext: true` without a sample simply requires a selection
+     * instead. Refused when `usesSampleContext` is false, so the host never has
+     * to guess a filename.
      */
     readonly samplePath?: string;
 }
@@ -470,12 +477,10 @@ export function parseSetupDescriptor(input: unknown): DescriptorShapeResult<Or3S
                 samplePath = rawSamplePath;
             }
         }
-        if (usesSample && samplePath === undefined) {
-            at(
-                '.firstAction.samplePath',
-                'samplePath is required when usesSampleContext is true, so the host can resolve the sample.'
-            );
-        }
+        // A missing samplePath is not an error: the v1 contract allowed
+        // `usesSampleContext: true` before samples existed, and such a package
+        // is still valid — it simply requires a selection instead of falling
+        // back to a sample.
         if (!usesSample && samplePath !== undefined) {
             at('.firstAction.samplePath', 'samplePath is only valid when usesSampleContext is true.');
         }

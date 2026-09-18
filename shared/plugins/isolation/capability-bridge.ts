@@ -43,11 +43,35 @@ export const REMOTE_CAPABILITY_METHODS = {
 export type RemoteCapabilityMethod =
     (typeof REMOTE_CAPABILITY_METHODS)[keyof typeof REMOTE_CAPABILITY_METHODS];
 
-/** Server refusal codes that keep their meaning when surfaced to the sandbox. */
-const REMOTE_FAILURE_RPC_CODES: Readonly<Record<string, string>> = Object.freeze({
-    'budget-exceeded': 'budget-exceeded',
-    cancelled: 'cancelled',
-    'deadline-exceeded': 'deadline-exceeded',
+/**
+ * Server refusal codes that keep their meaning when surfaced to the sandbox.
+ * Anything else still becomes `policy-denied`, never a guessed success.
+ */
+const REMOTE_RPC_CODES: ReadonlySet<string> = new Set([
+    'policy-denied',
+    'grant-denied',
+    'budget-exceeded',
+    'deadline-exceeded',
+    'cancelled',
+    'invalid-envelope',
+    'oversized',
+    'replay',
+    'backpressure',
+    'unavailable',
+    'internal',
+]);
+
+/** HTTP status fallbacks when a response carries no structured rpcCode. */
+const STATUS_RPC_CODES: Readonly<Record<number, string>> = Object.freeze({
+    400: 'policy-denied',
+    401: 'policy-denied',
+    403: 'policy-denied',
+    404: 'policy-denied',
+    409: 'policy-denied',
+    429: 'budget-exceeded',
+    499: 'cancelled',
+    503: 'unavailable',
+    504: 'deadline-exceeded',
 });
 
 /** Grant each bridged capability requires. */
@@ -122,8 +146,13 @@ export function createRemoteCapabilityMethods(
                 signal: context.signal,
             });
             if (!response.ok) {
+                // Preserve the server's own refusal code; only an unknown code
+                // is collapsed, so a spent budget never looks like a permission
+                // problem to the plugin.
                 throw Object.assign(new Error(response.message), {
-                    rpcCode: REMOTE_FAILURE_RPC_CODES[response.code] ?? 'policy-denied',
+                    rpcCode: REMOTE_RPC_CODES.has(response.code)
+                        ? response.code
+                        : 'policy-denied',
                 });
             }
             return response.result;
@@ -169,10 +198,12 @@ export function createHttpCapabilityTransport(input: {
             });
             if (!response.ok) {
                 let message = `Capability call failed (${response.status})`;
+                let code: string | null = null;
                 try {
                     const payload = (await response.json()) as {
                         statusMessage?: unknown;
                         message?: unknown;
+                        data?: { rpcCode?: unknown };
                     };
                     const detail =
                         typeof payload.statusMessage === 'string'
@@ -181,10 +212,20 @@ export function createHttpCapabilityTransport(input: {
                               ? payload.message
                               : null;
                     if (detail) message = detail;
+                    // h3 serializes our structured refusal as `data.rpcCode`;
+                    // dropping it turned every provider/budget refusal into a
+                    // permission problem.
+                    if (typeof payload.data?.rpcCode === 'string') {
+                        code = payload.data.rpcCode;
+                    }
                 } catch {
                     // A non-JSON error body still maps to the status-derived text.
                 }
-                return { ok: false, code: 'policy-denied', message };
+                return {
+                    ok: false,
+                    code: code ?? STATUS_RPC_CODES[response.status] ?? 'policy-denied',
+                    message,
+                };
             }
             const payload = (await response.json()) as { result?: unknown };
             return { ok: true, result: payload.result };

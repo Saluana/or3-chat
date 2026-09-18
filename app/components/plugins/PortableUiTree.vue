@@ -27,6 +27,11 @@ const props = defineProps<{
      * in the tree.
      */
     readonly dirtyKeys?: Set<string>;
+    /**
+     * Host execution lock (a write or a plugin request is in flight). A disabled
+     * tree refuses interaction, so a double click cannot start a second write.
+     */
+    readonly disabled?: boolean;
 }>();
 
 const emit = defineEmits<{ (event: 'ui-event', payload: PortableUiEvent): void }>();
@@ -124,10 +129,34 @@ watch(
     { immediate: true, deep: false }
 );
 
-/** Host-side value replacement; the plugin may ask, only the host decides. */
+/** Field ids currently rendered under this instance (including nested nodes). */
+function collectFieldIds(entries: readonly PortableUiNode[], into: Set<string>): void {
+    for (const node of entries) {
+        if (node.type === 'form' || node.type === 'stack' || node.type === 'box') {
+            collectFieldIds(node.children as readonly PortableUiNode[], into);
+            continue;
+        }
+        if (node.type.startsWith('field.')) {
+            const id = (node as { id?: string }).id;
+            if (id !== undefined) into.add(id);
+        }
+    }
+}
+
+/**
+ * Host-approved replacement of user-editable fields. Only ids that are
+ * currently rendered are accepted, so a plugin cannot seed values for fields
+ * the user cannot see; only the replaced ids lose their dirty mark, so a
+ * replacement never silently discards unrelated typing.
+ */
 function replaceValues(next: Readonly<Record<string, string | boolean>>): void {
-    for (const [id, value] of Object.entries(next)) values.value[id] = value;
-    dirty.value.clear();
+    const known = new Set<string>();
+    collectFieldIds(props.nodes, known);
+    for (const [id, value] of Object.entries(next)) {
+        if (!known.has(id)) continue;
+        values.value[id] = value;
+        dirty.value.delete(id);
+    }
 }
 
 /** Explicit reset of one field back to its declarative value. */
@@ -201,6 +230,7 @@ function submitForm(
     formId: string,
     nodes: readonly PortableUiNode[]
 ): void {
+    if (props.disabled) return;
     const submitter = event?.submitter as HTMLElement | null | undefined;
     const action = submitter?.getAttribute('data-action') ?? 'submit';
     emit('ui-event', {
@@ -220,7 +250,7 @@ function isSubmitButton(node: { readonly action: string }): boolean {
  * action keeps its declared name and never submits the form implicitly.
  */
 function onButton(node: { readonly action: string }): void {
-    if (isSubmitButton(node)) return;
+    if (props.disabled || isSubmitButton(node)) return;
     const payload = props.form
         ? collectFormValues(props.form.nodes)
         : { ...values.value };
@@ -298,6 +328,7 @@ defineOptions({ name: 'PortableUiTree' });
                 :model-value="values[node.id] as unknown as string"
                 :placeholder="node.placeholder"
                 :required="node.required"
+                :disabled="disabled"
                 class="w-full"
                 @update:model-value="(value: unknown) => setField(node.id, value, 'text')"
             />
@@ -311,6 +342,7 @@ defineOptions({ name: 'PortableUiTree' });
                 :model-value="values[node.id] as unknown as string"
                 :rows="node.rows ?? 4"
                 :required="node.required"
+                :disabled="disabled"
                 class="w-full"
                 @update:model-value="(value: unknown) => setField(node.id, value, 'text')"
             />
@@ -327,6 +359,7 @@ defineOptions({ name: 'PortableUiTree' });
                 label-key="label"
                 class="w-full"
                 :aria-label="node.label"
+                :disabled="disabled"
                 @update:model-value="(value: unknown) => setField(node.id, value, 'select')"
             />
             <p v-if="node.description" class="text-xs opacity-70">{{ node.description }}</p>
@@ -337,6 +370,7 @@ defineOptions({ name: 'PortableUiTree' });
                 :id="`portable-${node.id}`"
                 :model-value="Boolean(values[node.id])"
                 :label="node.label"
+                :disabled="disabled"
                 @update:model-value="(value: unknown) => setField(node.id, value, 'toggle')"
             />
             <span v-if="node.description" class="text-xs opacity-70">{{
@@ -387,7 +421,7 @@ defineOptions({ name: 'PortableUiTree' });
                 :variant="node.variant === 'primary' ? 'solid' : 'soft'"
                 size="sm"
                 :type="isSubmitButton(node) ? 'submit' : 'button'"
-                :disabled="node.disabled"
+                :disabled="node.disabled || disabled"
                 :data-action="node.action"
                 @click="onButton(node)"
             >

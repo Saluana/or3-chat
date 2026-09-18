@@ -119,6 +119,9 @@ export default defineEventHandler(async (event) => {
             handleId: handle.handleId,
             kind: handle.kind,
             generation: handle.generation,
+            // The client reads exactly this context through the host boundary,
+            // never the route query again.
+            contextId: handle.contextId,
         },
     };
 });

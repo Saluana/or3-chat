@@ -10,9 +10,29 @@ import {
 import {
     parseRpcEnvelope,
     type RpcEnvelope,
+    type RpcErrorCode,
     type RpcRequestEnvelope,
 } from './rpc-envelope';
 import { respondError, respondOk, RpcSession } from './rpc-session';
+
+/** Error codes a handler may raise; anything else is reported as `internal`. */
+const BROKER_RPC_ERROR_CODES: ReadonlySet<string> = new Set([
+    'invalid-envelope',
+    'unknown-version',
+    'malformed-id',
+    'oversized',
+    'unknown-method',
+    'grant-denied',
+    'deadline-exceeded',
+    'cancelled',
+    'replay',
+    'backpressure',
+    'runtime-crash',
+    'policy-denied',
+    'budget-exceeded',
+    'unavailable',
+    'internal',
+]);
 
 export type HostRpcMethodGrant =
     | 'hooks.register'
@@ -433,11 +453,9 @@ export class HostRpcBroker {
                 typeof error === 'object' &&
                 error !== null &&
                 'rpcCode' in error &&
-                typeof (error as { rpcCode: unknown }).rpcCode === 'string'
-                    ? ((error as { rpcCode: string }).rpcCode as
-                          | 'policy-denied'
-                          | 'budget-exceeded'
-                          | 'internal')
+                typeof (error as { rpcCode: unknown }).rpcCode === 'string' &&
+                BROKER_RPC_ERROR_CODES.has((error as { rpcCode: string }).rpcCode)
+                    ? ((error as { rpcCode: RpcErrorCode }).rpcCode)
                     : 'internal';
             this.#send(respondError(request, rpcCode, message));
             return {

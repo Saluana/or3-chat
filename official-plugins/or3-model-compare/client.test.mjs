@@ -6,9 +6,11 @@ import { createPortablePlugin } from '@or3/plugin-sdk';
 import { createPortableTestHost } from '@or3/plugin-sdk/testing';
 import {
     COMPARE_LIMITS,
+    UI_TEXT_BUDGET,
     buildComparisonPrompt,
     classifyFailure,
     comparisonTableRows,
+    fitPortableView,
     formatAnswerMarkdown,
     normalizeCompareOptions,
     parseDefaultModels,
@@ -19,7 +21,7 @@ import { createModelCompare, MODEL_COMPARE_MANIFEST } from './client.mjs';
 const root = dirname(fileURLToPath(import.meta.url));
 const samplePrompt = readFileSync(resolve(root, 'fixtures/sample-prompt.md'), 'utf8').trim();
 
-const approvedGrants = ['network.http', 'settings.read', 'settings.write'];
+const approvedGrants = ['documents.read', 'documents.write', 'network.http', 'settings.read', 'settings.write'];
 
 function catalog(overrides = {}) {
     return {
@@ -171,6 +173,36 @@ test('keeps completed answers when one model fails', async () => {
     expect(flat.some((node) => node.type === 'text' && node.text.includes('AI budget'))).toBe(true);
 });
 
+test('accepts a submitted prompt even when plugin state was never synced', async () => {
+    const host = await activate({ settings: { defaultModels: 'vendor/alpha, vendor/beta' } });
+    const runButton = lastView(host).flat.find(
+        (node) => node.type === 'button' && node.action === 'compare.run',
+    );
+    // Enablement cannot depend on a plugin-state prompt that typing never updates.
+    expect(runButton.disabled).not.toBe(true);
+    await host.invokeRequest('runtime.ui-event', {
+        action: 'compare.run',
+        values: { prompt: 'Typed prompt' },
+    });
+    const completions = host.calls.filter((call) => call.method === 'ai.complete');
+    expect(completions).toHaveLength(2);
+    expect(completions[0].params.prompt).toBe('Typed prompt');
+});
+
+test('validates an empty submitted prompt at submit time', async () => {
+    const host = await activate({ settings: { defaultModels: 'vendor/alpha, vendor/beta' } });
+    await host.invokeRequest('runtime.ui-event', {
+        action: 'compare.run',
+        values: { prompt: '   ' },
+    });
+    expect(host.calls.some((call) => call.method === 'ai.complete')).toBe(false);
+    expect(
+        lastView(host).flat.some(
+            (node) => node.type === 'text' && node.text.includes('bytes is required'),
+        ),
+    ).toBe(true);
+});
+
 test('explains an unconfigured host instead of offering a run', async () => {
     const host = createPortableTestHost({
         approvedGrants,
@@ -189,9 +221,9 @@ test('continues the chosen answer in chat with its model named', async () => {
     await host.invokeRequest('runtime.ui-event', { action: 'compare.run', values: { prompt: 'Compare this' } });
     await host.invokeRequest('runtime.ui-event', { action: 'compare.choose:1' });
     const payload = await host.invokeRequest('runtime.ui-event', { action: 'host.chat.continue' });
-    expect(payload.title).toContain('Compare');
-    expect(payload.content).toContain('_Model:');
-    expect(payload.content).toContain('## Compare this');
+    expect(payload.result.title).toContain('Compare');
+    expect(payload.result.content).toContain('_Model:');
+    expect(payload.result.content).toContain('## Compare this');
 });
 
 test('runs the first action on the host-provided sample', async () => {
@@ -239,4 +271,173 @@ test('keeps whole-store action buttons outside every form', async () => {
         context: { kind: 'sample', title: 'Sample', content: 'Selected content that is long enough to transform.' },
     });
     assertWholeStoreActionsAreOutsideForms(host, ['compare.run']);
+});
+
+/**
+ * The host validates every rendered identifier with
+ * `/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/`; a provider-qualified model id contains
+ * `/`, so it can never be used directly in a button id or action. This walks the
+ * whole rendered tree the way the host validator would and fails on the exact
+ * offending string.
+ */
+function assertHostSafeIdentifiers(host) {
+    const pattern = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/;
+    const visit = (node) => {
+        if (node.type === 'button') {
+            expect(node.id, `button id "${node.id}"`).toMatch(pattern);
+            expect(node.action, `button action "${node.action}"`).toMatch(pattern);
+        }
+        if (Array.isArray(node.children)) node.children.forEach(visit);
+    };
+    host.renders.at(-1).nodes.forEach(visit);
+}
+
+test('renders host-safe identifiers for provider-qualified models', async () => {
+    const host = await activate({
+        catalogOverrides: {
+            models: [
+                { id: 'openai/gpt-oss-120b', label: 'gpt-oss-120b', priced: true, promptPerMillion: 1, completionPerMillion: 2 },
+                { id: 'anthropic/claude-3-5-sonnet-latest', label: 'claude-3-5-sonnet', priced: true, promptPerMillion: 3, completionPerMillion: 6 },
+            ],
+        },
+        settings: {
+            defaultModels: 'openai/gpt-oss-120b,anthropic/claude-3-5-sonnet-latest',
+        },
+    });
+    const { flat } = lastView(host);
+    const list = flat.find((node) => node.type === 'list');
+    expect(list.items.map((item) => item.label)).toEqual([
+        'openai/gpt-oss-120b',
+        'anthropic/claude-3-5-sonnet-latest',
+    ]);
+    assertHostSafeIdentifiers(host);
+
+    // Remove by index still targets the qualified model it was rendered for.
+    await host.invokeRequest('runtime.ui-event', { action: 'compare.remove-model:0' });
+    const after = lastView(host).flat.find((node) => node.type === 'list');
+    expect(after.items.map((item) => item.label)).toEqual(['anthropic/claude-3-5-sonnet-latest']);
+    assertHostSafeIdentifiers(host);
+});
+
+/** UTF-8 byte walk matching the host renderer's accounting. */
+function viewBytes(value) {
+    if (typeof value === 'string') return new TextEncoder().encode(value).byteLength;
+    if (Array.isArray(value)) return value.reduce((sum, entry) => sum + viewBytes(entry), 0);
+    if (value && typeof value === 'object') {
+        return Object.entries(value).reduce(
+            (sum, [key, entry]) => (key === 'type' ? sum : sum + viewBytes(entry)),
+            0,
+        );
+    }
+    return 0;
+}
+
+test('render guard keeps four long answers inside the host tree budget', () => {
+    const answers = Array.from({ length: COMPARE_LIMITS.maxModels }, (_, index) => ({
+        type: 'markdown',
+        markdown: `answer ${index} ${'x'.repeat(9000)}`,
+    }));
+    const bounded = fitPortableView(
+        [{ type: 'stack', direction: 'column', children: answers }],
+        'too large',
+    );
+    expect(viewBytes(bounded)).toBeLessThanOrEqual(UI_TEXT_BUDGET);
+
+    const unbounded = Array.from({ length: 40 }, (_, index) => ({
+        type: 'markdown',
+        markdown: `# ${index}\n${'x'.repeat(9000)}`,
+    }));
+    const fallback = fitPortableView(
+        [{ type: 'stack', direction: 'column', children: unbounded }],
+        'too large',
+    );
+    expect(viewBytes(fallback)).toBeLessThanOrEqual(UI_TEXT_BUDGET);
+    expect(fallback).toEqual([{ type: 'text', text: 'too large' }]);
+});
+
+test('abbreviates long answers and keeps the rendered tree inside host budgets', async () => {
+    const longAnswer = 'A'.repeat(11_000);
+    const host = await activate({
+        settings: { defaultModels: 'vendor/alpha, vendor/beta' },
+        responses: {
+            'ai.complete': {
+                text: longAnswer,
+                model: 'vendor/alpha',
+                usage: { promptTokens: 1, completionTokens: 1, spendUsd: 0.0001 },
+            },
+        },
+    });
+    await host.invokeRequest('runtime.ui-event', {
+        action: 'compare.run',
+        values: { prompt: 'A short prompt' },
+    });
+    const { flat } = lastView(host);
+    const answers = flat.filter((node) => node.type === 'markdown');
+    expect(answers).toHaveLength(2);
+    for (const answer of answers) {
+        expect(new TextEncoder().encode(answer.markdown).byteLength).toBeLessThanOrEqual(8 * 1024);
+        expect(answer.markdown).toContain('abbreviated for display');
+    }
+    // The full answers are still what a write/continuation keeps.
+    const payload = await host.invokeRequest('runtime.ui-event', { action: 'compare.choose:0' });
+    expect(payload.ok).toBe(true);
+    const write = await host.invokeRequest('runtime.ui-event', { action: 'host.chat.continue' });
+    expect(write.result.content).toContain(longAnswer);
+
+    // Whole-tree text stays inside the host's 16 KiB ceiling.
+    let textBytes = 0;
+    const count = (value) => {
+        if (typeof value === 'string') textBytes += new TextEncoder().encode(value).byteLength;
+        else if (Array.isArray(value)) value.forEach(count);
+        else if (value && typeof value === 'object') {
+            for (const [key, entry] of Object.entries(value)) {
+                if (key !== 'type') count(entry);
+            }
+        }
+    };
+    count(host.renders.at(-1).nodes);
+    expect(textBytes).toBeLessThanOrEqual(16 * 1024);
+});
+
+test('bounds the prompt in UTF-8 bytes, not characters', () => {
+    // 3000 multi-byte characters exceed the byte ceiling but not a char count.
+    const multibyte = 'é'.repeat(2500);
+    expect(normalizeCompareOptions({ prompt: multibyte, models: ['a', 'b'] })).toMatchObject({
+        ok: false,
+        code: 'prompt-required',
+    });
+    expect(
+        normalizeCompareOptions({ prompt: 'ok', models: ['a', 'b'], systemPrompt: 'é'.repeat(900) })
+    ).toMatchObject({ ok: true });
+});
+
+test('reports field replacements the host must apply for user-requested changes', async () => {
+    const host = await activate({ settings: { defaultModels: 'vendor/alpha, vendor/beta' } });
+    const first = await host.invokeRequest('runtime.ui-event', {
+        action: 'host.first-action.run',
+        context: { kind: 'sample', title: 'Sample', content: 'A sample prompt' },
+    });
+    expect(first).toMatchObject({
+        ok: true,
+        result: { ok: true, fieldValues: { prompt: 'A sample prompt' } },
+    });
+
+    await host.invokeRequest('runtime.ui-event', {
+        action: 'compare.add-model',
+        values: { model: 'vendor/beta', prompt: 'typed prompt' },
+    });
+    const added = await host.invokeRequest('runtime.ui-event', {
+        action: 'compare.add-model',
+        values: { model: 'vendor/alpha', prompt: 'typed prompt' },
+    });
+    expect(added).toMatchObject({
+        ok: true,
+        result: { ok: true, fieldValues: { prompt: 'typed prompt' } },
+    });
+
+    const cleared = await host.invokeRequest('runtime.ui-event', { action: 'compare.reset' });
+    expect(cleared).toMatchObject({
+        ok: true,
+        result: { ok: true, fieldValues: { prompt: '' } },
+    });
 });

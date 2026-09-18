@@ -600,7 +600,9 @@ test('runtime entrypoint preserves explicit Nuxt settings while translating OR3 
     'NUXT_BACKGROUND_JOBS_JOB_TIMEOUT_MS',
     'NUXT_BACKGROUND_JOBS_ENCRYPTION_KEY',
     'NUXT_ADMIN_PLUGIN_CONNECTION_SECRET',
-    'NUXT_ADMIN_LIBRARY_LINK_SECRET'
+    'NUXT_ADMIN_LIBRARY_LINK_SECRET',
+    'NUXT_ADMIN_PLUGIN_ALLOWED_MODELS',
+    'NUXT_ADMIN_PLUGIN_MODEL_PRICES'
   ];
   const result = spawnSync(process.execPath, [
     RUNTIME_ENTRYPOINT,
@@ -627,6 +629,8 @@ test('runtime entrypoint preserves explicit Nuxt settings while translating OR3 
       OR3_BACKGROUND_ENCRYPTION_KEY: 'runtime-background-secret-at-least-32-characters',
       OR3_PLUGIN_CONNECTION_SECRET: 'runtime-plugin-connection-secret',
       OR3_LIBRARY_LINK_SECRET: 'runtime-library-link-secret',
+      OR3_PLUGIN_ALLOWED_MODELS: 'vendor/alpha,vendor/beta',
+      OR3_PLUGIN_MODEL_PRICES: '{"vendor/alpha":{"promptPerMillion":1,"completionPerMillion":2}}',
       NUXT_ADMIN_AUTH_JWT_SECRET: 'explicit-admin-secret',
       NUXT_AUTH_PROVIDER: 'custom'
     }
@@ -651,7 +655,9 @@ test('runtime entrypoint preserves explicit Nuxt settings while translating OR3 
     NUXT_BACKGROUND_JOBS_JOB_TIMEOUT_MS: '45000',
     NUXT_BACKGROUND_JOBS_ENCRYPTION_KEY: 'runtime-background-secret-at-least-32-characters',
     NUXT_ADMIN_PLUGIN_CONNECTION_SECRET: 'runtime-plugin-connection-secret',
-    NUXT_ADMIN_LIBRARY_LINK_SECRET: 'runtime-library-link-secret'
+    NUXT_ADMIN_LIBRARY_LINK_SECRET: 'runtime-library-link-secret',
+    NUXT_ADMIN_PLUGIN_ALLOWED_MODELS: 'vendor/alpha,vendor/beta',
+    NUXT_ADMIN_PLUGIN_MODEL_PRICES: '{"vendor/alpha":{"promptPerMillion":1,"completionPerMillion":2}}'
   });
 });
 

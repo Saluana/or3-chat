@@ -8,7 +8,11 @@ import type { PortableActivation } from '~/composables/plugins/portable-client-r
  * produce invisible UI. Withdrawal has to hide them again.
  */
 const invokeMock = vi.fn();
-const runHostActionMock = vi.fn();
+const prepareMock = vi.fn();
+const executeMock = vi.fn();
+const ensureMock = vi.fn();
+const sourceMock = vi.fn();
+const getDocumentInDbMock = vi.fn();
 const activations = new Map<string, unknown>();
 const routeQuery: Record<string, unknown> = {};
 const fetchMock = vi.fn();
@@ -17,17 +21,24 @@ const navigateToMock = vi.fn();
 vi.mock('~/composables/plugins/portable-client-runtime', () => ({
     usePortableActivations: () => activations,
     invokePortableUiEvent: (...args: unknown[]) => invokeMock(...args),
+    ensurePortableClientActivation: (...args: unknown[]) => ensureMock(...args),
+    getPortableClientSource: (...args: unknown[]) => sourceMock(...args),
 }));
 
 vi.mock('~/composables/plugins/usePortableHostActions', () => ({
-    usePortableHostActions: () => ({ run: (...args: unknown[]) => runHostActionMock(...args) }),
+    usePortableHostActions: () => ({
+        prepare: (...args: unknown[]) => prepareMock(...args),
+        execute: (...args: unknown[]) => executeMock(...args),
+        run: vi.fn(),
+    }),
 }));
 
 vi.mock('~/db/documents', () => ({
-    getDocument: async () => ({
-        id: 'doc_1',
-        content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Selected text' }] }] },
-    }),
+    getDocumentInDb: (...args: unknown[]) => getDocumentInDbMock(...args),
+}));
+
+vi.mock('~/db/client', () => ({
+    getWorkspaceDb: () => ({ name: 'or3-db-ws-1' }),
 }));
 
 vi.mock('#imports', async (importOriginal) => ({
@@ -42,15 +53,41 @@ vi.mock('#imports', async (importOriginal) => ({
 import PortableUiTree from '../PortableUiTree.vue';
 import PortableClientView from '../PortableClientView.vue';
 
+function prepared(overrides: Record<string, unknown> = {}) {
+    return {
+        action: 'host.document.create',
+        plan: { kind: 'create-document', title: 'Result', content: '# Result', requiresConfirmation: false },
+        pluginId: 'sample.plugin',
+        workspaceId: 'ws-1',
+        generation: 1,
+        documentRevision: null,
+        requiresConfirmation: false,
+        ...overrides,
+    };
+}
+
 beforeEach(() => {
     invokeMock.mockReset();
-    runHostActionMock.mockReset();
+    prepareMock.mockReset();
+    executeMock.mockReset();
+    ensureMock.mockReset();
+    sourceMock.mockReset();
+    getDocumentInDbMock.mockReset();
     fetchMock.mockReset();
     navigateToMock.mockReset();
-    runHostActionMock.mockResolvedValue({
+    getDocumentInDbMock.mockResolvedValue({
+        id: 'doc_from_handle',
+        title: 'Doc One',
+        updated_at: 10,
+        content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Selected text' }] }] },
+    });
+    prepareMock.mockResolvedValue({ ok: true, prepared: prepared() });
+    executeMock.mockResolvedValue({
         ok: true,
         outcome: { status: 'created-document', documentId: 'doc_new' },
     });
+    ensureMock.mockResolvedValue(null);
+    sourceMock.mockReturnValue(null);
     fetchMock.mockResolvedValue({ firstAction: { label: 'Summarize', ready: false, reason: 'Finish setup' } });
     for (const key of Object.keys(routeQuery)) delete routeQuery[key];
 });
@@ -68,6 +105,7 @@ function activation(overrides: Partial<PortableActivation> = {}): PortableActiva
         view: null,
         contributions: [],
         capabilities: [],
+        approvedGrants: ['documents.read', 'documents.write'],
         logs: [],
         crashed: false,
         startedAt: 0,
@@ -79,6 +117,18 @@ const stubs = {
     UIcon: { template: '<i />' },
     UBadge: { template: '<span><slot /></span>' },
     UAlert: { props: ['title', 'description'], template: '<div role="alert">{{ title }}</div>' },
+    UTextarea: {
+        props: ['modelValue'],
+        emits: ['update:modelValue'],
+        template:
+            '<textarea :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+    },
+    UInput: {
+        props: ['modelValue'],
+        emits: ['update:modelValue'],
+        template:
+            '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+    },
 };
 
 // Nuxt auto-imports the renderer in the app; a unit mount has to register it.
@@ -133,29 +183,142 @@ describe('PortableClientView host actions', () => {
         ]);
         await wrapper.get('button[data-action="host.document.create"]').trigger('click');
         await Promise.resolve();
-        expect(runHostActionMock).toHaveBeenCalledWith(
+        await Promise.resolve();
+        expect(prepareMock).toHaveBeenCalledWith(
             expect.objectContaining({ pluginId: 'sample.plugin', action: 'host.document.create' })
         );
+        expect(executeMock).toHaveBeenCalledWith(expect.objectContaining({ action: 'host.document.create' }));
         expect(invokeMock).not.toHaveBeenCalled();
     })
 
     it('requires confirmation before replacing the selected document', async () => {
         routeQuery.documentId = 'doc_1';
+        prepareMock.mockResolvedValue({
+            ok: true,
+            prepared: prepared({
+                action: 'host.document.replace',
+                plan: {
+                    kind: 'replace-document',
+                    documentId: 'doc_1',
+                    title: null,
+                    content: '# New',
+                    requiresConfirmation: true,
+                },
+                requiresConfirmation: true,
+                documentRevision: 'rev-1',
+            }),
+        });
         const wrapper = shell([
             { type: 'button', id: 'replace', label: 'Replace document', action: 'host.document.replace' },
         ]);
         await wrapper.get('button[data-action="host.document.replace"]').trigger('click');
+        await Promise.resolve();
         // Nothing is written until the host confirmation is answered.
-        expect(runHostActionMock).not.toHaveBeenCalled();
+        expect(executeMock).not.toHaveBeenCalled();
         const dialog = wrapper.get('[data-testid="portable-host-confirm"]');
         expect(dialog.text()).toContain('Replace selected document');
 
         const confirm = dialog.findAll('button').find((button) => button.text().includes('Replace'));
         await confirm?.trigger('click');
         await Promise.resolve();
-        expect(runHostActionMock).toHaveBeenCalledWith(
-            expect.objectContaining({ action: 'host.document.replace', selectedDocumentId: 'doc_1' })
+        // The exact frozen plan is executed; the plugin is not asked again.
+        expect(executeMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: 'host.document.replace',
+                documentRevision: 'rev-1',
+            })
         );
+        expect(invokeMock).not.toHaveBeenCalled();
+    })
+
+    it('runs only one host action while a previous one is still preparing', async () => {
+        let resolvePrepare: (value: unknown) => void = () => undefined;
+        prepareMock.mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    resolvePrepare = resolve;
+                })
+        );
+        const wrapper = shell([
+            { type: 'button', id: 'save', label: 'Create document', action: 'host.document.create' },
+        ]);
+        const button = wrapper.get('button[data-action="host.document.create"]');
+        await button.trigger('click');
+        await button.trigger('click');
+        await button.trigger('click');
+        expect(prepareMock).toHaveBeenCalledTimes(1);
+        resolvePrepare({ ok: true, prepared: prepared() });
+        await flushPromises();
+        expect(executeMock).toHaveBeenCalledTimes(1);
+    })
+
+    it('disables the plugin tree while a confirmation is pending', async () => {
+        routeQuery.documentId = 'doc_1';
+        prepareMock.mockResolvedValue({
+            ok: true,
+            prepared: prepared({
+                action: 'host.document.replace',
+                plan: {
+                    kind: 'replace-document',
+                    documentId: 'doc_1',
+                    title: null,
+                    content: '# New',
+                    requiresConfirmation: true,
+                },
+                requiresConfirmation: true,
+                documentRevision: 'rev-1',
+            }),
+        });
+        const wrapper = shell([
+            { type: 'button', id: 'run', label: 'Run', action: 'plugin.run' },
+            { type: 'button', id: 'replace', label: 'Replace', action: 'host.document.replace' },
+        ]);
+        expect(wrapper.get('button[data-action="plugin.run"]').attributes('disabled')).toBeUndefined();
+        await wrapper.get('button[data-action="host.document.replace"]').trigger('click');
+        await flushPromises();
+        expect(wrapper.find('[data-testid="portable-host-confirm"]').exists()).toBe(true);
+        expect(wrapper.get('button[data-action="plugin.run"]').attributes('disabled')).toBeDefined();
+        expect(invokeMock).not.toHaveBeenCalled();
+    })
+
+    it('keeps typed fields and offers restart after a stopped activation', async () => {
+        sourceMock.mockReturnValue({ descriptor: {}, workspaceId: 'ws-1', runtimeEntry: undefined });
+        activations.set(
+            'sample.plugin',
+            activation({
+                status: 'stopped',
+                view: {
+                    title: null,
+                    nodes: [
+                        { type: 'field.textarea', id: 'notes', label: 'Notes', value: 'kept' },
+                    ],
+                } as never,
+            })
+        );
+        const wrapper = mount(PortableClientView, { props: { pluginId: 'sample.plugin' }, global });
+        await flushPromises();
+        // The tree survives the stop (disabled) so typed values are still there.
+        expect((wrapper.find('textarea').element as HTMLTextAreaElement).value).toBe('kept');
+        expect(wrapper.find('textarea').attributes('disabled')).toBeDefined();
+
+        await wrapper.get('[data-testid="portable-plugin-stopped"] button').trigger('click');
+        await flushPromises();
+        expect(ensureMock).toHaveBeenCalledWith('sample.plugin');
+    })
+
+    it('refuses a host write when the activation lacks write authority', async () => {
+        prepareMock.mockResolvedValue({
+            ok: false,
+            code: 'write-authority-required',
+            message: 'This plugin has not been approved to create or replace documents.',
+        });
+        const wrapper = shell([
+            { type: 'button', id: 'save', label: 'Create document', action: 'host.document.create' },
+        ]);
+        await wrapper.get('button[data-action="host.document.create"]').trigger('click');
+        await Promise.resolve();
+        expect(executeMock).not.toHaveBeenCalled();
+        expect(invokeMock).not.toHaveBeenCalled();
     })
 
     it('refuses an unknown host action instead of forwarding it', async () => {
@@ -163,12 +326,20 @@ describe('PortableClientView host actions', () => {
             { type: 'button', id: 'odd', label: 'Do odd thing', action: 'host.something.else' },
         ]);
         await wrapper.get('button[data-action="host.something.else"]').trigger('click');
-        expect(runHostActionMock).not.toHaveBeenCalled();
+        expect(prepareMock).not.toHaveBeenCalled();
         expect(invokeMock).not.toHaveBeenCalled();
     })
 
+    it('renders canonical host wording for reserved action buttons', () => {
+        const wrapper = shell([
+            { type: 'button', id: 'save', label: 'Totally not a write', action: 'host.document.create' },
+        ]);
+        const button = wrapper.get('button[data-action="host.document.create"]');
+        expect(button.text()).toBe('Create document');
+    })
+
     it('opens the document a host action wrote', async () => {
-        runHostActionMock.mockResolvedValue({
+        executeMock.mockResolvedValue({
             ok: true,
             outcome: { status: 'created-document', documentId: 'doc_new' },
         });
@@ -181,14 +352,32 @@ describe('PortableClientView host actions', () => {
         expect(navigateToMock).toHaveBeenCalledWith('/docs/doc_new');
     })
 
+    it('applies a plugin field replacement even to a field the user edited', async () => {
+        invokeMock.mockResolvedValue({
+            ok: true,
+            result: { fieldValues: { notes: 'Loaded preset' } },
+        });
+        const wrapper = shell([
+            { type: 'field.textarea', id: 'notes', label: 'Notes', value: 'typed' },
+            { type: 'button', id: 'load', label: 'Load', action: 'plugin.load' },
+        ]);
+        const textarea = wrapper.get('textarea');
+        await textarea.setValue('user typed this');
+        await wrapper.get('button[data-action="plugin.load"]').trigger('click');
+        await Promise.resolve();
+        expect(invokeMock).toHaveBeenCalled();
+        expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('Loaded preset');
+    })
+
     it('still forwards ordinary plugin actions to the plugin', async () => {
+        invokeMock.mockResolvedValue({ ok: true, result: {} });
         const wrapper = shell([
             { type: 'button', id: 'run', label: 'Run', action: 'compare.run' },
         ]);
         await wrapper.get('button[data-action="compare.run"]').trigger('click');
         await Promise.resolve();
         expect(invokeMock).toHaveBeenCalledWith('sample.plugin', expect.objectContaining({ action: 'compare.run' }));
-        expect(runHostActionMock).not.toHaveBeenCalled();
+        expect(prepareMock).not.toHaveBeenCalled();
     })
 
     it('offers the declared first action only when the plan says it can run', async () => {
@@ -210,5 +399,47 @@ describe('PortableClientView host actions', () => {
         expect(readyPanel.text()).toContain('Summarize sample');
         expect(readyPanel.text()).toContain('the package sample');
         expect(readyPanel.findAll('button')).toHaveLength(1);
+    })
+
+    it('resolves a selected-context first action through the host handle and read grant', async () => {
+        routeQuery.documentId = 'doc_1';
+        activations.set(
+            'sample.plugin',
+            activation({ view: { title: null, nodes: [] } as never })
+        );
+        fetchMock
+            .mockResolvedValueOnce({
+                firstAction: { label: 'Summarize selection', ready: true, contextKind: 'selected' },
+            })
+            .mockResolvedValueOnce({
+                status: 'ready',
+                handle: {
+                    handleId: 'sel_1_1',
+                    kind: 'document',
+                    generation: 1,
+                    contextId: 'doc_from_handle',
+                },
+            });
+        invokeMock.mockResolvedValue({ ok: true, result: {} });
+        const wrapper = mount(PortableClientView, { props: { pluginId: 'sample.plugin' }, global });
+        await flushPromises();
+        await wrapper.get('[data-testid="portable-plugin-first-action"] button').trigger('click');
+        await flushPromises();
+        const call = fetchMock.mock.calls.find((entry) => String(entry[0]).includes('first-action'));
+        expect(call).toBeTruthy();
+        expect((call?.[1] as { body?: unknown })?.body).toMatchObject({
+            documentId: 'doc_1',
+            generation: 1,
+        });
+        // The host reads exactly the server-authorized handle context, never the
+        // route query again.
+        expect(getDocumentInDbMock).toHaveBeenCalledWith(expect.anything(), 'doc_from_handle');
+        expect(invokeMock).toHaveBeenCalledWith(
+            'sample.plugin',
+            expect.objectContaining({
+                action: 'host.first-action.run',
+                context: expect.objectContaining({ kind: 'selected', content: 'Selected text' }),
+            })
+        );
     })
 });

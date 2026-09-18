@@ -12,6 +12,7 @@
  */
 
 import { readBoundedBody, combineWithDeadline } from '../connections/bounded-body';
+import { isUsablePluginModelPrice } from '~~/shared/plugins/ai/model-catalog';
 import type {
     ModelPrice,
     ModelPriceTable,
@@ -42,13 +43,9 @@ export function resolveModelPrice(
     model: string
 ): ModelPrice | null {
     const price = prices[model];
-    if (!price) return null;
-    return Number.isFinite(price.promptPerMillion) &&
-        Number.isFinite(price.completionPerMillion) &&
-        price.promptPerMillion >= 0 &&
-        price.completionPerMillion >= 0
-        ? price
-        : null;
+    // One canonical usable-price predicate, shared with the catalog and the
+    // governor: all-zero prices would be accounted as free and are refused.
+    return isUsablePluginModelPrice(price) ? price : null;
 }
 
 function nonNegativeInteger(value: unknown): number | null {

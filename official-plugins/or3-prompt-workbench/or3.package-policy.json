@@ -18,6 +18,7 @@
     }
   ],
   "dataScopes": [
+    "documents.read",
     "settings.read",
     "storage.read"
   ],
@@ -28,6 +29,7 @@
     "or3-portable-client-v1"
   ],
   "writes": [
+    "documents.write",
     "settings.write",
     "storage.write"
   ]

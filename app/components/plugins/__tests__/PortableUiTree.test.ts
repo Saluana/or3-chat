@@ -221,6 +221,47 @@ describe('PortableUiTree host renderer (4.5)', () => {
         );
     });
 
+    it('replaces only the named fields, ignores unknown ids and preserves other edits', async () => {
+        const wrapper = mountTree([
+            {
+                type: 'form',
+                id: 'settings',
+                children: [
+                    { type: 'field.text', id: 'a', label: 'A', value: 'a0' },
+                    { type: 'field.text', id: 'b', label: 'B', value: 'b0' },
+                ],
+            },
+        ]);
+        await wrapper.find('input#portable-a').setValue('typed-a');
+        await wrapper.find('input#portable-b').setValue('typed-b');
+
+        (wrapper.vm as unknown as { replaceValues: (next: Record<string, string>) => void })
+            .replaceValues({ a: 'loaded-a', ghost: 'ignored' });
+        await wrapper.vm.$nextTick();
+        expect((wrapper.find('input#portable-a').element as HTMLInputElement).value).toBe('loaded-a');
+        // Only the replaced field loses its dirty mark; the other edit survives.
+        expect((wrapper.find('input#portable-b').element as HTMLInputElement).value).toBe('typed-b');
+        // An unknown id is refused rather than seeding an invisible field.
+        expect(wrapper.find('input#portable-ghost').exists()).toBe(false);
+
+        // A replacement hands the field back to the plugin's declarative value;
+        // the untouched dirty field still keeps what the user typed.
+        await wrapper.setProps({
+            nodes: [
+                {
+                    type: 'form',
+                    id: 'settings',
+                    children: [
+                        { type: 'field.text', id: 'a', label: 'A', value: 'declared-a' },
+                        { type: 'field.text', id: 'b', label: 'B', value: 'declared-b' },
+                    ],
+                },
+            ],
+        });
+        expect((wrapper.find('input#portable-a').element as HTMLInputElement).value).toBe('declared-a');
+        expect((wrapper.find('input#portable-b').element as HTMLInputElement).value).toBe('typed-b');
+    });
+
     it('drops field state when the field is removed from the tree', async () => {
         const wrapper = mountTree([
             {

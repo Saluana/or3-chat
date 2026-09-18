@@ -366,6 +366,7 @@ describe('setup plan (4.10)', () => {
                     operationId: 'summarize',
                     label: 'Try the sample',
                     usesSampleContext: true,
+                    samplePath: 'fixtures/sample.md',
                 },
             },
             policy,
@@ -385,6 +386,39 @@ describe('setup plan (4.10)', () => {
         expect(
             buildFirstActionHandoff({ plan: samplePlan, hasSelectedContext: false })
         ).toMatchObject({ ready: true, contextKind: 'sample' });
+        // Selected context wins over the sample; the fixture is only a fallback.
+        expect(
+            buildFirstActionHandoff({ plan: samplePlan, hasSelectedContext: true })
+        ).toMatchObject({ ready: true, contextKind: 'selected' });
+
+        // Legacy v1 shape: usesSampleContext without a sample path is valid and
+        // simply requires a selection instead of falling back to a fixture.
+        const noSamplePlan = buildSetupPlan({
+            setup: {
+                ...setup,
+                firstAction: {
+                    operationId: 'summarize',
+                    label: 'Try it',
+                    usesSampleContext: true,
+                },
+            },
+            policy,
+            hostConnections,
+            values: { workspace: 'Team notes' },
+            connectionStates: [
+                {
+                    slotId: 'docs',
+                    connectionId: 'conn-1',
+                    ref: 'orc_conn-1_r1',
+                    providerId: 'fake',
+                    scopes: ['read:items'],
+                    testPassed: true,
+                },
+            ],
+        });
+        expect(
+            buildFirstActionHandoff({ plan: noSamplePlan, hasSelectedContext: false })
+        ).toMatchObject({ ready: false, contextKind: 'selected', reasonCode: 'selection-required' });
 
         const notReady = buildSetupPlan({ setup, policy, hostConnections });
         expect(

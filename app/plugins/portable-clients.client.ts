@@ -2,17 +2,21 @@
  * @module app/plugins/portable-clients.client
  *
  * Purpose:
- * Start selected isolated-client packages in the contained sandbox, and stop
- * them when the workspace, the selection or the plugin's enablement changes.
+ * Record which isolated-client packages the active workspace may run, register
+ * their surfaces, and tear them down when the workspace or selection changes.
  *
  * Behavior:
  * - The runtime manifest is the only source of truth: only a `ready` descriptor
  *   for an `isolated-client` package with a digest-addressed client entry is
- *   started. Everything else is left to the V1 manager or reported by the UI.
- * - An activation is torn down when its descriptor key changes, the plugin stops
- *   being enabled, or the workspace changes, so no sandbox outlives its authority.
- * - A dashboard page is registered per activation and removed on teardown; the
- *   page renders what the plugin renders.
+ *   made available to a surface.
+ * - Activation is demand-driven. A contained activation has a hard wall-clock
+ *   budget (the containment watchdog), so a plugin is started when its surface
+ *   opens or the user asks it to restart — never eagerly for every enabled
+ *   package, which would spend the budget before anyone used the plugin.
+ * - A source whose descriptor key changes is stopped and replaced; a source
+ *   that stops being enabled is stopped and removed.
+ * - A dashboard page is registered per available source and removed on
+ *   teardown; the page renders what the plugin renders.
  *
  * Constraints:
  * - Client only, and only when SSR auth and the plugin runtime loader are on.
@@ -25,10 +29,12 @@ import { useSessionContext } from '~/composables/auth/useSessionContext';
 import type { PluginRuntimeManifestResponse } from '~~/shared/plugins/runtime-manifest';
 import type { PackageV2PluginDescriptor } from '~~/shared/plugins/runtime-descriptor';
 import {
-    activatePortableClient,
     deactivatePortableClient,
     installPortableUnloadTeardown,
-    type PortableActivation,
+    listPortableActivations,
+    listPortableClientSources,
+    removePortableClientSource,
+    setPortableClientSource,
 } from '~/composables/plugins/portable-client-runtime';
 import {
     registerDashboardPlugin,
@@ -104,13 +110,14 @@ export default defineNuxtPlugin(() => {
     installPortableUnloadTeardown();
 
     const session = useSessionContext();
-    const active = new Map<string, PortableActivation>();
+    const registeredPages = new Set<string>();
     let currentRevision = '';
     let syncToken = 0;
 
     const stop = async (pluginId: string): Promise<void> => {
-        active.delete(pluginId);
+        registeredPages.delete(pluginId);
         unregisterDashboardPlugin(`${DASHBOARD_PLUGIN_PREFIX}${pluginId}`);
+        removePortableClientSource(pluginId);
         await deactivatePortableClient(pluginId);
     };
 
@@ -118,7 +125,9 @@ export default defineNuxtPlugin(() => {
         const token = ++syncToken;
         const workspaceId = session.data.value?.session?.workspace?.id;
         if (!workspaceId) {
-            for (const pluginId of [...active.keys()]) await stop(pluginId);
+            for (const source of listPortableClientSources()) {
+                await stop(source.descriptor.id);
+            }
             currentRevision = '';
             return;
         }
@@ -147,52 +156,48 @@ export default defineNuxtPlugin(() => {
             wanted.set(pluginId, entry.descriptor);
         }
 
-        for (const [pluginId, activation] of [...active.entries()]) {
-            const next = wanted.get(pluginId);
-            if (next && activation.descriptorKey === next.descriptorKey) continue;
-            await stop(pluginId);
+        // A source that is gone, replaced or running on another workspace is
+        // stopped and removed before the new selection is recorded.
+        for (const activation of listPortableActivations()) {
+            if (activation.workspaceId !== workspaceId) {
+                await stop(activation.pluginId);
+            }
+        }
+        for (const source of listPortableClientSources()) {
+            const next = wanted.get(source.descriptor.id);
+            if (
+                next &&
+                next.descriptorKey === source.descriptorKey &&
+                source.workspaceId === workspaceId
+            ) {
+                continue;
+            }
+            await stop(source.descriptor.id);
         }
 
-        let hadFailure = false;
         for (const [pluginId, descriptor] of wanted) {
             if (token !== syncToken) return;
-            if (active.has(pluginId)) continue;
-            try {
-                const activation = await activatePortableClient({
-                    descriptor,
-                    workspaceId,
-                    runtimeEntry: manifest.runtime[pluginId],
-                });
-                if (token !== syncToken) {
-                    await stop(pluginId);
-                    return;
-                }
-                active.set(pluginId, activation);
-                registerDashboardPlugin({
-                    id: `${DASHBOARD_PLUGIN_PREFIX}${pluginId}`,
-                    icon: 'i-lucide-puzzle',
-                    label: descriptor.name,
-                    ...(descriptor.description === undefined
-                        ? {}
-                        : { description: descriptor.description }),
-                    pluginId,
-                    pages: [createSurfacePage(descriptor)],
-                });
-            } catch (error) {
-                hadFailure = true;
-                if (import.meta.dev) {
-                    console.error(
-                        `[portable-clients] failed to start plugin "${pluginId}"`,
-                        error
-                    );
-                }
-            }
+            setPortableClientSource({
+                descriptor,
+                workspaceId,
+                runtimeEntry: manifest.runtime[pluginId],
+            });
+            if (registeredPages.has(pluginId)) continue;
+            registeredPages.add(pluginId);
+            registerDashboardPlugin({
+                id: `${DASHBOARD_PLUGIN_PREFIX}${pluginId}`,
+                icon: 'i-lucide-puzzle',
+                label: descriptor.name,
+                ...(descriptor.description === undefined
+                    ? {}
+                    : { description: descriptor.description }),
+                pluginId,
+                pages: [createSurfacePage(descriptor)],
+            });
         }
 
         if (token !== syncToken) return;
-        // Only commit the revision after a fully successful sync so a transient
-        // failure is retried instead of being treated as an empty selection.
-        if (!hadFailure) currentRevision = manifest.revision;
+        currentRevision = manifest.revision;
     };
 
     watch(
@@ -200,14 +205,16 @@ export default defineNuxtPlugin(() => {
         () => {
             ++syncToken;
             currentRevision = '';
-            for (const pluginId of [...active.keys()]) void stop(pluginId);
+            for (const source of listPortableClientSources()) {
+                void stop(source.descriptor.id);
+            }
             void syncManifest();
         },
         { immediate: true }
     );
 
     // Reconcile requests are the same signal the V1 manager listens to: a
-    // settings/selection change should re-evaluate which packages run.
+    // settings/selection change should re-evaluate which packages are available.
     window.addEventListener(WORKSPACE_PLUGIN_RECONCILE_EVENT, () => {
         currentRevision = '';
         void syncManifest();

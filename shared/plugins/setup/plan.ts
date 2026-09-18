@@ -77,6 +77,8 @@ export interface SetupPlan {
         readonly operationId: string;
         readonly label: string;
         readonly usesSampleContext: boolean;
+        /** Present only when the package ships a resolvable sample file. */
+        readonly samplePath?: string;
     };
     /** Reasons that keep the plugin from being ready. */
     readonly blockers: readonly string[];
@@ -337,9 +339,10 @@ export function describeSetupStatus(plan: SetupPlan): {
 }
 
 /**
- * The first-action handoff: the host runs the declared action with either the
- * selected context or the package's sample, and never with `.env`, a terminal
- * command or a manually extracted archive.
+ * The first-action handoff: the host runs the declared action with the user's
+ * selected context when there is one, and only falls back to the package's
+ * sample when the package ships one and no selection exists. `.env`, terminal
+ * commands and manually extracted archives are never a context source.
  */
 export interface FirstActionHandoff {
     readonly operationId: string;
@@ -356,17 +359,23 @@ export function buildFirstActionHandoff(input: {
     readonly hasSelectedContext: boolean;
 }): FirstActionHandoff {
     const { plan } = input;
+    const samplePath = plan.firstAction.samplePath;
+    const hasSample = typeof samplePath === 'string' && samplePath.length > 0;
+    // Selected context is always preferred; the sample is a fallback, not an
+    // override, so opening a plugin on a document never silently runs a fixture.
+    const contextKind: FirstActionHandoff['contextKind'] =
+        input.hasSelectedContext || !hasSample ? 'selected' : 'sample';
     if (plan.status !== 'ready') {
         return {
             operationId: plan.firstAction.operationId,
             label: plan.firstAction.label,
-            contextKind: plan.firstAction.usesSampleContext ? 'sample' : 'selected',
+            contextKind,
             ready: false,
             reason: plan.blockers[0] ?? 'Setup is incomplete',
             reasonCode: 'setup-incomplete',
         };
     }
-    if (!plan.firstAction.usesSampleContext && !input.hasSelectedContext) {
+    if (contextKind === 'selected' && !input.hasSelectedContext) {
         return {
             operationId: plan.firstAction.operationId,
             label: plan.firstAction.label,
@@ -379,7 +388,7 @@ export function buildFirstActionHandoff(input: {
     return {
         operationId: plan.firstAction.operationId,
         label: plan.firstAction.label,
-        contextKind: plan.firstAction.usesSampleContext ? 'sample' : 'selected',
+        contextKind,
         ready: true,
     };
 }

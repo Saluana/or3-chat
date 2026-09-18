@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
     HOST_ACTIONS,
+    HOST_ACTION_LABELS,
     MAX_HOST_ACTION_CONTENT_CHARS,
     chatTitleFrom,
     isHostAction,
     isKnownHostAction,
     planHostAction,
+    readHostActionRpcPayload,
     tipTapToText,
 } from '../../app/utils/plugins/portable-host-actions'
 
@@ -126,9 +128,73 @@ describe('portable host actions', () => {
         expect(tipTapToText({ type: 'doc', content: [] })).toBe('')
     })
 
+    it('preserves hard breaks and nested block boundaries as text', () => {
+        const text = tipTapToText({
+            type: 'doc',
+            content: [
+                {
+                    type: 'paragraph',
+                    content: [
+                        { type: 'text', text: 'First line' },
+                        { type: 'hardBreak' },
+                        { type: 'text', text: 'Second line' },
+                    ],
+                },
+                {
+                    type: 'listItem',
+                    content: [
+                        { type: 'paragraph', content: [{ type: 'text', text: 'Item' }] },
+                        {
+                            type: 'bulletList',
+                            content: [
+                                {
+                                    type: 'listItem',
+                                    content: [
+                                        { type: 'paragraph', content: [{ type: 'text', text: 'Nested' }] },
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        })
+        expect(text).toBe('First line\nSecond line\n- Item\n- Nested')
+    })
+
     it('derives a compact single-line chat title', () => {
         expect(chatTitleFrom('\n\n# Title\nbody')).toBe('Title')
         expect(chatTitleFrom('   ')).toBe('Continued result')
         expect(chatTitleFrom('x'.repeat(80)).endsWith('…')).toBe(true)
+    })
+
+    it('unwraps the RPC envelope a host action call actually resolves to', () => {
+        // `callPlugin()` resolves to `{ ok, result }`; reading the envelope as
+        // the payload made every successful write look empty.
+        const success = readHostActionRpcPayload({
+            ok: true,
+            result: { title: 'Summary', content: '# Body' },
+        })
+        expect(success).toEqual({
+            ok: true,
+            payload: { title: 'Summary', content: '# Body' },
+        })
+        expect(readHostActionRpcPayload({ ok: true, result: 'text' })).toMatchObject({
+            ok: false,
+            code: 'payload-required',
+        })
+    })
+
+    it('surfaces a structured RPC refusal instead of inventing an empty payload', () => {
+        expect(
+            readHostActionRpcPayload({ ok: false, code: 'quota-exceeded', message: 'No budget' })
+        ).toEqual({ ok: false, code: 'quota-exceeded', message: 'No budget' })
+        expect(readHostActionRpcPayload(undefined)).toMatchObject({ ok: false, code: 'payload-required' })
+    })
+
+    it('renders host-owned canonical wording for reserved actions', () => {
+        expect(HOST_ACTION_LABELS[HOST_ACTIONS.createDocument]).toBe('Create document')
+        expect(HOST_ACTION_LABELS[HOST_ACTIONS.replaceDocument]).toBe('Replace selected document')
+        expect(HOST_ACTION_LABELS[HOST_ACTIONS.continueInChat]).toBe('Continue in chat')
     })
 })

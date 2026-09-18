@@ -10,13 +10,20 @@ replace the selection, or continue in chat.
 - **Model transforms with disclosed cost.** Summarize, key points, action items
   and rewrite-for-clarity run through the host's governed `ai.complete`
   capability; the preview shows the model and the attributed spend.
-- **Nothing is written without a click.** Every write is a host-rendered action:
-  the plugin never touches a document itself, replacing the selection requires a
-  host confirmation, and the target is always the document the plugin was opened
-  on — never an id the plugin names.
-- **Bounded input.** Selections are validated (non-empty, at most 24,000
-  characters) with explicit reasons, so a whole library cannot be pushed through
-  one call.
+- **No accidental spend.** Choosing a model-backed transformation is an explicit
+  state update: the first Transform click shows the model selector and its
+  prices, and only the next click dispatches. Each result keeps its own
+  transformation, title and source, so a later failed run can never relabel an
+  older result, and Clear discards an in-flight response.
+- **Nothing is written without a click.** Every write is a host-rendered action
+  that requires the workspace-approved `documents.write` grant: the plugin never
+  touches a document itself, replacing the selection requires a host confirmation
+  of the exact frozen payload and document revision, and the target is always the
+  document the plugin was opened on — never an id the plugin names.
+- **Bounded input.** Selections are validated in UTF-8 bytes (non-empty, at most
+  6,000 bytes) with explicit reasons, so a whole library cannot be pushed through
+  one call. A long model result is abbreviated in the preview with an explicit
+  marker; the write payload keeps the full text.
 
 ## Limits (deliberate)
 

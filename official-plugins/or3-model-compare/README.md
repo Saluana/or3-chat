@@ -12,6 +12,10 @@ and continue the best one in normal chat or as a new document.
   your account.
 - **A chosen answer can continue.** The chosen answer can be written to a new
   document, or opened in a normal chat thread where you keep working.
+- **The submitted prompt is the contract.** Typing only updates the host field
+  store, so the compare button never depends on plugin state; the prompt is
+  validated when Compare is clicked and an empty prompt is refused with the
+  reason.
 - **Failure keeps what worked.** If one model refuses or times out, the answers
   that arrived stay visible with an actionable reason for the one that did not.
 
@@ -25,6 +29,9 @@ and continue the best one in normal chat or as a new document.
   the host's governed `ai.complete` capability, which holds the credential and
   enforces the allowlist, output ceiling and spend limit.
 - No credential is stored, and no provider endpoint is chosen by the plugin.
+- The prompt is byte-bounded, and long answers are abbreviated in the display
+  (with an explicit marker) so the rendered tree stays inside the host's
+  budgets. The full answer is what a document write or chat continuation keeps.
 
 ## Host requirements
 
@@ -32,7 +39,8 @@ and continue the best one in normal chat or as a new document.
   (`OR3_PLUGIN_ALLOWED_MODELS`, `OR3_PLUGIN_MODEL_PRICES`) plus a host model
   provider credential. Without them the plugin explains that no approved model is
   available instead of failing at run time.
-- The `network.http` grant (host-mediated model calls), and `settings.read` /
+- The `network.http` grant (host-mediated model calls), `documents.read` /
+  `documents.write` (selection handoff and approved writes), and `settings.read` /
   `settings.write` for its defaults.
 
 ## Authoring
