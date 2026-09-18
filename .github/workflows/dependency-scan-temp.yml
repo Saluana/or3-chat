@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   adjust:
-    if: github.event.head_commit.message == '[Chore] Restore lint compatibility'
+    if: github.event.head_commit.message == '[Chore] Pin compatible TypeScript ESLint'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -19,13 +19,24 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
-      - name: Restore compatible TypeScript ESLint versions
-        run: bun add -d '@typescript-eslint/eslint-plugin@^8.65.0' '@typescript-eslint/parser@^8.65.0'
+      - name: Pin compatible TypeScript ESLint resolution
+        run: |
+          bun add -d '@typescript-eslint/eslint-plugin@8.65.0' '@typescript-eslint/parser@8.65.0'
+          python - <<'PY'
+          from pathlib import Path
+          for filename in ('package.json', 'bun.lock'):
+              path = Path(filename)
+              text = path.read_text()
+              text = text.replace('"@typescript-eslint/eslint-plugin": "8.65.0"', '"@typescript-eslint/eslint-plugin": "^8.65.0"')
+              text = text.replace('"@typescript-eslint/parser": "8.65.0"', '"@typescript-eslint/parser": "^8.65.0"')
+              path.write_text(text)
+          PY
+          bun install --frozen-lockfile
       - name: Commit lockfile adjustment
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add package.json bun.lock
           git diff --cached --quiet && exit 0
-          git commit -m '[Deps] Keep TypeScript ESLint on compatible release'
+          git commit -m '[Deps] Pin TypeScript ESLint compatibility'
           git push
