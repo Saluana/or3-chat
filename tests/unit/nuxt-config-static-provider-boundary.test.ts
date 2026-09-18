@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fsObservations = vi.hoisted(() => ({
@@ -103,5 +104,25 @@ describe('static generation provider import boundary', () => {
         expect(nuxtConfig.runtimeConfig.public.connect.publicUrl).toBe(
             'https://chat.example.com'
         );
+    });
+
+    it('installs every Iconify collection the server bundle declares', async () => {
+        const { default: nuxtConfig } = await import('../../nuxt.config');
+        const collections =
+            (
+                nuxtConfig.icon as
+                    | { serverBundle?: { collections?: string[] } }
+                    | undefined
+            )?.serverBundle?.collections ?? [];
+        const manifest = JSON.parse(
+            readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
+        ) as { devDependencies?: Record<string, string> };
+        const missing = collections.filter(
+            (collection) =>
+                !manifest.devDependencies?.[`@iconify-json/${collection}`]
+        );
+
+        expect(collections.length).toBeGreaterThan(0);
+        expect(missing).toEqual([]);
     });
 });
