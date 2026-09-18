@@ -1,0 +1,27 @@
+name: Temporary baseline SystemPromptsModal check
+
+on:
+  push:
+    branches:
+      - chore/dependency-upkeep-2026-09-18
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out default branch
+        uses: actions/checkout@v5
+        with:
+          ref: or3-cloud
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Install baseline dependencies
+        run: bun install --frozen-lockfile
+      - name: Run targeted baseline test
+        run: bunx vitest run --project=core-app app/components/chat/__tests__/SystemPromptsModal.test.ts --reporter=dot
