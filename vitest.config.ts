@@ -2,6 +2,8 @@ import { defineConfig } from 'vitest/config';
 import path from 'path';
 import vue from '@vitejs/plugin-vue';
 
+const rootDir = import.meta.dirname;
+
 const pluginCompatibilityTests = [
     'app/composables/__tests__/action-surface-adapters.test.ts',
     'app/composables/__tests__/admin-extensions-surface-adapter.test.ts',
@@ -42,20 +44,20 @@ export default defineConfig({
         // files are loaded from linked provider packages with their own node_modules.
         dedupe: ['vue', 'nuxt', 'zod'],
         alias: {
-            '#imports': path.resolve(__dirname, 'tests/stubs/nuxt-imports.ts'),
+            '#imports': path.resolve(rootDir, 'tests/stubs/nuxt-imports.ts'),
             '#build/or3/bundled-plugin-catalog': path.resolve(
-                __dirname,
+                rootDir,
                 'tests/stubs/bundled-plugin-catalog.ts'
             ),
             '#or3-bundled-plugin-catalog': path.resolve(
-                __dirname,
+                rootDir,
                 'tests/stubs/bundled-plugin-catalog.ts'
             ),
-            '~': path.resolve(__dirname, 'app'),
-            '~~': path.resolve(__dirname),
-            '~~/': path.resolve(__dirname) + '/',
-            '#app': path.resolve(__dirname, 'tests/stubs/nuxt-app.ts'),
-            'nuxt/app': path.resolve(__dirname, 'tests/stubs/nuxt-app.ts'),
+            '~': path.resolve(rootDir, 'app'),
+            '~~': path.resolve(rootDir),
+            '~~/': path.resolve(rootDir) + '/',
+            '#app': path.resolve(rootDir, 'tests/stubs/nuxt-app.ts'),
+            'nuxt/app': path.resolve(rootDir, 'tests/stubs/nuxt-app.ts'),
         },
     },
     test: {
