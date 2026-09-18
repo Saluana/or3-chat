@@ -54,6 +54,8 @@ One selected code version is shared by every workspace. Before promotion, every 
 
 Every operation is reported with the workspace it installs into, and a paused operation is reported as `resumable` in addition to `needsSetup`, so a caller can tell "waiting on you" from "waiting on the registry" and offer to continue it.
 
+A promotion that fills an empty selection (a first install) also enables the plugin for the workspace the operation installs into; the runtime gate refuses a disabled package, so a completed install would otherwise be a version nothing runs. An update replaces the selection without touching enablement, so a workspace that disabled a plugin keeps it disabled after the update.
+
 ## Permission consent
 
 A candidate whose release asks for authority is refused until the workspace has a *current* reviewed-grant record: `prepare` reports `grant-review-unreviewed` (no record, or a record this release did not write) or `grant-review-stale` (the release now asks for a different set). Consent is recorded per workspace with `POST /api/admin/plugins/packages/{pluginId}/grants`, which derives the requested set from the staged candidate's manifest or the signed release metadata and stores only an approved subset of it. The promotion boundary re-checks the same record, and the instance-wide preflight refuses a promotion while any enabled workspace lacks a current one.

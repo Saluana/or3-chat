@@ -87,4 +87,9 @@ OR3 repository for the full rule set.
   and `scripts/publish-manifest.mjs`, which rewrites the publish `exports` to
   `./dist/*` for the tarball only, then restores the repository manifest. npm
   does not apply `publishConfig.exports`, so this prepack rewrite is required.
+- The published subpaths and the JavaScript build entries live together in
+  `scripts/publish-entries.mjs`, and `tests/unit/plugin-sdk-publish-surface.test.ts`
+  fails if a published subpath is not built: declarations are emitted for every
+  source file, so a missing build entry would otherwise ship a subpath that
+  resolves to nothing.
 - The package bundles no third-party runtime code; see `THIRD_PARTY_NOTICES`.

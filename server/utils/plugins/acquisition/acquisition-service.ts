@@ -46,8 +46,13 @@ import {
     type Or3SetupDescriptorV1,
 } from '@or3/plugin-sdk/profile';
 import type { SetupPlan } from '~~/shared/plugins/setup/plan';
-import { getEnabledPlugins, getPluginGrantReview } from '../../../admin/plugins/workspace-plugin-store';
+import {
+    getEnabledPlugins,
+    getPluginGrantReview,
+    setPluginEnabled,
+} from '../../../admin/plugins/workspace-plugin-store';
 import { PluginPackageRouteCatalog } from '../../../admin/plugins/package-route-catalog';
+import type { PluginPackagePointer } from '../../../admin/plugins/package-pointer-store';
 import {
     readPackageGrantReview,
     readPluginStateSnapshot,
@@ -931,6 +936,8 @@ export class PluginAcquisitionService {
         // candidate, so the promotion already happened and only the receipt is
         // outstanding.
         if (pointer?.current?.packageDigest === record.candidateDigest) {
+            const enabled = await this.#enableFirstInstall(record, pointer);
+            if (!enabled.ok) return await this.#fail(record, enabled.code, enabled.message, true);
             return {
                 kind: 'continue',
                 operation: await this.#advanceTo(record, 'promoted', {}),
@@ -1050,10 +1057,42 @@ export class PluginAcquisitionService {
                 restage
             );
         }
+        const enabled = await this.#enableFirstInstall(record, result.pointer);
+        if (!enabled.ok) return await this.#fail(record, enabled.code, enabled.message, true);
         return {
             kind: 'continue',
             operation: await this.#advanceTo(record, 'promoted', {}),
         };
+    }
+
+    /**
+     * A first install (no previous selection) enables the plugin for the
+     * installing workspace. Reporting an install as ready while the runtime gate
+     * refused the still-disabled package was a promise the operator could not
+     * use; an update never changes enablement, so a deliberate disable survives.
+     * Idempotent, so a retry after the pointer write cannot double-apply.
+     */
+    async #enableFirstInstall(
+        record: PluginAcquisitionOperation,
+        pointer: PluginPackagePointer
+    ): Promise<{ readonly ok: true } | { readonly ok: false; readonly code: 'internal-error'; readonly message: string }> {
+        if (pointer.previous !== null) return { ok: true };
+        try {
+            await setPluginEnabled(
+                this.#deps.services.settings,
+                record.workspaceId,
+                record.pluginId,
+                true
+            );
+            return { ok: true };
+        } catch {
+            return {
+                ok: false,
+                code: 'internal-error',
+                message:
+                    'The plugin was selected but could not be enabled for this workspace; retry the operation.',
+            };
+        }
     }
 
     async #receipt(record: PluginAcquisitionOperation): Promise<StepResult> {

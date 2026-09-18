@@ -27,6 +27,13 @@ const nodes = computed<readonly PortableUiNode[]>(
     () => activation.value?.view?.nodes ?? []
 );
 
+/**
+ * Dashboard contributions registered by this activation. They are rendered here
+ * so a plugin's registered cards are visible (and disappear again when the
+ * plugin withdraws them), instead of being recorded and never shown.
+ */
+const contributions = computed(() => activation.value?.contributions ?? []);
+
 const statusLabel = computed(() => {
     const state = activation.value;
     if (!state) return 'Not running';
@@ -100,6 +107,29 @@ async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
             <div v-else class="text-sm text-(--ui-text-muted)">
                 The plugin has not rendered anything yet.
             </div>
+
+            <section
+                v-if="contributions.length > 0"
+                class="flex flex-col gap-3"
+                data-testid="portable-plugin-contributions"
+            >
+                <h3 class="text-sm font-medium">Dashboard cards</h3>
+                <article
+                    v-for="contribution in contributions"
+                    :key="contribution.id"
+                    class="rounded-lg border border-(--ui-border) p-3"
+                    :data-testid="`portable-plugin-contribution-${contribution.id}`"
+                >
+                    <h4 v-if="contribution.title" class="text-sm font-medium">
+                        {{ contribution.title }}
+                    </h4>
+                    <PortableUiTree
+                        :nodes="contribution.nodes"
+                        :store="fieldStore"
+                        @ui-event="forwardUiEvent"
+                    />
+                </article>
+            </section>
 
             <details
                 v-if="activation.logs.length > 0"

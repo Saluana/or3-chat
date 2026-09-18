@@ -6,28 +6,15 @@ import {
     writeFileSync,
 } from 'node:fs';
 import { resolve } from 'node:path';
+import { SUBPATH_ENTRIES } from './publish-entries.mjs';
 
 const packageRoot = resolve(import.meta.dirname, '..');
 const packageJsonPath = resolve(packageRoot, 'package.json');
 const backupPath = resolve(packageRoot, '.publish-backup.json');
 
-const SUBPATHS = {
-    '.': 'index',
-    './manifest': 'manifest',
-    './host': 'host',
-    './testing': 'testing',
-    './package-tree': 'package-tree',
-    './profile': 'profile',
-    './state-compatibility': 'state-compatibility',
-    './package-archive': 'cli/archive',
-    './ui': 'ui',
-    './portable': 'portable',
-    './portable-runtime': 'portable-runtime',
-};
-
 function distExports() {
     const exports = {};
-    for (const [subpath, entry] of Object.entries(SUBPATHS)) {
+    for (const [subpath, entry] of Object.entries(SUBPATH_ENTRIES)) {
         exports[subpath] = {
             types: `./dist/${entry}.d.ts`,
             import: `./dist/${entry}.js`,

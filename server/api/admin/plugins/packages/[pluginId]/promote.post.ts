@@ -10,6 +10,7 @@ import {
     readPluginStateSnapshot,
     restorePluginStateSnapshot,
 } from '../../../../../admin/plugins/package-operation-support';
+import { setPluginEnabled } from '../../../../../admin/plugins/workspace-plugin-store';
 import { acquisitionServiceFor } from '../../../../../utils/plugins/acquisition/route-support';
 import { requesterIdentity } from '../../../../../utils/plugins/acquisition/route-identity';
 
@@ -114,6 +115,13 @@ export default defineEventHandler(async (event) => {
             restorePluginStateSnapshot(services, workspaceId, pluginId, snapshot),
     });
     if (result.status === 'promoted') {
+        // A first promotion installs the plugin for this workspace, so it is
+        // enabled here too: the runtime gate refuses a disabled package, and
+        // "promoted" without enablement would be a version nothing runs. An
+        // update leaves enablement as the workspace set it.
+        if (result.pointer.previous === null) {
+            await setPluginEnabled(services.settings, workspaceId, pluginId, true);
+        }
         await event.context.adminHooks?.doAction('admin.plugin:action:promoted', {
             id: pluginId,
             workspaceId,

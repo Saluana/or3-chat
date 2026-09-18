@@ -9,6 +9,7 @@ const promoteMock = vi.fn();
 const preflightMock = vi.fn();
 const listForPluginMock = vi.fn();
 const readManifestMock = vi.fn();
+const setEnabledMock = vi.fn();
 
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
@@ -36,8 +37,13 @@ vi.mock('../../../../admin/stores/registry', () => ({
     getWorkspaceSettingsStore: () => ({}),
 }));
 
+vi.mock('../../../../admin/plugins/workspace-plugin-store', () => ({
+    setPluginEnabled: (...args: unknown[]) => setEnabledMock(...args),
+}));
+
 vi.mock('../../../../admin/plugins/package-operation-support', () => ({
     pluginPackageServices: () => ({
+        settings: {},
         promotion: { promote: promoteMock },
         migration: { getStateVersion: async () => 1 },
         packages: { packagePath: () => '/tmp/does-not-need-to-exist' },
@@ -69,7 +75,9 @@ describe('promote route guard', () => {
         promoteMock.mockReset().mockResolvedValue({
             status: 'promoted',
             packageDigest: `sha256-${'a'.repeat(64)}`,
+            pointer: { previous: { packageDigest: `sha256-${'b'.repeat(64)}` } },
         });
+        setEnabledMock.mockReset().mockResolvedValue(['or3.sample-utility']);
         preflightMock.mockReset().mockResolvedValue({ checked: 1, blocking: [] });
         listForPluginMock.mockReset().mockResolvedValue([]);
         readManifestMock.mockReset().mockResolvedValue({ requestedGrants: ['settings.read'] });
@@ -111,10 +119,22 @@ describe('promote route guard', () => {
         expect(promoteMock).not.toHaveBeenCalled();
     });
 
+    it('enables a first install for the promoted workspace', async () => {
+        promoteMock.mockResolvedValue({
+            status: 'promoted',
+            packageDigest: `sha256-${'a'.repeat(64)}`,
+            pointer: { previous: null },
+        });
+        await callRoute();
+        expect(setEnabledMock).toHaveBeenCalledWith({}, 'ws-1', 'or3.sample-utility', true);
+    });
+
     it('promotes once the candidate is not owned and every workspace passes', async () => {
         const result = (await callRoute()) as { ok: boolean };
         expect(result.ok).toBe(true);
         expect(promoteMock).toHaveBeenCalledOnce();
+        // An update never changes the workspace's own enablement decision.
+        expect(setEnabledMock).not.toHaveBeenCalled();
         // Completed operations never block a later direct promotion.
         listForPluginMock.mockResolvedValue([
             {

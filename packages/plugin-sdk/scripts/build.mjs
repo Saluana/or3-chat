@@ -1,24 +1,13 @@
 import { spawnSync } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { BUILD_ENTRIES } from './publish-entries.mjs';
 
 const packageRoot = resolve(import.meta.dirname, '..');
 
 rmSync(resolve(packageRoot, 'dist'), { recursive: true, force: true });
 
-const entries = [
-    'src/index.ts',
-    'src/manifest.ts',
-    'src/host.ts',
-    'src/testing.ts',
-    'src/ui.ts',
-    'src/portable.ts',
-    'src/profile.ts',
-    'src/package-tree.ts',
-    'src/state-compatibility.ts',
-    'src/cli/index.ts',
-    'src/cli/archive.ts',
-];
+const entries = BUILD_ENTRIES;
 
 function run(command, args) {
     const result = spawnSync(command, args, {
@@ -37,6 +26,10 @@ run('bun', [
     ...entries,
     '--outdir',
     'dist',
+    // Flat `dist/<entry>.js` layout, which is what the published `exports`
+    // subpaths point at (declarations land beside them from `tsc`).
+    '--root',
+    'src',
     '--target',
     'node',
     '--format',

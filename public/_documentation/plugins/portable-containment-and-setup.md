@@ -85,6 +85,11 @@ slot contribution for this activation only, and `ui.withdraw` (or teardown)
 removes them. An invalid tree is reported, never rendered. The typed client for
 plugins is `createPortableClient` in `@or3/plugin-sdk/portable`.
 
+The portable profile renders dashboard contributions (`ui.dashboard.card`) on the
+plugin's own dashboard surface: each registered card is shown with the same
+host renderer as `ui.render`, and withdrawing it removes the card. A contribution
+is never stored without a place to appear.
+
 ### Budgets
 
 | Budget | Value |

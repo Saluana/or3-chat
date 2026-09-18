@@ -6,6 +6,7 @@ import { OR3_PLUGIN_V2_HOST_CAPABILITIES } from '../../../../admin/plugins/v2-ho
 import { pluginPackageServices } from '../../../../admin/plugins/package-operation-support';
 import { PluginPackageRouteCatalog } from '../../../../admin/plugins/package-route-catalog';
 import {
+    getEnabledPlugins,
     setPluginEnabled,
     setPluginGrantReview,
 } from '../../../../admin/plugins/workspace-plugin-store';
@@ -74,9 +75,12 @@ function makeHarness(input: {
     failDownload?: () => boolean;
     installEnabled?: boolean;
     acceptedTrustModes?: readonly string[];
+    /** Share an instance root/settings store to model an update over time. */
+    root?: string;
+    settings?: WorkspaceSettingsStore;
 }) {
-    const root = tempRoot('or3-extensions-');
-    const settings = memoryStore();
+    const root = input.root ?? tempRoot('or3-extensions-');
+    const settings = input.settings ?? memoryStore();
     const services = pluginPackageServices(settings, root);
     const store = new PluginAcquisitionOperationStore(root);
     const workspaceIds = input.workspaceIds ?? ['ws-1'];
@@ -180,6 +184,35 @@ describe('reviewed acquisition pipeline (5.1, 5.4)', () => {
         expect(pointer?.candidate).toBeNull();
         expect(operation.expectedPointerRevision).toBe(1);
         expect(pointer?.revision).toBe(2);
+
+        // A completed install is usable: the runtime gate refuses a disabled
+        // plugin, so a first install enables it for the installing workspace.
+        expect(await getEnabledPlugins(harness.settings, 'ws-1')).toEqual(['alpha']);
+    });
+
+    it('leaves enablement alone for an update, so a deliberate disable survives', async () => {
+        const root = tempRoot('or3-extensions-');
+        const settings = memoryStore();
+        const first = await releaseFixture({ version: '1.0.0' });
+        const installed = await makeHarness({ fixture: first, root, settings }).start({
+            version: '1.0.0',
+        });
+        expect(installed.ok).toBe(true);
+        expect(await getEnabledPlugins(settings, 'ws-1')).toEqual(['alpha']);
+
+        // An owner disables it; the update below must not silently re-enable it.
+        await setPluginEnabled(settings, 'ws-1', 'alpha', false);
+        const upgrade = await releaseFixture({ version: '1.1.0' });
+        const updated = await makeHarness({ fixture: upgrade, root, settings }).start({
+            version: '1.1.0',
+        });
+        expect(updated.ok).toBe(true);
+        if (!updated.ok) return;
+        expect(updated.operation.status).toBe('completed');
+        const pointer = await makeHarness({ fixture: upgrade, root, settings }).services.pointers
+            .readPointer('alpha');
+        expect(pointer?.previous).not.toBeNull();
+        expect(await getEnabledPlugins(settings, 'ws-1')).toEqual([]);
     });
 
     it('returns the durable operation id before the pipeline runs', async () => {

@@ -51,7 +51,7 @@ Local assessment governs execution. It is not an attestation to central commerce
 
 ## Install, update and canary
 
-Installing goes through the durable acquisition operation (see [Trusted Registry Acquisition](./trusted-acquisition)). The UI follows the recorded stage and mirrors the operation's own retry/cancel rules.
+Installing goes through the durable acquisition operation (see [Trusted Registry Acquisition](./trusted-acquisition)). The UI follows the recorded stage and mirrors the operation's own retry/cancel rules. A first install enables the plugin for the installing workspace, so "installed" means the package is actually running; an update never changes enablement, so a workspace that deliberately disabled a plugin keeps it disabled.
 
 A release that declares a contained client runtime needs a real browser canary. The host issues a single-use ticket bound to the plugin, package digest, workspace, client id and nonce; the admin's browser performs a hidden activation of the candidate's exact bytes in the contained sandbox, re-hashes them and reports the outcome. Until that evidence exists the operation stays pending with `client-canary-pending`, and the UI completes the check and retries the same operation. A server-side check alone never substitutes for it.
 
