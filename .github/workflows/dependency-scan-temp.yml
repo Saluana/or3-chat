@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   verify:
-    if: github.event.head_commit.message == '[Chore] Verify dependency updates'
+    if: github.event.head_commit.message == '[Chore] Recheck dependency updates'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -43,37 +43,14 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
       - name: Typecheck
-        id: typecheck
-        continue-on-error: true
         run: bun run type-check
       - name: Lint
-        id: lint
-        continue-on-error: true
         run: bun run lint
       - name: Core tests
-        id: tests
-        continue-on-error: true
         run: bun run test
       - name: Provider compatibility
-        id: providers
-        continue-on-error: true
         run: bun run test:cloud:provider-compatibility
       - name: Production build
-        id: build
-        continue-on-error: true
         run: bun run build
       - name: Remaining outdated dependencies
         run: bun outdated || true
-      - name: Require critical checks
-        run: |
-          echo 'typecheck=${{ steps.typecheck.outcome }}'
-          echo 'lint=${{ steps.lint.outcome }}'
-          echo 'tests=${{ steps.tests.outcome }}'
-          echo 'providers=${{ steps.providers.outcome }}'
-          echo 'build=${{ steps.build.outcome }}'
-          if [ '${{ steps.typecheck.outcome }}' != 'success' ] || \
-             [ '${{ steps.tests.outcome }}' != 'success' ] || \
-             [ '${{ steps.providers.outcome }}' != 'success' ] || \
-             [ '${{ steps.build.outcome }}' != 'success' ]; then
-            exit 1
-          fi
