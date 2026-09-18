@@ -65,7 +65,11 @@ export type HostActionPlan =
     | {
           readonly kind: 'replace-document'
           readonly documentId: string
-          readonly title: string | null
+          /**
+           * Always null: replacing content never renames the user's document,
+           * even when the plugin suggests a title.
+           */
+          readonly title: null
           readonly content: string
           readonly requiresConfirmation: true
       }
@@ -128,7 +132,9 @@ export function planHostAction(input: {
             plan: {
                 kind: 'replace-document',
                 documentId,
-                title,
+                // A plugin's suggested title is not applied to an existing
+                // document: the write is content-only.
+                title: null,
                 content,
                 requiresConfirmation: true,
             },

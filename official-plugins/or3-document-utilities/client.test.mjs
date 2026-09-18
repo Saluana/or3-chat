@@ -21,19 +21,23 @@ const sample = JSON.parse(readFileSync(resolve(root, 'fixtures/sample-selection.
 
 const approvedGrants = ['documents.read', 'documents.write', 'network.http', 'settings.read', 'settings.write'];
 
-function catalog() {
+function catalog(overrides = {}) {
     return {
         configured: true,
-        models: [{ id: 'vendor/alpha', label: 'alpha', priced: true, promptPerMillion: 1, completionPerMillion: 2 }],
+        models: [
+            { id: 'vendor/alpha', label: 'alpha', priced: true, promptPerMillion: 1, completionPerMillion: 2 },
+            { id: 'vendor/beta', label: 'beta', priced: true, promptPerMillion: 3, completionPerMillion: 6 },
+        ],
         limits: { maxOutputTokens: 1024, spendLimitUsd: 0.5, maxConcurrentCalls: 4, deadlineMs: 30_000 },
+        ...overrides,
     };
 }
 
-async function activate({ responses, settings } = {}) {
+async function activate({ responses, settings, catalogOverrides } = {}) {
     const host = createPortableTestHost({
         approvedGrants,
         responses: {
-            'ai.models': catalog(),
+            'ai.models': catalog(catalogOverrides ?? {}),
             'ai.complete': {
                 text: '- Confirm the audit\n- Confirm the snapshot',
                 model: 'vendor/alpha',
@@ -122,6 +126,24 @@ test('runs a model transform with the attributed cost', async () => {
     expect(flat.some((node) => node.type === 'markdown' && node.markdown.includes('Confirm the audit'))).toBe(true);
 });
 
+test('runs a model transform inside the host-disclosed output ceiling', async () => {
+    const host = await activate({
+        catalogOverrides: { limits: { maxOutputTokens: 256, spendLimitUsd: 0.5, maxConcurrentCalls: 4, deadlineMs: 30_000 } },
+    });
+    await host.invokeRequest('runtime.ui-event', {
+        action: 'host.first-action.run',
+        context: { kind: 'selection', title: sample.title, content: sample.content },
+    });
+    await host.invokeRequest('runtime.ui-event', {
+        action: 'documents.transform',
+        values: { transform: 'summary', model: 'vendor/beta' },
+    });
+    const completion = host.calls.find((call) => call.method === 'ai.complete');
+    expect(completion.params.maxOutputTokens).toBe(256);
+    // The user's model choice is honoured, not just the first priced model.
+    expect(completion.params.model).toBe('vendor/beta');
+});
+
 test('offers host writes only after a preview and returns bounded payloads', async () => {
     const host = await activate();
     await host.invokeRequest('runtime.ui-event', {
@@ -166,4 +188,37 @@ test('refuses a too-short selection and explains the failure from the host', asy
     expect(host.calls.some((call) => call.method === 'ai.complete')).toBe(true);
     expect(flatNodes(host).some((node) => node.type === 'text' && node.text.includes('AI budget'))).toBe(true);
     expect(DOCUMENT_UTILITIES_MANIFEST.id).toBe('or3.document-utilities');
+});
+
+/**
+ * The host submits only the enclosing form's values for a button inside a form,
+ * and the whole field store for a button outside every form. Actions that need
+ * the prompt/template/content must therefore stay outside every form.
+ */
+function assertWholeStoreActionsAreOutsideForms(host, actions) {
+    const view = host.renders.at(-1);
+    const inside = new Set();
+    const walk = (nodes, inForm) => {
+        for (const node of nodes) {
+            if (node.type === 'form') {
+                walk(node.children, true);
+                continue;
+            }
+            if (node.type === 'button' && inForm) inside.add(node.action);
+            if (Array.isArray(node.children)) walk(node.children, inForm);
+        }
+    };
+    walk(view.nodes, false);
+    for (const action of actions) {
+        expect(inside.has(action)).toBe(false);
+    }
+}
+
+test('keeps whole-store action buttons outside every form', async () => {
+    const host = await activate();
+    await host.invokeRequest('runtime.ui-event', {
+        action: 'host.first-action.run',
+        context: { kind: 'selection', title: sample.title, content: sample.content },
+    });
+    assertWholeStoreActionsAreOutsideForms(host, ['documents.transform']);
 });

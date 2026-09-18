@@ -4,7 +4,7 @@ import {
     checkV2PackageConformance,
     type V2ConformanceResult,
 } from './conformance';
-import { assertPackageRoot, materializePackTree } from './shared';
+import { assertPackageRoot, findMissingDeclaredSample, materializePackTree } from './shared';
 
 export interface ValidateCommandResult {
     readonly root: string;
@@ -26,8 +26,24 @@ export async function validateV2Package(packageRoot: string): Promise<ValidateCo
     const packRoot = resolve(root, '.or3-pack-validate');
     let result: V2ConformanceResult;
     try {
-        materializePackTree(root, packRoot);
-        result = await checkV2PackageConformance(packRoot, { mode: 'source' });
+        const files = materializePackTree(root, packRoot);
+        const missingSample = findMissingDeclaredSample({ packRoot, files });
+        result = missingSample
+            ? {
+                  status: 'nonconformant',
+                  issues: [
+                      {
+                          code: 'portable-sample-missing',
+                          file: 'or3.setup.json',
+                          subject: missingSample,
+                          severity: 'error',
+                          message: `firstAction.samplePath "${missingSample}" is not part of the package; the host cannot run the declared sample.`,
+                      },
+                  ],
+                  digest: null,
+                  manifestDigest: null,
+              }
+            : await checkV2PackageConformance(packRoot, { mode: 'source' });
     } finally {
         rmSync(packRoot, { recursive: true, force: true });
     }

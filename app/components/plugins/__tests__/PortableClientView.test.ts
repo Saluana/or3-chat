@@ -12,6 +12,7 @@ const runHostActionMock = vi.fn();
 const activations = new Map<string, unknown>();
 const routeQuery: Record<string, unknown> = {};
 const fetchMock = vi.fn();
+const navigateToMock = vi.fn();
 
 vi.mock('~/composables/plugins/portable-client-runtime', () => ({
     usePortableActivations: () => activations,
@@ -33,7 +34,7 @@ vi.mock('#imports', async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
     useRoute: () => ({ query: routeQuery }),
     useToast: () => ({ add: vi.fn() }),
-    navigateTo: vi.fn(),
+    navigateTo: (...args: unknown[]) => navigateToMock(...args),
     $fetch: (...args: unknown[]) => fetchMock(...args),
     useRuntimeConfig: () => ({ public: {} }),
 }));
@@ -45,6 +46,7 @@ beforeEach(() => {
     invokeMock.mockReset();
     runHostActionMock.mockReset();
     fetchMock.mockReset();
+    navigateToMock.mockReset();
     runHostActionMock.mockResolvedValue({
         ok: true,
         outcome: { status: 'created-document', documentId: 'doc_new' },
@@ -163,6 +165,20 @@ describe('PortableClientView host actions', () => {
         await wrapper.get('button[data-action="host.something.else"]').trigger('click');
         expect(runHostActionMock).not.toHaveBeenCalled();
         expect(invokeMock).not.toHaveBeenCalled();
+    })
+
+    it('opens the document a host action wrote', async () => {
+        runHostActionMock.mockResolvedValue({
+            ok: true,
+            outcome: { status: 'created-document', documentId: 'doc_new' },
+        });
+        const wrapper = shell([
+            { type: 'button', id: 'save', label: 'Create document', action: 'host.document.create' },
+        ]);
+        await wrapper.get('button[data-action="host.document.create"]').trigger('click');
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(navigateToMock).toHaveBeenCalledWith('/docs/doc_new');
     })
 
     it('still forwards ordinary plugin actions to the plugin', async () => {

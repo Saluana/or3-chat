@@ -4,7 +4,7 @@
     {
       "key": "defaultTemplate",
       "kind": "text",
-      "label": "Default template",
+      "label": "Default template ({{name}} variables)",
       "order": 1,
       "required": false
     }

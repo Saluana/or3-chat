@@ -17,8 +17,10 @@ and continue the best one in normal chat or as a new document.
 
 ## Limits (deliberate)
 
-- At most four models and 1024 output tokens per answer, bounded by the host's own
-  plugin AI budget.
+- At most four models; the per-answer output ceiling is the lower of the plugin's
+  default (512 tokens) and the host's own disclosed limit, and every call counts
+  against the host's per-session plugin AI budget. Unpriced models cannot be
+  selected.
 - No benchmark service, no scoring, no bundled inference: every call goes through
   the host's governed `ai.complete` capability, which holds the credential and
   enforces the allowlist, output ceiling and spend limit.

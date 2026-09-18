@@ -4,7 +4,7 @@
     {
       "key": "defaultModels",
       "kind": "text",
-      "label": "Default models to compare",
+      "label": "Default models to compare (comma-separated ids)",
       "order": 1,
       "required": false
     },

@@ -6,12 +6,11 @@
   "additionalProperties": false,
   "properties": {
     "defaultModels": {
-      "type": "array",
+      "type": "string",
       "title": "Default models to compare",
-      "description": "Model ids from the host allowlist; ids this host does not approve are ignored.",
-      "items": { "type": "string" },
-      "maxItems": 4,
-      "default": []
+      "description": "Comma-separated model ids from the host allowlist; ids this host does not approve are ignored.",
+      "maxLength": 600,
+      "default": ""
     },
     "maxOutputTokens": {
       "type": "integer",

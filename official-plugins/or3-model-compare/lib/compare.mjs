@@ -86,6 +86,28 @@ export function normalizeCompareOptions(input = {}) {
     return { ok: true, value: { prompt, models, systemPrompt, maxOutputTokens } };
 }
 
+/**
+ * Default models from the setup text field. The host stores a `text` field as a
+ * string, so a comma-separated list is the contract; an array is accepted for
+ * programmatic callers and tests.
+ */
+export function parseDefaultModels(input) {
+    const entries = Array.isArray(input)
+        ? input
+        : typeof input === 'string'
+          ? input.split(',')
+          : [];
+    const models = [];
+    for (const entry of entries) {
+        const id = typeof entry === 'string' ? entry.trim() : '';
+        if (!/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,191}$/.test(id)) continue;
+        if (models.includes(id)) continue;
+        models.push(id);
+        if (models.length >= COMPARE_LIMITS.maxModels) break;
+    }
+    return models;
+}
+
 /** One identical prompt for every model, so the comparison is fair. */
 export function buildComparisonPrompt({ prompt, systemPrompt = '' }) {
     const system = systemPrompt.trim();

@@ -23,7 +23,9 @@ host model, and keep versioned presets.
 - No workflow engine, no scheduling, no background runs: one preview, one run.
 - No expressions, includes, loops or remote templates.
 - Model calls go through the host's governed `ai.complete` capability; the plugin
-  never holds a credential or picks an endpoint.
+  never holds a credential or picks an endpoint. The output ceiling is the lower
+  of the plugin's default and the host's disclosed limit, and each run counts
+  against the host's per-session budget.
 
 ## Host requirements
 

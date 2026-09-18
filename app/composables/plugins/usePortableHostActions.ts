@@ -22,11 +22,7 @@
  * - Asking the user for confirmation (the surface component owns that step).
  */
 
-import {
-    HOST_ACTIONS,
-    planHostAction,
-    type HostActionPayload,
-} from '~/utils/plugins/portable-host-actions'
+import { planHostAction, type HostActionPayload } from '~/utils/plugins/portable-host-actions'
 import { invokePortableUiEvent } from '~/composables/plugins/portable-client-runtime'
 import { createDocument, updateDocument, type CreateDocumentInput } from '~/db/documents'
 import { createThread } from '~/db/threads'
@@ -87,10 +83,10 @@ export function usePortableHostActions() {
 
         try {
             if (planned.plan.kind === 'replace-document') {
+                // Content-only: an approved replace never renames the document.
                 await updateDocument(planned.plan.documentId, {
                     // The editor's JSON shape is the document store's content shape.
                     content: markdownToTipTapDoc(planned.plan.content) as CreateDocumentInput['content'],
-                    ...(planned.plan.title ? { title: planned.plan.title } : {}),
                 })
                 return {
                     ok: true,
@@ -129,5 +125,5 @@ export function usePortableHostActions() {
         }
     }
 
-    return { run, actions: HOST_ACTIONS }
+    return { run }
 }

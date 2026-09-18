@@ -10,7 +10,7 @@
  * content needs an explicit confirmation. Nothing here executes plugin code.
  */
 import { computed, onMounted, ref } from 'vue';
-import { $fetch, useRoute, useToast } from '#imports';
+import { $fetch, navigateTo, useRoute, useToast } from '#imports';
 import {
     invokePortableUiEvent,
     usePortableActivations,
@@ -74,8 +74,17 @@ async function runHostAction(action: string): Promise<void> {
             return;
         }
         toast.add({ title: describeOutcome(result.outcome.status), color: 'success' });
-        if (result.outcome.threadId) {
-            await navigateTo(`/chat/${result.outcome.threadId}`);
+        // Show the result: the plugin surface is where the action started, not
+        // where the written content lives. Navigation is best-effort; the write
+        // already succeeded and is reported above.
+        try {
+            if (result.outcome.threadId) {
+                await navigateTo(`/chat/${result.outcome.threadId}`);
+            } else if (result.outcome.documentId) {
+                await navigateTo(`/docs/${result.outcome.documentId}`);
+            }
+        } catch {
+            /* intentionally empty */
         }
     } finally {
         busy.value = false;

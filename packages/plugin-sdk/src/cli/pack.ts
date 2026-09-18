@@ -8,6 +8,7 @@ import { writeDeterministicPackageZip } from './archive';
 import {
     assertPackageRoot,
     ensureDir,
+    findMissingDeclaredSample,
     isWithinPath,
     materializePackTree,
 } from './shared';
@@ -41,6 +42,13 @@ export async function packV2Package(
     const files = materializePackTree(sourceRoot, packRoot, {
         excludePaths: archivePath ? [archivePath] : [],
     });
+    const missingSample = findMissingDeclaredSample({ packRoot, files });
+    if (missingSample) {
+        throw new Error(
+            `The package declares firstAction.samplePath "${missingSample}" but that file is not ` +
+                `part of the package. Add it (or remove the declaration) before packing.`
+        );
+    }
     const verification = await verifyPackageTree(packRoot);
     if (archivePath) {
         ensureDir(dirname(archivePath));

@@ -47,6 +47,8 @@ export type V2ConformanceIssueCode =
     | 'unresolved-bare-import'
     | 'nuxt-auto-import'
     | 'client-entry-missing'
+    /** `firstAction.samplePath` is declared but the file is not in the package. */
+    | 'portable-sample-missing'
     | PortableProfileFindingCode
     | PackageTreeValidationCode;
 

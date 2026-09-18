@@ -67,6 +67,9 @@ export function createPromptWorkbench(options = {}) {
         migrated: false,
         models: [],
         model: '',
+        modelPrices: {},
+        hostSpendLimitUsd: null,
+        hostMaxOutputTokens: null,
         catalogConfigured: false,
         output: null,
         failures: [],
@@ -145,13 +148,48 @@ export function createPromptWorkbench(options = {}) {
             });
         }
 
+        // The model selector sits in its own form; the run button deliberately
+        // stays outside every form so the host submits the whole field store
+        // (template, variables and model) with it.
+        if (state.models.length > 0) {
+            children.push({
+                type: 'form',
+                id: 'model',
+                children: [
+                    {
+                        type: 'field.select',
+                        id: 'model',
+                        label: 'Model',
+                        value: state.model,
+                        options: state.models.map((id) => ({
+                            value: id,
+                            label: state.modelPrices[id] ? `${id} · ${state.modelPrices[id]}` : id,
+                        })),
+                        description:
+                            state.hostSpendLimitUsd === null
+                                ? 'Model calls are billed by the provider and attributed to this plugin.'
+                                : `Calls are billed by the provider and attributed to this plugin; this session's host limit is $${state.hostSpendLimitUsd}.`,
+                    },
+                ],
+            });
+        }
+
         children.push({
             type: 'stack',
             direction: 'row',
             children: [
                 { type: 'button', id: 'preview', label: 'Update preview', action: ACTIONS.preview },
-                ...(state.catalogConfigured
-                    ? [{ type: 'button', id: 'run', label: state.running ? 'Running…' : 'Run with AI', action: ACTIONS.run, variant: 'primary', disabled: state.running }]
+                ...(state.models.length > 0
+                    ? [
+                          {
+                              type: 'button',
+                              id: 'run',
+                              label: state.running ? 'Running…' : 'Run with AI',
+                              action: ACTIONS.run,
+                              variant: 'primary',
+                              disabled: state.running,
+                          },
+                      ]
                     : []),
             ],
         });
@@ -214,6 +252,13 @@ export function createPromptWorkbench(options = {}) {
         if (catalog.ok) {
             state.catalogConfigured = catalog.value.configured;
             state.models = catalog.value.models.filter((model) => model.priced).map((model) => model.id);
+            state.modelPrices = Object.fromEntries(
+                catalog.value.models
+                    .filter((model) => model.priced)
+                    .map((model) => [model.id, `$${model.promptPerMillion}/$${model.completionPerMillion} per M`]),
+            );
+            state.hostSpendLimitUsd = catalog.value.limits.spendLimitUsd > 0 ? catalog.value.limits.spendLimitUsd : null;
+            state.hostMaxOutputTokens = catalog.value.limits.maxOutputTokens > 0 ? catalog.value.limits.maxOutputTokens : null;
             state.model = state.models[0] ?? '';
         }
         const stored = await context.storage.get(PRESET_STORAGE_KEY);
@@ -256,7 +301,7 @@ export function createPromptWorkbench(options = {}) {
         const answer = await completeWithHostModel(hostCall, {
             model: state.model,
             prompt: preview.value.text,
-            maxOutputTokens: PROMPT_LIMITS.defaultOutputTokens,
+            maxOutputTokens: runOutputCeiling(state),
         }).catch((error) => ({ ok: false, error: classifyFailure(error) }));
         state.running = false;
         if (!answer.ok) {
@@ -301,6 +346,9 @@ export function createPromptWorkbench(options = {}) {
         }
         if (action === ACTIONS.run) {
             applyFormValues(values);
+            if (typeof values.model === 'string' && state.models.includes(values.model)) {
+                state.model = values.model;
+            }
             await run(context);
             return { ok: true };
         }
@@ -360,6 +408,15 @@ export function createPromptWorkbench(options = {}) {
         },
     });
     return { definition, client, state, renderTemplate };
+}
+
+/** The plugin's default, clamped to the host's disclosed ceiling when there is one. */
+function runOutputCeiling(state) {
+    const hostMax = state.hostMaxOutputTokens;
+    if (typeof hostMax === 'number' && hostMax > 0) {
+        return Math.min(PROMPT_LIMITS.maxOutputTokens, hostMax);
+    }
+    return PROMPT_LIMITS.defaultOutputTokens;
 }
 
 export default (() => {

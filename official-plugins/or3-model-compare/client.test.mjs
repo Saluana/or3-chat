@@ -11,6 +11,7 @@ import {
     comparisonTableRows,
     formatAnswerMarkdown,
     normalizeCompareOptions,
+    parseDefaultModels,
     summarizeSpendUsd,
 } from './lib/compare.mjs';
 import { createModelCompare, MODEL_COMPARE_MANIFEST } from './client.mjs';
@@ -20,7 +21,7 @@ const samplePrompt = readFileSync(resolve(root, 'fixtures/sample-prompt.md'), 'u
 
 const approvedGrants = ['network.http', 'settings.read', 'settings.write'];
 
-function catalog() {
+function catalog(overrides = {}) {
     return {
         configured: true,
         models: [
@@ -29,6 +30,7 @@ function catalog() {
             { id: 'vendor/unpriced', label: 'unpriced', priced: false, promptPerMillion: null, completionPerMillion: null },
         ],
         limits: { maxOutputTokens: 1024, spendLimitUsd: 0.5, maxConcurrentCalls: 4, deadlineMs: 30_000 },
+        ...overrides,
     };
 }
 
@@ -40,10 +42,14 @@ function completion(text, spendUsd = 0.001) {
     };
 }
 
-async function activate({ responses, settings } = {}) {
+async function activate({ responses, settings, catalogOverrides } = {}) {
     const host = createPortableTestHost({
         approvedGrants,
-        responses: { 'ai.models': catalog(), 'ai.complete': completion('answer'), ...(responses ?? {}) },
+        responses: {
+            'ai.models': catalog(catalogOverrides ?? {}),
+            'ai.complete': completion('answer'),
+            ...(responses ?? {}),
+        },
         ...(settings ? { initialSettings: settings } : {}),
     });
     const { definition } = createModelCompare({ client: host.client });
@@ -82,6 +88,14 @@ test('validates the comparison request and bounds the models', () => {
     expect(normalized.value.maxOutputTokens).toBe(COMPARE_LIMITS.maxOutputTokens);
 });
 
+test('parses default models from the setup text field and ignores junk', () => {
+    expect(parseDefaultModels('vendor/alpha, vendor/beta ,vendor/alpha')).toEqual(['vendor/alpha', 'vendor/beta']);
+    expect(parseDefaultModels(['vendor/alpha', 42, ''])).toEqual(['vendor/alpha']);
+    expect(parseDefaultModels('not a model!!')).toEqual([]);
+    expect(parseDefaultModels(undefined)).toEqual([]);
+    expect(parseDefaultModels('a/b,c/d,e/f,g/h,i/j')).toHaveLength(COMPARE_LIMITS.maxModels);
+});
+
 test('builds one identical prompt and a stable answer document', () => {
     expect(buildComparisonPrompt({ prompt: 'Question?' })).toBe('Question?');
     expect(buildComparisonPrompt({ prompt: 'Question?', systemPrompt: 'Be brief.' })).toBe(
@@ -102,7 +116,7 @@ test('classifies host failures with actionable copy', () => {
 });
 
 test('runs one completion per selected model and reports attributed spend', async () => {
-    const host = await activate({ settings: { defaultModels: ['vendor/alpha', 'vendor/beta'] } });
+    const host = await activate({ settings: { defaultModels: 'vendor/alpha, vendor/beta' } });
     await host.invokeRequest('runtime.ui-event', { action: 'compare.run', values: { prompt: 'Compare this' } });
 
     const completions = host.calls.filter((call) => call.method === 'ai.complete');
@@ -111,6 +125,7 @@ test('runs one completion per selected model and reports attributed spend', asyn
     // The same prompt reaches every model, with the output ceiling applied.
     expect(new Set(completions.map((call) => call.params.prompt)).size).toBe(1);
     expect(completions[0].params.prompt).toBe('Compare this');
+    // No explicit setting: the plugin default applies (below the host ceiling).
     expect(completions[0].params.maxOutputTokens).toBe(COMPARE_LIMITS.defaultOutputTokens);
 
     const { flat } = lastView(host);
@@ -118,16 +133,28 @@ test('runs one completion per selected model and reports attributed spend', asyn
     const table = flat.find((node) => node.type === 'table');
     expect(table.rows).toHaveLength(2);
     expect(table.caption).toContain('Attributed provider spend');
+    // The host's own session limit is disclosed next to the attributed spend.
+    expect(table.caption).toContain('host limit is $0.5');
     expect(summarizeSpendUsd([{ spendUsd: 0.001 }, { spendUsd: 0.002 }])).toBeCloseTo(0.003);
     expect(comparisonTableRows([{ label: 'alpha', status: 'ok', completionTokens: 5, spendUsd: 0.001 }])).toEqual([
         { model: 'alpha', status: 'Answered', completionTokens: '5', spend: '$0.0010' },
     ]);
 });
 
+test('clamps the output ceiling to the host-disclosed limit', async () => {
+    const host = await activate({
+        settings: { defaultModels: 'vendor/alpha, vendor/beta', maxOutputTokens: 900 },
+        catalogOverrides: { limits: { maxOutputTokens: 128, spendLimitUsd: 0.5, maxConcurrentCalls: 4, deadlineMs: 30_000 } },
+    });
+    await host.invokeRequest('runtime.ui-event', { action: 'compare.run', values: { prompt: 'Compare this' } });
+    const completions = host.calls.filter((call) => call.method === 'ai.complete');
+    expect(completions.every((call) => call.params.maxOutputTokens === 128)).toBe(true);
+});
+
 test('keeps completed answers when one model fails', async () => {
     let calls = 0;
     const host = await activate({
-        settings: { defaultModels: ['vendor/alpha', 'vendor/beta'] },
+        settings: { defaultModels: 'vendor/alpha, vendor/beta' },
         responses: {
             'ai.complete': () => {
                 calls += 1;
@@ -158,7 +185,7 @@ test('explains an unconfigured host instead of offering a run', async () => {
 });
 
 test('continues the chosen answer in chat with its model named', async () => {
-    const host = await activate({ settings: { defaultModels: ['vendor/alpha', 'vendor/beta'] } });
+    const host = await activate({ settings: { defaultModels: 'vendor/alpha, vendor/beta' } });
     await host.invokeRequest('runtime.ui-event', { action: 'compare.run', values: { prompt: 'Compare this' } });
     await host.invokeRequest('runtime.ui-event', { action: 'compare.choose:1' });
     const payload = await host.invokeRequest('runtime.ui-event', { action: 'host.chat.continue' });
@@ -179,4 +206,37 @@ test('runs the first action on the host-provided sample', async () => {
     const completions = host.calls.filter((call) => call.method === 'ai.complete');
     expect(completions[0].params.prompt).toBe(samplePrompt);
     expect(MODEL_COMPARE_MANIFEST.id).toBe('or3.model-compare');
+});
+
+/**
+ * The host submits only the enclosing form's values for a button inside a form,
+ * and the whole field store for a button outside every form. Actions that need
+ * the prompt/template/content must therefore stay outside every form.
+ */
+function assertWholeStoreActionsAreOutsideForms(host, actions) {
+    const view = host.renders.at(-1);
+    const inside = new Set();
+    const walk = (nodes, inForm) => {
+        for (const node of nodes) {
+            if (node.type === 'form') {
+                walk(node.children, true);
+                continue;
+            }
+            if (node.type === 'button' && inForm) inside.add(node.action);
+            if (Array.isArray(node.children)) walk(node.children, inForm);
+        }
+    };
+    walk(view.nodes, false);
+    for (const action of actions) {
+        expect(inside.has(action)).toBe(false);
+    }
+}
+
+test('keeps whole-store action buttons outside every form', async () => {
+    const host = await activate();
+    await host.invokeRequest('runtime.ui-event', {
+        action: 'host.first-action.run',
+        context: { kind: 'sample', title: 'Sample', content: 'Selected content that is long enough to transform.' },
+    });
+    assertWholeStoreActionsAreOutsideForms(host, ['compare.run']);
 });

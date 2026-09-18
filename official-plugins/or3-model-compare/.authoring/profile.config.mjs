@@ -40,11 +40,10 @@ export const authoringConfig = Object.freeze({
     fields: [
         {
             key: 'defaultModels',
-            label: 'Default models to compare',
+            label: 'Default models to compare (comma-separated ids)',
             kind: 'text',
             required: false,
             order: 1,
-            description: 'Comma-separated model ids from the host allowlist; unknown ids are ignored.',
         },
         {
             key: 'maxOutputTokens',

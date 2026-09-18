@@ -63,7 +63,9 @@ export function createDocumentUtilities(options = {}) {
         transform: 'outline',
         models: [],
         model: '',
+        modelPrices: {},
         catalogConfigured: false,
+        hostMaxOutputTokens: null,
         output: null,
         running: false,
         failures: [],
@@ -108,6 +110,26 @@ export function createDocumentUtilities(options = {}) {
             children.push({
                 type: 'text',
                 text: 'This host has no approved models, so model transformations are unavailable; the offline outline still works.',
+            });
+        }
+        // Its own form: the transform button stays outside every form, so the
+        // host submits the whole field store with it.
+        if (active?.usesModel && state.models.length > 0) {
+            children.push({
+                type: 'form',
+                id: 'model',
+                children: [
+                    {
+                        type: 'field.select',
+                        id: 'model',
+                        label: 'Model',
+                        value: state.model,
+                        options: state.models.map((id) => ({
+                            value: id,
+                            label: state.modelPrices[id] ? `${id} · ${state.modelPrices[id]}` : id,
+                        })),
+                    },
+                ],
             });
         }
 
@@ -160,7 +182,13 @@ export function createDocumentUtilities(options = {}) {
         if (catalog.ok) {
             state.catalogConfigured = catalog.value.configured;
             state.models = catalog.value.models.filter((model) => model.priced).map((model) => model.id);
+            state.modelPrices = Object.fromEntries(
+                catalog.value.models
+                    .filter((model) => model.priced)
+                    .map((model) => [model.id, `$${model.promptPerMillion}/$${model.completionPerMillion} per M`]),
+            );
             state.model = state.models[0] ?? '';
+            state.hostMaxOutputTokens = catalog.value.limits.maxOutputTokens > 0 ? catalog.value.limits.maxOutputTokens : null;
         }
         const preferred = await context.settings.get('defaultTransform');
         if (preferred.ok && typeof preferred.value === 'string' && transformById(preferred.value)) {
@@ -211,10 +239,15 @@ export function createDocumentUtilities(options = {}) {
         state.running = true;
         render();
         const prompt = buildTransformPrompt({ transform: state.transform, content: selection.value.content });
+        const hostMax = state.hostMaxOutputTokens;
+        const ceiling =
+            typeof hostMax === 'number' && hostMax > 0
+                ? Math.min(DOCUMENT_LIMITS.maxOutputTokens, hostMax)
+                : DOCUMENT_LIMITS.defaultOutputTokens;
         const answer = await completeWithHostModel(hostCall, {
             model: state.model,
             prompt,
-            maxOutputTokens: DOCUMENT_LIMITS.defaultOutputTokens,
+            maxOutputTokens: ceiling,
         }).catch((error) => ({ ok: false, error: classifyFailure(error) }));
         state.running = false;
         if (!answer.ok) {
@@ -264,6 +297,9 @@ export function createDocumentUtilities(options = {}) {
             if (typeof values.content === 'string') state.content = values.content;
             if (typeof values.transform === 'string' && transformById(values.transform)) {
                 state.transform = values.transform;
+            }
+            if (typeof values.model === 'string' && state.models.includes(values.model)) {
+                state.model = values.model;
             }
             await transform(context);
             return { ok: true };

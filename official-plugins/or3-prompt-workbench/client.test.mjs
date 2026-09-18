@@ -16,19 +16,23 @@ import { createPromptWorkbench, PROMPT_WORKBENCH_MANIFEST } from './client.mjs';
 
 const approvedGrants = ['network.http', 'settings.read', 'settings.write', 'storage.read', 'storage.write'];
 
-function catalog() {
+function catalog(overrides = {}) {
     return {
         configured: true,
-        models: [{ id: 'vendor/alpha', label: 'alpha', priced: true, promptPerMillion: 1, completionPerMillion: 2 }],
+        models: [
+            { id: 'vendor/alpha', label: 'alpha', priced: true, promptPerMillion: 1, completionPerMillion: 2 },
+            { id: 'vendor/beta', label: 'beta', priced: true, promptPerMillion: 3, completionPerMillion: 6 },
+        ],
         limits: { maxOutputTokens: 1024, spendLimitUsd: 0.5, maxConcurrentCalls: 4, deadlineMs: 30_000 },
+        ...overrides,
     };
 }
 
-async function activate({ responses, settings, storage } = {}) {
+async function activate({ responses, settings, storage, catalogOverrides } = {}) {
     const host = createPortableTestHost({
         approvedGrants,
         responses: {
-            'ai.models': catalog(),
+            'ai.models': catalog(catalogOverrides ?? {}),
             'ai.complete': {
                 text: 'model answer',
                 model: 'vendor/alpha',
@@ -98,6 +102,21 @@ test('preview and execution share one rendered text', async () => {
     expect(flatNodes(host).some((node) => node.type === 'markdown' && node.markdown === 'model answer')).toBe(true);
 });
 
+test('runs on the model the user chose and within the host ceiling', async () => {
+    const host = await activate({
+        catalogOverrides: { limits: { maxOutputTokens: 200, spendLimitUsd: 0.5, maxConcurrentCalls: 4, deadlineMs: 30_000 } },
+    });
+    await host.invokeRequest('runtime.ui-event', {
+        action: 'workbench.run',
+        values: { template: 'Summarize: {{selection}}', selection: 'the text', model: 'vendor/beta' },
+    });
+    const completion = host.calls.find((call) => call.method === 'ai.complete');
+    expect(completion.params.model).toBe('vendor/beta');
+    expect(completion.params.maxOutputTokens).toBe(200);
+    const selector = flatNodes(host).find((node) => node.type === 'field.select' && node.id === 'model');
+    expect(selector.options.map((option) => option.value)).toEqual(['vendor/alpha', 'vendor/beta']);
+});
+
 test('refuses to run with missing values and explains why', async () => {
     const host = await activate();
     await host.invokeRequest('runtime.ui-event', {
@@ -150,4 +169,37 @@ test('runs the first action on the host-provided selection', async () => {
     const preview = flat.find((node) => node.type === 'result');
     expect(preview.text).toContain('Selected passage.');
     expect(buildPreview({ template: 'x', values: {} }).ok).toBe(true);
+});
+
+/**
+ * The host submits only the enclosing form's values for a button inside a form,
+ * and the whole field store for a button outside every form. Actions that need
+ * the prompt/template/content must therefore stay outside every form.
+ */
+function assertWholeStoreActionsAreOutsideForms(host, actions) {
+    const view = host.renders.at(-1);
+    const inside = new Set();
+    const walk = (nodes, inForm) => {
+        for (const node of nodes) {
+            if (node.type === 'form') {
+                walk(node.children, true);
+                continue;
+            }
+            if (node.type === 'button' && inForm) inside.add(node.action);
+            if (Array.isArray(node.children)) walk(node.children, inForm);
+        }
+    };
+    walk(view.nodes, false);
+    for (const action of actions) {
+        expect(inside.has(action)).toBe(false);
+    }
+}
+
+test('keeps whole-store action buttons outside every form', async () => {
+    const host = await activate();
+    await host.invokeRequest('runtime.ui-event', {
+        action: 'host.first-action.run',
+        context: { kind: 'sample', title: 'Sample', content: 'Selected content that is long enough to transform.' },
+    });
+    assertWholeStoreActionsAreOutsideForms(host, ['workbench.run']);
 });

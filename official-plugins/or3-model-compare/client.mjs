@@ -11,6 +11,7 @@ import {
     comparisonTableRows,
     formatAnswerMarkdown,
     normalizeCompareOptions,
+    parseDefaultModels,
     summarizeSpendUsd,
 } from './lib/compare.mjs';
 
@@ -92,6 +93,7 @@ export function createModelCompare(options = {}) {
         catalogError: null,
         systemPrompt: '',
         maxOutputTokens: COMPARE_LIMITS.defaultOutputTokens,
+        hostSpendLimitUsd: null,
         running: false,
         results: [],
         failures: [],
@@ -205,7 +207,9 @@ export function createModelCompare(options = {}) {
         if (state.results.length > 0) {
             children.push({
                 type: 'table',
-                caption: `Attributed provider spend: $${summarizeSpendUsd(state.results).toFixed(4)} (separate from your OR3 plan)`,
+                caption:
+                    `Attributed provider spend: $${summarizeSpendUsd(state.results).toFixed(4)} (separate from your OR3 plan` +
+                    `${state.hostSpendLimitUsd === null ? '' : `; this session's host limit is $${state.hostSpendLimitUsd}`})`,
                 columns: [
                     { key: 'model', label: 'Model' },
                     { key: 'status', label: 'Status' },
@@ -270,21 +274,20 @@ export function createModelCompare(options = {}) {
         const priced = catalog.value.models.filter((model) => model.priced).map((model) => model.id);
         // Defaults from settings, narrowed to what this host actually approves.
         const configured = await context.settings.get('defaultModels');
-        const preferred = configured.ok && Array.isArray(configured.value) ? configured.value : [];
         const chosen = [];
-        for (const model of preferred) {
-            if (typeof model === 'string' && priced.includes(model) && !chosen.includes(model)) {
-                chosen.push(model);
-            }
-            if (chosen.length >= COMPARE_LIMITS.maxModels) break;
+        for (const model of parseDefaultModels(configured.ok ? configured.value : undefined)) {
+            if (priced.includes(model) && !chosen.includes(model)) chosen.push(model);
         }
         state.models = chosen;
+        // The default stays the plugin's own; both it and any saved setting are
+        // clamped to the ceiling the host disclosed.
+        const hostMax = catalog.value.limits.maxOutputTokens;
+        const ceiling = hostMax > 0 ? Math.min(COMPARE_LIMITS.maxOutputTokens, hostMax) : COMPARE_LIMITS.maxOutputTokens;
+        state.maxOutputTokens = Math.min(state.maxOutputTokens, ceiling);
+        state.hostSpendLimitUsd = catalog.value.limits.spendLimitUsd > 0 ? catalog.value.limits.spendLimitUsd : null;
         const tokens = await context.settings.get('maxOutputTokens');
         if (tokens.ok && typeof tokens.value === 'number') {
-            state.maxOutputTokens = Math.min(
-                COMPARE_LIMITS.maxOutputTokens,
-                Math.max(64, Math.trunc(tokens.value)),
-            );
+            state.maxOutputTokens = Math.min(ceiling, Math.max(64, Math.trunc(tokens.value)));
         }
         const system = await context.settings.get('systemPrompt');
         if (system.ok && typeof system.value === 'string') state.systemPrompt = system.value;

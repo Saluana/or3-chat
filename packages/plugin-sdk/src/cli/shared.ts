@@ -8,7 +8,8 @@ import {
     statSync,
     writeFileSync,
 } from 'node:fs';
-import { basename, dirname, relative, resolve, sep } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { PACKAGE_SETUP_FILE, parseSetupDescriptor } from '../profile';
 
 export const CLI_NAME = 'or3-plugin';
 
@@ -149,6 +150,29 @@ export function listArtifactFiles(root: string): string[] {
  * The packer and the runtime import scanner share one exclusion set (see
  * `PACK_IGNORE_NAMES`, dot-directories, and `isShippablePackageFile`).
  */
+/**
+ * The declared first-action sample must ship in the package. A missing file is a
+ * build-time refusal, not a runtime surprise when a user runs the first action.
+ */
+export function findMissingDeclaredSample(input: {
+    readonly packRoot: string;
+    readonly files: readonly string[];
+}): string | null {
+    const setupPath = join(input.packRoot, PACKAGE_SETUP_FILE);
+    if (!existsSync(setupPath)) return null;
+    let raw: unknown;
+    try {
+        raw = JSON.parse(readFileSync(setupPath, 'utf8')) as unknown;
+    } catch {
+        return null;
+    }
+    const parsed = parseSetupDescriptor(raw);
+    const firstAction = parsed.value?.firstAction;
+    if (!firstAction?.usesSampleContext || !firstAction.samplePath) return null;
+    const wanted = posix(firstAction.samplePath);
+    return input.files.includes(wanted) ? null : wanted;
+}
+
 export function materializePackTree(
     sourceRoot: string,
     outputRoot: string,

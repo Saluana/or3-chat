@@ -36,11 +36,16 @@ Supporting SDK/host work:
 
 Recorded from `bun packages/plugin-sdk/bin/or3-plugin.mjs` on this commit:
 
-| Package | Validate | Tests | Package digest | Manifest digest | Archive |
-|---|---|---|---|---|---|
-| `or3-model-compare` | conformant | 8 pass / 0 fail | `sha256-5905d9d01f85ff61fd1d9ac4a076dfbf061aa074c49e323917c3c83683df7ad3` | `sha256-6acfb8d8957dd64496f7244d5025bb94853960902a6ca6d0386629b05d3c2573` | 11,507 bytes (`/tmp` recomputable) |
-| `or3-prompt-workbench` | conformant | 7 pass / 0 fail | `sha256-694b9e6dbe1b694d1e5b2867160548c24a9d96d7dc5ecfefc864a052016f20de` | `sha256-1866194815a40e2dc2eb249adf12f08beec6d3c5de6a4300a1d2d33d8a2e2803` | recomputable |
-| `or3-document-utilities` | conformant | 7 pass / 0 fail | `sha256-2ef5c3bebce9a096f3262e8097d4e9cdd20c158e1b55d069013be8b1474f1300` | `sha256-e7e16f2b19f88a67079eb116a3ea782a973608a243e5f1c3b0af9f154a8a1ba3` | recomputable |
+| Package | Validate | Tests | Package digest | Manifest digest |
+|---|---|---|---|---|
+| `or3-model-compare` | conformant | 11 pass / 0 fail | `sha256-1c3353e6ec4677a3e14c3cef175a6164fb3f0148be2dbaa11b3796c74f250356` | `sha256-6acfb8d8957dd64496f7244d5025bb94853960902a6ca6d0386629b05d3c2573` |
+| `or3-prompt-workbench` | conformant | 9 pass / 0 fail | `sha256-5fdbbe0b06575966ebfbf3b0bc331897562dadf1cfe8cb2e9863b29013c7a361` | `sha256-1866194815a40e2dc2eb249adf12f08beec6d3c5de6a4300a1d2d33d8a2e2803` |
+| `or3-document-utilities` | conformant | 9 pass / 0 fail | `sha256-ebd894862e68e0c66c57ef077409d9c2d3ce29e88081398f3d66d4a3574335b0` | `sha256-e7e16f2b19f88a67079eb116a3ea782a973608a243e5f1c3b0af9f154a8a1ba3` |
+
+Manifest digests are unchanged from the first recording: the review round below
+touched package code, the setup field label and the READMEs, not the manifest.
+The CLI resolves the SDK from `dist/`, so the CLI was rebuilt before this table
+was produced.
 
 Packing is deterministic (the same source packed twice produced the same archive
 bytes). Each package carries its own `LICENSE` (GPL-3.0), `THIRD_PARTY_NOTICES`
@@ -60,6 +65,20 @@ Per-package source/license/setup/compatibility evidence:
   `features.required: [or3-portable-client-v1]`, `trust: isolated-client`,
   `stateCompatibility` version 1 with `rollback: safe`.
 
+## Review round (self-review before hand-off)
+
+A ruthless review of this change set found and fixed:
+
+| Issue | Fix |
+|---|---|
+| **Model Compare defaults never applied**: the setup field is `text` (the host stores a string) while the client read an array and the settings schema declared an array, so a saved default list was silently ignored. | `parseDefaultModels()` parses the comma-separated string (arrays still accepted for tests), the settings schema declares a string, and the label states the format. |
+| **Replace renamed the user's document**: the host applied the plugin-provided payload title to the existing document. | `host.document.replace` is content-only; a plugin-supplied title is ignored (asserted in tests). |
+| **Host limits ignored**: both products used their own output ceilings and never disclosed the host's session spend cap. | The host's disclosed `maxOutputTokens` clamps the plugin default and any saved setting, and the spend cap appears next to the attributed spend. |
+| **Prompt Workbench had no model choice** and its new selector first landed inside a form, which scopes the host's submitted values to that form. | A model selector with prices, and the run button deliberately outside every form; each package now asserts that whole-store action buttons are not nested in a form. |
+| **A declared `firstAction.samplePath` could be missing from the archive**, failing only at run time. | `or3-plugin validate` reports `portable-sample-missing` as nonconformant and `pack` refuses to write the archive; covered by tests and verified end to end on a package copy. |
+| **A write was reported but not shown**. | `create`/`replace` navigate to the written document (chat continuation already navigated), with navigation best-effort after the write is reported. |
+| **Dead references/params**: an unused `actions` return (and its now-dangling identifier), unused fact-parser parameters, and a settings field `description` the descriptor contract drops. | Removed; hints live in labels and the settings schema. |
+
 ## Verification performed
 
 - Package tests (`bun test` per package): 22 tests, all passing, including the
@@ -67,12 +86,14 @@ Per-package source/license/setup/compatibility evidence:
   migration.
 - Repository: `bun run test` → 1 pre-existing failure only
   (`SystemPromptsModal.test.ts`, reka-ui `DialogRootContext`), everything else
-  passing including the 23 new host/SDK tests; `bun run type-check` → 25 errors,
-  all pre-existing (none in changed files, see below); `bun run build` → success
-  (61.2 MB / 20.2 MB gzip), with the recorded build-time note that trusted-host
-  V2 client UI remains rebuild-required (portable/isolated-client is the profile
-  the products use); targeted `eslint` on every changed file → 0 errors and 0 new
-  warnings.
+  passing including the 26 new host/SDK tests; `bun run type-check` → 25 errors,
+  all pre-existing (none in changed files, see below); `bun run build` → success,
+  with the recorded build-time note that trusted-host V2 client UI remains
+  rebuild-required (portable/isolated-client is the profile the products use);
+  targeted `eslint` on every changed file → 0 errors and 0 new warnings.
+- The packaged CLI resolves the SDK from `dist/`; it was rebuilt before the
+  digests above were taken (the guard for a missing declared sample exists only in
+  the rebuilt CLI).
 - Pre-existing failures, distinguished from this work:
   - `bun run type-check`: 25 errors in `shared/plugins/authority/__tests__`,
     `shared/plugins/isolation/__tests__`, `app/components/marketplace`,

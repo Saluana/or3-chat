@@ -25,8 +25,9 @@ replace the selection, or continue in chat.
 
 ## Host requirements
 
-- Model transforms need the operator model configuration; the offline outline
-  does not.
+- Model transforms need the operator model configuration and an approved paid
+  model chosen in the form; the offline outline does not need a model. The output
+  ceiling is the lower of the plugin's default and the host's disclosed limit.
 - Grants: `documents.read` (selection scope), `documents.write` (approved
   writes), `network.http` (model calls), `settings.read`/`settings.write`.
 

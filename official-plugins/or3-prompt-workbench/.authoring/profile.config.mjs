@@ -33,11 +33,10 @@ export const authoringConfig = Object.freeze({
     fields: [
         {
             key: 'defaultTemplate',
-            label: 'Default template',
+            label: 'Default template ({{name}} variables)',
             kind: 'text',
             required: false,
             order: 1,
-            description: 'Opened when the plugin starts; write variables as {{name}}.',
         },
     ],
     testAction: { operationId: 'models.list', deadlineMs: 10_000 },

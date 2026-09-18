@@ -54,8 +54,11 @@ describe('portable host actions', () => {
         expect(planned.plan).toMatchObject({
             kind: 'replace-document',
             documentId: 'doc_1',
+            title: null,
             requiresConfirmation: true,
         })
+        // A plugin-suggested title never renames the user's document.
+        expect(planned.plan.title).toBeNull()
         // A plugin-supplied target is ignored entirely.
         const ignoredTarget = planHostAction({
             action: HOST_ACTIONS.replaceDocument,
