@@ -1403,7 +1403,7 @@
                     "name": "library.md",
                     "path": "/plugins/library",
                     "category": "Guide",
-                    "summary": "Dashboard > Library connects one local user to that person's marketplace account through a bounded device-style pairing: the browser sees only a comparison code and the canonical verification link, the local server keeps the polling secret and an encrypted credential bound to that user and instance, and the link carries exactly library:read and downloads:acquire with a fixed 90-day lifetime. Disconnect stops the local server first and retries central revocation; revoked, expired or restored authority asks for a reconnect while installed software keeps running."
+                    "summary": "Dashboard > Library connects one local user to that person's marketplace account through a bounded device-style pairing: the browser sees only a comparison code and the canonical verification link, the local server keeps the polling secret and an encrypted credential bound to that user and instance, and the link carries exactly library:read and downloads:acquire with a fixed 90-day lifetime. Disconnect stops the local server first and retries central revocation; revoked, expired or restored authority asks for a reconnect while installed software keeps running. While linked, the page also lists the account's purchased releases (read through the server-held credential), and the plugin page shows an existing purchase as In your Library instead of a Buy action."
                 },
                 {
                     "name": "v1-support-and-migration.md",

@@ -86,6 +86,32 @@ export interface LinkedSessionPayload {
     readonly scopes: readonly string[];
 }
 
+/**
+ * One acquired release as the marketplace reports it (task 10.1). Only what a
+ * Library view needs: the release identity, when it was acquired and which
+ * coverage allowed it.
+ */
+export interface RemoteAcquiredRelease {
+    readonly releaseId: string;
+    readonly pluginId: string;
+    readonly version: string;
+    readonly archiveSha256: string;
+    readonly coverageKind: 'update-pass' | 'plus';
+    readonly coverageUntil: string;
+    readonly acquiredAt: string;
+}
+
+export interface RemoteLibraryEntitlements {
+    readonly plus: { readonly status: 'active' | 'none' | 'ended'; readonly until: string | null };
+    readonly pluginCoverage: readonly {
+        readonly pluginId: string;
+        readonly until: string;
+        readonly status: 'valid' | 'refunded' | 'withdrawn';
+    }[];
+    readonly acquired: readonly RemoteAcquiredRelease[];
+    readonly acquiredCursor: string | null;
+}
+
 export interface LibraryLinkTransport {
     start(input: {
         readonly label: string;
@@ -95,6 +121,8 @@ export interface LibraryLinkTransport {
     poll(pairingId: string, secret: string): Promise<TransportResult<PolledPairingPayload>>;
     verify(token: string): Promise<TransportResult<LinkedSessionPayload>>;
     revoke(token: string): Promise<TransportResult<{ readonly revoked: true }>>;
+    /** The linked account's purchases, for the local Library view (task 10.1). */
+    entitlements(token: string): Promise<TransportResult<RemoteLibraryEntitlements>>;
 }
 
 const RETRYABLE_CODES: readonly LibraryTransportFailureCode[] = [
@@ -308,6 +336,66 @@ async function readBoundedText(response: Response, limit: number): Promise<strin
     }
 }
 
+/**
+ * Validate the entitlements response before it reaches a view. A structurally
+ * wrong payload is refused rather than rendered as an empty Library.
+ */
+export function parseLibraryEntitlements(value: unknown): RemoteLibraryEntitlements | null {
+    if (!isRecord(value)) return null;
+    const plus = value.plus;
+    if (!isRecord(plus) || typeof plus.status !== 'string') return null;
+    if (!['active', 'none', 'ended'].includes(plus.status)) return null;
+    if (plus.until !== null && typeof plus.until !== 'string') return null;
+
+    const coverage: { pluginId: string; until: string; status: 'valid' | 'refunded' | 'withdrawn' }[] = [];
+    if (!Array.isArray(value.pluginCoverage)) return null;
+    for (const entry of value.pluginCoverage) {
+        if (!isRecord(entry)) return null;
+        const pluginId = stringField(entry, 'pluginId');
+        const until = stringField(entry, 'until');
+        const status = entry.status;
+        if (!pluginId || !until) return null;
+        if (status !== 'valid' && status !== 'refunded' && status !== 'withdrawn') return null;
+        coverage.push({ pluginId, until, status });
+    }
+
+    const acquired: RemoteAcquiredRelease[] = [];
+    if (!Array.isArray(value.acquired)) return null;
+    for (const entry of value.acquired) {
+        if (!isRecord(entry)) return null;
+        const releaseId = stringField(entry, 'releaseId');
+        const pluginId = stringField(entry, 'pluginId');
+        const version = stringField(entry, 'version');
+        const archiveSha256 = stringField(entry, 'archiveSha256');
+        const coverageUntil = stringField(entry, 'coverageUntil');
+        const acquiredAt = stringField(entry, 'acquiredAt');
+        const coverageKind = entry.coverageKind;
+        if (!releaseId || !pluginId || !version || !archiveSha256 || !coverageUntil || !acquiredAt) {
+            return null;
+        }
+        if (coverageKind !== 'update-pass' && coverageKind !== 'plus') return null;
+        acquired.push({
+            releaseId,
+            pluginId,
+            version,
+            archiveSha256,
+            coverageKind,
+            coverageUntil,
+            acquiredAt,
+        });
+    }
+
+    const cursor = value.acquiredCursor;
+    if (cursor !== null && cursor !== undefined && typeof cursor !== 'string') return null;
+
+    return {
+        plus: { status: plus.status as 'active' | 'none' | 'ended', until: plus.until as string | null },
+        pluginCoverage: coverage,
+        acquired,
+        acquiredCursor: typeof cursor === 'string' ? cursor : null,
+    };
+}
+
 export function createHttpLibraryLinkTransport(
     config: Pick<LibraryLinkConfig, 'registryOrigin' | 'requestTimeoutMs'>
 ): LibraryLinkTransport {
@@ -424,6 +512,25 @@ export function createHttpLibraryLinkTransport(
                     failure: failure(
                         'invalid-response',
                         'The marketplace sent an unexpected session response.'
+                    ),
+                };
+            }
+            return { ok: true, value: parsed };
+        },
+
+        async entitlements(token) {
+            const result = await request('/api/v1/library/entitlements', {
+                method: 'GET',
+                headers: { 'x-or3-library-token': token },
+            });
+            if (!result.ok) return result;
+            const parsed = parseLibraryEntitlements(result.value);
+            if (!parsed) {
+                return {
+                    ok: false,
+                    failure: failure(
+                        'invalid-response',
+                        'The marketplace sent an unexpected Library response.'
                     ),
                 };
             }

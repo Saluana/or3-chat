@@ -28,6 +28,7 @@ import type {
     LibraryLinkTransport,
     LibraryTransportFailure,
     LinkedSessionPayload,
+    RemoteAcquiredRelease,
     RemoteLinkSummary,
 } from './transport';
 
@@ -54,6 +55,17 @@ export interface LibraryLinkedView {
     readonly account?: string;
     readonly accountId?: string;
     readonly lastVerifiedAt?: string;
+}
+
+/** The purchased releases a linked local user may restore (task 10.1). */
+export interface LibraryEntitlementsView {
+    readonly configured: boolean;
+    readonly linked: boolean;
+    readonly accountId?: string;
+    readonly accountDisplayName?: string;
+    readonly plus?: { readonly status: 'active' | 'none' | 'ended'; readonly until: string | null };
+    readonly acquired?: readonly RemoteAcquiredRelease[];
+    readonly notice?: LibraryTransportFailure;
 }
 
 export interface LibraryLinkStatusView {
@@ -148,6 +160,50 @@ export class LibraryLinkService {
 
     async status(userId: string): Promise<LibraryLinkStatusView> {
         return await withUserLock(userId, () => this.#guardStale(userId, () => this.#status(userId)));
+    }
+
+    /**
+     * Read the linked account's purchases, for the local Library view. This is a
+     * read-only listing: it never records an acquisition, downloads bytes or
+     * changes authority, and an unlinked state is answered without a request.
+     */
+    async entitlements(userId: string): Promise<LibraryEntitlementsView> {
+        if (!this.configured) return { configured: false, linked: false };
+        return await withUserLock(userId, async () => {
+            const record = await this.#store.read(userId);
+            if (!record || record.state !== 'linked') {
+                return { configured: true, linked: false };
+            }
+            const token = this.#tokenFor(userId, record);
+            if (!token) {
+                // Same terminal transition the status view uses; the purchase
+                // list simply stays empty until the user links again.
+                await this.#failTerminal(userId, record, 'lost', 'binding-undecryptable');
+                return { configured: true, linked: false };
+            }
+            const result = await this.#transport.entitlements(token);
+            if (!result.ok) {
+                if (revocationSettled(result.failure)) {
+                    const state = result.failure.code === 'link-expired' ? 'expired' : 'revoked';
+                    await this.#store.write(
+                        dropCredentials(
+                            { ...record, state, updatedAt: new Date(this.#now()).toISOString() },
+                            { retain: false }
+                        ),
+                        { expectRevision: record.revision }
+                    );
+                }
+                return { configured: true, linked: false, notice: result.failure };
+            }
+            return {
+                configured: true,
+                linked: true,
+                ...(record.accountId ? { accountId: record.accountId } : {}),
+                ...(record.accountDisplayName ? { accountDisplayName: record.accountDisplayName } : {}),
+                plus: result.value.plus,
+                acquired: result.value.acquired,
+            };
+        });
     }
 
     async start(

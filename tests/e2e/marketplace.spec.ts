@@ -1,20 +1,40 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 /**
  * Dashboard > Marketplace user journeys (task 6.6).
  *
- * Requires a signed-in instance: the marketplace is an authenticated dashboard
- * app, so a local profile with no session hides it by design. Run against a
- * Cloud-profile instance, for example:
+ * The marketplace is an authenticated dashboard app, so the journey needs a
+ * signed-in session. Identity is simulated at the network boundary — the same
+ * technique the original harness used, with the field shapes the app actually
+ * reads (`/api/auth/session` for the app session and its `authRequired` gate,
+ * `/api/admin/auth/session` with `kind` for install authority) — so the journey
+ * is deterministic without a live registry, a published package, a real
+ * provider account or an administrator:
  *
- *   PW_SKIP_WEB_SERVER=true PW_PORT=<port> bunx playwright test tests/e2e/marketplace.spec.ts
+ *   PW_PORT=3120 bunx playwright test tests/e2e/marketplace.spec.ts
  *
- * The host's marketplace endpoints are stubbed at the network boundary, so the
- * journey is deterministic without a live registry, a published package or an
- * admin account. What is under test is the UI journey: discovery, the actionable
- * block list, the member request path, keyboard reachability and the mobile
- * layout. Identity is stubbed through `/api/admin/auth/session` only.
+ * The host's marketplace data endpoints are stubbed the same way. What is under
+ * test is the UI journey: discovery, the actionable block list, the member
+ * request path, keyboard reachability and the mobile layout.
  */
+
+/** A signed-in local session with a workspace, as the client context expects. */
+function sessionPayload(authenticated: boolean) {
+    return {
+        session: authenticated
+            ? {
+                  authenticated: true,
+                  provider: 'e2e-harness',
+                  providerUserId: 'e2e-super-admin',
+                  user: { id: 'usr_e2e_admin', email: 'e2e@example.test', displayName: 'E2E Admin' },
+                  workspace: { id: 'ws_e2e', name: 'E2E Workspace' },
+                  role: 'owner',
+                  entitlements: [],
+              }
+            : null,
+        appAccessAllowed: authenticated,
+    };
+}
 
 const PUBLISHED = {
     configured: true,
@@ -65,14 +85,26 @@ const PREFLIGHT_BLOCKED = {
 };
 
 async function stubMarketplace(
-    page: import('@playwright/test').Page,
+    page: Page,
     options: { readonly role: 'owner' | 'member' }
 ): Promise<void> {
+    await page.route('**/api/auth/session', (route) =>
+        route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(sessionPayload(true)),
+        })
+    );
+    // `kind` is what the marketplace account check reads; a member (or a
+    // workspace-admin without deployment authority) gets the request path.
     await page.route('**/api/admin/auth/session', (route) =>
         route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify({ authenticated: true, role: options.role }),
+            body: JSON.stringify({
+                authenticated: true,
+                kind: options.role === 'owner' ? 'super_admin' : 'workspace_admin',
+            }),
         })
     );
     await page.route('**/api/plugins/marketplace/catalog*', (route) =>
@@ -110,8 +142,18 @@ async function stubMarketplace(
  * Open the dashboard, the Marketplace tile and the requested page, the way a
  * user would: hydration has to finish before the rail renders.
  */
+/**
+ * Open the marketplace the way the sidebar does. A dashboard deep link
+ * (`?dashboard=marketplace&page=discover`) is the same destination without the
+ * sidebar, which is what a mobile viewport uses.
+ */
+async function openMarketplaceDirect(page: Page): Promise<void> {
+    await page.goto('/?dashboard=marketplace&page=discover');
+    await expect(page.getByTestId('marketplace-discover')).toBeVisible({ timeout: 30_000 });
+}
+
 async function openMarketplace(
-    page: import('@playwright/test').Page,
+    page: Page,
     pageTitle = 'Discover'
 ): Promise<void> {
     await page.goto('/');
@@ -137,7 +179,7 @@ test.describe('marketplace journeys', () => {
         await expect(discover).toContainText('Sample Utility');
 
         // Keyboard: the search field is reachable and operable without a mouse.
-        const search = page.getByTestId('marketplace-search').locator('input');
+        const search = page.getByRole('textbox', { name: 'Search the marketplace' });
         await search.focus();
         await expect(search).toBeFocused();
         await search.fill('sample');
@@ -172,13 +214,8 @@ test.describe('marketplace journeys', () => {
     test('an unconfigured instance explains the gap instead of showing an empty store', async ({
         page,
     }) => {
-        await page.route('**/api/admin/auth/session', (route) =>
-            route.fulfill({
-                status: 200,
-                contentType: 'application/json',
-                body: JSON.stringify({ authenticated: true, role: 'owner' }),
-            })
-        );
+        await stubMarketplace(page, { role: 'owner' });
+        await page.unroute('**/api/plugins/marketplace/catalog*');
         await page.route('**/api/plugins/marketplace/catalog*', (route) =>
             route.fulfill({
                 status: 200,
@@ -195,10 +232,9 @@ test.describe('marketplace journeys', () => {
     test('mobile layout keeps one primary action and no nested dialogs', async ({ page }) => {
         await page.setViewportSize({ width: 390, height: 844 });
         await stubMarketplace(page, { role: 'owner' });
-        await openMarketplace(page);
-
-        const discover = page.getByTestId('marketplace-discover');
-        await expect(discover).toBeVisible({ timeout: 30_000 });
+        // The sidebar is a drawer at this width; the supported deep link opens
+        // the same app without depending on the drawer's off-canvas state.
+        await openMarketplaceDirect(page);
         await page.getByTestId('marketplace-card').first().click();
 
         // Long names wrap instead of forcing horizontal scrolling.
@@ -209,7 +245,11 @@ test.describe('marketplace journeys', () => {
 
         // One visible primary action: the install button.
         expect(await page.getByTestId('marketplace-install').count()).toBe(1);
-        // No dialog is stacked over the page for the detail view.
-        await expect(page.locator('[role="dialog"]')).toHaveCount(0);
+        // The dashboard shell is the only dialog: the plugin detail renders in
+        // place instead of stacking a nested modal over the dashboard.
+        await expect(page.locator('[role="dialog"]')).toHaveCount(1);
+        await expect(
+            page.getByTestId('marketplace-discover').locator('[role="dialog"]')
+        ).toHaveCount(0);
     });
 });

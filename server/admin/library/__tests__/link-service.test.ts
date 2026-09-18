@@ -15,6 +15,7 @@ import type {
     LibraryTransportFailureCode,
     LinkedSessionPayload,
     PolledPairingPayload,
+    RemoteLibraryEntitlements,
     StartedPairingPayload,
     TransportResult,
 } from '../transport';
@@ -76,11 +77,13 @@ interface Harness {
         poll: { pairingId: string; secret: string }[];
         verify: string[];
         revoke: string[];
+        entitlements: string[];
     };
     startResult: TransportResult<StartedPairingPayload>;
     pollResults: TransportResult<PolledPairingPayload>[];
     verifyResults: TransportResult<LinkedSessionPayload>[];
     revokeResults: TransportResult<{ revoked: true }>[];
+    entitlementsResult: TransportResult<RemoteLibraryEntitlements>;
     advance(ms: number): void;
     holdPoll(): { release: () => void };
     record(userId?: string): LibraryLinkRecord;
@@ -89,12 +92,21 @@ interface Harness {
 
 function createHarness(overrides: { configured?: boolean; encryptionKey?: string } = {}): Harness {
     const directory = mkdtempSync(join(tmpdir(), 'or3-library-link-service-'));
-    const calls: Harness['calls'] = { start: [], poll: [], verify: [], revoke: [] };
+    const calls: Harness['calls'] = { start: [], poll: [], verify: [], revoke: [], entitlements: [] };
     const state = {
         startResult: { ok: true, value: started() } as TransportResult<StartedPairingPayload>,
         pollResults: [] as TransportResult<PolledPairingPayload>[],
         verifyResults: [] as TransportResult<LinkedSessionPayload>[],
         revokeResults: [] as TransportResult<{ revoked: true }>[],
+        entitlementsResult: {
+            ok: true,
+            value: {
+                plus: { status: 'none', until: null },
+                pluginCoverage: [],
+                acquired: [],
+                acquiredCursor: null,
+            },
+        } as TransportResult<RemoteLibraryEntitlements>,
     };
     let now = NOW;
     let pollGate: Promise<void> | null = null;
@@ -122,6 +134,10 @@ function createHarness(overrides: { configured?: boolean; encryptionKey?: string
             const result = state.revokeResults.shift();
             if (!result) throw new Error('unexpected revoke');
             return result;
+        },
+        async entitlements(token) {
+            calls.entitlements.push(token);
+            return state.entitlementsResult;
         },
     };
 
@@ -163,6 +179,12 @@ function createHarness(overrides: { configured?: boolean; encryptionKey?: string
         },
         set revokeResults(value) {
             state.revokeResults = value;
+        },
+        get entitlementsResult() {
+            return state.entitlementsResult;
+        },
+        set entitlementsResult(value) {
+            state.entitlementsResult = value;
         },
         advance(ms: number) {
             now += ms;
@@ -572,6 +594,7 @@ describe('library link service', () => {
                 poll: async () => failure('central-unreachable', true),
                 verify: async () => failure('central-unreachable', true),
                 revoke: async () => failure('central-unreachable', true),
+                entitlements: async () => failure('central-unreachable', true),
             },
             encryptionKey: 'a-completely-different-key',
             instanceId: INSTANCE,
@@ -628,6 +651,7 @@ describe('library link service', () => {
                 poll: async () => failure('central-unreachable', true),
                 verify: async () => failure('central-unreachable', true),
                 revoke: async () => ({ ok: true, value: { revoked: true } }),
+                entitlements: async () => failure('central-unreachable', true),
             },
             encryptionKey: KEY,
             instanceId: INSTANCE,
@@ -691,6 +715,9 @@ describe('library link service', () => {
                     if (!result) throw new Error('unexpected revoke');
                     return result;
                 },
+                entitlements: async () => {
+                    throw new Error('must not be called');
+                },
             },
             encryptionKey: KEY,
             instanceId: INSTANCE,
@@ -719,6 +746,9 @@ describe('library link service', () => {
                     throw new Error('must not be called');
                 },
                 revoke: async () => {
+                    throw new Error('must not be called');
+                },
+                entitlements: async () => {
                     throw new Error('must not be called');
                 },
             },
@@ -757,5 +787,74 @@ describe('library link service', () => {
         expect((await h.service.status(USER)).state).toBe('linked');
         const files = readdirSync(h.directory).sort();
         expect(files).toEqual([`${USER}.json`]);
+    });
+});
+
+describe('library entitlements view', () => {
+    it('answers an unlinked user without a marketplace request', async () => {
+        const h = createHarness();
+        const view = await h.service.entitlements(USER);
+        expect(view).toEqual({ configured: true, linked: false });
+        expect(h.calls.entitlements).toHaveLength(0);
+    });
+
+    it('lists the linked account’s purchases with its identity', async () => {
+        const h = createHarness();
+        await toLinked(h);
+        h.entitlementsResult = {
+            ok: true,
+            value: {
+                plus: { status: 'active', until: '2027-01-01T00:00:00.000Z' },
+                pluginCoverage: [
+                    { pluginId: 'com.fixture.paid-plugin', until: '2027-01-01T00:00:00.000Z', status: 'valid' },
+                ],
+                acquired: [
+                    {
+                        releaseId: 'rel_fixture_100',
+                        pluginId: 'com.fixture.paid-plugin',
+                        version: '1.0.0',
+                        archiveSha256: `sha256-${'a'.repeat(64)}`,
+                        coverageKind: 'plus',
+                        coverageUntil: '2027-01-01T00:00:00.000Z',
+                        acquiredAt: '2026-09-17T12:00:00.000Z',
+                    },
+                ],
+                acquiredCursor: null,
+            },
+        };
+
+        const view = await h.service.entitlements(USER);
+        expect(h.calls.entitlements).toEqual([TOKEN]);
+        expect(view).toMatchObject({
+            configured: true,
+            linked: true,
+            accountId: 'central-user',
+            plus: { status: 'active', until: '2027-01-01T00:00:00.000Z' },
+        });
+        expect(view.acquired?.[0]?.releaseId).toBe('rel_fixture_100');
+        expect(JSON.stringify(view)).not.toContain(TOKEN);
+    });
+
+    it('ends the link locally when central proves it is gone', async () => {
+        const h = createHarness();
+        await toLinked(h);
+        h.entitlementsResult = failure('link-revoked');
+
+        const view = await h.service.entitlements(USER);
+        expect(view).toMatchObject({ configured: true, linked: false });
+        expect(view.notice?.code).toBe('link-revoked');
+        expect(h.record().state).toBe('revoked');
+        expect(h.record().tokenCiphertext).toBeUndefined();
+    });
+
+    it('keeps a working link through an outage and reports the failure', async () => {
+        const h = createHarness();
+        await toLinked(h);
+        h.entitlementsResult = failure('central-unreachable', true);
+
+        const view = await h.service.entitlements(USER);
+        expect(view).toMatchObject({ configured: true, linked: false });
+        expect(view.notice?.retryable).toBe(true);
+        expect(h.record().state).toBe('linked');
     });
 });

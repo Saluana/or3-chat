@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
-import type { LibraryLinkStatusView } from '../../../../admin/library/link-service';
+import type {
+    LibraryEntitlementsView,
+    LibraryLinkStatusView,
+} from '../../../../admin/library/link-service';
 
 vi.mock('h3', async (importOriginal) => ({
     // Real h3 readers are kept so proxy/host resolution behaves as in production;
@@ -21,6 +24,7 @@ vi.mock('../../../../auth/session', () => ({
 const statusMock = vi.fn();
 const startMock = vi.fn();
 const disconnectMock = vi.fn();
+const entitlementsMock = vi.fn();
 vi.mock('../../../../admin/library/route-support', () => ({
     libraryLinkServiceFor: async () => ({
         configured: true,
@@ -34,6 +38,7 @@ vi.mock('../../../../admin/library/route-support', () => ({
             status: statusMock as never,
             start: startMock as never,
             disconnect: disconnectMock as never,
+            entitlements: entitlementsMock as never,
         },
     }),
 }));
@@ -48,6 +53,7 @@ vi.mock('#imports', () => ({
 const { default: statusRoute } = await import('../link.get');
 const { default: startRoute } = await import('../link.post');
 const { default: disconnectRoute } = await import('../link/disconnect.post');
+const { default: entitlementsRoute } = await import('../entitlements.get');
 
 const SESSION = {
     authenticated: true,
@@ -75,6 +81,7 @@ describe('library link routes', () => {
         await expect(statusRoute(event() as never)).rejects.toMatchObject({ statusCode: 401 });
         await expect(startRoute(event() as never)).rejects.toMatchObject({ statusCode: 401 });
         await expect(disconnectRoute(event() as never)).rejects.toMatchObject({ statusCode: 401 });
+        await expect(entitlementsRoute(event() as never)).rejects.toMatchObject({ statusCode: 401 });
     });
 
     it('returns the caller’s own link state without credential fields', async () => {
@@ -140,5 +147,36 @@ describe('library link routes', () => {
         expect(disconnectMock).toHaveBeenCalledWith('user-1');
         expect(result.state).toBe('revoked');
         expect(result.centralRevokePending).toBe(true);
+    });
+});
+
+describe('library entitlements route', () => {
+    it('returns the caller’s own purchases without credential fields', async () => {
+        resolveSessionContextMock.mockResolvedValue(SESSION);
+        entitlementsMock.mockResolvedValue({
+            configured: true,
+            linked: true,
+            accountId: 'central-user',
+            plus: { status: 'none', until: null },
+            acquired: [
+                {
+                    releaseId: 'rel_fixture_100',
+                    pluginId: 'com.fixture.paid-plugin',
+                    version: '1.0.0',
+                    archiveSha256: `sha256-${'a'.repeat(64)}`,
+                    coverageKind: 'update-pass',
+                    coverageUntil: '2027-01-01T00:00:00.000Z',
+                    acquiredAt: '2026-09-17T12:00:00.000Z',
+                },
+            ],
+        });
+
+        const result = (await entitlementsRoute(event() as never)) as LibraryEntitlementsView & {
+            token?: unknown;
+        };
+        expect(entitlementsMock).toHaveBeenCalledWith('user-1');
+        expect(result.linked).toBe(true);
+        expect(result.acquired?.[0]?.releaseId).toBe('rel_fixture_100');
+        expect(result).not.toHaveProperty('token');
     });
 });

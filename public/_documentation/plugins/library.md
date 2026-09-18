@@ -2,6 +2,8 @@
 
 Dashboard > Library connects one **local user** on this server to that person's marketplace account. It exists so a self-hosted OR3 can read a personal marketplace Library and download entitled releases without sharing a marketplace login, cookie or purchase history with anyone else on the host — including other local users.
 
+While linked, the page lists the account's purchases (version, acquisition date and coverage window) read through this server's own credential. A marketplace purchase a user already owns is shown as **In your Library** on the plugin page instead of a Buy action, matching the checkout rule that refuses a duplicate purchase.
+
 The link belongs to the signed-in local user. Another local user reads a different binding and can never see or use the first user's link, and matching email addresses never merge two accounts.
 
 ## Configuration
@@ -45,6 +47,7 @@ Installed plugins keep working when a link expires, is revoked or is unreachable
 All are authenticated and `no-store`, scoped to the signed-in local user.
 
 - `GET /api/plugins/library/link` — the caller's own link state. Performs a due poll of a pairing attempt and a scheduled re-verification of a linked credential.
+- `GET /api/plugins/library/entitlements` — the linked account's purchased releases (Plus status, coverage windows, acquired versions) for the Library page. An unlinked user gets an empty listing without a marketplace request; a credential central already refused ends the link locally.
 - `POST /api/plugins/library/link` — start or restart pairing (rate limited per user).
 - `POST /api/plugins/library/link/disconnect` — stop this server's use of the credential and confirm revocation.
 

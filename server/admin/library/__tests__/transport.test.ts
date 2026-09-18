@@ -291,3 +291,68 @@ describe('library link transport', () => {
         });
     });
 });
+
+describe('library entitlements transport', () => {
+    beforeEach(() => {
+        fetchMock.mockReset();
+    });
+
+    const LISTING = {
+        plus: { status: 'active', until: '2027-01-01T00:00:00.000Z' },
+        pluginCoverage: [
+            { pluginId: 'com.fixture.paid-plugin', until: '2027-01-01T00:00:00.000Z', status: 'valid' },
+        ],
+        acquired: [
+            {
+                releaseId: 'rel_fixture_100',
+                pluginId: 'com.fixture.paid-plugin',
+                version: '1.0.0',
+                archiveSha256: `sha256-${'a'.repeat(64)}`,
+                packageTreeSha256: null,
+                manifestSha256: null,
+                authoritySha256: null,
+                publishedAt: '2026-09-17T00:00:00.000Z',
+                acquiredAt: '2026-09-17T12:00:00.000Z',
+                coverageKind: 'plus',
+                coverageUntil: '2027-01-01T00:00:00.000Z',
+            },
+        ],
+        acquiredCursor: null,
+    };
+
+    it('reads the listing with the token in a header and tolerates extra release fields', async () => {
+        const transport = createHttpLibraryLinkTransport(CONFIG);
+        respond(200, LISTING);
+
+        const result = await transport.entitlements(TOKEN);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value.acquired[0]?.releaseId).toBe('rel_fixture_100');
+        expect(calls()[0]?.url).toBe('https://marketplace.example.test/api/v1/library/entitlements');
+        expect((calls()[0]?.init.headers as Record<string, string>)['x-or3-library-token']).toBe(TOKEN);
+    });
+
+    it('refuses a structurally wrong listing instead of showing an empty Library', async () => {
+        const transport = createHttpLibraryLinkTransport(CONFIG);
+        respond(200, { ...LISTING, acquired: [{ releaseId: 'rel_only' }] });
+        expect(await transport.entitlements(TOKEN)).toMatchObject({
+            ok: false,
+            failure: { code: 'invalid-response' },
+        });
+
+        respond(200, { ...LISTING, plus: { status: 'granted', until: null } });
+        expect(await transport.entitlements(TOKEN)).toMatchObject({
+            ok: false,
+            failure: { code: 'invalid-response' },
+        });
+    });
+
+    it('maps a revoked credential to the terminal link failure', async () => {
+        const transport = createHttpLibraryLinkTransport(CONFIG);
+        respond(401, { error: { code: 'link-revoked' } });
+        expect(await transport.entitlements(TOKEN)).toMatchObject({
+            ok: false,
+            failure: { code: 'link-revoked', retryable: false },
+        });
+    });
+});
