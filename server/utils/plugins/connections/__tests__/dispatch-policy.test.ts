@@ -83,6 +83,35 @@ describe('connection dispatch policy (findings 10, 11, 17)', () => {
         expect(decision).toMatchObject({ status: 'denied', code: 'operation-not-approved' });
     });
 
+    it('fails closed before transport when plugin policy is unavailable', async () => {
+        const decision = decideConnectionDispatch({
+            provider: FAKE_CONNECTION_PROVIDER,
+            operationId: 'items.list',
+            url: 'https://fake.provider.test/v1/items',
+            method: 'GET',
+            grantedScopes: ['read:items'],
+            policyRequired: true,
+        });
+        expect(decision).toMatchObject({ status: 'denied', code: 'operation-not-approved' });
+
+        const { transport, requests } = createFakeProviderTransport({
+            kind: 'json',
+            status: 200,
+            body: { data: [] },
+        });
+        const outcome = await dispatchApprovedConnectionOperation({
+            provider: FAKE_CONNECTION_PROVIDER,
+            operationId: 'items.list',
+            url: 'https://fake.provider.test/v1/items',
+            grantedScopes: ['read:items'],
+            credential: 'tok_live_123',
+            transport,
+            policyRequired: true,
+        });
+        expect(outcome).toMatchObject({ status: 'denied', code: 'operation-not-approved' });
+        expect(requests).toHaveLength(0);
+    });
+
     it('refuses a scope the release does not approve', () => {
         const decision = decideConnectionDispatch({
             provider: FAKE_CONNECTION_PROVIDER,

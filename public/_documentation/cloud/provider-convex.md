@@ -218,3 +218,7 @@ If `AUTH_PROVIDER=clerk` and Convex is active, install `or3-provider-clerk` so t
 - [sync-layer](./sync-layer)
 - [storage-layer](./storage-layer)
 - [or3-cloud-config](./or3-cloud-config)
+
+## Provider template development
+
+In the provider repository, `bun run type-check` checks every bundled Convex template against its schema-derived generated declarations, as well as the provider source. Development checks use the sibling `or3-chat` checkout for host contracts. After editing templates or their declarations, run `bun run build:templates` to refresh the distributable pack. The installed project's Convex codegen regenerates its own `_generated` files.

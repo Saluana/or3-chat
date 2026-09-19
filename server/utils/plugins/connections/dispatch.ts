@@ -157,6 +157,8 @@ export function decideConnectionDispatch(input: {
     readonly grantedScopes: readonly string[];
     /** Approved connection authority of the release, when available. */
     readonly policy?: ConnectionDispatchPolicy | null;
+    /** Require an installed plugin release to provide usable policy authority. */
+    readonly policyRequired?: boolean;
     /** Host-minted approval, when the operation requires one. */
     readonly approval?: unknown;
     readonly pluginId?: string;
@@ -182,6 +184,14 @@ export function decideConnectionDispatch(input: {
             status: 'denied',
             code: 'operation-not-approved',
             message: `Operation ${operation.id} is governed by ${operation.governedBy}; call that host capability instead`,
+        };
+    }
+
+    if (input.policyRequired && !input.policy) {
+        return {
+            status: 'denied',
+            code: 'operation-not-approved',
+            message: `Release policy is unavailable; refusing operation ${operation.id}`,
         };
     }
 
@@ -507,6 +517,8 @@ export async function dispatchApprovedConnectionOperation(input: {
     readonly signal?: AbortSignal;
     /** Release-approved operation/destination policy. */
     readonly policy?: ConnectionDispatchPolicy | null;
+    /** Require the release policy before any provider transport can run. */
+    readonly policyRequired?: boolean;
     readonly approval?: unknown;
     readonly pluginId?: string;
     readonly workspaceId?: string;
@@ -525,6 +537,7 @@ export async function dispatchApprovedConnectionOperation(input: {
         requestedHeaders: input.headers,
         grantedScopes: input.grantedScopes,
         ...(input.policy === undefined ? {} : { policy: input.policy }),
+        ...(input.policyRequired === undefined ? {} : { policyRequired: input.policyRequired }),
         ...(input.approval === undefined ? {} : { approval: input.approval }),
         ...(input.pluginId === undefined ? {} : { pluginId: input.pluginId }),
         ...(input.workspaceId === undefined ? {} : { workspaceId: input.workspaceId }),

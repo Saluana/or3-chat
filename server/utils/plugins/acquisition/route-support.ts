@@ -23,10 +23,10 @@
 import type { H3Event } from 'h3';
 import { getWorkspaceAccessStore, getWorkspaceSettingsStore } from '../../../admin/stores/registry';
 import { listInstalledExtensions } from '../../../admin/extensions/extension-manager';
+import { libraryLinkServiceFor } from '../../../admin/library/route-support';
 import { OR3_PLUGIN_V2_HOST_CAPABILITIES } from '../../../admin/plugins/v2-host-capabilities';
 import { resolveConnectionService } from '../connections/resolve';
 import { loadSetupState } from '../setup/state';
-import { readSetupValues } from '../setup/settings-store';
 import {
     pluginPackageServices,
 } from '../../../admin/plugins/package-operation-support';
@@ -38,6 +38,7 @@ import { PluginAcquisitionOperationStore } from './operation-store';
 import { RegistryStateStore } from './registry-state';
 import { RegistryClient } from './registry-client';
 import { PluginAcquisitionService } from './acquisition-service';
+import type { PluginAcquisitionReleaseIdentity } from '~~/shared/plugins/acquisition/contracts';
 
 const WORKSPACE_PAGE_SIZE = 100;
 const MAX_WORKSPACE_PAGES = 100;
@@ -49,7 +50,8 @@ export function registryClientFor(
      * The registry stores the release-scoped quarantine ledger, so a decision
      * recorded by one resolve is visible to every later resolve on this host.
      */
-    quarantineLedger?: RegistryStateStore
+    quarantineLedger?: RegistryStateStore,
+    acceptedAdvisoryCheckpoint?: Awaited<ReturnType<RegistryStateStore['read']>>['acceptedAdvisoryCheckpoint']
 ): RegistryClient {
     return new RegistryClient({
         registryOrigin: config.registryOrigin,
@@ -64,6 +66,7 @@ export function registryClientFor(
         maxArtifactBytes: config.maxArtifactBytes,
         reserveBytes: config.reserveBytes,
         acceptedAdvisorySequence,
+        acceptedAdvisoryCheckpoint,
         ...(quarantineLedger
             ? {
                   quarantinedReleases: async () =>
@@ -100,17 +103,23 @@ export async function listAllWorkspaceIds(event: H3Event): Promise<readonly stri
  * declares no setup at all.
  */
 async function setupPlanFor(event: H3Event, requesterUserId: string) {
-    return async (pluginId: string, workspaceId: string, packageRoot: string) => {
+    return async (
+        pluginId: string,
+        workspaceId: string,
+        packageRoot: string,
+        operationId?: string
+    ) => {
         void packageRoot;
         const { service, durable } = resolveConnectionService();
         const state = await loadSetupState({
+            event,
             pluginId,
             workspaceId,
             ownerUserId: requesterUserId,
             hasSelectedContext: false,
             service,
             durableConnections: durable,
-            storedValues: await readSetupValues(event, workspaceId, pluginId),
+            ...(operationId === undefined ? {} : { setupOperationId: operationId }),
         });
         return state.plan;
     };
@@ -118,7 +127,12 @@ async function setupPlanFor(event: H3Event, requesterUserId: string) {
 
 export async function acquisitionServiceFor(
     event: H3Event,
-    requesterUserId = ''
+    requesterUserId = '',
+    /**
+     * The acting local user whose Library link may cover a paid release. Kept
+     * separate from the recorded requester identity, which is an audit label.
+     */
+    libraryUserId = ''
 ): Promise<PluginAcquisitionService> {
     const config = acquisitionConfig();
     const settings = getWorkspaceSettingsStore(event);
@@ -128,7 +142,12 @@ export async function acquisitionServiceFor(
     return new PluginAcquisitionService({
         config,
         store: new PluginAcquisitionOperationStore(),
-        registry: registryClientFor(config, state.acceptedAdvisorySequence, registryState),
+        registry: registryClientFor(
+            config,
+            state.acceptedAdvisorySequence,
+            registryState,
+            state.acceptedAdvisoryCheckpoint
+        ),
         services,
         routeCatalog: new PluginPackageRouteCatalog(services.packages, services.pointers),
         hostCapabilities: OR3_PLUGIN_V2_HOST_CAPABILITIES,
@@ -153,5 +172,48 @@ export async function acquisitionServiceFor(
                 .filter((extension) => extension.kind === 'plugin')
                 .map((extension) => extension.id),
         registryState,
+        // Only a request that carries a local user id can use a Library link,
+        // and only that user's own link: credentials stay server-side.
+        ...(libraryUserId.length > 0
+            ? {
+                  resolveCoveredArtifact: async (input: {
+                      readonly requesterUserId: string;
+                      readonly releaseId: string;
+                      readonly expectedRelease: Pick<
+                          PluginAcquisitionReleaseIdentity,
+                          | 'releaseId'
+                          | 'pluginId'
+                          | 'version'
+                          | 'archiveSha256'
+                          | 'packageTreeSha256'
+                          | 'manifestSha256'
+                          | 'authoritySha256'
+                      >;
+                  }) => {
+                      if (input.requesterUserId !== requesterUserId) {
+                          return {
+                              ok: false as const,
+                              code: 'link-required' as const,
+                              message:
+                                  'Only the original acquisition requester may use that Library link.',
+                          };
+                      }
+                      const { service, configured } = await libraryLinkServiceFor(event);
+                      if (!configured) {
+                          return {
+                              ok: false as const,
+                              code: 'library-unconfigured' as const,
+                              message:
+                                  'This host has no Library link configured, so a paid release cannot be acquired.',
+                          };
+                      }
+                      return await service.artifactAccess(
+                          libraryUserId,
+                          input.releaseId,
+                          input.expectedRelease
+                      );
+                  },
+              }
+            : {}),
     });
 }

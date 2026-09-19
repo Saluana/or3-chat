@@ -27,7 +27,9 @@
  * - Fetching metadata or artifacts (the registry client owns that).
  */
 
+import { satisfies } from 'semver';
 import type { Sha256 } from '../runtime-descriptor';
+import type { EffectiveAuthority } from '../authority/effective-authority';
 
 /** Pinned schema of the signed release metadata this host accepts. */
 export interface ReleaseMetadataDocument {
@@ -45,6 +47,8 @@ export interface ReleaseMetadataDocument {
     readonly engines: { readonly or3: string; readonly pluginApi: string };
     readonly features: readonly string[];
     readonly requestedGrants: readonly string[];
+    /** Complete signed authority descriptor, when published by the registry. */
+    readonly authority?: EffectiveAuthority;
     readonly reviewId: string;
     readonly license: string;
     readonly publishedAt: string;
@@ -82,6 +86,7 @@ export type ReleaseMetadataRefusalCode =
     | 'release-key-untrusted'
     | 'release-identity-mismatch'
     | 'release-digest-mismatch'
+    | 'authority-mismatch'
     | 'release-profile-unsupported'
     | 'release-engine-unsupported'
     | 'advisory-stale'
@@ -192,6 +197,54 @@ export function parseReleaseMetadata(input: unknown): ParseReleaseMetadataResult
             at(field, 'must be an array of strings');
         }
     }
+    if (input.authority !== undefined) {
+        const authority = input.authority;
+        if (!isRecord(authority)) {
+            at('authority', 'must be an object when present');
+        } else {
+            if (typeof authority.trust !== 'string' || authority.trust.length === 0) {
+                at('authority.trust', 'must be a non-empty string');
+            }
+            for (const field of [
+                'grants',
+                'features',
+                'engines',
+                'connectionScopes',
+                'dataScopes',
+                'writes',
+                'setupHooks',
+                'dependencies',
+            ] as const) {
+                if (!Array.isArray(authority[field]) || authority[field].some((entry) => typeof entry !== 'string')) {
+                    at(`authority.${field}`, 'must be an array of strings');
+                }
+            }
+            if (!Array.isArray(authority.destinations)) {
+                at('authority.destinations', 'must be an array');
+            } else {
+                for (const [index, destination] of authority.destinations.entries()) {
+                    if (!isRecord(destination)) {
+                        at(`authority.destinations[${index}]`, 'must be an object');
+                        continue;
+                    }
+                    if (typeof destination.host !== 'string' || destination.host.length === 0) {
+                        at(`authority.destinations[${index}].host`, 'must be a non-empty string');
+                    }
+                    for (const field of ['methods', 'pathPrefixes'] as const) {
+                        if (!Array.isArray(destination[field]) || destination[field].some((entry) => typeof entry !== 'string')) {
+                            at(`authority.destinations[${index}].${field}`, 'must be an array of strings');
+                        }
+                    }
+                    if (
+                        destination.connection !== undefined &&
+                        typeof destination.connection !== 'string'
+                    ) {
+                        at(`authority.destinations[${index}].connection`, 'must be a string');
+                    }
+                }
+            }
+        }
+    }
     if (input.signature !== undefined) {
         if (!isRecord(input.signature)) at('signature', 'must be an object');
         else {
@@ -268,6 +321,32 @@ export function acquisitionProfileRequirement(
     return ACQUISITION_PROFILE_REQUIREMENTS.find((entry) => entry.profile === profile) ?? null;
 }
 
+export interface ClientEngineSupport {
+    /** True when the signed profile cannot run without a client browser runtime. */
+    readonly required: boolean;
+    /** False when required and the engine is not one the host qualified. */
+    readonly supported: boolean;
+}
+
+/**
+ * The browser half of profile qualification, shared by the preflight endpoint
+ * and the UI call to action so both fail closed on the same engine. An absent or
+ * unknown engine is never qualified.
+ */
+export function evaluateClientEngineSupport(input: {
+    readonly profile: string;
+    readonly engine: string | null | undefined;
+    readonly qualifiedEngines: readonly string[];
+}): ClientEngineSupport {
+    const required =
+        acquisitionProfileRequirement(input.profile)?.clientRuntime === 'required';
+    const supported =
+        !required ||
+        (typeof input.engine === 'string' &&
+            input.qualifiedEngines.some((qualified) => qualified === input.engine));
+    return Object.freeze({ required, supported });
+}
+
 /**
  * The profiles this host may acquire, given the package trust modes it declares.
  * A profile whose required trust mode is not declared is not supported: there is
@@ -341,7 +420,7 @@ export function evaluateReleaseMetadata(input: {
 
     if (
         document.engines.or3.length > 0 &&
-        compareVersions(trustRoot.hostOr3Version, document.engines.or3.replace(/^[>=^~\s]+/, '')) < 0
+        !satisfies(trustRoot.hostOr3Version, document.engines.or3)
     ) {
         return refusal(
             'release-engine-unsupported',
@@ -350,10 +429,7 @@ export function evaluateReleaseMetadata(input: {
     }
     if (
         document.engines.pluginApi.length > 0 &&
-        compareVersions(
-            trustRoot.hostPluginApiVersion,
-            document.engines.pluginApi.replace(/^[>=^~\s]+/, '')
-        ) < 0
+        !satisfies(trustRoot.hostPluginApiVersion, document.engines.pluginApi)
     ) {
         return refusal(
             'release-engine-unsupported',
@@ -497,6 +573,40 @@ export interface AdvisoryDocument {
     };
 }
 
+/**
+ * Authenticated registry security state. The marketplace serves this complete
+ * snapshot together with a signed checkpoint; hosts never use an unsigned or
+ * truncated index to decide which advisories apply.
+ */
+export interface RegistryAdvisorySnapshot {
+    readonly schemaVersion: 1;
+    readonly sequence: number;
+    /** Every active advisory, including old unresolved quarantines. */
+    readonly advisories: readonly AdvisoryDocument[];
+    /** Current status of release-signing keys at this checkpoint. */
+    readonly keyStatuses: readonly {
+        readonly keyId: string;
+        readonly status: 'active' | 'retired' | 'compromised';
+        readonly effectiveAt: string;
+        readonly reason?: string;
+    }[];
+}
+
+/** Signed freshness head for the complete advisory/key-status snapshot. */
+export interface RegistryAdvisoryCheckpoint {
+    readonly schemaVersion: 1;
+    readonly registryOrigin: string;
+    readonly sequence: number;
+    readonly issuedAt: string;
+    readonly expiresAt: string;
+    readonly snapshotSha256: Sha256;
+    readonly signature: {
+        readonly keyId: string;
+        readonly algorithm: 'ed25519';
+        readonly value: string;
+    };
+}
+
 export interface ParseAdvisoryResult {
     readonly document: AdvisoryDocument | null;
     readonly problems: readonly string[];
@@ -542,6 +652,21 @@ export function parseAdvisoryDocument(input: unknown): ParseAdvisoryResult {
 export function encodeAdvisoryDocument(document: AdvisoryDocument): Uint8Array {
     const { signature: _signature, ...unsigned } = document;
     return encodeReleaseMetadata(unsigned);
+}
+
+/** Canonical bytes covered by the signed complete checkpoint. */
+export function encodeRegistryAdvisoryCheckpoint(
+    checkpoint: RegistryAdvisoryCheckpoint
+): Uint8Array {
+    const { signature: _signature, ...unsigned } = checkpoint;
+    return encodeReleaseMetadata(unsigned);
+}
+
+/** Canonical bytes whose digest is carried by the checkpoint. */
+export function encodeRegistryAdvisorySnapshot(
+    snapshot: RegistryAdvisorySnapshot
+): Uint8Array {
+    return encodeReleaseMetadata(snapshot);
 }
 
 export interface AdvisoryDecision {

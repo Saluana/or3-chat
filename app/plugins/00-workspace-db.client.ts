@@ -7,6 +7,7 @@ import { cleanupCursorManager } from '~/core/sync/cursor-manager';
 import { cleanupHookBridge } from '~/core/sync/hook-bridge';
 import { cleanupSubscriptionManager } from '~/core/sync/subscription-manager';
 import { logoutCleanup } from '~/utils/logout-cleanup';
+import { stopAllPortableClientsAndAwait } from '~/composables/plugins/portable-client-runtime';
 
 async function shouldRunLogoutCleanup(
     authenticated: boolean | undefined
@@ -55,6 +56,7 @@ export default defineNuxtPlugin(async () => {
         async (newWorkspaceId, oldWorkspaceId) => {
             // Clean up resources from old workspace
             if (oldWorkspaceId) {
+                await stopAllPortableClientsAndAwait();
                 const dbName = `or3-db-${oldWorkspaceId}`;
                 cleanupCursorManager(dbName);
                 cleanupHookBridge(dbName);

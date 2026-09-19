@@ -1,9 +1,17 @@
+import { basename } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { describeAcquisitionStatus } from '~~/shared/plugins/acquisition/contracts';
+import {
+    describeAcquisitionStatus,
+    type PluginAcquisitionReceipt,
+} from '~~/shared/plugins/acquisition/contracts';
 import { buildSetupPlan } from '~~/shared/plugins/setup/plan';
 import { validateSetupValues } from '~~/shared/plugins/setup/values';
+import { computeAuthorityHash, type EffectiveAuthority } from '~~/shared/plugins/authority/effective-authority';
 import { OR3_PLUGIN_V2_HOST_CAPABILITIES } from '../../../../admin/plugins/v2-host-capabilities';
-import { pluginPackageServices } from '../../../../admin/plugins/package-operation-support';
+import {
+    pluginPackageServices,
+    readPackageManifest,
+} from '../../../../admin/plugins/package-operation-support';
 import { PluginPackageRouteCatalog } from '../../../../admin/plugins/package-route-catalog';
 import {
     getEnabledPlugins,
@@ -11,8 +19,11 @@ import {
     setPluginGrantReview,
 } from '../../../../admin/plugins/workspace-plugin-store';
 import type { WorkspaceSettingsStore } from '../../../../admin/stores/types';
-import { loadPackageDescriptors } from '../../setup/load-descriptors';
-import { setupValuesKey } from '../../setup/settings-store';
+import { loadPackageDescriptors, toEffectiveAuthority } from '../../setup/load-descriptors';
+import {
+    readSetupValuesFor,
+    setupValuesKey,
+} from '../../setup/settings-store';
 import {
     cleanupRoots,
     fakeRegistryTransport,
@@ -23,6 +34,7 @@ import {
     tempRoot,
     type ReleaseFixture,
 } from './fixtures';
+import { signReleaseMetadataForTest } from '../release-verify';
 import { PluginAcquisitionOperationStore } from '../operation-store';
 import { RegistryClient } from '../registry-client';
 import { PluginAcquisitionService, type AcquisitionServiceDeps } from '../acquisition-service';
@@ -48,14 +60,23 @@ function memoryStore(): WorkspaceSettingsStore {
 
 /** The host's own setup readiness rules, over the candidate package. */
 function setupPlanFor(root: string, settings: WorkspaceSettingsStore) {
-    return async (pluginId: string, workspaceId: string, packageRoot: string) => {
+    return async (
+        pluginId: string,
+        workspaceId: string,
+        packageRoot: string,
+        operationId?: string
+    ) => {
         const descriptors = await loadPackageDescriptors({
             extensionsBaseDir: root,
             packagePath: packageRoot,
         });
         if (!descriptors.policy || !descriptors.setup) return null;
-        const raw = await settings.get(workspaceId, setupValuesKey(pluginId));
-        const stored = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+        // Read the candidate's own digest-scoped document, falling back to the
+        // unscoped document exactly like the host's setup state loader does.
+        const stored = await readSetupValuesFor(settings, workspaceId, pluginId, {
+            packageDigest: basename(packageRoot),
+            ...(operationId === undefined ? {} : { operationId }),
+        });
         const validated = validateSetupValues({
             fields: descriptors.setup.fields,
             values: stored,
@@ -78,6 +99,10 @@ function makeHarness(input: {
     /** Share an instance root/settings store to model an update over time. */
     root?: string;
     settings?: WorkspaceSettingsStore;
+    /** Model a paid release: public artifact path refuses, Library route serves. */
+    coverageRequired?: boolean;
+    onRequest?: (url: string) => void;
+    resolveCoveredArtifact?: AcquisitionServiceDeps['resolveCoveredArtifact'];
 }) {
     const root = input.root ?? tempRoot('or3-extensions-');
     const settings = input.settings ?? memoryStore();
@@ -112,6 +137,10 @@ function makeHarness(input: {
         transport: fakeRegistryTransport({
             fixture: input.fixture,
             failDownload: input.failDownload,
+            ...(input.coverageRequired === undefined
+                ? {}
+                : { coverageRequired: input.coverageRequired }),
+            ...(input.onRequest === undefined ? {} : { onRequest: input.onRequest }),
         }),
         freeDiskBytes: async () => 1024 ** 3,
     });
@@ -134,12 +163,23 @@ function makeHarness(input: {
         },
         clientCanary: async () => ({ status: 'passed' as const }),
         setupPlan: setupPlanFor(root, settings),
+        ...(input.resolveCoveredArtifact === undefined
+            ? {}
+            : { resolveCoveredArtifact: input.resolveCoveredArtifact }),
     };
     const service = new PluginAcquisitionService(deps);
     async function reviewGrants(): Promise<void> {
         for (const workspaceId of workspaceIds) {
             await setPluginGrantReview(settings, workspaceId, 'alpha', {
-                requestedGrants: ['network.http'],
+                // Registry-only consent: bound to the signed authority and the
+                // approved grants, without a staged digest yet.
+                candidate: {
+                    requestedGrants: ['network.http'],
+                    releaseId: input.fixture.signed.releaseId,
+                    packageDigest: null,
+                    authoritySha256: input.fixture.signed.authoritySha256,
+                    authority: input.fixture.signed.authority ?? null,
+                },
                 approvedGrants: ['network.http'],
             });
         }
@@ -296,6 +336,50 @@ describe('reviewed acquisition pipeline (5.1, 5.4)', () => {
         if (!started.ok) return;
         expect(started.operation.failure?.code).toBe('authority-mismatch');
     });
+
+    it('rebuilds a new-envelope authority from the staged package before promotion', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const manifest = await readPackageManifest(fixture.treePath);
+        const descriptors = await loadPackageDescriptors({
+            extensionsBaseDir: fixture.treePath,
+            packagePath: fixture.treePath,
+        });
+        if (!descriptors.policy || !descriptors.setup) throw new Error('fixture descriptors missing');
+        const derived = toEffectiveAuthority({
+            manifest,
+            policy: descriptors.policy,
+            setup: descriptors.setup,
+        });
+        const tampered: EffectiveAuthority = {
+            ...derived,
+            destinations: [
+                ...derived.destinations,
+                {
+                    host: 'unexpected.example',
+                    methods: ['GET'],
+                    pathPrefixes: ['/'],
+                    connection: 'unexpected',
+                },
+            ],
+        };
+        const authoritySha256 = await computeAuthorityHash(tampered);
+        const signed = await signReleaseMetadataForTest({
+            document: {
+                ...fixture.signed,
+                authority: tampered,
+                authoritySha256,
+            },
+            keyId: fixture.key.keyId,
+            privateKeyBase64: fixture.privateKeyBase64,
+        });
+        const harness = makeHarness({ fixture: { ...fixture, signed } });
+        const started = await harness.start({ version: '1.0.0' });
+        expect(started.ok).toBe(true);
+        if (!started.ok) return;
+        expect(started.operation.status).toBe('failed');
+        expect(started.operation.failure?.code).toBe('authority-mismatch');
+        expect((await harness.services.pointers.readPointer('alpha'))?.current ?? null).toBeNull();
+    });
 });
 
 describe('recovery and cancellation (5.3)', () => {
@@ -375,6 +459,36 @@ describe('recovery and cancellation (5.3)', () => {
         const pointer = await harness.services.pointers.readPointer('alpha');
         expect(pointer?.current).toBeNull();
         expect(pointer?.candidate?.packageDigest).toBe(fixture.treeDigest);
+    });
+
+    it('blocks a global promotion when another enabled workspace lacks setup', async () => {
+        const root = tempRoot('or3-extensions-');
+        const settings = memoryStore();
+        await settings.set('ws-1', setupValuesKey('alpha'), JSON.stringify({ token: 'ready' }));
+        const first = await releaseFixture({ version: '1.0.0', requiredField: true });
+        const installed = await makeHarness({ fixture: first, root, settings }).start({
+            version: '1.0.0',
+        });
+        expect(installed.ok).toBe(true);
+        await setPluginEnabled(settings, 'ws-2', 'alpha', true);
+
+        const update = await releaseFixture({ version: '1.1.0', requiredField: true });
+        const attempted = await makeHarness({
+            fixture: update,
+            root,
+            settings,
+            workspaceIds: ['ws-1', 'ws-2'],
+        }).start({ version: '1.1.0' });
+        expect(attempted.ok).toBe(true);
+        if (!attempted.ok) return;
+        expect(attempted.operation.status).toBe('blocked');
+        expect(attempted.operation.failure?.code).toBe('workspace-preflight-blocked');
+        expect(attempted.operation.failure?.message).toContain('ws-2');
+        expect(
+            (await makeHarness({ fixture: update, root, settings }).services.pointers.readPointer(
+                'alpha'
+            ))?.current?.packageDigest
+        ).toBe(first.treeDigest);
     });
 
     it('recovers the receipt when a crash left the promotion committed but unrecorded', async () => {
@@ -533,5 +647,121 @@ describe('instance-wide preflight and conditional promotion (5.5, 5.6)', () => {
         const after = await harness.services.pointers.readPointer('alpha');
         expect(after?.current).toBeNull();
         expect(after?.candidate?.packageDigest).toBe(otherStored.digest);
+    });
+});
+
+describe('covered releases acquire through the acting user Library link', () => {
+    it('downloads from the linked route when the public artifact path refuses', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const requests: string[] = [];
+        const harness = makeHarness({
+            fixture,
+            coverageRequired: true,
+            onRequest: (url) => requests.push(url),
+            resolveCoveredArtifact: async (input) => ({
+                ok: true,
+                artifactPath: `/api/v1/library/releases/${input.releaseId}/artifact`,
+                headers: { 'x-or3-library-token': 'linked-token' },
+                alreadyAcquired: false,
+                receipt: {
+                    payload: {
+                        schemaVersion: 1,
+                        receiptId: 'acq_fixture1234',
+                        marketplaceUserId: 'user-1',
+                        release: {
+                            releaseId: input.expectedRelease.releaseId,
+                            pluginId: input.expectedRelease.pluginId,
+                            version: input.expectedRelease.version,
+                            archiveSha256: input.expectedRelease.archiveSha256,
+                            packageTreeSha256: input.expectedRelease.packageTreeSha256,
+                            manifestSha256: input.expectedRelease.manifestSha256,
+                            authoritySha256: input.expectedRelease.authoritySha256,
+                        },
+                        coverage: {
+                            kind: 'plus',
+                            grantId: 'grant_fixture',
+                            until: '2027-01-01T00:00:00.000Z',
+                        },
+                        issuedAt: '2026-09-18T01:00:00.000Z',
+                    },
+                    algorithm: 'ed25519',
+                    keyId: 'receipt-fixture',
+                    signature: 'signature',
+                } satisfies PluginAcquisitionReceipt,
+            }),
+        });
+
+        const started = await harness.start({ version: '1.0.0' });
+        expect(started.ok).toBe(true);
+        if (!started.ok) return;
+        expect(started.operation.status).toBe('completed');
+        expect(requests.some((url) => url.includes('/api/v1/library/releases/'))).toBe(true);
+        expect(
+            (await harness.services.pointers.readPointer('alpha'))?.current?.packageDigest
+        ).toBe(fixture.treeDigest);
+    });
+
+    it('stops retryably with coverage-required when no Library link covers it', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const harness = makeHarness({ fixture, coverageRequired: true });
+
+        const started = await harness.start({ version: '1.0.0' });
+        expect(started.ok).toBe(true);
+        if (!started.ok) return;
+        expect(started.operation.status).toBe('failed');
+        expect(started.operation.failure?.code).toBe('coverage-required');
+        expect(started.operation.failure?.retryable).toBe(true);
+        expect(
+            (await harness.services.pointers.readPointer('alpha'))?.current ?? null
+        ).toBeNull();
+    });
+
+    it('rejects traversal, query-bearing and wrong-release Library artifact paths', async () => {
+        for (const artifactPath of [
+            '/api/v1/library/releases/rel_other/artifact',
+            '/api/v1/library/releases/rel_other/../rel_other/artifact',
+            '/api/v1/library/releases/rel_other/artifact?redirect=1',
+        ]) {
+            const fixture = await releaseFixture({ version: `1.0.${artifactPath.length}` });
+            const harness = makeHarness({
+                fixture,
+                coverageRequired: true,
+                resolveCoveredArtifact: async () => ({
+                    ok: true,
+                    artifactPath,
+                    headers: { 'x-or3-library-token': 'linked-token' },
+                    alreadyAcquired: false,
+                    receipt: {
+                        payload: {
+                            schemaVersion: 1,
+                            receiptId: 'acq_fixture1234',
+                            marketplaceUserId: 'user-1',
+                            release: {
+                                releaseId: fixture.signed.releaseId,
+                                pluginId: fixture.signed.pluginId,
+                                version: fixture.signed.version,
+                                archiveSha256: fixture.signed.archiveSha256,
+                                packageTreeSha256: fixture.signed.packageTreeSha256,
+                                manifestSha256: fixture.signed.manifestSha256,
+                                authoritySha256: fixture.signed.authoritySha256,
+                            },
+                            coverage: {
+                                kind: 'plus',
+                                grantId: 'grant_fixture',
+                                until: '2027-01-01T00:00:00.000Z',
+                            },
+                            issuedAt: '2026-09-18T01:00:00.000Z',
+                        },
+                        algorithm: 'ed25519',
+                        keyId: 'receipt-fixture',
+                        signature: 'signature',
+                    } satisfies PluginAcquisitionReceipt,
+                }),
+            });
+            const started = await harness.start({ version: fixture.version });
+            expect(started.ok).toBe(true);
+            if (!started.ok) continue;
+            expect(started.operation.failure?.code).toBe('coverage-required');
+        }
     });
 });

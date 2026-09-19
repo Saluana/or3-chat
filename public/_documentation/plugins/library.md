@@ -35,6 +35,16 @@ It never carries checkout, billing, publishing, review, payout, account-settings
 
 Installed plugins keep working when a link expires, is revoked or is unreachable: the link is acquisition authority, not execution authority.
 
+## Covered (paid) acquisition
+
+A paid release is never downloadable from the public catalog path: the marketplace refuses it with `coverage-required`. The host distinguishes that refusal from an expired signed URL and, in the same acquisition operation, asks the marketplace to record the acquisition for the exact release using the *initiating local user's* own encrypted link, then downloads the bytes from the entitled artifact path with the credential kept server-side — never in browser state, a URL or plugin state. Everything after the download is unchanged: the same signature, advisory, archive, tree, consent, setup and promotion checks run, and a covered install finishes through the ordinary pipeline.
+
+* Acquisition is recorded idempotently, so a retry after a partial download or a page reload never asks the buyer to purchase again.
+* Another local user cannot use someone else's link: the credential is per-user and per-instance, and an operation only ever resolves the acting user's own binding.
+* Free and first-party releases keep installing anonymously on the public path; the linked route is only consulted for a release the marketplace actually refuses.
+* Without a link (or with the credential unresolved) the operation stops with a retryable `coverage-required` failure that says to connect the Library account, instead of retrying a public URL forever.
+* Bytes already acquired and installed keep working when the marketplace is unreachable.
+
 ## Disconnect, rotation and restore
 
 - **Disconnect** in Dashboard > Library stops this server first (the local record is revoked immediately) and then asks the marketplace to revoke the credential. If the marketplace is unreachable the local stop still holds; while the page is open the confirmation is retried on its own schedule, and the pending state is reported until central confirms it. A credential is only forgotten once central has revoked it or proven it already unusable.

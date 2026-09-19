@@ -54,6 +54,28 @@ export interface CreatePluginAiMethodInput {
     readonly prices: ModelPriceTable;
     readonly allowedModels?: readonly string[];
     readonly budgets?: typeof DEFAULT_CONTAINMENT_BUDGETS;
+    /** Spend already committed by the durable identity ledger. */
+    readonly initialSpendUsd?: number;
+    /** Reserve and settle the durable identity ledger around provider work. */
+    readonly reserveSpend?: (input: {
+        readonly amountUsd: number;
+    }) => Promise<{
+        readonly ok: boolean;
+        readonly reservationId?: string;
+        readonly reservationWindowId?: number;
+        readonly code?: 'unavailable' | 'contention' | 'budget-exceeded';
+        readonly message?: string;
+    }>;
+    readonly settleSpend?: (input: {
+        readonly reservationId: string;
+        readonly reservationWindowId: number;
+        readonly reservedUsd: number;
+        readonly actualSpendUsd?: number;
+    }) => Promise<{
+        readonly ok: boolean;
+        readonly code?: 'unavailable' | 'contention' | 'budget-exceeded';
+        readonly message?: string;
+    }>;
     readonly now?: () => number;
 }
 
@@ -77,6 +99,7 @@ export function createPluginAiCompleteMethod(
         budgets: input.budgets ?? DEFAULT_CONTAINMENT_BUDGETS,
         prices: input.prices,
         ...(input.allowedModels === undefined ? {} : { allowedModels: input.allowedModels }),
+        ...(input.initialSpendUsd === undefined ? {} : { initialSpendUsd: input.initialSpendUsd }),
         ...(input.now === undefined ? {} : { now: input.now }),
     });
 
@@ -105,7 +128,43 @@ export function createPluginAiCompleteMethod(
             });
         }
 
+        let durableReservation = false;
+        let durableSettlement = false;
+        let durableReservationId: string | null = null;
+        let durableReservationWindowId: number | null = null;
         try {
+            if (input.reserveSpend) {
+                const reserved = await input.reserveSpend({ amountUsd: admission.reservedUsd });
+                if (!reserved.ok) {
+                    admission.settle();
+                    throw Object.assign(
+                        new Error(reserved.message ?? 'The durable plugin AI budget is unavailable'),
+                        {
+                            rpcCode:
+                                reserved.code === 'budget-exceeded'
+                                    ? 'budget-exceeded'
+                                    : 'unavailable',
+                        }
+                    );
+                }
+                if (!reserved.reservationId) {
+                    admission.settle();
+                    throw Object.assign(
+                        new Error('The durable plugin AI budget returned no reservation token'),
+                        { rpcCode: 'unavailable' }
+                    );
+                }
+                durableReservationId = reserved.reservationId;
+                durableReservationWindowId = reserved.reservationWindowId ?? null;
+                if (durableReservationWindowId === null) {
+                    admission.settle();
+                    throw Object.assign(
+                        new Error('The durable plugin AI budget returned no window identity'),
+                        { rpcCode: 'unavailable' }
+                    );
+                }
+                durableReservation = true;
+            }
             const result = await input.provider.complete(
                 {
                     model: admission.model,
@@ -120,6 +179,26 @@ export function createPluginAiCompleteMethod(
                 spendUsd: result.spendUsd,
                 completionTokens: result.completionTokens,
             });
+            if (input.settleSpend && durableReservation) {
+                const durable = await input.settleSpend({
+                    reservationId: durableReservationId!,
+                    reservationWindowId: durableReservationWindowId!,
+                    reservedUsd: admission.reservedUsd,
+                    actualSpendUsd: result.spendUsd,
+                });
+                durableSettlement = true;
+                if (!durable.ok) {
+                    throw Object.assign(
+                        new Error(durable.message ?? 'The durable plugin AI budget is exhausted'),
+                        {
+                            rpcCode:
+                                durable.code === 'budget-exceeded'
+                                    ? 'budget-exceeded'
+                                    : 'unavailable',
+                        }
+                    );
+                }
+            }
             governor.record({
                 pluginId: context.pluginId,
                 workspaceId: context.workspaceId,
@@ -149,6 +228,19 @@ export function createPluginAiCompleteMethod(
             // Release the concurrency slot whatever happened: a failed call must
             // not hold capacity that the activation still needs.
             admission.settle();
+            if (input.settleSpend && durableReservation && !durableSettlement) {
+                await input
+                    .settleSpend({
+                        reservationId: durableReservationId!,
+                        reservationWindowId: durableReservationWindowId!,
+                        reservedUsd: admission.reservedUsd,
+                        // Once the provider has been called, an absent or
+                        // malformed response is charged at the reservation's
+                        // worst-case ceiling rather than released as free.
+                        actualSpendUsd: admission.reservedUsd,
+                    })
+                    .catch(() => undefined);
+            }
             if (context.signal.aborted) {
                 throw Object.assign(new Error('AI call was cancelled'), {
                     rpcCode: 'cancelled',

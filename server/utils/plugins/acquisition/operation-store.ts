@@ -41,6 +41,7 @@ import {
     isTerminalAcquisitionStatus,
     type PluginAcquisitionOperation,
     type PluginAcquisitionReleaseIdentity,
+    type PluginAcquisitionReceipt,
     type PluginAcquisitionStage,
     type PluginAcquisitionStatus,
 } from '~~/shared/plugins/acquisition/contracts';
@@ -82,6 +83,11 @@ export interface AcquisitionOperationPatch {
     readonly setupRevision?: number | null;
     readonly authoritySha256?: Sha256;
     readonly acceptedAdvisorySequence?: number;
+    readonly advisoryCheckpointSha256?: Sha256 | null;
+    readonly advisoryCheckpointIssuedAt?: string | null;
+    readonly advisoryCheckpointExpiresAt?: number | null;
+    readonly acquisitionReceipt?: PluginAcquisitionReceipt | null;
+    readonly acquisitionSource?: 'public' | 'library' | null;
     readonly downloadedBytes?: number;
     readonly stagingObject?: string | null;
     readonly downloadUrlExpiresAt?: number | null;
@@ -112,6 +118,9 @@ export interface CreateOperationInput {
      */
     readonly stage?: PluginAcquisitionStage;
     readonly acceptedAdvisorySequence?: number;
+    readonly advisoryCheckpointSha256?: Sha256 | null;
+    readonly advisoryCheckpointIssuedAt?: string | null;
+    readonly advisoryCheckpointExpiresAt?: number | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -411,6 +420,11 @@ export class PluginAcquisitionOperationStore {
             setupRevision: null,
             authoritySha256: input.release.authoritySha256,
             acceptedAdvisorySequence: input.acceptedAdvisorySequence ?? 0,
+            advisoryCheckpointSha256: input.advisoryCheckpointSha256 ?? null,
+            advisoryCheckpointIssuedAt: input.advisoryCheckpointIssuedAt ?? null,
+            advisoryCheckpointExpiresAt: input.advisoryCheckpointExpiresAt ?? null,
+            acquisitionReceipt: null,
+            acquisitionSource: null,
             downloadedBytes: 0,
             stagingObject: null,
             downloadUrlExpiresAt: null,
@@ -481,6 +495,21 @@ export class PluginAcquisitionOperationStore {
                 ...(patch.acceptedAdvisorySequence === undefined
                     ? {}
                     : { acceptedAdvisorySequence: patch.acceptedAdvisorySequence }),
+                ...(patch.advisoryCheckpointSha256 === undefined
+                    ? {}
+                    : { advisoryCheckpointSha256: patch.advisoryCheckpointSha256 }),
+                ...(patch.advisoryCheckpointIssuedAt === undefined
+                    ? {}
+                    : { advisoryCheckpointIssuedAt: patch.advisoryCheckpointIssuedAt }),
+                ...(patch.advisoryCheckpointExpiresAt === undefined
+                    ? {}
+                    : { advisoryCheckpointExpiresAt: patch.advisoryCheckpointExpiresAt }),
+                ...(patch.acquisitionReceipt === undefined
+                    ? {}
+                    : { acquisitionReceipt: patch.acquisitionReceipt }),
+                ...(patch.acquisitionSource === undefined
+                    ? {}
+                    : { acquisitionSource: patch.acquisitionSource }),
                 ...(patch.downloadedBytes === undefined ? {} : { downloadedBytes: patch.downloadedBytes }),
                 ...(patch.stagingObject === undefined ? {} : { stagingObject: patch.stagingObject }),
                 ...(patch.downloadUrlExpiresAt === undefined

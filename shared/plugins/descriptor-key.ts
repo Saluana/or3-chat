@@ -103,6 +103,9 @@ export function descriptorIdentityPayload(identity: PluginDescriptorIdentity): C
                   ...(identity.description === undefined
                       ? {}
                       : { description: identity.description }),
+                  ...(identity.authoritySha256 === undefined
+                      ? {}
+                      : { authoritySha256: identity.authoritySha256 }),
                   effectiveGrants: [...identity.effectiveGrants].sort(),
               }
             : {}),

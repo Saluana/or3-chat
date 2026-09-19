@@ -22,8 +22,10 @@
 
 import {
     encodeAdvisoryDocument,
+    encodeRegistryAdvisoryCheckpoint,
     encodeReleaseMetadata,
     type AdvisoryDocument,
+    type RegistryAdvisoryCheckpoint,
     type ReleaseMetadataDocument,
 } from '~~/shared/plugins/acquisition/release-metadata';
 
@@ -156,6 +158,65 @@ export async function verifyAdvisorySignature(input: {
     } catch {
         return false;
     }
+}
+
+/** Verify the signed freshness head for the complete registry snapshot. */
+export async function verifyRegistryAdvisoryCheckpointSignature(input: {
+    readonly checkpoint: RegistryAdvisoryCheckpoint;
+    readonly trustRoot: readonly TrustedReleaseKey[];
+}): Promise<boolean> {
+    const signature = input.checkpoint.signature;
+    if (!signature || signature.algorithm !== 'ed25519') return false;
+    const key = input.trustRoot.find((candidate) => candidate.keyId === signature.keyId);
+    if (!key) return false;
+    if (key.publicJwk.kty !== 'OKP' || key.publicJwk.crv !== 'Ed25519') return false;
+    const bytes = fromBase64(signature.value);
+    if (!bytes) return false;
+    try {
+        const publicKey = await crypto.subtle.importKey(
+            'jwk',
+            key.publicJwk as JsonWebKey,
+            { name: 'Ed25519' },
+            true,
+            ['verify']
+        );
+        return await crypto.subtle.verify(
+            { name: 'Ed25519' },
+            publicKey,
+            bytes as unknown as BufferSource,
+            encodeRegistryAdvisoryCheckpoint(input.checkpoint) as unknown as BufferSource
+        );
+    } catch {
+        return false;
+    }
+}
+
+/** Mint a complete advisory checkpoint signature for host-side fixtures. */
+export async function signRegistryAdvisoryCheckpointForTest(input: {
+    readonly checkpoint: RegistryAdvisoryCheckpoint;
+    readonly keyId: string;
+    readonly privateKeyBase64: string;
+}): Promise<RegistryAdvisoryCheckpoint> {
+    const raw = fromBase64(input.privateKeyBase64);
+    if (!raw) throw new Error('Invalid private key encoding');
+    const privateKey = await crypto.subtle.importKey(
+        'pkcs8',
+        raw as unknown as ArrayBuffer,
+        { name: 'Ed25519' },
+        false,
+        ['sign']
+    );
+    const signature = await crypto.subtle.sign(
+        { name: 'Ed25519' },
+        privateKey,
+        encodeRegistryAdvisoryCheckpoint(input.checkpoint) as unknown as BufferSource
+    );
+    let binary = '';
+    for (const byte of new Uint8Array(signature)) binary += String.fromCharCode(byte);
+    return {
+        ...input.checkpoint,
+        signature: { keyId: input.keyId, algorithm: 'ed25519', value: btoa(binary) },
+    };
 }
 
 /** Mint an advisory signature with an explicit key. Test and tooling helper only. */

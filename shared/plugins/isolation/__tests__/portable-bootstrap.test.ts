@@ -20,12 +20,15 @@ import {
     PORTABLE_FRAME_DOCUMENT,
     PORTABLE_FRAME_SCRIPT,
     PORTABLE_FRAME_SCRIPT_HASH,
+    PORTABLE_NESTED_WORKER_HARDENING_SOURCE,
     PORTABLE_WORKER_SHIM,
 } from '../portable-frame-document';
 import {
     assessPortableHost,
     bootstrapSourceIsInert,
+    browserEngineQualified,
     defaultHostAbi,
+    detectBrowserEngine,
     HOST_ABI_VERSION,
     PORTABLE_CLIENT_FEATURE,
     PORTABLE_PROFILE_NAME,
@@ -44,6 +47,8 @@ function grants(
         approvedGrants: [...approved],
         revision: 'g1',
         status: 'current',
+        authoritySha256: null,
+        packageDigest: null,
     };
 }
 
@@ -196,6 +201,38 @@ describe('portable sandbox transport (4.1)', () => {
         expect(bootstrapSourceIsInert('self.importScripts("https://x")')).toBe(false);
         expect(bootstrapSourceIsInert('eval("1")')).toBe(false);
         expect(bootstrapSourceIsInert('window.parent.postMessage(1, "*")')).toBe(false);
+    });
+
+    it('blocks nested Worker and SharedWorker constructors before publisher import', () => {
+        const sandbox = { Worker: function Worker() {}, SharedWorker: function SharedWorker() {} };
+        const getHardener = new Function(
+            'globalThis',
+            'self',
+            `${PORTABLE_NESTED_WORKER_HARDENING_SOURCE}; return or3HardenNestedWorkers;`
+        ) as (globalThis: object, self: object) => () => boolean;
+        const harden = getHardener(sandbox, sandbox);
+
+        expect(harden()).toBe(true);
+        expect(sandbox.Worker).toBeUndefined();
+        expect(sandbox.SharedWorker).toBeUndefined();
+        expect(Object.getOwnPropertyDescriptor(sandbox, 'Worker')).toMatchObject({
+            configurable: false,
+            writable: false,
+            value: undefined,
+        });
+
+        const unsupported = {} as { Worker?: unknown };
+        Object.defineProperty(unsupported, 'Worker', {
+            value: function Worker() {},
+            configurable: false,
+        });
+        expect(getHardener(unsupported, unsupported)()).toBe(false);
+    });
+
+    it('refuses to import when nested worker hardening cannot be installed', () => {
+        expect(PORTABLE_WORKER_SHIM).toContain('nested-worker-constructors-unavailable');
+        expect(PORTABLE_WORKER_SHIM).toContain('or3HardenNestedWorkers()');
+        expect(PORTABLE_WORKER_SHIM).toContain("['Worker', 'SharedWorker']");
     });
 
     it('keeps the frame script hash in sync with the served document', async () => {
@@ -613,5 +650,73 @@ describe('portable sandbox transport (4.1)', () => {
             ),
         });
         expect(harness.outbound.length).toBe(before);
+    });
+});
+
+describe('browser engine qualification (finding 12)', () => {
+    it('detects the engines the host distinguishes and fails closed otherwise', () => {
+        expect(
+            detectBrowserEngine(
+                'Mozilla/5.0 (Macintosh) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
+            )
+        ).toBe('chromium');
+        expect(
+            detectBrowserEngine(
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0'
+            )
+        ).toBe('chromium');
+        expect(detectBrowserEngine('Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0')).toBe(
+            'firefox'
+        );
+        expect(
+            detectBrowserEngine(
+                'Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15'
+            )
+        ).toBe('webkit');
+        expect(detectBrowserEngine('')).toBe('unknown');
+    });
+
+    it('qualifies only the engines the harness passed and never an unknown one', () => {
+        expect(browserEngineQualified('chromium')).toBe(true);
+        expect(browserEngineQualified('firefox')).toBe(false);
+        expect(browserEngineQualified('webkit')).toBe(false);
+        expect(browserEngineQualified('unknown')).toBe(false);
+        // A host that qualified another engine is honored by the same rule.
+        expect(browserEngineQualified('firefox', ['firefox'])).toBe(true);
+    });
+
+    it('denies an unqualified or unknown engine before any bytes are fetched', () => {
+        const loadServedBytes = vi.fn();
+        const input = {
+            release: {
+                releaseId: 'rel-1',
+                pluginId: 'sample.plugin',
+                packageTreeSha256: `sha256-${'a'.repeat(64)}`,
+                clientEntryDigest: `sha256-${'b'.repeat(64)}`,
+                moduleUrl: '/api/plugins/sample.plugin/client-entry.js',
+            },
+            profile: {
+                profile: PORTABLE_PROFILE_NAME,
+                minHostAbiVersion: HOST_ABI_VERSION,
+                requiredFeatures: [PORTABLE_CLIENT_FEATURE],
+            },
+            workspaceId: 'ws-1',
+            generation: 1,
+            grants: grants(),
+            loadServedBytes,
+        } as unknown as StartPortableWorkerInput;
+
+        for (const engine of ['firefox', 'webkit', 'unknown']) {
+            const denied = assessPortableHost({
+                abi: defaultHostAbi(),
+                profile: input.profile,
+                engine,
+            });
+            expect(denied.status).toBe('denied');
+            if (denied.status === 'denied') {
+                expect(denied.codes).toContain('browser-unsupported');
+            }
+        }
+        expect(loadServedBytes).not.toHaveBeenCalled();
     });
 });

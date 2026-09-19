@@ -72,6 +72,11 @@ export interface PromotePluginPackageInput {
         readonly snapshot: CandidateStateValue;
     }) => void | Promise<void>;
     readonly requireCanaryEvidence?: boolean;
+    /** Transfer the operation-owned setup overlay before pointer commit. */
+    readonly prepareSetupPromotion?: () =>
+        | void
+        | (() => void | Promise<void>)
+        | Promise<void | (() => void | Promise<void>)>;
     readonly now?: () => number;
     readonly faultBeforePointerSwap?: () => void | Promise<void>;
     readonly pointerWriteOptions?: PackagePointerWriteOptions;
@@ -192,6 +197,18 @@ export class PluginPackagePromotionService {
 
             let snapshot: CandidateStateValue;
             let snapshotDigest: Sha256;
+            let undoSetupPromotion: (() => void | Promise<void>) | undefined;
+            const rollbackSetupPromotion = async (): Promise<boolean> => {
+                try {
+                    await undoSetupPromotion?.();
+                    return true;
+                } catch {
+                    // The pointer is still unchanged; keep the original
+                    // promotion failure visible and let the next lifecycle
+                    // attempt revalidate the digest-scoped record.
+                    return false;
+                }
+            };
             try {
                 snapshot = structuredClone(await input.snapshotState()) as CandidateStateValue;
                 snapshotDigest = createCandidateStateSnapshotDigest(snapshot);
@@ -273,8 +290,12 @@ export class PluginPackagePromotionService {
                         snapshot,
                     });
                 }
+                undoSetupPromotion = (await input.prepareSetupPromotion?.()) ?? undefined;
                 await input.faultBeforePointerSwap?.();
             } catch (error) {
+                if (!(await rollbackSetupPromotion())) {
+                    return blockedPromote('migration', 'setup-promotion-rollback-failed', state);
+                }
                 await input.restoreState(snapshot);
                 return blockedPromote(
                     'migration',
@@ -283,6 +304,11 @@ export class PluginPackagePromotionService {
                 );
             }
 
+            // Setup configuration is stored per package digest, so swapping the
+            // pointer is the commit: the promoted digest already owns the
+            // settings prepared for it, and a failure before this point leaves
+            // the running version's document untouched. The pointer write itself
+            // is revision-checked and atomic.
             const next: PluginPackagePointer = {
                 schemaVersion: 1,
                 pluginId: input.pluginId,
@@ -327,6 +353,9 @@ export class PluginPackagePromotionService {
                 // rename(2) is the pointer commit point. A later fsync/fault
                 // must not restore old settings while the new package is live.
                 if (pointerWasCommitted(persisted, next)) return promoted();
+                if (!(await rollbackSetupPromotion())) {
+                    return blockedPromote('pointer-write', 'setup-promotion-rollback-failed', state);
+                }
                 await input.restoreState(snapshot);
                 return blockedPromote(
                     'pointer-write',

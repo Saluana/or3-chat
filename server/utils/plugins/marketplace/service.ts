@@ -28,8 +28,15 @@ import { promises as fs } from 'node:fs';
 import { acquisitionConfig } from '../acquisition/config';
 import { registryClientFor } from '../acquisition/route-support';
 import { RegistryStateStore } from '../acquisition/registry-state';
-import { acquisitionProfileRequirement } from '~~/shared/plugins/acquisition/release-metadata';
-import { OR3_PLUGIN_V2_HOST_CAPABILITIES } from '../../../admin/plugins/v2-host-capabilities';
+import {
+    acquisitionProfileRequirement,
+    evaluateClientEngineSupport,
+} from '~~/shared/plugins/acquisition/release-metadata';
+import type { EffectiveAuthority } from '~~/shared/plugins/authority/effective-authority';
+import {
+    OR3_PLUGIN_V2_CLIENT_PROFILE,
+    OR3_PLUGIN_V2_HOST_CAPABILITIES,
+} from '../../../admin/plugins/v2-host-capabilities';
 import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
 
 export interface MarketplaceBlock {
@@ -44,6 +51,7 @@ export interface MarketplaceBlock {
         | 'free-space'
         | 'use-installed'
         | 'browse-catalog'
+        | 'use-supported-browser'
         | 'retry';
 }
 
@@ -64,6 +72,12 @@ export interface MarketplacePreflightResult {
         readonly trustModes: readonly string[];
         readonly grants: readonly string[];
         readonly features: readonly string[];
+        /** Structured browser qualification for the portable client profile. */
+        readonly client: {
+            readonly profile: string;
+            readonly qualifiedBrowsers: readonly string[];
+            readonly staticHost: boolean;
+        };
     };
     readonly release: {
         readonly releaseId: string;
@@ -71,12 +85,16 @@ export interface MarketplacePreflightResult {
         readonly archiveSha256: string;
         readonly packageTreeSha256: string;
         readonly profile: string;
+        /** Whether the signed profile requires a client browser runtime. */
+        readonly clientRuntime: 'required' | 'forbidden' | null;
         readonly authoritySha256: string;
         readonly publishedAt: string;
         readonly license: string;
         readonly sourceSha256: string;
         /** Authority the signed release metadata requests, for explicit consent. */
         readonly requestedGrants: readonly string[];
+        /** Complete signed authority descriptor shown before consent, when published. */
+        readonly authority?: EffectiveAuthority;
     } | null;
     readonly advisories: {
         readonly latestSequence: number;
@@ -181,6 +199,8 @@ export async function readLatestPublishedVersion(pluginId: string): Promise<stri
 export async function preflightMarketplaceInstall(input: {
     readonly pluginId: string;
     readonly version?: string;
+    /** Engine detected by the requesting browser, when the caller reported one. */
+    readonly clientEngine?: string;
     readonly workspaceId: string;
     readonly installedPluginIds: readonly string[];
     readonly enabledPluginIds: readonly string[];
@@ -221,6 +241,12 @@ export async function preflightMarketplaceInstall(input: {
             trustModes: [...OR3_PLUGIN_V2_HOST_CAPABILITIES.supportedTrustModes],
             grants: [...OR3_PLUGIN_V2_HOST_CAPABILITIES.supportedGrants],
             features: [...OR3_PLUGIN_V2_HOST_CAPABILITIES.supportedFeatures],
+            client: {
+                profile: OR3_PLUGIN_V2_CLIENT_PROFILE.profile,
+                qualifiedBrowsers: [...OR3_PLUGIN_V2_CLIENT_PROFILE.qualifiedBrowsers],
+                // A preflight answer exists only where a host server exists.
+                staticHost: false,
+            },
         },
     };
 
@@ -264,7 +290,12 @@ export async function preflightMarketplaceInstall(input: {
         }, null);
     }
 
-    const client = registryClientFor(config, state.acceptedAdvisorySequence, registryState);
+    const client = registryClientFor(
+        config,
+        state.acceptedAdvisorySequence,
+        registryState,
+        state.acceptedAdvisoryCheckpoint
+    );
     const resolved = await client.resolveRelease({
         expectation: { pluginId: input.pluginId, version: requestedVersion },
     });
@@ -280,6 +311,15 @@ export async function preflightMarketplaceInstall(input: {
     }
 
     const document = resolved.value.document;
+    if (document.requestedGrants.length > 0 && document.authority === undefined) {
+        blocks.push(
+            block(
+                'authority-unavailable',
+                'This release asks for permissions but did not publish its complete signed authority descriptor, so it cannot be approved safely.',
+                'contact-admin'
+            )
+        );
+    }
     const requirement = acquisitionProfileRequirement(document.profile);
     if (!requirement) {
         blocks.push(
@@ -312,6 +352,23 @@ export async function preflightMarketplaceInstall(input: {
                 )
             );
         }
+        // The browser half of profile qualification: the same rule the runtime
+        // enforces before it fetches a byte, applied here so an unqualified
+        // engine never reaches a download button without a reason.
+        const engine = evaluateClientEngineSupport({
+            profile: document.profile,
+            engine: input.clientEngine ?? null,
+            qualifiedEngines: OR3_PLUGIN_V2_CLIENT_PROFILE.qualifiedBrowsers,
+        });
+        if (!engine.supported) {
+            blocks.push(
+                block(
+                    'client-engine-unsupported',
+                    `The "${document.profile}" profile runs only in qualified browsers (${OR3_PLUGIN_V2_CLIENT_PROFILE.qualifiedBrowsers.join(', ')}); this browser reported "${input.clientEngine ?? 'unknown'}".`,
+                    'use-supported-browser'
+                )
+            );
+        }
     }
 
     const storage = await readStorageHeadroom(config.maxArtifactBytes, config.reserveBytes);
@@ -336,11 +393,13 @@ export async function preflightMarketplaceInstall(input: {
         archiveSha256: document.archiveSha256,
         packageTreeSha256: document.packageTreeSha256,
         profile: document.profile,
+        clientRuntime: requirement?.clientRuntime ?? null,
         authoritySha256: document.authoritySha256,
         publishedAt: document.publishedAt,
         license: document.license,
         sourceSha256: document.sourceSha256,
         requestedGrants: document.requestedGrants,
+        ...(document.authority === undefined ? {} : { authority: document.authority }),
     }, advisories, storage);
 }
 

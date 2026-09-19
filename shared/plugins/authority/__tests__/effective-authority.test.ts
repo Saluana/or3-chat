@@ -26,6 +26,7 @@ function authority(
         ],
         connectionScopes: ['read:notes'],
         dataScopes: ['documents.read'],
+        writes: [],
         setupHooks: ['test-connection', 'summarize'],
         dependencies: [],
         ...overrides,
@@ -91,6 +92,16 @@ describe('effective authority (4.6)', () => {
                 }),
             ])
         );
+    });
+
+    it('requires fresh consent when a write appears without a new grant string', () => {
+        const comparison = compareAuthority(authority(), authority({ writes: ['notes.append'] }));
+
+        expect(comparison.expanded).toBe(true);
+        expect(comparison.requiresFreshConsent).toBe(true);
+        expect(comparison.expansions).toEqual([
+            expect.objectContaining({ kind: 'write-added', detail: 'notes.append' }),
+        ]);
     });
 
     it('treats narrowing as technical review without redundant broad consent', () => {
@@ -182,6 +193,75 @@ describe('effective authority (4.6)', () => {
         );
     });
 
+    it('hashes same-host destinations independently of connection declaration order', async () => {
+        const first = authority({
+            destinations: [
+                {
+                    host: 'api.example.com',
+                    methods: ['POST'],
+                    pathPrefixes: ['/write'],
+                    connection: 'account-b',
+                },
+                {
+                    host: 'api.example.com',
+                    methods: ['GET'],
+                    pathPrefixes: ['/read'],
+                    connection: 'account-a',
+                },
+            ],
+        });
+        const second = {
+            ...first,
+            destinations: [...first.destinations].reverse(),
+        };
+        await expect(computeAuthorityHash(first)).resolves.toBe(
+            await computeAuthorityHash(second)
+        );
+    });
+
+    it('treats every list-like authority field as a deduplicated set', async () => {
+        const first = authority({
+            grants: ['storage.read', 'storage.read', 'storage.write'],
+            features: ['feature-b', 'feature-a', 'feature-b'],
+            engines: ['or3>=1.0.0', 'or3>=1.0.0'],
+            destinations: [
+                {
+                    host: 'api.example.com',
+                    methods: ['GET', 'GET'],
+                    pathPrefixes: ['/v1/', '/v1/'],
+                    connection: 'example',
+                },
+            ],
+            connectionScopes: ['read:notes', 'read:notes'],
+            dataScopes: ['documents.read', 'documents.read'],
+            writes: ['notes.append', 'notes.append'],
+            setupHooks: ['summarize', 'summarize'],
+            dependencies: ['dep-a', 'dep-a'],
+        });
+        const second = authority({
+            grants: ['storage.write', 'storage.read'],
+            features: ['feature-a', 'feature-b'],
+            engines: ['or3>=1.0.0'],
+            destinations: [
+                {
+                    host: 'api.example.com',
+                    methods: ['GET'],
+                    pathPrefixes: ['/v1/'],
+                    connection: 'example',
+                },
+            ],
+            connectionScopes: ['read:notes'],
+            dataScopes: ['documents.read'],
+            writes: ['notes.append'],
+            setupHooks: ['summarize'],
+            dependencies: ['dep-a'],
+        });
+
+        await expect(computeAuthorityHash(first)).resolves.toBe(
+            await computeAuthorityHash(second)
+        );
+    });
+
     it('reports engine changes, which participate in the hash', () => {
         const comparison = compareAuthority(authority(), authority({ engines: ['or3>=2.0.0'] }));
         expect(comparison.identical).toBe(false);
@@ -196,7 +276,7 @@ describe('effective authority (4.6)', () => {
     });
 
     it('denies missing, stale and mismatched consent (IN11)', () => {
-        const hash = 'sha256-' + 'a'.repeat(64);
+        const hash = `sha256-${'a'.repeat(64)}` as const;
         const candidate = {
             pluginId: 'example.plugin',
             releaseId: 'rel_2',
@@ -252,7 +332,7 @@ describe('effective authority (4.6)', () => {
                     ...consent,
                     releaseId: 'rel_2',
                     generation: 2,
-                    authorityHash: 'sha256-' + 'b'.repeat(64),
+                    authorityHash: `sha256-${'b'.repeat(64)}` as const,
                 },
                 candidate,
             })
@@ -270,7 +350,7 @@ describe('effective authority (4.6)', () => {
             pluginId: 'example.plugin',
             releaseId: 'rel_1',
             generation: 1,
-            authorityHash: 'sha256-' + 'a'.repeat(64),
+            authorityHash: `sha256-${'a'.repeat(64)}` as const,
             approvedAt: 1,
             approvedBy: 'user_1',
         };
@@ -281,7 +361,7 @@ describe('effective authority (4.6)', () => {
                 releaseId: 'rel_1',
                 workspaceId: 'ws_1',
                 generation: 1,
-                authorityHash: 'sha256-' + 'a'.repeat(64),
+                authorityHash: `sha256-${'a'.repeat(64)}` as const,
             },
             consentedAuthority: previous,
             candidateAuthority: next,
@@ -295,7 +375,7 @@ describe('effective authority (4.6)', () => {
                 releaseId: 'rel_1',
                 workspaceId: 'ws_1',
                 generation: 1,
-                authorityHash: 'sha256-' + 'a'.repeat(64),
+                authorityHash: `sha256-${'a'.repeat(64)}` as const,
             },
             consentedAuthority: previous,
             candidateAuthority: previous,

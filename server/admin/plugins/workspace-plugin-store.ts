@@ -28,9 +28,15 @@ import {
     type PluginGatePolicy,
     type PluginGatePolicyNormalized,
 } from '~~/shared/plugins/access-policy';
+import {
+    compareAuthority,
+    type EffectiveAuthority,
+} from '~~/shared/plugins/authority/effective-authority';
 import type { PluginGrantReviewSnapshot } from '~~/shared/plugins/grant-review';
+import type { Sha256 } from '~~/shared/plugins/runtime-descriptor';
 import {
     createPluginPolicyRevision,
+    createReviewedPluginAuthorityRevision,
     createReviewedPluginGrantsRevision,
 } from './plugin-revisions';
 
@@ -136,16 +142,68 @@ const PluginGrantIdSchema = z
     .min(1)
     .regex(/^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)+$/);
 
+const Sha256Schema = z.string().regex(/^sha256-[a-f0-9]{64}$/);
+
+const AuthorityDestinationSchema = z
+    .object({
+        host: z.string().min(1).max(253),
+        methods: z.array(z.string().min(1).max(16)).max(16),
+        pathPrefixes: z.array(z.string().min(1).max(256)).max(64),
+        connection: z.string().min(1).max(128).optional(),
+    })
+    .strict();
+
+/**
+ * Persisted form of the authority a release declared. Consent binds to this
+ * descriptor so an update that adds a destination, method, path, scope, write,
+ * hook, feature, engine or dependency needs fresh approval even when every
+ * grant string is unchanged.
+ */
+const EffectiveAuthoritySchema = z
+    .object({
+        trust: z.string().min(1).max(64),
+        grants: z.array(z.string().min(1).max(64)).max(64),
+        features: z.array(z.string().min(1).max(64)).max(64),
+        engines: z.array(z.string().min(1).max(64)).max(16),
+        destinations: z.array(AuthorityDestinationSchema).max(64),
+        connectionScopes: z.array(z.string().min(1).max(128)).max(256),
+        dataScopes: z.array(z.string().min(1).max(64)).max(64),
+        writes: z.array(z.string().min(1).max(64)).max(64),
+        setupHooks: z.array(z.string().min(1).max(64)).max(32),
+        dependencies: z.array(z.string().min(1).max(128)).max(64),
+    })
+    .strict();
+
 const PersistedPluginGrantReviewSchema = z
     .object({
-        schemaVersion: z.literal(1),
+        schemaVersion: z.literal(2),
         requestedGrants: z.array(PluginGrantIdSchema),
         approvedGrants: z.array(PluginGrantIdSchema),
+        releaseId: z.string().min(1).max(128).nullable(),
+        packageDigest: Sha256Schema.nullable(),
+        authoritySha256: Sha256Schema.nullable(),
+        /**
+         * Declared authority when the package descriptors were readable at
+         * approval time. A registry-only approval records the signed hash
+         * without the descriptor and carries over only to the exact same hash.
+         */
+        authority: EffectiveAuthoritySchema.nullable(),
         revision: z.string().regex(/^sha256-[a-f0-9]{64}$/),
         reviewedAt: z.number().int().min(0),
         reviewedBy: z.string().min(1).optional(),
     })
     .strict();
+
+/** What a candidate release declares, as far as the host can verify it. */
+export interface PluginGrantCandidate {
+    readonly requestedGrants: readonly string[];
+    readonly releaseId: string | null;
+    readonly packageDigest: Sha256 | null;
+    /** Signed policy revision when the registry metadata was resolvable. */
+    readonly authoritySha256: Sha256 | null;
+    /** Complete declared authority; null only when descriptors are unreadable. */
+    readonly authority: EffectiveAuthority | null;
+}
 
 function normalizeGrantIds(grants: readonly string[]): string[] {
     return Array.from(new Set(grants)).sort();
@@ -287,18 +345,31 @@ function emptyGrantReview(
             approvedGrants: approved,
         }),
         status,
+        authoritySha256: null,
+        packageDigest: null,
     };
 }
 
-/** Reads the separately persisted reviewed-grant decision for one V2 plugin. */
+/**
+ * Reads the persisted authority consent for one V2 plugin candidate.
+ *
+ * A review is current only when the complete declared authority of the
+ * candidate is covered by what the workspace approved: an unchanged grant list
+ * with a wider destination, scope, write or hook set is stale. Narrowing still
+ * passes, so an update that removes authority does not demand fresh consent.
+ */
 export async function getPluginGrantReview(
     store: WorkspaceSettingsStore,
     workspaceId: string,
     pluginId: string,
-    requestedGrants: readonly string[]
+    candidate: PluginGrantCandidate
 ): Promise<PluginGrantReviewSnapshot> {
-    const requested = normalizeGrantIds(requestedGrants);
-    if (requested.length === 0) {
+    const requested = normalizeGrantIds(candidate.requestedGrants);
+    // A descriptor-bearing release still needs explicit review even when it
+    // requests no grant strings: destinations, scopes, writes, hooks, trust
+    // and dependencies are part of the authority a consent record covers.
+    const requiresAuthorityReview = requested.length > 0 || candidate.authority !== null;
+    if (!requiresAuthorityReview) {
         return {
             requestedGrants: Object.freeze([]),
             approvedGrants: Object.freeze([]),
@@ -307,46 +378,86 @@ export async function getPluginGrantReview(
                 approvedGrants: [],
             }),
             status: 'current',
+            authoritySha256: candidate.authoritySha256,
+            packageDigest: candidate.packageDigest,
         };
     }
     const raw = await store.get(workspaceId, `plugins.grants.${pluginId}`);
     if (!raw) return emptyGrantReview(requested, 'unreviewed');
-    const parsed = PersistedPluginGrantReviewSchema.safeParse(safeJsonParse(raw));
-    if (!parsed.success) return emptyGrantReview(requested, 'unreviewed');
-    const storedRequested = normalizeGrantIds(parsed.data.requestedGrants);
-    const storedApproved = normalizeGrantIds(parsed.data.approvedGrants);
-    const expectedRevision = createReviewedPluginGrantsRevision({
+    const json = safeJsonParse(raw);
+    const parsed = PersistedPluginGrantReviewSchema.safeParse(json);
+    if (!parsed.success) {
+        // Schema-1 records only covered grant strings, so they cannot authorize
+        // a release's full authority. Fail closed and require fresh consent.
+        const legacy =
+            json !== null &&
+            typeof json === 'object' &&
+            (json as { schemaVersion?: unknown }).schemaVersion === 1;
+        return emptyGrantReview(requested, legacy ? 'stale' : 'unreviewed');
+    }
+    const stored = parsed.data;
+    const storedRequested = normalizeGrantIds(stored.requestedGrants);
+    const storedApproved = normalizeGrantIds(stored.approvedGrants);
+    const expectedRevision = createReviewedPluginAuthorityRevision({
         requestedGrants: storedRequested,
         approvedGrants: storedApproved,
+        releaseId: stored.releaseId,
+        packageDigest: stored.packageDigest,
+        authoritySha256: stored.authoritySha256,
+        authority: stored.authority,
     });
     const approvedIsSubset = storedApproved.every((grant) => storedRequested.includes(grant));
-    if (!approvedIsSubset || parsed.data.revision !== expectedRevision) {
+    if (!approvedIsSubset || stored.revision !== expectedRevision) {
         return emptyGrantReview(requested, 'unreviewed');
     }
-    if (!sameStrings(storedRequested, requested)) {
+    if (!candidate.authority || !stored.authority) {
+        // Without descriptors on both sides only the exact signed authority
+        // carries over. A registry-only approval has no staged digest yet; the
+        // acquisition pipeline still verifies the staged bytes against the
+        // signed authority before this review is consulted, so matching the
+        // hash keeps the approved capabilities identical.
+        const sameAuthority =
+            candidate.authoritySha256 !== null &&
+            candidate.authoritySha256 === stored.authoritySha256;
+        const sameBytes =
+            stored.packageDigest === null ||
+            (candidate.packageDigest !== null &&
+                candidate.packageDigest === stored.packageDigest);
+        if (!sameAuthority || !sameBytes) return emptyGrantReview(requested, 'stale');
+    } else {
+        const comparison = compareAuthority(stored.authority, candidate.authority);
+        if (comparison.expanded) return emptyGrantReview(requested, 'stale');
+    }
+    // A grant the review never saw is new authority even when no descriptor is
+    // available to diff; narrowing (dropping reviewed grants) stays current.
+    if (!requested.every((grant) => storedRequested.includes(grant))) {
         return emptyGrantReview(requested, 'stale');
     }
     return {
-        requestedGrants: Object.freeze(storedRequested),
-        approvedGrants: Object.freeze(storedApproved),
-        revision: expectedRevision,
+        requestedGrants: Object.freeze(requested),
+        approvedGrants: Object.freeze(
+            storedApproved.filter((grant) => requested.includes(grant))
+        ),
+        revision: stored.revision,
         status: 'current',
+        authoritySha256: stored.authoritySha256,
+        packageDigest: stored.packageDigest,
     };
 }
 
-/** Replaces only the reviewed-grant record; access policy and plugin settings are untouched. */
+/** Replaces only the reviewed-authority record; settings and policy are untouched. */
 export async function setPluginGrantReview(
     store: WorkspaceSettingsStore,
     workspaceId: string,
     pluginId: string,
     input: {
-        requestedGrants: readonly string[];
-        approvedGrants: readonly string[];
+        readonly candidate: PluginGrantCandidate;
+        readonly approvedGrants: readonly string[];
         reviewedBy?: string;
         reviewedAt?: number;
     }
 ): Promise<PluginGrantReviewSnapshot> {
-    const requestedGrants = normalizeGrantIds(input.requestedGrants);
+    const requestedGrants = normalizeGrantIds(input.candidate.requestedGrants);
     const approvedGrants = normalizeGrantIds(input.approvedGrants);
     if (
         !requestedGrants.every((grant) => PluginGrantIdSchema.safeParse(grant).success) ||
@@ -355,14 +466,29 @@ export async function setPluginGrantReview(
     ) {
         throw new Error('Invalid reviewed grants');
     }
-    const revision = createReviewedPluginGrantsRevision({
+    const authority = input.candidate.authority;
+    if (!input.candidate.authoritySha256) {
+        throw new Error('Reviewed authority must be verifiable');
+    }
+    const releaseId = input.candidate.releaseId;
+    const packageDigest = input.candidate.packageDigest;
+    const authoritySha256 = input.candidate.authoritySha256;
+    const revision = createReviewedPluginAuthorityRevision({
         requestedGrants,
         approvedGrants,
+        releaseId,
+        packageDigest,
+        authoritySha256,
+        authority,
     });
     const persisted = PersistedPluginGrantReviewSchema.parse({
-        schemaVersion: 1,
+        schemaVersion: 2,
         requestedGrants,
         approvedGrants,
+        releaseId,
+        packageDigest,
+        authoritySha256,
+        authority,
         revision,
         reviewedAt: input.reviewedAt ?? Date.now(),
         reviewedBy: input.reviewedBy,
@@ -377,5 +503,7 @@ export async function setPluginGrantReview(
         approvedGrants: Object.freeze(approvedGrants),
         revision,
         status: 'current',
+        authoritySha256,
+        packageDigest,
     };
 }

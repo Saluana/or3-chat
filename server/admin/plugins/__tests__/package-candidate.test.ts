@@ -48,6 +48,8 @@ const currentReview: PluginGrantReviewSnapshot = {
     approvedGrants: ['documents.read'],
     revision: `sha256-${'a'.repeat(64)}`,
     status: 'current',
+    authoritySha256: null,
+    packageDigest: null,
 };
 
 async function setup() {

@@ -83,19 +83,20 @@ export const REMOTE_CAPABILITY_GRANTS: Readonly<
         [REMOTE_CAPABILITY_METHODS.connectionsDispatch]: 'network.http',
     });
 
-/** Host-issued session echo the server re-validates. */
-export interface SandboxSessionEcho {
-    readonly pluginId: string;
-    readonly workspaceId: string;
-    readonly generation: number;
-    readonly sessionId: string;
-    readonly sourceId: string;
+/** Host-minted activation identity the server resolves on every call. */
+export interface SandboxActivationEcho {
+    /**
+     * Opaque handle minted by the host before the sandbox started. It is sealed
+     * to the plugin, workspace, user, generation, package digest and approved
+     * grants; the sandbox never contributes any of those fields.
+     */
+    readonly activationId: string;
 }
 
 export interface RemoteCapabilityCall {
     readonly method: RemoteCapabilityMethod;
     readonly params: Readonly<Record<string, unknown>>;
-    readonly session: SandboxSessionEcho;
+    readonly session: SandboxActivationEcho;
     readonly requestId: string;
     readonly deadlineMs: number;
     readonly signal?: AbortSignal;
@@ -116,8 +117,8 @@ export type RemoteCapabilityTransport = (
 
 export interface CreateRemoteCapabilityMethodsInput {
     readonly transport: RemoteCapabilityTransport;
-    /** Host-issued session echo, re-resolved per call so a rotation is picked up. */
-    readonly session: () => SandboxSessionEcho;
+    /** Host-minted activation echo, re-resolved per call so rotation is picked up. */
+    readonly session: () => SandboxActivationEcho;
     readonly grants: PluginGrantReviewSnapshot;
     /** Capabilities to expose; defaults to every bridged method. */
     readonly capabilities?: readonly RemoteCapabilityMethod[];
@@ -188,11 +189,11 @@ export function createHttpCapabilityTransport(input: {
                     [CAPABILITY_INTENT_HEADER]: CAPABILITY_INTENT_VALUE,
                 },
                 body: JSON.stringify({
-                    pluginId: call.session.pluginId,
-                    generation: call.session.generation,
+                    activationId: call.session.activationId,
                     method: call.method,
                     params: call.params,
                     requestId: call.requestId,
+                    deadlineMs: call.deadlineMs,
                 }),
                 ...(call.signal === undefined ? {} : { signal: call.signal }),
             });

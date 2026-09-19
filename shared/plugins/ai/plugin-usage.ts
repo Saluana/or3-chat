@@ -125,6 +125,8 @@ export interface PluginAiGovernorOptions {
      * a missing price would otherwise be recorded as free spend.
      */
     readonly prices: ModelPriceTable;
+    /** Spend already committed by this user/workspace/plugin identity. */
+    readonly initialSpendUsd?: number;
     readonly now?: () => number;
 }
 
@@ -138,6 +140,7 @@ export class PluginAiGovernor {
     readonly #allowedModels: readonly string[] | undefined;
     readonly #prices: ModelPriceTable;
     readonly #now: () => number;
+    readonly #initialSpendUsd: number;
     readonly #usage: PluginAiUsageRecord[] = [];
     #reservedUsd = 0;
     #exhausted = false;
@@ -150,6 +153,16 @@ export class PluginAiGovernor {
         this.#allowedModels = options.allowedModels;
         this.#prices = options.prices;
         this.#now = options.now ?? (() => Date.now());
+        const initialSpendUsd = options.initialSpendUsd ?? 0;
+        this.#initialSpendUsd =
+            Number.isFinite(initialSpendUsd) && initialSpendUsd > 0 ? initialSpendUsd : 0;
+        if (this.#initialSpendUsd > 0) {
+            const charged = this.#ledger.chargeAiUsage({
+                spendUsd: this.#initialSpendUsd,
+                outputTokens: 0,
+            });
+            if (!charged.ok) this.#exhausted = true;
+        }
     }
 
     get limits(): PluginAiLimits {
@@ -157,7 +170,10 @@ export class PluginAiGovernor {
     }
 
     get spendUsd(): number {
-        return this.#usage.reduce((total, record) => total + record.spendUsd, 0);
+        return (
+            this.#initialSpendUsd +
+            this.#usage.reduce((total, record) => total + record.spendUsd, 0)
+        );
     }
 
     /** Spend plus worst-case cost of calls that are currently in flight. */
@@ -224,7 +240,7 @@ export class PluginAiGovernor {
         }
 
         const admitted = this.#ledger.admitCall();
-        if (!admitted.ok) {
+        if (admitted.ok === false) {
             return { status: 'refused', code: 'budget-exceeded', message: admitted.message };
         }
         // Reserve the worst case before dispatch so concurrent calls cannot each
@@ -271,7 +287,7 @@ export class PluginAiGovernor {
             spendUsd: actual.spendUsd,
             outputTokens: actual.completionTokens,
         });
-        if (!charged.ok) {
+        if (charged.ok === false) {
             this.#exhausted = true;
             return { ok: false, message: charged.message, terminate: true };
         }

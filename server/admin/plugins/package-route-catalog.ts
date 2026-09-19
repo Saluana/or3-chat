@@ -20,6 +20,7 @@ export type PackageManifestRead =
           readonly status: 'ready';
           readonly pluginId: string;
           readonly packageDigest: Sha256;
+          readonly packagePath: string;
           readonly manifest: Or3ExtensionManifestV2;
       }
     | { readonly status: 'inactive'; readonly pluginId: string }
@@ -34,6 +35,7 @@ export type SelectedPackageRouteCatalog =
           readonly status: 'ready';
           readonly pluginId: string;
           readonly packageDigest: Sha256;
+          readonly packagePath: string;
           readonly manifest: Or3ExtensionManifestV2;
           readonly routes: readonly PackageRuntimeRouteDef[];
       }
@@ -85,6 +87,7 @@ export class PluginPackageRouteCatalog {
                 status: 'ready',
                 pluginId,
                 packageDigest,
+                packagePath: packageRoot,
                 manifest: parsed.data,
             });
         } catch {
@@ -137,6 +140,7 @@ export class PluginPackageRouteCatalog {
             status: 'ready',
             pluginId,
             packageDigest: selection.selected.packageDigest,
+            packagePath: this.packages.packagePath(pluginId, selection.selected.packageDigest),
             manifest: read.manifest,
             routes: Object.freeze(routes),
         });

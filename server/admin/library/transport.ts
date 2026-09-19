@@ -9,11 +9,36 @@
  * ever appears in a URL.
  */
 import type { LibraryLinkConfig } from './config';
+import { canonicalJson } from '~~/shared/plugins/descriptor-key';
+import type { PluginAcquisitionReceipt } from '~~/shared/plugins/acquisition/contracts';
 
 const MAX_RESPONSE_BYTES = 64 * 1024;
 const PAIRING_ID_PATTERN = /^prs_[a-f0-9]{32}$/;
 const CODE_PATTERN = /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;
 const TOKEN_PATTERN = /^lkl_[A-Za-z0-9_-]{43}$/;
+const SHA256_PATTERN = /^sha256-[a-f0-9]{64}$/;
+const RECEIPT_KEY_ID_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
+const RECEIPT_ID_PATTERN = /^acq_[A-Za-z0-9]{4,60}$/;
+const RELEASE_ID_PATTERN = /^rel_[A-Za-z0-9._:-]{1,100}$/;
+const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
+const RECEIPT_KEY_CACHE_MS = 5 * 60_000;
+
+export interface RemoteReceiptKey {
+    readonly keyId: string;
+    readonly algorithm: 'ed25519';
+    readonly status: 'active' | 'retired' | 'compromised';
+    readonly publicKeyJwk: { readonly kty: 'OKP'; readonly crv: 'Ed25519'; readonly x: string };
+}
+
+const receiptKeyCache = new Map<
+    string,
+    { readonly expiresAt: number; readonly keys: readonly RemoteReceiptKey[] }
+>();
+
+/** Test seam; production callers use the bounded module cache. */
+export function clearLibraryReceiptKeyCache(): void {
+    receiptKeyCache.clear();
+}
 
 export type LibraryTransportFailureCode =
     | 'central-unreachable'
@@ -112,6 +137,170 @@ export interface RemoteLibraryEntitlements {
     readonly acquiredCursor: string | null;
 }
 
+/**
+ * One covered acquisition as the marketplace records it. Acquisition is
+ * idempotent on the central side, so retrying never requires a repurchase; the
+ * artifact path is the only place the bytes may be fetched from.
+ */
+export interface RemoteAcquisition {
+    readonly releaseId: string;
+    readonly artifactPath: string;
+    /** Structured receipt already verified against the marketplace key registry. */
+    readonly receipt: PluginAcquisitionReceipt;
+    readonly alreadyAcquired: boolean;
+}
+
+function parseRemoteAcquisition(value: unknown): RemoteAcquisition | null {
+    if (!isRecord(value)) return null;
+    const acquisition = value.acquisition;
+    const release = value.release;
+    if (!isRecord(acquisition) || !isRecord(release)) return null;
+    if (typeof release.releaseId !== 'string' || typeof release.artifactPath !== 'string') {
+        return null;
+    }
+    const receipt = parseAcquisitionReceipt(value.receipt);
+    if (!receipt || receipt.payload.release.releaseId !== release.releaseId) return null;
+    return {
+        releaseId: release.releaseId,
+        artifactPath: release.artifactPath,
+        receipt,
+        alreadyAcquired: acquisition.alreadyAcquired === true,
+    };
+}
+
+function parseAcquisitionReceipt(value: unknown): PluginAcquisitionReceipt | null {
+    if (!isRecord(value) || value.algorithm !== 'ed25519') return null;
+    if (
+        typeof value.keyId !== 'string' ||
+        !RECEIPT_KEY_ID_PATTERN.test(value.keyId) ||
+        typeof value.signature !== 'string' ||
+        !BASE64URL_PATTERN.test(value.signature)
+    ) {
+        return null;
+    }
+    const payload = value.payload;
+    if (!isRecord(payload) || payload.schemaVersion !== 1) return null;
+    if (
+        typeof payload.receiptId !== 'string' ||
+        !RECEIPT_ID_PATTERN.test(payload.receiptId) ||
+        typeof payload.marketplaceUserId !== 'string' ||
+        payload.marketplaceUserId.length === 0 ||
+        payload.marketplaceUserId.length > 80 ||
+        !validTimestamp(payload.issuedAt)
+    ) {
+        return null;
+    }
+    const release = payload.release;
+    if (
+        !isRecord(release) ||
+        typeof release.releaseId !== 'string' ||
+        !RELEASE_ID_PATTERN.test(release.releaseId) ||
+        typeof release.pluginId !== 'string' ||
+        release.pluginId.length === 0 ||
+        typeof release.version !== 'string' ||
+        release.version.length === 0 ||
+        !validHash(release.archiveSha256) ||
+        !nullableHash(release.packageTreeSha256) ||
+        !nullableHash(release.manifestSha256) ||
+        !nullableHash(release.authoritySha256)
+    ) {
+        return null;
+    }
+    const coverage = payload.coverage;
+    if (
+        !isRecord(coverage) ||
+        (coverage.kind !== 'update-pass' && coverage.kind !== 'plus') ||
+        typeof coverage.grantId !== 'string' ||
+        coverage.grantId.length === 0 ||
+        coverage.grantId.length > 80 ||
+        !validTimestamp(coverage.until)
+    ) {
+        return null;
+    }
+    return value as unknown as PluginAcquisitionReceipt;
+}
+
+function validTimestamp(value: unknown): value is string {
+    return typeof value === 'string' && !Number.isNaN(Date.parse(value));
+}
+
+function validHash(value: unknown): value is `sha256-${string}` {
+    return typeof value === 'string' && SHA256_PATTERN.test(value);
+}
+
+function nullableHash(value: unknown): value is `sha256-${string}` | null {
+    return value === null || validHash(value);
+}
+
+function parseReceiptKeys(value: unknown): readonly RemoteReceiptKey[] | null {
+    if (!isRecord(value) || !Array.isArray(value.keys)) return null;
+    const keys: RemoteReceiptKey[] = [];
+    const seen = new Set<string>();
+    for (const entry of value.keys) {
+        if (!isRecord(entry)) return null;
+        const jwk = entry.publicKeyJwk;
+        if (
+            typeof entry.keyId !== 'string' ||
+            !RECEIPT_KEY_ID_PATTERN.test(entry.keyId) ||
+            seen.has(entry.keyId) ||
+            entry.algorithm !== 'ed25519' ||
+            (entry.status !== 'active' &&
+                entry.status !== 'retired' &&
+                entry.status !== 'compromised') ||
+            !isRecord(jwk) ||
+            jwk.kty !== 'OKP' ||
+            jwk.crv !== 'Ed25519' ||
+            typeof jwk.x !== 'string' ||
+            !BASE64URL_PATTERN.test(jwk.x)
+        ) {
+            return null;
+        }
+        seen.add(entry.keyId);
+        keys.push({
+            keyId: entry.keyId,
+            algorithm: 'ed25519',
+            status: entry.status,
+            publicKeyJwk: { kty: 'OKP', crv: 'Ed25519', x: jwk.x },
+        });
+    }
+    return keys;
+}
+
+function fromBase64Url(value: string): Uint8Array | null {
+    if (!BASE64URL_PATTERN.test(value)) return null;
+    try {
+        const binary = atob(value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '='));
+        return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    } catch {
+        return null;
+    }
+}
+
+async function verifyAcquisitionReceipt(
+    receipt: PluginAcquisitionReceipt,
+    key: RemoteReceiptKey
+): Promise<boolean> {
+    const signature = fromBase64Url(receipt.signature);
+    if (!signature) return false;
+    try {
+        const cryptoKey = await crypto.subtle.importKey(
+            'jwk',
+            key.publicKeyJwk as JsonWebKey,
+            { name: 'Ed25519' },
+            false,
+            ['verify']
+        );
+        return await crypto.subtle.verify(
+            { name: 'Ed25519' },
+            cryptoKey,
+            signature as unknown as BufferSource,
+            new TextEncoder().encode(canonicalJson(receipt.payload)) as unknown as BufferSource
+        );
+    } catch {
+        return false;
+    }
+}
+
 export interface LibraryLinkTransport {
     start(input: {
         readonly label: string;
@@ -123,6 +312,11 @@ export interface LibraryLinkTransport {
     revoke(token: string): Promise<TransportResult<{ readonly revoked: true }>>;
     /** The linked account's purchases, for the local Library view (task 10.1). */
     entitlements(token: string): Promise<TransportResult<RemoteLibraryEntitlements>>;
+    /**
+     * Record (idempotently) an acquisition for one exact release and return the
+     * path its bytes may be fetched from. Never a download itself.
+     */
+    acquire(token: string, releaseId: string): Promise<TransportResult<RemoteAcquisition>>;
 }
 
 const RETRYABLE_CODES: readonly LibraryTransportFailureCode[] = [
@@ -450,6 +644,32 @@ export function createHttpLibraryLinkTransport(
         return { ok: true, value: parsed };
     }
 
+    async function receiptKeys(
+        forceFresh = false
+    ): Promise<TransportResult<readonly RemoteReceiptKey[]>> {
+        const cached = receiptKeyCache.get(config.registryOrigin);
+        if (!forceFresh && cached && cached.expiresAt > Date.now()) {
+            return { ok: true, value: cached.keys };
+        }
+        const result = await request('/api/v1/catalog/trust/receipt-keys', { method: 'GET' });
+        if (!result.ok) return result;
+        const parsed = parseReceiptKeys(result.value);
+        if (!parsed) {
+            return {
+                ok: false,
+                failure: failure(
+                    'invalid-response',
+                    'The marketplace sent an unexpected receipt-key response.'
+                ),
+            };
+        }
+        receiptKeyCache.set(config.registryOrigin, {
+            expiresAt: Date.now() + RECEIPT_KEY_CACHE_MS,
+            keys: parsed,
+        });
+        return { ok: true, value: parsed };
+    }
+
     return {
         async start(input) {
             const result = await request('/api/v1/connect/pairings', {
@@ -531,6 +751,50 @@ export function createHttpLibraryLinkTransport(
                     failure: failure(
                         'invalid-response',
                         'The marketplace sent an unexpected Library response.'
+                    ),
+                };
+            }
+            return { ok: true, value: parsed };
+        },
+
+        async acquire(token, releaseId) {
+            const result = await request('/api/v1/library/acquisitions', {
+                method: 'POST',
+                headers: { 'x-or3-library-token': token },
+                body: { releaseId },
+            });
+            if (!result.ok) return result;
+            const parsed = parseRemoteAcquisition(result.value);
+            if (!parsed) {
+                return {
+                    ok: false,
+                    failure: failure(
+                        'invalid-response',
+                        'The marketplace sent an unexpected acquisition response.'
+                    ),
+                };
+            }
+            if (parsed.releaseId !== releaseId) {
+                return {
+                    ok: false,
+                    failure: failure(
+                        'invalid-response',
+                        'The marketplace confirmed a different release than the one requested.'
+                    ),
+                };
+            }
+            // Key status is security-sensitive and the public endpoint has no
+            // signed freshness envelope. Re-fetch it for every acquisition;
+            // the cache is reserved for non-security callers/test seams.
+            const keys = await receiptKeys(true);
+            if (!keys.ok) return keys;
+            const key = keys.value.find((candidate) => candidate.keyId === parsed.receipt.keyId);
+            if (!key || key.status === 'compromised' || !(await verifyAcquisitionReceipt(parsed.receipt, key))) {
+                return {
+                    ok: false,
+                    failure: failure(
+                        'invalid-response',
+                        'The marketplace returned an untrusted acquisition receipt.'
                     ),
                 };
             }

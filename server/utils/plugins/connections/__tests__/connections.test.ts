@@ -263,7 +263,7 @@ describe('approved-operation dispatch (4.8)', () => {
             { cookie: 'session=1' },
             { host: 'evil.example' },
             { 'x-forwarded-host': 'evil.example' },
-        ]) {
+        ] as Record<string, string>[]) {
             const outcome = await dispatchApprovedConnectionOperation({
                 provider: FAKE_CONNECTION_PROVIDER,
                 operationId: 'items.list',

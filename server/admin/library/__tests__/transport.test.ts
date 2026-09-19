@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createHttpLibraryLinkTransport } from '../transport';
+import {
+    clearLibraryReceiptKeyCache,
+    createHttpLibraryLinkTransport,
+} from '../transport';
+import { canonicalJson } from '~~/shared/plugins/descriptor-key';
 
 const CONFIG = {
     registryOrigin: 'https://marketplace.example.test',
@@ -33,6 +37,66 @@ function respond(status: number, body: unknown): void {
     );
 }
 
+function base64Url(bytes: Uint8Array): string {
+    let binary = '';
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function receiptFixture() {
+    const pair = (await crypto.subtle.generateKey(
+        { name: 'Ed25519' },
+        true,
+        ['sign', 'verify']
+    )) as CryptoKeyPair;
+    const publicJwk = (await crypto.subtle.exportKey('jwk', pair.publicKey)) as JsonWebKey & {
+        x: string;
+    };
+    const payload = {
+        schemaVersion: 1 as const,
+        receiptId: 'acq_fixture1234',
+        marketplaceUserId: 'usr_1',
+        release: {
+            releaseId: 'rel_fixture_100',
+            pluginId: 'com.fixture.paid-plugin',
+            version: '1.0.0',
+            archiveSha256: `sha256-${'a'.repeat(64)}`,
+            packageTreeSha256: `sha256-${'b'.repeat(64)}`,
+            manifestSha256: `sha256-${'c'.repeat(64)}`,
+            authoritySha256: `sha256-${'d'.repeat(64)}`,
+        },
+        coverage: {
+            kind: 'plus' as const,
+            grantId: 'grant_fixture',
+            until: '2027-01-01T00:00:00.000Z',
+        },
+        issuedAt: '2026-09-18T01:00:00.000Z',
+    };
+    const signature = await crypto.subtle.sign(
+        { name: 'Ed25519' },
+        pair.privateKey,
+        new TextEncoder().encode(canonicalJson(payload))
+    );
+    return {
+        receipt: {
+            payload,
+            algorithm: 'ed25519' as const,
+            keyId: 'receipt-fixture',
+            signature: base64Url(new Uint8Array(signature)),
+        },
+        keys: [
+            {
+                keyId: 'receipt-fixture',
+                algorithm: 'ed25519',
+                status: 'active',
+                publicKeyJwk: { kty: 'OKP', crv: 'Ed25519', x: publicJwk.x },
+                createdAt: '2026-09-17T00:00:00.000Z',
+                retiredAt: null,
+            },
+        ],
+    };
+}
+
 /** Exactly the shape the deployed Worker returned in the phase-7 smoke run. */
 function startedResponse(): Record<string, unknown> {
     return {
@@ -55,6 +119,7 @@ function startedResponse(): Record<string, unknown> {
 describe('library link transport', () => {
     beforeEach(() => {
         fetchMock.mockReset();
+        clearLibraryReceiptKeyCache();
     });
 
     it('parses a real start response and never puts the secret in the URL', async () => {
@@ -292,9 +357,130 @@ describe('library link transport', () => {
     });
 });
 
+describe('library acquisition transport', () => {
+    beforeEach(() => {
+        fetchMock.mockReset();
+        clearLibraryReceiptKeyCache();
+    });
+
+    it('records the acquisition idempotently and returns the artifact path', async () => {
+        const transport = createHttpLibraryLinkTransport(CONFIG);
+        const fixture = await receiptFixture();
+        respond(200, {
+            acquisition: {
+                releaseId: 'rel_fixture_100',
+                acquiredAt: '2026-09-17T12:00:00.000Z',
+                alreadyAcquired: true,
+            },
+            release: {
+                releaseId: 'rel_fixture_100',
+                artifactPath: '/api/v1/library/releases/rel_fixture_100/artifact',
+            },
+            receipt: fixture.receipt,
+        });
+        respond(200, { keys: fixture.keys });
+
+        const result = await transport.acquire(TOKEN, 'rel_fixture_100');
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value).toMatchObject({
+            releaseId: 'rel_fixture_100',
+            artifactPath: '/api/v1/library/releases/rel_fixture_100/artifact',
+            alreadyAcquired: true,
+        });
+        expect(calls()[0]?.url).toBe(
+            'https://marketplace.example.test/api/v1/library/acquisitions'
+        );
+        expect(
+            (calls()[0]?.init.headers as Record<string, string>)['x-or3-library-token']
+        ).toBe(TOKEN);
+    });
+
+    it('refuses an acquisition that confirms a different release', async () => {
+        const transport = createHttpLibraryLinkTransport(CONFIG);
+        const fixture = await receiptFixture();
+        respond(200, {
+            acquisition: { releaseId: 'rel_other', alreadyAcquired: false },
+            release: {
+                releaseId: 'rel_other',
+                artifactPath: '/api/v1/library/releases/rel_other/artifact',
+            },
+            receipt: fixture.receipt,
+        });
+
+        expect(await transport.acquire(TOKEN, 'rel_fixture_100')).toMatchObject({
+            ok: false,
+            failure: { code: 'invalid-response' },
+        });
+    });
+
+    it('rejects tampered receipts and compromised receipt keys', async () => {
+        const transport = createHttpLibraryLinkTransport(CONFIG);
+        const fixture = await receiptFixture();
+        const tampered = structuredClone(fixture.receipt);
+        tampered.payload.release.version = '9.9.9';
+        respond(200, {
+            acquisition: { releaseId: 'rel_fixture_100', alreadyAcquired: false },
+            release: {
+                releaseId: 'rel_fixture_100',
+                artifactPath: '/api/v1/library/releases/rel_fixture_100/artifact',
+            },
+            receipt: tampered,
+        });
+        respond(200, { keys: fixture.keys });
+        await expect(transport.acquire(TOKEN, 'rel_fixture_100')).resolves.toMatchObject({
+            ok: false,
+            failure: { code: 'invalid-response' },
+        });
+
+        const compromised = await receiptFixture();
+        respond(200, {
+            acquisition: { releaseId: 'rel_fixture_100', alreadyAcquired: false },
+            release: {
+                releaseId: 'rel_fixture_100',
+                artifactPath: '/api/v1/library/releases/rel_fixture_100/artifact',
+            },
+            receipt: compromised.receipt,
+        });
+        respond(200, {
+            keys: compromised.keys.map((key) => ({ ...key, status: 'compromised' })),
+        });
+        await expect(transport.acquire(TOKEN, 'rel_fixture_100')).resolves.toMatchObject({
+            ok: false,
+            failure: { code: 'invalid-response' },
+        });
+    });
+
+    it('refreshes receipt-key status on every consecutive acquisition', async () => {
+        const transport = createHttpLibraryLinkTransport(CONFIG);
+        const fixture = await receiptFixture();
+        const response = {
+            acquisition: { releaseId: 'rel_fixture_100', alreadyAcquired: true },
+            release: {
+                releaseId: 'rel_fixture_100',
+                artifactPath: '/api/v1/library/releases/rel_fixture_100/artifact',
+            },
+            receipt: fixture.receipt,
+        };
+        respond(200, response);
+        respond(200, { keys: fixture.keys });
+        await expect(transport.acquire(TOKEN, 'rel_fixture_100')).resolves.toMatchObject({ ok: true });
+
+        respond(200, response);
+        respond(200, {
+            keys: fixture.keys.map((key) => ({ ...key, status: 'compromised' })),
+        });
+        await expect(transport.acquire(TOKEN, 'rel_fixture_100')).resolves.toMatchObject({
+            ok: false,
+            failure: { code: 'invalid-response' },
+        });
+    });
+});
+
 describe('library entitlements transport', () => {
     beforeEach(() => {
         fetchMock.mockReset();
+        clearLibraryReceiptKeyCache();
     });
 
     const LISTING = {

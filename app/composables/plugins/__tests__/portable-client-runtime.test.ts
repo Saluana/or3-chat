@@ -16,11 +16,13 @@ vi.mock('~~/shared/plugins/isolation/portable-bootstrap', () => ({
     PORTABLE_CLIENT_FEATURE: 'or3-portable-client-v1',
     PORTABLE_PROFILE_NAME: 'or3-portable-client-v1',
     defaultHostAbi: () => ({ abiVersion: 1, features: [], methods: [] }),
+    detectBrowserEngine: () => 'chromium',
     startPortableWorker: startPortableWorkerMock,
 }));
 
 const fetchMock = vi.fn();
 vi.stubGlobal('$fetch', fetchMock);
+const revocationRequests: string[] = [];
 
 const kvRows = new Map<string, { name: string; value: string | null; updated_at: number }>();
 const getKvByNameMock = vi.fn(async (name: string) => kvRows.get(name));
@@ -113,7 +115,40 @@ beforeEach(async () => {
     getKvByNameMock.mockClear();
     setKvByNameMock.mockClear();
     hardDeleteKvByNameMock.mockClear();
+    // The runtime mints a server-side activation handle before it starts any
+    // sandbox; the host answers here with a fresh generation each time.
+    let activationCounter = 0;
+    vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+            if (String(url) === '/api/plugins/isolation/activation') {
+                if (init?.method === 'DELETE') {
+                    const body = typeof init.body === 'string' ? JSON.parse(init.body) : null;
+                    if (typeof body?.activationId === 'string') {
+                        revocationRequests.push(body.activationId);
+                    }
+                    return new Response(JSON.stringify({ ok: true }), {
+                        status: 200,
+                        headers: { 'content-type': 'application/json' },
+                    });
+                }
+                activationCounter += 1;
+                return new Response(
+                    JSON.stringify({
+                        ok: true,
+                        activation: {
+                            activationId: `act_test_${activationCounter}`,
+                            generation: activationCounter,
+                        },
+                    }),
+                    { status: 200, headers: { 'content-type': 'application/json' } }
+                );
+            }
+            throw new Error(`Unexpected fetch: ${String(url)}`);
+        })
+    );
     await deactivatePortableClient('sample.plugin');
+    revocationRequests.length = 0;
     clearPortableClientSources();
 });
 
@@ -128,7 +163,9 @@ describe('portable settings services', () => {
         await expect(services.settings.list()).resolves.toEqual({
             values: { greeting: 'Hi' },
         });
-        expect(fetchMock).toHaveBeenCalledWith('/api/plugins/sample.plugin/setup-plan');
+        expect(fetchMock).toHaveBeenCalledWith(
+            '/api/plugins/sample.plugin/setup-plan?slot=current'
+        );
     });
 
     it('reports an unset key as null rather than inventing a value', async () => {
@@ -175,6 +212,45 @@ describe('demand-driven activation', () => {
 
         expect(startPortableWorkerMock).toHaveBeenCalledTimes(2);
         expect(restarted?.status).toBe('active');
+        expect(restarted?.generation).toBe(2);
+        expect(revocationRequests).toEqual(['act_test_1']);
+    });
+
+    it('revokes the server handle on explicit deactivation', async () => {
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('stop'));
+        setPortableClientSource({
+            descriptor: descriptor(),
+            workspaceId: 'ws-1',
+            runtimeEntry: undefined,
+        });
+
+        await ensurePortableClientActivation('sample.plugin');
+        await deactivatePortableClient('sample.plugin');
+
+        expect(revocationRequests).toEqual(['act_test_1']);
+    });
+
+    it('blocks the activation when the host refuses to mint a handle', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () =>
+                new Response(
+                    JSON.stringify({ statusMessage: 'This package has no current approved authority review.' }),
+                    { status: 403, headers: { 'content-type': 'application/json' } }
+                )
+            )
+        );
+        setPortableClientSource({
+            descriptor: descriptor(),
+            workspaceId: 'ws-1',
+            runtimeEntry: undefined,
+        });
+
+        const activation = await ensurePortableClientActivation('sample.plugin');
+        expect(activation?.status).toBe('blocked');
+        expect(activation?.blockCode).toBe('activation-refused');
+        // No sandbox may start without a minted identity or without a handle.
+        expect(startPortableWorkerMock).not.toHaveBeenCalled();
     });
 });
 
@@ -229,6 +305,8 @@ describe('portable storage services', () => {
 });
 
 describe('overlapping activations', () => {
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
     it('lets the replacement win and disposes the superseded start', async () => {
         const first = deferred<ReturnType<typeof startedRuntime>>();
         const second = deferred<ReturnType<typeof startedRuntime>>();
@@ -240,6 +318,10 @@ describe('overlapping activations', () => {
             descriptor: descriptor(),
             workspaceId: 'ws-1',
         });
+        // The host activation is minted before the sandbox starts; give the
+        // first start a chance to reach the sandbox so the replacement really
+        // overlaps a pending start.
+        await flush();
         const replacement = activatePortableClient({
             descriptor: descriptor(),
             workspaceId: 'ws-2',
@@ -260,6 +342,31 @@ describe('overlapping activations', () => {
         expect(getPortableActivation('sample.plugin')?.workspaceId).toBe('ws-2');
         expect(firstRuntime.dispose).toHaveBeenCalledTimes(1);
         expect(secondRuntime.dispose).not.toHaveBeenCalled();
+        expect(revocationRequests).toContain('act_test_1');
+    });
+
+    it('keeps the handle for non-fatal reports and revokes it for fatal crashes', async () => {
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('crash'));
+        const activation = await activatePortableClient({
+            descriptor: descriptor(),
+            workspaceId: 'ws-1',
+        });
+        expect(activation.status).toBe('active');
+
+        const start = startPortableWorkerMock.mock.calls[0]?.[0] as {
+            onCrash: (report: { fatal: boolean; reason: string }) => void;
+        } | undefined;
+        if (!start) throw new Error('Expected the sandbox start to be attempted');
+
+        start.onCrash({ fatal: false, reason: 'nested-worker-attempt' });
+        await flush();
+        expect(getPortableActivation('sample.plugin')?.status).toBe('active');
+        expect(revocationRequests).toEqual([]);
+
+        start.onCrash({ fatal: true, reason: 'worker-crashed' });
+        await flush();
+        expect(getPortableActivation('sample.plugin')?.status).toBe('stopped');
+        expect(revocationRequests).toEqual(['act_test_1']);
     });
 
     it('cancels a pending start instead of letting it publish after a stop', async () => {
@@ -269,6 +376,7 @@ describe('overlapping activations', () => {
             descriptor: descriptor(),
             workspaceId: 'ws-1',
         });
+        await flush();
 
         await deactivatePortableClient('sample.plugin');
         const runtime = startedRuntime('late');
@@ -288,6 +396,7 @@ describe('overlapping activations', () => {
             descriptor: descriptor(),
             workspaceId: 'ws-1',
         });
+        await flush();
 
         const call = startPortableWorkerMock.mock.calls[0]?.[0] as {
             onEvent: (event: unknown) => void;

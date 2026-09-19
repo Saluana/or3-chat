@@ -69,7 +69,7 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const service = await acquisitionServiceFor(event, requester);
+    const service = await acquisitionServiceFor(event, requester, context.session?.user?.id ?? '');
     const started = await service.start({
         pluginId: body.data.pluginId,
         ...(body.data.version === undefined ? {} : { version: body.data.version }),

@@ -13,6 +13,10 @@ import {
 } from './fixtures';
 import { RegistryClient } from '../registry-client';
 import { signAdvisoryForTest, signReleaseMetadataForTest } from '../release-verify';
+import {
+    computeAuthorityHash,
+    type EffectiveAuthority,
+} from '~~/shared/plugins/authority/effective-authority';
 
 const roots: string[] = [];
 
@@ -103,7 +107,44 @@ describe('registry resolve (5.2)', () => {
         expect(result.value.metadataSha256).toMatch(/^sha256-[a-f0-9]{64}$/);
         // The advisory log is always consulted: freshness that is only checked
         // when a caller supplies it is not checked at all.
-        expect(seen.some((url) => url.endsWith('/advisories'))).toBe(true);
+        expect(seen.some((url) => url.endsWith('/checkpoint'))).toBe(true);
+    });
+
+    it('refuses a signed authority descriptor whose digest does not match', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const authority: EffectiveAuthority = {
+            trust: 'isolated-client',
+            grants: ['network.http'],
+            features: [],
+            engines: ['or3', 'pluginApi'],
+            destinations: [
+                { host: 'api.example', methods: ['GET'], pathPrefixes: ['/v1'] },
+            ],
+            connectionScopes: [],
+            dataScopes: ['documents.read'],
+            writes: [],
+            setupHooks: ['first-action'],
+            dependencies: [],
+        };
+        const digest = await computeAuthorityHash(authority);
+        const tamperedAuthority = {
+            ...authority,
+            destinations: [{ ...authority.destinations[0]!, pathPrefixes: ['/admin'] }],
+        };
+        const signed = await signReleaseMetadataForTest({
+            document: {
+                ...fixture.signed,
+                authority: tamperedAuthority,
+                authoritySha256: digest,
+            },
+            keyId: fixture.key.keyId,
+            privateKeyBase64: fixture.privateKeyBase64,
+        });
+        const result = await makeClient({
+            keys: [fixture.key],
+            transport: fakeRegistryTransport({ fixture: { ...fixture, signed } }),
+        }).resolveRelease({ expectation: { pluginId: 'alpha', version: '1.0.0' } });
+        expect(result).toMatchObject({ ok: false, failure: { code: 'authority-mismatch' } });
     });
 
     it('refuses untrusted keys, tampered documents and wrong profiles', async () => {
@@ -497,6 +538,46 @@ describe('artifact download (5.2)', () => {
             ok: false,
             failure: { code: 'download-url-expired', retryable: true },
         });
+    });
+
+    it('distinguishes a paid-release refusal so the caller can use a Library link', async () => {
+        const { resolved, fixture, staging } = await resolvedFixture();
+        const client = makeClient({
+            keys: [],
+            transport: async () =>
+                new Response(
+                    JSON.stringify({
+                        statusCode: 403,
+                        statusMessage: 'coverage-required',
+                        data: { code: 'coverage-required' },
+                    }),
+                    { status: 403, headers: { 'content-type': 'application/json' } }
+                ),
+        });
+        void fixture;
+        expect(await client.downloadArtifact({ resolved, stagingPath: staging })).toMatchObject({
+            ok: false,
+            failure: { code: 'coverage-required', retryable: true },
+        });
+    });
+
+    it('sends caller-provided headers with the artifact request', async () => {
+        const { resolved, fixture, staging } = await resolvedFixture();
+        const seen: Record<string, string>[] = [];
+        const client = makeClient({
+            keys: [],
+            transport: async (_input, init) => {
+                seen.push((init?.headers as Record<string, string>) ?? {});
+                return new Response(new Uint8Array(fixture.bytes), { status: 200 });
+            },
+        });
+        const result = await client.downloadArtifact({
+            resolved,
+            stagingPath: staging,
+            headers: { 'x-or3-library-token': 'linked-token' },
+        });
+        expect(result.ok).toBe(true);
+        expect(seen[0]?.['x-or3-library-token']).toBe('linked-token');
     });
 
     it('refuses to stage when the free-space budget cannot cover staging and extraction', async () => {

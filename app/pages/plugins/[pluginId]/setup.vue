@@ -34,6 +34,9 @@ type SetupPlanResponse = {
         values: Record<string, string | number | boolean>;
         errors: readonly { key: string; message: string }[];
     };
+    packageDigest: string | null;
+    operationId: string | null;
+    setupRevision: number;
 };
 
 const route = useRoute();
@@ -54,6 +57,8 @@ const { data, error, refresh } = await useFetch<SetupPlanResponse>(
     () => `/api/plugins/${encodeURIComponent(pluginId.value)}/setup-plan`,
     { key: () => `plugin-setup-${pluginId.value}` }
 );
+
+const currentSetupRevision = computed(() => data.value?.setupRevision ?? 0);
 
 const busy = ref(false);
 const message = ref<string | null>(null);
@@ -95,7 +100,12 @@ async function saveSettings(
         await $fetch(`/api/plugins/${encodeURIComponent(pluginId.value)}/setup-values`, {
             method: 'POST',
             headers: mutationHeaders(),
-            body: { values: patch },
+            body: {
+                values: patch,
+                operationId: data.value?.operationId ?? null,
+                expectedPackageDigest: data.value?.packageDigest ?? null,
+                expectedRevision: currentSetupRevision.value,
+            },
         });
         saveState.value = 'saved';
         message.value = 'Settings saved.';

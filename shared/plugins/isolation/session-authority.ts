@@ -64,7 +64,7 @@ export interface HostSessionAuthorityOptions {
     readonly sourceId: string;
     readonly sessionTtlMs?: number;
     readonly now?: () => number;
-    readonly generateSessionId?: () => string;
+    readonly generateSessionId?: (pluginId: string, generation: number) => string;
 }
 
 let sessionCounter = 0;

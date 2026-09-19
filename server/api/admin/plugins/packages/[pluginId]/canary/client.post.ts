@@ -88,6 +88,7 @@ export default defineEventHandler(async (event) => {
                 workspaceId: ticket.workspaceId,
                 pluginId: candidate.pluginId,
                 packageDigest: candidate.packageDigest,
+                release: null,
             }),
         serverDryRun: (dryRun) => serverCandidateDryRun(services.packages, dryRun),
         clientHiddenPrepare: clientCanaryStepFromEvidence(services.clientCanary, {

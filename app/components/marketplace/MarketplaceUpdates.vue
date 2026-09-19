@@ -12,28 +12,188 @@ import { useToast } from '#imports';
 import {
     useMarketplaceInstall,
     useMarketplaceInstalled,
+    useMarketplaceConsent,
+    useMarketplaceUpdateCheck,
+    type AcquisitionStatusView,
+    type MarketplaceInstallTarget,
+    type MarketplaceUpdateCheckPlugin,
+    marketplaceTargetKey,
+    sameMarketplaceTarget,
 } from '~/composables/marketplace/useMarketplace';
 import { reportCandidateClientCanary } from '~/composables/plugins/portable-canary';
+import {
+    browserEngineQualified,
+    detectBrowserEngine,
+    QUALIFIED_BROWSER_ENGINES,
+} from '~~/shared/plugins/isolation/portable-bootstrap';
 
 const toast = useToast();
 const installed = useMarketplaceInstalled();
 const install = useMarketplaceInstall();
+const consent = useMarketplaceConsent();
+const updateCheck = useMarketplaceUpdateCheck();
 const busyPluginId = ref<string | null>(null);
 const canaryNote = ref<Record<string, string>>({});
+/** Per-plugin outcome after a resume attempt, so a stuck update offers the next step. */
+const updateNote = ref<Record<string, { readonly message: string; readonly retryable: boolean }>>(
+    {}
+);
+const browserEngine = ref<string>('unknown');
+const approvedUpdates = ref<Record<string, string>>({});
 
-onMounted(() => installed.load());
+function updateTarget(entry: MarketplaceUpdateCheckPlugin): MarketplaceInstallTarget | null {
+    if (!entry.latestVersion || !entry.release || entry.release.version !== entry.latestVersion) {
+        return null;
+    }
+    return {
+        pluginId: entry.pluginId,
+        releaseId: entry.release.releaseId,
+        version: entry.release.version,
+        archiveSha256: entry.release.archiveSha256,
+        packageTreeSha256: entry.release.packageTreeSha256,
+        authoritySha256: entry.release.authoritySha256,
+        requestedGrants: entry.release.requestedGrants,
+        authority: entry.release.authority,
+    };
+}
+
+function updateTargetKey(entry: MarketplaceUpdateCheckPlugin): string {
+    const target = updateTarget(entry);
+    return target ? marketplaceTargetKey(target) : '';
+}
+
+async function refreshUpdates(): Promise<void> {
+    approvedUpdates.value = {};
+    await updateCheck.check();
+}
+
+onMounted(() => {
+    browserEngine.value = detectBrowserEngine();
+    installed.load();
+});
 
 const candidates = computed(() =>
     installed.packages.value.filter((entry) => Boolean(entry.pointer?.candidate))
 );
 
-function reportOutcome(
-    pluginId: string,
-    status: string | undefined,
-    message: string | undefined
-): void {
-    if (status === 'completed') {
+/** Newer published releases that nobody has staged yet. */
+const availableUpdates = computed(() =>
+    (updateCheck.result.value?.plugins ?? []).filter(
+        (entry) => entry.status === 'update-available' && entry.latestVersion !== null
+    )
+);
+
+/** Releases the registry itself refuses (quarantine, revocation, no metadata). */
+const problemChecks = computed(() =>
+    (updateCheck.result.value?.plugins ?? []).filter(
+        (entry) => entry.status === 'blocked' || entry.status === 'unknown'
+    )
+);
+
+async function reviewUpdate(entry: MarketplaceUpdateCheckPlugin): Promise<void> {
+    const target = updateTarget(entry);
+    if (!target) return;
+    if (
+        entry.release?.profile === 'or3-portable-client-v1' &&
+        !browserEngineQualified(browserEngine.value, QUALIFIED_BROWSER_ENGINES)
+    ) {
+        updateNote.value = {
+            ...updateNote.value,
+            [entry.pluginId]: {
+                message: `This update needs a qualified browser (${QUALIFIED_BROWSER_ENGINES.join(', ')}); the current browser is ${browserEngine.value}.`,
+                retryable: false,
+            },
+        };
+        toast.add({
+            title: 'This browser cannot run the update',
+            description: 'Open the update in a qualified browser before staging it.',
+            color: 'warning',
+        });
+        return;
+    }
+    const grants = target.requestedGrants;
+    const authorityReviewRequired = grants.length > 0 || target.authority !== undefined;
+    if (grants.length > 0 && !target.authority) {
+        updateNote.value = {
+            ...updateNote.value,
+            [entry.pluginId]: {
+                message: 'The complete signed authority descriptor is unavailable, so this update cannot be approved safely.',
+                retryable: false,
+            },
+        };
+        toast.add({
+            title: 'Complete authority review unavailable',
+            description: 'Ask the publisher to republish the release with its signed authority descriptor.',
+            color: 'warning',
+        });
+        return;
+    }
+    if (authorityReviewRequired && approvedUpdates.value[entry.pluginId] !== marketplaceTargetKey(target)) {
+        updateNote.value = {
+            ...updateNote.value,
+            [entry.pluginId]: {
+                message: 'Review and approve the requested permissions before staging this update.',
+                retryable: false,
+            },
+        };
+        toast.add({
+            title: 'Permission review required',
+            description: 'Approve the displayed permissions, then review the update again.',
+            color: 'warning',
+        });
+        return;
+    }
+    if (authorityReviewRequired) {
+        const recorded = await consent.approve({
+            pluginId: target.pluginId,
+            approvedGrants: grants,
+            expectedPackageDigest: target.packageTreeSha256,
+            expectedAuthoritySha256: target.authoritySha256,
+            version: target.version,
+        });
+        if (!recorded) {
+            toast.add({
+                title: 'The update permissions were not recorded',
+                description: consent.error.value ?? 'Reload and review the release again.',
+                color: 'error',
+            });
+            return;
+        }
+    }
+    const currentEntry = updateCheck.result.value?.plugins.find(
+        (candidate) => candidate.pluginId === entry.pluginId
+    );
+    if (!currentEntry || !sameMarketplaceTarget(updateTarget(currentEntry), target)) {
+        delete approvedUpdates.value[entry.pluginId];
+        toast.add({
+            title: 'The reviewed release changed',
+            description: 'Refresh the update list and review the new release before staging it.',
+            color: 'warning',
+        });
+        return;
+    }
+    busyPluginId.value = entry.pluginId;
+    canaryNote.value = { ...canaryNote.value, [entry.pluginId]: 'staging review' };
+    try {
+        // Reviewing starts the ordinary acquisition operation for the selected
+        // release: compatibility, advisories, grants, setup and the canary all
+        // still run before anything is selected.
+        const finished = await install.start({
+            pluginId: entry.pluginId,
+            version: target.version,
+        });
+        reportOutcome(entry.pluginId, finished);
+            await Promise.all([installed.load(), refreshUpdates()]);
+    } finally {
+        busyPluginId.value = null;
+    }
+}
+
+function reportOutcome(pluginId: string, view: AcquisitionStatusView | null): void {
+    if (view?.status === 'completed') {
         canaryNote.value = { ...canaryNote.value, [pluginId]: 'activated' };
+        const { [pluginId]: _cleared, ...rest } = updateNote.value;
+        updateNote.value = rest;
         toast.add({
             title: 'Updated',
             description: 'The reviewed version is now the selected one.',
@@ -41,10 +201,25 @@ function reportOutcome(
         });
         return;
     }
-    canaryNote.value = { ...canaryNote.value, [pluginId]: status ?? 'pending' };
+    const status = view?.status ?? 'pending';
+    canaryNote.value = { ...canaryNote.value, [pluginId]: status };
+    const message =
+        view?.failure?.message ??
+        (status === 'paused'
+            ? 'Finish the required setup, then continue.'
+            : 'Resume when the blocker is cleared.');
+    updateNote.value = {
+        ...updateNote.value,
+        [pluginId]: { message, retryable: view?.retryable === true },
+    };
     toast.add({
-        title: status === 'paused' ? 'Setup required' : 'The update is still pending',
-        description: message ?? 'Resume the install when the blocker is cleared.',
+        title:
+            status === 'paused'
+                ? 'Setup required'
+                : view?.retryable === true
+                  ? 'The update needs another attempt'
+                  : 'The update is still pending',
+        description: message,
         color: 'warning',
     });
 }
@@ -92,7 +267,7 @@ async function activate(entry: {
         if (resumable && resumable.version === candidateVersion && resumable.status !== 'completed') {
             canaryNote.value = { ...canaryNote.value, [entry.pluginId]: 'resuming install' };
             const finished = await install.adopt(entry.pluginId, resumable.operationId);
-            reportOutcome(entry.pluginId, finished?.status, finished?.failure?.message);
+            reportOutcome(entry.pluginId, finished);
             await installed.load();
             return;
         }
@@ -149,7 +324,7 @@ async function activate(entry: {
                     [entry.pluginId]: 'resuming install',
                 };
                 const finished = await install.adopt(entry.pluginId, data.operationId);
-                reportOutcome(entry.pluginId, finished?.status, finished?.failure?.message);
+                reportOutcome(entry.pluginId, finished);
                 await installed.load();
                 return;
             }
@@ -175,9 +350,114 @@ async function activate(entry: {
 
 <template>
     <div class="flex flex-col gap-4" data-testid="marketplace-updates">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+            <p class="text-xs text-(--ui-text-muted)">
+                Checking reads the catalog. Nothing is staged until you review a release.
+            </p>
+            <UButton
+                size="sm"
+                color="neutral"
+                variant="soft"
+                icon="i-lucide-refresh-cw"
+                :loading="updateCheck.loading.value"
+                data-testid="marketplace-update-check"
+                @click="refreshUpdates()"
+            >
+                Check for updates
+            </UButton>
+        </div>
+        <p v-if="updateCheck.error.value" class="text-xs text-(--ui-text-error)">
+            {{ updateCheck.error.value }}
+        </p>
+        <ul
+            v-if="availableUpdates.length > 0"
+            class="flex flex-col gap-3"
+            data-testid="marketplace-update-available"
+        >
+            <li
+                v-for="entry in availableUpdates"
+                :key="entry.pluginId"
+                class="flex flex-col gap-2 rounded-lg border border-(--ui-border) p-3"
+            >
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="font-medium">{{ entry.pluginId }}</span>
+                    <UBadge color="info" variant="subtle">v{{ entry.latestVersion }}</UBadge>
+                    <span class="text-xs text-(--ui-text-muted)">
+                        installed {{ entry.installedVersion }}
+                    </span>
+                </div>
+                <p class="text-xs text-(--ui-text-muted)">
+                    Requested authority:
+                    {{ entry.release?.requestedGrants.join(', ') || 'none' }}
+                </p>
+                <details v-if="entry.release?.authority" class="rounded border border-(--ui-border) p-2 text-xs">
+                    <summary class="cursor-pointer font-medium">Review complete authority</summary>
+                    <div class="mt-2 flex flex-col gap-2">
+                        <p><strong>Trust:</strong> {{ entry.release.authority.trust }}</p>
+                        <p><strong>Features:</strong> {{ entry.release.authority.features.join(', ') || 'none' }}</p>
+                        <p><strong>Engines:</strong> {{ entry.release.authority.engines.join(', ') || 'none' }}</p>
+                        <div>
+                            <strong>Destinations</strong>
+                            <ul class="list-disc pl-5">
+                                <li v-for="destination in entry.release.authority.destinations" :key="`${destination.host}:${destination.connection ?? ''}`">
+                                    {{ destination.host }} — {{ destination.methods.join(', ') || 'no methods' }}
+                                    ({{ destination.pathPrefixes.join(', ') || 'all paths' }})
+                                    <span v-if="destination.connection">via {{ destination.connection }}</span>
+                                </li>
+                            </ul>
+                        </div>
+                        <p><strong>Connection scopes:</strong> {{ entry.release.authority.connectionScopes.join(', ') || 'none' }}</p>
+                        <p><strong>Data scopes:</strong> {{ entry.release.authority.dataScopes.join(', ') || 'none' }}</p>
+                        <p><strong>Writes:</strong> {{ entry.release.authority.writes.join(', ') || 'none' }}</p>
+                        <p><strong>Setup hooks:</strong> {{ entry.release.authority.setupHooks.join(', ') || 'none' }}</p>
+                        <p><strong>Dependencies:</strong> {{ entry.release.authority.dependencies.join(', ') || 'none' }}</p>
+                    </div>
+                </details>
+                <p v-else-if="entry.release?.requestedGrants.length" class="text-xs text-(--ui-text-error)">
+                    The complete signed authority descriptor is unavailable; this update cannot be approved safely.
+                </p>
+                <label
+                    v-if="entry.release?.requestedGrants.length || entry.release?.authority"
+                    class="flex items-center gap-2 text-xs text-(--ui-text-muted)"
+                >
+                    <input
+                        v-model="approvedUpdates[entry.pluginId]"
+                        type="checkbox"
+                        :true-value="updateTargetKey(entry)"
+                        :false-value="''"
+                        data-testid="marketplace-update-grant-approve"
+                    />
+                    I approve these permissions for this workspace.
+                </label>
+                <div class="flex flex-wrap gap-2">
+                    <UButton
+                        size="sm"
+                        color="primary"
+                        variant="soft"
+                        icon="i-lucide-eye"
+                        :loading="busyPluginId === entry.pluginId"
+                        data-testid="marketplace-update-review"
+                        @click="reviewUpdate(entry)"
+                    >
+                        Review update
+                    </UButton>
+                </div>
+            </li>
+        </ul>
+        <div v-if="problemChecks.length > 0" class="flex flex-col gap-1">
+            <p
+                v-for="entry in problemChecks"
+                :key="entry.pluginId"
+                class="text-xs text-(--ui-text-muted)"
+            >
+                {{ entry.pluginId }}: {{ entry.reason ?? 'no update information available' }}
+            </p>
+        </div>
+        <h3 class="text-sm font-medium">Staged candidates</h3>
         <div v-if="installed.loading.value" class="text-sm text-(--ui-text-muted)">Loading…</div>
         <div v-else-if="candidates.length === 0" class="text-sm text-(--ui-text-muted)">
-            No updates are waiting. Newer reviewed releases appear here before they activate.
+            No reviewed release is staged right now. Use “Check for updates” to look for a newer
+            version.
         </div>
         <ul v-else class="flex flex-col gap-3">
             <li
@@ -199,7 +479,14 @@ async function activate(entry: {
                     authority needs fresh consent first.
                 </p>
                 <p v-if="canaryNote[entry.pluginId]" class="text-xs text-(--ui-text-muted)">
-                    Browser check: {{ canaryNote[entry.pluginId] }}
+                    Update check: {{ canaryNote[entry.pluginId] }}
+                </p>
+                <p
+                    v-if="updateNote[entry.pluginId]"
+                    class="text-xs"
+                    data-testid="marketplace-update-note"
+                >
+                    {{ updateNote[entry.pluginId]?.message }}
                 </p>
                 <div class="flex flex-wrap gap-2">
                     <UButton
@@ -208,9 +495,10 @@ async function activate(entry: {
                         variant="soft"
                         icon="i-lucide-check"
                         :loading="busyPluginId === entry.pluginId"
+                        data-testid="marketplace-update-activate"
                         @click="activate(entry)"
                     >
-                        Check and activate
+                        {{ updateNote[entry.pluginId]?.retryable ? 'Continue' : 'Check and activate' }}
                     </UButton>
                     <UButton
                         size="sm"

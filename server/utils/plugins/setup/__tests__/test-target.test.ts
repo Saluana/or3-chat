@@ -16,7 +16,13 @@ const setup: Or3SetupDescriptorV1 = {
     },
 };
 
-const policy: Pick<Or3PackagePolicyV1, 'connections'> = {
+const policy: Or3PackagePolicyV1 = {
+    policyVersion: 1,
+    profile: 'or3-portable-client-v1',
+    destinations: [],
+    dataScopes: [],
+    writes: [],
+    requiredFeatures: [],
     connections: [
         {
             id: 'docs',
@@ -33,7 +39,7 @@ const policy: Pick<Or3PackagePolicyV1, 'connections'> = {
 function resolve(overrides: Partial<Parameters<typeof resolveSetupTestTarget>[0]> = {}) {
     return resolveSetupTestTarget({
         setup,
-        policy: policy as Or3PackagePolicyV1,
+        policy,
         provider: FAKE_CONNECTION_PROVIDER,
         slotId: 'docs',
         ...overrides,
@@ -65,8 +71,9 @@ describe('server-side setup test target (review 4.3)', () => {
     it('refuses an operation the release does not approve for the slot', () => {
         const result = resolve({
             policy: {
+                ...policy,
                 connections: [{ ...policy.connections[0]!, operations: [] }],
-            } as Or3PackagePolicyV1,
+            },
         });
         expect(result).toMatchObject({ ok: false });
         if (result.ok) return;
@@ -84,8 +91,9 @@ describe('server-side setup test target (review 4.3)', () => {
     it('refuses a package whose slot names another provider', () => {
         const result = resolve({
             policy: {
+                ...policy,
                 connections: [{ ...policy.connections[0]!, provider: 'other' }],
-            } as Or3PackagePolicyV1,
+            },
         });
         expect(result).toMatchObject({ ok: false });
         if (result.ok) return;

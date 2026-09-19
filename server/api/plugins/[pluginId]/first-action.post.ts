@@ -1,9 +1,14 @@
 import { createError, defineEventHandler, getRouterParam } from 'h3';
 import { requireCan, requireSession } from '../../../auth/can';
 import { resolveSessionContext } from '../../../auth/session';
+import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
+import { getWorkspaceSettingsStore } from '../../../admin/stores/registry';
+import { packageGrantCandidate } from '../../../admin/plugins/package-operation-support';
+import { getPluginGrantReview } from '../../../admin/plugins/workspace-plugin-store';
+import { evaluateReviewedPluginGrant } from '~~/shared/plugins/grant-review';
+import { resolvePluginPackage } from '../../../utils/plugins/setup/discovery';
 import { resolveConnectionService } from '../../../utils/plugins/connections/resolve';
 import { loadSetupState } from '../../../utils/plugins/setup/state';
-import { readSetupValues } from '../../../utils/plugins/setup/settings-store';
 import {
     getRetainedSelectionAuthority,
     latestRetainedSelectionAuthority,
@@ -62,13 +67,16 @@ export default defineEventHandler(async (event) => {
 
     const { service, durable } = resolveConnectionService();
     const state = await loadSetupState({
+        event,
         pluginId,
         workspaceId,
         ownerUserId: userId,
         hasSelectedContext: Boolean(documentId || messageId),
         service,
         durableConnections: durable,
-        storedValues: await readSetupValues(event, workspaceId, pluginId),
+        // The running plugin's handoff reads the selected version, never a
+        // candidate that is still waiting for promotion.
+        slot: 'current',
     });
     if (!state.installed) {
         throw createError({ statusCode: 404, statusMessage: 'Plugin is not installed' });
@@ -78,6 +86,34 @@ export default defineEventHandler(async (event) => {
             statusCode: 409,
             statusMessage: 'Setup information is unavailable for this plugin',
         });
+    }
+
+    // The selection handle is the only way document content reaches publisher
+    // code, so a release that reads documents needs an approved review before
+    // this route mints one. Unselected reads (no handle) and unapproved writes
+    // (host action executor) fail on their own boundaries too.
+    const installed = await resolvePluginPackage(pluginId, EXTENSIONS_BASE_DIR, 'current');
+    if (installed?.digest) {
+        const candidate = await packageGrantCandidate({
+            packagePath: installed.path,
+            packageDigest: installed.digest,
+        });
+        if (candidate.requestedGrants.includes('documents.read')) {
+            const review = await getPluginGrantReview(
+                getWorkspaceSettingsStore(event),
+                workspaceId,
+                pluginId,
+                candidate
+            );
+            const decision = evaluateReviewedPluginGrant(review, 'documents.read');
+            if (!decision.allowed) {
+                throw createError({
+                    statusCode: 403,
+                    statusMessage: 'This plugin is not approved to read documents.',
+                    data: { code: 'documents-grant-required', reason: decision.reason },
+                });
+            }
+        }
     }
 
     const handoff = state.firstAction;

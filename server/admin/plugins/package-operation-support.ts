@@ -25,12 +25,19 @@
 import { promises as fs } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Sha256 } from '../../../shared/plugins/runtime-descriptor';
+import { computeAuthorityHash, type EffectiveAuthority } from '~~/shared/plugins/authority/effective-authority';
 import type { WorkspaceSettingsStore } from '../stores/types';
-import { Or3ExtensionManifestV2Schema } from '../extensions/types';
+import { Or3ExtensionManifestV2Schema, type Or3ExtensionManifestV2 } from '../extensions/types';
+import {
+    loadPackageDescriptors,
+    packageAuthorityDigest,
+    toEffectiveAuthority,
+} from '../../utils/plugins/setup/load-descriptors';
 import {
     getPluginGrantReview,
     getPluginSettings,
     replacePluginSettings,
+    type PluginGrantCandidate,
 } from './workspace-plugin-store';
 import { PluginSettingsMigrationService } from './settings-migration';
 import { ImmutablePluginPackageStore } from './package-store';
@@ -136,9 +143,77 @@ export async function readPackageManifest(packageRoot: string) {
 }
 
 /**
- * Reads the grant review that applies to one candidate package, using the
- * manifest from the stored bytes so a caller cannot approve different grants
- * than the package requests.
+ * Build the consent candidate for one verified package. The manifest and the
+ * descriptors come from the stored bytes, so the authority a reviewer approves
+ * is the authority the package actually declares.
+ */
+export async function packageGrantCandidate(input: {
+    readonly packagePath: string;
+    readonly packageDigest: Sha256 | null;
+    readonly release?: {
+        readonly releaseId: string;
+        readonly authoritySha256: Sha256;
+        readonly authority?: EffectiveAuthority;
+    } | null;
+}): Promise<PluginGrantCandidate> {
+    const manifest: Or3ExtensionManifestV2 = await readPackageManifest(input.packagePath);
+    const descriptors = await loadPackageDescriptors({
+        extensionsBaseDir: input.packagePath,
+        packagePath: input.packagePath,
+    });
+    const releaseId = input.release?.releaseId ?? null;
+    const authority =
+        descriptors.policy && descriptors.setup
+            ? toEffectiveAuthority({
+                  manifest,
+                  policy: descriptors.policy,
+                  setup: descriptors.setup,
+              })
+            : null;
+    if (input.release) {
+        if (input.release.authority !== undefined) {
+            const derivedDigest = authority ? await computeAuthorityHash(authority) : null;
+            const signedDigest = await computeAuthorityHash(input.release.authority);
+            if (
+                !authority ||
+                derivedDigest !== input.release.authoritySha256 ||
+                signedDigest !== input.release.authoritySha256
+            ) {
+                throw new Error('The staged package authority does not match the signed release authority.');
+            }
+        } else {
+            const legacyDigest = packageAuthorityDigest(descriptors.policy, descriptors.setup);
+            if (legacyDigest !== null && legacyDigest !== input.release.authoritySha256) {
+                throw new Error('The staged package policy does not match the signed legacy authority digest.');
+            }
+        }
+    }
+    if (!descriptors.policy || !descriptors.setup) {
+        return {
+            requestedGrants: manifest.requestedGrants,
+            releaseId,
+            packageDigest: input.packageDigest,
+            authoritySha256:
+                input.release?.authoritySha256 ??
+                packageAuthorityDigest(descriptors.policy, descriptors.setup),
+            authority: null,
+        };
+    }
+    const authoritySha256 = input.release?.authoritySha256
+        ?? (authority ? await computeAuthorityHash(authority) : packageAuthorityDigest(descriptors.policy, descriptors.setup));
+    return {
+        requestedGrants: manifest.requestedGrants,
+        releaseId,
+        packageDigest: input.packageDigest,
+        authoritySha256,
+        authority,
+    };
+}
+
+/**
+ * Reads the authority consent that applies to one candidate package, using the
+ * manifest and descriptors from the stored bytes so a caller cannot approve
+ * different authority than the package declares.
  */
 export async function readPackageGrantReview(input: {
     readonly packages: ImmutablePluginPackageStore;
@@ -146,15 +221,22 @@ export async function readPackageGrantReview(input: {
     readonly workspaceId: string;
     readonly pluginId: string;
     readonly packageDigest: Sha256;
+    readonly release?: {
+        readonly releaseId: string;
+        readonly authoritySha256: Sha256;
+        readonly authority?: EffectiveAuthority;
+    } | null;
 }) {
-    const manifest = await readPackageManifest(
-        input.packages.packagePath(input.pluginId, input.packageDigest)
-    );
+    const candidate = await packageGrantCandidate({
+        packagePath: input.packages.packagePath(input.pluginId, input.packageDigest),
+        packageDigest: input.packageDigest,
+        release: input.release ?? null,
+    });
     return getPluginGrantReview(
         input.settings,
         input.workspaceId,
         input.pluginId,
-        manifest.requestedGrants
+        candidate
     );
 }
 

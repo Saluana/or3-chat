@@ -40,7 +40,6 @@ import { verifyPackageTree } from '../../../admin/plugins/package-tree';
 import type { PluginV2HostCapabilities } from '~~/shared/plugins/v2-compatibility';
 import type { PluginManifestV2 } from '@or3/plugin-sdk/manifest';
 import {
-    defineOr3PortableProfile,
     validatePortableProfile,
     type Or3PackagePolicyV1,
     type Or3SetupDescriptorV1,
@@ -50,10 +49,12 @@ import {
     getEnabledPlugins,
     getPluginGrantReview,
     setPluginEnabled,
+    type PluginGrantCandidate,
 } from '../../../admin/plugins/workspace-plugin-store';
 import { PluginPackageRouteCatalog } from '../../../admin/plugins/package-route-catalog';
 import type { PluginPackagePointer } from '../../../admin/plugins/package-pointer-store';
 import {
+    packageGrantCandidate,
     readPackageGrantReview,
     readPluginStateSnapshot,
     restorePluginStateSnapshot,
@@ -63,8 +64,12 @@ import {
 import {
     preflightPluginStateCompatibility,
 } from '~~/shared/plugins/state-compatibility';
-import { setupValuesKey } from '../setup/settings-store';
-import { loadPackageDescriptors } from '../setup/load-descriptors';
+import {
+    loadPackageDescriptors,
+    packageAuthorityDigest,
+    toEffectiveAuthority,
+} from '../setup/load-descriptors';
+import { computeAuthorityHash } from '~~/shared/plugins/authority/effective-authority';
 import {
     acquisitionProfileRequirement,
     type AcquisitionProfileRequirement,
@@ -80,7 +85,8 @@ import {
     type PluginAcquisitionReleaseIdentity,
     type PluginAcquisitionStage,
 } from '~~/shared/plugins/acquisition/contracts';
-import type { AcquisitionConfig } from './config';import {
+import type { AcquisitionConfig } from './config';
+import {
     PluginAcquisitionOperationError,
     PluginAcquisitionOperationStore,
     type AcquisitionOperationPatch,
@@ -88,6 +94,16 @@ import type { AcquisitionConfig } from './config';import {
 import type { CandidateCanaryStepResult } from '../../../admin/plugins/package-candidate-canary';
 import { getPluginSettings } from '../../../admin/plugins/workspace-plugin-store';
 import { RegistryClient, sha256FileIdentity, type RegistryFailureCode } from './registry-client';
+import type { LibraryArtifactAccessResult } from '../../../admin/library/link-service';
+import { RegistryStateAcceptanceError } from './registry-state';
+import { promoteScopedSetupValues } from '../setup/settings-store';
+
+const LIBRARY_RELEASE_ID_PATTERN = /^rel_[A-Za-z0-9._:-]{1,100}$/;
+
+function isExpectedLibraryArtifactPath(path: string, releaseId: string): boolean {
+    return LIBRARY_RELEASE_ID_PATTERN.test(releaseId) &&
+        path === `/api/v1/library/releases/${encodeURIComponent(releaseId)}/artifact`;
+}
 
 export interface StartAcquisitionInput {
     readonly pluginId: string;
@@ -151,7 +167,8 @@ export interface AcquisitionServiceDeps {
     readonly setupPlan?: (
         pluginId: string,
         workspaceId: string,
-        packageRoot: string
+        packageRoot: string,
+        operationId?: string
     ) => Promise<SetupPlan | null>;
     /** Legacy extension ids, so a V2 package cannot shadow one. */
     readonly listInstalledExtensionIds?: () => Promise<readonly string[]>;
@@ -161,7 +178,34 @@ export interface AcquisitionServiceDeps {
      * Durable monotonic advisory state. When present, an accepted sequence is
      * recorded so a later replayed catalog cannot clear it.
      */
-    readonly registryState?: { acceptAdvisorySequence(sequence: number): Promise<unknown> };
+    readonly registryState?: {
+        acceptAdvisorySequence(sequence: number): Promise<unknown>;
+        acceptAdvisoryCheckpoint?: (checkpoint: {
+            sequence: number;
+            snapshotSha256: `sha256-${string}`;
+            issuedAt: string;
+            expiresAt: string;
+        }) => Promise<unknown>;
+    };
+    /**
+     * The acting user's Library link, used when the public artifact path refuses
+     * a covered release. Acquisition through it is idempotent, so a retry after a
+     * partial download never requires a repurchase.
+     */
+    readonly resolveCoveredArtifact?: (input: {
+        readonly requesterUserId: string;
+        readonly releaseId: string;
+        readonly expectedRelease: Pick<
+            PluginAcquisitionReleaseIdentity,
+            | 'releaseId'
+            | 'pluginId'
+            | 'version'
+            | 'archiveSha256'
+            | 'packageTreeSha256'
+            | 'manifestSha256'
+            | 'authoritySha256'
+        >;
+    }) => Promise<LibraryArtifactAccessResult>;
 }
 
 type StepResult =
@@ -235,10 +279,31 @@ export class PluginAcquisitionService {
         const document = resolved.value.document;
         // The host has now accepted this catalog position; record it monotonically
         // so a later replayed catalog cannot clear a revocation.
-        await this.#deps.registryState
-            ?.acceptAdvisorySequence(resolved.value.advisorySequence)
-            .catch(() => undefined);
-        let record: PluginAcquisitionOperation;        try {
+        try {
+            if (this.#deps.registryState?.acceptAdvisoryCheckpoint) {
+                await this.#deps.registryState.acceptAdvisoryCheckpoint(resolved.value.advisoryCheckpoint);
+            } else {
+                await this.#deps.registryState?.acceptAdvisorySequence(resolved.value.advisorySequence);
+            }
+        } catch (error) {
+            return {
+                ok: false,
+                failure: restFailure(
+                    'resolved',
+                    error instanceof RegistryStateAcceptanceError
+                        ? error.kind === 'replay'
+                            ? 'advisory-stale'
+                            : 'advisory-unverified'
+                        : 'storage-unavailable',
+                    `The host could not persist the advisory checkpoint before acquisition: ${
+                        error instanceof Error ? error.message : 'storage is unavailable.'
+                    }`,
+                    true
+                ),
+            };
+        }
+        let record: PluginAcquisitionOperation;
+        try {
             record = await this.#deps.store.create({
                 pluginId: input.pluginId,
                 version: document.version,
@@ -247,6 +312,9 @@ export class PluginAcquisitionService {
                 instanceId: input.instanceId,
                 stage: 'resolved',
                 acceptedAdvisorySequence: resolved.value.advisorySequence,
+                advisoryCheckpointSha256: resolved.value.advisoryCheckpoint.snapshotSha256,
+                advisoryCheckpointIssuedAt: resolved.value.advisoryCheckpoint.issuedAt,
+                advisoryCheckpointExpiresAt: Date.parse(resolved.value.advisoryCheckpoint.expiresAt),
                 release: releaseIdentity(document),
             });
         } catch (error) {
@@ -378,33 +446,67 @@ export class PluginAcquisitionService {
     }
 
     /**
-     * Instance-wide update preflight: every enabled workspace must be able to read
-     * the same selected version. A blocking workspace is reported and the update
-     * stays blocked until an owner explicitly disables it.
+     * Instance-wide update preflight: every enabled workspace must be able to
+     * read the same selected version. A blocking workspace is reported and the
+     * update stays blocked until an owner explicitly disables it. Consent is
+     * evaluated against the candidate's complete authority, so an update that
+     * widens hosts, scopes or writes blocks even when grants are unchanged.
      */
     async preflightWorkspaces(
         pluginId: string,
-        manifestRequestedGrants: readonly string[]
+        candidate: PluginGrantCandidate,
+        options: { readonly operationId?: string; readonly includeWorkspaceId?: string } = {}
     ): Promise<WorkspacePreflightResult> {
-        const workspaceIds = await this.#deps.listWorkspaceIds();
+        const workspaceIds = new Set(await this.#deps.listWorkspaceIds());
+        if (options.includeWorkspaceId) workspaceIds.add(options.includeWorkspaceId);
         const blocking: WorkspacePreflightBlock[] = [];
         let checked = 0;
         const pointer = await this.#deps.services.pointers.readPointer(pluginId);
         for (const workspaceId of workspaceIds) {
             const enabled = await getEnabledPlugins(this.#deps.services.settings, workspaceId);
-            if (!enabled.includes(pluginId)) continue;
+            const isInitiatingWorkspace = workspaceId === options.includeWorkspaceId;
+            if (!enabled.includes(pluginId) && !isInitiatingWorkspace) continue;
             checked += 1;
             const review = await getPluginGrantReview(
                 this.#deps.services.settings,
                 workspaceId,
                 pluginId,
-                manifestRequestedGrants
+                candidate
             );
             if (review.status !== 'current') {
                 blocking.push({ workspaceId, code: `grant-review-${review.status}` });
                 continue;
             }
             if (!pointer?.candidate) continue;
+            if (this.#deps.setupPlan) {
+                let setupPlan: SetupPlan | null;
+                try {
+                    setupPlan = await this.#deps.setupPlan(
+                        pluginId,
+                        workspaceId,
+                        this.#deps.services.packages.packagePath(
+                            pluginId,
+                            candidate.packageDigest as `sha256-${string}`
+                        ),
+                        workspaceId === options.includeWorkspaceId
+                            ? options.operationId
+                            : undefined
+                    );
+                } catch {
+                    setupPlan = null;
+                    blocking.push({ workspaceId, code: 'setup-unavailable' });
+                }
+                if (setupPlan && setupPlan.status !== 'ready') {
+                    blocking.push({
+                        workspaceId,
+                        code:
+                            setupPlan.status === 'blocked'
+                                ? 'setup-blocked'
+                                : 'setup-required',
+                    });
+                    continue;
+                }
+            }
             const state = preflightPluginStateCompatibility({
                 operation: 'upgrade',
                 storedStateVersion: await this.#deps.services.migration.getStateVersion(
@@ -422,6 +524,38 @@ export class PluginAcquisitionService {
             }
         }
         return { checked, blocking: Object.freeze(blocking) };
+    }
+
+    /**
+     * The authority candidate for a recorded operation's staged package. Used
+     * wherever consent is evaluated after the candidate exists, so every check
+     * binds to the same bytes and the same signed authority.
+     */
+    async #consentCandidate(
+        record: PluginAcquisitionOperation,
+        fallbackRequestedGrants: readonly string[]
+    ): Promise<PluginGrantCandidate> {
+        if (!record.candidateDigest) {
+            return {
+                requestedGrants: [...fallbackRequestedGrants],
+                releaseId: record.release.releaseId,
+                packageDigest: null,
+                authoritySha256: record.release.authoritySha256,
+                authority: record.release.authority ?? null,
+            };
+        }
+        return await packageGrantCandidate({
+            packagePath: this.#deps.services.packages.packagePath(
+                record.pluginId,
+                record.candidateDigest
+            ),
+            packageDigest: record.candidateDigest,
+            release: {
+                releaseId: record.release.releaseId,
+                authoritySha256: record.release.authoritySha256,
+                authority: record.release.authority,
+            },
+        });
     }
 
     #refuseStart(input: StartAcquisitionInput): PluginAcquisitionFailure | null {
@@ -473,6 +607,24 @@ export class PluginAcquisitionService {
                     'blocked'
                 );
             }
+            const resumeStage = resumeStageFor(record);
+            if (
+                resumeStage !== 'resolved' &&
+                acquisitionStageIndex(resumeStage) >= acquisitionStageIndex('authorized') &&
+                acquisitionStageIndex(resumeStage) < acquisitionStageIndex('promoted')
+            ) {
+                const revalidated = await this.#revalidateRecordedRelease(record);
+                if (!revalidated.ok) {
+                    return await this.#fail(
+                        record,
+                        revalidated.failure.code,
+                        revalidated.failure.message,
+                        revalidated.failure.retryable,
+                        'blocked'
+                    );
+                }
+                record = revalidated.record;
+            }
             switch (resumeStageFor(record)) {
                 case 'resolved':
                     return await this.#authorize(record);
@@ -509,6 +661,103 @@ export class PluginAcquisitionService {
                 false
             );
         }
+    }
+
+    /**
+     * Re-resolve the exact signed release before any resumed side effect. A
+     * candidate downloaded under an older trust decision must not be promoted
+     * after a key compromise, quarantine or registry rollback. The latest
+     * checkpoint evidence is persisted on the operation before work continues.
+     */
+    async #revalidateRecordedRelease(
+        record: PluginAcquisitionOperation
+    ): Promise<
+        | { readonly ok: true; readonly record: PluginAcquisitionOperation }
+        | { readonly ok: false; readonly failure: PluginAcquisitionFailure }
+    > {
+        const resolved = await this.#deps.registry.resolveRelease({
+            expectation: {
+                pluginId: record.pluginId,
+                version: record.version,
+                releaseId: record.release.releaseId,
+            },
+        });
+        if (!resolved.ok) {
+            return {
+                ok: false,
+                failure: restFailure(
+                    record.stage,
+                    toFailureCode(resolved.failure.code),
+                    resolved.failure.message,
+                    resolved.failure.retryable
+                ),
+            };
+        }
+        const current = releaseIdentity(resolved.value.document);
+        const expected = record.release;
+        const identityMatches = releaseIdentitiesEqual(expected, current);
+        if (!identityMatches) {
+            return {
+                ok: false,
+                failure: restFailure(
+                    record.stage,
+                    'release-digest-mismatch',
+                    'The registry no longer serves the exact signed release recorded for this operation.',
+                    false
+                ),
+            };
+        }
+        if (
+            record.advisoryCheckpointSha256 &&
+            resolved.value.advisorySequence === record.acceptedAdvisorySequence &&
+            record.advisoryCheckpointIssuedAt !== null &&
+            record.advisoryCheckpointIssuedAt !== undefined &&
+            (resolved.value.advisoryCheckpoint.snapshotSha256 !== record.advisoryCheckpointSha256 ||
+                Date.parse(resolved.value.advisoryCheckpoint.issuedAt) <
+                    Date.parse(record.advisoryCheckpointIssuedAt))
+        ) {
+            return {
+                ok: false,
+                failure: restFailure(
+                    record.stage,
+                    'advisory-unverified',
+                    'The registry returned a different checkpoint at the operation’s accepted sequence.',
+                    false
+                ),
+            };
+        }
+        try {
+            if (this.#deps.registryState?.acceptAdvisoryCheckpoint) {
+                await this.#deps.registryState.acceptAdvisoryCheckpoint(resolved.value.advisoryCheckpoint);
+            } else {
+                await this.#deps.registryState?.acceptAdvisorySequence(resolved.value.advisorySequence);
+            }
+        } catch (error) {
+            return {
+                ok: false,
+                failure: restFailure(
+                    record.stage,
+                    error instanceof RegistryStateAcceptanceError
+                        ? error.kind === 'replay'
+                            ? 'advisory-stale'
+                            : 'advisory-unverified'
+                        : 'storage-unavailable',
+                    `The host could not persist the refreshed advisory checkpoint: ${
+                        error instanceof Error ? error.message : 'storage is unavailable.'
+                    }`,
+                    true
+                ),
+            };
+        }
+        const checkpointExpiresAt = Date.parse(resolved.value.advisoryCheckpoint.expiresAt);
+        const patch: AcquisitionOperationPatch = {
+            acceptedAdvisorySequence: resolved.value.advisorySequence,
+            advisoryCheckpointSha256: resolved.value.advisoryCheckpoint.snapshotSha256,
+            advisoryCheckpointIssuedAt: resolved.value.advisoryCheckpoint.issuedAt,
+            advisoryCheckpointExpiresAt: checkpointExpiresAt,
+        };
+        const next = await this.#deps.store.update(record.operationId, record.revision, patch);
+        return { ok: true, record: next };
     }
 
     /** 5.4: policy is re-checked against the resolved identity before reservation. */
@@ -602,8 +851,7 @@ export class PluginAcquisitionService {
             );
         }
         if (
-            resolved.value.document.archiveSha256 !== release.archiveSha256 ||
-            resolved.value.document.releaseId !== release.releaseId
+            !releaseIdentitiesEqual(release, releaseIdentity(resolved.value.document))
         ) {
             return await this.#fail(
                 record,
@@ -613,11 +861,63 @@ export class PluginAcquisitionService {
             );
         }
 
-        const download = await this.#deps.registry.downloadArtifact({
+        let acquisitionSource: PluginAcquisitionOperation['acquisitionSource'] =
+            record.acquisitionSource ?? 'public';
+        let acquisitionReceipt = record.acquisitionReceipt ?? null;
+        let download = await this.#deps.registry.downloadArtifact({
             resolved: resolved.value,
             stagingPath: artifactPath,
             resumeFromBytes: staged > 0 ? staged : 0,
         });
+        if (!download.ok && download.failure.code === 'coverage-required') {
+            // A paid release is never on the public path. Fall back once to the
+            // acting user's own Library link; the entitlement is recorded
+            // idempotently, so retrying after a partial download is safe.
+            const access = await this.#deps.resolveCoveredArtifact?.({
+                requesterUserId: record.requesterUserId,
+                releaseId: release.releaseId,
+                expectedRelease: release,
+            });
+            if (!access || !access.ok) {
+                const mapped = access && !access.ok ? libraryAccessFailure(access) : null;
+                return await this.#fail(
+                    record,
+                    mapped?.code ?? 'coverage-required',
+                    mapped?.message ??
+                        'This release is part of a paid product. Connect your Library account and retry.',
+                    mapped?.retryable ?? true,
+                    'failed',
+                    { downloadedBytes: await safeFileSize(artifactPath), stagingObject: artifactPath }
+                );
+            }
+            if (!access.receipt) {
+                return await this.#fail(
+                    record,
+                    'library-unavailable',
+                    'The marketplace did not return a signed acquisition receipt.',
+                    true,
+                    'failed',
+                    { downloadedBytes: await safeFileSize(artifactPath), stagingObject: artifactPath }
+                );
+            }
+            const origin = this.#deps.config.registryOrigin.replace(/\/$/, '');
+            if (!isExpectedLibraryArtifactPath(access.artifactPath, release.releaseId)) {
+                return await this.#fail(
+                    record,
+                    'coverage-required',
+                    'The marketplace returned an unexpected artifact location.',
+                    false
+                );
+            }
+            download = await this.#deps.registry.downloadArtifact({
+                resolved: { ...resolved.value, artifactUrl: `${origin}${access.artifactPath}` },
+                stagingPath: artifactPath,
+                resumeFromBytes: staged > 0 ? staged : 0,
+                headers: access.headers,
+            });
+            acquisitionSource = 'library';
+            acquisitionReceipt = access.receipt;
+        }
         if (!download.ok) {
             return await this.#fail(
                 record,
@@ -633,6 +933,8 @@ export class PluginAcquisitionService {
             operation: await this.#advanceTo(record, 'downloaded', {
                 downloadedBytes: download.value.bytes,
                 stagingObject: artifactPath,
+                acquisitionSource,
+                acquisitionReceipt,
             }),
         };
     }
@@ -737,11 +1039,20 @@ export class PluginAcquisitionService {
 
         const selectedPackages = await this.#deps.routeCatalog.listSelected();
         const ready = selectedPackages.filter((catalog) => catalog.status === 'ready');
+        const candidate = await packageGrantCandidate({
+            packagePath: treePath,
+            packageDigest: release.packageTreeSha256,
+            release: {
+                releaseId: release.releaseId,
+                authoritySha256: release.authoritySha256,
+                authority: release.authority,
+            },
+        });
         const grantReview = await getPluginGrantReview(
             this.#deps.services.settings,
             record.workspaceId,
             record.pluginId,
-            manifest.requestedGrants
+            candidate
         );
         const result = await this.#deps.services.candidates.prepare({
             pluginId: record.pluginId,
@@ -865,7 +1176,11 @@ export class PluginAcquisitionService {
                 'paused'
             );
         }
-        const preflight = await this.preflightWorkspaces(record.pluginId, manifest.requestedGrants);
+        const preflight = await this.preflightWorkspaces(
+            record.pluginId,
+            await this.#consentCandidate(record, manifest.requestedGrants),
+            { operationId: record.operationId, includeWorkspaceId: record.workspaceId }
+        );
         if (preflight.blocking.length > 0) {
             const detail = preflight.blocking
                 .map((entry) => `${entry.workspaceId} (${entry.code})`)
@@ -897,6 +1212,11 @@ export class PluginAcquisitionService {
                     workspaceId: record.workspaceId,
                     pluginId: candidate.pluginId,
                     packageDigest: candidate.packageDigest,
+                    release: {
+                        releaseId: record.release.releaseId,
+                        authoritySha256: record.release.authoritySha256,
+                        authority: record.release.authority,
+                    },
                 }),
             serverDryRun: (dryRun) =>
                 this.#serverDryRun(record, dryRun),
@@ -989,7 +1309,11 @@ export class PluginAcquisitionService {
                 'paused'
             );
         }
-        const preflight = await this.preflightWorkspaces(record.pluginId, manifest.requestedGrants);
+        const preflight = await this.preflightWorkspaces(
+            record.pluginId,
+            await this.#consentCandidate(record, manifest.requestedGrants),
+            { operationId: record.operationId, includeWorkspaceId: record.workspaceId }
+        );
         if (preflight.blocking.length > 0) {
             const detail = preflight.blocking
                 .map((entry) => `${entry.workspaceId} (${entry.code})`)
@@ -1029,6 +1353,11 @@ export class PluginAcquisitionService {
                     workspaceId: record.workspaceId,
                     pluginId: candidate.pluginId,
                     packageDigest: candidate.packageDigest,
+                    release: {
+                        releaseId: record.release.releaseId,
+                        authoritySha256: record.release.authoritySha256,
+                        authority: record.release.authority,
+                    },
                 }),
             restoreState: (snapshot) =>
                 restorePluginStateSnapshot(
@@ -1037,6 +1366,54 @@ export class PluginAcquisitionService {
                     record.pluginId,
                     snapshot
                 ),
+            prepareSetupPromotion: async () => {
+                const pointer = await this.#deps.services.pointers.readPointer(record.pluginId);
+                const workspaceIds = new Set(await this.#deps.listWorkspaceIds());
+                workspaceIds.add(record.workspaceId);
+                const undos: Array<() => void | Promise<void>> = [];
+                try {
+                    for (const workspaceId of workspaceIds) {
+                        const enabled = await getEnabledPlugins(
+                            this.#deps.services.settings,
+                            workspaceId
+                        );
+                        if (workspaceId !== record.workspaceId && !enabled.includes(record.pluginId)) {
+                            continue;
+                        }
+                        const undo = await promoteScopedSetupValues(
+                            this.#deps.services.settings,
+                            workspaceId,
+                            record.pluginId,
+                            record.candidateDigest!,
+                            record.operationId,
+                            pointer?.current?.packageDigest ?? null
+                        );
+                        if (undo) undos.push(undo);
+                    }
+                } catch (error) {
+                    let rollbackFailure: unknown;
+                    for (const undo of [...undos].reverse()) {
+                        try {
+                            await undo();
+                        } catch (undoError) {
+                            rollbackFailure ??= undoError;
+                        }
+                    }
+                    if (rollbackFailure) throw rollbackFailure;
+                    throw error;
+                }
+                return async () => {
+                    let rollbackFailure: unknown;
+                    for (const undo of [...undos].reverse()) {
+                        try {
+                            await undo();
+                        } catch (undoError) {
+                            rollbackFailure ??= undoError;
+                        }
+                    }
+                    if (rollbackFailure) throw rollbackFailure;
+                };
+            },
             requireCanaryEvidence: true,
         });
         if (result.status !== 'promoted') {
@@ -1226,12 +1603,48 @@ export class PluginAcquisitionService {
                     .join(', ')}`,
             };
         }
-        const authority = await this.#signedAuthorityDigest(descriptors.policy, descriptors.setup);
-        if (authority !== null && authority !== record.release?.authoritySha256) {
-            return {
-                code: 'authority-mismatch',
-                message: `The package's reviewed authority ${authority} does not match the signed authority ${record.release?.authoritySha256}.`,
-            };
+        if (record.release?.authority !== undefined) {
+            // New envelopes carry the complete signed authority. Rebuild it
+            // from the exact staged manifest and descriptors so promotion
+            // cannot rely on a hash-only registry review.
+            if (!descriptors.policy || !descriptors.setup) {
+                return {
+                    code: 'authority-mismatch',
+                    message: 'The package is missing the descriptors needed to rebuild its signed authority.',
+                };
+            }
+            const derivedAuthority = toEffectiveAuthority({
+                manifest: manifest as unknown as PluginManifestV2,
+                policy: descriptors.policy,
+                setup: descriptors.setup,
+            });
+            const [derivedDigest, signedDigest] = await Promise.all([
+                computeAuthorityHash(derivedAuthority),
+                computeAuthorityHash(record.release.authority),
+            ]);
+            if (
+                derivedDigest !== record.release.authoritySha256 ||
+                signedDigest !== record.release.authoritySha256
+            ) {
+                return {
+                    code: 'authority-mismatch',
+                    message: `The staged package authority ${derivedDigest} does not match the signed authority ${record.release.authoritySha256}.`,
+                };
+            }
+        } else {
+            // Legacy envelopes retain the SDK policy revision contract. They
+            // are exact-hash consent only and cannot participate in descriptor
+            // expansion/narrowing reuse.
+            const legacyAuthority = await this.#signedAuthorityDigest(
+                descriptors.policy,
+                descriptors.setup
+            );
+            if (legacyAuthority !== null && legacyAuthority !== record.release?.authoritySha256) {
+                return {
+                    code: 'authority-mismatch',
+                    message: `The package's reviewed authority ${legacyAuthority} does not match the signed authority ${record.release?.authoritySha256}.`,
+                };
+            }
         }
         return null;
     }
@@ -1239,30 +1652,14 @@ export class PluginAcquisitionService {
     /**
      * The canonical policy revision the marketplace signs as the release's
      * authority digest, recomputed with the SDK's own profile rules from the
-     * descriptors inside the verified package tree.
+     * descriptors inside the verified package tree. Shared with the consent
+     * path so approval and acquisition bind to the same value.
      */
     async #signedAuthorityDigest(
         policy: Or3PackagePolicyV1 | null,
         setup: Or3SetupDescriptorV1 | null
     ): Promise<`sha256-${string}` | null> {
-        if (!policy || !setup) return null;
-        try {
-            const profile = defineOr3PortableProfile({
-                profile: policy.profile as 'or3-portable-client-v1',
-                destinations: policy.destinations,
-                connections: policy.connections,
-                dataScopes: policy.dataScopes,
-                writes: policy.writes,
-                features: policy.requiredFeatures,
-                settingsSchemaPath: setup.settingsSchemaPath,
-                fields: setup.fields,
-                ...(setup.testAction === undefined ? {} : { testAction: setup.testAction }),
-                firstAction: setup.firstAction,
-            });
-            return profile.revisions.policy;
-        } catch {
-            return null;
-        }
+        return packageAuthorityDigest(policy, setup);
     }
 
     /**
@@ -1297,7 +1694,12 @@ export class PluginAcquisitionService {
                     'This package declares setup, and this host cannot evaluate setup readiness here.',
             };
         }
-        const plan = await this.#deps.setupPlan(record.pluginId, record.workspaceId, packageRoot);
+        const plan = await this.#deps.setupPlan(
+            record.pluginId,
+            record.workspaceId,
+            packageRoot,
+            record.operationId
+        );
         if (!plan || plan.status === 'ready') return { status: 'ready', message: '' };
         const message =
             plan.blockers[0] ??
@@ -1400,11 +1802,50 @@ function releaseIdentity(document: ReleaseMetadataDocument): PluginAcquisitionRe
         packageTreeSha256: document.packageTreeSha256,
         manifestSha256: document.manifestSha256,
         authoritySha256: document.authoritySha256,
+        ...(document.authority === undefined ? {} : { authority: document.authority }),
         profile: document.profile,
         sourceSha256: document.sourceSha256,
         license: document.license,
         publishedAt: document.publishedAt,
     };
+}
+
+function releaseIdentitiesEqual(
+    left: PluginAcquisitionReleaseIdentity,
+    right: PluginAcquisitionReleaseIdentity
+): boolean {
+    return (
+        left.releaseId === right.releaseId &&
+        left.pluginId === right.pluginId &&
+        left.version === right.version &&
+        left.archiveSha256 === right.archiveSha256 &&
+        left.packageTreeSha256 === right.packageTreeSha256 &&
+        left.manifestSha256 === right.manifestSha256 &&
+        left.authoritySha256 === right.authoritySha256 &&
+        left.profile === right.profile &&
+        left.sourceSha256 === right.sourceSha256 &&
+        left.license === right.license &&
+        left.publishedAt === right.publishedAt
+    );
+}
+
+function libraryAccessFailure(access: Extract<LibraryArtifactAccessResult, { readonly ok: false }>): {
+    readonly code: PluginAcquisitionFailureCode;
+    readonly message: string;
+    readonly retryable: boolean;
+} {
+    switch (access.code) {
+        case 'link-expired':
+            return { code: 'link-expired', message: access.message, retryable: true };
+        case 'coverage-denied':
+            return { code: 'coverage-denied', message: access.message, retryable: false };
+        case 'link-required':
+            return { code: 'coverage-required', message: access.message, retryable: true };
+        case 'library-unconfigured':
+            return { code: 'library-unavailable', message: access.message, retryable: false };
+        default:
+            return { code: 'library-unavailable', message: access.message, retryable: true };
+    }
 }
 
 function candidateBlockFailure(stage: string, codes: readonly string[]): {

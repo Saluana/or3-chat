@@ -8,6 +8,12 @@ import {
 import { PluginPackagePromotionService } from '../package-promotion';
 import { PluginPackagePointerStore, type PluginPackagePointer } from '../package-pointer-store';
 import { ImmutablePluginPackageStore } from '../package-store';
+import type { WorkspaceSettingsStore } from '../../stores/types';
+import {
+    promoteScopedSetupValues,
+    readSetupValuesFor,
+    writeScopedSetupValues,
+} from '../../../utils/plugins/setup/settings-store';
 
 const currentGrantReview = () => ({
     status: 'current' as const,
@@ -131,6 +137,69 @@ describe('PluginPackagePromotionService', () => {
         const pointer = await pointers.readPointer('alpha');
         expect(pointer?.current?.packageDigest).toBe(current.digest);
         expect(pointer?.candidate?.packageDigest).toBe(candidate.digest);
+    });
+
+    it('rolls back the setup transfer before a failed pointer swap', async () => {
+        const { service, current, candidate } = await setup();
+        const values = new Map<string, string>();
+        const settings: WorkspaceSettingsStore = {
+            get: async (workspaceId, key) => values.get(`${workspaceId}:${key}`) ?? null,
+            set: async (workspaceId, key, value) => {
+                values.set(`${workspaceId}:${key}`, value);
+            },
+        };
+        await writeScopedSetupValues(
+            settings,
+            'workspace-1',
+            'alpha',
+            { packageDigest: current.digest },
+            { token: 'running' }
+        );
+        await writeScopedSetupValues(
+            settings,
+            'workspace-1',
+            'alpha',
+            { packageDigest: candidate.digest, operationId: 'acq_retry_old' },
+            { token: 'old-attempt' }
+        );
+        const result = await service.promote({
+            pluginId: 'alpha',
+            workspaceId: 'workspace-1',
+            expectedCandidateDigest: candidate.digest,
+            storedStateVersion: 1,
+            snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: currentGrantReview,
+            restoreState: vi.fn(),
+            prepareSetupPromotion: async () =>
+                await promoteScopedSetupValues(
+                    settings,
+                    'workspace-1',
+                    'alpha',
+                    candidate.digest,
+                    'acq_retry_old',
+                    current.digest
+                ),
+            faultBeforePointerSwap: async () => {
+                throw new Error('forced-pre-swap-failure');
+            },
+        });
+        expect(result).toMatchObject({ status: 'blocked', stage: 'migration' });
+        await expect(
+            readSetupValuesFor(settings, 'workspace-1', 'alpha', {
+                packageDigest: candidate.digest,
+                operationId: 'acq_retry_new',
+                basePackageDigest: current.digest,
+            })
+        ).resolves.toEqual({ token: 'running' });
+        await expect(
+            writeScopedSetupValues(
+                settings,
+                'workspace-1',
+                'alpha',
+                { packageDigest: candidate.digest, operationId: 'acq_retry_new' },
+                { token: 'new-attempt' }
+            )
+        ).resolves.toBe(1);
     });
 
     it('rejects stale canary evidence when the workspace state changes', async () => {

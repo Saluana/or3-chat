@@ -5,6 +5,7 @@ import {
     encodeReleaseMetadata,
     evaluateArtifactDigest,
     evaluateArtifactUrl,
+    evaluateClientEngineSupport,
     evaluateDownloadBounds,
     evaluateFreshness,
     evaluateReleaseMetadata,
@@ -243,5 +244,38 @@ describe('freshness and bounds (5.2)', () => {
         expect(
             evaluateArtifactUrl({ url: 'https://market.example.evil.example/x', registryOrigin: registry })
         ).toMatchObject({ code: 'download-url-invalid' });
+    });
+});
+
+describe('client engine qualification (finding 12)', () => {
+    const qualified = ['chromium'];
+
+    it('requires a qualified engine only for profiles that need a client runtime', () => {
+        expect(
+            evaluateClientEngineSupport({
+                profile: 'or3-portable-client-v1',
+                engine: 'chromium',
+                qualifiedEngines: qualified,
+            })
+        ).toEqual({ required: true, supported: true });
+        for (const engine of ['firefox', 'webkit', 'unknown', '', null, undefined]) {
+            expect(
+                evaluateClientEngineSupport({
+                    profile: 'or3-portable-client-v1',
+                    engine,
+                    qualifiedEngines: qualified,
+                })
+            ).toEqual({ required: true, supported: false });
+        }
+    });
+
+    it('does not browser-scope a profile with no client runtime requirement', () => {
+        expect(
+            evaluateClientEngineSupport({
+                profile: 'or3-trusted-host-v1',
+                engine: 'unknown',
+                qualifiedEngines: qualified,
+            })
+        ).toEqual({ required: false, supported: true });
     });
 });

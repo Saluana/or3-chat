@@ -10,6 +10,8 @@ import { preflightMarketplaceInstall } from '../../../utils/plugins/marketplace/
 type PreflightBody = {
     readonly pluginId?: unknown;
     readonly version?: unknown;
+    /** Browser engine the requesting page detected, for profile qualification. */
+    readonly clientEngine?: unknown;
 };
 
 /**
@@ -39,6 +41,11 @@ export default defineEventHandler(async (event) => {
         typeof body?.version === 'string' && /^[0-9A-Za-z.+-]{1,64}$/.test(body.version)
             ? body.version
             : undefined;
+    const clientEngine =
+        typeof body?.clientEngine === 'string' &&
+        /^[a-zA-Z0-9._-]{1,64}$/.test(body.clientEngine)
+            ? body.clientEngine.toLowerCase()
+            : undefined;
 
     const settingsStore = getWorkspaceSettingsStore(event);
     const [installed, enabled] = await Promise.all([
@@ -52,6 +59,7 @@ export default defineEventHandler(async (event) => {
     return await preflightMarketplaceInstall({
         pluginId,
         ...(version === undefined ? {} : { version }),
+        ...(clientEngine === undefined ? {} : { clientEngine }),
         workspaceId,
         installedPluginIds,
         enabledPluginIds: enabled,

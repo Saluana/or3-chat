@@ -24,6 +24,7 @@
  */
 
 import type { Sha256 } from '../runtime-descriptor';
+import type { EffectiveAuthority } from '../authority/effective-authority';
 
 /** Ordered pipeline stages, from request to receipt. */
 export const PLUGIN_ACQUISITION_STAGES = [
@@ -68,6 +69,10 @@ export const PLUGIN_ACQUISITION_FAILURE_CODES = [
     'release-quarantined',
     'download-url-invalid',
     'download-url-expired',
+    'coverage-required',
+    'coverage-denied',
+    'link-expired',
+    'library-unavailable',
     'download-over-limit',
     'download-failed',
     'storage-unavailable',
@@ -106,10 +111,39 @@ export interface PluginAcquisitionReleaseIdentity {
     readonly packageTreeSha256: Sha256;
     readonly manifestSha256: Sha256;
     readonly authoritySha256: Sha256;
+    /** Comprehensive signed authority; absent on legacy releases. */
+    readonly authority?: EffectiveAuthority;
     readonly profile: string;
     readonly sourceSha256: Sha256;
     readonly license: string;
     readonly publishedAt: string;
+}
+
+/** Structured, signed provenance returned for a covered Library acquisition. */
+export interface PluginAcquisitionReceipt {
+    readonly payload: {
+        readonly schemaVersion: 1;
+        readonly receiptId: string;
+        readonly marketplaceUserId: string;
+        readonly release: {
+            readonly releaseId: string;
+            readonly pluginId: string;
+            readonly version: string;
+            readonly archiveSha256: Sha256;
+            readonly packageTreeSha256: Sha256 | null;
+            readonly manifestSha256: Sha256 | null;
+            readonly authoritySha256: Sha256 | null;
+        };
+        readonly coverage: {
+            readonly kind: 'update-pass' | 'plus';
+            readonly grantId: string;
+            readonly until: string;
+        };
+        readonly issuedAt: string;
+    };
+    readonly algorithm: 'ed25519';
+    readonly keyId: string;
+    readonly signature: string;
 }
 
 export interface PluginAcquisitionOperation {
@@ -142,6 +176,13 @@ export interface PluginAcquisitionOperation {
     readonly authoritySha256: Sha256;
     /** Highest advisory sequence accepted at resolve time (rollback guard). */
     readonly acceptedAdvisorySequence: number;
+    /** Fresh signed checkpoint that authorized the recorded release. */
+    readonly advisoryCheckpointSha256?: Sha256 | null;
+    readonly advisoryCheckpointIssuedAt?: string | null;
+    readonly advisoryCheckpointExpiresAt?: number | null;
+    /** Provenance for a covered artifact; credentials and URLs are never stored. */
+    readonly acquisitionReceipt?: PluginAcquisitionReceipt | null;
+    readonly acquisitionSource?: 'public' | 'library' | null;
     /** Bytes staged so far, so a resume does not restart the download. */
     readonly downloadedBytes: number;
     /** Staging object, when it is still needed to resume. */

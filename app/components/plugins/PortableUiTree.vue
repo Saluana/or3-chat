@@ -354,7 +354,7 @@ defineOptions({ name: 'PortableUiTree' });
             <USelectMenu
                 :id="`portable-${node.id}`"
                 :model-value="values[node.id] as unknown as string"
-                :items="node.options"
+                :items="[...node.options]"
                 value-key="value"
                 label-key="label"
                 class="w-full"

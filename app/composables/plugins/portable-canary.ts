@@ -28,6 +28,7 @@ import {
     PORTABLE_CLIENT_FEATURE,
     PORTABLE_PROFILE_NAME,
     defaultHostAbi,
+    detectBrowserEngine,
     startPortableWorker,
 } from '~~/shared/plugins/isolation/portable-bootstrap';
 import { PORTABLE_FRAME_CSP } from '~~/shared/plugins/isolation/containment-policy';
@@ -36,7 +37,6 @@ import {
     PORTABLE_FRAME_URL,
     type HostFrameElementPort,
 } from '~~/shared/plugins/isolation/portable-frame-transport';
-import { detectBrowserEngine } from '~/composables/plugins/portable-client-runtime';
 
 export interface CanaryTicketPayload {
     readonly ticketId: string;

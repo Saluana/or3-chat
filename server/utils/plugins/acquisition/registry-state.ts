@@ -43,39 +43,84 @@ export interface StoredQuarantine {
     readonly recordedAt: number;
 }
 
+export interface AcceptedAdvisoryCheckpoint {
+    readonly sequence: number;
+    /** Digest covers the complete advisory and key-status snapshot. */
+    readonly snapshotSha256: string;
+    readonly issuedAt: string;
+    readonly expiresAt: string;
+}
+
 export interface RegistryState {
     readonly schemaVersion: 1;
     /** Highest advisory sequence accepted from the configured registry. */
     readonly acceptedAdvisorySequence: number;
+    /** Latest authenticated checkpoint at the accepted sequence. */
+    readonly acceptedAdvisoryCheckpoint: AcceptedAdvisoryCheckpoint | null;
     /** Release-scoped quarantine decisions, keyed by release id. */
     readonly quarantinedReleases: Readonly<Record<string, StoredQuarantine>>;
     readonly updatedAt: number;
 }
 
+export class RegistryStateCorruptError extends Error {
+    constructor(message = 'The persisted registry trust state is corrupt or unreadable.') {
+        super(message);
+        this.name = 'RegistryStateCorruptError';
+    }
+}
+
+export type RegistryStateAcceptanceErrorKind = 'replay' | 'equivocation';
+
+/** A verified checkpoint lost the monotonic persistence race or conflicted. */
+export class RegistryStateAcceptanceError extends Error {
+    constructor(
+        readonly kind: RegistryStateAcceptanceErrorKind,
+        message: string
+    ) {
+        super(message);
+        this.name = 'RegistryStateAcceptanceError';
+    }
+}
+
 const EMPTY_STATE: RegistryState = {
     schemaVersion: 1,
     acceptedAdvisorySequence: 0,
+    acceptedAdvisoryCheckpoint: null,
     quarantinedReleases: {},
     updatedAt: 0,
 };
 
 function parseQuarantines(value: unknown): Record<string, StoredQuarantine> {
-    if (typeof value !== 'object' || value === null) return {};
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        throw new RegistryStateCorruptError('The persisted quarantine ledger is invalid.');
+    }
     const out: Record<string, StoredQuarantine> = {};
     let count = 0;
     for (const [releaseId, entry] of Object.entries(value as Record<string, unknown>)) {
-        if (count >= MAX_QUARANTINED_RELEASES) break;
-        if (typeof entry !== 'object' || entry === null) continue;
+        if (count >= MAX_QUARANTINED_RELEASES) {
+            throw new RegistryStateCorruptError('The persisted quarantine ledger is too large.');
+        }
+        if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+            throw new RegistryStateCorruptError('The persisted quarantine ledger contains an invalid entry.');
+        }
         const record = entry as Record<string, unknown>;
         if (
+            releaseId.length === 0 ||
+            record.releaseId !== releaseId ||
             typeof record.pluginId !== 'string' ||
+            record.pluginId.length === 0 ||
             typeof record.version !== 'string' ||
+            record.version.length === 0 ||
             typeof record.sequence !== 'number' ||
             !Number.isSafeInteger(record.sequence) ||
             record.sequence < 0 ||
-            typeof record.reason !== 'string'
+            typeof record.reason !== 'string' ||
+            record.reason.length === 0 ||
+            typeof record.recordedAt !== 'number' ||
+            !Number.isFinite(record.recordedAt) ||
+            record.recordedAt < 0
         ) {
-            continue;
+            throw new RegistryStateCorruptError('The persisted quarantine ledger contains an invalid entry.');
         }
         out[releaseId] = {
             releaseId,
@@ -83,7 +128,7 @@ function parseQuarantines(value: unknown): Record<string, StoredQuarantine> {
             version: record.version,
             sequence: record.sequence,
             reason: record.reason,
-            recordedAt: typeof record.recordedAt === 'number' ? record.recordedAt : 0,
+            recordedAt: record.recordedAt,
         };
         count += 1;
     }
@@ -91,16 +136,51 @@ function parseQuarantines(value: unknown): Record<string, StoredQuarantine> {
 }
 
 function parseState(value: unknown): RegistryState {
-    if (typeof value !== 'object' || value === null) return EMPTY_STATE;
+    if (typeof value !== 'object' || value === null) {
+        throw new RegistryStateCorruptError('The persisted registry state is not an object.');
+    }
     const record = value as Record<string, unknown>;
-    if (record.schemaVersion !== 1) return EMPTY_STATE;
+    if (record.schemaVersion !== 1) {
+        throw new RegistryStateCorruptError('The persisted registry state has an unsupported schema.');
+    }
     const sequence = record.acceptedAdvisorySequence;
     if (typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 0) {
-        return EMPTY_STATE;
+        throw new RegistryStateCorruptError('The persisted advisory sequence is invalid.');
+    }
+    const checkpointValue = record.acceptedAdvisoryCheckpoint;
+    let checkpoint: AcceptedAdvisoryCheckpoint | null = null;
+    if (checkpointValue !== undefined && checkpointValue !== null) {
+        if (typeof checkpointValue !== 'object' || Array.isArray(checkpointValue)) {
+            throw new RegistryStateCorruptError('The persisted advisory checkpoint is invalid.');
+        }
+        const candidate = checkpointValue as Record<string, unknown>;
+        if (
+            typeof candidate.sequence !== 'number' ||
+            !Number.isSafeInteger(candidate.sequence) ||
+            candidate.sequence < 0 ||
+            typeof candidate.snapshotSha256 !== 'string' ||
+            !/^sha256-[a-f0-9]{64}$/.test(candidate.snapshotSha256) ||
+            typeof candidate.issuedAt !== 'string' ||
+            Number.isNaN(Date.parse(candidate.issuedAt)) ||
+            typeof candidate.expiresAt !== 'string' ||
+            Number.isNaN(Date.parse(candidate.expiresAt))
+        ) {
+            throw new RegistryStateCorruptError('The persisted advisory checkpoint is invalid.');
+        }
+        checkpoint = {
+            sequence: candidate.sequence,
+            snapshotSha256: candidate.snapshotSha256,
+            issuedAt: candidate.issuedAt,
+            expiresAt: candidate.expiresAt,
+        };
+        if (checkpoint.sequence !== sequence) {
+            throw new RegistryStateCorruptError('The persisted checkpoint does not match its sequence.');
+        }
     }
     return {
         schemaVersion: 1,
         acceptedAdvisorySequence: sequence,
+        acceptedAdvisoryCheckpoint: checkpoint,
         quarantinedReleases: parseQuarantines(record.quarantinedReleases),
         updatedAt: typeof record.updatedAt === 'number' ? record.updatedAt : 0,
     };
@@ -122,15 +202,26 @@ export class RegistryStateStore {
             const handle = await fs.open(this.statePath(), constants.O_RDONLY | constants.O_NOFOLLOW);
             try {
                 const stat = await handle.stat();
-                if (!stat.isFile() || stat.size > MAX_STATE_BYTES) return EMPTY_STATE;
+                if (!stat.isFile() || stat.size > MAX_STATE_BYTES) {
+                    throw new RegistryStateCorruptError('The persisted registry state file is invalid.');
+                }
                 return parseState(JSON.parse(await handle.readFile('utf8')));
             } finally {
                 await handle.close();
             }
-        } catch {
-            // An unreadable state file is treated as "nothing accepted yet"; the
-            // monotonic check still protects a host that has accepted a sequence.
-            return EMPTY_STATE;
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT') return EMPTY_STATE;
+            if (error instanceof RegistryStateCorruptError) throw error;
+            if (error instanceof SyntaxError) {
+                throw new RegistryStateCorruptError('The persisted registry state is not valid JSON.');
+            }
+            // Permission, I/O and symlink errors must fail closed. Treating them
+            // as an empty cursor could erase a quarantine after a restart.
+            throw new RegistryStateCorruptError(
+                `The persisted registry state could not be read: ${
+                    error instanceof Error ? error.message : 'unknown storage error'
+                }`
+            );
         }
     }
 
@@ -142,15 +233,87 @@ export class RegistryStateStore {
         if (!Number.isSafeInteger(sequence) || sequence < 0) {
             throw new TypeError('Advisory sequence must be a non-negative integer');
         }
+        return await this.#accept(sequence, null, now);
+    }
+
+    /** Record a complete checkpoint, allowing a newer same-sequence checkpoint. */
+    async acceptAdvisoryCheckpoint(
+        checkpoint: AcceptedAdvisoryCheckpoint,
+        now: number = Date.now()
+    ): Promise<RegistryState> {
+        if (
+            !Number.isSafeInteger(checkpoint.sequence) ||
+            checkpoint.sequence < 0 ||
+            !/^sha256-[a-f0-9]{64}$/.test(checkpoint.snapshotSha256) ||
+            Number.isNaN(Date.parse(checkpoint.issuedAt)) ||
+            Number.isNaN(Date.parse(checkpoint.expiresAt))
+        ) {
+            throw new TypeError('Advisory checkpoint evidence is invalid');
+        }
+        return await this.#accept(checkpoint.sequence, checkpoint, now);
+    }
+
+    async #accept(
+        sequence: number,
+        checkpoint: AcceptedAdvisoryCheckpoint | null,
+        now: number
+    ): Promise<RegistryState> {
         await fs.mkdir(this.#directory, { recursive: true, mode: 0o700 });
         const release = await this.#acquireLock(now);
         try {
             const current = await this.read();
-            if (sequence <= current.acceptedAdvisorySequence) return current;
+            const currentCheckpoint = current.acceptedAdvisoryCheckpoint;
+            if (sequence < current.acceptedAdvisorySequence) {
+                throw new RegistryStateAcceptanceError(
+                    'replay',
+                    `Advisory sequence ${sequence} is older than accepted sequence ${current.acceptedAdvisorySequence}.`
+                );
+            }
+            if (sequence === current.acceptedAdvisorySequence) {
+                if (!checkpoint) {
+                    if (currentCheckpoint) {
+                        throw new RegistryStateAcceptanceError(
+                            'replay',
+                            'A sequence-only update cannot replace an authenticated checkpoint.'
+                        );
+                    }
+                    return current;
+                }
+                if (!currentCheckpoint) {
+                    // The first full checkpoint at a legacy sequence adds the
+                    // evidence that the old sequence-only format did not have.
+                } else {
+                    const nextIssuedAt = Date.parse(checkpoint.issuedAt);
+                    const currentIssuedAt = Date.parse(currentCheckpoint.issuedAt);
+                    if (checkpoint.snapshotSha256 !== currentCheckpoint.snapshotSha256) {
+                        throw new RegistryStateAcceptanceError(
+                            'equivocation',
+                            'Two different advisory snapshots share the same sequence.'
+                        );
+                    }
+                    if (nextIssuedAt < currentIssuedAt) {
+                        throw new RegistryStateAcceptanceError(
+                            'replay',
+                            'An older same-sequence advisory checkpoint was replayed.'
+                        );
+                    }
+                    if (nextIssuedAt === currentIssuedAt) {
+                        if (checkpoint.expiresAt !== currentCheckpoint.expiresAt) {
+                            throw new RegistryStateAcceptanceError(
+                                'equivocation',
+                                'Two different advisory checkpoints share the same sequence and issue time.'
+                            );
+                        }
+                        return current;
+                    }
+                }
+            }
 
             const next: RegistryState = {
                 schemaVersion: 1,
                 acceptedAdvisorySequence: sequence,
+                acceptedAdvisoryCheckpoint: checkpoint ??
+                    (sequence === current.acceptedAdvisorySequence ? currentCheckpoint : null),
                 quarantinedReleases: current.quarantinedReleases,
                 updatedAt: now,
             };
@@ -209,6 +372,7 @@ export class RegistryStateStore {
             const state: RegistryState = {
                 schemaVersion: 1,
                 acceptedAdvisorySequence: current.acceptedAdvisorySequence,
+                acceptedAdvisoryCheckpoint: current.acceptedAdvisoryCheckpoint,
                 quarantinedReleases: bounded,
                 updatedAt: now,
             };

@@ -10,7 +10,19 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRuntimeConfig, useToast } from '#imports';
 import {
+    detectBrowserEngine,
+} from '~~/shared/plugins/isolation/portable-bootstrap';
+import {
+    evaluateClientEngineSupport,
+} from '~~/shared/plugins/acquisition/release-metadata';
+import type {
+    MarketplaceInstallTarget,
+    MarketplacePreflight,
+} from '~/composables/marketplace/useMarketplace';
+import {
     marketplacePluginDeepLink,
+    marketplaceTargetKey,
+    sameMarketplaceTarget,
     useMarketplaceAccount,
     useMarketplaceCatalog,
     useMarketplaceConsent,
@@ -29,13 +41,23 @@ const account = useMarketplaceAccount();
 
 const selectedPluginId = ref<string | null>(null);
 const adminRequestCopied = ref(false);
-/** Explicit approval of the authority the selected release asks for. */
-const grantsApproved = ref(false);
+/**
+ * The exact reviewed tuple whose permissions were approved. Keyed by the full
+ * release identity, so approval of one release can never carry over to another
+ * answer for the same plugin.
+ */
+const approvedTargetKey = ref<string | null>(null);
 // A static or local build cannot install: acquisition needs the host server.
 const runtimeConfig = useRuntimeConfig();
 const installSupported = computed(() => runtimeConfig.public?.ssrAuthEnabled === true);
+/**
+ * Engine detection is client-only, so it starts unknown and fails closed until
+ * `onMounted` has run: an unsupported browser is never offered an install.
+ */
+const browserEngine = ref<string | null>(null);
 
 onMounted(async () => {
+    browserEngine.value = detectBrowserEngine();
     await Promise.all([catalog.load(), account.load()]);
     // A request link selects one plugin: open it rather than dropping the reader
     // on the catalog. The dashboard query is read from the document URL because
@@ -51,34 +73,52 @@ onMounted(async () => {
  * loaded first and its newest release version is what preflight and the install
  * are asked about. Asking without a version would be refused as
  * `release-metadata-invalid` for every plugin.
+ *
+ * Every answer this flow continues on must belong to the request it made: a
+ * superseded detail or preflight stops the flow instead of feeding the new
+ * selection with the old target's evidence.
  */
 async function openDetail(pluginId: string): Promise<void> {
     selectedPluginId.value = pluginId;
-    grantsApproved.value = false;
-    await detail.load(pluginId);
-    const version = resolveLatestVersion();
-    await preflight.run(pluginId, version);
+    approvedTargetKey.value = null;
+    install.reset();
+    detail.clear();
+    preflight.clear();
+
+    const loaded = await detail.load(pluginId);
+    if (loaded.superseded || selectedPluginId.value !== pluginId) return;
+    const version = resolveLatestVersion(loaded.entry);
+    const answer = await preflight.run(pluginId, version, browserEngine.value ?? undefined);
+    if (!answer || selectedPluginId.value !== pluginId) return;
     // A durable operation outlives this page: pick it up so the operator can
     // resume or cancel it instead of losing it on reload.
     try {
-        await install.restore(pluginId, version === undefined ? {} : { version });
+        await install.restore(
+            pluginId,
+            answer.release ? { version: answer.release.version } : {}
+        );
     } catch {
         // Restoring is a convenience: a refused list must not break discovery.
     }
 }
 
 /** Newest published version of the selected plugin, as the catalog orders them. */
-function resolveLatestVersion(): string | undefined {
-    const releases = detail.entry.value?.releases;
+function resolveLatestVersion(entry: Record<string, unknown> | null): string | undefined {
+    const releases = entry?.releases;
     if (Array.isArray(releases)) {
         for (const release of releases) {
             const version = (release as { version?: unknown })?.version;
             if (typeof version === 'string' && version.length > 0) return version;
         }
     }
-    const latestRelease = detail.entry.value?.latestRelease;
+    const latestRelease = entry?.latestRelease;
     const latest = (latestRelease as { version?: unknown } | undefined)?.version;
     return typeof latest === 'string' && latest.length > 0 ? latest : undefined;
+}
+
+function publisherName(card: Record<string, unknown>): string {
+    const publisher = card.publisher as { displayName?: string } | undefined;
+    return publisher?.displayName ?? pluginIdOf(card);
 }
 
 function pluginIdOf(card: Record<string, unknown>): string {
@@ -96,38 +136,111 @@ const summary = computed(() => {
     return entry && typeof entry.summary === 'string' ? entry.summary : '';
 });
 
-const releases = computed(() => {
-    const entry = detail.entry.value;
-    const value = entry?.releases;
-    return Array.isArray(value) ? (value as readonly Record<string, unknown>[]) : [];
-});
-
-const latestVersion = computed(() => {
-    // The preflight answer is authoritative: it is the version the server
-    // actually resolved and verified.
-    const release = preflight.result.value?.release;
-    if (release) return release.version;
-    const first = releases.value[0];
-    return first && typeof first.version === 'string' ? first.version : undefined;
-});
-
 const canRequestFromAdmin = computed(
     () => account.checked.value && !account.canInstall.value
 );
 
-/** The authority the selected release asks for, as signed in its metadata. */
-const requestedGrants = computed(() => {
-    const release = preflight.result.value?.release;
-    return Array.isArray(release?.requestedGrants) ? release.requestedGrants : [];
+/**
+ * The preflight answer for the current selection only. The composable already
+ * drops superseded answers, and the echoed plugin id is checked again here so
+ * disclosure, consent and the install action can only ever read one target.
+ */
+function boundPreflight(): MarketplacePreflight | null {
+    const pluginId = selectedPluginId.value;
+    const answer = preflight.result.value;
+    if (!pluginId || !answer || answer.pluginId !== pluginId) return null;
+    return answer;
+}
+
+const selectedRelease = computed(() => boundPreflight()?.release ?? null);
+const selectedBlocks = computed(() => boundPreflight()?.blocks ?? []);
+const selectedAdvisories = computed(() => boundPreflight()?.advisories ?? null);
+
+/** The exact reviewed target; null until the matching preflight is complete. */
+const installTarget = computed<MarketplaceInstallTarget | null>(() => {
+    const answer = boundPreflight();
+    if (preflight.loading.value || !answer || answer.status !== 'installable') return null;
+    const release = answer.release;
+    if (!release) return null;
+    return {
+        pluginId: answer.pluginId,
+        releaseId: release.releaseId,
+        version: release.version,
+        archiveSha256: release.archiveSha256,
+        packageTreeSha256: release.packageTreeSha256,
+        authoritySha256: release.authoritySha256,
+        requestedGrants: signedGrants(release),
+        authority: release.authority,
+    };
 });
+
+/** Signed requested authority; a malformed answer yields no grants, not a crash. */
+function signedGrants(release: MarketplacePreflight['release']): readonly string[] {
+    const value: unknown = release?.requestedGrants;
+    return Array.isArray(value) ? value.filter((grant): grant is string => typeof grant === 'string') : [];
+}
+
+const installTargetKey = computed(() =>
+    installTarget.value ? marketplaceTargetKey(installTarget.value) : null
+);
+
+/** The authority the selected release asks for, as signed in its metadata. */
+const requestedGrants = computed(() => installTarget.value?.requestedGrants ?? []);
 
 /**
  * Consent is required before the pipeline may stage, canary or promote a
- * release that asks for authority; the checkbox is the operator's explicit
- * approval of exactly this list.
+ * release that asks for authority; the checkbox is bound to one exact tuple, so
+ * approval of a previous answer expires with it.
  */
-const consentRequired = computed(() => requestedGrants.value.length > 0);
-const consentOutstanding = computed(() => consentRequired.value && !grantsApproved.value);
+const consentRequired = computed(
+    () => requestedGrants.value.length > 0 || installTarget.value?.authority !== undefined
+);
+
+const grantsApproved = computed({
+    get: () =>
+        installTargetKey.value !== null && approvedTargetKey.value === installTargetKey.value,
+    set: (value: boolean) => {
+        approvedTargetKey.value = value ? installTargetKey.value : null;
+    },
+});
+
+const consentOutstanding = computed(
+    () => consentRequired.value && !grantsApproved.value
+);
+
+/** Qualified browser list the preflight answer exposes for the client profile. */
+function qualifiedBrowsersFrom(answer: MarketplacePreflight | null): readonly string[] {
+    const host = answer?.host as
+        | { readonly client?: { readonly qualifiedBrowsers?: unknown } }
+        | undefined;
+    const browsers = host?.client?.qualifiedBrowsers;
+    return Array.isArray(browsers)
+        ? browsers.filter((browser): browser is string => typeof browser === 'string')
+        : [];
+}
+
+/**
+ * The browser half of profile qualification, evaluated with the same shared
+ * rule the preflight endpoint applies. Only releases whose profile requires a
+ * client runtime are browser-scoped; server-side packages stay installable in
+ * any browser.
+ */
+const browserSupport = computed(() =>
+    selectedRelease.value === null
+        ? null
+        : evaluateClientEngineSupport({
+              profile: selectedRelease.value.profile,
+              engine: browserEngine.value,
+              qualifiedEngines: qualifiedBrowsersFrom(boundPreflight()),
+          })
+);
+
+const browserUnsupported = computed(
+    () => browserSupport.value?.required === true && !browserSupport.value.supported
+);
+
+/** Install actions are only offered when the engine can actually run the profile. */
+const browserQualified = computed(() => browserSupport.value?.supported !== false);
 
 async function copyAdminRequest(): Promise<void> {
     const url = marketplacePluginDeepLink(
@@ -152,15 +265,19 @@ async function copyAdminRequest(): Promise<void> {
 }
 
 async function runInstall(): Promise<void> {
-    const pluginId = selectedPluginId.value;
-    if (!pluginId) return;
+    // Capture the reviewed tuple before the first await: approval, install and
+    // every message act on this exact target, not on whatever is selected later.
+    const target = installTarget.value;
+    if (!target) return;
     // Persist the reviewed authority before anything is staged, so the pipeline
     // sees a current review instead of pausing at `grant-review-unreviewed`.
     if (consentRequired.value) {
         const recorded = await consent.approve({
-            pluginId,
-            approvedGrants: requestedGrants.value,
-            ...(latestVersion.value === undefined ? {} : { version: latestVersion.value }),
+            pluginId: target.pluginId,
+            approvedGrants: target.requestedGrants,
+            expectedPackageDigest: target.packageTreeSha256,
+            expectedAuthoritySha256: target.authoritySha256,
+            version: target.version,
         });
         if (!recorded) {
             toast.add({
@@ -171,10 +288,17 @@ async function runInstall(): Promise<void> {
             return;
         }
     }
-    const result = await install.start({
-        pluginId,
-        ...(latestVersion.value === undefined ? {} : { version: latestVersion.value }),
-    });
+    // The confirmation is only valid for the tuple the operator reviewed: a
+    // selection or release change while approval was in flight invalidates it.
+    if (!sameMarketplaceTarget(installTarget.value, target)) {
+        toast.add({
+            title: 'The reviewed release changed',
+            description: 'Check the plugin again and review its permissions before installing.',
+            color: 'warning',
+        });
+        return;
+    }
+    const result = await install.start({ pluginId: target.pluginId, version: target.version });
     if (!result) {
         toast.add({
             title: 'Install did not complete',
@@ -189,8 +313,8 @@ async function runInstall(): Promise<void> {
             description: `${detailName.value} is ready to use.`,
             color: 'success',
         });
-        grantsApproved.value = false;
-        await preflight.run(pluginId);
+        approvedTargetKey.value = null;
+        await preflight.run(target.pluginId, undefined, browserEngine.value ?? undefined);
         return;
     }
     toast.add({
@@ -208,7 +332,7 @@ async function retryInstall(): Promise<void> {
     const result = await install.retry(pluginId);
     if (result?.status === 'completed') {
         toast.add({ title: 'Installed', description: `${detailName.value} is ready to use.`, color: 'success' });
-        await preflight.run(pluginId);
+        await preflight.run(pluginId, undefined, browserEngine.value ?? undefined);
         return;
     }
     if (result?.needsSetup) {
@@ -229,6 +353,8 @@ function blockActionLabel(block: { action: string }): string | null {
             return 'Free disk space on the server';
         case 'review-grants':
             return 'Review the permissions below';
+        case 'use-supported-browser':
+            return 'Open this plugin in a supported browser';
         case 'retry':
             return 'Try again';
         default:
@@ -281,7 +407,7 @@ function blockActionLabel(block: { action: string }): string | null {
             :description="catalog.notice.value"
         />
 
-        <div v-if="selectedPluginId" class="flex flex-col gap-4 rounded-lg border border-(--ui-border) p-4">
+        <div v-if="selectedPluginId" class="flex flex-col gap-4 rounded-lg border border-(--ui-border) p-4" data-testid="marketplace-detail">
             <div class="flex items-start justify-between gap-3">
                 <div>
                     <h3 class="text-lg font-medium">{{ detailName }}</h3>
@@ -296,19 +422,19 @@ function blockActionLabel(block: { action: string }): string | null {
                 />
             </div>
 
-            <dl v-if="preflight.result.value?.release" class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            <dl v-if="selectedRelease" class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                 <dt class="text-(--ui-text-muted)">Version</dt>
-                <dd>{{ preflight.result.value.release.version }}</dd>
+                <dd>{{ selectedRelease.version }}</dd>
                 <dt class="text-(--ui-text-muted)">Profile</dt>
-                <dd>{{ preflight.result.value.release.profile }}</dd>
+                <dd>{{ selectedRelease.profile }}</dd>
                 <dt class="text-(--ui-text-muted)">License</dt>
-                <dd>{{ preflight.result.value.release.license }}</dd>
+                <dd>{{ selectedRelease.license }}</dd>
                 <dt class="text-(--ui-text-muted)">Published</dt>
-                <dd>{{ preflight.result.value.release.publishedAt }}</dd>
+                <dd>{{ selectedRelease.publishedAt }}</dd>
                 <dt class="text-(--ui-text-muted)">Advisories accepted</dt>
                 <dd>
-                    {{ preflight.result.value.advisories.acceptedSequence }}
-                    of {{ preflight.result.value.advisories.latestSequence }}
+                    {{ selectedAdvisories?.acceptedSequence }}
+                    of {{ selectedAdvisories?.latestSequence }}
                 </dd>
             </dl>
 
@@ -317,7 +443,16 @@ function blockActionLabel(block: { action: string }): string | null {
             </div>
 
             <UAlert
-                v-for="block in preflight.result.value?.blocks ?? []"
+                v-if="preflight.error.value"
+                color="error"
+                variant="subtle"
+                title="The install check could not run"
+                :description="preflight.error.value"
+                data-testid="marketplace-preflight-error"
+            />
+
+            <UAlert
+                v-for="block in selectedBlocks"
                 :key="block.code"
                 color="warning"
                 variant="subtle"
@@ -335,8 +470,17 @@ function blockActionLabel(block: { action: string }): string | null {
                 data-testid="marketplace-install-unsupported"
             />
 
+            <UAlert
+                v-if="browserUnsupported"
+                color="warning"
+                variant="subtle"
+                title="This browser cannot install this plugin"
+                description="Discovery stays read-only here. The portable client profile is qualified only on Chromium-based browsers; open the plugin link in a supported browser to install it."
+                data-testid="marketplace-browser-unsupported"
+            />
+
             <div
-                v-if="installSupported && account.canInstall.value && consentRequired"
+                v-if="installSupported && account.canInstall.value && consentRequired && browserQualified"
                 class="flex flex-col gap-2 rounded-lg border border-(--ui-border) p-3"
                 data-testid="marketplace-grant-consent"
             >
@@ -349,6 +493,32 @@ function blockActionLabel(block: { action: string }): string | null {
                         <code>{{ grant }}</code>
                     </li>
                 </ul>
+                <details v-if="selectedRelease?.authority" class="rounded border border-(--ui-border) p-2 text-xs">
+                    <summary class="cursor-pointer font-medium">Review complete authority</summary>
+                    <div class="mt-2 flex flex-col gap-2">
+                        <p><strong>Trust:</strong> {{ selectedRelease.authority.trust }}</p>
+                        <p><strong>Features:</strong> {{ selectedRelease.authority.features.join(', ') || 'none' }}</p>
+                        <p><strong>Engines:</strong> {{ selectedRelease.authority.engines.join(', ') || 'none' }}</p>
+                        <div>
+                            <strong>Destinations</strong>
+                            <ul class="list-disc pl-5">
+                                <li v-for="destination in selectedRelease.authority.destinations" :key="`${destination.host}:${destination.connection ?? ''}`">
+                                    {{ destination.host }} — {{ destination.methods.join(', ') || 'no methods' }}
+                                    ({{ destination.pathPrefixes.join(', ') || 'all paths' }})
+                                    <span v-if="destination.connection">via {{ destination.connection }}</span>
+                                </li>
+                            </ul>
+                        </div>
+                        <p><strong>Connection scopes:</strong> {{ selectedRelease.authority.connectionScopes.join(', ') || 'none' }}</p>
+                        <p><strong>Data scopes:</strong> {{ selectedRelease.authority.dataScopes.join(', ') || 'none' }}</p>
+                        <p><strong>Writes:</strong> {{ selectedRelease.authority.writes.join(', ') || 'none' }}</p>
+                        <p><strong>Setup hooks:</strong> {{ selectedRelease.authority.setupHooks.join(', ') || 'none' }}</p>
+                        <p><strong>Dependencies:</strong> {{ selectedRelease.authority.dependencies.join(', ') || 'none' }}</p>
+                    </div>
+                </details>
+                <p v-else-if="requestedGrants.length > 0" class="text-xs text-(--ui-text-error)">
+                    The complete signed authority descriptor is unavailable; this release cannot be approved safely.
+                </p>
                 <label class="flex items-center gap-2 text-sm">
                     <input
                         v-model="grantsApproved"
@@ -361,8 +531,8 @@ function blockActionLabel(block: { action: string }): string | null {
 
             <div class="flex flex-wrap items-center gap-2">
                 <UButton
-                    v-if="installSupported && account.canInstall.value"
-                    :disabled="preflight.result.value?.status !== 'installable' || install.running.value || consentOutstanding"
+                    v-if="installSupported && account.canInstall.value && browserQualified"
+                    :disabled="!installTarget || install.running.value || consentOutstanding"
                     :loading="install.running.value || consent.saving.value"
                     icon="i-lucide-download"
                     data-testid="marketplace-install"
@@ -370,6 +540,20 @@ function blockActionLabel(block: { action: string }): string | null {
                 >
                     Install
                 </UButton>
+                <template v-else-if="browserUnsupported">
+                    <UButton
+                        color="warning"
+                        variant="soft"
+                        icon="i-lucide-link"
+                        data-testid="marketplace-copy-plugin-link"
+                        @click="copyAdminRequest"
+                    >
+                        {{ adminRequestCopied ? 'Plugin link copied' : 'Copy plugin link for a supported browser' }}
+                    </UButton>
+                    <span class="text-sm text-(--ui-text-muted)">
+                        You can still read the listing here.
+                    </span>
+                </template>
                 <template v-else-if="installSupported && canRequestFromAdmin">
                     <UButton
                         color="neutral"
@@ -425,7 +609,12 @@ function blockActionLabel(block: { action: string }): string | null {
                         color="primary"
                         variant="soft"
                         icon="i-lucide-settings"
-                        :to="`/plugins/${selectedPluginId}/setup`"
+                        :to="{
+                            path: `/plugins/${selectedPluginId}/setup`,
+                            query: install.operationId.value
+                                ? { operationId: install.operationId.value }
+                                : undefined,
+                        }"
                     >
                         Finish setup
                     </UButton>
@@ -452,7 +641,7 @@ function blockActionLabel(block: { action: string }): string | null {
                     <span class="font-medium">{{ card.name }}</span>
                     <span class="text-xs text-(--ui-text-muted)">{{ card.summary }}</span>
                     <span class="text-xs text-(--ui-text-muted)">
-                        {{ (card.publisher as { displayName?: string } | undefined)?.displayName ?? pluginIdOf(card) }}
+                        {{ publisherName(card) }}
                     </span>
                 </button>
             </li>

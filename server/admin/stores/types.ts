@@ -107,6 +107,18 @@ export interface WorkspaceSettingsStore {
     get(workspaceId: string, key: string): Promise<string | null>;
     /** Persists a setting value to the store. */
     set(workspaceId: string, key: string, value: string): Promise<void>;
+    /**
+     * Optional provider-native compare-and-set. Candidate plugin setup uses
+     * this when available so revision checks remain atomic across processes;
+     * providers that only implement get/set are serialized within one host
+     * process and must not claim multi-instance CAS semantics.
+     */
+    compareAndSet?(
+        workspaceId: string,
+        key: string,
+        expectedValue: string | null,
+        nextValue: string
+    ): Promise<boolean>;
 }
 
 export interface AdminUserInfo {

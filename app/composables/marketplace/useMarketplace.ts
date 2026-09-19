@@ -24,18 +24,29 @@
 
 import { computed, ref } from 'vue';
 import { requestWorkspacePluginReconcile } from '~/composables/plugins/bundled-v1-manager-runtime';
+import type { EffectiveAuthority } from '~~/shared/plugins/authority/effective-authority';
 
 /**
  * Nuxt's typed routes cannot express runtime-composed API paths, so every call
  * goes through these two helpers and the result is narrowed by the caller.
  */
-async function apiGet<T>(url: string): Promise<T> {
-    return (await ($fetch as unknown as (input: string) => Promise<unknown>)(url)) as T;
+async function apiGet<T>(url: string, signal?: AbortSignal): Promise<T> {
+    const request = $fetch as unknown as (
+        input: string,
+        init?: Record<string, unknown>
+    ) => Promise<unknown>;
+    // The signal is only passed when one exists so signal-less requests keep
+    // their exact call shape (`$fetch(url)`).
+    return (await (signal === undefined ? request(url) : request(url, { signal }))) as T;
 }
 
 async function apiPost<T>(
     url: string,
-    options: { readonly body?: unknown; readonly adminIntent?: boolean } = {}
+    options: {
+        readonly body?: unknown;
+        readonly adminIntent?: boolean;
+        readonly signal?: AbortSignal;
+    } = {}
 ): Promise<T> {
     return (await (
         $fetch as unknown as (input: string, init: Record<string, unknown>) => Promise<unknown>
@@ -43,6 +54,7 @@ async function apiPost<T>(
         method: 'POST',
         ...(options.adminIntent === false ? {} : { headers: { 'x-or3-admin-intent': 'admin' } }),
         ...(options.body === undefined ? {} : { body: options.body }),
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
     })) as T;
 }
 
@@ -70,6 +82,12 @@ export interface MarketplacePreflight {
         readonly trustModes: readonly string[];
         readonly grants: readonly string[];
         readonly features: readonly string[];
+        /** Structured browser qualification for the portable client profile. */
+        readonly client: {
+            readonly profile: string;
+            readonly qualifiedBrowsers: readonly string[];
+            readonly staticHost: boolean;
+        };
     };
     readonly release: {
         readonly releaseId: string;
@@ -77,10 +95,15 @@ export interface MarketplacePreflight {
         readonly archiveSha256: string;
         readonly packageTreeSha256: string;
         readonly profile: string;
+        /** Whether the signed profile requires a client browser runtime. */
+        readonly clientRuntime: 'required' | 'forbidden' | null;
+        readonly authoritySha256: string;
         readonly publishedAt: string;
         readonly license: string;
         /** Authority this release asks for, as signed in its release metadata. */
         readonly requestedGrants: readonly string[];
+        /** Complete signed authority descriptor for operator review. */
+        readonly authority?: EffectiveAuthority;
     } | null;
     readonly advisories: {
         readonly latestSequence: number;
@@ -213,55 +236,231 @@ export function useMarketplaceCatalog() {
     return { loading, error, notice, configured, cards, total, search, category, load };
 }
 
+/**
+ * One answer from a detail request. `superseded` means a newer selection owns
+ * the state now (the request was aborted or overtaken), so the caller must not
+ * continue a flow that depends on this response.
+ */
+export interface MarketplaceDetailLoad {
+    readonly superseded: boolean;
+    readonly entry: Record<string, unknown> | null;
+}
+
 export function useMarketplaceDetail() {
     const loading = ref(false);
     const entry = ref<Record<string, unknown> | null>(null);
     const error = ref<string | null>(null);
+    /**
+     * Detail answers are bound to the request that asked for them: a monotonic
+     * generation ignores late responses, and the controller aborts the network
+     * call so a superseded request cannot even complete.
+     */
+    let generation = 0;
+    let controller: AbortController | null = null;
 
-    const load = async (pluginId: string) => {
-        loading.value = true;
+    /** Drop the previous selection's answer before a new one asks anything. */
+    const clear = (): void => {
+        generation += 1;
+        controller?.abort();
+        controller = null;
+        loading.value = false;
+        entry.value = null;
         error.value = null;
+    };
+
+    const load = async (pluginId: string): Promise<MarketplaceDetailLoad> => {
+        const request = ++generation;
+        controller?.abort();
+        controller = new AbortController();
+        const { signal } = controller;
+
+        // Selecting a new target drops the old answer first; a late response
+        // for it must never re-appear under the new selection.
+        entry.value = null;
+        error.value = null;
+        loading.value = true;
         try {
             const response = await apiGet<{ entry: Record<string, unknown> | null }>(
-                `/api/plugins/marketplace/${pluginId}`
+                `/api/plugins/marketplace/${pluginId}`,
+                signal
             );
+            if (request !== generation) return { superseded: true, entry: null };
             entry.value = response.entry;
+            return { superseded: false, entry: response.entry };
         } catch (caught) {
-            entry.value = null;
+            if (request !== generation || signal.aborted) {
+                return { superseded: true, entry: null };
+            }
             error.value =
                 caught instanceof Error ? caught.message : 'That plugin could not be loaded.';
+            return { superseded: false, entry: null };
         } finally {
-            loading.value = false;
+            if (request === generation) loading.value = false;
         }
     };
 
-    return { loading, entry, error, load };
+    return { loading, entry, error, load, clear };
 }
 
 export function useMarketplacePreflight() {
     const loading = ref(false);
     const result = ref<MarketplacePreflight | null>(null);
     const error = ref<string | null>(null);
+    /** Same generation discipline as the detail: only the newest answer counts. */
+    let generation = 0;
+    let controller: AbortController | null = null;
 
-    const run = async (pluginId: string, version?: string): Promise<MarketplacePreflight | null> => {
+    const clear = (): void => {
+        generation += 1;
+        controller?.abort();
+        controller = null;
+        loading.value = false;
+        result.value = null;
+        error.value = null;
+    };
+
+    const run = async (
+        pluginId: string,
+        version?: string,
+        clientEngine?: string
+    ): Promise<MarketplacePreflight | null> => {
+        const request = ++generation;
+        controller?.abort();
+        controller = new AbortController();
+        const { signal } = controller;
+
+        // Stale evidence must never authorize a new target: the previous answer
+        // is dropped first and only the newest request may publish one.
+        result.value = null;
+        error.value = null;
+        loading.value = true;
+        try {
+            const answer = await apiPost<MarketplacePreflight>(
+                '/api/plugins/marketplace/preflight',
+                {
+                    body: {
+                        pluginId,
+                        ...(version === undefined ? {} : { version }),
+                        ...(clientEngine === undefined ? {} : { clientEngine }),
+                    },
+                    signal,
+                }
+            );
+            if (request !== generation) return null;
+            // The server echoes the target it checked; an answer for another
+            // plugin is not evidence for this selection.
+            if (answer.pluginId !== pluginId) {
+                error.value = 'The install check answered for a different plugin.';
+                return null;
+            }
+            result.value = answer;
+            return answer;
+        } catch (caught) {
+            if (request !== generation || signal.aborted) return null;
+            error.value =
+                caught instanceof Error ? caught.message : 'The install check could not run.';
+            return null;
+        } finally {
+            if (request === generation) loading.value = false;
+        }
+    };
+
+    return { loading, result, error, run, clear };
+}
+
+/**
+ * The exact target an operator reviews and confirms: plugin, release, package
+ * digests and authority hash. Everything downstream uses this tuple, and the
+ * server re-checks the digests when consent is recorded.
+ */
+export interface MarketplaceInstallTarget {
+    readonly pluginId: string;
+    readonly releaseId: string;
+    readonly version: string;
+    readonly archiveSha256: string;
+    /** Consent binds to the extracted package identity, not transport bytes. */
+    readonly packageTreeSha256: string;
+    readonly authoritySha256: string;
+    readonly requestedGrants: readonly string[];
+    readonly authority?: EffectiveAuthority;
+}
+
+/** Stable identity of a reviewed tuple, for binding a checkbox to one answer. */
+export function marketplaceTargetKey(target: MarketplaceInstallTarget): string {
+    return [
+        target.pluginId,
+        target.releaseId,
+        target.version,
+        target.archiveSha256,
+        target.packageTreeSha256,
+        target.authoritySha256,
+    ].join(':');
+}
+
+/** Whether the current answer is still exactly the tuple that was confirmed. */
+export function sameMarketplaceTarget(
+    current: MarketplaceInstallTarget | null,
+    confirmed: MarketplaceInstallTarget
+): boolean {
+    return current !== null && marketplaceTargetKey(current) === marketplaceTargetKey(confirmed);
+}
+
+export interface MarketplaceUpdateCheckPlugin {
+    readonly pluginId: string;
+    readonly installedVersion: string;
+    readonly latestVersion: string | null;
+    readonly status: 'up-to-date' | 'update-available' | 'blocked' | 'unknown';
+    readonly reason?: string;
+    readonly release?: {
+        readonly releaseId: string;
+        readonly version: string;
+        readonly archiveSha256: string;
+        readonly packageTreeSha256: string;
+        readonly authoritySha256: string;
+        readonly requestedGrants: readonly string[];
+        readonly authority?: EffectiveAuthority;
+        readonly publishedAt: string;
+        readonly profile?: string;
+    };
+}
+
+export interface MarketplaceUpdateCheckResult {
+    readonly ok: boolean;
+    readonly configured: boolean;
+    readonly checkedAt: number;
+    readonly plugins: readonly MarketplaceUpdateCheckPlugin[];
+}
+
+/**
+ * A bounded registry update check. It only discovers: starting a review is the
+ * ordinary acquisition operation, so compatibility, advisories, consent and
+ * setup all still run before anything is selected.
+ */
+export function useMarketplaceUpdateCheck() {
+    const loading = ref(false);
+    const result = ref<MarketplaceUpdateCheckResult | null>(null);
+    const error = ref<string | null>(null);
+
+    const check = async (): Promise<MarketplaceUpdateCheckResult | null> => {
         loading.value = true;
         error.value = null;
         try {
-            result.value = await apiPost<MarketplacePreflight>(
-                '/api/plugins/marketplace/preflight',
-                { body: { pluginId, ...(version === undefined ? {} : { version }) } }
+            result.value = await apiGet<MarketplaceUpdateCheckResult>(
+                '/api/admin/plugins/updates'
             );
             return result.value;
         } catch (caught) {
             error.value =
-                caught instanceof Error ? caught.message : 'The install check could not run.';
+                caught instanceof Error
+                    ? caught.message
+                    : 'The update check could not run.';
             return null;
         } finally {
             loading.value = false;
         }
     };
 
-    return { loading, result, error, run };
+    return { loading, result, error, check };
 }
 
 /**
@@ -277,14 +476,16 @@ export function useMarketplaceInstall() {
     const error = ref<string | null>(null);
     const canaryStatus = ref<string | null>(null);
     const running = ref(false);
+    /** Selection/restore generation; late responses cannot retarget controls. */
+    let operationGeneration = 0;
 
-    const poll = async (): Promise<AcquisitionStatusView | null> => {
-        if (!operationId.value) return null;
+    const poll = async (expectedOperationId = operationId.value): Promise<AcquisitionStatusView | null> => {
+        if (!expectedOperationId || operationId.value !== expectedOperationId) return null;
         const response = await apiGet<AcquisitionResponse>(
-            `/api/admin/plugins/acquisitions/${operationId.value}/status`
+            `/api/admin/plugins/acquisitions/${expectedOperationId}/status`
         );
         const view = unwrapAcquisitionOperation(response);
-        status.value = view;
+        if (operationId.value === expectedOperationId) status.value = view;
         return view;
     };
 
@@ -307,7 +508,9 @@ export function useMarketplaceInstall() {
         pluginId: string,
         options: { readonly version?: string; readonly workspaceId?: string } = {}
     ): Promise<AcquisitionStatusView | null> => {
+        const generation = ++operationGeneration;
         const operations = await listOperations(pluginId);
+        if (generation !== operationGeneration) return null;
         const unfinished = operations.filter(
             (operation) =>
                 operation.status !== 'completed' &&
@@ -319,6 +522,7 @@ export function useMarketplaceInstall() {
                 ? null
                 : resumableOperationFor(unfinished, options.version)) ?? unfinished[0] ?? null;
         if (!relevant) return null;
+        if (generation !== operationGeneration) return null;
         operationId.value = relevant.operationId;
         status.value = relevant;
         return relevant;
@@ -352,6 +556,12 @@ export function useMarketplaceInstall() {
             const view = await poll();
             if (!view) return null;
             if (view.status === 'completed' || view.status === 'canceled') return view;
+            if (view.status === 'blocked') {
+                error.value =
+                    view.failure?.message ??
+                    'This operation is blocked. Resolve the blocker, then choose Continue.';
+                return view;
+            }
             if (view.status === 'paused' || (view.status === 'failed' && !view.retryable)) return view;
             if (view.failure?.code === 'client-canary-pending') {
                 canaryStatus.value = 'pending';
@@ -365,6 +575,7 @@ export function useMarketplaceInstall() {
             if (view.status === 'failed') return view;
             await new Promise((resolve) => setTimeout(resolve, 1_000));
         }
+        error.value = 'The operation did not settle within the polling window. Check its status before retrying.';
         return status.value;
     };
 
@@ -385,6 +596,7 @@ export function useMarketplaceInstall() {
         readonly version?: string;
         readonly workspaceId?: string;
     }): Promise<AcquisitionStatusView | null> => {
+        operationGeneration += 1;
         running.value = true;
         error.value = null;
         canaryStatus.value = null;
@@ -418,6 +630,7 @@ export function useMarketplaceInstall() {
 
     const retry = async (pluginId: string): Promise<AcquisitionStatusView | null> => {
         if (!operationId.value) return null;
+        operationGeneration += 1;
         running.value = true;
         try {
             const response = await apiPost<AcquisitionResponse>(
@@ -436,6 +649,7 @@ export function useMarketplaceInstall() {
 
     const cancel = async (): Promise<void> => {
         if (!operationId.value) return;
+        operationGeneration += 1;
         const response = await apiPost<AcquisitionResponse>(
             `/api/admin/plugins/acquisitions/${operationId.value}/cancel`
         );
@@ -448,19 +662,44 @@ export function useMarketplaceInstall() {
      * Adopt an operation the server already recorded (for example an update a
      * previous install left pending) and follow it to completion. This is how the
      * Updates view resumes the pipeline instead of promoting around it.
+     *
+     * Watching is not resuming: a paused, blocked or retryable-failed operation
+     * advances only through the owner-authorized retry, which revalidates setup
+     * readiness and evidence server-side. A running operation is watched as-is.
      */
     const adopt = async (
         pluginId: string,
         recordedOperationId: string
     ): Promise<AcquisitionStatusView | null> => {
+        const generation = ++operationGeneration;
         running.value = true;
         error.value = null;
         operationId.value = recordedOperationId;
         try {
+            const view = await poll(recordedOperationId);
+            if (generation !== operationGeneration) return null;
+            if (!view) return null;
+            if (view.status !== 'completed' && view.status !== 'canceled' && view.retryable) {
+                return await retry(pluginId);
+            }
             return await settle(pluginId);
         } finally {
             running.value = false;
         }
+    };
+
+    /**
+     * Forget the locally displayed operation when the selection changes. The
+     * durable operation itself is untouched server-side; `restore` re-adopts it
+     * for the plugin it belongs to.
+     */
+    const reset = (): void => {
+        operationGeneration += 1;
+        operationId.value = null;
+        status.value = null;
+        error.value = null;
+        canaryStatus.value = null;
+        running.value = false;
     };
 
     return {
@@ -476,6 +715,7 @@ export function useMarketplaceInstall() {
         adopt,
         restore,
         listOperations,
+        reset,
     };
 }
 
@@ -493,6 +733,10 @@ export function useMarketplaceConsent() {
         readonly pluginId: string;
         readonly approvedGrants: readonly string[];
         readonly version?: string;
+        /** Staged digest (or signed archive digest) shown to the reviewer. */
+        readonly expectedPackageDigest: string | null;
+        /** Signed authority hash shown to the reviewer. */
+        readonly expectedAuthoritySha256: string;
     }): Promise<boolean> => {
         saving.value = true;
         error.value = null;
@@ -500,6 +744,8 @@ export function useMarketplaceConsent() {
             await apiPost(`/api/admin/plugins/packages/${input.pluginId}/grants`, {
                 body: {
                     approvedGrants: [...input.approvedGrants],
+                    expectedPackageDigest: input.expectedPackageDigest,
+                    expectedAuthoritySha256: input.expectedAuthoritySha256,
                     ...(input.version === undefined ? {} : { version: input.version }),
                 },
             });

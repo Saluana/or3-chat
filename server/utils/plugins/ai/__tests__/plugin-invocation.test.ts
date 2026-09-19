@@ -78,6 +78,67 @@ describe('plugin AI invocation (4.11)', () => {
         ).rejects.toMatchObject({ rpcCode: 'policy-denied' });
     });
 
+    it('charges a lost provider response at the reserved ceiling', async () => {
+        let settlement: {
+            reservationId: string;
+            reservationWindowId: number;
+            reservedUsd: number;
+            actualSpendUsd?: number;
+        } | null = null;
+        const spec = createPluginAiCompleteMethod({
+            provider: {
+                async complete() {
+                    throw new Error('provider connection lost');
+                },
+            },
+            prices: PRICES,
+            reserveSpend: async () => ({
+                ok: true,
+                reservationId: 'reservation-1',
+                reservationWindowId: 7,
+            }),
+            settleSpend: async (input) => {
+                settlement = input;
+                return { ok: true };
+            },
+        });
+        await expect(
+            spec.handler({ model: 'openai/gpt-4o-mini', prompt: 'hi' }, context)
+        ).rejects.toThrow('provider connection lost');
+        expect(settlement).toMatchObject({
+            reservationId: 'reservation-1',
+            reservationWindowId: 7,
+        });
+        const captured = settlement as { actualSpendUsd?: number } | null;
+        expect(captured?.actualSpendUsd).toBeGreaterThan(0);
+    });
+
+    it('does not retry a durable settlement after a successful provider response', async () => {
+        const settleSpend = vi.fn(async () => ({
+            ok: false as const,
+            code: 'unavailable' as const,
+            message: 'The durable ledger went offline',
+        }));
+        const spec = createPluginAiCompleteMethod({
+            provider: fakeProvider(),
+            prices: PRICES,
+            reserveSpend: async () => ({
+                ok: true,
+                reservationId: 'reservation-2',
+                reservationWindowId: 7,
+            }),
+            settleSpend,
+        });
+
+        await expect(
+            spec.handler({ model: 'openai/gpt-4o-mini', prompt: 'hi' }, context)
+        ).rejects.toMatchObject({ rpcCode: 'unavailable' });
+        // The provider has already returned a result. A second worst-case
+        // settlement could double-charge a ledger that applies the first write
+        // successfully but loses its response.
+        expect(settleSpend).toHaveBeenCalledTimes(1);
+    });
+
     it('refuses a call whose spend would exceed the activation budget', async () => {
         const spec = createPluginAiCompleteMethod({
             provider: fakeProvider({ spendUsd: 5 }),

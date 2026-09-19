@@ -59,6 +59,7 @@ export default defineEventHandler(async (event) => {
                 workspaceId,
                 pluginId: candidate.pluginId,
                 packageDigest: candidate.packageDigest,
+                release: null,
             }),
         serverDryRun: (dryRun) => serverCandidateDryRun(services.packages, dryRun),
         clientHiddenPrepare: clientCanaryStepFromEvidence(services.clientCanary, {
@@ -85,6 +86,7 @@ export default defineEventHandler(async (event) => {
                 workspaceId,
                 pluginId,
                 packageDigest,
+                release: null,
             });
             const ticket = await services.clientCanary.issueTicket({
                 pluginId,

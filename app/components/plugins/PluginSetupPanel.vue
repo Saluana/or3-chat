@@ -112,7 +112,7 @@ function hydrate(settings: { values: Readonly<Record<string, string | number | b
     values.value = next;
 }
 
-watch(() => props.settings.values, hydrate, { immediate: true, deep: true });
+watch(() => props.settings, hydrate, { immediate: true, deep: true });
 
 // A successful save confirms the exact revision that was written, so edits made
 // after the request started stay dirty.
@@ -229,7 +229,7 @@ function canConnect(connection: SetupConnectionPlan): boolean {
                 <UInput
                     v-else
                     :id="`setup-${field.key}`"
-                    :model-value="values[field.key] as string | number"
+                    :model-value="String(values[field.key] ?? '')"
                     :type="field.kind === 'number' ? 'number' : 'text'"
                     class="w-full"
                     @update:model-value="(value) => onEdit(field, value)"
@@ -279,7 +279,7 @@ function canConnect(connection: SetupConnectionPlan): boolean {
                         <UInput
                             v-else
                             :id="`setup-${field.key}`"
-                            :model-value="values[field.key] as string | number"
+                            :model-value="String(values[field.key] ?? '')"
                             :type="field.kind === 'number' ? 'number' : 'text'"
                             class="w-full"
                             @update:model-value="(value) => onEdit(field, value)"

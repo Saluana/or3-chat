@@ -29,8 +29,13 @@ import type {
     LibraryTransportFailure,
     LinkedSessionPayload,
     RemoteAcquiredRelease,
+    RemoteLibraryEntitlements,
     RemoteLinkSummary,
 } from './transport';
+import type {
+    PluginAcquisitionReceipt,
+    PluginAcquisitionReleaseIdentity,
+} from '~~/shared/plugins/acquisition/contracts';
 
 /** A linked session is re-verified at most this often while the UI is used. */
 const VERIFY_INTERVAL_MS = 10 * 60_000;
@@ -65,6 +70,7 @@ export interface LibraryEntitlementsView {
     readonly accountDisplayName?: string;
     readonly plus?: { readonly status: 'active' | 'none' | 'ended'; readonly until: string | null };
     readonly acquired?: readonly RemoteAcquiredRelease[];
+    readonly pluginCoverage?: RemoteLibraryEntitlements['pluginCoverage'];
     readonly notice?: LibraryTransportFailure;
 }
 
@@ -82,6 +88,30 @@ export interface LibraryLinkStatusView {
 export type LibraryLinkResult =
     | { readonly ok: true; readonly value: LibraryLinkStatusView }
     | { readonly ok: false; readonly failure: LibraryTransportFailure };
+
+/**
+ * Artifact access for one covered release through the initiating user's own
+ * link. The header is only ever used server-side, for the acquisition download.
+ */
+export type LibraryArtifactAccessResult =
+    | {
+          readonly ok: true;
+          readonly artifactPath: string;
+          readonly headers: Readonly<Record<string, string>>;
+          readonly alreadyAcquired: boolean;
+          /** Signed central receipt for this exact release/requester pair. */
+          readonly receipt: PluginAcquisitionReceipt;
+      }
+    | {
+          readonly ok: false;
+          readonly code:
+              | 'link-required'
+              | 'link-expired'
+              | 'coverage-denied'
+              | 'library-unconfigured'
+              | 'library-unavailable';
+          readonly message: string;
+      };
 
 export interface LibraryLinkServiceDeps {
     readonly store: LibraryLinkStore;
@@ -202,6 +232,115 @@ export class LibraryLinkService {
                 ...(record.accountDisplayName ? { accountDisplayName: record.accountDisplayName } : {}),
                 plus: result.value.plus,
                 acquired: result.value.acquired,
+                pluginCoverage: result.value.pluginCoverage,
+            };
+        });
+    }
+
+    /**
+     * Access the artifact for one covered release using this user's own link.
+     * Acquisition is recorded idempotently on the marketplace, so a retry after
+     * a partial download never requires a repurchase; the returned path is the
+     * only way to fetch bytes for a covered release (the public path refuses it).
+     */
+    async artifactAccess(
+        userId: string,
+        releaseId: string,
+        expectedRelease?: Pick<
+            PluginAcquisitionReleaseIdentity,
+            | 'releaseId'
+            | 'pluginId'
+            | 'version'
+            | 'archiveSha256'
+            | 'packageTreeSha256'
+            | 'manifestSha256'
+            | 'authoritySha256'
+        >
+    ): Promise<LibraryArtifactAccessResult> {
+        if (!this.configured) {
+            return {
+                ok: false,
+                code: 'library-unconfigured',
+                message: 'This host has no Library link configured.',
+            };
+        }
+        return await withUserLock(userId, async () => {
+            const record = await this.#store.read(userId);
+            if (!record || record.state !== 'linked') {
+                return {
+                    ok: false,
+                    code: 'link-required',
+                    message: 'Connect your marketplace Library account, then retry.',
+                };
+            }
+            const token = this.#tokenFor(userId, record);
+            if (!token) {
+                await this.#failTerminal(userId, record, 'lost', 'binding-undecryptable');
+                return {
+                    ok: false,
+                    code: 'link-required',
+                    message: 'Connect your marketplace Library account again, then retry.',
+                };
+            }
+            const acquisition = await this.#transport.acquire(token, releaseId);
+            if (!acquisition.ok) {
+                if (revocationSettled(acquisition.failure)) {
+                    const state = acquisition.failure.code === 'link-expired' ? 'expired' : 'revoked';
+                    await this.#store.write(
+                        dropCredentials(
+                            {
+                                ...record,
+                                state,
+                                updatedAt: new Date(this.#now()).toISOString(),
+                            },
+                            { retain: false }
+                        ),
+                        { expectRevision: record.revision }
+                    );
+                }
+                return {
+                    ok: false,
+                    code:
+                        acquisition.failure.code === 'link-expired'
+                            ? 'link-expired'
+                            : acquisition.failure.code === 'account-restricted'
+                              ? 'coverage-denied'
+                              : ['link-invalid', 'link-revoked', 'account-deleted'].includes(
+                                      acquisition.failure.code
+                                  )
+                                ? 'link-required'
+                                : 'library-unavailable',
+                    message: acquisition.failure.message,
+                };
+            }
+            const receipt = acquisition.value.receipt;
+            const payloadRelease = receipt.payload.release;
+            if (
+                !record.accountId ||
+                receipt.payload.marketplaceUserId !== record.accountId ||
+                payloadRelease.releaseId !== releaseId ||
+                (expectedRelease !== undefined &&
+                    (payloadRelease.releaseId !== expectedRelease.releaseId ||
+                        payloadRelease.pluginId !== expectedRelease.pluginId ||
+                        payloadRelease.version !== expectedRelease.version ||
+                        payloadRelease.archiveSha256 !== expectedRelease.archiveSha256 ||
+                        payloadRelease.packageTreeSha256 !== expectedRelease.packageTreeSha256 ||
+                        payloadRelease.manifestSha256 !== expectedRelease.manifestSha256 ||
+                        payloadRelease.authoritySha256 !== expectedRelease.authoritySha256))
+            ) {
+                return {
+                    ok: false,
+                    code: 'library-unavailable',
+                    message:
+                        'The marketplace receipt was not bound to this account and exact release.',
+                };
+            }
+            return {
+                ok: true,
+                artifactPath: acquisition.value.artifactPath,
+                headers: { 'x-or3-library-token': token },
+                alreadyAcquired: acquisition.value.alreadyAcquired,
+                receipt,
             };
         });
     }

@@ -21,23 +21,35 @@ import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
 import { listInstalledExtensions } from '../../../admin/extensions/extension-manager';
 import { ImmutablePluginPackageStore } from '../../../admin/plugins/package-store';
 import { PluginPackagePointerStore } from '../../../admin/plugins/package-pointer-store';
+import type { Sha256 } from '~~/shared/plugins/runtime-descriptor';
 
 export interface ResolvedPluginPackage {
     readonly pluginId: string;
     readonly path: string;
     readonly source: 'package' | 'extension';
-    readonly digest: string | null;
+    readonly digest: Sha256 | null;
 }
+
+/**
+ * Which pointer slot to resolve. `auto` prefers a pending candidate (setup for
+ * an install/update); `current` resolves only the running selection, so runtime
+ * settings never follow a candidate that has not been promoted.
+ */
+export type PluginPackageSlot = 'auto' | 'current';
 
 export async function resolvePluginPackage(
     pluginId: string,
-    extensionsRoot = EXTENSIONS_BASE_DIR
+    extensionsRoot = EXTENSIONS_BASE_DIR,
+    slot: PluginPackageSlot = 'auto'
 ): Promise<ResolvedPluginPackage | null> {
     const packages = new ImmutablePluginPackageStore(extensionsRoot);
     const pointers = new PluginPackagePointerStore(extensionsRoot, packages);
     try {
         const selection = await pointers.readStartupSelection(pluginId);
-        const target = selection.pointer?.candidate ?? selection.pointer?.current ?? null;
+        const target =
+            slot === 'current'
+                ? selection.pointer?.current ?? null
+                : selection.pointer?.candidate ?? selection.pointer?.current ?? null;
         if (target) {
             return {
                 pluginId,

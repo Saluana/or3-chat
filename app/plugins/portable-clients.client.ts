@@ -167,7 +167,7 @@ export default defineNuxtPlugin(() => {
             const next = wanted.get(source.descriptor.id);
             if (
                 next &&
-                next.descriptorKey === source.descriptorKey &&
+                next.descriptorKey === source.descriptor.descriptorKey &&
                 source.workspaceId === workspaceId
             ) {
                 continue;

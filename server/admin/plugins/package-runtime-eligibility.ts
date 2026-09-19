@@ -8,6 +8,7 @@ import { verifyPluginV2Compatibility } from '../../../shared/plugins/v2-compatib
 import { checkPluginAccess } from '../../utils/plugins/access/require-plugin-access';
 import type { WorkspaceSettingsStore } from '../stores/types';
 import { getPluginGrantReview } from './workspace-plugin-store';
+import { packageGrantCandidate } from './package-operation-support';
 import type { SelectedPackageRouteCatalog } from './package-route-catalog';
 import { OR3_PLUGIN_V2_HOST_CAPABILITIES } from './v2-host-capabilities';
 
@@ -84,19 +85,29 @@ export async function evaluateSelectedPackageRuntimeEligibility(
 
     const evaluated = await Promise.all(
         input.selectedPackages.map(async (catalog) => {
-            const [access, review] = await Promise.all([
+            const [access, candidate] = await Promise.all([
                 checkPluginAccess(input.event, {
                     pluginId: catalog.pluginId,
                     action: 'runtime.load',
                     extension: { access: catalog.manifest.access ?? null },
                 }),
-                getPluginGrantReview(
-                    input.settingsStore,
-                    input.workspaceId,
-                    catalog.pluginId,
-                    catalog.manifest.requestedGrants
-                ),
+                packageGrantCandidate({
+                    packagePath: catalog.packagePath,
+                    packageDigest: catalog.packageDigest,
+                }).catch(() => ({
+                    requestedGrants: catalog.manifest.requestedGrants,
+                    releaseId: null,
+                    packageDigest: catalog.packageDigest,
+                    authoritySha256: null,
+                    authority: null,
+                })),
             ]);
+            const review = await getPluginGrantReview(
+                input.settingsStore,
+                input.workspaceId,
+                catalog.pluginId,
+                candidate
+            );
             const dependencyResolution = dependencyGraph.resolutions[catalog.pluginId];
             let blockCode: PluginRuntimeManifestBlockCode | undefined;
             if (!input.packageRuntimeDecision.allowed) {

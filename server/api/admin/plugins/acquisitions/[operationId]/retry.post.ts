@@ -32,7 +32,11 @@ export default defineEventHandler(async (event) => {
     }
     // A retry re-evaluates setup readiness, so the host plan is built for the
     // acting admin's view of the target workspace.
-    const service = await acquisitionServiceFor(event, requesterIdentity(context));
+    const service = await acquisitionServiceFor(
+        event,
+        requesterIdentity(context),
+        context.session?.user?.id ?? ''
+    );
     try {
         const operation = await service.retry(operationId);
         return { ok: true, operation: describeAcquisitionStatus(operation) };

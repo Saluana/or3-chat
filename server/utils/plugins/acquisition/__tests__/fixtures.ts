@@ -21,9 +21,15 @@ import {
 } from '@or3/plugin-sdk/profile';
 import { writeDeterministicPackageZip } from '@or3/plugin-sdk/package-archive';
 import { verifyPackageTree } from '../../../../admin/plugins/package-tree';
-import type { ReleaseMetadataDocument } from '~~/shared/plugins/acquisition/release-metadata';
-import type { AdvisoryDocument } from '~~/shared/plugins/acquisition/release-metadata';
-import { signReleaseMetadataForTest } from '../release-verify';
+import {
+    encodeRegistryAdvisorySnapshot,
+    type AdvisoryDocument,
+    type RegistryAdvisoryCheckpoint,
+    type RegistryAdvisorySnapshot,
+    type ReleaseMetadataDocument,
+} from '~~/shared/plugins/acquisition/release-metadata';
+import { sha256Identity } from '~~/shared/plugins/digest';
+import { signRegistryAdvisoryCheckpointForTest, signReleaseMetadataForTest } from '../release-verify';
 import type { MarketplaceReleaseKey } from '../config';
 
 export const ORIGIN = 'https://market.example';
@@ -172,15 +178,18 @@ export function portablePackageTree(input: {
     return { root, profile };
 }
 
-export interface ReleaseFixture {
+export interface RegistryArtifactFixture {
     readonly bytes: Uint8Array;
     readonly signed: ReleaseMetadataDocument;
     readonly treeDigest: `sha256-${string}`;
     readonly key: MarketplaceReleaseKey;
     readonly privateKeyBase64: string;
+    readonly releaseId: string;
+}
+
+export interface ReleaseFixture extends RegistryArtifactFixture {
     readonly profile: Or3PortableProfile;
     readonly version: string;
-    readonly releaseId: string;
     /** The extracted package tree, for tests that install or inspect it. */
     readonly treePath: string;
 }
@@ -247,7 +256,7 @@ export function jsonResponse(body: unknown, status = 200): Response {
 }
 
 export interface FakeRegistryOptions {
-    readonly fixture: ReleaseFixture;
+    readonly fixture: RegistryArtifactFixture;
     readonly advisories?: readonly (AdvisoryDocument & { signature?: unknown })[];
     /** Transports for advisory documents, keyed by sequence. */
     readonly advisoryDocuments?: Readonly<Record<number, unknown>>;
@@ -255,15 +264,72 @@ export interface FakeRegistryOptions {
     /** Answer 200 to a Range request instead of 206 (ignored range). */
     readonly ignoreRange?: boolean;
     readonly onRequest?: (url: string) => void;
+    /**
+     * Model a paid release: the public artifact path refuses with
+     * `coverage-required`, and only the token-authenticated Library route serves
+     * the bytes.
+     */
+    readonly coverageRequired?: boolean;
+    /** Override the complete-checkpoint sequence for cursor replay tests. */
+    readonly checkpointSequence?: number;
 }
 
 /**
  * A transport that answers the marketplace's real public trust endpoints:
  * the release metadata wrapper, the advisory log, the advisory documents and the
- * content-addressed artifact.
+ * content-addressed artifact. With `coverageRequired` it also models the
+ * linked-host artifact route.
  */
 export function fakeRegistryTransport(options: FakeRegistryOptions): typeof fetch {
     const { fixture } = options;
+    const snapshotPromise = (async (): Promise<RegistryAdvisorySnapshot> => {
+        const advisories = [...(options.advisories ?? [])] as AdvisoryDocument[];
+        const sequence = options.checkpointSequence ?? Math.max(9, ...advisories.map((entry) => entry.sequence));
+        return {
+            schemaVersion: 1,
+            sequence,
+            advisories,
+            keyStatuses: [
+                {
+                    keyId: fixture.key.keyId,
+                    status: 'active',
+                    effectiveAt: new Date(Date.now() - 60_000).toISOString(),
+                },
+            ],
+        };
+    })();
+    const checkpointPromise = snapshotPromise.then(async (snapshot) => {
+        const issuedAt = new Date().toISOString();
+        const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
+        const unsigned: RegistryAdvisoryCheckpoint = {
+            schemaVersion: 1,
+            registryOrigin: ORIGIN,
+            sequence: snapshot.sequence,
+            issuedAt,
+            expiresAt,
+            snapshotSha256: await sha256Identity(encodeRegistryAdvisorySnapshot(snapshot)),
+            signature: { keyId: fixture.key.keyId, algorithm: 'ed25519', value: 'fixture' },
+        };
+        return await signRegistryAdvisoryCheckpointForTest({
+            checkpoint: unsigned,
+            keyId: fixture.key.keyId,
+            privateKeyBase64: fixture.privateKeyBase64,
+        });
+    });
+    const artifactResponse = (range: string | undefined): Response => {
+        if (range && !options.ignoreRange) {
+            const from = Number(range.replace(/bytes=/, '').replace(/-.*/, ''));
+            const partial = fixture.bytes.slice(from);
+            return new Response(new Uint8Array(partial), {
+                status: 206,
+                headers: { 'content-length': String(partial.byteLength) },
+            });
+        }
+        return new Response(new Uint8Array(fixture.bytes), {
+            status: 200,
+            headers: { 'content-length': String(fixture.bytes.byteLength) },
+        });
+    };
     return (async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         options.onRequest?.(url);
@@ -272,6 +338,10 @@ export function fakeRegistryTransport(options: FakeRegistryOptions): typeof fetc
                 releaseId: fixture.releaseId,
                 document: fixture.signed,
             });
+        }
+        if (url.endsWith('/checkpoint')) {
+            const [checkpoint, snapshot] = await Promise.all([checkpointPromise, snapshotPromise]);
+            return jsonResponse({ checkpoint, snapshot });
         }
         if (url.endsWith('/advisories')) {
             return jsonResponse({
@@ -297,21 +367,33 @@ export function fakeRegistryTransport(options: FakeRegistryOptions): typeof fetc
             if (!document) return new Response('missing', { status: 404 });
             return jsonResponse({ sequence, document });
         }
-        if (url.includes('/artifacts/')) {
-            if (options.failDownload?.()) throw new Error('connection reset');
-            const range = (init?.headers as Record<string, string> | undefined)?.range;
-            if (range && !options.ignoreRange) {
-                const from = Number(range.replace(/bytes=/, '').replace(/-.*/, ''));
-                const partial = fixture.bytes.slice(from);
-                return new Response(new Uint8Array(partial), {
-                    status: 206,
-                    headers: { 'content-length': String(partial.byteLength) },
-                });
+        const headers = (init?.headers as Record<string, string> | undefined) ?? {};
+        if (url.includes('/api/v1/library/releases/')) {
+            if (options.coverageRequired && !headers['x-or3-library-token']) {
+                return jsonResponse(
+                    {
+                        statusCode: 403,
+                        statusMessage: 'acquisition-required',
+                        data: { code: 'acquisition-required' },
+                    },
+                    403
+                );
             }
-            return new Response(new Uint8Array(fixture.bytes), {
-                status: 200,
-                headers: { 'content-length': String(fixture.bytes.byteLength) },
-            });
+            return artifactResponse(headers.range);
+        }
+        if (url.includes('/artifacts/')) {
+            if (options.coverageRequired) {
+                return jsonResponse(
+                    {
+                        statusCode: 403,
+                        statusMessage: 'coverage-required',
+                        data: { code: 'coverage-required' },
+                    },
+                    403
+                );
+            }
+            if (options.failDownload?.()) throw new Error('connection reset');
+            return artifactResponse(headers.range);
         }
         return new Response('missing', { status: 404 });
     }) as typeof fetch;

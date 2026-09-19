@@ -48,6 +48,8 @@ export interface EffectiveAuthority {
     readonly connectionScopes: readonly string[];
     /** Data scopes the release may request (for example `documents.read`). */
     readonly dataScopes: readonly string[];
+    /** Workspace writes the release may perform (for example `notes.append`). */
+    readonly writes: readonly string[];
     /** Setup hooks the release declares (test action + first action ids). */
     readonly setupHooks: readonly string[];
     /** Dependency metadata that changes runtime authority. */
@@ -62,6 +64,7 @@ export type AuthorityChangeKind =
     | 'connection-changed'
     | 'connection-scope-added'
     | 'data-scope-added'
+    | 'write-added'
     | 'setup-hook-added'
     | 'feature-added'
     | 'engine-added'
@@ -86,23 +89,46 @@ export interface AuthorityComparison {
 }
 
 function authorityPayload(authority: EffectiveAuthority) {
+    const canonicalStringSet = (values: readonly string[]) =>
+        [...new Set(values)].sort();
+
+    // Normalize duplicate declarations for the same host/connection before
+    // sorting. Sorting by host alone makes two same-host connections depend on
+    // publication order, so an equivalent descriptor could hash differently
+    // across the registry and host.
+    const destinations = [...groupDestinations(authority.destinations).values()]
+        .map((destination) => ({
+            host: destination.host,
+            methods: canonicalStringSet([...destination.methods]),
+            pathPrefixes: canonicalStringSet([...destination.paths]),
+            connection: destination.connection || null,
+        }))
+        .sort((left, right) => {
+            const host = left.host < right.host ? -1 : left.host > right.host ? 1 : 0;
+            if (host !== 0) return host;
+            const leftConnection = left.connection ?? '';
+            const rightConnection = right.connection ?? '';
+            if (leftConnection < rightConnection) return -1;
+            if (leftConnection > rightConnection) return 1;
+            const leftMethods = left.methods.join('\u0000');
+            const rightMethods = right.methods.join('\u0000');
+            if (leftMethods < rightMethods) return -1;
+            if (leftMethods > rightMethods) return 1;
+            const leftPaths = left.pathPrefixes.join('\u0000');
+            const rightPaths = right.pathPrefixes.join('\u0000');
+            return leftPaths < rightPaths ? -1 : leftPaths > rightPaths ? 1 : 0;
+        });
     return {
         trust: authority.trust,
-        grants: [...authority.grants].sort(),
-        features: [...authority.features].sort(),
-        engines: [...authority.engines].sort(),
-        destinations: [...authority.destinations]
-            .map((destination) => ({
-                host: destination.host,
-                methods: [...destination.methods].map((method) => method.toUpperCase()).sort(),
-                pathPrefixes: [...destination.pathPrefixes].sort(),
-                connection: destination.connection ?? null,
-            }))
-            .sort((left, right) => left.host.localeCompare(right.host)),
-        connectionScopes: [...authority.connectionScopes].sort(),
-        dataScopes: [...authority.dataScopes].sort(),
-        setupHooks: [...authority.setupHooks].sort(),
-        dependencies: [...authority.dependencies].sort(),
+        grants: canonicalStringSet(authority.grants),
+        features: canonicalStringSet(authority.features),
+        engines: canonicalStringSet(authority.engines),
+        destinations,
+        connectionScopes: canonicalStringSet(authority.connectionScopes),
+        dataScopes: canonicalStringSet(authority.dataScopes),
+        writes: canonicalStringSet(authority.writes),
+        setupHooks: canonicalStringSet(authority.setupHooks),
+        dependencies: canonicalStringSet(authority.dependencies),
     };
 }
 
@@ -285,6 +311,7 @@ export function compareAuthority(
     for (const [kind, before, after] of [
         ['connection-scope-added', previous.connectionScopes, next.connectionScopes],
         ['data-scope-added', previous.dataScopes, next.dataScopes],
+        ['write-added', previous.writes, next.writes],
         ['setup-hook-added', previous.setupHooks, next.setupHooks],
         ['feature-added', previous.features, next.features],
         ['engine-added', previous.engines, next.engines],

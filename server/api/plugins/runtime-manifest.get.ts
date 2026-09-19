@@ -1,3 +1,4 @@
+import { parseSha256 } from '~~/shared/plugins/digest';
 import { createHash } from 'node:crypto';
 import { defineEventHandler } from 'h3';
 import { useRuntimeConfig } from '#imports';
@@ -358,6 +359,7 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
                 ...(manifest.description === undefined
                     ? {}
                     : { description: manifest.description }),
+                authoritySha256: eligibility.grants.authoritySha256 ? parseSha256(eligibility.grants.authoritySha256) : null,
                 policyRevision: createPluginPolicyRevision(access.effectivePolicy),
                 grantsRevision: eligibility.grantsRevision,
                 effectiveGrants: [...eligibility.grants.approvedGrants],

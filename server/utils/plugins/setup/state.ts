@@ -26,11 +26,13 @@ import type {
     Or3SetupDescriptorV1,
     PortableProfileFieldValue,
 } from '@or3/plugin-sdk/profile';
+import type { H3Event } from 'h3';
 import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
 import type { PluginConnectionService } from '../connections/service';
 import { listConnectionProviders } from '../connections/providers/registry';
 import { loadPackageDescriptors } from './load-descriptors';
-import { resolvePluginPackage } from './discovery';
+import { resolvePluginPackage, type PluginPackageSlot } from './discovery';
+import { readSetupValues } from './settings-store';
 
 export interface SetupDestinationView {
     readonly id: string;
@@ -42,6 +44,8 @@ export interface SetupDestinationView {
 export interface SetupState {
     readonly pluginId: string;
     readonly installed: boolean;
+    /** Exact package these values belong to; null for a legacy extension. */
+    readonly packageDigest: string | null;
     readonly plan: SetupPlan | null;
     readonly status: ReturnType<typeof describeSetupStatus>;
     readonly firstAction: FirstActionHandoff;
@@ -58,14 +62,20 @@ export interface SetupState {
 }
 
 export interface LoadSetupStateInput {
+    readonly event: H3Event;
     readonly pluginId: string;
     readonly workspaceId: string;
     readonly ownerUserId: string;
     readonly hasSelectedContext: boolean;
     readonly service: PluginConnectionService;
     readonly durableConnections: boolean;
-    /** Saved settings document for this plugin, or an empty object. */
-    readonly storedValues: Readonly<Record<string, unknown>>;
+    /** Operation-owned candidate overlay to hydrate when setup is pending. */
+    readonly setupOperationId?: string;
+    /**
+     * `auto` resolves a pending candidate (setup for an install/update);
+     * `current` resolves the running selection (runtime settings reads).
+     */
+    readonly slot?: PluginPackageSlot;
 }
 
 /** Registered provider capabilities, projected for plan validation. */
@@ -82,14 +92,36 @@ export function hostConnectionCapabilities(): readonly HostConnectionCapability[
 
 export async function loadSetupState(input: LoadSetupStateInput): Promise<SetupState> {
     // The resolved package may be an immutable candidate awaiting setup (an
-    // acquisition), not only a legacy extension directory.
-    const installed = await resolvePluginPackage(input.pluginId);
+    // acquisition), not only a legacy extension directory. Runtime reads pass
+    // `current` so they never follow an unpromoted candidate.
+    const installed = await resolvePluginPackage(
+        input.pluginId,
+        EXTENSIONS_BASE_DIR,
+        input.slot ?? 'auto'
+    );
+    const current = await resolvePluginPackage(
+        input.pluginId,
+        EXTENSIONS_BASE_DIR,
+        'current'
+    );
+    const storedValues = installed
+        ? await readSetupValues(input.event, input.workspaceId, input.pluginId, {
+              packageDigest: installed.digest,
+              ...(input.setupOperationId === undefined
+                  ? {}
+                  : { operationId: input.setupOperationId }),
+              ...(current?.digest === null || current?.digest === undefined
+                  ? {}
+                  : { basePackageDigest: current.digest }),
+          })
+        : {};
 
     const destinations: SetupDestinationView[] = [];
     if (!installed) {
         return {
             pluginId: input.pluginId,
             installed: false,
+            packageDigest: null,
             plan: null,
             status: { status: 'blocked', label: 'Not installed', blocked: true },
             firstAction: {
@@ -129,6 +161,7 @@ export async function loadSetupState(input: LoadSetupStateInput): Promise<SetupS
         return {
             pluginId: input.pluginId,
             installed: true,
+            packageDigest: installed.digest,
             plan: null,
             status: { status: 'blocked', label: 'Setup unavailable', blocked: true },
             firstAction: {
@@ -149,12 +182,12 @@ export async function loadSetupState(input: LoadSetupStateInput): Promise<SetupS
         };
     }
 
-    // Stored settings are re-validated against the installed schema on read: a
-    // package update can invalidate a saved value, and an invalid value must not
-    // count as supplied.
+    // Stored settings are re-validated against the resolved package's schema on
+    // read: a package update can invalidate a saved value, and an invalid value
+    // must not count as supplied.
     const validated = validateSetupValues({
         fields: descriptors.setup.fields,
-        values: input.storedValues,
+        values: storedValues,
     });
     for (const error of validated.errors) {
         problems.push(`Saved setting "${error.key}" is no longer valid: ${error.message}`);
@@ -208,6 +241,7 @@ export async function loadSetupState(input: LoadSetupStateInput): Promise<SetupS
     return {
         pluginId: input.pluginId,
         installed: true,
+        packageDigest: installed.digest,
         plan,
         status: describeSetupStatus(plan),
         firstAction: buildFirstActionHandoff({

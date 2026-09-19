@@ -24,11 +24,13 @@ All are authenticated, workspace-scoped and `no-store`; install actions are owne
 
 - `GET /api/plugins/marketplace/catalog` — browse the configured registry through the local server (search, category, tag, collection, page, pageSize). Returns `{ configured, catalog }`; `configured: false` means this instance has no registry.
 - `GET /api/plugins/marketplace/{pluginId}` — one published plugin's public detail.
-- `POST /api/plugins/marketplace/preflight` — the install assessment: `{ pluginId, version? }`.
+- `POST /api/plugins/marketplace/preflight` — the install assessment: `{ pluginId, version?, clientEngine? }` (`clientEngine` is the browser engine the page detected, used for profile qualification).
 - `POST /api/admin/plugins/acquisitions` — start the install (resource documented in [Trusted Registry Acquisition](./trusted-acquisition)).
 - `GET /api/plugins/diagnostics` — the redacted support report (owner only).
 
 The browser never talks to the registry: the local server is the configured trusted client, so a self-hosted instance does not need a generic URL proxy and the registry never sees a session cookie.
+
+A release whose signed profile requires a contained client runtime is browser-scoped. The preflight request reports the engine the page detected, the host judges it against the same structured qualified-engine list the runtime enforces, and an unsupported or unknown engine gets no install action: discovery stays read-only with a copyable plugin link to open in a qualified browser. Chromium is the only qualified engine today; the runtime re-checks the engine before it fetches any bytes, so the CTA is a journey gate rather than the boundary.
 
 ## Preflight block codes
 
@@ -40,6 +42,7 @@ Preflight answers with a list of actionable blocks rather than a boolean. Each b
 | `registry-install-disabled` | `enable-install` | `OR3_MARKETPLACE_INSTALL_ENABLED` is not `true`. |
 | `release-profile-unsupported` | `contact-admin` | This host does not declare the release's profile. |
 | `release-trust-unsupported` | `contact-admin` | This host does not run the release's trust mode. |
+| `client-engine-unsupported` | `use-supported-browser` | The release's profile needs a client runtime this browser is not qualified for. |
 | `release-key-untrusted` / `release-signature-invalid` | `browse-catalog` | The release is not signed by a trusted key. |
 | `release-quarantined` | `browse-catalog` | A signed advisory quarantines this release. |
 | `advisory-stale` / `catalog-stale` | `retry` | The registry served an older position than this host accepted. |
@@ -55,9 +58,11 @@ Installing goes through the durable acquisition operation (see [Trusted Registry
 
 A release that declares a contained client runtime needs a real browser canary. The host issues a single-use ticket bound to the plugin, package digest, workspace, client id and nonce; the admin's browser performs a hidden activation of the candidate's exact bytes in the contained sandbox, re-hashes them and reports the outcome. Until that evidence exists the operation stays pending with `client-canary-pending`, and the UI completes the check and retries the same operation. A server-side check alone never substitutes for it.
 
+Updates shows two things: staged candidates, and newer published releases found by an explicit, bounded catalog check ("Check for updates"). The check resolves each newer release through the same trust pipeline as acquisition, so a quarantined or unresolvable release is reported as blocked instead of advertised. Reviewing an available update starts the ordinary acquisition operation for that exact release — it never promotes directly — which is what surfaces the authority and setup differences. Checking for updates never stages anything by itself.
+
 Updates are recorded candidates on the same lifecycle, and an update a previous install recorded is resumed rather than re-implemented: when a candidate is owned by an unfinished install operation, Updates continues that operation so the pipeline's preflight, setup readiness and browser canary all still apply. The promotion boundary enforces this for every caller: it refuses a candidate an unfinished install operation owns (answering with the operation id), and it runs the instance-wide workspace preflight for any promotion, whatever created the candidate. Expanded authority needs fresh workspace consent before the check can pass. Rollback, pin and uninstall keep their existing package operations, and plugin data is kept unless deletion is requested explicitly.
 
-A durable operation outlives the page: opening a plugin's detail restores the unfinished operation the server recorded (matching version first, otherwise the newest), so an operator who reloaded or stepped away can continue or cancel it instead of losing it. A setup pause is reported as `resumable` and rendered as Continue, and completed operations reconcile the running plugin runtime so enabled code starts, disabled code stops and an update replaces the sandbox.
+A durable operation outlives the page: opening a plugin's detail restores the unfinished operation the server recorded (matching version first, otherwise the newest), so an operator who reloaded or stepped away can continue or cancel it instead of losing it. Watching is not resuming: a paused, blocked or retryable-failed operation is advanced through the owner-authorized retry (which revalidates setup, consent and evidence server-side) before the UI polls again, and a running operation is only watched. Failures that cannot progress show their message instead of a spinning check. A setup pause is reported as `resumable` and rendered as Continue, and completed operations reconcile the running plugin runtime so enabled code starts, disabled code stops and an update replaces the sandbox.
 
 Every mutation the views perform — enabling, disabling, removing, rolling back and completing an install — emits the workspace plugin reconciliation signal the runtime already listens to. The UI never leaves a mutation's effect waiting for the next reload.
 
@@ -80,3 +85,9 @@ The request link is a supported deep link: `/?dashboard=marketplace&plugin=<plug
 - [Trusted Registry Acquisition](./trusted-acquisition) — the install pipeline, advisories and recovery.
 - [Portable Containment and Setup](./portable-containment-and-setup) — the sandbox the client packages run in.
 - [Portable Profile](./portable-profile) — what a marketplace package may be.
+
+## Update checks and version pins
+
+Updates discovers newer releases before staging them, in semantic version order. It checks signed engine compatibility and quarantine state, then the signed-in user's linked Library coverage for paid releases. Acquisition rechecks authority, coverage and setup before promotion.
+
+An administrator can pin discovery to an exact release with `POST /api/admin/plugins/update-pin`, using `{ "pluginId": "or3.model-compare", "version": "1.0.0" }`; send `version: null` to remove it. Pins apply across the instance and persist under the extensions directory. This controls update discovery; an explicitly requested manual acquisition still requires its normal approval.

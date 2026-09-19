@@ -74,7 +74,7 @@ function readHeaders(value: unknown): Record<string, string> | undefined {
  */
 export function createConnectionDispatchMethod(input: {
     readonly service: PluginConnectionService;
-    /** Immutable release authority; without it only read-only operations run. */
+    /** Immutable release authority; without it every plugin operation is denied. */
     readonly policy?: ConnectionDispatchPolicy | null;
     readonly approvals?: HostApprovalPort;
     /**
@@ -187,6 +187,7 @@ export function createConnectionDispatchMethod(input: {
                 grantedScopes: connection.scopes,
                 credential,
                 ...(input.policy === undefined ? {} : { policy: input.policy }),
+                policyRequired: true,
                 ...(approval === undefined ? {} : { approval }),
                 pluginId: context.pluginId,
                 workspaceId: context.workspaceId,

@@ -78,6 +78,8 @@ const grantReview: PluginGrantReviewSnapshot = {
     approvedGrants: ['documents.read'],
     revision: `sha256-${'a'.repeat(64)}`,
     status: 'current',
+    authoritySha256: null,
+    packageDigest: null,
 };
 
 describe('package install→promote→disable→rollback E2E', () => {

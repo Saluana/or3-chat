@@ -15,15 +15,13 @@ function grants(approved: readonly string[]): PluginGrantReviewSnapshot {
         approvedGrants: [...approved],
         revision: 'g1',
         status: 'current',
+        authoritySha256: null,
+        packageDigest: null,
     };
 }
 
 const session = {
-    pluginId: 'example.plugin',
-    workspaceId: 'ws_1',
-    generation: 3,
-    sessionId: 'sess-1',
-    sourceId: 'sbx-1',
+    activationId: 'act_test_handle',
 };
 
 describe('server capability bridge (finding 4)', () => {
@@ -132,8 +130,7 @@ describe('server capability bridge (finding 4)', () => {
         expect(init.credentials).toBe('same-origin');
         expect((init.headers as Record<string, string>)['x-or3-plugin-intent']).toBe('plugin');
         expect(JSON.parse(String(init.body))).toMatchObject({
-            pluginId: 'example.plugin',
-            generation: 3,
+            activationId: 'act_test_handle',
             method: 'ai.complete',
         });
     });

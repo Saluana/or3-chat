@@ -20,6 +20,8 @@ const GRANTS = {
     approvedGrants: ['settings.read'],
     revision: 'g1',
     status: 'current' as const,
+    authoritySha256: null,
+    packageDigest: DIGEST,
 };
 
 function ticketRequest() {

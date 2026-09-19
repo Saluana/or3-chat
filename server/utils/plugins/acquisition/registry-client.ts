@@ -33,7 +33,7 @@ import { createHash } from 'node:crypto';
 import { sha256Identity } from '~~/shared/plugins/digest';
 import type { Sha256 } from '~~/shared/plugins/runtime-descriptor';
 import {
-    encodeAdvisoryDocument,
+    encodeRegistryAdvisorySnapshot,
     evaluateAdvisories,
     encodeReleaseMetadata,
     evaluateArtifactDigest,
@@ -49,11 +49,17 @@ import {
     type ReleaseMetadataDocument,
     type ReleaseMetadataExpectation,
     type ReleaseMetadataRefusal,
+    type RegistryAdvisoryCheckpoint,
+    type RegistryAdvisorySnapshot,
+    type AdvisoryDocument,
 } from '~~/shared/plugins/acquisition/release-metadata';
+import { computeAuthorityHash } from '~~/shared/plugins/authority/effective-authority';
 import {
     verifyAdvisorySignature,
+    verifyRegistryAdvisoryCheckpointSignature,
     verifyReleaseMetadataSignature,
 } from './release-verify';
+import type { AcceptedAdvisoryCheckpoint } from './registry-state';
 
 export interface RegistryClientOptions {
     readonly registryOrigin: string;
@@ -69,6 +75,7 @@ export interface RegistryClientOptions {
     readonly freeDiskBytes?: (path: string) => Promise<number>;
     /** Highest advisory sequence already accepted by this host. Defaults to 0. */
     readonly acceptedAdvisorySequence?: number;
+    readonly acceptedAdvisoryCheckpoint?: AcceptedAdvisoryCheckpoint | null;
     /**
      * Release-scoped quarantine decisions this host already recorded. Read live
      * so a decision made by another resolve is visible here immediately, and
@@ -110,6 +117,8 @@ export interface RegistryClientOptions {
         }[]
     ) => Promise<void> | void;
     readonly now?: () => number;
+    /** Maximum age accepted for the signed complete advisory checkpoint. */
+    readonly advisoryCheckpointMaxAgeMs?: number;
 }
 
 export type RegistryFailureCode =
@@ -121,6 +130,7 @@ export type RegistryFailureCode =
     | 'release-key-untrusted'
     | 'release-identity-mismatch'
     | 'release-digest-mismatch'
+    | 'authority-mismatch'
     | 'release-profile-unsupported'
     | 'release-expired'
     | 'release-engine-unsupported'
@@ -130,6 +140,7 @@ export type RegistryFailureCode =
     | 'release-quarantined'
     | 'download-url-invalid'
     | 'download-url-expired'
+    | 'coverage-required'
     | 'download-over-limit'
     | 'download-failed'
     | 'storage-unavailable'
@@ -155,6 +166,13 @@ export interface ResolvedRelease {
      */
     readonly artifactUrl: string;
     readonly advisorySequence: number;
+    /** Signed checkpoint that authorized the release, for resume revalidation. */
+    readonly advisoryCheckpoint: {
+        readonly sequence: number;
+        readonly snapshotSha256: Sha256;
+        readonly issuedAt: string;
+        readonly expiresAt: string;
+    };
 }
 
 function failure(code: RegistryFailureCode, message: string, retryable = false): {
@@ -174,6 +192,30 @@ function refusalToFailure(refusal: ReleaseMetadataRefusal): {
 
 function joinOrigin(origin: string, path: string): string {
     return `${origin.replace(/\/$/, '')}${path}`;
+}
+
+/**
+ * A refusal body is bounded and optional: an expired signed URL usually answers
+ * without one, and a paid release answers `coverage-required` so the host can
+ * route the download through the linked Library instead of retrying a public
+ * URL that will never serve it.
+ */
+async function readRefusalCode(response: Response): Promise<string | null> {
+    try {
+        const text = (await response.text()).slice(0, 2048);
+        const parsed: unknown = JSON.parse(text);
+        if (!parsed || typeof parsed !== 'object') return null;
+        const record = parsed as { data?: unknown; statusMessage?: unknown };
+        const data =
+            record.data && typeof record.data === 'object'
+                ? (record.data as { code?: unknown })
+                : null;
+        if (typeof data?.code === 'string') return data.code;
+        if (typeof record.statusMessage === 'string') return record.statusMessage;
+        return null;
+    } catch {
+        return null;
+    }
 }
 
 export class RegistryClient {
@@ -290,6 +332,25 @@ export class RegistryClient {
         });
         if (!decision.ok) return refusalToFailure(decision.refusal);
 
+        // A published authority descriptor is the reviewable form of the
+        // authority hash. When present it must hash to the signed digest; a
+        // mismatched descriptor is never shown for consent. Older free releases
+        // may omit it, in which case no opaque authority can be approved by the UI.
+        if (parsed.document.authority !== undefined) {
+            let authorityDigest: Sha256;
+            try {
+                authorityDigest = await computeAuthorityHash(parsed.document.authority);
+            } catch {
+                return failure('authority-mismatch', 'The signed authority descriptor is invalid.');
+            }
+            if (authorityDigest !== parsed.document.authoritySha256) {
+                return failure(
+                    'authority-mismatch',
+                    'The signed authority descriptor does not match its authority digest.'
+                );
+            }
+        }
+
         if (
             input.catalogAdvisorySequence !== undefined &&
             input.latestAdvisorySequence !== undefined
@@ -302,11 +363,17 @@ export class RegistryClient {
             if (freshness) return refusalToFailure(freshness);
         }
 
-        // The signed advisory log decides whether this exact release is still
-        // acquirable. It is fetched and verified here, not left to the caller:
-        // freshness that is only checked "when supplied" is not checked at all.
+        // The complete signed checkpoint decides whether this exact release is
+        // still acquirable. Unsigned index summaries are discovery hints only
+        // and are never used to select which advisory documents to verify.
         const advisories = await this.#verifyAdvisories(parsed.document);
         if (!advisories.ok) return advisories;
+        if (!advisories.value.trustedKeyIds.includes(parsed.document.signature?.keyId ?? '')) {
+            return failure(
+                'release-key-untrusted',
+                'The signing key for this release is not explicitly trusted at the current registry checkpoint.'
+            );
+        }
 
         const metadataSha256 = await releaseMetadataDigest(parsed.document);
         const artifact = this.#artifactReference(parsed.document.archiveSha256);
@@ -318,7 +385,8 @@ export class RegistryClient {
                 document: parsed.document,
                 metadataSha256,
                 artifactUrl: artifact.url,
-                advisorySequence: advisories.value,
+                advisorySequence: advisories.value.sequence,
+                advisoryCheckpoint: advisories.value.checkpoint,
             },
         };
     }
@@ -334,61 +402,139 @@ export class RegistryClient {
      */
     async #verifyAdvisories(
         document: ReleaseMetadataDocument
-    ): Promise<RegistryResult<number>> {
+    ): Promise<
+        RegistryResult<{
+            readonly sequence: number;
+            readonly checkpoint: {
+                readonly sequence: number;
+                readonly snapshotSha256: Sha256;
+                readonly issuedAt: string;
+                readonly expiresAt: string;
+            };
+            readonly revokedKeyIds: readonly string[];
+            readonly trustedKeyIds: readonly string[];
+        }>
+    > {
         // A quarantine this host already recorded still applies even if the
         // registry's current log no longer lists it.
         const ledger = await this.#options.quarantinedReleases?.();
         const recorded = ledger?.[document.releaseId];
         if (recorded) return refusalToFailure(recordedQuarantineRefusal(recorded));
 
-        const fetched = await this.#getJson('/api/v1/catalog/trust/advisories');
+        const fetched = await this.#getJson('/api/v1/catalog/trust/checkpoint');
         if (!fetched.ok) return fetched;
-        const entries = advisoryListEntries(fetched.value);
-        if (!entries) {
-            return failure('advisory-unverified', 'The registry returned an unreadable advisory log.');
+        const parsedCheckpoint = parseCheckpointResponse(fetched.value);
+        if (!parsedCheckpoint) {
+            return failure(
+                'advisory-unverified',
+                'The registry returned an unreadable signed advisory checkpoint.'
+            );
+        }
+        const { checkpoint, snapshot } = parsedCheckpoint;
+        if (checkpoint.registryOrigin !== this.#options.registryOrigin) {
+            return failure(
+                'advisory-unverified',
+                'The advisory checkpoint belongs to a different registry.'
+            );
+        }
+        const now = this.#now();
+        const issuedAt = Date.parse(checkpoint.issuedAt);
+        const expiresAt = Date.parse(checkpoint.expiresAt);
+        const maxAge = this.#options.advisoryCheckpointMaxAgeMs ?? 24 * 60 * 60 * 1000;
+        if (
+            !Number.isFinite(issuedAt) ||
+            !Number.isFinite(expiresAt) ||
+            issuedAt > now + 5 * 60 * 1000 ||
+            expiresAt <= now ||
+            expiresAt <= issuedAt ||
+            now - issuedAt > maxAge
+        ) {
+            return failure(
+                'advisory-stale',
+                'The registry advisory checkpoint is expired or outside the freshness window.'
+            );
+        }
+        if (checkpoint.sequence < this.#acceptedAdvisorySequence()) {
+            return failure(
+                'advisory-stale',
+                `Advisory sequence ${checkpoint.sequence} is lower than the accepted sequence ${this.#acceptedAdvisorySequence()}.`
+            );
+        }
+        const acceptedCheckpoint = this.#options.acceptedAdvisoryCheckpoint;
+        if (
+            acceptedCheckpoint &&
+            checkpoint.sequence === acceptedCheckpoint.sequence &&
+            (checkpoint.snapshotSha256 !== acceptedCheckpoint.snapshotSha256 ||
+                Date.parse(checkpoint.issuedAt) < Date.parse(acceptedCheckpoint.issuedAt))
+        ) {
+            return failure(
+                checkpoint.snapshotSha256 !== acceptedCheckpoint.snapshotSha256
+                    ? 'advisory-unverified'
+                    : 'advisory-stale',
+                checkpoint.snapshotSha256 !== acceptedCheckpoint.snapshotSha256
+                    ? 'The registry presented two different advisory snapshots at one sequence.'
+                    : 'The registry replayed an older advisory checkpoint at the accepted sequence.'
+            );
+        }
+        if (!(await verifyRegistryAdvisoryCheckpointSignature({
+            checkpoint,
+            trustRoot: this.#options.trustRoot.releaseKeys,
+        }))) {
+            return failure(
+                'advisory-unverified',
+                'The registry advisory checkpoint is not signed by a trusted release key.'
+            );
+        }
+        if (snapshot.sequence !== checkpoint.sequence) {
+            return failure('advisory-unverified', 'The advisory snapshot sequence does not match its checkpoint.');
+        }
+        const snapshotDigest = await sha256Identity(encodeRegistryAdvisorySnapshot(snapshot));
+        if (snapshotDigest !== checkpoint.snapshotSha256) {
+            return failure('advisory-unverified', 'The advisory snapshot digest does not match its checkpoint.');
+        }
+        const seenSequences = new Set<number>();
+        const keyStatuses = new Map(snapshot.keyStatuses.map((key) => [key.keyId, key.status]));
+        const revokedKeyIds = snapshot.keyStatuses
+            .filter((key) => key.status === 'compromised')
+            .map((key) => key.keyId);
+        const trustedKeyIds = snapshot.keyStatuses
+            .filter((key) => key.status === 'active' || key.status === 'retired')
+            .map((key) => key.keyId);
+        if (keyStatuses.size !== snapshot.keyStatuses.length) {
+            return failure('advisory-unverified', 'The advisory checkpoint contains duplicate signing keys.');
+        }
+        if (keyStatuses.get(checkpoint.signature.keyId) !== 'active') {
+            return failure('advisory-unverified', 'The advisory checkpoint signer is not explicitly active.');
         }
         const accepted = this.#acceptedAdvisorySequence();
-        const scoped = entries.filter(
-            (entry) =>
-                entry.releaseId === document.releaseId ||
-                (entry.pluginId === document.pluginId && entry.version === document.version)
-        );
-        // Verify new advisories, and every scoped quarantine however old: a
-        // lower sequence must not hide a decision that still applies.
-        const applicable = scoped
-            .filter((entry) => entry.sequence > accepted || entry.kind === 'quarantine')
-            .sort((left, right) => right.sequence - left.sequence);
-
         const parsedAdvisories = [];
-        for (const entry of applicable) {
-            const raw = await this.#getJson(
-                `/api/v1/catalog/trust/advisories/${encodeURIComponent(String(entry.sequence))}`
-            );
-            if (!raw.ok) return raw;
-            const unwrapped = unwrapAdvisoryDocument(raw.value);
-            const parsed = parseAdvisoryDocument(unwrapped);
-            if (!parsed.document) {
+        for (const advisory of snapshot.advisories) {
+            if (seenSequences.has(advisory.sequence) || advisory.sequence > checkpoint.sequence) {
                 return failure(
                     'advisory-unverified',
-                    `Advisory ${entry.sequence} is unreadable: ${parsed.problems.join('; ')}`
+                    'The advisory snapshot contains duplicate or future sequence values.'
                 );
             }
+            seenSequences.add(advisory.sequence);
             const signatureValid = await verifyAdvisorySignature({
-                document: parsed.document,
+                document: advisory,
                 trustRoot: this.#options.trustRoot.releaseKeys,
             });
             if (
                 !signatureValid ||
                 !this.#options.trustRoot.releaseKeys.some(
-                    (key) => key.keyId === parsed.document?.signature?.keyId
+                    (key) =>
+                        key.keyId === advisory.signature?.keyId &&
+                        (keyStatuses.get(key.keyId) === 'active' ||
+                            keyStatuses.get(key.keyId) === 'retired')
                 )
             ) {
                 return failure(
                     'advisory-unverified',
-                    `Advisory ${entry.sequence} is not signed by a trusted release key.`
+                    `Advisory ${advisory.sequence} is not signed by a trusted release key.`
                 );
             }
-            parsedAdvisories.push(parsed.document);
+            parsedAdvisories.push(advisory);
         }
 
         // Scoped quarantine decision over every verified advisory, recorded before
@@ -411,12 +557,22 @@ export class RegistryClient {
             pluginId: document.pluginId,
             version: document.version,
         });
-        const latest = Math.max(
-            decision.latestSequence,
-            entries.reduce((highest, entry) => Math.max(highest, entry.sequence), accepted)
-        );
+        const latest = Math.max(decision.latestSequence, checkpoint.sequence, accepted);
         if (decision.refusal) return refusalToFailure(decision.refusal);
-        return { ok: true, value: latest };
+        return {
+            ok: true,
+            value: {
+                sequence: latest,
+                checkpoint: {
+                    sequence: checkpoint.sequence,
+                    snapshotSha256: checkpoint.snapshotSha256,
+                    issuedAt: checkpoint.issuedAt,
+                    expiresAt: checkpoint.expiresAt,
+                },
+                revokedKeyIds,
+                trustedKeyIds,
+            },
+        };
     }
 
     /**
@@ -444,6 +600,8 @@ export class RegistryClient {
         readonly stagingPath: string;
         readonly resumeFromBytes?: number;
         readonly signal?: AbortSignal;
+        /** Extra request headers, for a linked Library artifact download. */
+        readonly headers?: Readonly<Record<string, string>>;
     }): Promise<
         RegistryResult<{ readonly bytes: number; readonly digest: Sha256; readonly path: string }>
     > {
@@ -454,10 +612,12 @@ export class RegistryClient {
         let response: Response;
         try {
             response = await this.#fetch(input.resolved.artifactUrl, {
-                headers:
-                    resumeFrom > 0
+                headers: {
+                    ...(resumeFrom > 0
                         ? { range: `bytes=${resumeFrom}-`, accept: 'application/octet-stream' }
-                        : { accept: 'application/octet-stream' },
+                        : { accept: 'application/octet-stream' }),
+                    ...(input.headers ?? {}),
+                },
                 signal: input.signal ?? AbortSignal.timeout(10 * 60_000),
                 redirect: 'error',
             });
@@ -470,7 +630,16 @@ export class RegistryClient {
         }
 
         if (response.status === 403 || response.status === 401) {
-            // Signed URLs expire; the caller re-resolves and tries again.
+            // A paid release refuses the public path with a distinguishable body;
+            // the caller can then acquire through the linked Library. Anything
+            // else is an expired signed URL that a re-resolve may recover.
+            if ((await readRefusalCode(response)) === 'coverage-required') {
+                return failure(
+                    'coverage-required',
+                    'This release is part of a paid product. Connect your Library account and retry.',
+                    true
+                );
+            }
             return failure('download-url-expired', 'The release download link is no longer valid.', true);
         }
         if (response.status === 404) {
@@ -592,56 +761,110 @@ function unwrapMetadataDocument(value: unknown): unknown {
     return value;
 }
 
-function unwrapAdvisoryDocument(value: unknown): unknown {
-    if (value && typeof value === 'object' && !Array.isArray(value) && 'document' in value) {
-        const wrapper = value as { document?: unknown };
-        if (wrapper.document && typeof wrapper.document === 'object') return wrapper.document;
+/** Parse the signed checkpoint plus its complete advisory/key snapshot. */
+function parseCheckpointResponse(value: unknown): {
+    readonly checkpoint: RegistryAdvisoryCheckpoint;
+    readonly snapshot: RegistryAdvisorySnapshot;
+} | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const record = value as Record<string, unknown>;
+    const checkpointValue = record.checkpoint;
+    const snapshotValue = record.snapshot;
+    if (
+        !checkpointValue ||
+        typeof checkpointValue !== 'object' ||
+        Array.isArray(checkpointValue) ||
+        !snapshotValue ||
+        typeof snapshotValue !== 'object' ||
+        Array.isArray(snapshotValue)
+    ) {
+        return null;
     }
-    return value;
-}
-
-interface AdvisoryListEntry {
-    readonly sequence: number;
-    readonly releaseId: string;
-    readonly pluginId: string;
-    readonly version: string;
-    /**
-     * The marketplace's log carries the kind, which lets the client verify a
-     * scoped quarantine that sits at or below the freshness cursor without
-     * fetching every historical advisory.
-     */
-    readonly kind?: string;
-}
-
-/** Shape of the marketplace's public advisory log (newest first). */
-function advisoryListEntries(value: unknown): AdvisoryListEntry[] | null {
-    if (!value || typeof value !== 'object') return null;
-    const advisories = (value as { advisories?: unknown }).advisories;
-    if (!Array.isArray(advisories)) return null;
-    const entries: AdvisoryListEntry[] = [];
-    for (const entry of advisories) {
-        if (!entry || typeof entry !== 'object') continue;
-        const record = entry as Record<string, unknown>;
-        const sequence = record.sequence;
+    const checkpoint = checkpointValue as Record<string, unknown>;
+    const snapshot = snapshotValue as Record<string, unknown>;
+    if (
+        checkpoint.schemaVersion !== 1 ||
+        typeof checkpoint.registryOrigin !== 'string' ||
+        typeof checkpoint.sequence !== 'number' ||
+        !Number.isSafeInteger(checkpoint.sequence) ||
+        checkpoint.sequence < 0 ||
+        typeof checkpoint.issuedAt !== 'string' ||
+        typeof checkpoint.expiresAt !== 'string' ||
+        typeof checkpoint.snapshotSha256 !== 'string' ||
+        !/^sha256-[a-f0-9]{64}$/.test(checkpoint.snapshotSha256) ||
+        !checkpoint.signature ||
+        typeof checkpoint.signature !== 'object' ||
+        Array.isArray(checkpoint.signature)
+    ) {
+        return null;
+    }
+    const signature = checkpoint.signature as Record<string, unknown>;
+    if (
+        typeof signature.keyId !== 'string' ||
+        signature.algorithm !== 'ed25519' ||
+        typeof signature.value !== 'string' ||
+        signature.value.length === 0
+    ) {
+        return null;
+    }
+    if (
+        snapshot.schemaVersion !== 1 ||
+        snapshot.sequence !== checkpoint.sequence ||
+        !Array.isArray(snapshot.advisories) ||
+        !Array.isArray(snapshot.keyStatuses)
+    ) {
+        return null;
+    }
+    const advisories: AdvisoryDocument[] = [];
+    for (const raw of snapshot.advisories) {
+        const parsed = parseAdvisoryDocument(raw);
+        if (!parsed.document) return null;
+        advisories.push(parsed.document);
+    }
+    const keyStatuses: RegistryAdvisorySnapshot['keyStatuses'][number][] = [];
+    for (const raw of snapshot.keyStatuses) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+        const status = raw as Record<string, unknown>;
         if (
-            typeof sequence !== 'number' ||
-            !Number.isSafeInteger(sequence) ||
-            sequence <= 0 ||
-            typeof record.releaseId !== 'string' ||
-            typeof record.pluginId !== 'string' ||
-            typeof record.version !== 'string'
+            typeof status.keyId !== 'string' ||
+            status.keyId.length === 0 ||
+            (status.status !== 'active' &&
+                status.status !== 'retired' &&
+                status.status !== 'compromised') ||
+            typeof status.effectiveAt !== 'string' ||
+            Number.isNaN(Date.parse(status.effectiveAt)) ||
+            (status.reason !== undefined && typeof status.reason !== 'string')
         ) {
-            continue;
+            return null;
         }
-        entries.push({
-            ...(typeof record.kind === 'string' ? { kind: record.kind } : {}),
-            sequence,
-            releaseId: record.releaseId,
-            pluginId: record.pluginId,
-            version: record.version,
+        keyStatuses.push({
+            keyId: status.keyId,
+            status: status.status,
+            effectiveAt: status.effectiveAt,
+            ...(typeof status.reason === 'string' ? { reason: status.reason } : {}),
         });
     }
-    return entries;
+    return {
+        checkpoint: {
+            schemaVersion: 1,
+            registryOrigin: checkpoint.registryOrigin,
+            sequence: checkpoint.sequence,
+            issuedAt: checkpoint.issuedAt,
+            expiresAt: checkpoint.expiresAt,
+            snapshotSha256: checkpoint.snapshotSha256 as Sha256,
+            signature: {
+                keyId: signature.keyId,
+                algorithm: 'ed25519',
+                value: signature.value,
+            },
+        },
+        snapshot: {
+            schemaVersion: 1,
+            sequence: snapshot.sequence,
+            advisories,
+            keyStatuses,
+        },
+    };
 }
 
 /** Digest identity of the exact canonical metadata bytes that were signed. */

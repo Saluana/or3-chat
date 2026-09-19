@@ -4,15 +4,20 @@ import { requireAdminApiContext } from '../../../../../admin/api';
 import { resolveAdminWorkspaceTarget } from '../../../../../admin/workspace-target';
 import { getWorkspaceSettingsStore } from '../../../../../admin/stores/registry';
 import {
+    packageGrantCandidate,
     pluginPackageServices,
     readPackageGrantReview,
     readPackageManifest,
     readPluginStateSnapshot,
     restorePluginStateSnapshot,
 } from '../../../../../admin/plugins/package-operation-support';
-import { setPluginEnabled } from '../../../../../admin/plugins/workspace-plugin-store';
-import { acquisitionServiceFor } from '../../../../../utils/plugins/acquisition/route-support';
+import { getEnabledPlugins, setPluginEnabled } from '../../../../../admin/plugins/workspace-plugin-store';
+import {
+    acquisitionServiceFor,
+    listAllWorkspaceIds,
+} from '../../../../../utils/plugins/acquisition/route-support';
 import { requesterIdentity } from '../../../../../utils/plugins/acquisition/route-identity';
+import { promoteScopedSetupValues } from '../../../../../utils/plugins/setup/settings-store';
 
 const BodySchema = z.object({
     workspaceId: z.string().min(1).optional(),
@@ -49,15 +54,14 @@ export default defineEventHandler(async (event) => {
             data: { code: 'preflight-unavailable' },
         });
     }
-    const owned = (
-        await acquisition.listForPlugin(pluginId).catch(() => {
+    const operations = await acquisition.listForPlugin(pluginId).catch(() => {
             throw createError({
                 statusCode: 503,
                 statusMessage: 'The recorded install operations could not be read.',
                 data: { code: 'preflight-unavailable' },
             });
-        })
-    ).find(
+        });
+    const owned = operations.find(
         (operation) =>
             operation.candidateDigest === body.data.candidateDigest &&
             operation.status !== 'completed' &&
@@ -70,6 +74,12 @@ export default defineEventHandler(async (event) => {
             data: { code: 'acquisition-required', operationId: owned.operationId },
         });
     }
+    const setupOperation = operations.find(
+        (operation) =>
+            operation.candidateDigest === body.data.candidateDigest &&
+            operation.status !== 'completed' &&
+            operation.status !== 'canceled'
+    );
 
     // The instance-wide preflight protects every enabled workspace, whatever
     // created the candidate: one selected version is shared by all of them.
@@ -84,7 +94,17 @@ export default defineEventHandler(async (event) => {
     }
     const preflight = await acquisition.preflightWorkspaces(
         pluginId,
-        candidateManifest.requestedGrants
+        await packageGrantCandidate({
+            packagePath: services.packages.packagePath(
+                pluginId,
+                body.data.candidateDigest as `sha256-${string}`
+            ),
+            packageDigest: body.data.candidateDigest as `sha256-${string}`,
+        }),
+        {
+            operationId: setupOperation?.operationId ?? 'direct-promotion',
+            includeWorkspaceId: workspaceId,
+        }
     );
     if (preflight.blocking.length > 0) {
         const detail = preflight.blocking
@@ -110,9 +130,54 @@ export default defineEventHandler(async (event) => {
                 workspaceId,
                 pluginId: candidate.pluginId,
                 packageDigest: candidate.packageDigest,
+                release: null,
             }),
         restoreState: (snapshot) =>
             restorePluginStateSnapshot(services, workspaceId, pluginId, snapshot),
+        prepareSetupPromotion: async () => {
+            const pointer = await services.pointers.readPointer(pluginId);
+            const workspaceIds = new Set(await listAllWorkspaceIds(event));
+            workspaceIds.add(workspaceId);
+            const undos: Array<() => void | Promise<void>> = [];
+            const rollback = async () => {
+                let rollbackFailure: unknown;
+                for (const undo of [...undos].reverse()) {
+                    try {
+                        await undo();
+                    } catch (undoError) {
+                        rollbackFailure ??= undoError;
+                    }
+                }
+                if (rollbackFailure) throw rollbackFailure;
+            };
+            try {
+                for (const targetWorkspaceId of workspaceIds) {
+                    const enabled = await getEnabledPlugins(
+                        services.settings,
+                        targetWorkspaceId
+                    );
+                    if (
+                        targetWorkspaceId !== workspaceId &&
+                        !enabled.includes(pluginId)
+                    ) {
+                        continue;
+                    }
+                    const undo = await promoteScopedSetupValues(
+                        services.settings,
+                        targetWorkspaceId,
+                        pluginId,
+                        body.data.candidateDigest,
+                        setupOperation?.operationId ?? 'direct-promotion',
+                        pointer?.current?.packageDigest ?? null
+                    );
+                    if (undo) undos.push(undo);
+                }
+            } catch (error) {
+                await rollback();
+                throw error;
+            }
+            return rollback;
+        },
     });
     if (result.status === 'promoted') {
         // A first promotion installs the plugin for this workspace, so it is

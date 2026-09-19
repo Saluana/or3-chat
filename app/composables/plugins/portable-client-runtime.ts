@@ -39,6 +39,7 @@ import {
     PORTABLE_CLIENT_FEATURE,
     PORTABLE_PROFILE_NAME,
     defaultHostAbi,
+    detectBrowserEngine,
     startPortableWorker,
 } from '~~/shared/plugins/isolation/portable-bootstrap';
 import { PORTABLE_FRAME_CSP } from '~~/shared/plugins/isolation/containment-policy';
@@ -98,8 +99,11 @@ export interface PortableActivation {
     readonly startedAt: number | null;
 }
 
-interface InternalActivation extends PortableActivation {
+interface InternalActivation extends Omit<PortableActivation, 'status'> {
+    status: PortableActivationStatus;
     runtime: WorkerIsolationRuntime | null;
+    /** Opaque server handle used for explicit teardown revocation. */
+    activationId: string | null;
     /** The epoch this activation owns; a superseded epoch may not publish. */
     epoch: number;
 }
@@ -114,7 +118,6 @@ export const PORTABLE_UI_EVENT_REQUEST = 'runtime.ui-event';
 const activations = reactive(
     new Map<string, InternalActivation>()
 ) as Map<string, InternalActivation>;
-let generationCounter = 0;
 let listenerInstalled = false;
 
 /**
@@ -135,16 +138,6 @@ function claimActivationEpoch(pluginId: string): number {
 
 function holdsActivationEpoch(pluginId: string, epoch: number): boolean {
     return activationEpochs.get(pluginId) === epoch;
-}
-
-/** Engine detection drives `assessPortableHost`; unqualified engines stay blocked. */
-export function detectBrowserEngine(userAgent?: string): string {
-    const agent =
-        userAgent ?? (typeof navigator === 'undefined' ? '' : navigator.userAgent);
-    if (/Firefox\//.test(agent)) return 'firefox';
-    if (/Edg\/|Chrome\/|Chromium\//.test(agent)) return 'chromium';
-    if (/Safari\//.test(agent)) return 'webkit';
-    return 'unknown';
 }
 
 function createHiddenFrame(): HostFrameElementPort {
@@ -197,8 +190,9 @@ export function createPortableSettingsServices(pluginId: string): {
 } {
     const loadValues = async (): Promise<Record<string, unknown>> => {
         // A plain `string` URL keeps Nuxt's typed-route inference out of a
-        // runtime-composed path.
-        const url: string = `/api/plugins/${pluginId}/setup-plan`;
+        // runtime-composed path. `slot=current` makes the running plugin read
+        // the selected version's settings, never a pending candidate's.
+        const url: string = `/api/plugins/${pluginId}/setup-plan?slot=current`;
         // The route answers `{ settings: { values }, ... }`; reading a top-level
         // `values` made every saved setting look unset.
         const plan = (await ($fetch as unknown as (input: string) => Promise<unknown>)(
@@ -238,7 +232,7 @@ export function createPortableSettingsServices(pluginId: string): {
                         rpcCode: 'invalid-input',
                     });
                 }
-                const url: string = `/api/plugins/${pluginId}/setup-values`;
+                const url: string = `/api/plugins/${pluginId}/setup-values?slot=current`;
                 await (
                     $fetch as unknown as (
                         input: string,
@@ -314,7 +308,84 @@ function readGrants(descriptor: PackageV2PluginDescriptor) {
         approvedGrants: [...descriptor.effectiveGrants],
         revision: descriptor.grantsRevision,
         status: 'current' as const,
+        authoritySha256: descriptor.authoritySha256 ?? null,
+        packageDigest: descriptor.artifact.packageDigest,
     };
+}
+
+/**
+ * Ask the server for an activation handle before the sandbox starts. The server
+ * re-derives the plugin, workspace, acting user, generation, selected package
+ * digest and approved grants; a refusal blocks the activation rather than
+ * letting the sandbox run without a verified identity.
+ */
+async function mintHostActivation(
+    pluginId: string
+): Promise<
+    | { readonly ok: true; readonly activationId: string; readonly generation: number }
+    | { readonly ok: false; readonly message: string }
+> {
+    try {
+        const response = await fetch('/api/plugins/isolation/activation', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'content-type': 'application/json',
+                'x-or3-plugin-intent': 'plugin',
+            },
+            body: JSON.stringify({ pluginId }),
+        });
+        if (!response.ok) {
+            let message = `The host refused to activate this plugin (${response.status})`;
+            try {
+                const payload = (await response.json()) as {
+                    statusMessage?: unknown;
+                    message?: unknown;
+                };
+                if (typeof payload.statusMessage === 'string') message = payload.statusMessage;
+                else if (typeof payload.message === 'string') message = payload.message;
+            } catch {
+                // A non-JSON refusal keeps the status text.
+            }
+            return { ok: false, message };
+        }
+        const payload = (await response.json()) as {
+            activation?: { activationId?: unknown; generation?: unknown };
+        };
+        const activationId = payload.activation?.activationId;
+        const generation = payload.activation?.generation;
+        if (typeof activationId !== 'string' || typeof generation !== 'number') {
+            return { ok: false, message: 'The host returned no activation handle' };
+        }
+        return { ok: true, activationId, generation };
+    } catch (error) {
+        return {
+            ok: false,
+            message:
+                error instanceof Error
+                    ? error.message
+                    : 'The host activation could not be requested',
+        };
+    }
+}
+
+/** Best-effort, authenticated revocation for client stop/logout/workspace switch. */
+async function revokeHostActivationHandle(activationId: string): Promise<void> {
+    if (!activationId) return;
+    try {
+        await fetch('/api/plugins/isolation/activation', {
+            method: 'DELETE',
+            credentials: 'same-origin',
+            keepalive: true,
+            headers: {
+                'content-type': 'application/json',
+                'x-or3-plugin-intent': 'plugin',
+            },
+            body: JSON.stringify({ activationId }),
+        });
+    } catch {
+        // The server's TTL remains the fallback when the tab is already offline.
+    }
 }
 
 /**
@@ -388,6 +459,17 @@ export async function activatePortableClient(
     // This activation claims the plugin's next epoch before any await, so a
     // replacement started while it is still resolving supersedes it cleanly.
     const epoch = claimActivationEpoch(pluginId);
+    const previous = activations.get(pluginId);
+    if (previous) {
+        previous.runtime?.dispose();
+        previous.runtime = null;
+        previous.status = 'stopped';
+        if (previous.activationId) {
+            const previousHandle = previous.activationId;
+            previous.activationId = null;
+            void revokeHostActivationHandle(previousHandle);
+        }
+    }
 
     if (input.runtimeEntry !== undefined) {
         const resolution = await resolvePackageDescriptor({
@@ -417,13 +499,35 @@ export async function activatePortableClient(
 
     if (!holdsActivationEpoch(pluginId, epoch)) return currentActivationOr(pluginId, descriptor, workspaceId, epoch);
 
-    generationCounter += 1;
-    const generation = generationCounter;
+    /**
+     * The server mints the activation before any sandbox starts: it seals the
+     * plugin, workspace, acting user, generation, selected package digest and
+     * approved grants into an opaque handle. The sandbox never sees or names
+     * those fields, and the capability route resolves the handle on every call.
+     */
+    const minted = await mintHostActivation(pluginId);
+    if (!holdsActivationEpoch(pluginId, epoch)) {
+        if (minted.ok) void revokeHostActivationHandle(minted.activationId);
+        return currentActivationOr(pluginId, descriptor, workspaceId, epoch);
+    }
+    if (!minted.ok) {
+        return recordBlocked(
+            pluginId,
+            descriptor,
+            workspaceId,
+            'activation-refused',
+            minted.message,
+            epoch
+        );
+    }
+    const generation = minted.generation;
+
     const base: InternalActivation = {
         pluginId,
         version: descriptor.version,
         workspaceId,
         generation,
+        activationId: minted.activationId,
         epoch,
         descriptorKey: descriptor.descriptorKey,
         status: 'starting',
@@ -443,9 +547,9 @@ export async function activatePortableClient(
     const grants = readGrants(descriptor);
     const moduleUrl = `/api/plugins/packages/${encodeURIComponent(pluginId)}/${descriptor.artifact.packageDigest}/${clientEntry.entry}`;
     const transport = createHttpCapabilityTransport();
-    // The capability echo needs the host-issued session, which only exists after
-    // the sandbox started; a call before then is refused rather than guessed.
-    let session: { readonly sessionId: string; readonly sourceId: string } | null = null;
+    // The activation handle is host-minted and page-side only; the sandbox
+    // cannot name a plugin, generation or grant list of its own.
+    const activationId = minted.activationId;
 
     const started = await startPortableWorker({
         release: {
@@ -468,20 +572,7 @@ export async function activatePortableClient(
         services: createPortableSettingsServices(pluginId),
         methods: createRemoteCapabilityMethods({
             transport,
-            session: () => {
-                if (!session) {
-                    throw Object.assign(new Error('Sandbox session is not established yet'), {
-                        rpcCode: 'unavailable',
-                    });
-                }
-                return {
-                    pluginId,
-                    workspaceId,
-                    generation,
-                    sessionId: session.sessionId,
-                    sourceId: session.sourceId,
-                };
-            },
+            session: () => ({ activationId }),
             grants,
             capabilities: Object.values(REMOTE_CAPABILITY_METHODS),
         }),
@@ -501,13 +592,16 @@ export async function activatePortableClient(
         onEvent: (event) => recordEvent(pluginId, epoch, event),
         onCrash: (report) => {
             // A fatal crash terminates the sandbox, so the activation is no
-            // longer active; a non-fatal containment violation is recorded.
+            // longer active. A non-fatal containment report leaves the runtime
+            // usable, so its handle must remain valid for later calls.
+            if (report.fatal) void revokeHostActivationHandle(activationId);
             update(pluginId, epoch, {
                 crashed: report.fatal,
                 ...(report.fatal
                     ? {
                           status: 'stopped' as const,
                           runtime: null,
+                          activationId: null,
                           blockCode: report.reason,
                       }
                     : {}),
@@ -520,10 +614,12 @@ export async function activatePortableClient(
     // leaves the replacement's state untouched.
     if (!holdsActivationEpoch(pluginId, epoch)) {
         if (started.status !== 'blocked') started.runtime.dispose();
+        void revokeHostActivationHandle(activationId);
         return currentActivationOr(pluginId, descriptor, workspaceId, epoch);
     }
 
     if (started.status === 'blocked') {
+        void revokeHostActivationHandle(activationId);
         return recordBlocked(
             pluginId,
             descriptor,
@@ -534,7 +630,6 @@ export async function activatePortableClient(
         );
     }
 
-    session = started.session;
     update(pluginId, epoch, {
         status: 'active',
         runtime: started.runtime,
@@ -542,7 +637,6 @@ export async function activatePortableClient(
     });
     return snapshot(pluginId);
 }
-
 /**
  * The activation to report for a completion that no longer owns the plugin: the
  * live one when something replaced it, otherwise the superseded activation
@@ -562,6 +656,7 @@ function currentActivationOr(
         workspaceId,
         generation: 0,
         epoch,
+        activationId: null,
         descriptorKey: descriptor.descriptorKey,
         status: 'stopped',
         blockCode: null,
@@ -590,6 +685,7 @@ function recordBlocked(
         version: descriptor.version,
         workspaceId,
         generation: 0,
+        activationId: null,
         epoch,
         descriptorKey: descriptor.descriptorKey,
         status: 'blocked',
@@ -667,22 +763,26 @@ export async function deactivatePortableClient(pluginId: string): Promise<void> 
     const current = activations.get(pluginId);
     if (!current) return;
     const runtime = current.runtime;
+    const activationId = current.activationId;
     Object.assign(current, {
         runtime: null,
+        activationId: null,
         status: 'stopped',
         contributions: [],
         view: null,
     });
     runtime?.dispose();
+    if (activationId) await revokeHostActivationHandle(activationId);
 }
 
 export function stopAllPortableClients(): void {
+    void stopAllPortableClientsAndAwait();
+}
+
+/** Awaitable teardown used by logout and workspace-switch cleanup. */
+export async function stopAllPortableClientsAndAwait(): Promise<void> {
     for (const pluginId of [...activations.keys()]) {
-        void deactivatePortableClient(pluginId);
-    }
-    if (listenerInstalled && typeof window !== 'undefined') {
-        window.removeEventListener('pagehide', stopAllPortableClients);
-        listenerInstalled = false;
+        await deactivatePortableClient(pluginId);
     }
 }
 

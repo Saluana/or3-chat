@@ -8,11 +8,14 @@
 import { readFile, stat } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import {
+    defineOr3PortableProfile,
     parsePackagePolicy,
     parseSetupDescriptor,
     type Or3PackagePolicyV1,
     type Or3SetupDescriptorV1,
 } from '@or3/plugin-sdk/profile';
+import type { EffectiveAuthority } from '~~/shared/plugins/authority/effective-authority';
+import type { Sha256 } from '~~/shared/plugins/runtime-descriptor';
 import type { ConnectionDispatchPolicy } from '~~/shared/plugins/connections/contracts';
 
 const MAX_DESCRIPTOR_BYTES = 256 * 1024;
@@ -119,5 +122,126 @@ export function toConnectionDispatchPolicy(
             methods: [...destination.methods],
             scopes: [...destination.scopes],
         })),
+    };
+}
+
+/** The manifest fields that change what a release may do at runtime. */
+export interface PackageAuthorityManifest {
+    readonly trust: string;
+    readonly engines: { readonly or3: string; readonly pluginApi?: string };
+    readonly requestedGrants: readonly string[];
+    readonly features?: {
+        readonly required: readonly string[];
+        readonly optional: readonly string[];
+    };
+    readonly dependencies?: {
+        readonly required: readonly PackageDependencyDeclaration[];
+        readonly optional: readonly PackageDependencyDeclaration[];
+    };
+}
+
+export interface PackageDependencyDeclaration {
+    readonly id: string;
+    readonly range: string;
+    readonly features?: readonly string[];
+}
+
+function uniqueSorted(values: readonly string[]): string[] {
+    return Array.from(new Set(values)).sort();
+}
+
+/**
+ * The exact policy revision the registry signs as a release's authority digest.
+ * Computed with the SDK's own profile rules so approval, acquisition and the
+ * signed metadata all agree on one value.
+ */
+export function packageAuthorityDigest(
+    policy: Or3PackagePolicyV1 | null,
+    setup: Or3SetupDescriptorV1 | null
+): Sha256 | null {
+    if (!policy || !setup) return null;
+    try {
+        const profile = defineOr3PortableProfile({
+            profile: policy.profile,
+            destinations: policy.destinations,
+            connections: policy.connections,
+            dataScopes: policy.dataScopes,
+            writes: policy.writes,
+            features: policy.requiredFeatures,
+            settingsSchemaPath: setup.settingsSchemaPath,
+            fields: setup.fields,
+            ...(setup.testAction === undefined ? {} : { testAction: setup.testAction }),
+            firstAction: setup.firstAction,
+        });
+        return profile.revisions.policy;
+    } catch {
+        return null;
+    }
+}
+
+function dependencyEntries(
+    dependencies: PackageAuthorityManifest['dependencies']
+): string[] {
+    if (!dependencies) return [];
+    const entries: string[] = [];
+    for (const group of ['required', 'optional'] as const) {
+        for (const dependency of dependencies[group]) {
+            const features = uniqueSorted(dependency.features ?? []).join('+');
+            entries.push(
+                `${group}:${dependency.id}@${dependency.range}${features.length > 0 ? `#${features}` : ''}`
+            );
+        }
+    }
+    return entries;
+}
+
+/**
+ * The complete authority a release declares, derived from its validated
+ * descriptors and manifest. Consent records bind to this, so an update that
+ * adds a host, method, path, scope, write, hook, feature, engine or dependency
+ * is an expansion even when every grant string stays the same.
+ */
+export function toEffectiveAuthority(input: {
+    readonly manifest: PackageAuthorityManifest;
+    readonly policy: Or3PackagePolicyV1;
+    readonly setup: Or3SetupDescriptorV1;
+}): EffectiveAuthority {
+    const { manifest, policy, setup } = input;
+    const destinations = policy.destinations.flatMap((destination) =>
+        destination.hosts.map((host) => ({
+            host,
+            methods: [...destination.methods],
+            pathPrefixes: [...destination.scopes],
+            connection: destination.id,
+        }))
+    );
+    const connectionScopes = policy.connections.flatMap((connection) => [
+        ...connection.scopes.map((scope) => `${connection.id}:${scope}`),
+        ...connection.operations.map((operation) => `${connection.id}:op:${operation}`),
+    ]);
+    const setupHooks = [
+        ...(setup.testAction ? [setup.testAction.operationId] : []),
+        setup.firstAction.operationId,
+    ];
+    const engines = [
+        `or3:${manifest.engines.or3}`,
+        ...(manifest.engines.pluginApi === undefined
+            ? []
+            : [`pluginApi:${manifest.engines.pluginApi}`]),
+    ];
+    return {
+        trust: manifest.trust,
+        grants: uniqueSorted(manifest.requestedGrants),
+        features: uniqueSorted([
+            ...(manifest.features?.required ?? []),
+            ...policy.requiredFeatures,
+        ]),
+        engines,
+        destinations,
+        connectionScopes: uniqueSorted(connectionScopes),
+        dataScopes: uniqueSorted(policy.dataScopes),
+        writes: uniqueSorted(policy.writes),
+        setupHooks,
+        dependencies: dependencyEntries(manifest.dependencies),
     };
 }

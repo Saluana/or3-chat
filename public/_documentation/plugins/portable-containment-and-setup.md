@@ -54,28 +54,40 @@ Two capabilities exist **only** through host methods, never as browser APIs:
 
 ### Message identity
 
-The host mints a per-sandbox session (plugin, workspace, generation, source) and
-sends it in the bootstrap message. Every request must echo it. A forged plugin or
-workspace id, a stale generation after disable/update/workspace switch, or an
-opaque-origin message without the matching session is denied **before** any
-handler runs. `origin === 'null'` is never treated as identity.
+The host mints a per-sandbox session for the contained worker and an opaque
+activation handle for the authenticated capability bridge. The handle is sealed
+to the plugin, workspace, acting user, generation, selected immutable package
+digest and approved grant review. A forged identity, a stale generation after
+disable/update/workspace switch, or an opaque-origin message without the
+matching host state is denied **before** any handler runs. `origin === 'null'`
+is never treated as identity.
 
-The session is created for every portable activation and bound to the sandbox the
-host actually started, so it cannot be supplied or skipped by a caller. The
-host-owned frame shim stamps it onto outbound requests, which means plugin code
-never handles it — and terminating the activation retires it permanently, so the
-same request can never be replayed against a replacement sandbox.
+The activation handle is created before the sandbox starts and is the only
+identity sent to the capability endpoint. The host revalidates the selected
+package and current grant review on every request. Stop, logout, workspace
+switch, update, disable and fatal teardown explicitly revoke the handle, while
+server expiry remains a bounded fallback; a replacement sandbox therefore
+cannot reuse the previous activation's authority.
 
 ### Host capabilities
 
 The runtime registers host methods for an activation **only when the activation's
 approved grants cover them**, and the broker re-checks the grant on every call.
 Server-owned capabilities (governed model completions, approved connection
-dispatch) are reached through an authenticated host endpoint: it requires an
-authenticated session in the workspace with `workspace.write`, a same-origin
-mutation with the plugin intent header, an installed and enabled plugin, and then
-re-derives plugin, workspace, user, owner and credential from server records.
-Nothing the sandbox sends is treated as authority.
+dispatch) are reached through an authenticated host endpoint. Before a sandbox
+starts, the host mints an opaque activation handle
+(`POST /api/plugins/isolation/activation`): the route re-checks the session, the
+plugin's installed/enabled/access state, the current selected package digest and
+its current approved review, then seals all of it into the record. The capability
+endpoint carries only that handle plus the method and parameters — plugin,
+workspace, user, generation, digest and grants are read from the record, never
+from the request. A handle that is unknown, expired, revoked, used from another
+session, or whose selected package changed is refused before any method runs, and
+the endpoint dispatches through the same host RPC broker as the in-page bridge,
+so grant denial, replay, backpressure, the host-clamped deadline and cancellation
+apply identically. Disconnecting the client aborts the in-flight handler. The AI
+spend governor is keyed to the acting identity, not the activation, so a new
+activation cannot reset a spent budget.
 
 ### UI events and contributions
 
@@ -102,12 +114,14 @@ is never stored without a place to appear.
 | Per-call deadline | 10 s |
 | Activation wall clock | 120 s |
 | UI tree depth / nodes / text / items | 8 / 200 / 16 KiB / 2048 items |
-| AI spend per activation | $1.00 |
+| AI spend per user/workspace/plugin UTC budget window | $1.00 |
 | AI output per call | 4096 tokens |
 
-One ledger per activation is owned by the runtime and charged at each boundary:
-inbound messages, outbound results/states, admitted calls (host-clamped deadlines)
-and UI updates. A UI tree is measured in one bounded pass over *everything the
+The runtime ledger for each activation is charged at each boundary: inbound
+messages, outbound results/states, admitted calls (host-clamped deadlines) and
+UI updates. AI spend is also reserved in a durable ledger keyed by the acting
+user, workspace, plugin and named UTC budget window, so a new activation or
+process does not reset committed spend. A UI tree is measured in one bounded pass over *everything the
 renderer can show* — text, markdown, captions, table cells, list labels and
 descriptions, option labels, placeholders and field values — plus its nodes, depth
 and total array entries/object members, so a table full of large cells cannot hide
@@ -142,16 +156,28 @@ disappears. The host can replace or reset values explicitly.
 
 Consent is bound to what a release can actually do, not only to its grant
 strings. The effective authority hash covers grants, outbound destinations with
-methods and paths, connection scopes, data scopes, trust profile, setup hooks and
-dependency metadata, and it is tied to the exact release.
+methods and paths, connection scopes, data scopes, writes, trust profile, setup
+hooks, engines, features and dependency metadata, and it is tied to the exact
+release.
 
-* Adding a hostname, method, path, scope, write, hook or dependency requires fresh
-  consent even when no grant string changed.
+* Adding a hostname, method, path, scope, write, hook, engine, feature or
+  dependency requires fresh consent even when no grant string changed.
 * Narrowing authority passes technical review without redundant broad consent.
 * A change of release or generation makes previous consent stale.
 * Switching the connection behind an unchanged destination counts as a change
   (the connection identity participates in the hash), and several destinations on
   one host are compared individually instead of collapsing into one entry.
+
+The persisted approval record carries the release id, the reviewed candidate
+digest, the signed authority hash and the full declared authority, and its
+revision covers all of them. Recording consent requires the reviewer to submit
+the candidate digest and authority hash they were shown, so a candidate that is
+replaced between displaying permissions and saving the approval is refused
+instead of silently approved. Promotion and runtime eligibility evaluate the
+same record per enabled workspace, so an instance-wide update that widens any
+workspace's authority stays blocked until that workspace approves it. A
+registry-only approval (before bytes are staged) carries over only to the exact
+same signed authority.
 
 Destructive, external-write, purchase, credential, grant and background actions
 always need an approval that only the host UI can mint. An approval-shaped object
@@ -170,10 +196,22 @@ Setup is host-generated from the package's own `or3.setup.json` and
   plan's "missing" flag and the save endpoint agree;
 * optional settings are configurable from the same form (under "Optional
   settings"); they are deferrable, not hidden;
-* saved settings live in the workspace settings store. The form hydrates from the
-  *validated saved values*, and saving sends a patch of only the fields you
-  edited, so a refresh can never replace stored values with defaults you never
-  touched;
+* saved settings live in the workspace settings store, scoped to the exact
+  package digest they were written for. The form hydrates from the *validated
+  saved values*, and saving sends a patch of only the fields you edited, so a
+  refresh can never replace stored values with defaults you never touched. A
+  save carries the revision the form loaded; a concurrent save is refused with
+  `setup-values-conflict` instead of overwritten;
+* preparing an update writes the candidate's configuration under the
+  candidate's digest, never the running version's document. A canceled, failed
+  or crashed update therefore leaves live configuration untouched, and
+  promotion commits the pair by swapping the pointer. Values saved before
+  digest scoping, or an update that never saved its own, are inherited through
+  the unscoped document for the first read only; a scoped document, once it
+  exists, is authoritative — corrupt included;
+* the running plugin reads and writes its own version: runtime settings
+  requests resolve `current` (never a candidate), while the setup page and the
+  acquisition readiness check resolve the candidate while one is pending;
 * required connections must be bound to the slot the package declares, connected
   **and** pass their test. A stored credential satisfies only the slot it was
   created for, and a slot is refused when the registered provider does not
@@ -199,12 +237,13 @@ Setup is host-generated from the package's own `or3.setup.json` and
 
 Plugin-attributed AI calls use your configured model provider credential, which
 stays on the host. Usage is attributed to the plugin, the provider's charge is
-disclosed next to the action, and spend/output/concurrency limits are enforced
-per activation:
+disclosed next to the action, and spend/output/concurrency limits are enforced.
+The durable spend limit belongs to the user, workspace, plugin and current UTC
+budget window, while output and concurrency remain activation-local:
 
 * the worst-case cost of a call is **reserved before dispatch**, so concurrent
   calls cannot each assume the whole remaining budget, and further calls are
-  refused once the activation limit is committed;
+  refused once the budget-window limit is committed;
 * models must have a host-configured price — an unpriced model is refused rather
   than recorded as free;
 * a provider response without usable token usage fails closed instead of being
@@ -231,3 +270,17 @@ contributions are withdrawn, the frame is removed, and the host page stays
 usable. The probe routes and the harness that exposes the startup API to a
 qualification page exist only while `OR3_CONTAINMENT_PROBE_ENABLED=true`; no
 normal profile sets it.
+
+### Qualified browsers
+
+Containment is *measured* in Chromium, Firefox, WebKit and mobile Safari, but a
+measured probe is not a qualified runtime. An engine is only enabled for the
+portable client profile once the containment suite and the lifecycle
+qualification above both pass for it; today that is Chromium only. The host's
+structured client-profile declaration lists exactly the qualified engines, the
+marketplace preflight reports `client-engine-unsupported` for any other engine
+(including an unrecognized user agent), and the install action is replaced with
+an explicit unsupported-browser state, read-only discovery and a copyable plugin
+link. The runtime repeats the same check through `assessPortableHost` before it
+fetches a single byte, so an unqualified engine is refused structurally rather
+than by convention.

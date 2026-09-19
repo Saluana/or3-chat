@@ -102,6 +102,66 @@ export const PORTABLE_WIRE_LIMITS = Object.freeze({
 });
 
 /**
+ * Install the nested-worker deny boundary before publisher code is imported.
+ * If a browser exposes an unreplaceable constructor, the shim refuses to
+ * import the publisher instead of claiming that the boundary is enforced.
+ */
+export const PORTABLE_NESTED_WORKER_HARDENING_SOURCE = `
+function or3HardenNestedWorkers() {
+  var roots = [];
+  try { if (typeof globalThis !== 'undefined') roots.push(globalThis); } catch (error) { return false; }
+  try { if (typeof self !== 'undefined' && roots.indexOf(self) === -1) roots.push(self); } catch (error) { return false; }
+  var names = ['Worker', 'SharedWorker'];
+  for (var rootIndex = 0; rootIndex < roots.length; rootIndex += 1) {
+    var root = roots[rootIndex];
+    for (var nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
+      var name = names[nameIndex];
+      var target = root;
+      var replaced = false;
+      for (var depth = 0; target && depth < 16; depth += 1) {
+        var descriptor;
+        try { descriptor = Object.getOwnPropertyDescriptor(target, name); } catch (error) { return false; }
+        if (descriptor) {
+          if (descriptor.configurable === false) {
+            if (Object.prototype.hasOwnProperty.call(descriptor, 'value') && descriptor.value === undefined) {
+              replaced = true;
+              break;
+            }
+            return false;
+          }
+          try {
+            Object.defineProperty(target, name, {
+              value: undefined,
+              writable: false,
+              configurable: false,
+              enumerable: false,
+            });
+          } catch (error) { return false; }
+          replaced = true;
+          break;
+        }
+        try { target = Object.getPrototypeOf(target); } catch (error) { return false; }
+      }
+      if (!replaced) {
+        try {
+          Object.defineProperty(root, name, {
+            value: undefined,
+            writable: false,
+            configurable: false,
+            enumerable: false,
+          });
+        } catch (error) { return false; }
+      }
+      try {
+        if (root[name] !== undefined) return false;
+      } catch (error) { return false; }
+    }
+  }
+  return true;
+}
+`;
+
+/**
  * Host-owned worker shim. Runs inside the worker (and therefore inside the
  * frame's opaque origin) and holds no ambient capability of its own.
  */
@@ -115,6 +175,7 @@ const pending = [];
 const limits = { bytes: ${PORTABLE_WIRE_LIMITS.bytes}, depth: ${PORTABLE_WIRE_LIMITS.depth}, nodes: ${PORTABLE_WIRE_LIMITS.nodes} };
 const nativePostMessage = self.postMessage.bind(self);
 ${PORTABLE_WIRE_GUARD_SOURCE}
+${PORTABLE_NESTED_WORKER_HARDENING_SOURCE}
 function deliver(data) {
   try {
     self.dispatchEvent(new MessageEvent('message', { data: data }));
@@ -185,6 +246,10 @@ function start(source) {
   state.started = true;
   if (!source) {
     nativePostMessage({ or3Portable: 'worker-error', reason: 'missing-module-source' });
+    return;
+  }
+  if (!or3HardenNestedWorkers()) {
+    nativePostMessage({ or3Portable: 'worker-error', reason: 'nested-worker-constructors-unavailable' });
     return;
   }
   const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
@@ -312,7 +377,7 @@ ${PORTABLE_WIRE_GUARD_SOURCE}
  * nothing else, so `'unsafe-inline'` is still unnecessary.
  */
 export const PORTABLE_FRAME_SCRIPT_HASH =
-    'sha256-r9YJSb6v0w+DfMy76Po61TzOeNYvaVPL0Kmq+t6eiPM=';
+    'sha256-TFAXm7CuJbfHeGEFJrdqIQIEV5rq/NxsWJnzPrm795A=';
 
 /** The frame document: inert markup plus the hash-authorised relay script. */
 export const PORTABLE_FRAME_DOCUMENT = `<!doctype html>

@@ -57,6 +57,28 @@ export const PORTABLE_PROFILE_NAME = 'or3-portable-client-v1';
 export const QUALIFIED_BROWSER_ENGINES = ['chromium'] as const;
 export type BrowserEngine = 'chromium' | 'firefox' | 'webkit' | string;
 
+/**
+ * Classify the engine from a user-agent string. Detection lives next to the
+ * qualification it feeds so the preflight answer and the runtime denial agree;
+ * an unrecognized agent is `unknown` and fails closed.
+ */
+export function detectBrowserEngine(userAgent?: string): BrowserEngine {
+    const agent =
+        userAgent ?? (typeof navigator === 'undefined' ? '' : navigator.userAgent);
+    if (/Firefox\//.test(agent)) return 'firefox';
+    if (/Edg\/|Chrome\/|Chromium\//.test(agent)) return 'chromium';
+    if (/Safari\//.test(agent)) return 'webkit';
+    return 'unknown';
+}
+
+/** Whether an engine may run the portable profile. Unknown engines fail closed. */
+export function browserEngineQualified(
+    engine: BrowserEngine,
+    qualifiedBrowsers: readonly BrowserEngine[] = QUALIFIED_BROWSER_ENGINES
+): boolean {
+    return qualifiedBrowsers.some((qualified) => qualified === engine);
+}
+
 export interface HostAbiDescriptor {
     /** Host-owned ABI version; the sandbox never supplies this. */
     readonly version: number;
@@ -135,11 +157,7 @@ export function assessPortableHost(input: {
     if (input.abi.staticHost) {
         codes.push('static-host-deferred');
     }
-    if (
-        !input.abi.qualifiedBrowsers.some(
-            (engine) => engine === input.engine
-        )
-    ) {
+    if (!browserEngineQualified(input.engine, input.abi.qualifiedBrowsers)) {
         codes.push('browser-unsupported');
     }
 

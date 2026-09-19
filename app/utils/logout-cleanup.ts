@@ -23,6 +23,7 @@ import type { NuxtApp } from 'nuxt/app';
 import { kv } from '~/db';
 import { state } from '~/state/global';
 import { clearWorkspaceDbsOnLogout } from '~/utils/workspace-db-logout';
+import { stopAllPortableClientsAndAwait } from '~/composables/plugins/portable-client-runtime';
 
 type SyncEngine = { stop?: () => Promise<void> | void };
 
@@ -58,6 +59,14 @@ export async function logoutCleanup(
     nuxtApp?: NuxtAppWithSync,
     options: LogoutCleanupOptions = {}
 ) {
+    try {
+        // Revoke portable activation handles before clearing the session. The
+        // server TTL remains the fallback if the browser is already offline.
+        await stopAllPortableClientsAndAwait();
+    } catch {
+        // Best-effort; logout must still clear local state.
+    }
+
     try {
         await nuxtApp?.$syncEngine?.stop?.();
     } catch {
