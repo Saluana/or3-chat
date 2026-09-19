@@ -14,6 +14,7 @@ import type {
     AdminUserStore,
     AdminStoreCapabilities,
 } from './types';
+import { withTrustedHostSettingsMigration } from './host-settings-migration';
 import { useRuntimeConfig } from '#imports';
 
 export interface AdminStoreProvider {
@@ -68,6 +69,10 @@ export function getWorkspaceAccessStore(event: H3Event): WorkspaceAccessStore {
 
 /**
  * Resolves the appropriate WorkspaceSettingsStore for the current environment.
+ *
+ * Providers that exposed a client-writable legacy namespace are wrapped with
+ * the host migration policy so untrusted values never silently become
+ * authority.
  */
 export function getWorkspaceSettingsStore(event: H3Event): WorkspaceSettingsStore {
     const providerId = resolveProviderId(event);
@@ -80,7 +85,9 @@ export function getWorkspaceSettingsStore(event: H3Event): WorkspaceSettingsStor
         });
     }
 
-    return provider.createWorkspaceSettingsStore(event);
+    return withTrustedHostSettingsMigration(
+        provider.createWorkspaceSettingsStore(event)
+    );
 }
 
 /**

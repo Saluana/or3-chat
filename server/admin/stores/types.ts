@@ -119,6 +119,14 @@ export interface WorkspaceSettingsStore {
         expectedValue: string | null,
         nextValue: string
     ): Promise<boolean>;
+    /**
+     * Optional access to values a provider historically kept in a
+     * client-writable namespace (for example Convex `kv`, which workspace
+     * editors could push through ordinary sync). Values here are untrusted:
+     * the host migration policy decides what may be copied into the private
+     * settings store, and security-authoritative keys are never copied.
+     */
+    getLegacy?(workspaceId: string, key: string): Promise<string | null>;
 }
 
 export interface AdminUserInfo {

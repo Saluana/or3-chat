@@ -1229,7 +1229,7 @@
                     "name": "provider-convex.md",
                     "path": "/cloud/provider-convex",
                     "category": "Guide",
-                    "summary": "Dedicated install and wiring guide for the Convex sync/storage/backend provider package, including the typed generic-file compatibility boundary."
+                    "summary": "Dedicated install and wiring guide for the Convex sync/storage/backend provider package, including the typed generic-file compatibility boundary and private host-settings storage with legacy migration."
                 },
                 {
                     "name": "provider-fs.md",

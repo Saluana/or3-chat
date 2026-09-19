@@ -115,6 +115,57 @@ describe('persistent plugin AI budget ledger', () => {
         ).resolves.toMatchObject({ ok: false, code: 'unavailable' });
     });
 
+    it('never overspends when reservations race on one window', async () => {
+        const values = new Map<string, string>();
+        const store: WorkspaceSettingsStore = {
+            async get(workspaceId, key) {
+                await Promise.resolve();
+                return values.get(`${workspaceId}:${key}`) ?? null;
+            },
+            async set(workspaceId, key, value) {
+                values.set(`${workspaceId}:${key}`, value);
+            },
+            async compareAndSet(workspaceId, key, expected, next) {
+                await Promise.resolve();
+                const scoped = `${workspaceId}:${key}`;
+                const current = values.get(scoped) ?? null;
+                if (current !== expected) return false;
+                values.set(scoped, next);
+                return true;
+            },
+        };
+        const now = 1_700_000_000_000;
+
+        const results = await Promise.all(
+            Array.from({ length: 5 }, () =>
+                reservePersistentPluginAiSpend({
+                    store,
+                    ...identity,
+                    amountUsd: 0.3,
+                    limitUsd: 1,
+                    now,
+                })
+            )
+        );
+        const granted = results.filter((result) => result.ok);
+        expect(granted).toHaveLength(3);
+        for (const result of results) {
+            if (result.ok) continue;
+            expect(['budget-exceeded', 'contention']).toContain(result.code);
+        }
+
+        const final = await readPersistentPluginAiBudget({
+            store,
+            ...identity,
+            limitUsd: 1,
+            now,
+        });
+        expect(final.ok).toBe(true);
+        if (!final.ok) return;
+        expect(final.budget.reservedUsd).toBeCloseTo(0.9, 10);
+        expect(final.budget.spendUsd + final.budget.reservedUsd).toBeLessThanOrEqual(1);
+    });
+
     it('fails closed after repeated provider CAS contention', async () => {
         const store = memoryStore({ casFailures: 8 });
         await expect(
