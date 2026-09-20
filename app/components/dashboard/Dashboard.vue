@@ -152,7 +152,7 @@
     </UModal>
 </template>
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, provide } from 'vue';
 import PluginIcons from './PluginIcons.vue';
 import {
     useDashboardNavigation,
@@ -180,6 +180,8 @@ const open = computed({
     get: () => props.showModal,
     set: (value: boolean) => emit('update:showModal', value),
 });
+
+provide('or3:dashboard:close', () => { open.value = false; });
 
 const runtimeConfig = useRuntimeConfig();
 const ssrAuthEnabled = runtimeConfig.public.ssrAuthEnabled === true;

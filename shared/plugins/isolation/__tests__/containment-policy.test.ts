@@ -384,18 +384,21 @@ describe('containment budgets (4.4)', () => {
 
 describe('UI tree content budgets (review 13)', () => {
     it('counts cell, label and field content, not just node.text', () => {
-        // 40 rows x 2 cells of 512 bytes: one "node with no text" previously, now
-        // well past the aggregate text ceiling.
+        // Table cells are the largest content a renderer shows: one "node with no
+        // text" previously. Size the rows from the recorded ceiling so this keeps
+        // testing the counting rule rather than a frozen byte budget.
+        const budgets = resolveContainmentBudgets();
         const cell = 'x'.repeat(512);
+        const rows = Math.ceil(budgets.maxUiTextBytes / cell.length) + 4;
         const table = {
             type: 'table',
             columns: [
                 { key: 'a', label: 'A' },
                 { key: 'b', label: 'B' },
             ],
-            rows: Array.from({ length: 40 }, () => ({ a: cell, b: cell })),
+            rows: Array.from({ length: rows }, () => ({ a: cell, b: cell })),
         };
-        const breached = validateUiTreeBudgets(table);
+        const breached = validateUiTreeBudgets(table, budgets);
         expect(breached).toMatchObject({ ok: false, kind: 'ui-text-bytes' });
     });
 

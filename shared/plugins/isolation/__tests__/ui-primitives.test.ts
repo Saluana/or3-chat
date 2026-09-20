@@ -96,6 +96,55 @@ describe('portable UI primitives (4.5)', () => {
         expect(progress).toMatchObject({ ok: true, node: { value: 100, max: 100 } });
     });
 
+    it('accepts bounded live field actions and does not leak extra publisher keys', () => {
+        expect(
+            validatePortableUiNode({
+                type: 'field.text',
+                id: 'query',
+                label: '',
+                search: true,
+                onChange: 'tasks.search',
+                onInput: 'publisher-owned-handler',
+            })
+        ).toEqual({
+            ok: true,
+            node: {
+                type: 'field.text',
+                id: 'query',
+                label: '',
+                search: true,
+                onChange: 'tasks.search',
+            },
+        });
+        expect(
+            validatePortableUiNode({
+                type: 'field.select',
+                id: 'filter',
+                label: 'Filter',
+                options: [{ value: 'all', label: 'All tasks' }],
+                onChange: 'not valid!',
+            })
+        ).toMatchObject({ ok: false, code: 'ui-invalid-node' });
+        expect(
+            validatePortableUiNode({
+                type: 'button',
+                id: 'add',
+                label: 'Add task',
+                action: 'tasks.add',
+                submit: true,
+            })
+        ).toEqual({
+            ok: true,
+            node: {
+                type: 'button',
+                id: 'add',
+                label: 'Add task',
+                action: 'tasks.add',
+                submit: true,
+            },
+        });
+    });
+
     it('sanitizes markdown so publisher text cannot inject markup', () => {
         const cases: Array<[string, string]> = [
             ['<script>alert(1)</script>', '&lt;script&gt;alert(1)&lt;/script&gt;'],
@@ -123,4 +172,10 @@ describe('portable UI primitives (4.5)', () => {
         ).toContain('href="https://example.com"');
         expect(renderSanitizedMarkdown('first\n\nsecond')).toContain('<p>first</p>');
     });
+});
+
+it('validates task-like item controls without accepting publisher markup or invalid state',()=>{
+ expect(validatePortableUiNode({type:'item',id:'task-1',label:'<script>x</script>',action:'toggle',checked:false,deleteAction:'remove'})).toMatchObject({ok:true,node:{type:'item',checked:false,deleteAction:'remove'}});
+ expect(validatePortableUiNode({type:'item',id:'task-1',label:'Task',action:'toggle',checked:'yes'})).toMatchObject({ok:false});
+ expect(validatePortableUiNode({type:'heading',text:'Tasks',level:8})).toMatchObject({ok:false});
 });

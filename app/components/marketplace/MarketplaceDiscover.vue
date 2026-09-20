@@ -579,6 +579,9 @@ function blockActionLabel(block: { action: string }): string | null {
                     Browser check: {{ install.canaryStatus.value }}
                 </p>
                 <MarketplaceFailure v-if="install.status.value.failure" :operation="install.status.value" />
+                <p v-if="['failed', 'blocked'].includes(install.status.value.status)" class="text-(--ui-text-muted)">
+                    This is a saved installation result. Refreshing does not retry it.
+                </p>
                 <div class="flex gap-2">
                     <UButton
                         v-if="install.status.value.retryable"
@@ -592,14 +595,16 @@ function blockActionLabel(block: { action: string }): string | null {
                         {{ install.status.value.resumable ? 'Continue' : 'Retry' }}
                     </UButton>
                     <UButton
-                        v-if="!['completed', 'canceled'].includes(install.status.value.status)"
+                        v-if="install.canCancel.value"
+                        :loading="install.canceling.value"
+                        :disabled="install.status.value.canceled"
                         size="sm"
                         color="error"
                         variant="ghost"
                         icon="i-lucide-ban"
                         @click="install.cancel()"
                     >
-                        Cancel
+                        {{ install.status.value.canceled ? 'Cancel requested' : 'Cancel' }}
                     </UButton>
                     <UButton
                         v-if="install.status.value.needsSetup"

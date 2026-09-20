@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
+import { ref } from 'vue';
 import type { PortableActivation } from '~/composables/plugins/portable-client-runtime';
 
 /**
@@ -11,6 +12,7 @@ const invokeMock = vi.fn();
 const prepareMock = vi.fn();
 const executeMock = vi.fn();
 const ensureMock = vi.fn();
+const activateMock = vi.fn();
 const sourceMock = vi.fn();
 const getDocumentInDbMock = vi.fn();
 const activations = new Map<string, unknown>();
@@ -19,6 +21,7 @@ const fetchMock = vi.fn();
 const navigateToMock = vi.fn();
 
 vi.mock('~/composables/plugins/portable-client-runtime', () => ({
+    activatePortableClient: (...args: unknown[]) => activateMock(...args),
     usePortableActivations: () => activations,
     invokePortableUiEvent: (...args: unknown[]) => invokeMock(...args),
     ensurePortableClientActivation: (...args: unknown[]) => ensureMock(...args),
@@ -71,6 +74,8 @@ beforeEach(() => {
     prepareMock.mockReset();
     executeMock.mockReset();
     ensureMock.mockReset();
+    activateMock.mockReset();
+    activateMock.mockResolvedValue(activation());
     sourceMock.mockReset();
     getDocumentInDbMock.mockReset();
     fetchMock.mockReset();
@@ -132,7 +137,7 @@ const stubs = {
 };
 
 // Nuxt auto-imports the renderer in the app; a unit mount has to register it.
-const global = { stubs, components: { PortableUiTree } };
+const global = { stubs };
 
 describe('PortableClientView', () => {
     it('renders registered dashboard contributions', () => {
@@ -307,7 +312,7 @@ describe('PortableClientView host actions', () => {
 
         await wrapper.get('[data-testid="portable-plugin-stopped"] button').trigger('click');
         await flushPromises();
-        expect(ensureMock).toHaveBeenCalledWith('sample.plugin');
+        expect(activateMock).toHaveBeenCalledWith(sourceMock.mock.results[0]!.value);
     })
 
     it('refuses a host write when the activation lacks write authority', async () => {
@@ -405,6 +410,16 @@ describe('PortableClientView host actions', () => {
         expect(readyPanel.findAll('button')).toHaveLength(1);
     })
 
+    it('does not present a selection shortcut as a blocker for an already-rendered interface', async () => {
+        fetchMock.mockResolvedValue({
+            firstAction: { label: 'Open tasks', ready: false, reasonCode: 'selection-required', reason: 'Select a document' },
+        });
+        const wrapper = shell([{ type: 'button', id: 'create', label: 'Create list', action: 'tasks.create-list' }]);
+        await flushPromises();
+        expect(wrapper.find('[data-testid="portable-plugin-first-action"]').exists()).toBe(false);
+        expect(wrapper.get('button[data-action="tasks.create-list"]').text()).toBe('Create list');
+    });
+
     it('resolves a selected-context first action through the host handle and read grant', async () => {
         routeQuery.documentId = 'doc_1';
         activations.set(
@@ -446,4 +461,40 @@ describe('PortableClientView host actions', () => {
             })
         );
     })
+});
+
+
+describe('portable surface recovery', () => {
+    it('shows the main view in the sidebar when the plugin has no navigation tree', () => {
+        activations.set('sample.plugin', activation({
+            view: { title: null, nodes: [{ type: 'text', text: 'My tasks' }], navigation: [] },
+        }));
+        const wrapper = mount(PortableClientView, { props: { pluginId: 'sample.plugin', surface: 'sidebar' }, global });
+        expect(wrapper.text()).toContain('My tasks');
+        expect(wrapper.text()).not.toContain('has not rendered');
+    });
+
+    it('restores the current tree after a source refresh without requiring another render event', async () => {
+        const source = ref({ descriptor: { descriptorKey: 'old' }, workspaceId: 'ws-1' });
+        sourceMock.mockImplementation(() => source.value);
+        activations.set('sample.plugin', activation({
+            view: { title: null, nodes: [{ type: 'text', text: 'My tasks' }] },
+        }));
+        const wrapper = mount(PortableClientView, { props: { pluginId: 'sample.plugin' }, global });
+        await flushPromises();
+        source.value = { descriptor: { descriptorKey: 'new' }, workspaceId: 'ws-1' };
+        await flushPromises();
+        expect(wrapper.text()).toContain('My tasks');
+        expect(wrapper.text()).not.toContain('has not rendered');
+    });
+
+    it('restarts an active plugin that has not rendered a view', async () => {
+        activations.set('sample.plugin', activation());
+        sourceMock.mockReturnValue({ descriptor: {}, workspaceId: 'ws-1' });
+        const wrapper = mount(PortableClientView, { props: { pluginId: 'sample.plugin' }, global });
+        await flushPromises();
+        await wrapper.findAll('button').find((button) => button.text() === 'Restart plugin')!.trigger('click');
+        await flushPromises();
+        expect(activateMock).toHaveBeenCalledOnce();
+    });
 });

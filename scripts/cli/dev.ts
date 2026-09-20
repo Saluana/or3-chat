@@ -28,6 +28,7 @@ import {
     type PackageManagerCommand,
 } from '../../shared/cloud/wizard/package-manager';
 import { isPortAvailable } from '../../shared/cloud/wizard/dev-server';
+import { prepareLocalProviders } from '../../shared/dev/local-providers';
 
 export const DEFAULT_PORT = 3000;
 
@@ -296,7 +297,8 @@ export function nuxtDevEnvironment(
     };
 }
 
-function runNuxtDev(argv: string[]): Promise<number> {
+async function runNuxtDev(argv: string[]): Promise<number> {
+    const localProviders = await prepareLocalProviders(process.cwd());
     const command = execPackageCommand(detectPackageManager(), [
         'nuxt',
         'dev',
@@ -305,7 +307,10 @@ function runNuxtDev(argv: string[]): Promise<number> {
     return new Promise((resolvePromise, rejectPromise) => {
         const child = crossSpawn(command.command, command.args, {
             stdio: 'inherit',
-            env: nuxtDevEnvironment(),
+            env: {
+                ...nuxtDevEnvironment(),
+                OR3_DEV_PROVIDER_MODULES: JSON.stringify(localProviders),
+            },
         });
         child.on('error', rejectPromise);
         child.on('exit', (code) => resolvePromise(code ?? 0));

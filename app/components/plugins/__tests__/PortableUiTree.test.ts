@@ -1,9 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import PortableUiTree from '../PortableUiTree.vue';
 import type { PortableUiNode } from '~~/shared/plugins/isolation/ui-primitives';
 
+const resize = vi.hoisted(() => ({ callback: undefined as undefined | ((entries: { contentRect: { width: number } }[]) => void) }));
+vi.mock('@vueuse/core', async (importOriginal) => ({
+    ...await importOriginal<typeof import('@vueuse/core')>(),
+    useResizeObserver: (_target: unknown, callback: typeof resize.callback) => { resize.callback = callback; },
+}));
+
 const stubs = {
+    USlideover: {
+        props: ['open'],
+        emits: ['update:open'],
+        template: '<div v-if="open" role="dialog"><slot name="content" /><button aria-label="Dismiss drawer" @click="$emit(\'update:open\', false)" /></div>',
+    },
     UInput: {
         props: ['modelValue', 'id', 'placeholder', 'required'],
         emits: ['update:modelValue'],
@@ -18,7 +30,8 @@ const stubs = {
     USelectMenu: {
         props: ['modelValue', 'id', 'items', 'ariaLabel'],
         emits: ['update:modelValue'],
-        template: '<select :id="id" :aria-label="ariaLabel" />',
+        template:
+            '<select :id="id" :aria-label="ariaLabel" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="item in items" :key="item.value" :value="item.value">{{ item.label }}</option></select>',
     },
     UCheckbox: {
         props: ['modelValue', 'id', 'label'],
@@ -41,7 +54,33 @@ function mountTree(nodes: readonly PortableUiNode[]) {
     return mount(PortableUiTree, { props: { nodes }, global: { stubs } });
 }
 
+afterEach(() => {
+    vi.useRealTimers();
+});
+
 describe('PortableUiTree host renderer (4.5)', () => {
+    it('moves the inspector into a dismissible drawer without losing edits on resize', async () => {
+        const wrapper = mountTree([{ type: 'columns', layout: 'workspace', children: [
+            { type: 'column', children: [{ type: 'text', text: 'Task list' }] },
+            { type: 'column', children: [{ type: 'field.text', id: 'title', label: 'Title', value: 'Saved title' }] },
+        ] }]);
+        await wrapper.get('#portable-title').setValue('Unsaved edit');
+        resize.callback?.([{ contentRect: { width: 390 } }]);
+        await nextTick();
+        expect(wrapper.find('aside').exists()).toBe(false);
+        expect(wrapper.get('[role="dialog"] input').element).toHaveProperty('value', 'Unsaved edit');
+        await wrapper.setProps({ nodes: [{ type: 'text', text: 'Confirm deletion' }, ...wrapper.props('nodes')] });
+        expect(wrapper.get('[role="dialog"]').text()).toContain('Confirm deletion');
+        await wrapper.get('[aria-label="Dismiss drawer"]').trigger('click');
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+        expect(wrapper.text()).toContain('Open details');
+        await wrapper.setProps({ nodes: [{ type: 'text', text: 'Saved' }, ...wrapper.props('nodes')] });
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+        resize.callback?.([{ contentRect: { width: 1000 } }]);
+        await nextTick();
+        expect(wrapper.get('aside input').element).toHaveProperty('value', 'Unsaved edit');
+        wrapper.unmount();
+    });
     it('renders text, markdown, tables, lists and progress with host components', () => {
         const wrapper = mountTree([
             { type: 'text', text: 'plain text' },
@@ -165,6 +204,97 @@ describe('PortableUiTree host renderer (4.5)', () => {
             action: 'submit',
             formId: 'settings',
             values: { name: 'changed' },
+        });
+    });
+
+    it('keeps a named form action when the button opts into native submit', async () => {
+        const wrapper = mountTree([
+            {
+                type: 'form',
+                id: 'quick-add',
+                children: [
+                    { type: 'field.text', id: 'title', label: 'Title', value: '' },
+                    {
+                        type: 'button',
+                        id: 'add',
+                        label: 'Add task',
+                        action: 'tasks.quick-add',
+                        submit: true,
+                    },
+                ],
+            },
+        ]);
+
+        await wrapper.find('input#portable-title').setValue('Keyboard task');
+        await wrapper.find('form').trigger('submit', {
+            submitter: wrapper.find('button').element,
+        });
+        expect(wrapper.emitted('ui-event')?.[0]?.[0]).toMatchObject({
+            kind: 'action',
+            action: 'tasks.quick-add',
+            formId: 'quick-add',
+            values: { title: 'Keyboard task' },
+        });
+    });
+
+    it('debounces a declared text-field action with the current form values', async () => {
+        vi.useFakeTimers();
+        const wrapper = mountTree([
+            {
+                type: 'form',
+                id: 'search',
+                layout: 'inline',
+                children: [
+                    {
+                        type: 'field.text',
+                        id: 'query',
+                        label: '',
+                        value: '',
+                        search: true,
+                        onChange: 'tasks.search',
+                    },
+                ],
+            },
+        ]);
+
+        await wrapper.find('input#portable-query').setValue('design');
+        await vi.advanceTimersByTimeAsync(199);
+        expect(wrapper.emitted('ui-event')).toBeUndefined();
+
+        await vi.advanceTimersByTimeAsync(1);
+        expect(wrapper.emitted('ui-event')?.[0]?.[0]).toMatchObject({
+            kind: 'action',
+            action: 'tasks.search',
+            values: { query: 'design' },
+        });
+    });
+
+    it('raises a declared select action immediately with the current values', async () => {
+        const wrapper = mountTree([
+            {
+                type: 'form',
+                id: 'toolbar',
+                children: [
+                    {
+                        type: 'field.select',
+                        id: 'filter',
+                        label: 'Filter',
+                        value: 'all',
+                        options: [
+                            { value: 'all', label: 'All tasks' },
+                            { value: 'open', label: 'Open tasks' },
+                        ],
+                        onChange: 'tasks.toolbar',
+                    },
+                ],
+            },
+        ]);
+
+        await wrapper.find('select#portable-filter').setValue('open');
+        expect(wrapper.emitted('ui-event')?.[0]?.[0]).toMatchObject({
+            kind: 'action',
+            action: 'tasks.toolbar',
+            values: { filter: 'open' },
         });
     });
 

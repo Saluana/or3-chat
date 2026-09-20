@@ -97,6 +97,8 @@ export type HostPluginEvent =
     | {
           readonly status: 'rendered';
           readonly name: 'ui.render';
+          readonly key?: string | null;
+          readonly navigation?: readonly PortableUiNode[];
           readonly title: string | null;
           readonly nodes: readonly PortableUiNode[];
           readonly metrics: {
@@ -208,14 +210,19 @@ export function validateRenderPayload(payload: Readonly<Record<string, unknown>>
     readonly ok: true;
     readonly title: string | null;
     readonly nodes: readonly PortableUiNode[];
+    readonly key: string | null;
+    readonly navigation: readonly PortableUiNode[];
     readonly metrics: { readonly nodes: number; readonly depth: number; readonly textBytes: number };
 } | { readonly ok: false; readonly reason: string } {
+    if (payload.key !== undefined && (typeof payload.key !== 'string' || payload.key.length > 128)) return {ok:false,reason:'ui.render key must be a bounded string'};
     const rawNodes = payload.nodes;
+    const rawNavigation = payload.navigation ?? [];
+    if (!Array.isArray(rawNavigation)) return {ok:false,reason:'ui.render navigation must be an array'};
     if (!Array.isArray(rawNodes)) {
         return { ok: false, reason: 'ui.render requires a nodes array' };
     }
     const nodes: PortableUiNode[] = [];
-    for (const raw of rawNodes) {
+    for (const raw of [...rawNodes, ...rawNavigation]) {
         const validated = validatePortableUiNode(raw);
         if (!validated.ok) return { ok: false, reason: validated.message };
         nodes.push(validated.node);
@@ -225,7 +232,9 @@ export function validateRenderPayload(payload: Readonly<Record<string, unknown>>
     return {
         ok: true,
         title: readString(payload.title),
-        nodes,
+        key: readString(payload.key),
+        nodes: nodes.slice(0, rawNodes.length),
+        navigation: nodes.slice(rawNodes.length),
         metrics: { nodes: metrics.nodes, depth: metrics.depth, textBytes: metrics.textBytes },
     };
 }
@@ -726,6 +735,8 @@ export class WorkerIsolationRuntime {
                 name: UI_RENDER_EVENT,
                 title: rendered.title,
                 nodes: rendered.nodes,
+                navigation: rendered.navigation,
+                key: rendered.key,
                 metrics: rendered.metrics,
             });
             return true;

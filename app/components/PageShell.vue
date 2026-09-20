@@ -1734,13 +1734,14 @@ function onNewChat() {
 
 async function openWorkspaceResource(
     resource: WorkspaceResource,
-    destination: 'new-tab' | 'new-pane'
+    destination: 'new-tab' | 'new-pane',
+    options: { reuseExisting?: boolean } = {}
 ): Promise<boolean> {
     if (destination === 'new-tab') {
         if (!workspaceTabsEnabled.value) return false;
         return !!(await workspaceTabs.openResource(resource, {
             target: 'active',
-            allowDuplicate: true,
+            allowDuplicate: !options.reuseExisting,
             reuseActiveBlank: false,
         }));
     }

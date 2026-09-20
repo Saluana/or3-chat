@@ -62,10 +62,14 @@ export const DEFAULT_CONTAINMENT_BUDGETS: ContainmentBudgets = Object.freeze({
     maxConcurrentCalls: 8,
     defaultCallDeadlineMs: 10_000,
     maxActivationMs: 120_000,
-    maxUiTreeDepth: 8,
-    maxUiTreeNodes: 200,
-    maxUiTextBytes: 16 * 1024,
-    maxUiTreeItems: 2048,
+    // A workspace surface (navigation plus a list plus an inspector) is a real
+    // product tree, not a card: these budgets size the renderer, and stay well
+    // inside the RPC wire caps (256 KiB / 20k values) so a valid tree is never
+    // refused by the transport after the renderer accepted it.
+    maxUiTreeDepth: 12,
+    maxUiTreeNodes: 1000,
+    maxUiTextBytes: 64 * 1024,
+    maxUiTreeItems: 12_000,
     maxAiSpendUsd: 1,
     maxAiOutputTokens: 4096,
 });

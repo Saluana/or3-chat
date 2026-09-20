@@ -45,6 +45,7 @@ function sdkMethodsForGrant(grant: string): readonly string[] {
 
 export const OR3_PLUGIN_V2_GRANT_REGISTRY: readonly Or3PluginV2GrantQualification[] =
     Object.freeze([
+        { grant: 'tools.register.client', status: 'qualified', registration: {kind: 'test', id: 'portable-tools.workspace-grant-and-teardown'} },
         {
             grant: 'ui.dashboard.register',
             status: 'qualified',
@@ -152,7 +153,7 @@ export const OR3_PLUGIN_V2_HOST_CAPABILITIES: PluginV2HostCapabilities = Object.
     pluginApiVersion: '2.0.0',
     supportedTrustModes: Object.freeze(['trusted-host', 'isolated-client'] as const),
     supportedGrants: Object.freeze(qualifiedGrants),
-    supportedFeatures: Object.freeze(['or3-portable-client-v1']),
+    supportedFeatures: Object.freeze(['or3-portable-client-v1', 'or3-portable-workspace-v1']),
 });
 
 /**

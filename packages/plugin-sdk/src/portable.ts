@@ -246,6 +246,8 @@ export function createPortableClient(
             emit(PORTABLE_EVENT.render, {
                 ...(view.title === undefined ? {} : { title: view.title }),
                 nodes: view.nodes,
+                ...(view.key === undefined ? {} : {key:view.key}),
+                ...(view.navigation === undefined ? {} : {navigation:view.navigation}),
             });
         },
         contribute(slot, id, view) {

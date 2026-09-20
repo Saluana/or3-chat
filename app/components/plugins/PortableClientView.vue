@@ -14,9 +14,12 @@
  * surface opens, and a stopped activation can be restarted without discarding
  * the field values already typed here.
  */
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import PortableUiTree from './PortableUiTree.vue';
+import { openPortablePane } from '~/composables/plugins/portable-pane';
 import { $fetch, navigateTo, useRoute, useToast } from '#imports';
 import {
+    activatePortableClient,
     ensurePortableClientActivation,
     getPortableClientSource,
     invokePortableUiEvent,
@@ -39,7 +42,24 @@ import {
 import type { PortableUiNode } from '~~/shared/plugins/isolation/ui-primitives';
 import type { PortableUiEvent } from '~~/shared/plugins/isolation/ui-primitives';
 
-const props = defineProps<{ readonly pluginId: string }>();
+const props = defineProps<{ readonly pluginId: string; readonly surface?: 'sidebar' | 'pane' }>();
+
+/**
+ * A stopped activation is usually the containment session expiring (a host
+ * restart, a stale handle) rather than a refusal the user must act on. Recover
+ * it automatically at most twice per session, with a short backoff, so a
+ * surface never stays dead with its values still on screen. Refusals that only
+ * the user can clear are left to the explicit restart action.
+ */
+const NON_RECOVERABLE_STOP_CODES = new Set([
+    'plugin-disabled',
+    'plugin-uninstalled',
+    'plugin-access-denied',
+    'activation-session-mismatch',
+]);
+const MAX_AUTO_RECOVERY_ATTEMPTS = 2;
+/** Shared across the sidebar and pane surfaces for the same plugin. */
+const recoveryAttempts = new Map<string, number>();
 
 const toast = useToast();
 const route = useRoute();
@@ -48,6 +68,9 @@ const hostActions = usePortableHostActions();
 const activation = computed(() => activations.get(props.pluginId) ?? null);
 const busy = ref(false);
 const fieldStore = ref<Record<string, string | boolean>>({});
+watch(() => activation.value?.view?.key, () => {
+    if (props.surface !== 'sidebar') fieldStore.value = {};
+});
 const treeRef = ref<{ replaceValues: (values: Record<string, string | boolean>) => void } | null>(
     null
 );
@@ -64,10 +87,40 @@ const selectedDocumentId = computed(() => {
  * restart. New renders replace it.
  */
 const nodes = ref<readonly PortableUiNode[]>([]);
+const surfaceNodes = computed(() => {
+    const view = activation.value?.view;
+    return props.surface === 'sidebar' && view?.navigation?.length
+        ? view.navigation
+        : view?.nodes ?? [];
+});
 watch(
-    () => activation.value?.view?.nodes ?? null,
+    () => {
+        const source = getPortableClientSource(props.pluginId);
+        return source ? `${source.workspaceId}:${source.descriptor.descriptorKey}` : null;
+    },
+    async (next, previous) => {
+        if (next === previous) return;
+        nodes.value = [];
+        fieldStore.value = {};
+        if (next) {
+            try {
+                await ensurePortableClientActivation(props.pluginId);
+                nodes.value = surfaceNodes.value;
+            } catch (error) {
+                toast.add({
+                    title: 'The plugin could not start',
+                    description: error instanceof Error ? error.message : 'The sandbox did not start',
+                    color: 'error',
+                });
+            }
+        }
+    },
+    { flush: 'post' }
+);
+watch(
+    () => activation.value?.view ? surfaceNodes.value : null,
     (next) => {
-        if (next && next.length > 0) nodes.value = next;
+        if (next) nodes.value = next;
     },
     { immediate: true }
 );
@@ -87,6 +140,7 @@ interface FirstActionState {
     readonly label: string;
     readonly contextKind: 'sample' | 'selected';
     readonly reason: string | null;
+    readonly reasonCode?: string;
 }
 const firstAction = ref<FirstActionState | null>(null);
 const firstActionBusy = ref(false);
@@ -227,6 +281,7 @@ async function loadFirstAction(): Promise<void> {
                 ready?: boolean;
                 contextKind?: string;
                 reason?: string;
+                reasonCode?: string;
             };
         }>(`/api/plugins/${encodeURIComponent(props.pluginId)}/setup-plan${query}`);
         const handoff = plan.firstAction;
@@ -240,6 +295,7 @@ async function loadFirstAction(): Promise<void> {
             label: handoff.label,
             contextKind,
             reason: typeof handoff.reason === 'string' ? handoff.reason : null,
+            reasonCode: handoff.reasonCode,
         };
     } catch {
         firstAction.value = null;
@@ -341,12 +397,18 @@ async function runFirstAction(): Promise<void> {
     }
 }
 
-/** Restart a stopped activation without discarding the rendered field store. */
+/** Explicitly restart the sandbox, including an active session with no view. */
 async function restartActivation(): Promise<void> {
     if (restartBusy.value) return;
     restartBusy.value = true;
     try {
-        await ensurePortableClientActivation(props.pluginId);
+        const source = getPortableClientSource(props.pluginId);
+        if (!source) throw new Error('This plugin is not available in the current workspace.');
+        const restarted = await activatePortableClient(source);
+        if (restarted.status !== 'active') {
+            throw new Error(restarted.blockMessage ?? 'The plugin could not start.');
+        }
+        nodes.value = surfaceNodes.value;
         await loadFirstAction();
     } catch (error) {
         toast.add({
@@ -359,12 +421,63 @@ async function restartActivation(): Promise<void> {
     }
 }
 
-onMounted(async () => {
+let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearRecoveryTimer(): void {
+    if (recoveryTimer === null) return;
+    clearTimeout(recoveryTimer);
+    recoveryTimer = null;
+}
+
+/** Restart a stopped activation silently: the surface is already on screen. */
+async function autoRecoverActivation(): Promise<void> {
+    recoveryTimer = null;
+    const source = getPortableClientSource(props.pluginId);
+    if (!source) return;
+    const attempts = recoveryAttempts.get(props.pluginId) ?? 0;
+    if (attempts >= MAX_AUTO_RECOVERY_ATTEMPTS) return;
+    recoveryAttempts.set(props.pluginId, attempts + 1);
     try {
-        await ensurePortableClientActivation(props.pluginId);
+        const recovered = await activatePortableClient(source);
+        if (recovered.status !== 'active') return;
+        nodes.value = surfaceNodes.value;
+        await loadFirstAction();
     } catch (error) {
         if (import.meta.dev) {
-            console.warn(`[portable-client-view] failed to start "${props.pluginId}"`, error);
+            console.warn(`[portable-client-view] recovery failed for "${props.pluginId}"`, error);
+        }
+    }
+}
+
+watch(
+    () => [activation.value?.status, activation.value?.blockCode] as const,
+    ([status, code]) => {
+        if (status === 'active') {
+            recoveryAttempts.set(props.pluginId, 0);
+            clearRecoveryTimer();
+            return;
+        }
+        if (status !== 'stopped' || recoveryTimer !== null) return;
+        if (code && NON_RECOVERABLE_STOP_CODES.has(code)) return;
+        const attempts = recoveryAttempts.get(props.pluginId) ?? 0;
+        if (attempts >= MAX_AUTO_RECOVERY_ATTEMPTS) return;
+        recoveryTimer = setTimeout(() => void autoRecoverActivation(), 300 * (attempts + 1));
+    },
+    { immediate: true }
+);
+
+onBeforeUnmount(clearRecoveryTimer);
+
+onMounted(async () => {
+    // A stopped activation is left to the recovery watcher above: it restarts
+    // with a backoff instead of racing a second start on mount.
+    if (activation.value === null) {
+        try {
+            await ensurePortableClientActivation(props.pluginId);
+        } catch (error) {
+            if (import.meta.dev) {
+                console.warn(`[portable-client-view] failed to start "${props.pluginId}"`, error);
+            }
         }
     }
     await loadFirstAction();
@@ -409,7 +522,14 @@ async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
             ...(payload.formId === undefined ? {} : { formId: payload.formId }),
             values: payload.values,
         });
+        const outcome = response as { ok?: boolean; message?: string; result?: { ok?: boolean; message?: string } };
+        if (outcome.ok === false || outcome.result?.ok === false) {
+            throw new Error(outcome.message ?? outcome.result?.message ?? 'The plugin could not complete this action.');
+        }
         applyFieldReplacement(response);
+        if (props.surface === 'sidebar' && payload.action.startsWith('navigation.open:')) {
+            await openPortablePane(props.pluginId);
+        }
     } catch (error) {
         toast.add({
             title: 'Plugin action failed',
@@ -424,7 +544,7 @@ async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
 </script>
 
 <template>
-    <div class="flex flex-col gap-4">
+    <div class="flex min-h-0 flex-col gap-4" :class="surface === 'pane' ? 'h-full overflow-hidden' : ''">
         <div
             v-if="!activation"
             class="text-sm text-(--ui-text-muted)"
@@ -448,7 +568,7 @@ async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
         </div>
 
         <template v-else>
-            <div class="flex items-center gap-2 text-xs text-(--ui-text-muted)">
+            <div v-if="!surface" class="flex items-center gap-2 text-xs text-(--ui-text-muted)">
                 <UBadge color="neutral" variant="subtle">{{ statusLabel }}</UBadge>
                 <span>v{{ activation.version }}</span>
                 <span v-if="activation.crashed" class="text-red-500">containment violation</span>
@@ -477,7 +597,7 @@ async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
             </div>
 
             <div
-                v-if="firstAction"
+                v-if="!surface && firstAction && !(firstAction.reasonCode === 'selection-required' && renderNodes.length > 0)"
                 class="flex flex-wrap items-center gap-2 rounded-lg border border-(--ui-border) p-3"
                 data-testid="portable-plugin-first-action"
             >
@@ -524,22 +644,31 @@ async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
                 </div>
             </div>
 
-            <PortableUiTree
+            <div
                 v-if="renderNodes.length > 0"
+                :class="surface === 'pane' ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'flex flex-col gap-2'"
+                :aria-busy="busy"
+                data-testid="portable-plugin-view"
+            >
+            <PortableUiTree
                 ref="treeRef"
+                :key="surface === 'sidebar' ? pluginId : activation?.view?.key ?? pluginId"
                 :nodes="renderNodes"
                 :store="fieldStore"
                 :disabled="locked"
-                :aria-busy="busy"
-                data-testid="portable-plugin-view"
                 @ui-event="forwardUiEvent"
             />
+            </div>
             <div v-else class="text-sm text-(--ui-text-muted)">
-                The plugin has not rendered anything yet.
+                <p>The plugin has not rendered anything yet.</p>
+                <UButton v-if="activation.status === 'active'" class="mt-2" size="sm"
+                    :loading="restartBusy" @click="restartActivation">
+                    Restart plugin
+                </UButton>
             </div>
 
             <section
-                v-if="contributions.length > 0"
+                v-if="!surface && contributions.length > 0"
                 class="flex flex-col gap-3"
                 data-testid="portable-plugin-contributions"
             >
@@ -563,7 +692,7 @@ async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
             </section>
 
             <details
-                v-if="activation.logs.length > 0"
+                v-if="!surface && activation.logs.length > 0"
                 class="rounded-md border border-(--ui-border) p-2 text-xs"
                 data-testid="portable-plugin-logs"
             >

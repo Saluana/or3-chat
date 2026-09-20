@@ -1253,7 +1253,7 @@
                     "name": "providers.md",
                     "path": "/cloud/providers",
                     "category": "Guide",
-                    "summary": "This guide covers how OR3 discovers provider packages, how to install them, and how the Clerk to Convex token bridge works. For normal local or VPS operation, use the managed @or3/cloud operator. For editable source or custom providers, use the"
+                    "summary": "Provider discovery, installation, automatic sibling builds in dev, explicit fallback warnings, OR3_LOCAL_PROVIDERS opt-out, and the Clerk to Convex token bridge. For normal local or VPS operation, use the managed @or3/cloud operator. For editable source or custom providers, use the"
                 },
                 {
                     "name": "release-checklist.md",
@@ -1355,7 +1355,7 @@
                     "name": "portable-profile.md",
                     "path": "/plugins/portable-profile",
                     "category": "Reference",
-                    "summary": "The or3-portable-client-v1 profile generates deterministic or3.package-policy.json and or3.setup.json descriptors from one authoring configuration, requires the or3-portable-client-v1 feature flag, and restricts packages to isolated browser-only code with no plugin dependencies, custom state migrations or install scripts."
+                    "summary": "Portable authoring descriptors and isolated browser-only packages, plus the or3-portable-workspace-v1 sidebar, workspace tab, theme-aware 860px content layout, independently scrolling inspector and mobile slide-out, bounded live field actions and permission-gated chat-tool contract."
                 },
                 {
                     "name": "connections.md",
@@ -1397,7 +1397,7 @@
                     "name": "marketplace.md",
                     "path": "/plugins/marketplace",
                     "category": "Guide",
-                    "summary": "Native discovery, signed authority consent, resumable acquisition, and update checks with semantic ordering, instance version pins, compatibility and linked Library coverage. Includes actionable failure guidance, safe diagnostic reports, instance-wide V2 installation detection, duplicate-install protection, workspace-bound resumed browser canaries, the Admin > Plugins marketplace shortcut, separate Chat/admin sign-in requirements, and publisher listing help for support, privacy and external-cost links."
+                    "summary": "Native discovery, signed authority consent, resumable acquisition, terminal failure history, cancellation feedback, empty-view restart recovery, and update checks with semantic ordering, instance version pins, compatibility and linked Library coverage. Includes portable Open versus Configure behavior, runtime loader prerequisites, legacy Tasks integration limits, actionable failure guidance, safe diagnostic reports, instance-wide V2 installation detection, duplicate-install protection, workspace-bound resumed browser canaries, the Admin > Plugins marketplace shortcut, separate Chat/admin sign-in requirements, and publisher listing help for support, privacy and external-cost links."
                 },
                 {
                     "name": "library.md",

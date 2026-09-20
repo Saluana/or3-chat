@@ -27,7 +27,7 @@
  * - Trusted-host packages (they run through the existing bundled manager).
  */
 
-import { reactive, readonly } from 'vue';
+import { markRaw, shallowReactive, reactive, readonly } from 'vue';
 import type { PackageV2PluginDescriptor } from '~~/shared/plugins/runtime-descriptor';
 import type {
     HostPluginEvent,
@@ -66,6 +66,8 @@ export type PortableActivationStatus =
     | 'stopped';
 
 export interface PortableRenderedView {
+    readonly key?: string | null;
+    readonly navigation?: readonly PortableUiNode[];
     readonly title: string | null;
     readonly nodes: readonly PortableUiNode[];
 }
@@ -476,7 +478,7 @@ function recordEvent(pluginId: string, epoch: number, event: HostPluginEvent): v
     const current = activations.get(pluginId);
     if (!current || current.epoch !== epoch) return;
     if (event.status === 'rendered') {
-        update(pluginId, epoch, { view: { title: event.title, nodes: event.nodes } });
+        update(pluginId, epoch, { view: { key: event.key ?? null, title: event.title, nodes: event.nodes, navigation: event.navigation ?? [] } });
         return;
     }
     if (event.status === 'contributed') {
@@ -720,7 +722,8 @@ export async function activatePortableClient(
 
     update(pluginId, epoch, {
         status: 'active',
-        runtime: started.runtime,
+        // Runtime methods use native private fields; Vue proxies cannot be their receiver.
+        runtime: markRaw(started.runtime),
         capabilities: started.runtime.capabilities,
     });
     return snapshot(pluginId);
@@ -804,7 +807,7 @@ export interface PortableClientSource {
     readonly runtimeEntry: unknown;
 }
 
-const clientSources = new Map<string, PortableClientSource>();
+const clientSources = shallowReactive(new Map<string, PortableClientSource>());
 
 export function setPortableClientSource(source: PortableClientSource): void {
     clientSources.set(source.descriptor.id, source);
@@ -998,4 +1001,20 @@ function snapshotOf(entry: InternalActivation): PortableActivation {
         crashed: entry.crashed,
         startedAt: entry.startedAt,
     });
+}
+
+/** Chat tool calls stay inside the approved sandbox and its storage authority. */
+export async function invokePortableToolRequest(
+    pluginId: string,
+    method: 'runtime.tools' | 'runtime.tool',
+    payload: Readonly<Record<string, unknown>> = {},
+): Promise<unknown> {
+    const activation = await ensurePortableClientActivation(pluginId);
+    const current = activations.get(pluginId);
+    if (activation?.status !== 'active' || !current?.runtime || !current.approvedGrants.includes('tools.register.client')) {
+        throw new Error('This plugin is not approved to provide chat tools in this workspace.');
+    }
+    const response = await current.runtime.callPlugin(method, payload);
+    if (!response.ok) throw new Error(response.message);
+    return response.result;
 }

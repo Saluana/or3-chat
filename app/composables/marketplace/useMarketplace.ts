@@ -477,6 +477,10 @@ export function useMarketplaceInstall() {
     const error = ref<string | null>(null);
     const canaryStatus = ref<string | null>(null);
     const running = ref(false);
+    const canceling = ref(false);
+    const canCancel = computed(() =>
+        status.value !== null && ['pending', 'running', 'paused'].includes(status.value.status)
+    );
     /** Selection/restore generation; late responses cannot retarget controls. */
     let operationGeneration = 0;
 
@@ -512,11 +516,15 @@ export function useMarketplaceInstall() {
         const generation = ++operationGeneration;
         const operations = await listOperations(pluginId);
         if (generation !== operationGeneration) return null;
-        const unfinished = operations.filter(
+        const matching = operations.filter((operation) =>
+            options.workspaceId === undefined || operation.workspaceId === options.workspaceId
+        );
+        const unfinished = matching.filter(
             (operation) =>
                 operation.status !== 'completed' &&
                 operation.status !== 'canceled' &&
-                (options.workspaceId === undefined || operation.workspaceId === options.workspaceId)
+                !matching.some((newer) => newer.workspaceId === operation.workspaceId &&
+                    newer.status === 'completed' && newer.updatedAt > operation.updatedAt)
         );
         const relevant =
             (options.version === undefined
@@ -648,14 +656,24 @@ export function useMarketplaceInstall() {
     };
 
     const cancel = async (): Promise<void> => {
-        if (!operationId.value) return;
-        operationGeneration += 1;
-        const response = await apiPost<AcquisitionResponse>(
-            `/api/admin/plugins/acquisitions/${operationId.value}/cancel`
-        );
-        const view = unwrapAcquisitionOperation(response);
-        if (view) status.value = view;
-        else await poll();
+        if (!operationId.value || !canCancel.value || canceling.value) return;
+        const id = operationId.value;
+        const generation = operationGeneration;
+        canceling.value = true;
+        error.value = null;
+        try {
+            const response = await apiPost<AcquisitionResponse>(
+                `/api/admin/plugins/acquisitions/${id}/cancel`
+            );
+            if (generation !== operationGeneration) return;
+            const view = unwrapAcquisitionOperation(response);
+            if (view) status.value = view;
+            else await poll(id);
+        } catch (caught) {
+            if (generation === operationGeneration) error.value = acquisitionRequestError(caught);
+        } finally {
+            canceling.value = false;
+        }
     };
 
     /**
@@ -708,6 +726,8 @@ export function useMarketplaceInstall() {
         error,
         running,
         canaryStatus,
+        canCancel,
+        canceling,
         start,
         retry,
         cancel,

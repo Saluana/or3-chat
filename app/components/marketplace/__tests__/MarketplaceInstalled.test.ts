@@ -9,6 +9,13 @@ import MarketplaceInstalled from '../MarketplaceInstalled.vue';
  * "no version selected" a guessed `pointer.selected.version` produced.
  */
 const fetchMock = vi.fn();
+const openPageMock = vi.fn();
+const sourceMock = vi.fn(() => ({}));
+vi.mock('~/composables/plugins/portable-pane', () => ({openPortablePane: (...args: unknown[]) => openPageMock(...args)}));
+vi.mock('~/composables/plugins/portable-client-runtime', () => ({
+    getPortableClientSource: () => sourceMock(),
+    usePortableActivations: () => new Map(),
+}));
 vi.stubGlobal('$fetch', fetchMock);
 
 const stubs = {
@@ -73,6 +80,9 @@ describe('MarketplaceInstalled', () => {
         expect(wrapper.text()).toContain('2.1.0');
         expect(wrapper.text()).not.toContain('no version selected');
         expect(wrapper.text()).toContain('Open');
+        const open = wrapper.findAll('button').find((button) => button.text() === 'Open')!;
+        await open.trigger('click');
+        expect(openPageMock).toHaveBeenCalledWith('sample.plugin');
     });
 
     it('hides Open and the version when no slot has a readable selection', async () => {

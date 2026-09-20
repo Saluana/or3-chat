@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AcquisitionStatusView } from '~~/shared/plugins/acquisition/contracts';
 const { reconcileMock } = vi.hoisted(() => ({ reconcileMock: vi.fn() }));
 
 // The signal itself is guarded by `import.meta.client`, which is not set in the
@@ -440,5 +441,47 @@ describe('deep links', () => {
         expect(marketplacePluginDeepLink('https://or3.test', 'sample.plugin')).toBe(
             'https://or3.test/?dashboard=marketplace&plugin=sample.plugin'
         );
+    });
+});
+
+
+describe('install cancellation and recorded results', () => {
+    it('does not cancel a terminal failure', async () => {
+        const install = useMarketplaceInstall();
+        install.operationId.value = 'op-1';
+        install.status.value = statusView({ status: 'failed' }) as unknown as AcquisitionStatusView;
+        expect(install.canCancel.value).toBe(false);
+        await install.cancel();
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('reports a rejected cancel and leaves the operation available', async () => {
+        const install = useMarketplaceInstall();
+        install.operationId.value = 'op-1';
+        install.status.value = statusView({ status: 'paused' }) as unknown as AcquisitionStatusView;
+        fetchMock.mockRejectedValue({ statusCode: 403 });
+        await install.cancel();
+        expect(install.error.value).toContain('administrator access');
+        expect(install.status.value?.status).toBe('paused');
+        expect(install.canceling.value).toBe(false);
+    });
+
+    it('updates the displayed operation after cancellation', async () => {
+        const install = useMarketplaceInstall();
+        install.operationId.value = 'op-1';
+        install.status.value = statusView({ status: 'paused' }) as unknown as AcquisitionStatusView;
+        fetchMock.mockResolvedValue({ operation: statusView({ status: 'canceled', canceled: true }) });
+        await install.cancel();
+        expect(install.status.value?.status).toBe('canceled');
+        expect(install.canCancel.value).toBe(false);
+    });
+
+    it('does not restore an old failure after a newer successful installation', async () => {
+        fetchMock.mockResolvedValue({ operations: [
+            statusView({ updatedAt: 20 }),
+            statusView({ operationId: 'old', status: 'failed', updatedAt: 10 }),
+        ] });
+        const install = useMarketplaceInstall();
+        expect(await install.restore('sample.plugin')).toBeNull();
     });
 });

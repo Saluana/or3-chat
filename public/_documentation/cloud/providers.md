@@ -47,16 +47,26 @@ bun add or3-provider-fs
 bun add or3-provider-s3
 ```
 
-Or local sibling packages during development:
+### Local provider development
 
-```bash
-bun add or3-provider-clerk@link:../or3-provider-clerk
-bun add or3-provider-convex@link:../or3-provider-convex
-bun add or3-provider-basic-auth@link:../or3-provider-basic-auth
-bun add or3-provider-sqlite@link:../or3-provider-sqlite
-bun add or3-provider-fs@link:../or3-provider-fs
-bun add or3-provider-s3@link:../or3-provider-s3
-```
+`bun run dev` and `bun run dev:ssr` automatically rebuild available sibling
+`or3-provider-*` repositories and use their built Nuxt modules for that dev
+process. Each provider prints its version and resolved local path. Restart the
+dev command after editing provider source to rebuild it.
+
+A missing sibling or failed build prints a warning and uses the installed
+package instead. A failed local build is never selected merely because an old
+`dist/` exists. Keep provider dependencies installed in each sibling repository
+(`bun install`) so its build can run.
+
+Set `OR3_LOCAL_PROVIDERS=false` to test installed packages only. CI defaults to
+installed packages; `OR3_LOCAL_PROVIDERS=true` explicitly enables local builds
+there. Direct `nuxt dev` invocations do not perform this preparation: use the
+wrapper commands above. Production builds always resolve installed packages.
+
+The wrapper passes `OR3_DEV_PROVIDER_MODULES` internally to its Nuxt child; do
+not persist that generated map in `.env`. No dependency pins, lockfiles or
+installed packages are rewritten by local provider selection.
 
 ## Configure Providers
 

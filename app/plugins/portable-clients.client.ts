@@ -43,6 +43,12 @@ import {
 } from '~/composables/dashboard/useDashboardPlugins';
 import { WORKSPACE_PLUGIN_RECONCILE_EVENT } from '~/composables/plugins/bundled-v1-manager-runtime';
 
+import { usePaneApps } from "~/composables/core/usePaneApps";
+import { registerSidebarPage } from "~/composables/sidebar/registerSidebarPage";
+import { portablePaneId } from "~/composables/plugins/portable-pane";
+
+import { registerPortableTools } from "~/composables/plugins/portable-tools";
+
 const DASHBOARD_PLUGIN_PREFIX = 'portable:';
 
 export function isPortableClientDescriptor(
@@ -111,10 +117,13 @@ export default defineNuxtPlugin(() => {
 
     const session = useSessionContext();
     const registeredPages = new Set<string>();
+    const surfaceDisposers = new Map<string, () => void>();
     let currentRevision = '';
     let syncToken = 0;
 
     const stop = async (pluginId: string): Promise<void> => {
+        surfaceDisposers.get(pluginId)?.();
+        surfaceDisposers.delete(pluginId);
         registeredPages.delete(pluginId);
         unregisterDashboardPlugin(`${DASHBOARD_PLUGIN_PREFIX}${pluginId}`);
         removePortableClientSource(pluginId);
@@ -184,6 +193,25 @@ export default defineNuxtPlugin(() => {
             });
             if (registeredPages.has(pluginId)) continue;
             registeredPages.add(pluginId);
+            const pane = usePaneApps().registerPaneApp({
+                id: portablePaneId(pluginId), label: descriptor.name,
+                icon: "i-lucide-app-window", pluginId,
+                component: { render: () => h("div", {class:"h-full min-h-0 overflow-hidden"}, [h(PORTABLE_CLIENT_VIEW, {pluginId,surface:"pane"})]) },
+            });
+            const sidebar = registerSidebarPage({
+                id: portablePaneId(pluginId), label: descriptor.name,
+                icon: "i-lucide-app-window", pluginId,
+                component: { render: () => h("div", {class:"px-3 py-5"}, [h(PORTABLE_CLIENT_VIEW, {pluginId,surface:"sidebar"})]) },
+                usesDefaultHeader: false,
+            });
+            let disposeTools = () => {};
+            let disposed = false;
+            surfaceDisposers.set(pluginId, () => { disposed = true; disposeTools(); sidebar(); pane.dispose(); });
+            if (descriptor.effectiveGrants.includes("tools.register.client")) {
+                void registerPortableTools(pluginId).then(dispose => {
+                    if (disposed) dispose(); else disposeTools = dispose;
+                }).catch(error => console.warn("[portable-clients] tool registration failed", pluginId, error));
+            }
             registerDashboardPlugin({
                 id: `${DASHBOARD_PLUGIN_PREFIX}${pluginId}`,
                 icon: 'i-lucide-puzzle',

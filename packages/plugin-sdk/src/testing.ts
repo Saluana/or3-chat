@@ -457,18 +457,23 @@ export interface PortableTestHost {
  * ------------------------------------------------------------------------ */
 
 const TEST_UI_MAX_TEXT_BYTES = 8 * 1024;
-const TEST_UI_MAX_TREE_BYTES = 16 * 1024;
-const TEST_UI_MAX_NODES = 200;
-const TEST_UI_MAX_DEPTH = 8;
+const TEST_UI_MAX_TREE_BYTES = 64 * 1024;
+const TEST_UI_MAX_NODES = 1000;
+const TEST_UI_MAX_DEPTH = 12;
 /** Whole-tree item budget (`maxUiTreeItems` in the host containment budgets). */
-const TEST_UI_MAX_TREE_ITEMS = 2048;
+const TEST_UI_MAX_TREE_ITEMS = 12_000;
 /** Per-collection cap (`PORTABLE_UI_MAX_ITEMS`: children, list items, rows). */
 const TEST_UI_MAX_ITEMS = 200;
 const TEST_UI_MAX_COLUMNS = 12;
 const TEST_UI_MAX_OPTIONS = 100;
+const TEST_UI_MAX_BADGES = 4;
+const TEST_UI_MAX_ITEM_CHILDREN = 50;
 const TEST_UI_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/;
 
 const TEST_UI_FIELD_TYPES = new Set(['field.text', 'field.textarea', 'field.select', 'field.toggle']);
+const TEST_UI_TONES = ['neutral', 'info', 'success', 'warning', 'danger'];
+const TEST_UI_TEXT_TONES = ['default', 'muted', 'success', 'warning', 'danger'];
+const TEST_UI_ACCENTS = ['slate', 'blue', 'violet', 'pink', 'green', 'amber', 'orange', 'red'];
 
 function testUtf8Bytes(value: string): number {
     return new TextEncoder().encode(value).byteLength;
@@ -551,8 +556,80 @@ export function assertValidPortableTestView(view: PortableUiView, source: string
         const node = raw as Record<string, unknown>;
         const type = typeof node.type === 'string' ? node.type : '';
         switch (type) {
+            case 'heading':
+                boundedString(node.text, 'heading.text', 512);
+                if (node.level !== undefined && node.level !== 2 && node.level !== 3) fail('heading.level must be 2 or 3');
+                if (node.description !== undefined) boundedString(node.description, 'heading.description', 1024);
+                if (node.meta !== undefined) boundedString(node.meta, 'heading.meta', 256);
+                break;
+            case 'badge':
+                boundedString(node.label, 'badge.label', 64);
+                if (node.tone !== undefined && !TEST_UI_TONES.includes(String(node.tone))) {
+                    fail('badge.tone must be one of neutral|info|success|warning|danger');
+                }
+                break;
+            case 'divider':
+                break;
+            case 'item':
+                boundedId(node.id, 'item.id');
+                boundedString(node.label, 'item.label', 512);
+                boundedString(node.action, 'item.action', 256);
+                if (node.description !== undefined) boundedString(node.description, 'item.description', 1024);
+                if (node.meta !== undefined) boundedString(node.meta, 'item.meta', 256);
+                if (node.color !== undefined && !TEST_UI_ACCENTS.includes(String(node.color))) {
+                    fail('item.color must be a known accent');
+                }
+                if (node.badges !== undefined) {
+                    const badges = boundedItems(node.badges, 'item.badges', TEST_UI_MAX_BADGES);
+                    for (const badge of badges) {
+                        if (!badge || typeof badge !== 'object' || Array.isArray(badge)) {
+                            fail('item.badges entries must be objects');
+                        }
+                        const record = badge as { label?: unknown; tone?: unknown };
+                        boundedString(record.label, 'badge.label', 64);
+                        if (record.tone !== undefined && !TEST_UI_TONES.includes(String(record.tone))) {
+                            fail('badge.tone must be one of neutral|info|success|warning|danger');
+                        }
+                    }
+                }
+                if (node.deleteAction !== undefined) boundedString(node.deleteAction, 'item.deleteAction', 256);
+                if (node.detailAction !== undefined) boundedString(node.detailAction, 'item.detailAction', 256);
+                if (node.expandAction !== undefined) boundedString(node.expandAction, 'item.expandAction', 256);
+                if (node.expanded !== undefined && typeof node.expanded !== 'boolean') {
+                    fail('item.expanded must be boolean');
+                }
+                if (node.selected !== undefined && typeof node.selected !== 'boolean') fail('item.selected must be boolean');
+                if (node.checked !== undefined && typeof node.checked !== 'boolean') fail('item.checked must be boolean');
+                if (node.children !== undefined) {
+                    boundedItems(node.children, 'item.children', TEST_UI_MAX_ITEM_CHILDREN);
+                }
+                break;
+            case 'columns': {
+                const bands = boundedItems(node.children, 'columns children', TEST_UI_MAX_COLUMNS);
+                if (bands.length === 0) fail('columns requires column children');
+                for (const band of bands) {
+                    if (!band || typeof band !== 'object' || Array.isArray(band)) {
+                        fail('columns children must be column nodes');
+                    }
+                    if ((band as { type?: unknown }).type !== 'column') {
+                        fail('columns children must be column nodes');
+                    }
+                }
+                break;
+            }
+            case 'column':
+                if (
+                    node.width !== undefined &&
+                    !['sm', 'md', 'lg', 'fill'].includes(String(node.width))
+                ) {
+                    fail('column.width must be sm|md|lg|fill');
+                }
+                break;
             case 'text':
                 boundedString(node.text, 'text');
+                if (node.tone !== undefined && !TEST_UI_TEXT_TONES.includes(String(node.tone))) {
+                    fail('text.tone must be one of default|muted|success|warning|danger');
+                }
                 break;
             case 'markdown':
                 boundedString(node.markdown, 'markdown');
@@ -627,6 +704,12 @@ export function assertValidPortableTestView(view: PortableUiView, source: string
                 break;
             case 'form': {
                 boundedId(node.id, 'form.id');
+                if (
+                    node.layout !== undefined &&
+                    !['card', 'inline', 'plain'].includes(String(node.layout))
+                ) {
+                    fail('form.layout must be card|inline|plain');
+                }
                 const formChildren = Array.isArray(node.children) ? node.children : [];
                 for (const child of formChildren) {
                     const childType =
@@ -659,6 +742,12 @@ export function assertValidPortableTestView(view: PortableUiView, source: string
                 if (node.description !== undefined) boundedString(node.description, 'field.description');
                 if (type === 'field.text' && node.placeholder !== undefined) {
                     boundedString(node.placeholder, 'field.placeholder');
+                }
+                if (type === 'field.text' && node.search !== undefined && typeof node.search !== 'boolean') {
+                    fail('field.search must be boolean');
+                }
+                if (type === 'field.select' && node.onChange !== undefined) {
+                    boundedId(node.onChange, 'field.select.onChange');
                 }
                 if (type === 'field.select') {
                     const options = boundedItems(node.options, 'field.select options', TEST_UI_MAX_OPTIONS);
@@ -697,7 +786,7 @@ export function assertValidPortableTestView(view: PortableUiView, source: string
         for (const child of children) visit(child, depth + 1);
     };
 
-    for (const node of view.nodes) visit(node, 1);
+    for (const node of [...view.nodes, ...(view.navigation ?? [])]) visit(node, 1);
 }
 
 /**

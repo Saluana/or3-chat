@@ -14,6 +14,7 @@ import { providerIdToModuleId } from './shared/cloud/provider-compatibility';
 import { stripBrokenOpenRouterSourcemapsPlugin } from './plugins/vite-strip-broken-openrouter-sourcemaps';
 import { resolveConnectCloudflareReadiness } from './shared/cloud/wizard/cloudflare-attestation';
 import { DEFAULT_WEBHOOKS_BLOCK_PRIVATE_IPS } from './shared/config/constants';
+import { resolveDevProviderModule } from './shared/dev/local-providers';
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
@@ -111,6 +112,10 @@ const pluginSdkSourceRoot = resolve(__dirname, 'packages/plugin-sdk/src');
 const hasPluginSdkSource = existsSync(resolve(pluginSdkSourceRoot, 'index.ts'));
 const pluginSdkSourceAliases: Record<string, string> = hasPluginSdkSource
     ? {
+          // The root entry too: a plugin loaded from a sibling checkout must
+          // resolve the *same* SDK instance this app runs, or its `ui` helpers
+          // come from a second copy with a different shape.
+          '@or3/plugin-sdk': resolve(pluginSdkSourceRoot, 'index.ts'),
           '@or3/plugin-sdk/package-tree': resolve(
               pluginSdkSourceRoot,
               'package-tree.ts',
@@ -282,19 +287,13 @@ for (const moduleId of or3ProviderModules) {
     generatedProviderModules.push(moduleId);
 }
 
-function resolveLocalProviderModule(moduleId: string): string {
-    if (moduleId !== 'or3-provider-sqlite/nuxt') return moduleId;
-    const localModule = resolve(__dirname, '../or3-provider-sqlite/src/module.ts');
-    return existsSync(localModule) ? localModule : moduleId;
-}
-
 const activeProviderModules = Array.from(
     new Set([
         ...generatedProviderModules,
         ...providerModulesFromConfig,
         ...pluginModulesFromConfig,
     ])
-).map(resolveLocalProviderModule);
+).map((moduleId) => resolveDevProviderModule(moduleId));
 
 const authProviderAvailable =
     isStaticCloudDisabledBuild ||
@@ -554,6 +553,9 @@ export default defineNuxtConfig({
     // Disable SSR for test pages to avoid hydration mismatches
     routeRules: {
         '/_tests/**': { ssr: false },
+        // Renderer harness for the portable Tasks plugin. The page itself
+        // refuses to render outside development, so this never ships.
+        '/__tasks-preview': { ssr: false },
         ...(isScrollTestHarnessEnabled
             ? { '/__or3-scroll-test': { ssr: false } }
             : {}),

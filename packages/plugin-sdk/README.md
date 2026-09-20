@@ -44,6 +44,19 @@ without importing OR3 application internals.
 
 ## CLI
 
+### Portable workspace UI
+
+Hosts advertising `or3-portable-workspace-v1` render a separate navigation tree
+in the existing sidebar and the main tree in a workspace tab. The bounded
+`columns` layout `workspace` gives content an approximately 860px maximum width
+and an independently scrolling inspector. Below 760px, the inspector uses the
+host's accessible modal slide-out instead of stacking below the content.
+`field.text` and `field.select` can declare a bounded `onChange` action: text
+input is debounced and select changes dispatch immediately with the current form
+values. Host theme tokens, focus styles and touch sizing apply automatically,
+without publisher CSS or DOM access. See the host's `plugins/portable-profile`
+documentation for the complete surface and permission-gated tool contract.
+
 The package installs an `or3-plugin` binary that works with no OR3 checkout and
 no private path aliases:
 

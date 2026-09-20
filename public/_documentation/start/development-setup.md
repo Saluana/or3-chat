@@ -50,6 +50,11 @@ before starting. If another OR3 or Nuxt server is already running there, it
 explains the conflict and offers the next free port instead of silently
 starting a second broken server.
 
+Available sibling provider repositories are rebuilt and selected automatically
+by the dev wrapper. Build failures or missing siblings fall back to installed
+packages with a warning. Use `OR3_LOCAL_PROVIDERS=false bun run dev` to test
+installed packages only. See [local provider development](../cloud/providers#local-provider-development).
+
 Local-first mode needs no account or `.env` file. It stores data in the
 browser. Connect OpenRouter from the in-app onboarding when you are ready.
 

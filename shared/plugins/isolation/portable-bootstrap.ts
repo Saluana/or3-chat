@@ -96,7 +96,7 @@ export function defaultHostAbi(
 ): HostAbiDescriptor {
     return Object.freeze({
         version: HOST_ABI_VERSION,
-        features: [PORTABLE_CLIENT_FEATURE],
+        features: [PORTABLE_CLIENT_FEATURE, 'or3-portable-workspace-v1'],
         qualifiedBrowsers: [...QUALIFIED_BROWSER_ENGINES],
         staticHost: false,
         ...overrides,

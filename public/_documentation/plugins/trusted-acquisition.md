@@ -119,10 +119,15 @@ The pipeline presents the host's declared package capabilities (`supportedTrustM
 
 ## Task-list staging package
 
-`or3sal.tasks` 0.2.0 uses Plugin Runtime V2, the portable client profile and
-SDK 2.0.0. It requires only `storage.read` and `storage.write`. Its source project
-is `or3-plugin-tasks`; build with Bun and pack the bundled `dist` tree. Install
-the reviewed staging release through Marketplace, approve storage access,
-complete setup, and open the portable task view. The legacy Nuxt module remains
-archived in the plugin source: AI tools, sidebar registration and notifications
-are not part of this portable release, and existing `or3-tasks` data is unchanged.
+`or3sal.tasks` 0.3.0 adds the portable workspace feature: sidebar lists, a Tasks
+tab, compact rows and a right-hand inspector. It requests `storage.read`,
+`storage.write` and `tools.register.client`; the chat tools share UI storage and
+start disabled. Build the plugin with its pinned matching SDK and pack `dist`.
+Submit the package and exact source through the staging marketplace review and
+detached-signing flow, then update through Marketplace in Chat. Old signed package
+bytes and pointers must never be replaced manually.
+
+The original `task-lists-v1` blob is preserved when migrating to v2 per-list
+documents. Legacy posts/meta records are not changed or imported. Downgrading to
+0.2.0 reads the preserved original snapshot, not later v2 edits. Notifications,
+assignees, comments and attachments are not implemented.

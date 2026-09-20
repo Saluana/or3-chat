@@ -65,6 +65,34 @@ identical bytes and hashes.
 
 ## Required feature flag
 
+### Workspace surfaces
+
+Hosts advertising `or3-portable-workspace-v1` accept `ui.render.navigation` as
+the sidebar tree and `ui.render.nodes` as the workspace tab. Both share one
+validated node/text budget. `key` resets the pane's field state on list changes.
+Sidebar actions prefixed `navigation.open:` are handled by the plugin before the
+host opens or focuses its workspace tab using the existing resource navigation API.
+The current portable surface has one selected-list state per activation; duplicated
+splits share that selection. Independent per-list tabs are not yet supported.
+
+Host-rendered `columns` can use `layout: 'workspace'` for an unframed content area
+and right-hand inspector. The main content is centered and capped at 860px.
+The list and inspector scroll independently within the workspace pane; below a
+760px pane width the inspector opens in a modal slide-out with Escape dismissal,
+focus containment and return focus. Controls and selection states use the host theme tokens, with larger
+touch targets and 16px text inputs on narrow displays. `field.text` and
+`field.select` can declare an `onChange` action: text changes are debounced,
+while select changes dispatch immediately through the existing mediated action
+channel with the current form values.
+`item` supports completion, selection, bounded badges,
+counts and expandable children; forms support inline/plain layouts. Buttons accept
+a bounded Lucide icon and `iconOnly`, with their label retained for accessibility.
+Text fields accept `date: true`. Publisher HTML, CSS and DOM access remain prohibited.
+
+The optional `tools.register.client` grant enables discovery through `runtime.tools`
+and invocation through `runtime.tool`. Names must use the plugin namespace; tools
+start disabled and are removed on workspace/version teardown.
+
 The policy always requires the feature flag `or3-portable-client-v1`.
 `applyPortableProfileToManifest()` merges it into `manifest.features.required`
 and sets `manifest.settings.schema` to the setup schema path, so the manifest and

@@ -250,6 +250,8 @@ describe('MarketplaceDiscover', () => {
         await wrapper.get('[data-testid="marketplace-card"]').trigger('click');
         await flush();
         expect(wrapper.text()).toContain('This version is already installed');
+        expect(wrapper.text()).toContain('Refreshing does not retry it');
+        expect(wrapper.findAll('button').some((button) => button.text() === 'Cancel')).toBe(false);
         expect(wrapper.text()).not.toContain('secret-token');
         expect(wrapper.find('[data-testid="marketplace-continue"]').exists()).toBe(false);
         await wrapper.get('[data-testid="marketplace-copy-diagnostics"]').trigger('click');

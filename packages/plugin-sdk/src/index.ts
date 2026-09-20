@@ -31,9 +31,17 @@ export type {
 export type { PluginError, PluginErrorCode, PluginResult } from './results';
 export { definePortableUi, ui } from './ui';
 export type {
+    PortableBadge,
     PortableButton,
+    PortableColumn,
+    PortableColumns,
     PortableFormField,
+    PortableHeading,
+    PortableItem,
+    PortableUiAccent,
     PortableUiNode,
+    PortableUiTextTone,
+    PortableUiTone,
     PortableUiView,
 } from './ui';
 export { createPortableClient, PORTABLE_EVENT, PORTABLE_RPC_VERSION } from './portable';

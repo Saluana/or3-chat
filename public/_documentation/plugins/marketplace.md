@@ -13,6 +13,18 @@ they are disabled. Use **Installed** to activate an existing package in another
 workspace; clicking Install again does not create a second copy. Candidate
 preparation also refuses the already-current package without changing its pointer.
 
+For enabled portable packages, **Open** opens the plugin's running dashboard
+surface; **Configure** opens setup. Disabled packages must be enabled first.
+The instance also needs `OR3_PLUGIN_MODULE_LOADER_V2_ENABLED=true` and the target
+workspace must be included in `OR3_PLUGIN_MODULE_LOADER_V2_WORKSPACE_IDS` when that
+allowlist is set. A stored or enabled package alone does not establish runtime
+eligibility. The loader still enforces the package's approved workspace grants.
+
+The current portable profile exposes dashboard and command-palette contributions.
+It does not replace legacy sidebar, workspace-pane, chat-tool or reminder
+integrations. Tasks 0.2.0 is a portable task-list surface, not a feature-complete
+migration of the legacy Tasks plugin; legacy source and data remain separate.
+
 ## Configuration
 
 The marketplace reads the same reviewed-acquisition configuration as the install pipeline:
@@ -78,6 +90,16 @@ Every mutation the views perform — enabling, disabling, removing, rolling back
 Resuming an installation runs its browser canary in the operation's recorded workspace, even when the administrator's Chat session currently uses another workspace. Permission review and runtime evidence remain bound to that installation's workspace.
 
 ## Installation failures and support reports
+
+Failed and blocked results are saved history: refreshing does not retry them.
+Cancel is offered only for pending, running or paused operations; a running
+cancellation shows **Cancel requested**, and request failures appear in the view.
+Older failures are no longer restored after a newer successful installation in
+the same workspace. Retry/Continue remains available when the server allows it.
+
+Portable sidebar surfaces display the main plugin view when the package does not
+provide separate navigation. An empty active view offers **Restart plugin**, which
+starts a fresh contained activation and reports startup failures.
 
 Discover and Updates explain recorded acquisition failures with recovery guidance,
 the plugin version and target workspace. Retry/Continue is offered only when the

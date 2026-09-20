@@ -7,17 +7,32 @@
  * list filters the same entries down to those with a recorded candidate so a
  * release is reviewed, health-checked and activated through the same services.
  */
-import { onMounted, ref } from 'vue';
+import { inject, onMounted, ref } from 'vue';
 import { useToast } from '#imports';
 import { useMarketplaceInstalled } from '~/composables/marketplace/useMarketplace';
-import { usePortableActivations } from '~/composables/plugins/portable-client-runtime';
+import { getPortableClientSource, usePortableActivations } from '~/composables/plugins/portable-client-runtime';
+import { openPortablePane } from '~/composables/plugins/portable-pane';
 
 
 const toast = useToast();
 const installed = useMarketplaceInstalled();
 const activations = usePortableActivations();
+const closeDashboard = inject<() => void>('or3:dashboard:close', () => {});
 const busyPluginId = ref<string | null>(null);
 onMounted(() => installed.load());
+
+async function openPlugin(pluginId: string): Promise<void> {
+    if (!getPortableClientSource(pluginId)) {
+        toast.add({ title: 'Plugin interface unavailable', description: 'The plugin runtime is not available in this workspace. Check runtime diagnostics in Admin → Plugins. Configure opens setup only.', color: 'warning' });
+        return;
+    }
+    try {
+        await openPortablePane(pluginId);
+        closeDashboard();
+    } catch (error) {
+        toast.add({title: 'Could not open plugin', description: error instanceof Error ? error.message : 'The workspace pane is unavailable.', color: 'warning'});
+    }
+}
 
 function isEnabled(pluginId: string): boolean {
     return installed.enabled.value.includes(pluginId);
@@ -174,7 +189,8 @@ async function apiGet<T>(url: string): Promise<T> {
                             color="primary"
                             variant="soft"
                             icon="i-lucide-play"
-                            :to="`/plugins/${entry.pluginId}/setup`"
+                            :disabled="!isEnabled(entry.pluginId)"
+                            @click="openPlugin(entry.pluginId)"
                         >
                             Open
                         </UButton>

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PackageV2PluginDescriptor } from '~~/shared/plugins/runtime-descriptor';
+import { invokePortableUiEvent } from '../portable-client-runtime';
 
 /**
  * Two contract bugs this pins down:
@@ -252,6 +253,21 @@ describe('portable settings services', () => {
 });
 
 describe('demand-driven activation', () => {
+    it('keeps private-field runtime instances unproxied for actions and teardown', async () => {
+        class PrivateRuntime {
+            #active = true;
+            capabilities = [];
+            async callPlugin() { return { ok: this.#active }; }
+            dispose() { this.#active = false; }
+        }
+        const runtime = new PrivateRuntime();
+        startPortableWorkerMock.mockResolvedValue({ ...startedRuntime('private'), runtime });
+        setPortableClientSource({ descriptor: descriptor(), workspaceId: 'ws-1', runtimeEntry: undefined });
+        await ensurePortableClientActivation('sample.plugin');
+        await expect(invokePortableUiEvent('sample.plugin', { action: 'tasks.create-list' })).resolves.toEqual({ ok: true });
+        await expect(deactivatePortableClient('sample.plugin')).resolves.not.toThrow();
+    });
+
     it('starts a recorded source on demand and reuses a running activation', async () => {
         startPortableWorkerMock.mockResolvedValue(startedRuntime('demand'));
         setPortableClientSource({
