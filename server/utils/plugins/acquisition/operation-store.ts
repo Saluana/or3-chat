@@ -83,6 +83,7 @@ export interface AcquisitionOperationPatch {
     readonly setupRevision?: number | null;
     readonly authoritySha256?: Sha256;
     readonly acceptedAdvisorySequence?: number;
+    readonly acceptedSecurityRevision?: number;
     readonly advisoryCheckpointSha256?: Sha256 | null;
     readonly advisoryCheckpointIssuedAt?: string | null;
     readonly advisoryCheckpointExpiresAt?: number | null;
@@ -118,6 +119,7 @@ export interface CreateOperationInput {
      */
     readonly stage?: PluginAcquisitionStage;
     readonly acceptedAdvisorySequence?: number;
+    readonly acceptedSecurityRevision?: number;
     readonly advisoryCheckpointSha256?: Sha256 | null;
     readonly advisoryCheckpointIssuedAt?: string | null;
     readonly advisoryCheckpointExpiresAt?: number | null;
@@ -420,6 +422,7 @@ export class PluginAcquisitionOperationStore {
             setupRevision: null,
             authoritySha256: input.release.authoritySha256,
             acceptedAdvisorySequence: input.acceptedAdvisorySequence ?? 0,
+            acceptedSecurityRevision: input.acceptedSecurityRevision ?? 0,
             advisoryCheckpointSha256: input.advisoryCheckpointSha256 ?? null,
             advisoryCheckpointIssuedAt: input.advisoryCheckpointIssuedAt ?? null,
             advisoryCheckpointExpiresAt: input.advisoryCheckpointExpiresAt ?? null,
@@ -495,6 +498,9 @@ export class PluginAcquisitionOperationStore {
                 ...(patch.acceptedAdvisorySequence === undefined
                     ? {}
                     : { acceptedAdvisorySequence: patch.acceptedAdvisorySequence }),
+                ...(patch.acceptedSecurityRevision === undefined
+                    ? {}
+                    : { acceptedSecurityRevision: patch.acceptedSecurityRevision }),
                 ...(patch.advisoryCheckpointSha256 === undefined
                     ? {}
                     : { advisoryCheckpointSha256: patch.advisoryCheckpointSha256 }),

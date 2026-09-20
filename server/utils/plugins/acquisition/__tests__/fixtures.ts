@@ -272,6 +272,20 @@ export interface FakeRegistryOptions {
     readonly coverageRequired?: boolean;
     /** Override the complete-checkpoint sequence for cursor replay tests. */
     readonly checkpointSequence?: number;
+    /** Full snapshot override, for revision/equivocation replay tests. */
+    readonly snapshot?: RegistryAdvisorySnapshot;
+    readonly keyStatuses?: RegistryAdvisorySnapshot['keyStatuses'];
+    /** Override individual checkpoint envelope fields. */
+    readonly checkpoint?: Partial<
+        Pick<
+            RegistryAdvisoryCheckpoint,
+            'registryOrigin' | 'revision' | 'sequence' | 'issuedAt' | 'expiresAt' | 'snapshotSha256'
+        >
+    >;
+    /** Sign the checkpoint with a different key than the release fixture. */
+    readonly checkpointKey?: TestKey;
+    /** Replace the whole `/checkpoint` response, for malformed-shape tests. */
+    readonly checkpointResponse?: unknown;
 }
 
 /**
@@ -283,13 +297,17 @@ export interface FakeRegistryOptions {
 export function fakeRegistryTransport(options: FakeRegistryOptions): typeof fetch {
     const { fixture } = options;
     const snapshotPromise = (async (): Promise<RegistryAdvisorySnapshot> => {
+        if (options.snapshot) return options.snapshot;
         const advisories = [...(options.advisories ?? [])] as AdvisoryDocument[];
         const sequence = options.checkpointSequence ?? Math.max(9, ...advisories.map((entry) => entry.sequence));
         return {
-            schemaVersion: 1,
+            schemaVersion: 2,
+            // Every mutation bumps the revision in the real registry; fixtures
+            // only need it to be monotonic across replayed responses.
+            revision: 1,
             sequence,
             advisories,
-            keyStatuses: [
+            keyStatuses: options.keyStatuses ?? [
                 {
                     keyId: fixture.key.keyId,
                     status: 'active',
@@ -299,21 +317,28 @@ export function fakeRegistryTransport(options: FakeRegistryOptions): typeof fetc
         };
     })();
     const checkpointPromise = snapshotPromise.then(async (snapshot) => {
-        const issuedAt = new Date().toISOString();
-        const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
+        const signer = options.checkpointKey ?? {
+            key: fixture.key,
+            privateKeyBase64: fixture.privateKeyBase64,
+        };
+        const issuedAt = options.checkpoint?.issuedAt ?? new Date().toISOString();
+        const expiresAt = options.checkpoint?.expiresAt ?? new Date(Date.now() + 10 * 60_000).toISOString();
         const unsigned: RegistryAdvisoryCheckpoint = {
-            schemaVersion: 1,
-            registryOrigin: ORIGIN,
-            sequence: snapshot.sequence,
+            schemaVersion: 2,
+            registryOrigin: options.checkpoint?.registryOrigin ?? ORIGIN,
+            revision: options.checkpoint?.revision ?? snapshot.revision,
+            sequence: options.checkpoint?.sequence ?? snapshot.sequence,
             issuedAt,
             expiresAt,
-            snapshotSha256: await sha256Identity(encodeRegistryAdvisorySnapshot(snapshot)),
-            signature: { keyId: fixture.key.keyId, algorithm: 'ed25519', value: 'fixture' },
+            snapshotSha256:
+                options.checkpoint?.snapshotSha256 ??
+                (await sha256Identity(encodeRegistryAdvisorySnapshot(snapshot))),
+            signature: { keyId: signer.key.keyId, algorithm: 'ed25519', value: 'fixture' },
         };
         return await signRegistryAdvisoryCheckpointForTest({
             checkpoint: unsigned,
-            keyId: fixture.key.keyId,
-            privateKeyBase64: fixture.privateKeyBase64,
+            keyId: signer.key.keyId,
+            privateKeyBase64: signer.privateKeyBase64,
         });
     });
     const artifactResponse = (range: string | undefined): Response => {
@@ -340,6 +365,9 @@ export function fakeRegistryTransport(options: FakeRegistryOptions): typeof fetc
             });
         }
         if (url.endsWith('/checkpoint')) {
+            if (options.checkpointResponse !== undefined) {
+                return jsonResponse(options.checkpointResponse);
+            }
             const [checkpoint, snapshot] = await Promise.all([checkpointPromise, snapshotPromise]);
             return jsonResponse({ checkpoint, snapshot });
         }

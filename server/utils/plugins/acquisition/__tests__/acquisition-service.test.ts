@@ -1,4 +1,5 @@
-import { basename } from 'node:path';
+import { readFile, writeFile } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
     describeAcquisitionStatus,
@@ -33,8 +34,10 @@ import {
     releaseFixture,
     tempRoot,
     type ReleaseFixture,
+    type TestKey,
 } from './fixtures';
 import { signReleaseMetadataForTest } from '../release-verify';
+import type { RegistryAdvisorySnapshot } from '~~/shared/plugins/acquisition/release-metadata';
 import { PluginAcquisitionOperationStore } from '../operation-store';
 import { RegistryClient } from '../registry-client';
 import { PluginAcquisitionService, type AcquisitionServiceDeps } from '../acquisition-service';
@@ -103,6 +106,12 @@ function makeHarness(input: {
     coverageRequired?: boolean;
     onRequest?: (url: string) => void;
     resolveCoveredArtifact?: AcquisitionServiceDeps['resolveCoveredArtifact'];
+    /** Replace the registry transport, e.g. to change the checkpoint mid-run. */
+    transport?: typeof fetch;
+    /** Additional keys the host trusts, e.g. a checkpoint signed by another key. */
+    trustedKeys?: readonly TestKey[];
+    /** Durable advisory state, so checkpoint persistence is observable. */
+    registryState?: AcquisitionServiceDeps['registryState'];
 }) {
     const root = input.root ?? tempRoot('or3-extensions-');
     const settings = input.settings ?? memoryStore();
@@ -111,10 +120,14 @@ function makeHarness(input: {
     const workspaceIds = input.workspaceIds ?? ['ws-1'];
     const trustModes = input.acceptedTrustModes ?? ['isolated-client'];
     const supportedProfiles = trustModes.includes('isolated-client') ? [PORTABLE_PROFILE] : [];
+    const trustedKeys = [
+        input.fixture.key,
+        ...(input.trustedKeys ?? []).map((entry) => entry.key),
+    ];
     const config: AcquisitionConfig = {
         registryOrigin: ORIGIN,
         installEnabled: input.installEnabled ?? true,
-        releaseKeys: [input.fixture.key],
+        releaseKeys: [...trustedKeys],
         supportedTrustModes: [...trustModes],
         supportedProfiles,
         hostOr3Version: '0.3.0',
@@ -126,7 +139,7 @@ function makeHarness(input: {
         registryOrigin: ORIGIN,
         supportedProfiles,
         trustRoot: {
-            releaseKeys: [input.fixture.key],
+            releaseKeys: [...trustedKeys],
             supportedProfiles,
             hostOr3Version: '0.3.0',
             hostPluginApiVersion: '2.0.0',
@@ -134,14 +147,16 @@ function makeHarness(input: {
         },
         maxArtifactBytes: MAX_ARTIFACT_BYTES,
         reserveBytes: 0,
-        transport: fakeRegistryTransport({
-            fixture: input.fixture,
-            failDownload: input.failDownload,
-            ...(input.coverageRequired === undefined
-                ? {}
-                : { coverageRequired: input.coverageRequired }),
-            ...(input.onRequest === undefined ? {} : { onRequest: input.onRequest }),
-        }),
+        transport:
+            input.transport ??
+            fakeRegistryTransport({
+                fixture: input.fixture,
+                failDownload: input.failDownload,
+                ...(input.coverageRequired === undefined
+                    ? {}
+                    : { coverageRequired: input.coverageRequired }),
+                ...(input.onRequest === undefined ? {} : { onRequest: input.onRequest }),
+            }),
         freeDiskBytes: async () => 1024 ** 3,
     });
     const deps: AcquisitionServiceDeps = {
@@ -163,6 +178,7 @@ function makeHarness(input: {
         },
         clientCanary: async () => ({ status: 'passed' as const }),
         setupPlan: setupPlanFor(root, settings),
+        ...(input.registryState === undefined ? {} : { registryState: input.registryState }),
         ...(input.resolveCoveredArtifact === undefined
             ? {}
             : { resolveCoveredArtifact: input.resolveCoveredArtifact }),
@@ -546,6 +562,163 @@ describe('recovery and cancellation (5.3)', () => {
         // Cancellation after the pointer moved never reports "canceled".
         const canceled = await harness.service.cancel(finished.operationId);
         expect(canceled.status).toBe('completed');
+    });
+});
+
+describe('resume revalidation across security revisions (finding 32)', () => {
+    it('rejects equivocation at the accepted revision and accepts a higher one', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0', requiredField: true });
+        const snapshot = (revision: number, sequence: number): RegistryAdvisorySnapshot => ({
+            schemaVersion: 2,
+            revision,
+            sequence,
+            advisories: [],
+            keyStatuses: [
+                {
+                    keyId: fixture.key.keyId,
+                    status: 'active',
+                    effectiveAt: new Date(Date.now() - 60_000).toISOString(),
+                },
+            ],
+        });
+        // The checkpoint the registry serves can move between resumes.
+        let active = fakeRegistryTransport({ fixture, snapshot: snapshot(1, 9) });
+        const switching: typeof fetch = (input, init) => active(input, init);
+        const harness = makeHarness({ fixture, transport: switching });
+
+        const started = await harness.start({ version: '1.0.0' });
+        if (!started.ok) throw new Error('expected a recorded operation');
+        expect(started.operation.status).toBe('paused');
+        expect(started.operation.failure?.code).toBe('setup-required');
+        expect(started.operation.acceptedSecurityRevision).toBe(1);
+        expect(started.operation.advisoryCheckpointSha256).toBeTruthy();
+
+        // Same revision, different digest: the snapshot shifted under the
+        // recorded operation, which is equivocation rather than progress.
+        active = fakeRegistryTransport({ fixture, snapshot: snapshot(1, 10) });
+        const equivocated = await harness.service.retry(started.operation.operationId);
+        expect(equivocated.status).toBe('blocked');
+        expect(equivocated.failure?.code).toBe('advisory-unverified');
+
+        // A strictly higher revision is a newer security state: the resume
+        // continues and records the new revision and digest.
+        active = fakeRegistryTransport({ fixture, snapshot: snapshot(2, 10) });
+        await harness.settings.set(
+            'ws-1',
+            setupValuesKey('alpha'),
+            JSON.stringify({ token: 'secret-value' })
+        );
+        const resumed = await harness.service.retry(started.operation.operationId);
+        expect(resumed.status).toBe('completed');
+        expect(resumed.acceptedSecurityRevision).toBe(2);
+    });
+
+    it('persists the authenticated checkpoint before a revoked release key is refused', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        // A second key signs the checkpoint while the fixture key (which signed
+        // the release) is marked compromised in the same snapshot: a compromise
+        // sweep with a still-signing checkpoint key.
+        const checkpointKey = await makeKey('or3-checkpoint-key');
+        const accepted: unknown[] = [];
+        const registryState = {
+            async acceptAdvisorySequence(sequence: number) {
+                accepted.push({ sequence });
+            },
+            async acceptAdvisoryCheckpoint(checkpoint: {
+                revision: number;
+                sequence: number;
+                snapshotSha256: string;
+                issuedAt: string;
+                expiresAt: string;
+            }) {
+                accepted.push(checkpoint);
+            },
+        };
+        const revokedAt = new Date(Date.now() - 30_000).toISOString();
+        const harness = makeHarness({
+            fixture,
+            trustedKeys: [checkpointKey],
+            registryState,
+            transport: fakeRegistryTransport({
+                fixture,
+                checkpointKey,
+                keyStatuses: [
+                    {
+                        keyId: fixture.key.keyId,
+                        status: 'compromised',
+                        effectiveAt: revokedAt,
+                    },
+                    {
+                        keyId: checkpointKey.key.keyId,
+                        status: 'active',
+                        effectiveAt: revokedAt,
+                    },
+                ],
+            }),
+        });
+        await harness.reviewGrants();
+        const started = await harness.service.start({
+            pluginId: 'alpha',
+            version: '1.0.0',
+            workspaceId: 'ws-1',
+            requesterUserId: 'user-1',
+            instanceId: 'instance-1',
+        });
+        expect(started.ok).toBe(false);
+        if (started.ok) return;
+        expect(started.failure.code).toBe('release-key-untrusted');
+        // The refusal was applied only after the authenticated revision (and
+        // digest) became durable host state, so a replay of the earlier
+        // checkpoint can no longer be accepted.
+        expect(accepted).toHaveLength(1);
+        expect(accepted[0]).toMatchObject({ revision: 1, sequence: 9 });
+    });
+
+    it('migrates a legacy operation by authenticating the v2 checkpoint instead of comparing v1 evidence', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0', requiredField: true });
+        const snapshot: RegistryAdvisorySnapshot = {
+            schemaVersion: 2,
+            revision: 0,
+            sequence: 9,
+            advisories: [],
+            keyStatuses: [
+                {
+                    keyId: fixture.key.keyId,
+                    status: 'active',
+                    effectiveAt: new Date(Date.now() - 60_000).toISOString(),
+                },
+            ],
+        };
+        const harness = makeHarness({
+            fixture,
+            transport: fakeRegistryTransport({ fixture, snapshot }),
+        });
+        const started = await harness.start({ version: '1.0.0' });
+        if (!started.ok) throw new Error('expected a recorded operation');
+        expect(started.operation.status).toBe('paused');
+        expect(started.operation.failure?.code).toBe('setup-required');
+        expect(started.operation.acceptedSecurityRevision).toBe(0);
+
+        // Rewrite the durable record to the pre-0028 shape: no revision field and
+        // the v1 digest, which cannot be compared with a v2 digest. The sequence
+        // floor survives; only the incomparable digest evidence is discarded.
+        const path = join(
+            harness.store.operationsDirectory(),
+            `${started.operation.operationId}.json`
+        );
+        const legacy = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>;
+        delete legacy.acceptedSecurityRevision;
+        legacy.advisoryCheckpointSha256 = `sha256-${'0'.repeat(64)}`;
+        await writeFile(path, JSON.stringify(legacy), 'utf8');
+
+        await harness.settings.set(
+            'ws-1',
+            setupValuesKey('alpha'),
+            JSON.stringify({ token: 'secret-value' })
+        );
+        const resumed = await harness.service.retry(started.operation.operationId);
+        expect(resumed.status).toBe('completed');
+        expect(resumed.acceptedSecurityRevision).toBe(0);
     });
 });
 

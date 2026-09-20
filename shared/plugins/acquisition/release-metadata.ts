@@ -579,7 +579,13 @@ export interface AdvisoryDocument {
  * truncated index to decide which advisories apply.
  */
 export interface RegistryAdvisorySnapshot {
-    readonly schemaVersion: 1;
+    readonly schemaVersion: 2;
+    /**
+     * Monotonic security-state revision covering every checkpoint-visible
+     * mutation (advisories, release holds, key statuses). It is the snapshot's
+     * identity; the sequence only tracks the advisory log.
+     */
+    readonly revision: number;
     readonly sequence: number;
     /** Every active advisory, including old unresolved quarantines. */
     readonly advisories: readonly AdvisoryDocument[];
@@ -592,10 +598,18 @@ export interface RegistryAdvisorySnapshot {
     }[];
 }
 
-/** Signed freshness head for the complete advisory/key-status snapshot. */
+/**
+ * Signed freshness head for the complete advisory/key-status snapshot.
+ *
+ * `revision` is the snapshot identity and strictly increases with every
+ * checkpoint-visible mutation, so a host refuses a lower revision (rollback), a
+ * digest change at the accepted revision (equivocation) and an older issue time
+ * at the accepted revision (replay). `sequence` stays the advisory-log floor.
+ */
 export interface RegistryAdvisoryCheckpoint {
-    readonly schemaVersion: 1;
+    readonly schemaVersion: 2;
     readonly registryOrigin: string;
+    readonly revision: number;
     readonly sequence: number;
     readonly issuedAt: string;
     readonly expiresAt: string;

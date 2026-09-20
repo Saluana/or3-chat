@@ -75,6 +75,13 @@ export interface RegistryClientOptions {
     readonly freeDiskBytes?: (path: string) => Promise<number>;
     /** Highest advisory sequence already accepted by this host. Defaults to 0. */
     readonly acceptedAdvisorySequence?: number;
+    /**
+     * Highest security-state revision already accepted by this host. Defaults to
+     * the accepted checkpoint's revision (or 0), so every caller that already
+     * carries persisted checkpoint evidence enforces the revision floor without
+     * a second source of truth.
+     */
+    readonly acceptedSecurityRevision?: number;
     readonly acceptedAdvisoryCheckpoint?: AcceptedAdvisoryCheckpoint | null;
     /**
      * Release-scoped quarantine decisions this host already recorded. Read live
@@ -147,10 +154,26 @@ export type RegistryFailureCode =
     | 'archive-digest-mismatch'
     | 'internal-error';
 
+/** A checkpoint whose envelope, freshness, signature and snapshot digest verified. */
+export interface VerifiedAdvisoryCheckpoint {
+    readonly revision: number;
+    readonly sequence: number;
+    readonly snapshotSha256: Sha256;
+    readonly issuedAt: string;
+    readonly expiresAt: string;
+}
+
 export interface RegistryFailure {
     readonly code: RegistryFailureCode;
     readonly message: string;
     readonly retryable: boolean;
+    /**
+     * Checkpoint evidence that was fully authenticated before this refusal was
+     * decided. The caller must persist it even though the release is refused:
+     * otherwise a host could observe a revocation (for example a key compromise)
+     * and forget the revision, letting a replayed earlier checkpoint through.
+     */
+    readonly checkpoint?: VerifiedAdvisoryCheckpoint;
 }
 
 export type RegistryResult<T> =
@@ -167,27 +190,38 @@ export interface ResolvedRelease {
     readonly artifactUrl: string;
     readonly advisorySequence: number;
     /** Signed checkpoint that authorized the release, for resume revalidation. */
-    readonly advisoryCheckpoint: {
-        readonly sequence: number;
-        readonly snapshotSha256: Sha256;
-        readonly issuedAt: string;
-        readonly expiresAt: string;
-    };
+    readonly advisoryCheckpoint: VerifiedAdvisoryCheckpoint;
 }
 
-function failure(code: RegistryFailureCode, message: string, retryable = false): {
+function failure(
+    code: RegistryFailureCode,
+    message: string,
+    retryable = false,
+    checkpoint?: VerifiedAdvisoryCheckpoint
+): {
     ok: false;
     failure: RegistryFailure;
 } {
-    return { ok: false, failure: { code, message, retryable } };
+    return {
+        ok: false,
+        failure: {
+            code,
+            message,
+            retryable,
+            ...(checkpoint === undefined ? {} : { checkpoint }),
+        },
+    };
 }
 
-function refusalToFailure(refusal: ReleaseMetadataRefusal): {
+function refusalToFailure(
+    refusal: ReleaseMetadataRefusal,
+    checkpoint?: VerifiedAdvisoryCheckpoint
+): {
     ok: false;
     failure: RegistryFailure;
 } {
     const retryable = refusal.code === 'advisory-stale' || refusal.code === 'catalog-stale';
-    return failure(refusal.code as RegistryFailureCode, refusal.message, retryable);
+    return failure(refusal.code as RegistryFailureCode, refusal.message, retryable, checkpoint);
 }
 
 function joinOrigin(origin: string, path: string): string {
@@ -231,6 +265,14 @@ export class RegistryClient {
 
     #acceptedAdvisorySequence(): number {
         return this.#options.acceptedAdvisorySequence ?? 0;
+    }
+
+    #acceptedSecurityRevision(): number {
+        const explicit = this.#options.acceptedSecurityRevision;
+        if (typeof explicit === 'number' && Number.isSafeInteger(explicit) && explicit >= 0) {
+            return explicit;
+        }
+        return this.#options.acceptedAdvisoryCheckpoint?.revision ?? 0;
     }
 
     #configured(): boolean {
@@ -369,15 +411,25 @@ export class RegistryClient {
         const advisories = await this.#verifyAdvisories(parsed.document);
         if (!advisories.ok) return advisories;
         if (!advisories.value.trustedKeyIds.includes(parsed.document.signature?.keyId ?? '')) {
+            // The checkpoint that revoked this key was authenticated; its
+            // evidence must reach the caller so the revocation cannot be
+            // forgotten and replayed away.
             return failure(
                 'release-key-untrusted',
-                'The signing key for this release is not explicitly trusted at the current registry checkpoint.'
+                'The signing key for this release is not explicitly trusted at the current registry checkpoint.',
+                false,
+                advisories.value.checkpoint
             );
         }
 
         const metadataSha256 = await releaseMetadataDigest(parsed.document);
         const artifact = this.#artifactReference(parsed.document.archiveSha256);
-        if (!artifact.ok) return artifact;
+        if (!artifact.ok) {
+            return {
+                ok: false,
+                failure: { ...artifact.failure, checkpoint: advisories.value.checkpoint },
+            };
+        }
 
         return {
             ok: true,
@@ -406,6 +458,7 @@ export class RegistryClient {
         RegistryResult<{
             readonly sequence: number;
             readonly checkpoint: {
+                readonly revision: number;
                 readonly sequence: number;
                 readonly snapshotSha256: Sha256;
                 readonly issuedAt: string;
@@ -454,6 +507,17 @@ export class RegistryClient {
                 'The registry advisory checkpoint is expired or outside the freshness window.'
             );
         }
+        // The security-state revision is the snapshot's identity: it must never
+        // move backwards, and two different snapshots must never claim one
+        // revision. The advisory sequence stays a second, independent floor so a
+        // replayed catalog cannot clear a revocation even at a higher revision.
+        const acceptedRevision = this.#acceptedSecurityRevision();
+        if (checkpoint.revision < acceptedRevision) {
+            return failure(
+                'advisory-stale',
+                `Security revision ${checkpoint.revision} is lower than the accepted revision ${acceptedRevision}.`
+            );
+        }
         if (checkpoint.sequence < this.#acceptedAdvisorySequence()) {
             return failure(
                 'advisory-stale',
@@ -461,20 +525,19 @@ export class RegistryClient {
             );
         }
         const acceptedCheckpoint = this.#options.acceptedAdvisoryCheckpoint;
-        if (
-            acceptedCheckpoint &&
-            checkpoint.sequence === acceptedCheckpoint.sequence &&
-            (checkpoint.snapshotSha256 !== acceptedCheckpoint.snapshotSha256 ||
-                Date.parse(checkpoint.issuedAt) < Date.parse(acceptedCheckpoint.issuedAt))
-        ) {
-            return failure(
-                checkpoint.snapshotSha256 !== acceptedCheckpoint.snapshotSha256
-                    ? 'advisory-unverified'
-                    : 'advisory-stale',
-                checkpoint.snapshotSha256 !== acceptedCheckpoint.snapshotSha256
-                    ? 'The registry presented two different advisory snapshots at one sequence.'
-                    : 'The registry replayed an older advisory checkpoint at the accepted sequence.'
-            );
+        if (acceptedCheckpoint && checkpoint.revision === acceptedCheckpoint.revision) {
+            if (checkpoint.snapshotSha256 !== acceptedCheckpoint.snapshotSha256) {
+                return failure(
+                    'advisory-unverified',
+                    'The registry presented two different security snapshots at one revision.'
+                );
+            }
+            if (Date.parse(checkpoint.issuedAt) < Date.parse(acceptedCheckpoint.issuedAt)) {
+                return failure(
+                    'advisory-stale',
+                    'The registry replayed an older advisory checkpoint at the accepted revision.'
+                );
+            }
         }
         if (!(await verifyRegistryAdvisoryCheckpointSignature({
             checkpoint,
@@ -492,6 +555,20 @@ export class RegistryClient {
         if (snapshotDigest !== checkpoint.snapshotSha256) {
             return failure('advisory-unverified', 'The advisory snapshot digest does not match its checkpoint.');
         }
+        // The checkpoint is now fully authenticated: origin, freshness, monotonic
+        // revision, signature and snapshot digest all verified. Every refusal
+        // from here on is release- or content-specific, so the authenticated
+        // evidence travels with it and the caller persists it before applying
+        // the refusal. Otherwise a host could observe a revocation (a key
+        // compromise, for example), forget the revision, and later accept a
+        // replayed earlier checkpoint.
+        const verifiedCheckpoint: VerifiedAdvisoryCheckpoint = {
+            revision: checkpoint.revision,
+            sequence: checkpoint.sequence,
+            snapshotSha256: checkpoint.snapshotSha256,
+            issuedAt: checkpoint.issuedAt,
+            expiresAt: checkpoint.expiresAt,
+        };
         const seenSequences = new Set<number>();
         const keyStatuses = new Map(snapshot.keyStatuses.map((key) => [key.keyId, key.status]));
         const revokedKeyIds = snapshot.keyStatuses
@@ -501,10 +578,20 @@ export class RegistryClient {
             .filter((key) => key.status === 'active' || key.status === 'retired')
             .map((key) => key.keyId);
         if (keyStatuses.size !== snapshot.keyStatuses.length) {
-            return failure('advisory-unverified', 'The advisory checkpoint contains duplicate signing keys.');
+            return failure(
+                'advisory-unverified',
+                'The advisory checkpoint contains duplicate signing keys.',
+                false,
+                verifiedCheckpoint
+            );
         }
         if (keyStatuses.get(checkpoint.signature.keyId) !== 'active') {
-            return failure('advisory-unverified', 'The advisory checkpoint signer is not explicitly active.');
+            return failure(
+                'advisory-unverified',
+                'The advisory checkpoint signer is not explicitly active.',
+                false,
+                verifiedCheckpoint
+            );
         }
         const accepted = this.#acceptedAdvisorySequence();
         const parsedAdvisories = [];
@@ -512,7 +599,9 @@ export class RegistryClient {
             if (seenSequences.has(advisory.sequence) || advisory.sequence > checkpoint.sequence) {
                 return failure(
                     'advisory-unverified',
-                    'The advisory snapshot contains duplicate or future sequence values.'
+                    'The advisory snapshot contains duplicate or future sequence values.',
+                    false,
+                    verifiedCheckpoint
                 );
             }
             seenSequences.add(advisory.sequence);
@@ -531,7 +620,9 @@ export class RegistryClient {
             ) {
                 return failure(
                     'advisory-unverified',
-                    `Advisory ${advisory.sequence} is not signed by a trusted release key.`
+                    `Advisory ${advisory.sequence} is not signed by a trusted release key.`,
+                    false,
+                    verifiedCheckpoint
                 );
             }
             parsedAdvisories.push(advisory);
@@ -547,7 +638,7 @@ export class RegistryClient {
         });
         if (quarantine) {
             await this.#options.recordQuarantines?.([quarantine]);
-            return refusalToFailure(recordedQuarantineRefusal(quarantine));
+            return refusalToFailure(recordedQuarantineRefusal(quarantine), verifiedCheckpoint);
         }
 
         const decision = evaluateAdvisories({
@@ -558,17 +649,12 @@ export class RegistryClient {
             version: document.version,
         });
         const latest = Math.max(decision.latestSequence, checkpoint.sequence, accepted);
-        if (decision.refusal) return refusalToFailure(decision.refusal);
+        if (decision.refusal) return refusalToFailure(decision.refusal, verifiedCheckpoint);
         return {
             ok: true,
             value: {
                 sequence: latest,
-                checkpoint: {
-                    sequence: checkpoint.sequence,
-                    snapshotSha256: checkpoint.snapshotSha256,
-                    issuedAt: checkpoint.issuedAt,
-                    expiresAt: checkpoint.expiresAt,
-                },
+                checkpoint: verifiedCheckpoint,
                 revokedKeyIds,
                 trustedKeyIds,
             },
@@ -782,9 +868,14 @@ function parseCheckpointResponse(value: unknown): {
     }
     const checkpoint = checkpointValue as Record<string, unknown>;
     const snapshot = snapshotValue as Record<string, unknown>;
+    // schemaVersion 1 checkpoints have no revision and are rejected outright:
+    // their snapshot identity is not authenticated the way this host requires.
     if (
-        checkpoint.schemaVersion !== 1 ||
+        checkpoint.schemaVersion !== 2 ||
         typeof checkpoint.registryOrigin !== 'string' ||
+        typeof checkpoint.revision !== 'number' ||
+        !Number.isSafeInteger(checkpoint.revision) ||
+        checkpoint.revision < 0 ||
         typeof checkpoint.sequence !== 'number' ||
         !Number.isSafeInteger(checkpoint.sequence) ||
         checkpoint.sequence < 0 ||
@@ -808,7 +899,11 @@ function parseCheckpointResponse(value: unknown): {
         return null;
     }
     if (
-        snapshot.schemaVersion !== 1 ||
+        snapshot.schemaVersion !== 2 ||
+        typeof snapshot.revision !== 'number' ||
+        !Number.isSafeInteger(snapshot.revision) ||
+        snapshot.revision < 0 ||
+        snapshot.revision !== checkpoint.revision ||
         snapshot.sequence !== checkpoint.sequence ||
         !Array.isArray(snapshot.advisories) ||
         !Array.isArray(snapshot.keyStatuses)
@@ -846,8 +941,9 @@ function parseCheckpointResponse(value: unknown): {
     }
     return {
         checkpoint: {
-            schemaVersion: 1,
+            schemaVersion: 2,
             registryOrigin: checkpoint.registryOrigin,
+            revision: checkpoint.revision,
             sequence: checkpoint.sequence,
             issuedAt: checkpoint.issuedAt,
             expiresAt: checkpoint.expiresAt,
@@ -859,7 +955,8 @@ function parseCheckpointResponse(value: unknown): {
             },
         },
         snapshot: {
-            schemaVersion: 1,
+            schemaVersion: 2,
+            revision: snapshot.revision,
             sequence: snapshot.sequence,
             advisories,
             keyStatuses,

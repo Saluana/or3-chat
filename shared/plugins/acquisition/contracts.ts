@@ -176,6 +176,12 @@ export interface PluginAcquisitionOperation {
     readonly authoritySha256: Sha256;
     /** Highest advisory sequence accepted at resolve time (rollback guard). */
     readonly acceptedAdvisorySequence: number;
+    /**
+     * Highest security-state revision accepted at resolve time. The revision is
+     * the snapshot identity, so a resume compares it together with the digest
+     * rather than sequence alone.
+     */
+    readonly acceptedSecurityRevision?: number;
     /** Fresh signed checkpoint that authorized the recorded release. */
     readonly advisoryCheckpointSha256?: Sha256 | null;
     readonly advisoryCheckpointIssuedAt?: string | null;

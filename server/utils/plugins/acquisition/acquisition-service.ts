@@ -180,6 +180,7 @@ export interface AcquisitionServiceDeps {
     readonly registryState?: {
         acceptAdvisorySequence(sequence: number): Promise<unknown>;
         acceptAdvisoryCheckpoint?: (checkpoint: {
+            revision: number;
             sequence: number;
             snapshotSha256: `sha256-${string}`;
             issuedAt: string;
@@ -263,6 +264,18 @@ export class PluginAcquisitionService {
                 ...(input.version === undefined ? {} : { version: input.version }),
             },
         });
+        // Persist the authenticated checkpoint before applying the resolve
+        // outcome, including release-specific refusals such as a revoked key or
+        // an advisory. Persisting only on success would let a host observe a
+        // revocation, forget the revision, and later accept a replayed earlier
+        // checkpoint.
+        const verifiedCheckpoint = resolved.ok
+            ? resolved.value.advisoryCheckpoint
+            : resolved.failure.checkpoint;
+        if (verifiedCheckpoint) {
+            const persistenceFailure = await this.#persistCheckpoint('resolved', verifiedCheckpoint);
+            if (persistenceFailure) return { ok: false, failure: persistenceFailure };
+        }
         if (!resolved.ok) {
             return {
                 ok: false,
@@ -276,31 +289,6 @@ export class PluginAcquisitionService {
         }
 
         const document = resolved.value.document;
-        // The host has now accepted this catalog position; record it monotonically
-        // so a later replayed catalog cannot clear a revocation.
-        try {
-            if (this.#deps.registryState?.acceptAdvisoryCheckpoint) {
-                await this.#deps.registryState.acceptAdvisoryCheckpoint(resolved.value.advisoryCheckpoint);
-            } else {
-                await this.#deps.registryState?.acceptAdvisorySequence(resolved.value.advisorySequence);
-            }
-        } catch (error) {
-            return {
-                ok: false,
-                failure: restFailure(
-                    'resolved',
-                    error instanceof RegistryStateAcceptanceError
-                        ? error.kind === 'replay'
-                            ? 'advisory-stale'
-                            : 'advisory-unverified'
-                        : 'storage-unavailable',
-                    `The host could not persist the advisory checkpoint before acquisition: ${
-                        error instanceof Error ? error.message : 'storage is unavailable.'
-                    }`,
-                    true
-                ),
-            };
-        }
         let record: PluginAcquisitionOperation;
         try {
             record = await this.#deps.store.create({
@@ -311,6 +299,7 @@ export class PluginAcquisitionService {
                 instanceId: input.instanceId,
                 stage: 'resolved',
                 acceptedAdvisorySequence: resolved.value.advisorySequence,
+                acceptedSecurityRevision: resolved.value.advisoryCheckpoint.revision,
                 advisoryCheckpointSha256: resolved.value.advisoryCheckpoint.snapshotSha256,
                 advisoryCheckpointIssuedAt: resolved.value.advisoryCheckpoint.issuedAt,
                 advisoryCheckpointExpiresAt: Date.parse(resolved.value.advisoryCheckpoint.expiresAt),
@@ -725,10 +714,48 @@ export class PluginAcquisitionService {
     }
 
     /**
+     * Persist authenticated checkpoint evidence before any policy decision. A
+     * refusal from the state store (replay or equivocation) is a real failure:
+     * the host must not continue on evidence it could not keep durable.
+     */
+    async #persistCheckpoint(
+        stage: PluginAcquisitionStage,
+        checkpoint: {
+            revision: number;
+            sequence: number;
+            snapshotSha256: `sha256-${string}`;
+            issuedAt: string;
+            expiresAt: string;
+        }
+    ): Promise<PluginAcquisitionFailure | null> {
+        try {
+            if (this.#deps.registryState?.acceptAdvisoryCheckpoint) {
+                await this.#deps.registryState.acceptAdvisoryCheckpoint(checkpoint);
+            } else {
+                await this.#deps.registryState?.acceptAdvisorySequence(checkpoint.sequence);
+            }
+            return null;
+        } catch (error) {
+            return restFailure(
+                stage,
+                error instanceof RegistryStateAcceptanceError
+                    ? error.kind === 'replay'
+                        ? 'advisory-stale'
+                        : 'advisory-unverified'
+                    : 'storage-unavailable',
+                `The host could not persist the advisory checkpoint before acquisition: ${
+                    error instanceof Error ? error.message : 'storage is unavailable.'
+                }`,
+                true
+            );
+        }
+    }
+
+    /**
      * Re-resolve the exact signed release before any resumed side effect. A
      * candidate downloaded under an older trust decision must not be promoted
-     * after a key compromise, quarantine or registry rollback. The latest
-     * checkpoint evidence is persisted on the operation before work continues.
+     * after a key compromise, quarantine or registry rollback. Authenticated
+     * checkpoint evidence is persisted before the refusal is applied.
      */
     async #revalidateRecordedRelease(
         record: PluginAcquisitionOperation
@@ -743,6 +770,13 @@ export class PluginAcquisitionService {
                 releaseId: record.release.releaseId,
             },
         });
+        const verifiedCheckpoint = resolved.ok
+            ? resolved.value.advisoryCheckpoint
+            : resolved.failure.checkpoint;
+        if (verifiedCheckpoint) {
+            const persistenceFailure = await this.#persistCheckpoint(record.stage, verifiedCheckpoint);
+            if (persistenceFailure) return { ok: false, failure: persistenceFailure };
+        }
         if (!resolved.ok) {
             return {
                 ok: false,
@@ -768,9 +802,21 @@ export class PluginAcquisitionService {
                 ),
             };
         }
+        // Resume evidence is compared on the security revision, not the advisory
+        // sequence: the revision is the snapshot identity, so the same revision
+        // with a different digest (or an older issue time) is equivocation or a
+        // replay. A strictly higher revision is a newer state and is accepted.
+        //
+        // Legacy operations recorded before revisioned checkpoints have no
+        // revision field and only a v1 digest, which cannot be compared with a
+        // v2 one. Like the persisted registry state, they keep their sequence
+        // floor (still enforced by the registry client) and authenticate the
+        // fresh v2 checkpoint recorded below instead of failing equivocation.
+        const hasRevisionEvidence = typeof record.acceptedSecurityRevision === 'number';
         if (
+            hasRevisionEvidence &&
             record.advisoryCheckpointSha256 &&
-            resolved.value.advisorySequence === record.acceptedAdvisorySequence &&
+            resolved.value.advisoryCheckpoint.revision === record.acceptedSecurityRevision &&
             record.advisoryCheckpointIssuedAt !== null &&
             record.advisoryCheckpointIssuedAt !== undefined &&
             (resolved.value.advisoryCheckpoint.snapshotSha256 !== record.advisoryCheckpointSha256 ||
@@ -782,37 +828,15 @@ export class PluginAcquisitionService {
                 failure: restFailure(
                     record.stage,
                     'advisory-unverified',
-                    'The registry returned a different checkpoint at the operation’s accepted sequence.',
+                    'The registry returned a different checkpoint at the operation’s accepted revision.',
                     false
-                ),
-            };
-        }
-        try {
-            if (this.#deps.registryState?.acceptAdvisoryCheckpoint) {
-                await this.#deps.registryState.acceptAdvisoryCheckpoint(resolved.value.advisoryCheckpoint);
-            } else {
-                await this.#deps.registryState?.acceptAdvisorySequence(resolved.value.advisorySequence);
-            }
-        } catch (error) {
-            return {
-                ok: false,
-                failure: restFailure(
-                    record.stage,
-                    error instanceof RegistryStateAcceptanceError
-                        ? error.kind === 'replay'
-                            ? 'advisory-stale'
-                            : 'advisory-unverified'
-                        : 'storage-unavailable',
-                    `The host could not persist the refreshed advisory checkpoint: ${
-                        error instanceof Error ? error.message : 'storage is unavailable.'
-                    }`,
-                    true
                 ),
             };
         }
         const checkpointExpiresAt = Date.parse(resolved.value.advisoryCheckpoint.expiresAt);
         const patch: AcquisitionOperationPatch = {
             acceptedAdvisorySequence: resolved.value.advisorySequence,
+            acceptedSecurityRevision: resolved.value.advisoryCheckpoint.revision,
             advisoryCheckpointSha256: resolved.value.advisoryCheckpoint.snapshotSha256,
             advisoryCheckpointIssuedAt: resolved.value.advisoryCheckpoint.issuedAt,
             advisoryCheckpointExpiresAt: checkpointExpiresAt,

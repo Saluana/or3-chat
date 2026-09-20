@@ -51,7 +51,13 @@ export function registryClientFor(
      * recorded by one resolve is visible to every later resolve on this host.
      */
     quarantineLedger?: RegistryStateStore,
-    acceptedAdvisoryCheckpoint?: Awaited<ReturnType<RegistryStateStore['read']>>['acceptedAdvisoryCheckpoint']
+    acceptedAdvisoryCheckpoint?: Awaited<ReturnType<RegistryStateStore['read']>>['acceptedAdvisoryCheckpoint'],
+    /**
+     * Highest security-state revision already accepted. Optional so an existing
+     * caller that only carries the persisted checkpoint still enforces the
+     * revision floor through that checkpoint.
+     */
+    acceptedSecurityRevision?: number
 ): RegistryClient {
     return new RegistryClient({
         registryOrigin: config.registryOrigin,
@@ -66,6 +72,7 @@ export function registryClientFor(
         maxArtifactBytes: config.maxArtifactBytes,
         reserveBytes: config.reserveBytes,
         acceptedAdvisorySequence,
+        acceptedSecurityRevision,
         acceptedAdvisoryCheckpoint,
         ...(quarantineLedger
             ? {
@@ -146,7 +153,8 @@ export async function acquisitionServiceFor(
             config,
             state.acceptedAdvisorySequence,
             registryState,
-            state.acceptedAdvisoryCheckpoint
+            state.acceptedAdvisoryCheckpoint,
+            state.acceptedSecurityRevision
         ),
         services,
         routeCatalog: new PluginPackageRouteCatalog(services.packages, services.pointers),

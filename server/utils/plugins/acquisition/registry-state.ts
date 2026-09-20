@@ -3,12 +3,19 @@
  *
  * Purpose:
  * The small amount of durable state the acquisition track keeps about a registry:
- * the highest advisory sequence this host has accepted, and the quarantine
- * decisions it has seen for individual releases.
+ * the highest security-state revision and advisory sequence this host has
+ * accepted, and the quarantine decisions it has seen for individual releases.
  *
  * Behavior:
- * - Monotonic: a lower sequence is refused, so a replayed catalog can never clear
- *   a revocation the host already saw.
+ * - Monotonic in the revision: a lower revision is refused (rollback), a digest
+ *   change at the accepted revision is equivocation, and an older issue time at
+ *   the accepted revision is a replay. The advisory sequence remains a second
+ *   floor, so a replayed catalog can never clear a revocation the host already
+ *   saw.
+ * - schemaVersion 1 state is migrated by carrying over the sequence floor and
+ *   starting the accepted revision at 0. Pre-v2 checkpoints have no `revision`
+ *   and are rejected outright, so the old digest cannot be compared to a v2
+ *   digest; only the sequence floor survives.
  * - Quarantines are stored per release, separately from the sequence cursor. The
  *   cursor only measures freshness; filtering scoped decisions with it would let
  *   an unrelated release's advisory clear a quarantine.
@@ -17,7 +24,7 @@
  *   with the check-and-write taken under an exclusive lock.
  *
  * Constraints:
- * - No network and no registry identity beyond the sequence number.
+ * - No network and no registry identity beyond the revision/sequence numbers.
  */
 
 import { constants } from 'node:fs';
@@ -44,6 +51,9 @@ export interface StoredQuarantine {
 }
 
 export interface AcceptedAdvisoryCheckpoint {
+    /** Monotonic identity of the complete security snapshot. */
+    readonly revision: number;
+    /** Advisory-log head at the same checkpoint. */
     readonly sequence: number;
     /** Digest covers the complete advisory and key-status snapshot. */
     readonly snapshotSha256: string;
@@ -52,10 +62,12 @@ export interface AcceptedAdvisoryCheckpoint {
 }
 
 export interface RegistryState {
-    readonly schemaVersion: 1;
+    readonly schemaVersion: 2;
+    /** Highest security-state revision accepted from the configured registry. */
+    readonly acceptedSecurityRevision: number;
     /** Highest advisory sequence accepted from the configured registry. */
     readonly acceptedAdvisorySequence: number;
-    /** Latest authenticated checkpoint at the accepted sequence. */
+    /** Latest authenticated checkpoint at the accepted revision. */
     readonly acceptedAdvisoryCheckpoint: AcceptedAdvisoryCheckpoint | null;
     /** Release-scoped quarantine decisions, keyed by release id. */
     readonly quarantinedReleases: Readonly<Record<string, StoredQuarantine>>;
@@ -83,7 +95,8 @@ export class RegistryStateAcceptanceError extends Error {
 }
 
 const EMPTY_STATE: RegistryState = {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    acceptedSecurityRevision: 0,
     acceptedAdvisorySequence: 0,
     acceptedAdvisoryCheckpoint: null,
     quarantinedReleases: {},
@@ -135,50 +148,86 @@ function parseQuarantines(value: unknown): Record<string, StoredQuarantine> {
     return out;
 }
 
+/**
+ * Parse one persisted checkpoint. v2 evidence requires a safe revision; a v1
+ * checkpoint (no revision field) is validated for shape but cannot be compared
+ * to v2 digests, so the caller discards it and keeps only the sequence floor.
+ */
+function parseCheckpointEvidence(
+    value: unknown,
+    options: { readonly legacy: boolean },
+): AcceptedAdvisoryCheckpoint | null {
+    if (value === undefined || value === null) return null;
+    if (typeof value !== 'object' || Array.isArray(value)) {
+        throw new RegistryStateCorruptError('The persisted advisory checkpoint is invalid.');
+    }
+    const candidate = value as Record<string, unknown>;
+    if (
+        typeof candidate.sequence !== 'number' ||
+        !Number.isSafeInteger(candidate.sequence) ||
+        candidate.sequence < 0 ||
+        typeof candidate.snapshotSha256 !== 'string' ||
+        !/^sha256-[a-f0-9]{64}$/.test(candidate.snapshotSha256) ||
+        typeof candidate.issuedAt !== 'string' ||
+        Number.isNaN(Date.parse(candidate.issuedAt)) ||
+        typeof candidate.expiresAt !== 'string' ||
+        Number.isNaN(Date.parse(candidate.expiresAt))
+    ) {
+        throw new RegistryStateCorruptError('The persisted advisory checkpoint is invalid.');
+    }
+    if (options.legacy) return null;
+    if (
+        typeof candidate.revision !== 'number' ||
+        !Number.isSafeInteger(candidate.revision) ||
+        candidate.revision < 0
+    ) {
+        throw new RegistryStateCorruptError('The persisted security revision is invalid.');
+    }
+    return {
+        revision: candidate.revision,
+        sequence: candidate.sequence,
+        snapshotSha256: candidate.snapshotSha256,
+        issuedAt: candidate.issuedAt,
+        expiresAt: candidate.expiresAt,
+    };
+}
+
 function parseState(value: unknown): RegistryState {
     if (typeof value !== 'object' || value === null) {
         throw new RegistryStateCorruptError('The persisted registry state is not an object.');
     }
     const record = value as Record<string, unknown>;
-    if (record.schemaVersion !== 1) {
+    const legacy = record.schemaVersion === 1;
+    if (!legacy && record.schemaVersion !== 2) {
         throw new RegistryStateCorruptError('The persisted registry state has an unsupported schema.');
     }
     const sequence = record.acceptedAdvisorySequence;
     if (typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 0) {
         throw new RegistryStateCorruptError('The persisted advisory sequence is invalid.');
     }
-    const checkpointValue = record.acceptedAdvisoryCheckpoint;
-    let checkpoint: AcceptedAdvisoryCheckpoint | null = null;
-    if (checkpointValue !== undefined && checkpointValue !== null) {
-        if (typeof checkpointValue !== 'object' || Array.isArray(checkpointValue)) {
-            throw new RegistryStateCorruptError('The persisted advisory checkpoint is invalid.');
+    // Migrating v1 state carries over only the sequence floor and starts the
+    // accepted revision at 0: pre-v2 checkpoints have no revision and are
+    // rejected by the client, so their digest cannot be compared to a v2 one.
+    let revision = 0;
+    if (!legacy) {
+        const candidate = record.acceptedSecurityRevision;
+        if (typeof candidate !== 'number' || !Number.isSafeInteger(candidate) || candidate < 0) {
+            throw new RegistryStateCorruptError('The persisted security revision is invalid.');
         }
-        const candidate = checkpointValue as Record<string, unknown>;
-        if (
-            typeof candidate.sequence !== 'number' ||
-            !Number.isSafeInteger(candidate.sequence) ||
-            candidate.sequence < 0 ||
-            typeof candidate.snapshotSha256 !== 'string' ||
-            !/^sha256-[a-f0-9]{64}$/.test(candidate.snapshotSha256) ||
-            typeof candidate.issuedAt !== 'string' ||
-            Number.isNaN(Date.parse(candidate.issuedAt)) ||
-            typeof candidate.expiresAt !== 'string' ||
-            Number.isNaN(Date.parse(candidate.expiresAt))
-        ) {
-            throw new RegistryStateCorruptError('The persisted advisory checkpoint is invalid.');
-        }
-        checkpoint = {
-            sequence: candidate.sequence,
-            snapshotSha256: candidate.snapshotSha256,
-            issuedAt: candidate.issuedAt,
-            expiresAt: candidate.expiresAt,
-        };
+        revision = candidate;
+    }
+    const checkpoint = parseCheckpointEvidence(record.acceptedAdvisoryCheckpoint, { legacy });
+    if (checkpoint) {
         if (checkpoint.sequence !== sequence) {
             throw new RegistryStateCorruptError('The persisted checkpoint does not match its sequence.');
         }
+        if (checkpoint.revision !== revision) {
+            throw new RegistryStateCorruptError('The persisted checkpoint does not match its revision.');
+        }
     }
     return {
-        schemaVersion: 1,
+        schemaVersion: 2,
+        acceptedSecurityRevision: revision,
         acceptedAdvisorySequence: sequence,
         acceptedAdvisoryCheckpoint: checkpoint,
         quarantinedReleases: parseQuarantines(record.quarantinedReleases),
@@ -226,22 +275,26 @@ export class RegistryStateStore {
     }
 
     /**
-     * Record a newly accepted sequence. A lower sequence is refused, so this can
-     * only ever move forward.
+     * Record a newly accepted advisory sequence without complete checkpoint
+     * evidence. Kept for callers that hold no signed checkpoint; a lower
+     * sequence is refused, so this can only ever move forward, and the accepted
+     * security revision is unchanged.
      */
     async acceptAdvisorySequence(sequence: number, now: number = Date.now()): Promise<RegistryState> {
         if (!Number.isSafeInteger(sequence) || sequence < 0) {
             throw new TypeError('Advisory sequence must be a non-negative integer');
         }
-        return await this.#accept(sequence, null, now);
+        return await this.#accept(null, sequence, null, now);
     }
 
-    /** Record a complete checkpoint, allowing a newer same-sequence checkpoint. */
+    /** Record a complete checkpoint, allowing only a strictly newer state. */
     async acceptAdvisoryCheckpoint(
         checkpoint: AcceptedAdvisoryCheckpoint,
         now: number = Date.now()
     ): Promise<RegistryState> {
         if (
+            !Number.isSafeInteger(checkpoint.revision) ||
+            checkpoint.revision < 0 ||
             !Number.isSafeInteger(checkpoint.sequence) ||
             checkpoint.sequence < 0 ||
             !/^sha256-[a-f0-9]{64}$/.test(checkpoint.snapshotSha256) ||
@@ -250,10 +303,11 @@ export class RegistryStateStore {
         ) {
             throw new TypeError('Advisory checkpoint evidence is invalid');
         }
-        return await this.#accept(checkpoint.sequence, checkpoint, now);
+        return await this.#accept(checkpoint.revision, checkpoint.sequence, checkpoint, now);
     }
 
     async #accept(
+        revision: number | null,
         sequence: number,
         checkpoint: AcceptedAdvisoryCheckpoint | null,
         now: number
@@ -263,54 +317,66 @@ export class RegistryStateStore {
         try {
             const current = await this.read();
             const currentCheckpoint = current.acceptedAdvisoryCheckpoint;
+            if (revision !== null && revision < current.acceptedSecurityRevision) {
+                throw new RegistryStateAcceptanceError(
+                    'replay',
+                    `Security revision ${revision} is older than accepted revision ${current.acceptedSecurityRevision}.`
+                );
+            }
             if (sequence < current.acceptedAdvisorySequence) {
                 throw new RegistryStateAcceptanceError(
                     'replay',
                     `Advisory sequence ${sequence} is older than accepted sequence ${current.acceptedAdvisorySequence}.`
                 );
             }
-            if (sequence === current.acceptedAdvisorySequence) {
-                if (!checkpoint) {
-                    if (currentCheckpoint) {
-                        throw new RegistryStateAcceptanceError(
-                            'replay',
-                            'A sequence-only update cannot replace an authenticated checkpoint.'
-                        );
-                    }
-                    return current;
-                }
-                if (!currentCheckpoint) {
-                    // The first full checkpoint at a legacy sequence adds the
-                    // evidence that the old sequence-only format did not have.
-                } else {
+            if (checkpoint) {
+                // The revision is the snapshot identity. Two different snapshots
+                // at one revision are equivocation even when the advisory
+                // sequence differs, because the revision is part of the digest.
+                if (
+                    revision !== null &&
+                    revision === current.acceptedSecurityRevision &&
+                    currentCheckpoint
+                ) {
                     const nextIssuedAt = Date.parse(checkpoint.issuedAt);
                     const currentIssuedAt = Date.parse(currentCheckpoint.issuedAt);
                     if (checkpoint.snapshotSha256 !== currentCheckpoint.snapshotSha256) {
                         throw new RegistryStateAcceptanceError(
                             'equivocation',
-                            'Two different advisory snapshots share the same sequence.'
+                            'Two different security snapshots share the same revision.'
                         );
                     }
                     if (nextIssuedAt < currentIssuedAt) {
                         throw new RegistryStateAcceptanceError(
                             'replay',
-                            'An older same-sequence advisory checkpoint was replayed.'
+                            'An older same-revision advisory checkpoint was replayed.'
                         );
                     }
                     if (nextIssuedAt === currentIssuedAt) {
                         if (checkpoint.expiresAt !== currentCheckpoint.expiresAt) {
                             throw new RegistryStateAcceptanceError(
                                 'equivocation',
-                                'Two different advisory checkpoints share the same sequence and issue time.'
+                                'Two different advisory checkpoints share the same revision and issue time.'
                             );
                         }
                         return current;
                     }
                 }
+                // A first complete checkpoint at the migrated revision 0 has no
+                // comparable evidence: the v1 digest format was different, which
+                // is exactly why the client rejects pre-v2 checkpoints.
+            } else if (sequence === current.acceptedAdvisorySequence && currentCheckpoint) {
+                throw new RegistryStateAcceptanceError(
+                    'replay',
+                    'A sequence-only update cannot replace an authenticated checkpoint.'
+                );
+            } else if (sequence === current.acceptedAdvisorySequence) {
+                return current;
             }
 
             const next: RegistryState = {
-                schemaVersion: 1,
+                schemaVersion: 2,
+                acceptedSecurityRevision: revision ?? current.acceptedSecurityRevision,
                 acceptedAdvisorySequence: sequence,
                 acceptedAdvisoryCheckpoint: checkpoint ??
                     (sequence === current.acceptedAdvisorySequence ? currentCheckpoint : null),
@@ -370,7 +436,8 @@ export class RegistryStateStore {
             if (!changed) return current;
 
             const state: RegistryState = {
-                schemaVersion: 1,
+                schemaVersion: 2,
+                acceptedSecurityRevision: current.acceptedSecurityRevision,
                 acceptedAdvisorySequence: current.acceptedAdvisorySequence,
                 acceptedAdvisoryCheckpoint: current.acceptedAdvisoryCheckpoint,
                 quarantinedReleases: bounded,

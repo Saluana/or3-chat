@@ -1,6 +1,10 @@
 import { rm } from 'node:fs/promises';
 import { afterEach, describe, expect, it } from 'vitest';
-import { encodeReleaseMetadata, type AdvisoryDocument } from '~~/shared/plugins/acquisition/release-metadata';
+import {
+    encodeReleaseMetadata,
+    type AdvisoryDocument,
+    type RegistryAdvisorySnapshot,
+} from '~~/shared/plugins/acquisition/release-metadata';
 import {
     fakeRegistryTransport,
     jsonResponse,
@@ -28,6 +32,14 @@ function makeClient(options: {
     transport: typeof fetch;
     keys: readonly TestKey['key'][];
     acceptedAdvisorySequence?: number;
+    acceptedSecurityRevision?: number;
+    acceptedAdvisoryCheckpoint?: {
+        revision: number;
+        sequence: number;
+        snapshotSha256: string;
+        issuedAt: string;
+        expiresAt: string;
+    } | null;
     freeDiskBytes?: number;
     maxArtifactBytes?: number;
     supportedProfiles?: readonly string[];
@@ -63,6 +75,12 @@ function makeClient(options: {
         maxArtifactBytes: options.maxArtifactBytes ?? 8 * 1024 * 1024,
         reserveBytes: 0,
         acceptedAdvisorySequence: accepted,
+        ...(options.acceptedSecurityRevision === undefined
+            ? {}
+            : { acceptedSecurityRevision: options.acceptedSecurityRevision }),
+        ...(options.acceptedAdvisoryCheckpoint === undefined
+            ? {}
+            : { acceptedAdvisoryCheckpoint: options.acceptedAdvisoryCheckpoint }),
         transport: options.transport,
         freeDiskBytes: async () => options.freeDiskBytes ?? 1024 ** 3,
         ...(options.quarantinedReleases
@@ -436,6 +454,348 @@ describe('registry resolve (5.2)', () => {
         expect(
             await down.resolveRelease({ expectation: { pluginId: 'alpha', version: '1.0.0' } })
         ).toMatchObject({ ok: false, failure: { code: 'registry-unreachable', retryable: true } });
+    });
+});
+
+describe('security-state checkpoint acceptance (finding 32)', () => {
+    const past = (minutes = 2) => new Date(Date.now() - minutes * 60_000).toISOString();
+    const future = (minutes = 20) => new Date(Date.now() + minutes * 60_000).toISOString();
+    const digest = (character: string): `sha256-${string}` => `sha256-${character.repeat(64)}`;
+
+    async function resolving(options: {
+        /** The fixture the client's transport serves; supplied at each call site. */
+        fixture?: Awaited<ReturnType<typeof releaseFixture>>;
+        client: Parameters<typeof makeClient>[0];
+    }) {
+        return await makeClient(options.client).resolveRelease({
+            expectation: { pluginId: 'alpha', version: '1.0.0' },
+        });
+    }
+
+    it('refuses a lower revision (rollback) even when it is otherwise fresh', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const result = await resolving({
+            fixture,
+            client: {
+                keys: [fixture.key],
+                acceptedSecurityRevision: 5,
+                acceptedAdvisoryCheckpoint: {
+                    revision: 5,
+                    sequence: 9,
+                    snapshotSha256: digest('9'),
+                    issuedAt: past(),
+                    expiresAt: future(60),
+                },
+                transport: fakeRegistryTransport({ fixture }),
+            },
+        });
+        expect(result).toMatchObject({ ok: false, failure: { code: 'advisory-stale' } });
+    });
+
+    it('refuses a different digest or an older issue time at the accepted revision', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        // A fixed snapshot so both transports compute the identical digest.
+        const snapshot: RegistryAdvisorySnapshot = {
+            schemaVersion: 2,
+            revision: 1,
+            sequence: 9,
+            advisories: [],
+            keyStatuses: [
+                { keyId: fixture.key.keyId, status: 'active', effectiveAt: past() },
+            ],
+        };
+        const baseline = await resolving({
+            fixture,
+            client: { keys: [fixture.key], transport: fakeRegistryTransport({ fixture, snapshot }) },
+        });
+        if (!baseline.ok) throw new Error('fixture did not resolve');
+        const accepted = {
+            revision: baseline.value.advisoryCheckpoint.revision,
+            sequence: baseline.value.advisoryCheckpoint.sequence,
+            issuedAt: new Date().toISOString(),
+            expiresAt: future(60),
+        };
+
+        // Same revision, different digest: the registry equivocated.
+        const equivocation = await resolving({
+            fixture,
+            client: {
+                keys: [fixture.key],
+                acceptedSecurityRevision: accepted.revision,
+                acceptedAdvisoryCheckpoint: {
+                    ...accepted,
+                    snapshotSha256: digest('1'),
+                },
+                transport: fakeRegistryTransport({ fixture, snapshot }),
+            },
+        });
+        expect(equivocation).toMatchObject({ ok: false, failure: { code: 'advisory-unverified' } });
+
+        // Same revision, same digest, older issue time: a replayed checkpoint.
+        const replay = await resolving({
+            fixture,
+            client: {
+                keys: [fixture.key],
+                acceptedSecurityRevision: accepted.revision,
+                acceptedAdvisoryCheckpoint: {
+                    ...accepted,
+                    snapshotSha256: baseline.value.advisoryCheckpoint.snapshotSha256,
+                },
+                transport: fakeRegistryTransport({
+                    fixture,
+                    snapshot,
+                    checkpoint: { issuedAt: past(10), expiresAt: future(60) },
+                }),
+            },
+        });
+        expect(replay).toMatchObject({ ok: false, failure: { code: 'advisory-stale' } });
+    });
+
+    it('refuses expired, future-dated and cross-origin checkpoints', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const expired = await resolving({
+            fixture,
+            client: {
+                keys: [fixture.key],
+                transport: fakeRegistryTransport({
+                    fixture,
+                    checkpoint: { issuedAt: past(10), expiresAt: past(1) },
+                }),
+            },
+        });
+        expect(expired).toMatchObject({ ok: false, failure: { code: 'advisory-stale' } });
+
+        const futureDated = await resolving({
+            fixture,
+            client: {
+                keys: [fixture.key],
+                transport: fakeRegistryTransport({
+                    fixture,
+                    checkpoint: { issuedAt: future(10), expiresAt: future(20) },
+                }),
+            },
+        });
+        expect(futureDated).toMatchObject({ ok: false, failure: { code: 'advisory-stale' } });
+
+        const wrongOrigin = await resolving({
+            fixture,
+            client: {
+                keys: [fixture.key],
+                transport: fakeRegistryTransport({
+                    fixture,
+                    checkpoint: { registryOrigin: 'https://other.example' },
+                }),
+            },
+        });
+        expect(wrongOrigin).toMatchObject({ ok: false, failure: { code: 'advisory-unverified' } });
+    });
+
+    it('refuses an untrusted or compromised checkpoint signer', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const rogue = await makeKey('or3-rogue-key');
+        const untrusted = await resolving({
+            fixture,
+            client: {
+                keys: [fixture.key],
+                transport: fakeRegistryTransport({ fixture, checkpointKey: rogue }),
+            },
+        });
+        expect(untrusted).toMatchObject({ ok: false, failure: { code: 'advisory-unverified' } });
+
+        const compromised = await resolving({
+            fixture,
+            client: {
+                keys: [fixture.key],
+                transport: fakeRegistryTransport({
+                    fixture,
+                    keyStatuses: [
+                        { keyId: fixture.key.keyId, status: 'compromised', effectiveAt: past() },
+                    ],
+                }),
+            },
+        });
+        expect(compromised).toMatchObject({ ok: false, failure: { code: 'advisory-unverified' } });
+    });
+
+    it('carries the authenticated checkpoint when a revoked release key refuses the release', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        // A still-trusted checkpoint key signs the snapshot that marks the
+        // release-signing key compromised: a compromise sweep in progress.
+        const checkpointKey = await makeKey('or3-checkpoint-carrier');
+        const refused = await resolving({
+            fixture,
+            client: {
+                keys: [fixture.key, checkpointKey.key],
+                transport: fakeRegistryTransport({
+                    fixture,
+                    checkpointKey,
+                    keyStatuses: [
+                        { keyId: fixture.key.keyId, status: 'compromised', effectiveAt: past() },
+                        {
+                            keyId: checkpointKey.key.keyId,
+                            status: 'active',
+                            effectiveAt: past(),
+                        },
+                    ],
+                }),
+            },
+        });
+        expect(refused).toMatchObject({
+            ok: false,
+            failure: {
+                code: 'release-key-untrusted',
+                // The caller must persist this evidence even though the release
+                // is refused, or a replayed earlier checkpoint becomes acceptable.
+                checkpoint: {
+                    revision: 1,
+                    sequence: 9,
+                    snapshotSha256: expect.stringMatching(/^sha256-[a-f0-9]{64}$/),
+                },
+            },
+        });
+    });
+
+    it('refuses a tampered digest, duplicate keys and future advisory sequences', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const tampered = await resolving({
+            fixture,
+            client: {
+                keys: [fixture.key],
+                transport: fakeRegistryTransport({
+                    fixture,
+                    checkpoint: { snapshotSha256: digest('0') },
+                }),
+            },
+        });
+        expect(tampered).toMatchObject({ ok: false, failure: { code: 'advisory-unverified' } });
+
+        const active = {
+            keyId: fixture.key.keyId,
+            status: 'active' as const,
+            effectiveAt: past(),
+        };
+        const duplicate = await resolving({
+            fixture,
+            client: {
+                keys: [fixture.key],
+                transport: fakeRegistryTransport({
+                    fixture,
+                    snapshot: {
+                        schemaVersion: 2,
+                        revision: 1,
+                        sequence: 9,
+                        advisories: [],
+                        keyStatuses: [active, { ...active }],
+                    },
+                }),
+            },
+        });
+        expect(duplicate).toMatchObject({ ok: false, failure: { code: 'advisory-unverified' } });
+
+        const futureAdvisory = await signAdvisoryForTest({
+            document: {
+                schemaVersion: 1,
+                sequence: 12,
+                kind: 'notice',
+                releaseId: fixture.releaseId,
+                pluginId: 'alpha',
+                version: '1.0.0',
+                archiveSha256: null,
+                reason: 'future',
+                issuedBy: 'or3-marketplace',
+                issuedAt: past(),
+            },
+            keyId: fixture.key.keyId,
+            privateKeyBase64: fixture.privateKeyBase64,
+        });
+        const futureSequence = await resolving({
+            fixture,
+            client: {
+                keys: [fixture.key],
+                transport: fakeRegistryTransport({
+                    fixture,
+                    snapshot: {
+                        schemaVersion: 2,
+                        revision: 1,
+                        sequence: 9,
+                        advisories: [futureAdvisory],
+                        keyStatuses: [active],
+                    },
+                }),
+            },
+        });
+        expect(futureSequence).toMatchObject({ ok: false, failure: { code: 'advisory-unverified' } });
+    });
+
+    it('rejects a schemaVersion 1 checkpoint outright', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const result = await resolving({
+            fixture,
+            client: {
+                keys: [fixture.key],
+                transport: fakeRegistryTransport({
+                    fixture,
+                    checkpointResponse: {
+                        checkpoint: {
+                            schemaVersion: 1,
+                            registryOrigin: ORIGIN,
+                            sequence: 9,
+                            issuedAt: past(),
+                            expiresAt: future(60),
+                            snapshotSha256: digest('a'),
+                            signature: {
+                                keyId: fixture.key.keyId,
+                                algorithm: 'ed25519',
+                                value: 'legacy',
+                            },
+                        },
+                        snapshot: {
+                            schemaVersion: 1,
+                            sequence: 9,
+                            advisories: [],
+                            keyStatuses: [
+                                { keyId: fixture.key.keyId, status: 'active', effectiveAt: past() },
+                            ],
+                        },
+                    },
+                }),
+            },
+        });
+        expect(result).toMatchObject({ ok: false, failure: { code: 'advisory-unverified' } });
+    });
+
+    it('accepts a strictly higher revision and threads it into the release', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const result = await resolving({
+            fixture,
+            client: {
+                keys: [fixture.key],
+                acceptedSecurityRevision: 3,
+                acceptedAdvisoryCheckpoint: {
+                    revision: 3,
+                    sequence: 9,
+                    snapshotSha256: digest('3'),
+                    issuedAt: past(10),
+                    expiresAt: future(60),
+                },
+                transport: fakeRegistryTransport({
+                    fixture,
+                    snapshot: {
+                        schemaVersion: 2,
+                        revision: 4,
+                        sequence: 9,
+                        advisories: [],
+                        keyStatuses: [
+                            { keyId: fixture.key.keyId, status: 'active', effectiveAt: past() },
+                        ],
+                    },
+                }),
+            },
+        });
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value.advisoryCheckpoint).toMatchObject({ revision: 4, sequence: 9 });
+        expect(result.value.advisorySequence).toBe(9);
     });
 });
 

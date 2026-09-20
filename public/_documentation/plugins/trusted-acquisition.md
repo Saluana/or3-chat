@@ -64,6 +64,41 @@ A candidate whose release asks for authority is refused until the workspace has 
 
 Quarantine decisions come from the signed advisory log, which is fetched and verified on every resolve: a quarantined release is refused with `release-quarantined`, an advisory that cannot be verified refuses with `advisory-unverified`, and the newest seen sequence is recorded monotonically. A release's publication date is not freshness: an old but intact, non-quarantined release is still acquirable.
 
+The registry checkpoint is `schemaVersion 2` and authenticates a monotonic **security revision** in addition to the advisory sequence. The snapshot it covers includes every active advisory *and* every release-key status, so key pretrust/retirement/compromise changes the signed bytes and begins a new revision. The host enforces all of the following, in order:
+
+- a checkpoint for another origin, an expired window, a future issue time or a checkpoint older than the host's configured maximum age is refused (`advisory-stale`);
+- a checkpoint whose revision is lower than the host's accepted revision is refused (`advisory-stale`), and the advisory sequence remains a second, independent floor;
+- the same revision with a different snapshot digest is refused as equivocation, and the same revision with an older issue time is refused as a replay (`advisory-unverified`/`advisory-stale`);
+- a checkpoint not signed by a key in the host's static trust root, signed by a non-active key, or with a digest that does not match the snapshot is refused (`advisory-unverified`);
+- duplicate keys, duplicate or future advisory sequences, untrusted advisory signatures and a snapshotted key that is missing or compromised are refused.
+
+`schemaVersion 1` checkpoints have no revision and are rejected outright. The accepted revision, sequence, digest and issue time are persisted under `<extensions>/.registry/state.json` (state `schemaVersion 2`); v1 state is migrated by carrying over the sequence floor and starting the accepted revision at 0. Resume of an in-flight acquisition compares the recorded revision **and** digest, not the sequence alone, so a key-status change cannot be disguised as progress. Legacy in-flight operations migrate the same way: their incomparable v1 digest is discarded and the fresh v2 checkpoint is authenticated instead.
+
+An authenticated checkpoint is persisted **before** any release-specific refusal is applied. A resolve that is refused because the snapshot revoked the release's key (or quarantined the release) still records the new revision, so a host that observed a revocation cannot forget it and later accept a replayed earlier checkpoint; the persisted revision then refuses that replay.
+
+## Key rotation and the host trust root
+
+Hosts verify releases, advisories and checkpoints against the static release keys in `OR3_MARKETPLACE_RELEASE_KEYS`; the signed snapshot advertises key status but carries no key material. **Pretrusting a new signing key on the registry therefore does not let an older host verify it.** The supported rotation order is host-update-first:
+
+1. ship the new key id and public JWK to every supported host's trust root (host software/configuration update), keeping the current key;
+2. the registry pretrusts the new key (a strictly higher revision) and the host accepts the revisioned checkpoint;
+3. the protected signer secret switches to the new key;
+4. the old key is retired (another higher revision) and remains published so releases and advisories it signed still verify historically.
+
+A rotation that skips step 1 fails closed: releases signed by the new key are refused with `release-key-untrusted`, and a checkpoint signed by it is refused as untrusted.
+
+## Installed or running releases when a quarantine arrives
+
+A quarantine blocks acquisition and activation, not execution:
+
+- **New acquisition or update** to the quarantined release is refused with `release-quarantined`, and the decision is persisted per release.
+- **A downloaded candidate** that has not yet been activated re-resolves at the next resumed stage, sees the quarantine and stops as `blocked`; the current version stays in place.
+- **An installed, running release keeps running.** The host does not unload it remotely; an operator can disable or uninstall it in the admin UI. Restarting cannot make it acquirable again because the ledger is durable.
+- **A newer version** of the same plugin can still be acquired (the ledger is release-scoped), which is the safe repair path.
+- **User data** is untouched by any quarantine path, and clearing a marketplace hold does not clear a quarantine the host already recorded for that exact release.
+
+Quarantine is a security statement only. Deprecation, refunds, membership and market restrictions have separate flows and never substitute for it.
+
 A paid release is the one exception the host does not treat as a hard stop. The public artifact path refuses it with `coverage-required`; the pipeline tells that refusal apart from an expired signed URL, records the acquisition through the acting local user's encrypted Library link, and retries the download once against the token-authenticated artifact route with the credential kept server-side. The same signature, advisory, archive, tree, consent, setup and promotion checks then run as for any free release; without a usable link the operation stops with a retryable `coverage-required` failure rather than looping on a URL that will never serve it.
 
 The advisory sequence is a *freshness* cursor, not a filter for which scoped decisions still apply. Quarantines are recorded per release in the registry state (`<extensions>/.registry/state.json`) independently of that cursor, evaluated over every verified advisory including ones at or below it, and consulted before the registry log is read at all. Resolving any other release therefore cannot clear a quarantine this host has already accepted, and a recorded decision survives a registry log that no longer lists it. The ledger is monotonic per release, bounded, and written under the same exclusive lock as the cursor.
