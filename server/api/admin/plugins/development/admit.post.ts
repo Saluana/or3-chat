@@ -38,7 +38,7 @@ import { requireAdminApiContext } from '../../../../admin/api';
 import { getClientIp } from '../../../../admin/auth/rate-limit';
 import { resolveAdminWorkspaceTarget } from '../../../../admin/workspace-target';
 import { getWorkspaceSettingsStore } from '../../../../admin/stores/registry';
-import { getPluginGrantReview } from '../../../../admin/plugins/workspace-plugin-store';
+import { getPluginGrantReview, setPluginGrantReview } from '../../../../admin/plugins/workspace-plugin-store';
 import {
     packageGrantCandidate,
     pluginPackageServices,
@@ -129,7 +129,8 @@ export default defineEventHandler(async (event) => {
             data: { code: 'candidate-receipt-invalid' },
         });
     }
-    if (receipt.profile !== 'or3-portable-client-v1') {        throw createError({
+    if (receipt.profile !== 'or3-portable-client-v1') {
+        throw createError({
             statusCode: 422,
             statusMessage: `Development admission supports the portable profile only; the receipt declares ${receipt.profile}.`,
             data: { code: 'candidate-profile-unsupported' },
@@ -211,6 +212,42 @@ export default defineEventHandler(async (event) => {
             services.pointers
         ).listSelected();
         const ready = selectedPackages.filter((catalog) => catalog.status === 'ready');
+        // Authority review is explicit and digest-bound: the owner approves the
+        // exact requested set the receipt displayed (subset only, never wider),
+        // recorded here because no staged candidate or signed release exists
+        // yet for the grants endpoint to bind to.
+        const grantCandidate = await packageGrantCandidate({
+            packagePath: treeRoot,
+            packageDigest: receipt.packageTreeSha256,
+        });
+        let grantReview = await getPluginGrantReview(settings, workspaceId, receipt.pluginId, grantCandidate);
+        const approvalRaw = fieldText(form ?? [], 'approvedGrants');
+        if (grantReview.status !== 'current') {
+            const principal = adminContext.principal;
+            const reviewedBy = principal.kind === 'super_admin' ? principal.username : principal.userId;
+            let approved: readonly string[] | null = null;
+            try {
+                const parsed = approvalRaw ? (JSON.parse(approvalRaw) as unknown) : null;
+                if (Array.isArray(parsed) && parsed.every((entry) => typeof entry === 'string')) {
+                    approved = parsed;
+                }
+            } catch {
+                approved = null;
+            }
+            const expectedPackageDigest = fieldText(form ?? [], 'expectedPackageDigest');
+            const expectedAuthoritySha256 = fieldText(form ?? [], 'expectedAuthoritySha256');
+            if (
+                approved !== null &&
+                expectedPackageDigest === receipt.packageTreeSha256 &&
+                expectedAuthoritySha256 === receipt.authoritySha256
+            ) {
+                grantReview = await setPluginGrantReview(settings, workspaceId, receipt.pluginId, {
+                    candidate: grantCandidate,
+                    approvedGrants: approved,
+                    reviewedBy,
+                });
+            }
+        }
         const result = await services.candidates.prepare({
             pluginId: receipt.pluginId,
             sourceRoot: treeRoot,
@@ -226,12 +263,7 @@ export default defineEventHandler(async (event) => {
                 version: catalog.manifest.version,
                 dependencies: catalog.manifest.dependencies,
             })),
-            grantReview: await getPluginGrantReview(
-                settings,
-                workspaceId,
-                receipt.pluginId,
-                await packageGrantCandidate({ packagePath: treeRoot, packageDigest: null })
-            ),
+            grantReview,
             storedStateVersion: await services.migration.getStateVersion(workspaceId, receipt.pluginId),
             identityPreflight: async () => {
                 const legacyConflict = (await listInstalledExtensions()).some(
@@ -266,6 +298,9 @@ export default defineEventHandler(async (event) => {
                 workspaceId,
                 stage: result.stage,
                 codes: result.codes,
+                requestedGrants: [...grantCandidate.requestedGrants],
+                authoritySha256: grantCandidate.authoritySha256,
+                packageDigest: receipt.packageTreeSha256,
             };
         }
 

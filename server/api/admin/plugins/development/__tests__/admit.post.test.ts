@@ -11,7 +11,7 @@ import { encodeFileZip } from '@or3/plugin-sdk/package-archive';
 const eligibilityMock = vi.fn();
 const rateLimitMock = vi.fn(async () => true);
 const recordMock = vi.fn(async () => undefined);
-const prepareMock = vi.fn(async () => ({
+const prepareMock = vi.fn(async (): Promise<Record<string, unknown>> => ({
     status: 'blocked',
     pointerUnchanged: true,
     stage: 'grants',
@@ -45,8 +45,12 @@ vi.mock('../../../../../admin/stores/registry', () => ({
 }));
 
 vi.mock('../../../../../admin/plugins/workspace-plugin-store', () => ({
-    getPluginGrantReview: async () => ({}),
+    getPluginGrantReview: async () => grantReviewMock(),
+    setPluginGrantReview: async () => setGrantReviewMock(),
 }));
+
+const grantReviewMock = vi.fn(async () => ({ status: 'unreviewed', requestedGrants: [] }));
+const setGrantReviewMock = vi.fn(async () => ({ status: 'current', requestedGrants: [] }));
 
 vi.mock('../../../../../admin/plugins/package-operation-support', () => ({
     pluginPackageServices: () => ({
@@ -55,7 +59,13 @@ vi.mock('../../../../../admin/plugins/package-operation-support', () => ({
         migration: { getStateVersion: async () => 1 },
         candidates: { prepare: () => prepareMock() },
     }),
-    packageGrantCandidate: async () => ({}),
+    packageGrantCandidate: async () => ({
+        requestedGrants: ['settings.read'],
+        releaseId: null,
+        packageDigest: `sha256-${'a'.repeat(64)}`,
+        authoritySha256: `sha256-${'c'.repeat(64)}`,
+        authority: null,
+    }),
 }));
 
 vi.mock('../../../../../admin/extensions/extension-manager', () => ({
@@ -235,7 +245,6 @@ describe('development admission boundary', () => {
         multipartParts = [{ name: 'package', data: PACKAGE_BYTES }];
         await expect(handler(event)).rejects.toMatchObject({ statusCode: 400 });
     });
-
     it('reports denied authority without recording provenance', async () => {
         readPackageZipMock.mockResolvedValueOnce({
             digest: `sha256-${'a'.repeat(64)}`,
@@ -248,5 +257,35 @@ describe('development admission boundary', () => {
         expect(result.stage).toBe('grants');
         expect(result.codes).toEqual(['grant-review-required']);
         expect(recordMock).not.toHaveBeenCalled();
+    });
+
+    it('records explicit digest-bound approval, then stages the candidate', async () => {
+        readPackageZipMock.mockResolvedValueOnce({
+            digest: `sha256-${'a'.repeat(64)}`,
+            entries: 3,
+            extractedRoot: null,
+        });
+        prepareMock.mockResolvedValueOnce({
+            status: 'candidate-stored',
+            pointerUnchanged: false,
+            stored: {
+                digest: `sha256-${'a'.repeat(64)}`,
+                verification: { manifestDigest: `sha256-${'b'.repeat(64)}` },
+            },
+            pointer: { revision: 1 },
+        });
+        const receipt = receiptFor();
+        const approvalParts = [
+            ...verifiableParts(receipt),
+            { name: 'approvedGrants', data: Buffer.from(JSON.stringify(['settings.read'])) },
+            { name: 'expectedPackageDigest', data: Buffer.from(receipt.packageTreeSha256 as string) },
+            { name: 'expectedAuthoritySha256', data: Buffer.from(receipt.authoritySha256 as string) },
+        ];
+        multipartParts = approvalParts;
+        const result = (await handler(event)) as { ok: boolean; packageDigest: string; provenance: string };
+        expect(result.ok).toBe(true);
+        expect(result.provenance).toBe('local-development');
+        expect(setGrantReviewMock).toHaveBeenCalledOnce();
+        expect(recordMock).toHaveBeenCalledOnce();
     });
 });

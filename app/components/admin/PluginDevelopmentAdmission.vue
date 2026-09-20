@@ -46,12 +46,27 @@ const admitted = ref<{
     readonly packageDigest: string;
 } | null>(null);
 const admitNote = ref<string | null>(null);
+/** Grants the owner approved for the exact displayed receipt, or null. */
+const approvedGrantsKey = ref<string | null>(null);
+const grantsApproved = ref(false);
+const blockedReview = ref<{
+    readonly requestedGrants: readonly string[];
+    readonly authoritySha256: string;
+    readonly packageDigest: string;
+} | null>(null);
 const verificationScope = ref<'runtime-canary' | 'recorded-interaction-check'>('runtime-canary');
 const attestedInteraction = ref(false);
 const exporting = ref(false);
 
 const canAdmit = computed(
-    () => eligibility.value?.eligible === true && packageFile.value && sourceFile.value && receiptFile.value && preview.value && !admitting.value
+    () =>
+        eligibility.value?.eligible === true &&
+        packageFile.value &&
+        sourceFile.value &&
+        receiptFile.value &&
+        preview.value &&
+        !admitting.value &&
+        (!blockedReview.value || grantsApproved.value)
 );
 
 async function apiGet<T>(url: string): Promise<T> {
@@ -77,8 +92,16 @@ function pick(target: 'package' | 'source' | 'receipt', files: FileList | null):
     previewError.value = null;
     admitted.value = null;
     admitNote.value = null;
+    blockedReview.value = null;
+    grantsApproved.value = false;
+    approvedGrantsKey.value = null;
     if (target === 'receipt' && file) void previewReceipt(file);
 }
+
+/** Identity of the displayed receipt, so approval cannot carry to other bytes. */
+const previewKey = computed(() =>
+    preview.value ? `${preview.value.pluginId}:${preview.value.packageTreeSha256}:${preview.value.authoritySha256}` : null
+);
 
 /** Client-side identity preview from the receipt bytes (digests re-checked server-side). */
 async function previewReceipt(file: File): Promise<void> {
@@ -106,7 +129,11 @@ async function previewReceipt(file: File): Promise<void> {
 }
 
 async function admit(): Promise<void> {
-    if (!packageFile.value || !sourceFile.value || !receiptFile.value) return;
+    if (!packageFile.value || !sourceFile.value || !receiptFile.value || !preview.value) return;
+    // Approval belongs to the exact displayed receipt; a changed selection
+    // drops it instead of carrying consent to other bytes.
+    const key = previewKey.value;
+    const approved = grantsApproved.value && approvedGrantsKey.value === key && blockedReview.value;
     admitting.value = true;
     admitNote.value = null;
     try {
@@ -114,6 +141,11 @@ async function admit(): Promise<void> {
         form.append('package', packageFile.value);
         form.append('source', sourceFile.value);
         form.append('receipt', receiptFile.value);
+        if (approved && key) {
+            form.append('approvedGrants', JSON.stringify([...blockedReview.value!.requestedGrants]));
+            form.append('expectedPackageDigest', blockedReview.value!.packageDigest);
+            form.append('expectedAuthoritySha256', blockedReview.value!.authoritySha256);
+        }
         const result = (await ($fetch as unknown as (input: string, init: Record<string, unknown>) => Promise<unknown>)(
             '/api/admin/plugins/development/admit',
             { method: 'POST', credentials: 'include', headers: { ...ADMIN_HEADERS }, body: form }
@@ -125,9 +157,22 @@ async function admit(): Promise<void> {
             provenance: string;
             stage?: string;
             codes?: readonly string[];
+            requestedGrants?: readonly string[];
+            authoritySha256?: string;
         };
         if (!result.ok) {
-            admitNote.value = `The candidate was blocked at ${result.stage ?? 'review'}: ${(result.codes ?? []).join(', ') || 'see the package checklist'}. Grants or setup may need attention before the canary.`;
+            if (result.stage === 'grants' && result.requestedGrants && result.authoritySha256 && result.packageDigest) {
+                blockedReview.value = {
+                    requestedGrants: result.requestedGrants,
+                    authoritySha256: result.authoritySha256,
+                    packageDigest: result.packageDigest,
+                };
+                grantsApproved.value = false;
+                approvedGrantsKey.value = null;
+                admitNote.value = 'This candidate asks for authority. Review the requested grants, approve them for this workspace, then admit again.';
+            } else {
+                admitNote.value = `The candidate was blocked at ${result.stage ?? 'review'}: ${(result.codes ?? []).join(', ') || 'see the package checklist'}. Grants or setup may need attention before the canary.`;
+            }
             toast.add({ title: 'Candidate needs attention', description: admitNote.value, color: 'warning' });
             return;
         }
@@ -256,8 +301,24 @@ async function exportVerification(): Promise<void> {
                     data-testid="dev-candidate-admit"
                     @click="admit"
                 >
-                    Admit candidate
+                    {{ blockedReview ? 'Approve and admit again' : 'Admit candidate' }}
                 </UButton>
+            </div>
+
+            <div v-if="blockedReview" class="flex flex-col gap-2 rounded border border-[var(--md-outline-variant)] p-2 text-xs" data-testid="dev-candidate-grants">
+                <p class="font-medium">Authority this candidate asks for</p>
+                <ul class="list-disc pl-5">
+                    <li v-for="grant in blockedReview.requestedGrants" :key="grant"><code>{{ grant }}</code></li>
+                </ul>
+                <label class="flex items-center gap-2">
+                    <input
+                        v-model="grantsApproved"
+                        type="checkbox"
+                        data-testid="dev-candidate-grant-approve"
+                        @change="approvedGrantsKey = previewKey"
+                    />
+                    I approve these permissions for this workspace and these exact bytes.
+                </label>
             </div>
 
             <p v-if="admitNote" class="text-xs opacity-80">{{ admitNote }}</p>
