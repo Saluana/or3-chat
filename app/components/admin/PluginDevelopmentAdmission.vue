@@ -13,6 +13,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useToast } from '#imports';
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
+import { useDevelopmentCanary } from '~/composables/admin/useDevelopmentCanary';
 
 interface Eligibility {
     readonly eligible: boolean;
@@ -57,8 +58,13 @@ const blockedReview = ref<{
 const verificationScope = ref<'runtime-canary' | 'recorded-interaction-check'>('runtime-canary');
 const attestedInteraction = ref(false);
 const exporting = ref(false);
-const canaryNote = ref<string | null>(null);
-const canaryBusy = ref(false);
+const developmentCanary = useDevelopmentCanary();
+const canaryNote = computed(() =>
+    admitted.value ? (developmentCanary.notes.value[admitted.value.pluginId] ?? null) : null
+);
+const canaryBusy = computed(() =>
+    admitted.value ? developmentCanary.busyPluginId.value === admitted.value.pluginId : false
+);
 
 const canAdmit = computed(
     () =>
@@ -194,52 +200,12 @@ async function admit(): Promise<void> {
 }
 
 /**
- * Complete the browser half of the candidate canary in this browser: run the
- * hidden activation of the exact admitted bytes, report the outcome, and let
- * the host re-run the canary to a pass. Server-only evidence never substitutes.
+ * Complete the browser half of the candidate canary in this browser through
+ * the shared admin helper (the same step the package row offers).
  */
 async function runBrowserCheck(): Promise<void> {
     if (!admitted.value) return;
-    canaryBusy.value = true;
-    canaryNote.value = 'Running the hidden browser activation…';
-    try {
-        const { reportCandidateClientCanary } = await import(
-            '~/composables/plugins/portable-canary'
-        );
-        for (let attempt = 0; attempt < 3; attempt += 1) {
-            const result = (await ($fetch as unknown as (input: string, init: Record<string, unknown>) => Promise<unknown>)(
-                `/api/admin/plugins/packages/${encodeURIComponent(admitted.value.pluginId)}/canary`,
-                { method: 'POST', credentials: 'include', headers: { ...ADMIN_HEADERS }, body: {} }
-            )) as {
-                ok?: boolean;
-                status?: string;
-                clientCanary?: { status: string; ticket: Parameters<typeof reportCandidateClientCanary>[0] };
-            };
-            if (result.ok) {
-                canaryNote.value = 'Canary passed in this browser.';
-                toast.add({ title: 'Browser check passed', description: 'Promote the candidate below when ready.', color: 'success' });
-                return;
-            }
-            if (result.clientCanary?.status !== 'awaiting-client') {
-                canaryNote.value = `Canary did not pass: ${result.status ?? 'blocked'}.`;
-                toast.add({ title: 'Browser check did not pass', description: canaryNote.value, color: 'error' });
-                return;
-            }
-            const outcome = await reportCandidateClientCanary(result.clientCanary.ticket);
-            canaryNote.value = `Browser activation ${outcome.status}. Re-checking…`;
-            if (outcome.status !== 'passed') {
-                canaryNote.value = `Browser activation ${outcome.status}: ${outcome.code ?? 'blocked'}.`;
-                toast.add({ title: 'Browser check did not pass', description: canaryNote.value, color: 'error' });
-                return;
-            }
-        }
-        canaryNote.value = 'Canary is still pending after three browser checks.';
-    } catch (error) {
-        canaryNote.value = error instanceof Error ? error.message : 'The browser check failed.';
-        toast.add({ title: 'Browser check failed', description: canaryNote.value, color: 'error' });
-    } finally {
-        canaryBusy.value = false;
-    }
+    await developmentCanary.runBrowserCheck(admitted.value.pluginId);
 }
 
 async function exportVerification(): Promise<void> {    if (!admitted.value) return;

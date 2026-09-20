@@ -18,6 +18,7 @@ import { isSuperAdmin } from '../../admin/context';
 import { ImmutablePluginPackageStore } from '../../admin/plugins/package-store';
 import { PluginPackagePointerStore } from '../../admin/plugins/package-pointer-store';
 import { PluginPackageRouteCatalog } from '../../admin/plugins/package-route-catalog';
+import { readLocalAdmission } from '../../admin/plugins/local-admission';
 import type { Sha256 } from '~~/shared/plugins/runtime-descriptor';
 
 /**
@@ -73,9 +74,10 @@ export default defineEventHandler(async (event) => {
                   ]);
                   const selectedDigest = startup?.selected?.packageDigest ?? null;
                   const candidateDigest = pointer?.candidate?.packageDigest ?? null;
-                  const [version, candidateVersion] = await Promise.all([
+                  const [version, candidateVersion, candidateAdmission] = await Promise.all([
                       versionFor(pluginId, selectedDigest),
                       versionFor(pluginId, candidateDigest),
+                      candidateDigest ? readLocalAdmission(pluginId, candidateDigest).catch(() => null) : null,
                   ]);
                   return {
                       pluginId,
@@ -96,6 +98,13 @@ export default defineEventHandler(async (event) => {
                           candidateDigest,
                           canOpen: version !== null,
                       },
+                      localAdmission: candidateAdmission
+                          ? {
+                                provenance: 'local-development' as const,
+                                receiptSha256: candidateAdmission.receiptSha256,
+                                admittedAt: candidateAdmission.admittedAt,
+                            }
+                          : null,
                   };
               }));
           })()

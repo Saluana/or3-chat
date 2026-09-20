@@ -133,7 +133,7 @@ function lifecycleFor(entry: InstalledEntry): PluginLifecycleView {
 function lifecycleBadge(entry: InstalledEntry): { readonly state: string; readonly label: string } {
     return describeLifecycleBadge(lifecycleFor(entry), {
         enabled: isEnabled(entry.pluginId),
-        isDevelopmentCandidate: false,
+        isDevelopmentCandidate: entry.localAdmission?.provenance === 'local-development',
     });
 }
 

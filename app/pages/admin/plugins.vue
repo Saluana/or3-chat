@@ -257,6 +257,9 @@
                             <div v-if="packagePlugin.pointer?.candidate" class="text-xs font-mono opacity-70">
                                 candidate: {{ packagePlugin.pointer.candidate.packageDigest }}
                             </div>
+                            <div v-if="packagePlugin.localAdmission" class="mt-1">
+                                <UBadge color="warning" variant="subtle">Development candidate</UBadge>
+                            </div>
                             <div v-if="packagePlugin.startup.issueCodes.length" class="mt-1 text-xs text-[var(--md-sys-color-error,#b91c1c)]">
                                 {{ packagePlugin.startup.issueCodes.join(', ') }}
                             </div>
@@ -274,6 +277,18 @@
                         >
                             Run canary
                         </UButton>
+                        <UButton
+                            v-if="packagePlugin.localAdmission"
+                            size="xs"
+                            color="neutral"
+                            :loading="developmentCanary.busyPluginId.value === packagePlugin.pluginId"
+                            @click="developmentCanary.runBrowserCheck(packagePlugin.pluginId).then(() => refreshPage())"
+                        >
+                            Run browser check
+                        </UButton>
+                        <p v-if="developmentCanary.notes.value[packagePlugin.pluginId]" class="w-full text-xs opacity-70">
+                            {{ developmentCanary.notes.value[packagePlugin.pluginId] }}
+                        </p>
                         <UButton
                             size="xs"
                             color="primary"
@@ -351,6 +366,7 @@ import {
 import { useAdminWorkspaceGate } from '~/composables/admin/useAdminWorkspaceGate';
 import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
 import PluginDevelopmentAdmission from '~/components/admin/PluginDevelopmentAdmission.vue';
+import { useDevelopmentCanary } from '~/composables/admin/useDevelopmentCanary';
 import { useRuntimeConfig } from '#imports';
 
 definePageMeta({
@@ -372,6 +388,11 @@ type ManagedV2Package = {
         selectedDigest: string | null;
         issueCodes: string[];
     };
+    localAdmission?: {
+        provenance: 'local-development';
+        receiptSha256: string;
+        admittedAt: string;
+    } | null;
 };
 
 const { selectedWorkspaceId, showWorkspaceSelector, onWorkspaceSelected } =
@@ -492,6 +513,7 @@ const plugins = computed(
     () => pageData.value?.plugins ?? []
 );
 const v2Packages = computed(() => pageData.value?.packagePlugins ?? []);
+const developmentCanary = useDevelopmentCanary();
 
 const enabledSet = ref<Set<string>>(new Set());
 const settingsByPlugin = reactive<Record<string, string>>({});

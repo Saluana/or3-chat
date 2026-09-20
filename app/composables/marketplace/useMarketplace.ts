@@ -983,6 +983,12 @@ export interface InstalledPackageView {
         readonly issueCodes: readonly string[];
     };
     readonly display?: InstalledPackageDisplay;
+    /** Explicit local-development provenance; never a marketplace release. */
+    readonly localAdmission?: {
+        readonly provenance: 'local-development';
+        readonly receiptSha256: string;
+        readonly admittedAt: string;
+    } | null;
 }
 
 /** Installed packages, enabled state and pending candidates for one workspace. */
