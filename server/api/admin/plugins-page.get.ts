@@ -77,7 +77,16 @@ export default defineEventHandler(async (event) => {
                   const [version, candidateVersion, candidateAdmission] = await Promise.all([
                       versionFor(pluginId, selectedDigest),
                       versionFor(pluginId, candidateDigest),
-                      candidateDigest ? readLocalAdmission(pluginId, candidateDigest).catch(() => null) : null,
+                      // Provenance follows the selected bytes: a promoted
+                      // development candidate keeps its local identity.
+                      (async () => {
+                          for (const digest of [candidateDigest, selectedDigest]) {
+                              if (!digest) continue;
+                              const record = await readLocalAdmission(pluginId, digest).catch(() => null);
+                              if (record) return record;
+                          }
+                          return null;
+                      })(),
                   ]);
                   return {
                       pluginId,
