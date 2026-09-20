@@ -1391,7 +1391,7 @@
                     "name": "trusted-acquisition.md",
                     "path": "/plugins/trusted-acquisition",
                     "category": "Reference",
-                    "summary": "Reviewed acquisition installs a package published and signed by a configured marketplace registry. It refuses arbitrary package URLs, verifies signed metadata, archive and canonical tree digests before any pointer changes, enforces the signed checkpoint's monotonic security revision (rollback, equivocation and replay are refused), requires every enabled workspace to preflight an instance-wide update, and is resumable under one operation id. Includes staging registry and public-key preparation for source development."
+                    "summary": "Reviewed acquisition installs a package published and signed by a configured marketplace registry. It refuses arbitrary package URLs, verifies signed metadata, archive and canonical tree digests before any pointer changes, enforces the signed checkpoint's monotonic security revision (rollback, equivocation and replay are refused), requires every enabled workspace to preflight an instance-wide update, and is resumable under one operation id. Includes staging registry and public-key preparation for source development, plus the portable or3sal.tasks package and its legacy compatibility limits."
                 },
                 {
                     "name": "marketplace.md",

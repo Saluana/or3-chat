@@ -116,3 +116,13 @@ The advisory sequence is a *freshness* cursor, not a filter for which scoped dec
 ## Host capability requirement
 
 The pipeline presents the host's declared package capabilities (`supportedTrustModes`, `supportedFeatures`, `supportedGrants`) and never widens them for a release. Acquiring a profile therefore requires the host to declare everything that profile needs. The current host declares `trusted-host` and `isolated-client` (with the hidden browser canary runner), the `or3-portable-client-v1` feature, and only the grants it actually honors: `ui.dashboard.register`, `ui.command-palette.register`, `settings.read`/`settings.write`, `storage.read`/`storage.write` (the plugin-namespaced KV store through the portable runtime), `network.http`, `documents.read` (selection-scoped reads through a host-minted handle; the server refuses to mint one without an approved review) and `documents.write` (host-performed writes behind the grant-checked host action executor). A release requesting anything else is refused with `unsupported-grant`, and the packed official archives are run through this boundary in `tests/unit/official-plugins-conformance.test.ts` so the vocabulary and the products cannot drift apart.
+
+## Task-list staging package
+
+`or3sal.tasks` 0.2.0 uses Plugin Runtime V2, the portable client profile and
+SDK 2.0.0. It requires only `storage.read` and `storage.write`. Its source project
+is `or3-plugin-tasks`; build with Bun and pack the bundled `dist` tree. Install
+the reviewed staging release through Marketplace, approve storage access,
+complete setup, and open the portable task view. The legacy Nuxt module remains
+archived in the plugin source: AI tools, sidebar registration and notifications
+are not part of this portable release, and existing `or3-tasks` data is unchanged.
