@@ -290,6 +290,15 @@
                             {{ developmentCanary.notes.value[packagePlugin.pluginId] }}
                         </p>
                         <UButton
+                            v-if="packagePlugin.localAdmission && packagePlugin.pointer?.candidate"
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            @click="developmentCanary.exportCanaryReceipt(packagePlugin.pluginId, packagePlugin.pointer.candidate.packageDigest)"
+                        >
+                            Export verification receipt
+                        </UButton>
+                        <UButton
                             size="xs"
                             color="primary"
                             :disabled="!packagePlugin.pointer?.candidate || v2ActionLoading[packagePlugin.pluginId]"
