@@ -6,6 +6,8 @@ import { getEnabledPlugins } from '../../../admin/plugins/workspace-plugin-store
 import { getWorkspaceSettingsStore } from '../../../admin/stores/registry';
 import { listInstalledExtensions } from '../../../admin/extensions/extension-manager';
 import { preflightMarketplaceInstall } from '../../../utils/plugins/marketplace/service';
+import { pluginPackageServices } from '../../../admin/plugins/package-operation-support';
+import { PluginPackageRouteCatalog } from '../../../admin/plugins/package-route-catalog';
 
 type PreflightBody = {
     readonly pluginId?: unknown;
@@ -48,13 +50,18 @@ export default defineEventHandler(async (event) => {
             : undefined;
 
     const settingsStore = getWorkspaceSettingsStore(event);
-    const [installed, enabled] = await Promise.all([
+    const services = pluginPackageServices(settingsStore);
+    const [installed, enabled, selected] = await Promise.all([
         listInstalledExtensions(),
         getEnabledPlugins(settingsStore, workspaceId),
+        new PluginPackageRouteCatalog(services.packages, services.pointers).listSelected(),
     ]);
     const installedPluginIds = installed
         .filter((extension) => extension.kind === 'plugin')
         .map((extension) => extension.id);
+    installedPluginIds.push(...selected
+        .filter((entry) => entry.status === 'ready')
+        .map((entry) => entry.pluginId));
 
     return await preflightMarketplaceInstall({
         pluginId,

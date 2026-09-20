@@ -187,6 +187,9 @@ export class PluginPackageCandidateService {
             if (!pointerCanAcceptCandidate(selection)) {
                 return blocked('pointer', selection.issues.map((entry) => entry.code));
             }
+            if (selection.pointer?.current?.packageDigest === verification.digest) {
+                return blocked('pointer', ['already-installed']);
+            }
 
             const compatibility = verifyPluginV2Compatibility({
                 manifest,

@@ -8,6 +8,11 @@ Admin > Plugins includes a **Browse Marketplace** link to this dashboard. Sign i
 with a regular Chat account: the system admin login is a separate session and
 does not make authenticated dashboard apps visible to a guest.
 
+Installed V2 packages are detected across the instance, even in workspaces where
+they are disabled. Use **Installed** to activate an existing package in another
+workspace; clicking Install again does not create a second copy. Candidate
+preparation also refuses the already-current package without changing its pointer.
+
 ## Configuration
 
 The marketplace reads the same reviewed-acquisition configuration as the install pipeline:

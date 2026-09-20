@@ -180,7 +180,7 @@ function canConnect(connection: SetupConnectionPlan): boolean {
         <p v-if="status.nextAction" class="text-sm opacity-80">Next: {{ status.nextAction }}</p>
 
         <div
-            v-if="!durableConnections"
+            v-if="plan.connections.length > 0 && !durableConnections"
             class="rounded border border-[var(--md-outline-variant)] p-3 text-xs"
             role="note"
         >
@@ -189,7 +189,7 @@ function canConnect(connection: SetupConnectionPlan): boolean {
         </div>
 
         <div
-            v-if="!credentialsAvailable"
+            v-if="plan.connections.length > 0 && !credentialsAvailable"
             class="rounded border border-[var(--md-outline-variant)] p-3 text-xs"
             role="alert"
         >

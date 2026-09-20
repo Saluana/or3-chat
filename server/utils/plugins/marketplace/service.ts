@@ -279,7 +279,7 @@ export async function preflightMarketplaceInstall(input: {
             latestSequence: state.acceptedAdvisorySequence,
             acceptedSequence: state.acceptedAdvisorySequence,
             quarantined: false,
-        }, null, input.enabledPluginIds.includes(input.pluginId));
+        }, null, true);
     }
 
     if (requestedVersion === undefined) {
