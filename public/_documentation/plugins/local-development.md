@@ -37,7 +37,8 @@ bun run dev:plugin
 
 This creates `.or3-plugin-dev/` (extensions, SQLite sync database,
 basic-auth database), sets `OR3_PLUGIN_DEVELOPMENT=1` and
-`OR3_PLUGIN_DEV_PROFILE`, and serves SSR on `127.0.0.1:3101`. Package
+`OR3_PLUGIN_DEV_PROFILE`, enables the V2 module loader that runs admitted
+packages, and serves SSR on `127.0.0.1:3101`. Package
 selection stays instance-wide inside that instance; the ordinary app's
 registry, production package pointers and user data are outside it.
 
