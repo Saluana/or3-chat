@@ -57,6 +57,8 @@ const blockedReview = ref<{
 const verificationScope = ref<'runtime-canary' | 'recorded-interaction-check'>('runtime-canary');
 const attestedInteraction = ref(false);
 const exporting = ref(false);
+const canaryNote = ref<string | null>(null);
+const canaryBusy = ref(false);
 
 const canAdmit = computed(
     () =>
@@ -191,8 +193,56 @@ async function admit(): Promise<void> {
     }
 }
 
-async function exportVerification(): Promise<void> {
+/**
+ * Complete the browser half of the candidate canary in this browser: run the
+ * hidden activation of the exact admitted bytes, report the outcome, and let
+ * the host re-run the canary to a pass. Server-only evidence never substitutes.
+ */
+async function runBrowserCheck(): Promise<void> {
     if (!admitted.value) return;
+    canaryBusy.value = true;
+    canaryNote.value = 'Running the hidden browser activation…';
+    try {
+        const { reportCandidateClientCanary } = await import(
+            '~/composables/plugins/portable-canary'
+        );
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+            const result = (await ($fetch as unknown as (input: string, init: Record<string, unknown>) => Promise<unknown>)(
+                `/api/admin/plugins/packages/${encodeURIComponent(admitted.value.pluginId)}/canary`,
+                { method: 'POST', credentials: 'include', headers: { ...ADMIN_HEADERS }, body: {} }
+            )) as {
+                ok?: boolean;
+                status?: string;
+                clientCanary?: { status: string; ticket: Parameters<typeof reportCandidateClientCanary>[0] };
+            };
+            if (result.ok) {
+                canaryNote.value = 'Canary passed in this browser.';
+                toast.add({ title: 'Browser check passed', description: 'Promote the candidate below when ready.', color: 'success' });
+                return;
+            }
+            if (result.clientCanary?.status !== 'awaiting-client') {
+                canaryNote.value = `Canary did not pass: ${result.status ?? 'blocked'}.`;
+                toast.add({ title: 'Browser check did not pass', description: canaryNote.value, color: 'error' });
+                return;
+            }
+            const outcome = await reportCandidateClientCanary(result.clientCanary.ticket);
+            canaryNote.value = `Browser activation ${outcome.status}. Re-checking…`;
+            if (outcome.status !== 'passed') {
+                canaryNote.value = `Browser activation ${outcome.status}: ${outcome.code ?? 'blocked'}.`;
+                toast.add({ title: 'Browser check did not pass', description: canaryNote.value, color: 'error' });
+                return;
+            }
+        }
+        canaryNote.value = 'Canary is still pending after three browser checks.';
+    } catch (error) {
+        canaryNote.value = error instanceof Error ? error.message : 'The browser check failed.';
+        toast.add({ title: 'Browser check failed', description: canaryNote.value, color: 'error' });
+    } finally {
+        canaryBusy.value = false;
+    }
+}
+
+async function exportVerification(): Promise<void> {    if (!admitted.value) return;
     if (verificationScope.value === 'recorded-interaction-check' && !attestedInteraction.value) {
         toast.add({ title: 'Attestation required', description: 'Confirm you exercised the candidate in this browser first.', color: 'warning' });
         return;
@@ -331,6 +381,12 @@ async function exportVerification(): Promise<void> {
                     from Chat to exercise it as a real sidebar, pane, tool and storage integration.
                 </p>
                 <div class="flex flex-col gap-2">
+                    <div class="flex flex-wrap gap-2">
+                        <UButton size="xs" :loading="canaryBusy" data-testid="dev-candidate-canary" @click="runBrowserCheck">
+                            Run browser check
+                        </UButton>
+                    </div>
+                    <p v-if="canaryNote" class="opacity-80">{{ canaryNote }}</p>
                     <label class="flex items-center gap-2">
                         Verification scope
                         <select v-model="verificationScope" class="rounded border border-[var(--md-outline-variant)] bg-transparent px-2 py-1">
