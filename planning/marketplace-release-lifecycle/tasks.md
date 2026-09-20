@@ -55,7 +55,7 @@ Delivery order: **A. Client clarity and recovery -> B. Real local candidate test
       Requirements: R9.AC3-R9.AC4.
       Done when: keyboard focus survives state refresh/dialog return, repeated polling does not repeat announcements, and 375px/1440px light/dark views have no horizontal page overflow using existing themed components.
 
-- [ ] 3.5 Qualify and document Phase A (3-4h)
+- [x] 3.5 Qualify and document Phase A (3-4h)
       Component: Lifecycle View, Acquisition Service, Runtime Confirmation, Diagnostic Projection. Repository: `or3-chat`.
       Requirements: R1-R4, R9.
       Done when: affected client/acquisition/runtime tests and one typecheck pass; Chrome verifies actual-plugin update, reload/resume, workspace switch, exact running identity, and recoverable failure; public documentation/docmap explain installed versus running and recovery limits. Record evidence and unresolved pre-existing failures separately.
