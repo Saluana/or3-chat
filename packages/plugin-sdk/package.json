@@ -39,6 +39,10 @@
             "types": "./src/cli/archive.ts",
             "import": "./src/cli/archive.ts"
         },
+        "./candidate": {
+            "types": "./src/candidate.ts",
+            "import": "./src/candidate.ts"
+        },
         "./testing": {
             "types": "./src/testing.ts",
             "import": "./src/testing.ts"

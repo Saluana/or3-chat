@@ -287,6 +287,34 @@ function encodeZip(entries: readonly PackageTreeEntryInput[]): Uint8Array {
 }
 
 /**
+ * Encodes caller-supplied files into a deterministic ZIP with the same fixed
+ * metadata as package archives (fixed compression, timestamps, attributes,
+ * UTF-8 names sorted in byte order).
+ *
+ * Unlike `writeDeterministicPackageZip` this performs no package-tree
+ * verification: it is the source-snapshot transport for candidate receipts,
+ * where the bytes are review input rather than executable package content.
+ * Symlink-escape and absolute paths are still refused.
+ */
+export function encodeFileZip(
+    files: ReadonlyArray<{ readonly path: string; readonly bytes: Uint8Array }>
+): Uint8Array {
+    const entries: PackageTreeEntryInput[] = files.map((file) => {
+        if (
+            file.path.length === 0 ||
+            file.path.includes('\0') ||
+            file.path.startsWith('/') ||
+            /^[a-z]:[\\/]/i.test(file.path)
+        ) {
+            throw new PackageTreeValidationError('path-traversal', `Unsafe snapshot path: ${file.path}`, file.path);
+        }
+        return { path: file.path, kind: 'file' as const, mode: 0o644, bytes: file.bytes, declaredLength: file.bytes.byteLength };
+    });
+    entries.sort(compareUtf8Paths);
+    return encodeZip(entries);
+}
+
+/**
  * Verifies `treeRoot` and returns a deterministic ZIP of its canonical tree.
  *
  * The tree is verified first and an invalid tree is never exported. Entries are

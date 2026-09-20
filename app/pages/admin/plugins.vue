@@ -32,6 +32,8 @@
             </UButton>
         </div>
 
+        <PluginDevelopmentAdmission />
+
         <div
             v-if="rebuildRequired && rebuildAvailable"
             class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] text-[var(--md-sys-color-on-warning-container,#92400e)]"
@@ -348,6 +350,7 @@ import {
 } from '~/utils/admin/plugin-access-policy';
 import { useAdminWorkspaceGate } from '~/composables/admin/useAdminWorkspaceGate';
 import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
+import PluginDevelopmentAdmission from '~/components/admin/PluginDevelopmentAdmission.vue';
 import { useRuntimeConfig } from '#imports';
 
 definePageMeta({

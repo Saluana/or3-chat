@@ -17,6 +17,7 @@ export const SUBPATH_ENTRIES = {
     './profile': 'profile',
     './state-compatibility': 'state-compatibility',
     './package-archive': 'cli/archive',
+    './candidate': 'candidate',
     './ui': 'ui',
     './portable': 'portable',
     './portable-runtime': 'portable-runtime',
@@ -33,6 +34,7 @@ export const BUILD_ENTRIES = [
     'src/profile.ts',
     'src/package-tree.ts',
     'src/state-compatibility.ts',
+    'src/candidate.ts',
     'src/cli/index.ts',
     'src/cli/archive.ts',
 ];

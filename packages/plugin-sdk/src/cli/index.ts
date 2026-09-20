@@ -1,5 +1,11 @@
 import { resolve } from 'node:path';
 import { buildV2Package } from './build';
+import {
+    isCandidateDirectory,
+    qualifyCandidateDirectory,
+    createV2Candidate,
+    verifyCandidateDirectory,
+} from '../candidate';
 import { createV2Package } from './create';
 import { inspectV2Package } from './inspect';
 import { packV2Package } from './pack';
@@ -17,6 +23,12 @@ Commands:
   build <package-root>
   pack <package-root> [--out <pack-dir>] [--archive <archive-path>]
   inspect <package-root-or-archive>
+  candidate <package-root> --out <candidate-dir>
+  candidate --verify <candidate-dir>
+  candidate --qualify <package-root> --candidate <candidate-dir>
+
+Candidate outputs (package.zip, source.zip, receipt.json) are immutable once
+written: testing and submission verify and consume them without rebuilding.
 
 Templates:
   portable-v1   isolated-client package conformant with or3-portable-client-v1 (default)
@@ -108,6 +120,52 @@ export async function runPluginCli(argv: readonly string[]): Promise<number> {
             if (!root) throw new Error('inspect requires <package-root>');
             const result = await inspectV2Package(resolve(root));
             printJson(result);
+            return 0;
+        }
+        case 'candidate': {
+            if (rest.includes('--verify')) {
+                const directory = requireArg(rest, '--verify');
+                const verified = await verifyCandidateDirectory(directory);
+                printJson({
+                    status: 'verified',
+                    candidateDirectory: verified.candidateDirectory,
+                    receiptSha256: verified.receiptSha256,
+                    pluginId: verified.receipt.pluginId,
+                    version: verified.receipt.version,
+                });
+                return 0;
+            }
+            if (rest.includes('--qualify')) {
+                const root = requireArg(rest, '--qualify');
+                const directory = requireArg(rest, '--candidate');
+                const qualified = await qualifyCandidateDirectory(root, directory);
+                printJson({
+                    status: 'qualified',
+                    candidateDirectory: qualified.candidateDirectory,
+                    receiptSha256: qualified.receiptSha256,
+                    pluginId: qualified.receipt.pluginId,
+                    version: qualified.receipt.version,
+                });
+                return 0;
+            }
+            const root = rest[0];
+            if (!root || root.startsWith('--')) {
+                throw new Error('candidate requires <package-root> --out <candidate-dir>');
+            }
+            const out = requireArg(rest, '--out');
+            const created = await createV2Candidate(root, {
+                outputDirectory: out,
+                command: `or3-plugin candidate ${rest.join(' ')}`.slice(0, 512),
+            });
+            printJson({
+                status: 'candidate-created',
+                candidateDirectory: created.candidateDirectory,
+                packagePath: created.packagePath,
+                sourcePath: created.sourcePath,
+                receiptPath: created.receiptPath,
+                receipt: created.receipt,
+                excludedSecrets: created.excludedSecrets,
+            });
             return 0;
         }
         default: {

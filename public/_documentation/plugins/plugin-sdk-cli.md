@@ -44,6 +44,9 @@ or3-plugin test ./example
 or3-plugin build ./example
 or3-plugin pack ./example --archive ./example.or3pkg
 or3-plugin inspect ./example            # or ./example.or3pkg
+or3-plugin candidate ./example --out ./example-candidate-1
+or3-plugin candidate --verify ./example-candidate-1
+or3-plugin candidate --qualify ./example --candidate ./example-candidate-1
 ```
 
 - `create` copies a starter template. `portable-v1` (default) is conformant with
@@ -67,9 +70,23 @@ or3-plugin inspect ./example            # or ./example.or3pkg
   is materialised before hashing; an archive is verified exactly as extracted, so
   the reported digest describes the artifact that was verified. It never imports
   plugin code. A fresh install reports `eligible`/`state-initialization`.
+- `candidate` builds one immutable candidate — sibling `package.zip`,
+  `source.zip` and `receipt.json` in a new directory — over the existing
+  validate/build/pack helpers. The receipt (schema version 1, at most 16 KiB)
+  binds plugin/version, package/manifest/source/authority digests, required
+  host features, the source revision with dirty-snapshot status, and the
+  actual SDK, lockfile and runtime inputs; unknown fields and oversized input
+  are rejected. `--verify` recomputes every digest from the frozen files
+  without rebuilding. `--qualify` requires the exact clean source commit with
+  matching SDK and dependency inputs, rebuilds in a scratch directory, and
+  fails unless the bytes compare equal — it never replaces the tested
+  archive. Dirty snapshots test locally but never qualify, and a published
+  version keeps immutable bytes (different bytes need an unused version).
 
 The `or3-plugin` CLI bundles no third-party runtime code and imports only Node
-built-ins plus this package's own modules.
+built-ins plus this package's own modules. See [Local Development
+Candidates](./local-development) for testing a candidate inside real OR3 Chat
+without publishing it.
 
 ## Portable starter
 

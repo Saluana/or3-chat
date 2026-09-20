@@ -26,6 +26,7 @@ import { computed, ref } from 'vue';
 import { requestWorkspacePluginReconcile } from '~/composables/plugins/bundled-v1-manager-runtime';
 import type { EffectiveAuthority } from '~~/shared/plugins/authority/effective-authority';
 import { acquisitionRequestError } from '~~/shared/plugins/acquisition/failure-presentation';
+import { ACTIVATION_CONFIRMATION_TIMEOUT_MS } from '~~/shared/plugins/lifecycle/lifecycle-view';
 
 /**
  * Nuxt's typed routes cannot express runtime-composed API paths, so every call
@@ -470,6 +471,11 @@ export function useMarketplaceUpdateCheck() {
  * A contained client package needs a browser canary; when the operation reports
  * `client-canary-pending` this runs the hidden activation with a fresh ticket and
  * retries the same operation, so the operator sees one continuous install.
+ *
+ * Completion proves installation, not activation: after `settle()` reports
+ * `completed`, call `confirmActivation()` to observe the exact package running
+ * in this browser/workspace (at most 30 seconds). A timeout leaves the server
+ * outcome intact and reports `not-confirmed` with retry/diagnostic actions.
  */
 export function useMarketplaceInstall() {
     const operationId = ref<string | null>(null);
@@ -483,6 +489,17 @@ export function useMarketplaceInstall() {
     );
     /** Selection/restore generation; late responses cannot retarget controls. */
     let operationGeneration = 0;
+    /**
+     * Activation observer generation. A workspace switch, navigation or `reset`
+     * detaches the observer without touching the durable operation; a late
+     * successful activation may still update the visible status through
+     * `observeActivationNow`, but it never retries a failed acquisition.
+     */
+    let confirmationGeneration = 0;
+    /** Latest bounded observation for the tracked operation target. */
+    const activationConfirmation = ref<ActivationConfirmationState | null>(null);
+    /** True once the 30s window elapsed without confirmation; server success stands. */
+    const activationTimedOut = ref(false);
 
     const poll = async (expectedOperationId = operationId.value): Promise<AcquisitionStatusView | null> => {
         if (!expectedOperationId || operationId.value !== expectedOperationId) return null;
@@ -591,6 +608,8 @@ export function useMarketplaceInstall() {
     /**
      * A completed operation has selected (or updated) the package, so the
      * running plugin runtime must be reconciled before the UI reports success.
+     * Reconciliation alone is not confirmation: use `confirmActivation()` to
+     * observe the exact package before displaying "Running".
      */
     const settle = async (pluginId: string): Promise<AcquisitionStatusView | null> => {
         const view = await waitForSettled(pluginId);
@@ -677,6 +696,118 @@ export function useMarketplaceInstall() {
     };
 
     /**
+     * Observe the exact selected package running in this browser/workspace.
+     * Scoped to the operation target (plugin, package digest, workspace): an
+     * activation of other bytes never satisfies it. Waits at most 30 seconds;
+     * on timeout the server installation outcome is preserved and the caller
+     * shows "Installed; activation not confirmed" with retry/diagnostic
+     * actions. Detaches on selection/workspace changes via `reset()` or
+     * `detachActivationConfirmation()`.
+     */
+    const confirmActivation = async (input: {
+        readonly pluginId: string;
+        readonly packageTreeSha256: string;
+        readonly workspaceId: string;
+        readonly timeoutMs?: number;
+    }): Promise<ActivationConfirmationState | null> => {
+        const generation = ++confirmationGeneration;
+        activationConfirmation.value = null;
+        activationTimedOut.value = false;
+        const timeoutMs = input.timeoutMs ?? ACTIVATION_CONFIRMATION_TIMEOUT_MS;
+        const deadline = Date.now() + timeoutMs;
+        const { getPortableActivation, isPortableActivationReady } = await import(
+            '~/composables/plugins/portable-client-runtime'
+        );
+        for (;;) {
+            if (generation !== confirmationGeneration) return null;
+            const activation = getPortableActivation(input.pluginId);
+            if (
+                activation &&
+                activation.packageDigest === input.packageTreeSha256 &&
+                activation.workspaceId === input.workspaceId
+            ) {
+                if (activation.status === 'blocked' || activation.status === 'stopped') {
+                    const state: ActivationConfirmationState = {
+                        confirmed: false,
+                        reason: 'failed',
+                        code: activation.blockCode ?? activation.status,
+                    };
+                    if (generation === confirmationGeneration) activationConfirmation.value = state;
+                    return state;
+                }
+                if (activation.status === 'active' && isPortableActivationReady(activation)) {
+                    const state: ActivationConfirmationState = {
+                        confirmed: true,
+                        observedAt: new Date().toISOString(),
+                        generation: activation.generation,
+                        degradedContributions: [...activation.degradedContributions],
+                    };
+                    if (generation === confirmationGeneration) activationConfirmation.value = state;
+                    return state;
+                }
+            }
+            if (Date.now() >= deadline) {
+                if (generation !== confirmationGeneration) return null;
+                activationTimedOut.value = true;
+                const state: ActivationConfirmationState = { confirmed: false, reason: 'timeout' };
+                activationConfirmation.value = state;
+                return state;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+    };
+
+    /**
+     * Retry only the observation: reconcile the runtime, then observe again
+     * without reinstalling. A late matching activation after a timeout updates
+     * the visible status; it never starts another acquisition.
+     */
+    const retryActivationConfirmation = async (input: {
+        readonly pluginId: string;
+        readonly packageTreeSha256: string;
+        readonly workspaceId: string;
+        readonly timeoutMs?: number;
+    }): Promise<ActivationConfirmationState | null> => {
+        requestWorkspacePluginReconcile('manifest-revision-change');
+        return await confirmActivation(input);
+    };
+
+    /** Single non-waiting check, for late arrivals after a timeout. */
+    const observeActivationNow = async (input: {
+        readonly pluginId: string;
+        readonly packageTreeSha256: string;
+        readonly workspaceId: string;
+    }): Promise<ActivationConfirmationState | null> => {
+        const { getPortableActivation, isPortableActivationReady } = await import(
+            '~/composables/plugins/portable-client-runtime'
+        );
+        const activation = getPortableActivation(input.pluginId);
+        if (
+            !activation ||
+            activation.packageDigest !== input.packageTreeSha256 ||
+            activation.workspaceId !== input.workspaceId ||
+            activation.status !== 'active' ||
+            !isPortableActivationReady(activation)
+        ) {
+            return null;
+        }
+        const state: ActivationConfirmationState = {
+            confirmed: true,
+            observedAt: new Date().toISOString(),
+            generation: activation.generation,
+            degradedContributions: [...activation.degradedContributions],
+        };
+        activationConfirmation.value = state;
+        activationTimedOut.value = false;
+        return state;
+    };
+
+    /** Detach the observer (workspace switch, navigation) without canceling anything. */
+    const detachActivationConfirmation = (): void => {
+        confirmationGeneration += 1;
+    };
+
+    /**
      * Adopt an operation the server already recorded (for example an update a
      * previous install left pending) and follow it to completion. This is how the
      * Updates view resumes the pipeline instead of promoting around it.
@@ -688,8 +819,7 @@ export function useMarketplaceInstall() {
     const adopt = async (
         pluginId: string,
         recordedOperationId: string
-    ): Promise<AcquisitionStatusView | null> => {
-        const generation = ++operationGeneration;
+    ): Promise<AcquisitionStatusView | null> => {        const generation = ++operationGeneration;
         running.value = true;
         error.value = null;
         operationId.value = recordedOperationId;
@@ -709,15 +839,19 @@ export function useMarketplaceInstall() {
     /**
      * Forget the locally displayed operation when the selection changes. The
      * durable operation itself is untouched server-side; `restore` re-adopts it
-     * for the plugin it belongs to.
+     * for the plugin it belongs to. Outstanding activation observers are
+     * detached too: they must not confirm an activation for a stale selection.
      */
     const reset = (): void => {
         operationGeneration += 1;
+        confirmationGeneration += 1;
         operationId.value = null;
         status.value = null;
         error.value = null;
         canaryStatus.value = null;
         running.value = false;
+        activationConfirmation.value = null;
+        activationTimedOut.value = false;
     };
 
     return {
@@ -728,6 +862,8 @@ export function useMarketplaceInstall() {
         canaryStatus,
         canCancel,
         canceling,
+        activationConfirmation,
+        activationTimedOut,
         start,
         retry,
         cancel,
@@ -735,9 +871,27 @@ export function useMarketplaceInstall() {
         adopt,
         restore,
         listOperations,
+        confirmActivation,
+        retryActivationConfirmation,
+        detachActivationConfirmation,
+        observeActivationNow,
         reset,
     };
 }
+
+/** What the bounded activation observer found in this browser/workspace. */
+export type ActivationConfirmationState =
+    | {
+          readonly confirmed: true;
+          readonly observedAt: string;
+          readonly generation: number;
+          readonly degradedContributions: readonly string[];
+      }
+    | {
+          readonly confirmed: false;
+          readonly reason: 'timeout' | 'detached' | 'failed';
+          readonly code?: string;
+      };
 
 /**
  * Record the operator's explicit consent to a release's requested authority.

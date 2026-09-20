@@ -7,8 +7,24 @@ import type { AcquisitionStatusView } from '~~/shared/plugins/acquisition/contra
 
 const fetchMock = vi.fn();
 const openPageMock = vi.fn();
+const { confirmationState } = vi.hoisted(() => ({
+    confirmationState: {
+        activation: null as null | Record<string, unknown>,
+    },
+}));
 vi.mock('~/composables/dashboard/useDashboardPlugins', () => ({
     useDashboardNavigation: () => ({ openPage: openPageMock }),
+}));
+// Activation confirmation reads the live registry; the mock answers instantly
+// so completed installs do not wait out the 30s window in tests.
+vi.mock('~/composables/plugins/portable-client-runtime', () => ({
+    getPortableActivation: (pluginId: string) =>
+        confirmationState.activation &&
+        (confirmationState.activation as { pluginId?: string }).pluginId === pluginId
+            ? confirmationState.activation
+            : null,
+    isPortableActivationReady: (activation: { status?: string }) =>
+        activation.status === 'active',
 }));
 // `$fetch` is a Nuxt auto-import: the composables call the global, so the test
 // replaces the global rather than mocking a module.
@@ -131,6 +147,13 @@ function acquisitionOperation(overrides: Partial<AcquisitionStatusView> = {}): A
         resumable: true,
         retryable: true,
         canceled: false,
+        release: {
+            releaseId: 'rel-1',
+            archiveSha256: 'sha256-archive',
+            packageTreeSha256: 'sha256-package',
+            manifestSha256: 'sha256-manifest',
+            authoritySha256: 'sha256-authority',
+        },
         failure: { code: 'setup-required', stage: 'candidate-recorded', message: 'Finish setup', retryable: true },
         updatedAt: 0,
         ...overrides,
@@ -274,6 +297,7 @@ describe('MarketplaceDiscover', () => {
     beforeEach(() => {
         fetchMock.mockReset();
         fetchMock.mockImplementation((url: string) => Promise.resolve(responseFor(url)));
+        confirmationState.activation = null;
         // The contained profile is qualified on Chromium; tests decide when a
         // different engine is under test.
         userAgentSpy = vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(CHROME_UA);
@@ -425,6 +449,9 @@ describe('MarketplaceDiscover', () => {
             if (url.startsWith('/api/admin/plugins/acquisitions') && init?.method === 'POST') {
                 return Promise.resolve({ ok: true, operation: acquisitionOperation({ status: 'completed', failure: null }) });
             }
+            if (url.startsWith('/api/admin/plugins/acquisitions/') && url.endsWith('/status')) {
+                return Promise.resolve({ ok: true, operation: acquisitionOperation({ status: 'completed', failure: null }) });
+            }
             return Promise.resolve(responseFor(url));
         });
 
@@ -441,7 +468,18 @@ describe('MarketplaceDiscover', () => {
         await wrapper.get('[data-testid="marketplace-grant-approve"]').setValue(true);
         expect(wrapper.get('[data-testid="marketplace-install"]').attributes('disabled')).toBeUndefined();
 
+        // The installed bytes run here, so activation confirmation resolves
+        // without waiting out the 30s window.
+        confirmationState.activation = {
+            pluginId: 'or3.sample-utility',
+            packageDigest: `sha256-${'b'.repeat(64)}`,
+            workspaceId: 'ws-1',
+            generation: 1,
+            status: 'active',
+            degradedContributions: [],
+        };
         await wrapper.get('[data-testid="marketplace-install"]').trigger('click');
+        await new Promise((resolve) => setTimeout(resolve, 0));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         const grantsAt = fetchMock.mock.calls.findIndex((call) =>
@@ -454,6 +492,11 @@ describe('MarketplaceDiscover', () => {
         );
         expect(grantsAt).toBeGreaterThan(-1);
         expect(installAt).toBeGreaterThan(grantsAt);
+        // Installation alone is not the success claim: the exact installed
+        // package was observed running here.
+        expect(
+            wrapper.get('[data-testid="marketplace-activation-confirmation"]').text()
+        ).toContain('Running here');
     });
 
     it('offers a copyable admin request when the account cannot install', async () => {

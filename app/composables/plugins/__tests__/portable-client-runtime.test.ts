@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PackageV2PluginDescriptor } from '~~/shared/plugins/runtime-descriptor';
+import type { PackageV2PluginDescriptor, Sha256 } from '~~/shared/plugins/runtime-descriptor';
 import { invokePortableUiEvent } from '../portable-client-runtime';
 
 /**
@@ -62,10 +62,13 @@ vi.mock('../bundled-v1-manager-runtime', () => ({
 import {
     activatePortableClient,
     clearPortableClientSources,
+    clearPortableSurfaceRegistrations,
     createPortableSettingsServices,
     deactivatePortableClient,
     ensurePortableClientActivation,
     getPortableActivation,
+    isPortableActivationReady,
+    reportPortableContributionReadiness,
     setPortableClientSource,
 } from '../portable-client-runtime';
 
@@ -158,6 +161,7 @@ beforeEach(async () => {
     await deactivatePortableClient('sample.plugin');
     revocationRequests.length = 0;
     clearPortableClientSources();
+    clearPortableSurfaceRegistrations('sample.plugin');
 });
 
 describe('portable settings services', () => {
@@ -709,5 +713,114 @@ describe('stale handle lifecycle', () => {
         expect(stopped?.view?.nodes).toHaveLength(1);
         expect(revocationRequests).toEqual(['act_test_1']);
         expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('contribution readiness and replacement safeguards', () => {
+    it('records the exact package digest and waits for required surfaces', async () => {
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('readiness'));
+        const activation = await activatePortableClient({
+            descriptor: descriptor(),
+            workspaceId: 'ws-1',
+        });
+        expect(activation.status).toBe('active');
+        expect(activation.packageDigest).toBe(`sha256-${'a'.repeat(64)}`);
+        // Pane/sidebar have not settled yet, so this is not full readiness.
+        expect(isPortableActivationReady(activation)).toBe(false);
+
+        reportPortableContributionReadiness('sample.plugin', 'pane', 'ready', {
+            descriptorKey: activation.descriptorKey,
+            workspaceId: 'ws-1',
+        });
+        expect(isPortableActivationReady(getPortableActivation('sample.plugin')!)).toBe(false);
+        reportPortableContributionReadiness('sample.plugin', 'sidebar', 'ready', {
+            descriptorKey: activation.descriptorKey,
+            workspaceId: 'ws-1',
+        });
+        // No tool grant: tools are not-required, so required surfaces suffice.
+        expect(isPortableActivationReady(getPortableActivation('sample.plugin')!)).toBe(true);
+    });
+
+    it('degrades optional tool discovery without failing the activation', async () => {
+        const withTools = { ...descriptor(), effectiveGrants: ['tools.register.client'] as never[] };
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('tools'));
+        const activation = await activatePortableClient({
+            descriptor: withTools,
+            workspaceId: 'ws-1',
+        });
+        for (const surface of ['pane', 'sidebar'] as const) {
+            reportPortableContributionReadiness('sample.plugin', surface, 'ready', {
+                descriptorKey: activation.descriptorKey,
+                workspaceId: 'ws-1',
+            });
+        }
+        expect(isPortableActivationReady(getPortableActivation('sample.plugin')!)).toBe(false);
+        reportPortableContributionReadiness('sample.plugin', 'tools', 'failed', {
+            descriptorKey: activation.descriptorKey,
+            workspaceId: 'ws-1',
+            code: 'catalog-too-large',
+        });
+        const degraded = getPortableActivation('sample.plugin')!;
+        expect(degraded.status).toBe('active');
+        expect(degraded.degradedContributions).toEqual(['tools:catalog-too-large']);
+        expect(isPortableActivationReady(degraded)).toBe(true);
+    });
+
+    it('ignores surface reports for bytes the activation does not run', async () => {
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('stale-surface'));
+        const activation = await activatePortableClient({
+            descriptor: descriptor(),
+            workspaceId: 'ws-1',
+        });
+        reportPortableContributionReadiness('sample.plugin', 'pane', 'ready', {
+            descriptorKey: `sha256-${'f'.repeat(64)}`,
+            workspaceId: 'ws-1',
+        });
+        const current = getPortableActivation('sample.plugin')!;
+        expect(current.contributionReadiness.pane).toBe('pending');
+        expect(isPortableActivationReady(current)).toBe(false);
+        expect(activation.packageDigest).toBe(`sha256-${'a'.repeat(64)}`);
+    });
+
+    it('inherits surfaces already settled for the same descriptor', async () => {
+        const first = descriptor();
+        reportPortableContributionReadiness('sample.plugin', 'pane', 'ready', {
+            descriptorKey: first.descriptorKey,
+            workspaceId: 'ws-1',
+        });
+        reportPortableContributionReadiness('sample.plugin', 'sidebar', 'ready', {
+            descriptorKey: first.descriptorKey,
+            workspaceId: 'ws-1',
+        });
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('inherited'));
+        const activation = await activatePortableClient({
+            descriptor: first,
+            workspaceId: 'ws-1',
+        });
+        expect(isPortableActivationReady(activation)).toBe(true);
+    });
+
+    it('preserves plugin storage across replacement and stops the old sandbox', async () => {
+        const services = createPortableSettingsServices('sample.plugin');
+        await services.storage.set({ key: 'preset', value: { theme: 'dark' } });
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('old'));
+        await activatePortableClient({ descriptor: descriptor(), workspaceId: 'ws-1' });
+
+        const replacement: PackageV2PluginDescriptor = {
+            ...descriptor(),
+            version: '1.1.0',
+            artifact: {
+                ...descriptor().artifact,
+                packageDigest: `sha256-${'d'.repeat(64)}` as Sha256,
+            },
+        };
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('new'));
+        const next = await activatePortableClient({ descriptor: replacement, workspaceId: 'ws-1' });
+        expect(next.packageDigest).toBe(`sha256-${'d'.repeat(64)}`);
+        // The old sandbox was disposed and its handle revoked; stored data kept.
+        expect(startedRuntime('old') && revocationRequests.length).toBeGreaterThan(0);
+        await expect(services.storage.get({ key: 'preset' })).resolves.toEqual({
+            value: { theme: 'dark' },
+        });
     });
 });

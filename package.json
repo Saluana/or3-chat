@@ -13,6 +13,7 @@
         "start": "node scripts/cli/start.mjs",
         "dev": "tsx scripts/cli/dev.ts",
         "dev:ssr": "tsx scripts/cli/dev.ts --or3-ssr --host 127.0.0.1 --port 3000",
+        "dev:plugin": "tsx scripts/cli/dev-plugin.ts",
         "convex-dev": "convex dev",
         "generate": "nuxt generate",
         "generate:static": "tsx scripts/cli/nuxt-task.ts generate-static",

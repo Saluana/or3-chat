@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AcquisitionStatusView } from '~~/shared/plugins/acquisition/contracts';
 const { reconcileMock } = vi.hoisted(() => ({ reconcileMock: vi.fn() }));
+const { portableActivationMock } = vi.hoisted(() => ({
+    portableActivationMock: { current: null as null | Record<string, unknown> },
+}));
 
 // The signal itself is guarded by `import.meta.client`, which is not set in the
 // test runtime; the contract under test is that every successful mutation asks
@@ -8,6 +11,19 @@ const { reconcileMock } = vi.hoisted(() => ({ reconcileMock: vi.fn() }));
 vi.mock('~/composables/plugins/bundled-v1-manager-runtime', () => ({
     requestWorkspacePluginReconcile: reconcileMock,
     WORKSPACE_PLUGIN_RECONCILE_EVENT: 'or3:workspace-plugin-reconcile',
+}));
+
+// The confirmation observer reads the live activation registry; the mock is
+// the registry, switched per test between matching, stale and absent states.
+vi.mock('~/composables/plugins/portable-client-runtime', () => ({
+    getPortableActivation: (pluginId: string) => {
+        const current = portableActivationMock.current;
+        return current && (current as { pluginId?: string }).pluginId === pluginId
+            ? current
+            : null;
+    },
+    isPortableActivationReady: (activation: { status?: string }) =>
+        activation.status === 'active',
 }));
 
 import {
@@ -483,5 +499,89 @@ describe('install cancellation and recorded results', () => {
         ] });
         const install = useMarketplaceInstall();
         expect(await install.restore('sample.plugin')).toBeNull();
+    });
+});
+
+describe('activation confirmation', () => {
+    const TARGET = {
+        pluginId: 'sample.plugin',
+        packageTreeSha256: 'sha256-exact',
+        workspaceId: 'ws-1',
+    };
+
+    beforeEach(() => {
+        portableActivationMock.current = null;
+    });
+
+    it('confirms the exact package once it is running', async () => {
+        portableActivationMock.current = {
+            pluginId: 'sample.plugin',
+            packageDigest: 'sha256-exact',
+            workspaceId: 'ws-1',
+            generation: 3,
+            status: 'active',
+            degradedContributions: [],
+        };
+        const install = useMarketplaceInstall();
+        const outcome = await install.confirmActivation(TARGET);
+        expect(outcome?.confirmed).toBe(true);
+        expect(install.activationTimedOut.value).toBe(false);
+    });
+
+    it('rejects a matching version running other bytes, then times out honestly', async () => {
+        portableActivationMock.current = {
+            pluginId: 'sample.plugin',
+            packageDigest: 'sha256-stale',
+            workspaceId: 'ws-1',
+            generation: 2,
+            status: 'active',
+            degradedContributions: [],
+        };
+        const install = useMarketplaceInstall();
+        const outcome = await install.confirmActivation({ ...TARGET, timeoutMs: 10 });
+        expect(outcome).toEqual({ confirmed: false, reason: 'timeout' });
+        // The server outcome stands; only the displayed state changes.
+        expect(install.activationTimedOut.value).toBe(true);
+    });
+
+    it('rejects another workspace activation', async () => {
+        portableActivationMock.current = {
+            pluginId: 'sample.plugin',
+            packageDigest: 'sha256-exact',
+            workspaceId: 'ws-2',
+            generation: 3,
+            status: 'active',
+            degradedContributions: [],
+        };
+        const install = useMarketplaceInstall();
+        const outcome = await install.confirmActivation({ ...TARGET, timeoutMs: 10 });
+        expect(outcome?.confirmed).toBe(false);
+        expect(install.activationTimedOut.value).toBe(true);
+    });
+
+    it('detaches on navigation without touching the operation', async () => {
+        const install = useMarketplaceInstall();
+        const pending = install.confirmActivation({ ...TARGET, timeoutMs: 5_000 });
+        install.detachActivationConfirmation();
+        await expect(pending).resolves.toBeNull();
+        expect(install.activationTimedOut.value).toBe(false);
+    });
+
+    it('accepts a late matching observation without a new acquisition', async () => {
+        const install = useMarketplaceInstall();
+        await install.confirmActivation({ ...TARGET, timeoutMs: 10 });
+        expect(install.activationTimedOut.value).toBe(true);
+        portableActivationMock.current = {
+            pluginId: 'sample.plugin',
+            packageDigest: 'sha256-exact',
+            workspaceId: 'ws-1',
+            generation: 4,
+            status: 'active',
+            degradedContributions: [],
+        };
+        const late = await install.observeActivationNow(TARGET);
+        expect(late?.confirmed).toBe(true);
+        expect(install.activationTimedOut.value).toBe(false);
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 });

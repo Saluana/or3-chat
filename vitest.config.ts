@@ -54,6 +54,10 @@ export default defineConfig({
                 __dirname,
                 'packages/plugin-sdk/src/cli/archive.ts'
             ),
+            '@or3/plugin-sdk/candidate': path.resolve(
+                __dirname,
+                'packages/plugin-sdk/src/candidate.ts'
+            ),
             '@or3/plugin-sdk/state-compatibility': path.resolve(
                 __dirname,
                 'packages/plugin-sdk/src/state-compatibility.ts'
@@ -113,6 +117,7 @@ export default defineConfig({
                     include: [
                         'server/**/__tests__/**/*.test.ts',
                         'shared/**/__tests__/**/*.test.ts',
+                        'packages/plugin-sdk/src/__tests__/**/*.test.ts',
                     ],
                     exclude: [
                         'shared/plugins/isolation/__tests__/**/*.test.ts',

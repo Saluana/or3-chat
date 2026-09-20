@@ -10,7 +10,15 @@
 import { inject, onMounted, ref } from 'vue';
 import { useToast } from '#imports';
 import { useMarketplaceInstalled } from '~/composables/marketplace/useMarketplace';
-import { getPortableClientSource, usePortableActivations } from '~/composables/plugins/portable-client-runtime';
+import {
+    getPortableClientSource,
+    isPortableActivationReady,
+    usePortableActivations,
+} from '~/composables/plugins/portable-client-runtime';
+import {
+    describeLifecycleBadge,
+    type PluginLifecycleView,
+} from '~~/shared/plugins/lifecycle/lifecycle-view';
 import { openPortablePane } from '~/composables/plugins/portable-pane';
 
 
@@ -44,6 +52,109 @@ function isPortable(pluginId: string): boolean {
 
 function activationFor(pluginId: string) {
     return activations.get(`portable:${pluginId}`) ?? activations.get(pluginId) ?? null;
+}
+
+type InstalledEntry = (typeof installed.packages.value)[number];
+
+/**
+ * The truthful lifecycle projection for one installed package: the
+ * instance-selected identity comes from the server DTO, the observed identity
+ * from the live activation in this browser/workspace. A matching version with
+ * a different digest never counts as running.
+ */
+function lifecycleFor(entry: InstalledEntry): PluginLifecycleView {
+    const selectedDigest =
+        entry.display?.selectedDigest ?? entry.startup.selectedDigest ?? null;
+    const selected =
+        selectedDigest && entry.display?.version
+            ? {
+                  pluginId: entry.pluginId,
+                  version: entry.display.version,
+                  packageTreeSha256: selectedDigest,
+                  manifestSha256: null,
+                  source: 'instance-selection' as const,
+              }
+            : null;
+    const activation = activationFor(entry.pluginId);
+    if (!activation) {
+        return {
+            selected,
+            acquisition: null,
+            runtime: { state: 'not-observed' },
+            activationTimedOut: false,
+        };
+    }
+    if (activation.status === 'blocked' || activation.status === 'stopped') {
+        return {
+            selected,
+            acquisition: null,
+            runtime: {
+                state: 'failed',
+                code: activation.blockCode ?? activation.status,
+            },
+            activationTimedOut: false,
+        };
+    }
+    const observed = {
+        pluginId: activation.pluginId,
+        version: activation.version,
+        packageTreeSha256: activation.packageDigest,
+        manifestSha256: null,
+    };
+    const matches =
+        selected !== null &&
+        activation.packageDigest === selected.packageTreeSha256 &&
+        activation.workspaceId === installed.workspaceId.value;
+    if (activation.status === 'active' && matches && isPortableActivationReady(activation)) {
+        return {
+            selected,
+            acquisition: null,
+            runtime: {
+                state: 'running',
+                identity: observed,
+                observedAt: new Date().toISOString(),
+                degradedContributions: [...activation.degradedContributions],
+            },
+            activationTimedOut: false,
+        };
+    }
+    if (matches) {
+        return {
+            selected,
+            acquisition: null,
+            runtime: { state: 'starting', identity: observed },
+            activationTimedOut: false,
+        };
+    }
+    return { selected, acquisition: null, runtime: { state: 'not-observed' }, activationTimedOut: false };
+}
+
+/** Single status badge: installed (selected) versus actually running here. */
+function lifecycleBadge(entry: InstalledEntry): { readonly state: string; readonly label: string } {
+    return describeLifecycleBadge(lifecycleFor(entry), {
+        enabled: isEnabled(entry.pluginId),
+        isDevelopmentCandidate: false,
+    });
+}
+
+function badgeColor(state: string): 'success' | 'info' | 'warning' | 'neutral' {
+    switch (state) {
+        case 'running':
+            return 'success';
+        case 'running-degraded':
+        case 'starting':
+            return 'info';
+        case 'activation-not-confirmed':
+        case 'failed':
+            return 'warning';
+        default:
+            return 'neutral';
+    }
+}
+
+/** Previous code selection exists, so recovery can be offered (data is kept, not migrated). */
+function canRollback(entry: InstalledEntry): boolean {
+    return Boolean(entry.pointer?.previous);
 }
 
 async function toggle(pluginId: string): Promise<void> {
@@ -108,10 +219,22 @@ async function copyDiagnostics(): Promise<void> {
             activations: [...activations.entries()].map(([id, activation]) => ({
                 pluginId: id,
                 status: activation.status,
+                packageDigest: activation.packageDigest ?? null,
+                version: activation.version ?? null,
+                workspaceId: activation.workspaceId ?? null,
+                generation: activation.generation ?? null,
                 blockCode: activation.blockCode ?? null,
                 crashed: activation.crashed,
                 logCount: activation.logs.length,
                 contributionCount: activation.contributions.length,
+                degradedContributions: [...activation.degradedContributions].slice(0, 16),
+            })),
+            selected: installed.packages.value.map((entry) => ({
+                pluginId: entry.pluginId,
+                version: entry.display?.version ?? null,
+                selectedDigest: entry.display?.selectedDigest ?? entry.startup.selectedDigest,
+                candidateVersion: entry.display?.candidateVersion ?? null,
+                candidateDigest: entry.display?.candidateDigest ?? null,
             })),
         };
         await navigator.clipboard.writeText(
@@ -170,10 +293,11 @@ async function apiGet<T>(url: string): Promise<T> {
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="font-medium">{{ entry.pluginId }}</span>
                         <UBadge color="neutral" variant="subtle">
-                            {{ entry.display?.version ?? 'no version selected' }}
+                            installed {{ entry.display?.version ?? 'no version selected' }}
                         </UBadge>
-                        <UBadge v-if="isEnabled(entry.pluginId)" color="success" variant="subtle">Enabled</UBadge>
-                        <UBadge v-else color="neutral" variant="subtle">Disabled</UBadge>
+                        <UBadge :color="badgeColor(lifecycleBadge(entry).state)" variant="subtle">
+                            {{ lifecycleBadge(entry).label }}
+                        </UBadge>
                         <UBadge
                             v-if="activationFor(entry.pluginId)?.status === 'blocked'"
                             color="warning"
@@ -182,6 +306,20 @@ async function apiGet<T>(url: string): Promise<T> {
                             Blocked: {{ activationFor(entry.pluginId)?.blockCode }}
                         </UBadge>
                     </div>
+                    <details class="text-xs text-(--ui-text-muted)">
+                        <summary class="cursor-pointer">Package identities</summary>
+                        <dl class="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+                            <dt>Selected version</dt>
+                            <dd class="break-all">{{ entry.display?.version ?? 'none' }}</dd>
+                            <dt>Selected digest</dt>
+                            <dd class="break-all">{{ entry.display?.selectedDigest ?? entry.startup.selectedDigest ?? 'none' }}</dd>
+                            <dt>Running version</dt>
+                            <dd class="break-all">{{ activationFor(entry.pluginId)?.version ?? 'not running here' }}</dd>
+                            <dt>Running digest</dt>
+                            <dd class="break-all">{{ activationFor(entry.pluginId)?.packageDigest ?? 'not running here' }}</dd>
+                        </dl>
+                        <p class="mt-1">Running means this browser observed the exact selected package; a matching version with a different digest never counts.</p>
+                    </details>
                     <div class="flex flex-wrap gap-2">
                         <UButton
                             v-if="entry.display?.canOpen"
@@ -223,10 +361,12 @@ async function apiGet<T>(url: string): Promise<T> {
                             Uninstall
                         </UButton>
                         <UButton
+                            v-if="canRollback(entry)"
                             size="sm"
                             color="neutral"
                             variant="ghost"
                             icon="i-lucide-undo-2"
+                            title="Restores the previous code selection. Plugin data is kept, not migrated: data written by the newer version may not be readable."
                             :loading="busyPluginId === entry.pluginId"
                             @click="rollback(entry.pluginId)"
                         >

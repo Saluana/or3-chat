@@ -6,51 +6,51 @@ Delivery order: **A. Client clarity and recovery -> B. Real local candidate test
 
 ## 1. Client Contracts
 
-- [ ] 1.1 Define the lifecycle projection over existing status and runtime contracts (2-3h)
+- [x] 1.1 Define the lifecycle projection over existing status and runtime contracts (2-3h)
       Component: Lifecycle View, Runtime Confirmation, Diagnostic Projection. Repository: `or3-chat`.
       Requirements: R1.AC1-R1.AC4, R9.AC1-R9.AC2.
       Done when: available, selected, and observed identities have documented authoritative sources; disabled, not-observed, starting, failed, and development provenance are representable without exposing activation handles or making browser-wide claims.
 
-- [ ] 1.2 Expose missing selected-package facts through existing read APIs (2-4h)
+- [x] 1.2 Expose missing selected-package facts through existing read APIs (2-4h)
       Component: Acquisition Service. Repository: `or3-chat`.
       Requirements: R1.AC1, R1.AC3, R2.AC1-R2.AC2.
       Done when: authorized status/detail responses provide the exact selected identity needed by the projection, old operation records still load, and route tests enforce existing owner/workspace access without new acquisition stages or persistence.
 
 ## 2. Runtime Confirmation
 
-- [ ] 2.1 Report exact activation and contribution readiness (3-4h)
+- [x] 2.1 Report exact activation and contribution readiness (3-4h)
       Component: Runtime Confirmation. Repository: `or3-chat`.
       Requirements: R1.AC2-R1.AC3, R4.AC1, R4.AC4.
       Done when: readiness follows bootstrap and applicable real sidebar/pane/tool registration; optional discovery errors remain visible, required registration failures prevent full readiness, and generation-bound tests reject stale notifications.
 
-- [ ] 2.2 Join completed acquisition to bounded activation observation (2-4h)
+- [x] 2.2 Join completed acquisition to bounded activation observation (2-4h)
       Component: Lifecycle View, Runtime Confirmation. Repository: `or3-chat`.
       Requirements: R1.AC3, R2.AC2, R4.AC1-R4.AC2.
       Done when: completion requests reconciliation, waits up to 30 seconds for the exact package, preserves server success on timeout, detaches observers on workspace/navigation changes, and accepts a later matching observation without starting another acquisition.
 
-- [ ] 2.3 Verify replacement cleanup and preserve data safeguards (2-4h)
+- [x] 2.3 Verify replacement cleanup and preserve data safeguards (2-4h)
       Component: Runtime Confirmation, Acquisition Service. Repository: `or3-chat`.
       Requirements: R4.AC3-R4.AC6.
       Done when: replacement tests prove old registrations are disposed, late callbacks cannot restore them, storage is not cleared, and pending-action/pane-close safeguards are preserved; unsupported data rollback is not offered.
 
 ## 3. Client Experience and Phase A Gate
 
-- [ ] 3.1 Build the single status and next-action view (3-4h)
+- [x] 3.1 Build the single status and next-action view (3-4h)
       Component: Lifecycle View. Repository: `or3-chat`.
       Requirements: R1.AC1-R1.AC4, R2.AC1, R2.AC3, R9.AC1.
       Done when: existing installed/updates/detail views share consistent status meanings and actions, show installed versus running separately, and do not claim full success from acquisition completion alone.
 
-- [ ] 3.2 Connect consent, setup, session return, retry, and cancellation (3-4h)
+- [x] 3.2 Connect consent, setup, session return, retry, and cancellation (3-4h)
       Component: Lifecycle View, Acquisition Service. Repository: `or3-chat`.
       Requirements: R2.AC2-R2.AC4, R3.AC1-R3.AC4.
       Done when: refresh/session recovery resumes the same operation, return destinations are validated, incompatible hosts are blocked, new authority is explicit, and stale enabled-workspace evidence or post-promotion cancellation is accurately displayed.
 
-- [ ] 3.3 Add bounded diagnostic copying and conditional recovery actions (2-3h)
+- [x] 3.3 Add bounded diagnostic copying and conditional recovery actions (2-3h)
       Component: Diagnostic Projection, Lifecycle View. Repository: `or3-chat`.
       Requirements: R4.AC2-R4.AC3, R4.AC5, R9.AC1-R9.AC2.
       Done when: copied output passes allowlist/redaction tests, includes useful identities and stage/error codes, and never offers an unverified previous package or claims rollback occurred without authoritative evidence.
 
-- [ ] 3.4 Polish accessible mobile and desktop states (2-3h)
+- [x] 3.4 Polish accessible mobile and desktop states (2-3h)
       Component: Lifecycle View. Repository: `or3-chat`.
       Requirements: R9.AC3-R9.AC4.
       Done when: keyboard focus survives state refresh/dialog return, repeated polling does not repeat announcements, and 375px/1440px light/dark views have no horizontal page overflow using existing themed components.
@@ -64,56 +64,56 @@ Phase A exit: a user can tell what is installed, what this browser is running, w
 
 ## 4. Immutable Candidate Files
 
-- [ ] 4.1 Define bounded candidate and verification receipt validation (2-3h)
+- [x] 4.1 Define bounded candidate and verification receipt validation (2-3h)
       Component: Candidate Builder, Verification Receipt. Repository: `or3-chat` SDK.
       Requirements: R5.AC1, R7.AC1.
       Done when: receipts have versioned schemas, canonical digest rules, artifact identities, provenance inputs, and explicit verification scope; validation rejects unknown/malformed identity fields and oversized input without recording secrets.
 
-- [ ] 4.2 Implement source snapshot and actual build-input capture (3-4h)
+- [x] 4.2 Implement source snapshot and actual build-input capture (3-4h)
       Component: Candidate Builder. Repository: `or3-chat` SDK.
       Requirements: R5.AC1, R5.AC3-R5.AC4.
       Done when: receipts distinguish clean commits from dirty snapshots, source archives include the candidate's relevant changed files without secrets, and SDK artifact/lockfile hashes identify actual inputs rather than package version strings alone.
 
-- [ ] 4.3 Add the candidate orchestration command (3-4h)
+- [x] 4.3 Add the candidate orchestration command (3-4h)
       Component: Candidate Builder. Repository: `or3-chat` SDK.
       Requirements: R5.AC1-R5.AC3.
       Done when: the command composes existing validation/build/pack/inspect helpers, creates sibling package/source/receipt outputs, refuses to overwrite a frozen candidate, and verifies existing files without implicit rebuilding.
 
-- [ ] 4.4 Add clean qualification comparison and SDK documentation (3-4h)
+- [x] 4.4 Add clean qualification comparison and SDK documentation (3-4h)
       Component: Candidate Builder. Repository: `or3-chat` SDK.
       Requirements: R5.AC2-R5.AC5, R9.AC5.
       Done when: a clean, release-policy-compliant rebuild is compared to frozen output and mismatches fail; targeted SDK tests/build/typecheck pass; authoring docs cover matching vendored SDK artifacts and immutable version rules. No npm publication is performed by this task.
 
 ## 5. Dedicated Local Admission
 
-- [ ] 5.1 Implement the isolated development instance profile (3-4h)
+- [x] 5.1 Implement the isolated development instance profile (3-4h)
       Component: Local Admission. Repository: `or3-chat`.
       Requirements: R6.AC1-R6.AC2, R6.AC6.
       Done when: opt-in startup uses explicit separate application/extension roots and loopback binding, ordinary settings are not borrowed implicitly, and production builds cannot enable the capability through the flag.
 
-- [ ] 5.2 Add the restricted owner admission boundary (3-4h)
+- [x] 5.2 Add the restricted owner admission boundary (3-4h)
       Component: Local Admission. Repository: `or3-chat`.
       Requirements: R6.AC2-R6.AC3.
       Done when: the entry point independently enforces build/profile/network/auth/origin eligibility, validates candidate receipt and bytes through existing archive protections, and creates explicit local provenance without fabricating a signed release or altering normal raw-upload policy.
 
-- [ ] 5.3 Integrate existing candidate checks and managed promotion (3-4h)
+- [x] 5.3 Integrate existing candidate checks and managed promotion (3-4h)
       Component: Local Admission, Acquisition Service. Repository: `or3-chat`.
       Requirements: R3.AC1-R3.AC4, R6.AC3-R6.AC5.
       Done when: a valid local candidate passes existing feature/authority/setup/canary checks before managed selection, denied grants block it, and interruption recovers existing candidate state rather than creating a second install engine.
 
-- [ ] 5.4 Add candidate selection, activation, and open controls (3-4h)
+- [x] 5.4 Add candidate selection, activation, and open controls (3-4h)
       Component: Local Admission, Lifecycle View. Repository: `or3-chat`.
       Requirements: R1.AC4, R6.AC4-R6.AC6, R9.AC3-R9.AC4.
       Done when: an eligible owner can select package/source/receipt files through the real admin UI, inspect identity/access, activate, and open the actual plugin; ineligible hosts show the requirement instead of an actionable bypass.
 
-- [ ] 5.5 Record scoped verification and support explicit candidate replacement (2-4h)
+- [x] 5.5 Record scoped verification and support explicit candidate replacement (2-4h)
       Component: Verification Receipt, Local Admission, Runtime Confirmation. Repository: `or3-chat`.
       Requirements: R5.AC2-R5.AC3, R6.AC5, R7.AC1, R7.AC4.
       Done when: a canary produces only canary evidence, interaction verification is separately labeled, the exported receipt binds the candidate/host, and replacing same-version/different-digest local candidates preserves storage and cleans up registrations.
 
 ## 6. Development Workflow Gate
 
-- [ ] 6.1 Add the admission security and isolation regression matrix (3-4h)
+- [x] 6.1 Add the admission security and isolation regression matrix (3-4h)
       Component: Local Admission. Repository: `or3-chat`.
       Requirements: R3, R6.AC1-R6.AC3, R6.AC6.
       Done when: negative tests cover each build/flag/profile/network/auth/origin restriction, archive abuse, invalid receipt, denied authority, and unchanged ordinary raw upload restrictions; none can be bypassed by supplied headers or configuration alone.
@@ -123,7 +123,7 @@ Phase A exit: a user can tell what is installed, what this browser is running, w
       Requirements: R1.AC4, R4.AC4-R4.AC6, R6.AC4-R6.AC5, R7.AC1.
       Done when: the dedicated instance runs a candidate through real sidebar/pane/tool/storage integration, reload retains a designated fixture, a second digest replaces it, the old activation is cleaned up, and the normal instance remains unchanged. Use only isolated fixture data.
 
-- [ ] 6.3 Qualify and document Phase B (2-4h)
+- [x] 6.3 Qualify and document Phase B (2-4h)
       Component: Candidate Builder, Local Admission, Verification Receipt. Repository: `or3-chat`.
       Requirements: R5-R7, R9.AC5.
       Done when: affected SDK/runtime/admin/security suites, appropriate compatibility tests, build checks, and typecheck pass; documentation/docmap and SDK README describe dedicated-instance setup, the trust boundary, replacement, and limitations; no preview page is required.

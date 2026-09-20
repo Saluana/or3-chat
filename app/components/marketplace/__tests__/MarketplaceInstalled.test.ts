@@ -12,9 +12,13 @@ const fetchMock = vi.fn();
 const openPageMock = vi.fn();
 const sourceMock = vi.fn(() => ({}));
 vi.mock('~/composables/plugins/portable-pane', () => ({openPortablePane: (...args: unknown[]) => openPageMock(...args)}));
+const { activationsState } = vi.hoisted(() => ({
+    activationsState: { current: new Map() as Map<string, unknown> },
+}));
 vi.mock('~/composables/plugins/portable-client-runtime', () => ({
     getPortableClientSource: () => sourceMock(),
-    usePortableActivations: () => new Map(),
+    usePortableActivations: () => activationsState.current,
+    isPortableActivationReady: (activation: { status?: string }) => activation.status === 'active',
 }));
 vi.stubGlobal('$fetch', fetchMock);
 
@@ -61,6 +65,7 @@ function pageResponse(
 
 beforeEach(() => {
     fetchMock.mockReset();
+    activationsState.current = new Map();
 });
 
 describe('MarketplaceInstalled', () => {
@@ -101,5 +106,104 @@ describe('MarketplaceInstalled', () => {
         expect(wrapper.text()).toContain('no version selected');
         // No readable selection means nothing to open, even with a candidate waiting.
         expect(wrapper.text()).not.toContain('Open');
+    });
+
+    it('shows Running only for the exact selected digest in this workspace', async () => {
+        const digest = `sha256-${'a'.repeat(64)}`;
+        fetchMock.mockResolvedValue(
+            pageResponse({
+                version: '2.1.0',
+                selectedDigest: digest,
+                candidateVersion: null,
+                candidateDigest: null,
+                canOpen: true,
+            })
+        );
+        activationsState.current = new Map([
+            [
+                'sample.plugin',
+                {
+                    pluginId: 'sample.plugin',
+                    version: '2.1.0',
+                    packageDigest: digest,
+                    workspaceId: 'ws-1',
+                    generation: 1,
+                    status: 'active',
+                    blockCode: null,
+                    degradedContributions: [],
+                },
+            ],
+        ]);
+        const wrapper = mount(MarketplaceInstalled, { global: { stubs } });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(wrapper.text()).toContain('installed 2.1.0');
+        expect(wrapper.text()).toContain('Running');
+    });
+
+    it('shows Not observed when another digest runs under a matching version', async () => {
+        fetchMock.mockResolvedValue(
+            pageResponse({
+                version: '2.1.0',
+                selectedDigest: `sha256-${'a'.repeat(64)}`,
+                candidateVersion: null,
+                candidateDigest: null,
+                canOpen: true,
+            })
+        );
+        activationsState.current = new Map([
+            [
+                'sample.plugin',
+                {
+                    pluginId: 'sample.plugin',
+                    version: '2.1.0',
+                    packageDigest: `sha256-${'f'.repeat(64)}`,
+                    workspaceId: 'ws-1',
+                    generation: 1,
+                    status: 'active',
+                    blockCode: null,
+                    degradedContributions: [],
+                },
+            ],
+        ]);
+        const wrapper = mount(MarketplaceInstalled, { global: { stubs } });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(wrapper.text()).toContain('Not observed');
+        const badges = wrapper.findAll('span').map((span) => span.text());
+        expect(badges).not.toContain('Running');
+    });
+
+    it('offers roll back only when a previous selection exists', async () => {
+        fetchMock.mockResolvedValue(
+            pageResponse(
+                {
+                    version: '2.1.0',
+                    selectedDigest: `sha256-${'a'.repeat(64)}`,
+                    candidateVersion: null,
+                    candidateDigest: null,
+                    canOpen: true,
+                },
+                { previous: { packageDigest: `sha256-${'9'.repeat(64)}` } }
+            )
+        );
+        const wrapper = mount(MarketplaceInstalled, { global: { stubs } });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(wrapper.text()).toContain('Roll back');
+    });
+
+    it('hides roll back when no previous selection exists', async () => {
+        fetchMock.mockResolvedValue(
+            pageResponse({
+                version: '2.1.0',
+                selectedDigest: `sha256-${'a'.repeat(64)}`,
+                candidateVersion: null,
+                candidateDigest: null,
+                canOpen: true,
+            })
+        );
+        const wrapper = mount(MarketplaceInstalled, { global: { stubs } });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(wrapper.text()).not.toContain('Roll back');
     });
 });

@@ -277,6 +277,14 @@ export interface AcquisitionStatusView {
     readonly resumable: boolean;
     readonly retryable: boolean;
     readonly canceled: boolean;
+    /** Exact selected identity, so the client can bind confirmation to these bytes. */
+    readonly release: {
+        readonly releaseId: string;
+        readonly archiveSha256: Sha256;
+        readonly packageTreeSha256: Sha256;
+        readonly manifestSha256: Sha256;
+        readonly authoritySha256: Sha256;
+    };
     readonly failure: PluginAcquisitionFailure | null;
     readonly updatedAt: number;
 }
@@ -310,6 +318,13 @@ export function describeAcquisitionStatus(
                 operation.status === 'blocked' ||
                 operation.status === 'paused'),
         canceled: operation.cancelRequested || operation.status === 'canceled',
+        release: {
+            releaseId: operation.release.releaseId,
+            archiveSha256: operation.release.archiveSha256,
+            packageTreeSha256: operation.release.packageTreeSha256,
+            manifestSha256: operation.release.manifestSha256,
+            authoritySha256: operation.release.authoritySha256,
+        },
         failure: operation.failure,
         updatedAt: operation.updatedAt,
     };

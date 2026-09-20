@@ -1397,7 +1397,7 @@
                     "name": "marketplace.md",
                     "path": "/plugins/marketplace",
                     "category": "Guide",
-                    "summary": "Native discovery, signed authority consent, resumable acquisition, terminal failure history, cancellation feedback, empty-view restart recovery, and update checks with semantic ordering, instance version pins, compatibility and linked Library coverage. Includes portable Open versus Configure behavior, runtime loader prerequisites, legacy Tasks integration limits, actionable failure guidance, safe diagnostic reports, instance-wide V2 installation detection, duplicate-install protection, workspace-bound resumed browser canaries, the Admin > Plugins marketplace shortcut, separate Chat/admin sign-in requirements, and publisher listing help for support, privacy and external-cost links."
+                    "summary": "Native discovery, signed authority consent, resumable acquisition, terminal failure history, cancellation feedback, empty-view restart recovery, and update checks with semantic ordering, instance version pins, compatibility and linked Library coverage. Installed versus actually running with exact digests, 30-second activation confirmation, bounded diagnostic reports with release and runtime identities, recovery limits, and the local development candidate path. Includes portable Open versus Configure behavior, runtime loader prerequisites, legacy Tasks integration limits, actionable failure guidance, workspace-bound resumed browser canaries, the Admin > Plugins marketplace shortcut, separate Chat/admin sign-in requirements, and publisher listing help."
                 },
                 {
                     "name": "library.md",
@@ -1410,6 +1410,12 @@
                     "path": "/plugins/v1-support-and-migration",
                     "category": "Guide",
                     "summary": "# V1 Support Policy and V2 Migration"
+                },
+                {
+                    "name": "local-development.md",
+                    "path": "/plugins/local-development",
+                    "category": "Guide",
+                    "summary": "Test an unpublished SDK candidate as a real plugin without publishing: immutable package/source/receipt outputs, the dedicated loopback development instance (bun run dev:plugin) with separate data, owner admission through existing validation/canary/promotion with local provenance, real worker and sidebar/pane/tool integration, scoped developer verification receipts, candidate replacement without data loss, and trust boundaries."
                 }
             ]
         }

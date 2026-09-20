@@ -84,9 +84,14 @@ export interface PortableLogEntry {
     readonly at: number;
 }
 
+export type PortableContributionSurface = 'pane' | 'sidebar' | 'tools';
+export type PortableContributionReadiness = 'pending' | 'ready' | 'failed' | 'not-required';
+
 export interface PortableActivation {
     readonly pluginId: string;
     readonly version: string;
+    /** Host-computed digest of the exact package bytes this activation runs. */
+    readonly packageDigest: string;
     readonly workspaceId: string;
     readonly generation: number;
     readonly descriptorKey: string;
@@ -98,6 +103,15 @@ export interface PortableActivation {
     readonly capabilities: readonly string[];
     /** Grants the workspace actually approved for this activation. */
     readonly approvedGrants: readonly string[];
+    /**
+     * Per-surface registration outcome. Pane and sidebar are required: a
+     * `failed` entry prevents full readiness. Tools are optional: a failed
+     * discovery is reported in `degradedContributions` instead of failing the
+     * activation, and surfaces without the grant stay `not-required`.
+     */
+    readonly contributionReadiness: Readonly<Record<PortableContributionSurface, PortableContributionReadiness>>;
+    /** Optional surfaces that failed but did not fail the activation. */
+    readonly degradedContributions: readonly string[];
     readonly logs: readonly PortableLogEntry[];
     readonly crashed: boolean;
     readonly startedAt: number | null;
@@ -598,6 +612,7 @@ export async function activatePortableClient(
     const base: InternalActivation = {
         pluginId,
         version: descriptor.version,
+        packageDigest: descriptor.artifact.packageDigest,
         workspaceId,
         generation,
         activationId: minted.activationId,
@@ -610,6 +625,13 @@ export async function activatePortableClient(
         contributions: [],
         capabilities: [],
         approvedGrants: [...descriptor.effectiveGrants],
+        contributionReadiness: inheritedReadiness(
+            pluginId,
+            descriptor.descriptorKey,
+            workspaceId,
+            descriptor.effectiveGrants.includes('tools.register.client')
+        ),
+        degradedContributions: [],
         logs: [],
         crashed: false,
         startedAt: Date.now(),
@@ -744,6 +766,7 @@ function currentActivationOr(
     return snapshotOf({
         pluginId,
         version: descriptor.version,
+        packageDigest: descriptor.artifact.packageDigest,
         workspaceId,
         generation: 0,
         epoch,
@@ -756,6 +779,8 @@ function currentActivationOr(
         contributions: [],
         capabilities: [],
         approvedGrants: [...descriptor.effectiveGrants],
+        contributionReadiness: { pane: 'pending', sidebar: 'pending', tools: 'not-required' },
+        degradedContributions: [],
         logs: [],
         crashed: false,
         startedAt: null,
@@ -774,6 +799,7 @@ function recordBlocked(
     const activation: InternalActivation = {
         pluginId,
         version: descriptor.version,
+        packageDigest: descriptor.artifact.packageDigest,
         workspaceId,
         generation: 0,
         activationId: null,
@@ -786,6 +812,8 @@ function recordBlocked(
         contributions: [],
         capabilities: [],
         approvedGrants: [...descriptor.effectiveGrants],
+        contributionReadiness: { pane: 'failed', sidebar: 'failed', tools: 'not-required' },
+        degradedContributions: [],
         logs: [],
         crashed: false,
         startedAt: null,
@@ -926,6 +954,129 @@ function markPortableClientActivationStale(
     requestWorkspacePluginReconcile('manifest-revision-change');
 }
 
+/**
+ * Host surface registrations live outside any single activation: the manifest
+ * sync registers pane/sidebar per descriptor before the demand-driven sandbox
+ * starts, and tears them down on replacement. This table records them keyed by
+ * the verified descriptor, so a starting activation inherits the surfaces that
+ * already settled for its exact bytes, and late surface reports only touch the
+ * activation running the same descriptor in the same workspace.
+ */
+interface SurfaceRegistration {
+    readonly descriptorKey: string;
+    readonly workspaceId: string;
+    readonly pane: PortableContributionReadiness;
+    readonly sidebar: PortableContributionReadiness;
+}
+
+const surfaceRegistrations = new Map<string, SurfaceRegistration>();
+
+function surfaceFor(
+    descriptorKey: string,
+    workspaceId: string
+): SurfaceRegistration {
+    return { descriptorKey, workspaceId, pane: 'pending', sidebar: 'pending' };
+}
+
+/**
+ * Record one host surface registration outcome. Pane and sidebar are required
+ * surfaces; a `failed` entry prevents full readiness. Reports for a descriptor
+ * the current activation does not run are kept for the next activation of
+ * those bytes rather than applied to unrelated code.
+ */
+export function reportPortableContributionReadiness(
+    pluginId: string,
+    surface: PortableContributionSurface,
+    status: 'ready' | 'failed',
+    options: { readonly descriptorKey: string; readonly workspaceId: string; readonly code?: string } = {
+        descriptorKey: '',
+        workspaceId: '',
+    }
+): void {
+    const { descriptorKey, workspaceId, code } = options;
+    if (surface === 'tools') {
+        reportToolReadiness(pluginId, status, descriptorKey, workspaceId, code);
+        return;
+    }
+    const previous = surfaceRegistrations.get(pluginId);
+    const base = previous ?? surfaceFor(descriptorKey, workspaceId);
+    surfaceRegistrations.set(pluginId, { ...base, descriptorKey, workspaceId, [surface]: status });
+    const current = activations.get(pluginId);
+    if (
+        current &&
+        current.descriptorKey === descriptorKey &&
+        current.workspaceId === workspaceId &&
+        holdsActivationEpoch(pluginId, current.epoch)
+    ) {
+        update(pluginId, current.epoch, {
+            contributionReadiness: { ...current.contributionReadiness, [surface]: status },
+        });
+    }
+}
+
+function reportToolReadiness(
+    pluginId: string,
+    status: 'ready' | 'failed',
+    descriptorKey: string,
+    workspaceId: string,
+    code?: string
+): void {
+    const current = activations.get(pluginId);
+    if (!current) return;
+    if (descriptorKey && current.descriptorKey !== descriptorKey) return;
+    if (workspaceId && current.workspaceId !== workspaceId) return;
+    if (!holdsActivationEpoch(pluginId, current.epoch)) return;
+    if (status === 'failed') {
+        const entry = code ? `tools:${code}` : 'tools:discovery-failed';
+        update(pluginId, current.epoch, {
+            contributionReadiness: { ...current.contributionReadiness, tools: 'failed' },
+            degradedContributions: current.degradedContributions.includes(entry)
+                ? current.degradedContributions
+                : [...current.degradedContributions, entry],
+        });
+        return;
+    }
+    update(pluginId, current.epoch, {
+        contributionReadiness: { ...current.contributionReadiness, tools: 'ready' },
+    });
+}
+
+/** Forget host surfaces when a source is stopped or replaced. */
+export function clearPortableSurfaceRegistrations(pluginId: string): void {
+    surfaceRegistrations.delete(pluginId);
+}
+
+/** Surfaces already settled for one descriptor, inherited at activation start. */
+function inheritedReadiness(
+    pluginId: string,
+    descriptorKey: string,
+    workspaceId: string,
+    toolsRequired: boolean
+): Record<PortableContributionSurface, PortableContributionReadiness> {
+    const recorded = surfaceRegistrations.get(pluginId);
+    const matches =
+        recorded !== undefined &&
+        recorded.descriptorKey === descriptorKey &&
+        recorded.workspaceId === workspaceId;
+    return {
+        pane: matches ? recorded.pane : 'pending',
+        sidebar: matches ? recorded.sidebar : 'pending',
+        tools: toolsRequired ? 'pending' : 'not-required',
+    };
+}
+
+/**
+ * Full readiness: the sandbox bootstrapped (`active`) and every applicable
+ * host surface settled. Required surfaces (pane, sidebar) must be `ready`;
+ * optional tools may be `ready`, `failed` (degraded) or `not-required`.
+ */
+export function isPortableActivationReady(activation: PortableActivation): boolean {
+    if (activation.status !== 'active') return false;
+    if (activation.contributionReadiness.pane !== 'ready') return false;
+    if (activation.contributionReadiness.sidebar !== 'ready') return false;
+    return activation.contributionReadiness.tools !== 'pending';
+}
+
 export function stopAllPortableClients(): void {
     void stopAllPortableClientsAndAwait();
 }
@@ -987,6 +1138,7 @@ function snapshotOf(entry: InternalActivation): PortableActivation {
     return Object.freeze({
         pluginId: entry.pluginId,
         version: entry.version,
+        packageDigest: entry.packageDigest,
         workspaceId: entry.workspaceId,
         generation: entry.generation,
         descriptorKey: entry.descriptorKey,
@@ -997,6 +1149,8 @@ function snapshotOf(entry: InternalActivation): PortableActivation {
         contributions: Object.freeze([...entry.contributions]),
         capabilities: Object.freeze([...entry.capabilities]),
         approvedGrants: Object.freeze([...entry.approvedGrants]),
+        contributionReadiness: Object.freeze({ ...entry.contributionReadiness }),
+        degradedContributions: Object.freeze([...entry.degradedContributions]),
         logs: Object.freeze([...entry.logs]),
         crashed: entry.crashed,
         startedAt: entry.startedAt,

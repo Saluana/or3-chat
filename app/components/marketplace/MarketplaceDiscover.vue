@@ -10,7 +10,11 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRuntimeConfig, useToast } from '#imports';
 import MarketplaceFailure from './MarketplaceFailure.vue';
-import { acquisitionFailureHelp } from '~~/shared/plugins/acquisition/failure-presentation';
+import {
+    acquisitionDiagnosticReport,
+    acquisitionFailureHelp,
+} from '~~/shared/plugins/acquisition/failure-presentation';
+import { ACTIVATION_NOT_CONFIRMED_COPY } from '~~/shared/plugins/lifecycle/lifecycle-view';
 import {
     detectBrowserEngine,
 } from '~~/shared/plugins/isolation/portable-bootstrap';
@@ -43,6 +47,18 @@ const account = useMarketplaceAccount();
 
 const selectedPluginId = ref<string | null>(null);
 const adminRequestCopied = ref(false);
+/** Confirmation the exact installed package runs in this browser/workspace. */
+const confirmationBusy = ref(false);
+/** Search field keeps focus after the detail closes, so keyboard users land somewhere predictable. */
+const searchField = ref<{ $el?: unknown } | null>(null);
+
+function closeDetail(): void {
+    selectedPluginId.value = null;
+    install.detachActivationConfirmation();
+    const input = searchField.value?.$el;
+    if (input instanceof HTMLInputElement) input.focus();
+    else if (input instanceof HTMLElement) input.querySelector('input')?.focus();
+}
 /**
  * The exact reviewed tuple whose permissions were approved. Keyed by the full
  * release identity, so approval of one release can never carry over to another
@@ -310,13 +326,9 @@ async function runInstall(): Promise<void> {
         return;
     }
     if (result.status === 'completed') {
-        toast.add({
-            title: 'Installed',
-            description: `${detailName.value} was installed. Check Installed for workspace activation and setup.`,
-            color: 'success',
-        });
         approvedTargetKey.value = null;
         await preflight.run(target.pluginId, undefined, browserEngine.value ?? undefined);
+        await confirmRunning(target);
         return;
     }
     toast.add({
@@ -326,13 +338,99 @@ async function runInstall(): Promise<void> {
     });
 }
 
+/**
+ * Confirm the installed bytes actually run here before claiming success.
+ * Installation (server) and activation (this browser) are reported
+ * separately: a timeout keeps the install and offers retry/diagnostics.
+ */
+async function confirmRunning(target: MarketplaceInstallTarget): Promise<void> {
+    const workspaceId = install.status.value?.workspaceId;
+    if (!workspaceId) {
+        toast.add({
+            title: 'Installed',
+            description: `${detailName.value} was installed. Check Installed for workspace activation and setup.`,
+            color: 'success',
+        });
+        return;
+    }
+    confirmationBusy.value = true;
+    try {
+        const confirmation = await install.confirmActivation({
+            pluginId: target.pluginId,
+            packageTreeSha256: target.packageTreeSha256,
+            workspaceId,
+        });
+        if (confirmation?.confirmed === true) {
+            toast.add({
+                title: 'Installed and running',
+                description: `${detailName.value} ${target.version} is running in this workspace.`,
+                color: 'success',
+            });
+            return;
+        }
+        toast.add({
+            title: ACTIVATION_NOT_CONFIRMED_COPY,
+            description: `${detailName.value} ${target.version} is installed. The running package could not be confirmed here yet; retry confirmation or copy diagnostics below.`,
+            color: 'warning',
+        });
+    } finally {
+        confirmationBusy.value = false;
+    }
+}
+
+async function retryConfirmation(): Promise<void> {
+    const target = installTarget.value;
+    const workspaceId = install.status.value?.workspaceId;
+    if (!target || !workspaceId) return;
+    confirmationBusy.value = true;
+    try {
+        await install.retryActivationConfirmation({
+            pluginId: target.pluginId,
+            packageTreeSha256: target.packageTreeSha256,
+            workspaceId,
+        });
+    } finally {
+        confirmationBusy.value = false;
+    }
+}
+
+async function copyInstallDiagnostics(): Promise<void> {
+    const operation = install.status.value;
+    if (!operation) return;
+    const confirmation = install.activationConfirmation.value;
+    try {
+        await navigator.clipboard.writeText(
+            acquisitionDiagnosticReport(operation, {
+                runtime:
+                    confirmation && confirmation.confirmed
+                        ? {
+                              state: 'running',
+                              packageTreeSha256: operation.release.packageTreeSha256,
+                              workspaceId: operation.workspaceId,
+                              degradedContributions: confirmation.degradedContributions,
+                          }
+                        : { state: 'not-confirmed', workspaceId: operation.workspaceId },
+                activationTimedOut: install.activationTimedOut.value,
+            })
+        );
+        toast.add({ title: 'Diagnostics copied', description: 'Only operation, release and observed runtime identities are included.', color: 'success' });
+    } catch {
+        toast.add({ title: 'Could not copy diagnostics', color: 'warning' });
+    }
+}
+
 async function retryInstall(): Promise<void> {
     const pluginId = selectedPluginId.value;
     if (!pluginId) return;
     const result = await install.retry(pluginId);
     if (result?.status === 'completed') {
-        toast.add({ title: 'Installed', description: `${detailName.value} was installed. Check Installed for workspace activation and setup.`, color: 'success' });
+        const target = installTarget.value;
         await preflight.run(pluginId, undefined, browserEngine.value ?? undefined);
+        if (target && sameMarketplaceTarget(installTarget.value, target)) {
+            await confirmRunning(target);
+        } else {
+            toast.add({ title: 'Installed', description: `${detailName.value} was installed. Check Installed for workspace activation and setup.`, color: 'success' });
+        }
         return;
     }
     if (result?.needsSetup) {
@@ -367,6 +465,7 @@ function blockActionLabel(block: { action: string }): string | null {
     <div class="flex flex-col gap-5" data-testid="marketplace-discover">
         <div class="flex flex-wrap items-center gap-2">
             <UInput
+                ref="searchField"
                 v-model="catalog.search.value"
                 icon="i-lucide-search"
                 placeholder="Search the marketplace"
@@ -418,7 +517,7 @@ function blockActionLabel(block: { action: string }): string | null {
                     variant="ghost"
                     icon="i-lucide-x"
                     aria-label="Close details"
-                    @click="selectedPluginId = null"
+                    @click="closeDetail"
                 />
             </div>
 
@@ -582,6 +681,49 @@ function blockActionLabel(block: { action: string }): string | null {
                 <p v-if="['failed', 'blocked'].includes(install.status.value.status)" class="text-(--ui-text-muted)">
                     This is a saved installation result. Refreshing does not retry it.
                 </p>
+                <p v-if="install.status.value.status === 'completed'" class="text-(--ui-text-muted)">
+                    This version is already selected and cannot be cancelled. Use Installed → Roll back where a previous version exists.
+                </p>
+                <div
+                    v-if="confirmationBusy || install.activationConfirmation.value || install.activationTimedOut.value"
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                    class="flex flex-col gap-2 rounded-lg border border-(--ui-border) p-3"
+                    data-testid="marketplace-activation-confirmation"
+                >
+                    <p v-if="confirmationBusy" class="text-(--ui-text-muted)">
+                        Confirming the installed package runs in this workspace…
+                    </p>
+                    <p v-else-if="install.activationConfirmation.value?.confirmed === true" class="text-(--ui-text-muted)">
+                        Running here: the installed package was observed in this workspace.
+                    </p>
+                    <p v-else class="text-(--ui-text-muted)">
+                        {{ ACTIVATION_NOT_CONFIRMED_COPY }}. The installation stands; only this browser's confirmation is missing.
+                    </p>
+                    <div v-if="!confirmationBusy" class="flex flex-wrap gap-2">
+                        <UButton
+                            size="sm"
+                            color="neutral"
+                            variant="soft"
+                            icon="i-lucide-rotate-ccw"
+                            data-testid="marketplace-retry-confirmation"
+                            @click="retryConfirmation"
+                        >
+                            Retry confirmation
+                        </UButton>
+                        <UButton
+                            size="sm"
+                            color="neutral"
+                            variant="ghost"
+                            icon="i-lucide-clipboard-list"
+                            data-testid="marketplace-copy-install-diagnostics"
+                            @click="copyInstallDiagnostics"
+                        >
+                            Copy diagnostics
+                        </UButton>
+                    </div>
+                </div>
                 <div class="flex gap-2">
                     <UButton
                         v-if="install.status.value.retryable"

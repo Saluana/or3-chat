@@ -31,6 +31,7 @@ developer-oriented `src/` is included for source inspection.
 | `@or3/plugin-sdk/profile` | `defineOr3PortableProfile()` and the portable profile validator (Node-only) |
 | `@or3/plugin-sdk/package-tree` | Canonical package tree hashing/verification (Node-only) |
 | `@or3/plugin-sdk/package-archive` | Deterministic ZIP transport for package trees (Node-only) |
+| `@or3/plugin-sdk/candidate` | Immutable candidate receipts, validation and qualification (Node-only) |
 | `@or3/plugin-sdk/state-compatibility` | State compatibility policy helpers (Node-only) |
 
 The host owns context construction, plugin identity, generation, grants,
@@ -67,6 +68,9 @@ or3-plugin test ./example
 or3-plugin build ./example
 or3-plugin pack ./example --archive ./example.or3pkg
 or3-plugin inspect ./example            # or ./example.or3pkg
+or3-plugin candidate ./example --out ./example-candidate-1
+or3-plugin candidate --verify ./example-candidate-1
+or3-plugin candidate --qualify ./example --candidate ./example-candidate-1
 ```
 
 - `create` copies a starter. The default `portable-v1` template is conformant
@@ -82,6 +86,19 @@ or3-plugin inspect ./example            # or ./example.or3pkg
   package-tree digest.
 - `inspect` reports the digest, manifest digest, module graph, grants, trust,
   state compatibility and conformance status without importing plugin code.
+- `candidate` freezes one testable unit: sibling `package.zip`, `source.zip`
+  and `receipt.json` outputs in a new directory. It composes the existing
+  validate/build/pack helpers, records the source revision with dirty-snapshot
+  status plus the actual SDK, lockfile and runtime inputs, and refuses to
+  overwrite a frozen output — a changed source is a new candidate, never a
+  mutated one. `--verify` recomputes every digest from the frozen files
+  without rebuilding; `--qualify` additionally requires the exact clean
+  source commit with matching SDK and dependency inputs, rebuilds, and fails
+  unless the bytes compare equal. Dirty snapshots test locally but never
+  qualify. Published versions are immutable: different bytes need an unused
+  version. A package that pins a vendored SDK tarball or a sibling alias
+  records those exact bytes in the receipt; release qualification compares
+  them rather than trusting a version string.
 
 ## Portable profile
 

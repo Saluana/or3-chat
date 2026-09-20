@@ -10,7 +10,8 @@
 import { computed, onMounted, ref } from 'vue';
 import { useToast } from '#imports';
 import MarketplaceFailure from './MarketplaceFailure.vue';
-import { acquisitionFailureHelp } from '~~/shared/plugins/acquisition/failure-presentation';
+import { acquisitionDiagnosticReport, acquisitionFailureHelp } from '~~/shared/plugins/acquisition/failure-presentation';
+import { ACTIVATION_NOT_CONFIRMED_COPY } from '~~/shared/plugins/lifecycle/lifecycle-view';
 import {
     useMarketplaceInstall,
     useMarketplaceInstalled,
@@ -42,6 +43,9 @@ const updateNote = ref<Record<string, { readonly message: string; readonly retry
 );
 const browserEngine = ref<string>('unknown');
 const approvedUpdates = ref<Record<string, string>>({});
+/** Last confirmation target per plugin, so a timeout can retry observation only. */
+const confirmationTargets = ref<Record<string, { pluginId: string; packageTreeSha256: string; workspaceId: string }>>({});
+const confirmationBusy = ref<Record<string, boolean>>({});
 
 function updateTarget(entry: MarketplaceUpdateCheckPlugin): MarketplaceInstallTarget | null {
     if (!entry.latestVersion || !entry.release || entry.release.version !== entry.latestVersion) {
@@ -193,14 +197,12 @@ async function reviewUpdate(entry: MarketplaceUpdateCheckPlugin): Promise<void> 
 
 function reportOutcome(pluginId: string, view: AcquisitionStatusView | null): void {
     if (view?.status === 'completed') {
-        canaryNote.value = { ...canaryNote.value, [pluginId]: 'activated' };
+        // Acquisition completion selects the package; it does not prove this
+        // browser runs it. Confirmation follows before any "running" claim.
+        canaryNote.value = { ...canaryNote.value, [pluginId]: 'installed, confirming activation' };
         const { [pluginId]: _cleared, ...rest } = updateNote.value;
         updateNote.value = rest;
-        toast.add({
-            title: 'Updated',
-            description: 'The reviewed version is now the selected one.',
-            color: 'success',
-        });
+        void confirmUpdateRunning(pluginId, view);
         return;
     }
     const status = view?.status ?? 'pending';
@@ -224,6 +226,125 @@ function reportOutcome(pluginId: string, view: AcquisitionStatusView | null): vo
         description: message,
         color: 'warning',
     });
+}
+
+/**
+ * Observe the newly selected package running here. A timeout leaves the
+ * installed update in place and offers confirmation retry plus diagnostics;
+ * it never reinstalls blindly.
+ */
+async function confirmUpdateRunning(pluginId: string, view: AcquisitionStatusView): Promise<void> {
+    const workspaceId = installed.workspaceId.value ?? view.workspaceId;
+    const target = {
+        pluginId,
+        packageTreeSha256: view.release.packageTreeSha256,
+        workspaceId,
+    };
+    confirmationTargets.value = { ...confirmationTargets.value, [pluginId]: target };
+    confirmationBusy.value = { ...confirmationBusy.value, [pluginId]: true };
+    try {
+        const confirmation = await install.confirmActivation(target);
+        canaryNote.value = { ...canaryNote.value, [pluginId]: install.activationTimedOut.value ? 'activation not confirmed' : 'running' };
+        if (confirmation?.confirmed === true) {
+            toast.add({
+                title: 'Updated and running',
+                description: `Version ${view.version} is running in this workspace.`,
+                color: 'success',
+            });
+            return;
+        }
+        updateNote.value = {
+            ...updateNote.value,
+            [pluginId]: {
+                message: `${ACTIVATION_NOT_CONFIRMED_COPY}: version ${view.version} is installed. Retry confirmation or copy diagnostics; the update stays selected.`,
+                retryable: false,
+            },
+        };
+        toast.add({
+            title: ACTIVATION_NOT_CONFIRMED_COPY,
+            description: `Version ${view.version} is installed but not confirmed running here yet.`,
+            color: 'warning',
+        });
+    } finally {
+        confirmationBusy.value = { ...confirmationBusy.value, [pluginId]: false };
+    }
+}
+
+async function retryUpdateConfirmation(pluginId: string): Promise<void> {
+    const target = confirmationTargets.value[pluginId];
+    if (!target) return;
+    confirmationBusy.value = { ...confirmationBusy.value, [pluginId]: true };
+    try {
+        const confirmation = await install.retryActivationConfirmation(target);
+        canaryNote.value = { ...canaryNote.value, [pluginId]: install.activationTimedOut.value ? 'activation not confirmed' : 'running' };
+        if (confirmation?.confirmed === true) {
+            const { [pluginId]: _cleared, ...rest } = updateNote.value;
+            updateNote.value = rest;
+            toast.add({ title: 'Running', description: 'The installed update was observed in this workspace.', color: 'success' });
+        }
+    } finally {
+        confirmationBusy.value = { ...confirmationBusy.value, [pluginId]: false };
+    }
+}
+
+/** Confirm a directly promoted candidate runs here; selection stands on timeout. */
+async function confirmPromotedCandidate(
+    pluginId: string,
+    candidateDigest: string,
+    candidateVersion: string
+): Promise<void> {
+    const workspaceId = installed.workspaceId.value;
+    if (!workspaceId) {
+        toast.add({
+            title: 'Updated',
+            description: 'The reviewed version is now the selected one.',
+            color: 'success',
+        });
+        return;
+    }
+    const target = { pluginId, packageTreeSha256: candidateDigest, workspaceId };
+    confirmationTargets.value = { ...confirmationTargets.value, [pluginId]: target };
+    confirmationBusy.value = { ...confirmationBusy.value, [pluginId]: true };
+    try {
+        const confirmation = await install.confirmActivation(target);
+        canaryNote.value = { ...canaryNote.value, [pluginId]: install.activationTimedOut.value ? 'activation not confirmed' : 'running' };
+        if (confirmation?.confirmed === true) {
+            toast.add({
+                title: 'Updated and running',
+                description: `Version ${candidateVersion} is running in this workspace.`,
+                color: 'success',
+            });
+            return;
+        }
+        updateNote.value = {
+            ...updateNote.value,
+            [pluginId]: {
+                message: `${ACTIVATION_NOT_CONFIRMED_COPY}: version ${candidateVersion} is installed. Retry confirmation below; the update stays selected.`,
+                retryable: false,
+            },
+        };
+        toast.add({
+            title: ACTIVATION_NOT_CONFIRMED_COPY,
+            description: `Version ${candidateVersion} is installed but not confirmed running here yet.`,
+            color: 'warning',
+        });
+    } finally {
+        confirmationBusy.value = { ...confirmationBusy.value, [pluginId]: false };
+    }
+}
+
+async function copyUpdateDiagnostics(pluginId: string): Promise<void> {    const operation = install.status.value;
+    if (!operation || operation.pluginId !== pluginId) return;
+    try {
+        await navigator.clipboard.writeText(
+            acquisitionDiagnosticReport(operation, {
+                activationTimedOut: install.activationTimedOut.value,
+            })
+        );
+        toast.add({ title: 'Diagnostics copied', description: 'Only operation and release identities are included.', color: 'success' });
+    } catch {
+        toast.add({ title: 'Could not copy diagnostics', color: 'warning' });
+    }
 }
 
 async function apiPost<T>(
@@ -316,8 +437,7 @@ async function activate(entry: {
                 body: { candidateDigest },
             });
             installed.reconcile('manifest-revision-change');
-        } catch (promotionError) {
-            // The promotion boundary refuses a candidate that an install
+        } catch (promotionError) {            // The promotion boundary refuses a candidate that an install
             // operation owns; resume that operation instead of reporting failure.
             const data = (promotionError as { data?: { code?: string; operationId?: string } }).data;
             if (data?.code === 'acquisition-required' && data.operationId) {
@@ -332,12 +452,10 @@ async function activate(entry: {
             }
             throw promotionError;
         }
-        toast.add({
-            title: 'Updated',
-            description: 'The reviewed version is now the selected one.',
-            color: 'success',
-        });
+        // Promotion selects the candidate; confirm it runs here before any
+        // "running" claim. A timeout keeps the selection and offers retry.
         await installed.load();
+        await confirmPromotedCandidate(entry.pluginId, candidateDigest, candidateVersion);
     } catch (error) {
         toast.add({
             title: 'The update could not be activated',
@@ -491,6 +609,43 @@ async function activate(entry: {
                 >
                     {{ updateNote[entry.pluginId]?.message }}
                 </p>
+                <div
+                    v-if="confirmationBusy[entry.pluginId] || confirmationTargets[entry.pluginId]"
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                    class="flex flex-col gap-2 rounded border border-(--ui-border) p-2 text-xs"
+                    data-testid="marketplace-update-confirmation"
+                >
+                    <p v-if="confirmationBusy[entry.pluginId]" class="text-(--ui-text-muted)">
+                        Confirming the installed update runs in this workspace…
+                    </p>
+                    <p v-else-if="install.activationTimedOut.value" class="text-(--ui-text-muted)">
+                        {{ ACTIVATION_NOT_CONFIRMED_COPY }}. The installation stands.
+                    </p>
+                    <div v-else class="flex flex-wrap gap-2">
+                        <UButton
+                            size="sm"
+                            color="neutral"
+                            variant="soft"
+                            icon="i-lucide-rotate-ccw"
+                            data-testid="marketplace-update-retry-confirmation"
+                            @click="retryUpdateConfirmation(entry.pluginId)"
+                        >
+                            Retry confirmation
+                        </UButton>
+                        <UButton
+                            size="sm"
+                            color="neutral"
+                            variant="ghost"
+                            icon="i-lucide-clipboard-list"
+                            data-testid="marketplace-update-copy-diagnostics"
+                            @click="copyUpdateDiagnostics(entry.pluginId)"
+                        >
+                            Copy diagnostics
+                        </UButton>
+                    </div>
+                </div>
                 <div class="flex flex-wrap gap-2">
                     <UButton
                         size="sm"

@@ -75,7 +75,19 @@ Local assessment governs execution. It is not an attestation to central commerce
 
 ## Install, update and canary
 
-Installing goes through the durable acquisition operation (see [Trusted Registry Acquisition](./trusted-acquisition)). The UI follows the recorded stage and mirrors the operation's own retry/cancel rules. A first install enables the plugin for the installing workspace, so "installed" means the package is actually running; an update never changes enablement, so a workspace that deliberately disabled a plugin keeps it disabled.
+Installing goes through the durable acquisition operation (see [Trusted Registry Acquisition](./trusted-acquisition)). The UI follows the recorded stage and mirrors the operation's own retry/cancel rules. A first install enables the plugin for the installing workspace; an update never changes enablement, so a workspace that deliberately disabled a plugin keeps it disabled.
+
+Installed and running are separate facts. **Installed** is the instance-selected
+package (version plus exact package digest, shown in expandable details).
+**Running** means this browser and workspace actually observed that exact
+package start, with its sidebar, pane and tool registrations settled. A
+matching version with a different digest never counts as running. After an
+install or update completes, the UI reconciles the runtime and observes the
+activation for up to 30 seconds before reporting success: when nothing
+confirms in time it shows **Installed; activation not confirmed**, keeps the
+server installation intact, and offers confirmation retry plus diagnostics
+instead of reinstalling. A late matching activation may still update the
+visible status; it never starts another acquisition.
 
 A release that declares a contained client runtime needs a real browser canary. The host issues a single-use ticket bound to the plugin, package digest, workspace, client id and nonce; the admin's browser performs a hidden activation of the candidate's exact bytes in the contained sandbox, re-hashes them and reports the outcome. Until that evidence exists the operation stays pending with `client-canary-pending`, and the UI completes the check and retries the same operation. A server-side check alone never substitutes for it.
 
@@ -110,9 +122,18 @@ has been exercised successfully.
 
 **Technical details → Copy diagnostic report** copies an explicit allowlist:
 operation ID, plugin ID, version, workspace ID, status, stage, failure code,
-retry/setup flags and timestamp. It excludes raw exception messages, URLs,
-credentials, settings and plugin content. Review the identifiers before sharing.
+release digests (release, archive, package tree, manifest, authority),
+observed runtime state and digest, retry/setup flags and timestamp. It excludes
+raw exception messages, URLs, credentials, settings, activation handles and
+plugin content. Review the identifiers before sharing.
 If clipboard access fails, the displayed report can be copied manually.
+
+Recovery limits: an update that fails before promotion leaves the previous
+package selected; a failure after promotion shows the actual selected and
+observed identities rather than assuming a rollback happened. Roll back is
+offered only when a previous selection exists, restores code selection only,
+and never clears plugin data or promises that old code can read newer data.
+Cancelling is impossible after promotion has committed.
 
 Server acquisition logs include the same operation ID and structured failure code.
 Unexpected step failures log exception type and stack frames, omitting exception
@@ -141,6 +162,7 @@ The request link is a supported deep link: `/?dashboard=marketplace&plugin=<plug
 - [Trusted Registry Acquisition](./trusted-acquisition) — the install pipeline, advisories and recovery.
 - [Portable Containment and Setup](./portable-containment-and-setup) — the sandbox the client packages run in.
 - [Portable Profile](./portable-profile) — what a marketplace package may be.
+- [Local Development Candidates](./local-development) — testing unpublished candidates without publishing.
 
 ## Update checks and version pins
 

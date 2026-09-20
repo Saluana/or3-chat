@@ -137,4 +137,29 @@ describe('admin route policy contracts', () => {
         expect(source).not.toContain("getRequestHeader(event, 'x-forwarded-for')");
         expect(source).toContain('const clientId = getClientIp(event);');
     });
+
+    it('keeps development admission super-admin-only with its own eligibility gate', async () => {
+        const files = [
+            'server/api/admin/plugins/development/admit.post.ts',
+            'server/api/admin/plugins/development/verification.post.ts',
+        ] as const;
+
+        for (const file of files) {
+            const source = await read(file);
+            expect(source).toContain('ownerOnly: true');
+            expect(source).toContain('superAdminOnly: true');
+            expect(source).toContain('mutation: true');
+            expect(source).not.toContain('allowWorkspaceAdmin: true');
+            expect(source).toContain('resolvePluginDevelopmentEligibility');
+        }
+    });
+
+    it('leaves ordinary raw-upload restrictions independent of development mode', async () => {
+        const install = await read('server/api/admin/extensions/install.post.ts');
+        // The ordinary ZIP path stays gated by its own configuration toggle and
+        // never consults the development flag.
+        expect(install).toContain('pluginZipInstallEnabled');
+        expect(install).not.toContain('OR3_PLUGIN_DEVELOPMENT');
+        expect(install).not.toContain('development-eligibility');
+    });
 });

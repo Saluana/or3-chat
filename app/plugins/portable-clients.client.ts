@@ -29,11 +29,13 @@ import { useSessionContext } from '~/composables/auth/useSessionContext';
 import type { PluginRuntimeManifestResponse } from '~~/shared/plugins/runtime-manifest';
 import type { PackageV2PluginDescriptor } from '~~/shared/plugins/runtime-descriptor';
 import {
+    clearPortableSurfaceRegistrations,
     deactivatePortableClient,
     installPortableUnloadTeardown,
     listPortableActivations,
     listPortableClientSources,
     removePortableClientSource,
+    reportPortableContributionReadiness,
     setPortableClientSource,
 } from '~/composables/plugins/portable-client-runtime';
 import {
@@ -127,6 +129,7 @@ export default defineNuxtPlugin(() => {
         registeredPages.delete(pluginId);
         unregisterDashboardPlugin(`${DASHBOARD_PLUGIN_PREFIX}${pluginId}`);
         removePortableClientSource(pluginId);
+        clearPortableSurfaceRegistrations(pluginId);
         await deactivatePortableClient(pluginId);
     };
 
@@ -207,10 +210,35 @@ export default defineNuxtPlugin(() => {
             let disposeTools = () => {};
             let disposed = false;
             surfaceDisposers.set(pluginId, () => { disposed = true; disposeTools(); sidebar(); pane.dispose(); });
+            // Pane and sidebar registration above are synchronous host calls: when
+            // they return, the surfaces settled for this descriptor. Tools
+            // discovery is asynchronous and optional, so its outcome is reported
+            // separately and a failure degrades rather than fails the activation.
+            reportPortableContributionReadiness(pluginId, 'pane', 'ready', {
+                descriptorKey: descriptor.descriptorKey,
+                workspaceId,
+            });
+            reportPortableContributionReadiness(pluginId, 'sidebar', 'ready', {
+                descriptorKey: descriptor.descriptorKey,
+                workspaceId,
+            });
             if (descriptor.effectiveGrants.includes("tools.register.client")) {
                 void registerPortableTools(pluginId).then(dispose => {
                     if (disposed) dispose(); else disposeTools = dispose;
-                }).catch(error => console.warn("[portable-clients] tool registration failed", pluginId, error));
+                    if (!disposed) {
+                        reportPortableContributionReadiness(pluginId, 'tools', 'ready', {
+                            descriptorKey: descriptor.descriptorKey,
+                            workspaceId,
+                        });
+                    }
+                }).catch(error => {
+                    console.warn("[portable-clients] tool registration failed", pluginId, error);
+                    reportPortableContributionReadiness(pluginId, 'tools', 'failed', {
+                        descriptorKey: descriptor.descriptorKey,
+                        workspaceId,
+                        code: error instanceof Error ? error.message.slice(0, 128) : 'discovery-failed',
+                    });
+                });
             }
             registerDashboardPlugin({
                 id: `${DASHBOARD_PLUGIN_PREFIX}${pluginId}`,

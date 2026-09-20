@@ -128,6 +128,10 @@ const pluginSdkSourceAliases: Record<string, string> = hasPluginSdkSource
               pluginSdkSourceRoot,
               'cli/archive.ts',
           ),
+          '@or3/plugin-sdk/candidate': resolve(
+              pluginSdkSourceRoot,
+              'candidate.ts',
+          ),
           // Server-side setup descriptors are parsed with the shared SDK
           // parser, so the package profile source must resolve to the
           // transformable source in a checkout build.
