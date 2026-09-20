@@ -1397,7 +1397,7 @@
                     "name": "marketplace.md",
                     "path": "/plugins/marketplace",
                     "category": "Guide",
-                    "summary": "Native discovery, signed authority consent, resumable acquisition, and update checks with semantic ordering, instance version pins, compatibility and linked Library coverage."
+                    "summary": "Native discovery, signed authority consent, resumable acquisition, and update checks with semantic ordering, instance version pins, compatibility and linked Library coverage. Includes publisher listing help for support, privacy and external-cost links."
                 },
                 {
                     "name": "library.md",
