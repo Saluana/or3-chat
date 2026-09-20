@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
-import { buildProvenanceSha256 } from '@or3/plugin-sdk/candidate';
+import { buildProvenanceSha256, hashSnapshotEntries } from '@or3/plugin-sdk/candidate';
+import { encodeFileZip } from '@or3/plugin-sdk/package-archive';
 
 /**
  * The admission boundary fails closed: an ineligible host, a malformed
@@ -20,9 +21,6 @@ const readPackageZipMock = vi.fn<() => Promise<{ digest: string; entries: number
     throw new Error('not a package archive');
 });
 
-vi.mock('@or3/plugin-sdk/package-archive', () => ({
-    readPackageZip: () => readPackageZipMock(),
-}));
 let multipartParts: { name?: string; data: unknown }[] | null = null;
 
 vi.mock('h3', () => ({
@@ -71,7 +69,8 @@ vi.mock('../../../../../admin/plugins/package-tree', () => ({
     }),
 }));
 
-vi.mock('@or3/plugin-sdk/package-archive', () => ({
+vi.mock('@or3/plugin-sdk/package-archive', async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
     readPackageZip: () => readPackageZipMock(),
 }));
 
@@ -154,6 +153,21 @@ function partsFor(receipt: unknown) {
     ];
 }
 
+/** Parts with a well-formed source snapshot, so the flow reaches package verification. */
+function verifiableParts(receipt: unknown) {
+    const entries = [{ path: 'client.mjs', bytes: Buffer.from('export default 1;\n') }];
+    const receiptWithSource = {
+        ...(receipt as Record<string, unknown>),
+        sourceSha256: hashSnapshotEntries(entries),
+    };
+    return [
+        { name: 'package', data: PACKAGE_BYTES },
+        { name: 'source', data: Buffer.from(encodeFileZip(entries)) },
+        { name: 'receipt', data: Buffer.from(JSON.stringify(receiptWithSource)) },
+        { name: 'workspaceId', data: Buffer.from('ws-1') },
+    ];
+}
+
 const event = { node: { req: { socket: { remoteAddress: '127.0.0.1' }, headers: {} } }, context: {} } as never;
 
 beforeEach(() => {
@@ -207,7 +221,9 @@ describe('development admission boundary', () => {
     });
 
     it('refuses archives that fail canonical verification', async () => {
-        multipartParts = partsFor(receiptFor());
+        // A well-formed source snapshot lets the flow reach package
+        // verification, where the garbage package bytes are refused.
+        multipartParts = verifiableParts(receiptFor());
         await expect(handler(event)).rejects.toMatchObject({
             statusCode: 422,
             data: { code: 'candidate-verification-failed' },
@@ -226,7 +242,7 @@ describe('development admission boundary', () => {
             entries: 3,
             extractedRoot: null,
         });
-        multipartParts = partsFor(receiptFor());
+        multipartParts = verifiableParts(receiptFor());
         const result = (await handler(event)) as { ok: boolean; stage: string; codes: readonly string[] };
         expect(result.ok).toBe(false);
         expect(result.stage).toBe('grants');

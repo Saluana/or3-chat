@@ -32,8 +32,8 @@ import { promises as fs } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createError, defineEventHandler, readMultipartFormData } from 'h3';
-import { parseCandidateReceipt, buildProvenanceSha256 } from '@or3/plugin-sdk/candidate';
-import { readPackageZip } from '@or3/plugin-sdk/package-archive';
+import { parseCandidateReceipt, buildProvenanceSha256, hashSnapshotEntries } from '@or3/plugin-sdk/candidate';
+import { readFileZipEntries, readPackageZip } from '@or3/plugin-sdk/package-archive';
 import { requireAdminApiContext } from '../../../../admin/api';
 import { getClientIp } from '../../../../admin/auth/rate-limit';
 import { resolveAdminWorkspaceTarget } from '../../../../admin/workspace-target';
@@ -142,10 +142,22 @@ export default defineEventHandler(async (event) => {
             data: { code: 'candidate-archive-mismatch' },
         });
     }
-    if (sha256Hex(sourceBytes) !== receipt.sourceSha256) {
+    // The receipt binds the source content identity, not the archive bytes:
+    // decode the snapshot and recompute it from the exact uploaded files.
+    let sourceEntries: { readonly path: string; readonly bytes: Uint8Array }[];
+    try {
+        sourceEntries = await readFileZipEntries(new Uint8Array(sourceBytes));
+    } catch (error) {
         throw createError({
             statusCode: 422,
-            statusMessage: 'The uploaded source.zip does not match the receipt source digest.',
+            statusMessage: error instanceof Error ? `The uploaded source.zip failed verification: ${error.message}` : 'The uploaded source.zip failed verification.',
+            data: { code: 'candidate-source-mismatch' },
+        });
+    }
+    if (hashSnapshotEntries(sourceEntries) !== receipt.sourceSha256) {
+        throw createError({
+            statusCode: 422,
+            statusMessage: 'The uploaded source.zip content does not match the receipt source digest.',
             data: { code: 'candidate-source-mismatch' },
         });
     }

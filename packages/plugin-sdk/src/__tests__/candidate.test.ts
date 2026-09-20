@@ -150,6 +150,24 @@ describe('verifyCandidateDirectory', () => {
         );
     });
 
+    it('rejects tampered source content', async () => {
+        const root = track(makePackage());
+        const created = await createV2Candidate(root, {
+            outputDirectory: track(makeOut()),
+            probeSourceControl: CLEAN_PROBE,
+        });
+        const sourcePath = join(created.candidateDirectory, 'source.zip');
+        const bytes = Buffer.from(readFileSync(sourcePath));
+        // Flip a byte inside the compressed data, not the trailing record:
+        // the decoded content must differ (or fail its CRC check).
+        const middle = Math.floor(bytes.length / 2);
+        bytes[middle] = bytes[middle]! ^ 0xff;
+        writeFileSync(sourcePath, bytes);
+        await expect(verifyCandidateDirectory(created.candidateDirectory)).rejects.toThrow(
+            /source/i
+        );
+    });
+
     it('rejects tampered source digests and unknown receipt fields', async () => {
         const root = track(makePackage());
         const created = await createV2Candidate(root, {

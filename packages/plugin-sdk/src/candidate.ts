@@ -420,9 +420,21 @@ export function collectSourceSnapshot(packageRoot: string, excludeRoots: readonl
 
 /** Content identity of a source snapshot, independent of archive encoding. */
 export function hashSourceSnapshot(packageRoot: string, files: readonly string[]): Sha256 {
-    const lines = [...files]
-        .sort()
-        .map((relativePath) => `${relativePath}:${hashFileBytes(join(packageRoot, relativePath))}`);
+    return hashSnapshotEntries(
+        [...files].sort().map((relativePath) => ({
+            path: relativePath,
+            bytes: readFileSync(join(packageRoot, relativePath)),
+        }))
+    );
+}
+
+/** Content identity over explicit entries (used to verify an uploaded source archive). */
+export function hashSnapshotEntries(
+    entries: ReadonlyArray<{ readonly path: string; readonly bytes: Uint8Array }>
+): Sha256 {
+    const lines = [...entries]
+        .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))
+        .map((entry) => `${entry.path}:${sha256Hex(entry.bytes)}`);
     return sha256Hex(lines.join('\n'));
 }
 
@@ -603,12 +615,24 @@ export async function verifyCandidateDirectory(candidateDirectory: string): Prom
     if (sha256Hex(packageBytes) !== receipt.archiveSha256) {
         throw new CandidateValidationError('digest-invalid', 'Candidate package.zip does not match the receipt archive digest');
     }
-    const { readPackageZip } = await import('./cli/archive');
+    const { readPackageZip, readFileZipEntries } = await import('./cli/archive');
     const read = await readPackageZip(packageBytes);
     if (read.digest !== receipt.packageTreeSha256) {
         throw new CandidateValidationError('digest-invalid', 'Candidate package.zip tree does not match the receipt package digest');
     }
-    void sourcePath;
+    const sourceBytes = readFileSync(sourcePath);
+    let sourceEntries: { readonly path: string; readonly bytes: Uint8Array }[];
+    try {
+        sourceEntries = await readFileZipEntries(sourceBytes);
+    } catch (error) {
+        throw new CandidateValidationError(
+            'digest-invalid',
+            `Candidate source.zip failed verification: ${error instanceof Error ? error.message : 'unreadable archive'}`
+        );
+    }
+    if (hashSnapshotEntries(sourceEntries) !== receipt.sourceSha256) {
+        throw new CandidateValidationError('digest-invalid', 'Candidate source.zip content does not match the receipt source digest');
+    }
     return { candidateDirectory: directory, receipt, receiptSha256: candidateReceiptSha256(receipt) };
 }
 

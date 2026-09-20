@@ -315,6 +315,27 @@ export function encodeFileZip(
 }
 
 /**
+ * Decodes a deterministic file ZIP (see `encodeFileZip`) into its entries,
+ * enforcing the same structural safety as package archives (no traversal,
+ * no duplicates, byte limits, CRC-32). Package-tree verification is not
+ * applied: this is the source-snapshot transport for candidate receipts.
+ */
+export async function readFileZipEntries(
+    bytes: Uint8Array,
+    options: PackageZipReadOptions = {}
+): Promise<{ readonly path: string; readonly bytes: Uint8Array }[]> {
+    if (bytes.byteLength === 0) {
+        throw new PackageTreeValidationError('length-invalid', 'Source archive is empty');
+    }
+    const limits: PackageTreeLimits = Object.freeze({ ...DEFAULT_LIMITS, ...options.limits });
+    const entries = decodeZip(bytes, limits);
+    assertStructurallySound(entries);
+    return entries
+        .filter((entry) => entry.kind === 'file')
+        .map((entry) => ({ path: entry.path, bytes: entry.bytes ?? new Uint8Array(0) }));
+}
+
+/**
  * Verifies `treeRoot` and returns a deterministic ZIP of its canonical tree.
  *
  * The tree is verified first and an invalid tree is never exported. Entries are
