@@ -529,7 +529,7 @@ export function useMarketplaceInstall() {
     };
 
     /** Complete a pending browser canary for the operation's candidate. */
-    const completeCanary = async (pluginId: string): Promise<boolean> => {
+    const completeCanary = async (pluginId: string, workspaceId: string): Promise<boolean> => {
         canaryStatus.value = 'checking';
         const { reportCandidateClientCanary } = await import(
             '~/composables/plugins/portable-canary'
@@ -537,7 +537,7 @@ export function useMarketplaceInstall() {
         const issued = await apiPost<{
             ok?: boolean;
             clientCanary?: { status: string; ticket: Parameters<typeof reportCandidateClientCanary>[0] };
-        }>(`/api/admin/plugins/packages/${pluginId}/canary`, { body: {} });
+        }>(`/api/admin/plugins/packages/${pluginId}/canary`, { body: { workspaceId } });
         if (issued.ok) {
             canaryStatus.value = 'passed';
             return true;
@@ -565,7 +565,7 @@ export function useMarketplaceInstall() {
             if (view.status === 'paused' || (view.status === 'failed' && !view.retryable)) return view;
             if (view.failure?.code === 'client-canary-pending') {
                 canaryStatus.value = 'pending';
-                const passed = await completeCanary(pluginId);
+                const passed = await completeCanary(pluginId, view.workspaceId);
                 if (passed) {
                     await apiPost(`/api/admin/plugins/acquisitions/${operationId.value}/retry`);
                     continue;

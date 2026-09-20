@@ -98,6 +98,28 @@ describe('marketplace mutations reconcile the plugin runtime', () => {
 });
 
 describe('durable operations are recovered', () => {
+    it('targets the recorded workspace when a resumed operation needs a browser canary', async () => {
+        const operation = statusView({
+            workspaceId: 'approved-workspace',
+            stage: 'candidate-recorded',
+            status: 'failed',
+            retryable: true,
+            failure: { code: 'client-canary-pending', retryable: true },
+        });
+        fetchMock.mockImplementation(async (url: string) =>
+            url.endsWith('/canary') ? { ok: false } : { ok: true, operation }
+        );
+
+        const install = useMarketplaceInstall();
+        await install.adopt('sample.plugin', 'op-1');
+
+        expect(fetchMock).toHaveBeenCalledWith('/api/admin/plugins/packages/sample.plugin/canary', {
+            method: 'POST',
+            headers: { 'x-or3-admin-intent': 'admin' },
+            body: { workspaceId: 'approved-workspace' },
+        });
+    });
+
     it('restores the unfinished operation that staged the requested version', async () => {
         fetchMock.mockImplementation((url: string) => {
             if (String(url).startsWith('/api/admin/plugins/acquisitions?')) {

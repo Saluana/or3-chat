@@ -70,6 +70,8 @@ A durable operation outlives the page: opening a plugin's detail restores the un
 
 Every mutation the views perform — enabling, disabling, removing, rolling back and completing an install — emits the workspace plugin reconciliation signal the runtime already listens to. The UI never leaves a mutation's effect waiting for the next reload.
 
+Resuming an installation runs its browser canary in the operation's recorded workspace, even when the administrator's Chat session currently uses another workspace. Permission review and runtime evidence remain bound to that installation's workspace.
+
 ## Permission consent
 
 A release that asks for authority cannot install, canary or be promoted until the workspace has recorded explicit consent. The detail view lists the exact `requestedGrants` from the signed release metadata, requires an explicit approval, and persists it with `POST /api/admin/plugins/packages/{pluginId}/grants` before the install operation starts. The server never takes the requested set from the caller: it reads the staged candidate's own manifest when one exists and otherwise re-derives it from the signed release metadata, so approval can only narrow what the release asked for. An update that expands authority leaves the existing review stale, which blocks the promotion until consent is recorded again.
