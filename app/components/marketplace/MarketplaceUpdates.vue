@@ -9,6 +9,8 @@
  */
 import { computed, onMounted, ref } from 'vue';
 import { useToast } from '#imports';
+import MarketplaceFailure from './MarketplaceFailure.vue';
+import { acquisitionFailureHelp } from '~~/shared/plugins/acquisition/failure-presentation';
 import {
     useMarketplaceInstall,
     useMarketplaceInstalled,
@@ -204,7 +206,7 @@ function reportOutcome(pluginId: string, view: AcquisitionStatusView | null): vo
     const status = view?.status ?? 'pending';
     canaryNote.value = { ...canaryNote.value, [pluginId]: status };
     const message =
-        view?.failure?.message ??
+        (view?.failure ? acquisitionFailureHelp(view).message : null) ??
         (status === 'paused'
             ? 'Finish the required setup, then continue.'
             : 'Resume when the blocker is cleared.');
@@ -350,6 +352,7 @@ async function activate(entry: {
 
 <template>
     <div class="flex flex-col gap-4" data-testid="marketplace-updates">
+        <MarketplaceFailure v-if="install.status.value?.failure" :operation="install.status.value" />
         <div class="flex flex-wrap items-center justify-between gap-2">
             <p class="text-xs text-(--ui-text-muted)">
                 Checking reads the catalog. Nothing is staged until you review a release.

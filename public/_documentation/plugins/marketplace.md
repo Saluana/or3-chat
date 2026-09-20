@@ -77,6 +77,29 @@ Every mutation the views perform — enabling, disabling, removing, rolling back
 
 Resuming an installation runs its browser canary in the operation's recorded workspace, even when the administrator's Chat session currently uses another workspace. Permission review and runtime evidence remain bound to that installation's workspace.
 
+## Installation failures and support reports
+
+Discover and Updates explain recorded acquisition failures with recovery guidance,
+the plugin version and target workspace. Retry/Continue is offered only when the
+server marks the operation retryable; setup pauses link to the setup page. Use
+**Manage installed plugins** to check the selected package and workspace activation.
+Successful acquisition means the package was installed, not that its first action
+has been exercised successfully.
+
+**Technical details → Copy diagnostic report** copies an explicit allowlist:
+operation ID, plugin ID, version, workspace ID, status, stage, failure code,
+retry/setup flags and timestamp. It excludes raw exception messages, URLs,
+credentials, settings and plugin content. Review the identifiers before sharing.
+If clipboard access fails, the displayed report can be copied manually.
+
+Server acquisition logs include the same operation ID and structured failure code.
+Unexpected step failures log exception type and stack frames, omitting exception
+text, and return a generic support message. `already-installed` and
+`grant-review-required` identify expected duplicate and permission-review failures.
+
+Requests rejected before an operation is available show session, administrator
+access or rate-limit guidance instead of raw HTTP exception text.
+
 ## Permission consent
 
 A release that asks for authority cannot install, canary or be promoted until the workspace has recorded explicit consent. The detail view lists the exact `requestedGrants` from the signed release metadata, requires an explicit approval, and persists it with `POST /api/admin/plugins/packages/{pluginId}/grants` before the install operation starts. The server never takes the requested set from the caller: it reads the staged candidate's own manifest when one exists and otherwise re-derives it from the signed release metadata, so approval can only narrow what the release asked for. An update that expands authority leaves the existing review stale, which blocks the promotion until consent is recorded again.

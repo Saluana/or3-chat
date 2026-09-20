@@ -25,6 +25,7 @@
 import { computed, ref } from 'vue';
 import { requestWorkspacePluginReconcile } from '~/composables/plugins/bundled-v1-manager-runtime';
 import type { EffectiveAuthority } from '~~/shared/plugins/authority/effective-authority';
+import { acquisitionRequestError } from '~~/shared/plugins/acquisition/failure-presentation';
 
 /**
  * Nuxt's typed routes cannot express runtime-composed API paths, so every call
@@ -620,8 +621,7 @@ export function useMarketplaceInstall() {
             status.value = started;
             return await settle(input.pluginId);
         } catch (caught) {
-            error.value =
-                caught instanceof Error ? caught.message : 'The installation could not start.';
+            error.value = acquisitionRequestError(caught);
             return null;
         } finally {
             running.value = false;
@@ -640,7 +640,7 @@ export function useMarketplaceInstall() {
             if (view) status.value = view;
             return await settle(pluginId);
         } catch (caught) {
-            error.value = caught instanceof Error ? caught.message : 'The retry was refused.';
+            error.value = acquisitionRequestError(caught);
             return null;
         } finally {
             running.value = false;

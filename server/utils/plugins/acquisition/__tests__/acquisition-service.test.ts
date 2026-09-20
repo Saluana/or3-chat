@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     describeAcquisitionStatus,
     type PluginAcquisitionReceipt,
@@ -219,6 +219,52 @@ function makeHarness(input: {
 }
 
 describe('reviewed acquisition pipeline (5.1, 5.4)', () => {
+    it('reports missing consent as a permission-review failure', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const harness = makeHarness({ fixture });
+        const started = await harness.service.start({
+            pluginId: 'alpha', version: '1.0.0', workspaceId: 'ws-1',
+            requesterUserId: 'user-1', instanceId: 'instance-1',
+        });
+        expect(started.ok).toBe(true);
+        if (!started.ok) return;
+        const stopped = await harness.service.advance(started.operation.operationId);
+        expect(stopped.failure).toMatchObject({ code: 'grant-review-required', retryable: false });
+        expect(await harness.services.pointers.readPointer('alpha')).toBeNull();
+    });
+
+    it('correlates unexpected failures without returning raw exception text', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const harness = makeHarness({ fixture });
+        vi.spyOn(harness.services.candidates, 'prepare').mockRejectedValueOnce(new Error('secret-token private-document'));
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            const started = await harness.start({ version: '1.0.0' });
+            expect(started.ok).toBe(true);
+            if (!started.ok) return;
+            expect(started.operation.failure?.code).toBe('internal-error');
+            expect(started.operation.failure?.message).not.toContain('secret-token');
+            expect(log).toHaveBeenCalledWith('[plugin-acquisition] step failed', expect.objectContaining({
+                operationId: started.operation.operationId, exceptionType: 'Error',
+            }));
+            expect(JSON.stringify(log.mock.calls)).not.toContain('secret-token');
+        } finally {
+            log.mockRestore();
+        }
+    });
+
+    it('reports an actionable duplicate-install code without changing the installed pointer', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const harness = makeHarness({ fixture });
+        await harness.start({ version: '1.0.0' });
+        const pointer = await harness.services.pointers.readPointer('alpha');
+        const repeated = await harness.start({ version: '1.0.0' });
+        expect(repeated.ok).toBe(true);
+        if (!repeated.ok) return;
+        expect(repeated.operation.failure).toMatchObject({ code: 'already-installed', retryable: false });
+        expect(await harness.services.pointers.readPointer('alpha')).toEqual(pointer);
+    });
+
     it('resolves, verifies, records a candidate, checks health and promotes a portable release', async () => {
         const fixture = await releaseFixture({ version: '1.0.0' });
         const harness = makeHarness({ fixture });

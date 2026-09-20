@@ -2,8 +2,14 @@ import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { testRuntimeConfig } from '../../../../tests/setup';
 import MarketplaceDiscover from '../MarketplaceDiscover.vue';
+import { acquisitionFailureHelp, acquisitionRequestError } from '~~/shared/plugins/acquisition/failure-presentation';
+import type { AcquisitionStatusView } from '~~/shared/plugins/acquisition/contracts';
 
 const fetchMock = vi.fn();
+const openPageMock = vi.fn();
+vi.mock('~/composables/dashboard/useDashboardPlugins', () => ({
+    useDashboardNavigation: () => ({ openPage: openPageMock }),
+}));
 // `$fetch` is a Nuxt auto-import: the composables call the global, so the test
 // replaces the global rather than mocking a module.
 vi.stubGlobal('$fetch', fetchMock);
@@ -112,7 +118,7 @@ function responseFor(url: string): unknown {
     return {};
 }
 
-function acquisitionOperation(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function acquisitionOperation(overrides: Partial<AcquisitionStatusView> = {}): AcquisitionStatusView {
     return {
         operationId: 'op-1',
         pluginId: 'or3.sample-utility',
@@ -125,7 +131,7 @@ function acquisitionOperation(overrides: Record<string, unknown> = {}): Record<s
         resumable: true,
         retryable: true,
         canceled: false,
-        failure: { code: 'setup-required', message: 'Finish setup', retryable: true },
+        failure: { code: 'setup-required', stage: 'candidate-recorded', message: 'Finish setup', retryable: true },
         updatedAt: 0,
         ...overrides,
     };
@@ -207,6 +213,62 @@ function entryFor(pluginId: string, name: string, summary: string, version: stri
 }
 
 describe('MarketplaceDiscover', () => {
+    it.each([
+        ['grant-review-required', 'Permission approval is needed'],
+        ['setup-required', 'Finish plugin setup'],
+        ['client-canary-pending', 'Browser verification is pending'],
+        ['download-failed', 'The download could not finish'],
+        ['package-verification-failed', 'Package safety checks did not pass'],
+        ['internal-error', 'Installation needs attention'],
+    ] as const)('explains %s without exposing arbitrary error text', (code, title) => {
+        const view = acquisitionOperation({ failure: { code, stage: 'candidate-recorded', retryable: false, message: 'secret-token' } });
+        const help = acquisitionFailureHelp(view);
+        expect(help.title).toBe(title);
+        expect(help.message).not.toContain('secret-token');
+    });
+
+    it.each([
+        [401, 'Sign in again'], [403, 'administrator access'], [429, 'Wait a moment'], [500, 'server logs'],
+    ])('explains HTTP %s failures before an operation exists', (statusCode, guidance) => {
+        expect(acquisitionRequestError({ statusCode, message: 'secret-token' })).toContain(guidance);
+        expect(acquisitionRequestError({ statusCode, message: 'secret-token' })).not.toContain('secret-token');
+    });
+
+    it('explains a failure, opens Installed, and copies only safe diagnostic fields', async () => {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        vi.stubGlobal('navigator', Object.assign(Object.create(window.navigator), { clipboard: { writeText } }));
+        fetchMock.mockImplementation((url: string) => Promise.resolve(
+            url.startsWith('/api/admin/plugins/acquisitions?')
+                ? { ok: true, operations: [acquisitionOperation({
+                    status: 'failed', needsSetup: false, retryable: false,
+                    failure: { code: 'already-installed', stage: 'candidate-recorded', message: 'secret-token private-document', retryable: false },
+                })] }
+                : responseFor(url)
+        ));
+        const wrapper = mount(MarketplaceDiscover, { global: { stubs } });
+        await flush();
+        await wrapper.get('[data-testid="marketplace-card"]').trigger('click');
+        await flush();
+        expect(wrapper.text()).toContain('This version is already installed');
+        expect(wrapper.text()).not.toContain('secret-token');
+        expect(wrapper.find('[data-testid="marketplace-continue"]').exists()).toBe(false);
+        await wrapper.get('[data-testid="marketplace-copy-diagnostics"]').trigger('click');
+        expect(writeText).toHaveBeenCalledOnce();
+        const report = JSON.parse(writeText.mock.calls[0]![0]);
+        expect(report).toMatchObject({ failureCode: 'already-installed', version: '1.0.0' });
+        expect(report).not.toHaveProperty('message');
+        writeText.mockRejectedValueOnce(new Error('Clipboard denied'));
+        await wrapper.get('[data-testid="marketplace-copy-diagnostics"]').trigger('click');
+        await flush();
+        expect(wrapper.text()).toContain('copy it manually');
+        expect(wrapper.get('[data-testid="marketplace-diagnostic-report"]').text()).toContain('op-1');
+        const manage = wrapper.findAll('button').find((button) => button.text() === 'Manage installed plugins')!;
+        await manage.trigger('click');
+        expect(openPageMock).toHaveBeenCalledWith('marketplace', 'installed');
+        vi.unstubAllGlobals();
+        vi.stubGlobal('$fetch', fetchMock);
+    });
+
     beforeEach(() => {
         fetchMock.mockReset();
         fetchMock.mockImplementation((url: string) => Promise.resolve(responseFor(url)));

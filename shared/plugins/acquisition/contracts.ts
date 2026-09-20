@@ -52,6 +52,8 @@ export type PluginAcquisitionTerminal = 'completed' | 'failed' | 'canceled' | 'b
 export type PluginAcquisitionStatus = PluginAcquisitionPhase | PluginAcquisitionTerminal;
 
 export const PLUGIN_ACQUISITION_FAILURE_CODES = [
+    'already-installed',
+    'grant-review-required',
     'registry-unconfigured',
     'registry-unreachable',
     'release-not-found',

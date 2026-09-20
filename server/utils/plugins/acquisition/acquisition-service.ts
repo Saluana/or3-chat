@@ -696,18 +696,26 @@ export class PluginAcquisitionService {
                     return await this.#fail(record, 'internal-error', 'Unknown acquisition stage.', false);
             }
         } catch (error) {
+            console.error('[plugin-acquisition] step failed', {
+                operationId: record.operationId,
+                pluginId: record.pluginId,
+                stage: record.stage,
+                exceptionType: error instanceof Error ? error.name : typeof error,
+                // Omit exception text: it can contain signed URLs or credentials.
+                stackFrames: error instanceof Error ? error.stack?.split('\n').filter((line) => /^\s+at /.test(line)).slice(0, 8) : undefined,
+            });
             if (error instanceof PluginAcquisitionOperationError) {
                 return await this.#fail(
                     await this.#deps.store.requireRecord(record.operationId),
                     error.code === 'operation-conflict' ? 'operation-conflict' : 'internal-error',
-                    error.message,
+                    error.code === 'operation-conflict' ? 'Another installation is in progress.' : 'The installation stopped unexpectedly. Share the diagnostic report with the instance administrator.',
                     error.code === 'operation-conflict'
                 );
             }
             return await this.#fail(
                 await this.#deps.store.requireRecord(record.operationId),
                 'internal-error',
-                error instanceof Error ? error.message : 'The acquisition failed unexpectedly.',
+                'The installation stopped unexpectedly. Share the diagnostic report with the instance administrator.',
                 false
             );
         }
@@ -1607,6 +1615,14 @@ export class PluginAcquisitionService {
             failure: restFailure(record.stage, code, message, retryable),
             completedAt: this.#now(),
         });
+        console.warn('[plugin-acquisition] stopped', {
+            operationId: record.operationId,
+            pluginId: record.pluginId,
+            workspaceId: record.workspaceId,
+            stage: record.stage,
+            code,
+            retryable,
+        });
         return { kind: 'rest', operation };
     }
 
@@ -1946,6 +1962,12 @@ function candidateBlockFailure(stage: string, codes: readonly string[]): {
     message: string;
     retryable: boolean;
 } {
+    if (codes.includes('already-installed')) {
+        return { code: 'already-installed', message: 'This package is already installed. Manage it from Installed.', retryable: false };
+    }
+    if (stage === 'grants') {
+        return { code: 'grant-review-required', message: 'Review and approve the requested permissions in the target workspace.', retryable: false };
+    }
     const detail = codes.join(', ') || stage;
     switch (stage) {
         case 'verification':

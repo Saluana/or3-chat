@@ -9,6 +9,8 @@
  */
 import { computed, onMounted, ref } from 'vue';
 import { useRuntimeConfig, useToast } from '#imports';
+import MarketplaceFailure from './MarketplaceFailure.vue';
+import { acquisitionFailureHelp } from '~~/shared/plugins/acquisition/failure-presentation';
 import {
     detectBrowserEngine,
 } from '~~/shared/plugins/isolation/portable-bootstrap';
@@ -310,7 +312,7 @@ async function runInstall(): Promise<void> {
     if (result.status === 'completed') {
         toast.add({
             title: 'Installed',
-            description: `${detailName.value} is ready to use.`,
+            description: `${detailName.value} was installed. Check Installed for workspace activation and setup.`,
             color: 'success',
         });
         approvedTargetKey.value = null;
@@ -318,10 +320,8 @@ async function runInstall(): Promise<void> {
         return;
     }
     toast.add({
-        title: result.needsSetup ? 'Setup required' : 'Install needs attention',
-        description:
-            result.failure?.message ??
-            'Review the status below, then finish setup or retry.',
+        title: acquisitionFailureHelp(result).title,
+        description: acquisitionFailureHelp(result).message,
         color: result.needsSetup ? 'warning' : 'error',
     });
 }
@@ -331,7 +331,7 @@ async function retryInstall(): Promise<void> {
     if (!pluginId) return;
     const result = await install.retry(pluginId);
     if (result?.status === 'completed') {
-        toast.add({ title: 'Installed', description: `${detailName.value} is ready to use.`, color: 'success' });
+        toast.add({ title: 'Installed', description: `${detailName.value} was installed. Check Installed for workspace activation and setup.`, color: 'success' });
         await preflight.run(pluginId, undefined, browserEngine.value ?? undefined);
         return;
     }
@@ -578,9 +578,7 @@ function blockActionLabel(block: { action: string }): string | null {
                 <p v-if="install.canaryStatus.value" class="text-(--ui-text-muted)">
                     Browser check: {{ install.canaryStatus.value }}
                 </p>
-                <p v-if="install.status.value.failure" class="text-(--ui-text-muted)">
-                    {{ install.status.value.failure.code }}: {{ install.status.value.failure.message }}
-                </p>
+                <MarketplaceFailure v-if="install.status.value.failure" :operation="install.status.value" />
                 <div class="flex gap-2">
                     <UButton
                         v-if="install.status.value.retryable"
@@ -594,7 +592,7 @@ function blockActionLabel(block: { action: string }): string | null {
                         {{ install.status.value.resumable ? 'Continue' : 'Retry' }}
                     </UButton>
                     <UButton
-                        v-if="install.status.value.status !== 'completed'"
+                        v-if="!['completed', 'canceled'].includes(install.status.value.status)"
                         size="sm"
                         color="error"
                         variant="ghost"
@@ -620,6 +618,7 @@ function blockActionLabel(block: { action: string }): string | null {
                     </UButton>
                 </div>
             </div>
+            <p v-if="install.error.value" role="alert" class="text-sm">{{ install.error.value }}</p>
         </div>
 
         <div v-if="catalog.loading.value" class="text-sm text-(--ui-text-muted)">Loading plugins…</div>
