@@ -9,8 +9,9 @@ supported yet.
 
 ## How it works
 
-1. You open the plugin's setup page (`/plugins/<pluginId>/setup`) and enter the
-   provider credential once, against the connection slot the package declares.
+1. You open the plugin's Configure page from Marketplace (or the direct setup
+   route, `/plugins/<pluginId>/setup`) and enter the provider credential once,
+   against the connection slot the package declares.
    The binding is explicit: the provider, scopes and operations come from the
    package policy and are validated against the registered provider, so a stored
    credential only satisfies the slot it was created for. The package is the

@@ -106,17 +106,27 @@ changing environment files so Nuxt picks them up.
 
 ### Developing sibling OR3 packages
 
-OR3 Chat normally uses the versioned packages installed in `node_modules` so
-long-running Vite sessions keep a bounded module graph. When working across a
-multi-repository checkout, opt into sibling source packages explicitly:
+`bun run dev` uses adjacent source checkouts automatically: when a sibling
+`or3-vsc` or `or3-workflows` checkout sits next to `or3-chat`, Vite and Nitro
+alias `or3-scroll`, `or3-workflow-core`, `or3-workflow-vue`, and the workflow
+stylesheet to that package source. Provider packages (`or3-provider-*`) are
+built from their sibling checkouts the same way. The dev banner prints which
+local sources were selected.
+
+Each alias resolves on its own: a missing, renamed, or partially checked-out
+sibling falls back to the installed `node_modules` package for that import, so
+one absent repository never breaks the app. Builds, deployment images, and
+generated projects never alias sibling source.
+
+Force the answer when you need to:
 
 ```bash
-OR3_USE_LOCAL_PACKAGES=true bun run dev
+OR3_USE_LOCAL_PACKAGES=false bun run dev   # always use installed packages
+OR3_USE_LOCAL_PACKAGES=true bun run build # alias sibling source outside dev
 ```
 
-This aliases adjacent `or3-vsc` and `or3-workflows` source trees into both the
-client and server builds. Enable it only while editing those packages because
-their larger source graphs make each HMR invalidation more expensive.
+Local source graphs make each HMR invalidation more expensive, so turn them off
+when you are not editing those packages.
 
 ---
 

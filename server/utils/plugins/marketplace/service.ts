@@ -204,6 +204,8 @@ export async function preflightMarketplaceInstall(input: {
     readonly workspaceId: string;
     readonly installedPluginIds: readonly string[];
     readonly enabledPluginIds: readonly string[];
+    /** Package digest currently selected for this plugin, when a pointer holds one. */
+    readonly selectedPackageDigest?: string;
 }): Promise<MarketplacePreflightResult> {
     const config = acquisitionConfig();
     const registryState = new RegistryStateStore();
@@ -387,6 +389,12 @@ export async function preflightMarketplaceInstall(input: {
         acceptedSequence: state.acceptedAdvisorySequence,
         quarantined: false,
     };
+    // Same predicate the acquisition pipeline applies to the candidate: the
+    // release is already the selected package, so an install would download and
+    // verify the whole artifact only to refuse it at the pointer check.
+    const alreadySelected =
+        input.selectedPackageDigest !== undefined &&
+        input.selectedPackageDigest === document.packageTreeSha256;
     return finish(base, blocks, {
         releaseId: document.releaseId,
         version: document.version,
@@ -400,7 +408,7 @@ export async function preflightMarketplaceInstall(input: {
         sourceSha256: document.sourceSha256,
         requestedGrants: document.requestedGrants,
         ...(document.authority === undefined ? {} : { authority: document.authority }),
-    }, advisories, storage);
+    }, advisories, storage, alreadySelected);
 }
 
 function finish(

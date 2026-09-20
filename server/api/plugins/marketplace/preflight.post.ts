@@ -63,6 +63,14 @@ export default defineEventHandler(async (event) => {
         .filter((entry) => entry.status === 'ready')
         .map((entry) => entry.pluginId));
 
+    // The acquisition pipeline refuses a candidate whose package digest is
+    // already the selected one. Reading the pointer directly here reports the
+    // same answer up front, including when the selected package is present but
+    // not routable, instead of after a download and verification pass.
+    const selection = await services.pointers.readStartupSelection(pluginId).catch(() => null);
+    const selectedPackageDigest =
+        selection && selection.status !== 'blocked' ? selection.selected?.packageDigest : undefined;
+
     return await preflightMarketplaceInstall({
         pluginId,
         ...(version === undefined ? {} : { version }),
@@ -70,5 +78,6 @@ export default defineEventHandler(async (event) => {
         workspaceId,
         installedPluginIds,
         enabledPluginIds: enabled,
+        ...(selectedPackageDigest === undefined ? {} : { selectedPackageDigest }),
     });
 });

@@ -81,6 +81,7 @@ beforeEach(() => {
     fetchMock.mockReset();
     fetchMock.mockResolvedValue(pageResponse);
     reconcileMock.mockReset();
+    localStorage.clear();
 });
 
 describe('marketplace mutations reconcile the plugin runtime', () => {
@@ -499,6 +500,23 @@ describe('install cancellation and recorded results', () => {
         ] });
         const install = useMarketplaceInstall();
         expect(await install.restore('sample.plugin')).toBeNull();
+    });
+
+    it('keeps a dismissed outcome dismissed across refreshes', async () => {
+        fetchMock.mockResolvedValue({ operations: [
+            statusView({ operationId: 'dead', status: 'failed', updatedAt: 10 }),
+        ] });
+        const install = useMarketplaceInstall();
+
+        expect((await install.restore('sample.plugin'))?.operationId).toBe('dead');
+        install.dismiss();
+        expect(install.operationId.value).toBeNull();
+        expect(await install.restore('sample.plugin')).toBeNull();
+
+        // A reload constructs a fresh composable against the same browser store.
+        const reloaded = useMarketplaceInstall();
+        expect(await reloaded.restore('sample.plugin')).toBeNull();
+        expect(reloaded.status.value).toBeNull();
     });
 });
 

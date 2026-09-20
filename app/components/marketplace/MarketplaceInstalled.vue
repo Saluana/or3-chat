@@ -10,6 +10,8 @@
 import { inject, onMounted, ref } from 'vue';
 import { useToast } from '#imports';
 import { useMarketplaceInstalled } from '~/composables/marketplace/useMarketplace';
+import { useDashboardNavigation } from '~/composables/dashboard/useDashboardPlugins';
+import { setMarketplaceSetupPlugin } from '~/composables/marketplace/useMarketplaceSetup';
 import {
     getPortableClientSource,
     isPortableActivationReady,
@@ -24,10 +26,16 @@ import { openPortablePane } from '~/composables/plugins/portable-pane';
 
 const toast = useToast();
 const installed = useMarketplaceInstalled();
+const navigation = useDashboardNavigation();
 const activations = usePortableActivations();
 const closeDashboard = inject<() => void>('or3:dashboard:close', () => {});
 const busyPluginId = ref<string | null>(null);
 onMounted(() => installed.load());
+
+function openConfigure(pluginId: string): void {
+    setMarketplaceSetupPlugin(pluginId);
+    void navigation.openPage('marketplace', 'configure');
+}
 
 async function openPlugin(pluginId: string): Promise<void> {
     if (!getPortableClientSource(pluginId)) {
@@ -137,18 +145,26 @@ function lifecycleBadge(entry: InstalledEntry): { readonly state: string; readon
     });
 }
 
-function badgeColor(state: string): 'success' | 'info' | 'warning' | 'neutral' {
+/**
+ * Chip styling for one lifecycle state.
+ *
+ * `info` is a container color in every OR3 theme (near-white in light mode,
+ * near-black in dark mode), so a Nuxt UI `color="info"` badge paints its label
+ * in a color that disappears into the surface. Its paired `on-info` token is
+ * the readable foreground, which is what the chip uses instead.
+ */
+function lifecycleBadgeClass(state: string): string {
     switch (state) {
         case 'running':
-            return 'success';
+            return 'bg-success/10 text-success ring-success/25';
         case 'running-degraded':
         case 'starting':
-            return 'info';
+            return 'bg-info text-[var(--md-on-info)] ring-[var(--md-info)]/25';
         case 'activation-not-confirmed':
         case 'failed':
-            return 'warning';
+            return 'bg-warning/10 text-warning ring-warning/25';
         default:
-            return 'neutral';
+            return 'bg-elevated text-[var(--ui-text-muted)] ring-[var(--ui-border)]';
     }
 }
 
@@ -260,7 +276,7 @@ async function apiGet<T>(url: string): Promise<T> {
 </script>
 
 <template>
-    <div class="flex flex-col gap-5">
+    <div class="dashboard-page-frame">
         <div v-if="installed.error.value" class="text-sm text-(--ui-text-muted)" data-testid="marketplace-installed-error">
             {{ installed.error.value }}
         </div>
@@ -278,26 +294,30 @@ async function apiGet<T>(url: string): Promise<T> {
             </UButton>
         </div>
 
-        <section class="flex flex-col gap-3" data-testid="marketplace-installed">
+        <section class="flex flex-col gap-4" data-testid="marketplace-installed">
             <h3 class="text-base font-medium">Installed</h3>
             <div v-if="installed.loading.value" class="text-sm text-(--ui-text-muted)">Loading…</div>
             <div v-else-if="installed.packages.value.length === 0" class="text-sm text-(--ui-text-muted)">
                 No packages are installed yet. Browse the marketplace to add one.
             </div>
-            <ul v-else class="flex flex-col gap-3">
+            <ul v-else class="flex flex-col gap-4">
                 <li
                     v-for="entry in installed.packages.value"
                     :key="entry.pluginId"
-                    class="flex flex-col gap-2 rounded-lg border border-(--ui-border) p-3"
+                    class="flex flex-col gap-3 rounded-lg border border-(--ui-border) p-4"
                 >
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="font-medium">{{ entry.pluginId }}</span>
                         <UBadge color="neutral" variant="subtle">
                             installed {{ entry.display?.version ?? 'no version selected' }}
                         </UBadge>
-                        <UBadge :color="badgeColor(lifecycleBadge(entry).state)" variant="subtle">
+                        <span
+                            class="font-medium inline-flex items-center text-xs px-2 py-1 gap-1 rounded-md ring ring-inset"
+                            :class="lifecycleBadgeClass(lifecycleBadge(entry).state)"
+                            :data-lifecycle-state="lifecycleBadge(entry).state"
+                        >
                             {{ lifecycleBadge(entry).label }}
-                        </UBadge>
+                        </span>
                         <UBadge
                             v-if="activationFor(entry.pluginId)?.status === 'blocked'"
                             color="warning"
@@ -308,7 +328,7 @@ async function apiGet<T>(url: string): Promise<T> {
                     </div>
                     <details class="text-xs text-(--ui-text-muted)">
                         <summary class="cursor-pointer">Package identities</summary>
-                        <dl class="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+                        <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
                             <dt>Selected version</dt>
                             <dd class="break-all">{{ entry.display?.version ?? 'none' }}</dd>
                             <dt>Selected digest</dt>
@@ -318,7 +338,7 @@ async function apiGet<T>(url: string): Promise<T> {
                             <dt>Running digest</dt>
                             <dd class="break-all">{{ activationFor(entry.pluginId)?.packageDigest ?? 'not running here' }}</dd>
                         </dl>
-                        <p class="mt-1">Running means this browser observed the exact selected package; a matching version with a different digest never counts.</p>
+                        <p class="mt-2">Running means this browser observed the exact selected package; a matching version with a different digest never counts.</p>
                     </details>
                     <div class="flex flex-wrap gap-2">
                         <UButton
@@ -337,7 +357,7 @@ async function apiGet<T>(url: string): Promise<T> {
                             color="neutral"
                             variant="soft"
                             icon="i-lucide-settings"
-                            :to="`/plugins/${entry.pluginId}/setup`"
+                            @click="openConfigure(entry.pluginId)"
                         >
                             Configure
                         </UButton>

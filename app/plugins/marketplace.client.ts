@@ -2,12 +2,13 @@
  * Dashboard > Marketplace registration.
  *
  * The marketplace is a dashboard app like the workspace manager: one registered
- * entry with Discover, Installed and Updates pages that reuse the existing
- * navigation, theme and components. No iframe and no central-site embedding: it
- * reads the local server's own marketplace endpoints.
+ * entry with Discover, Installed, Updates and contextual Configure pages that
+ * reuse the existing navigation, theme and components. No iframe and no
+ * central-site embedding: it reads the local server's own marketplace endpoints.
  */
 import { h, type Component } from 'vue';
 import { registerDashboardPlugin } from '~/composables/dashboard/useDashboardPlugins';
+import { useMarketplaceSetupPlugin } from '~/composables/marketplace/useMarketplaceSetup';
 
 /**
  * `import.meta.glob` keeps these paths out of TypeScript's module resolution
@@ -18,6 +19,7 @@ import { registerDashboardPlugin } from '~/composables/dashboard/useDashboardPlu
 const DISCOVER = import.meta.glob('../components/marketplace/MarketplaceDiscover.vue');
 const INSTALLED = import.meta.glob('../components/marketplace/MarketplaceInstalled.vue');
 const UPDATES = import.meta.glob('../components/marketplace/MarketplaceUpdates.vue');
+const CONFIGURE = import.meta.glob('../components/marketplace/MarketplaceConfigure.vue');
 
 function lazyPage(modules: Record<string, unknown>, label: string): Component {
     const loader = Object.values(modules)[0] as (() => Promise<unknown>) | undefined;
@@ -63,6 +65,17 @@ export default defineNuxtPlugin(() => {
                 icon: 'i-lucide-refresh-cw',
                 description: 'Review and activate waiting updates.',
                 component: lazyPage(UPDATES, 'Updates'),
+            },
+            {
+                id: 'configure',
+                title: 'Configure',
+                icon: 'i-lucide-settings-2',
+                description: 'Configure an installed plugin from the dashboard.',
+                // Configure is contextual: the plugin id is supplied by an
+                // Installed/Discover action, so it should not appear as an
+                // empty tile on the Marketplace landing page.
+                isAvailable: () => useMarketplaceSetupPlugin().value !== null,
+                component: lazyPage(CONFIGURE, 'Configure'),
             },
         ],
     });

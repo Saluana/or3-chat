@@ -4,6 +4,7 @@ import { testRuntimeConfig } from '../../../../tests/setup';
 import MarketplaceDiscover from '../MarketplaceDiscover.vue';
 import { acquisitionFailureHelp, acquisitionRequestError } from '~~/shared/plugins/acquisition/failure-presentation';
 import type { AcquisitionStatusView } from '~~/shared/plugins/acquisition/contracts';
+import { setMarketplaceSetupPlugin } from '~/composables/marketplace/useMarketplaceSetup';
 
 const fetchMock = vi.fn();
 const openPageMock = vi.fn();
@@ -290,6 +291,11 @@ describe('MarketplaceDiscover', () => {
         const manage = wrapper.findAll('button').find((button) => button.text() === 'Manage installed plugins')!;
         await manage.trigger('click');
         expect(openPageMock).toHaveBeenCalledWith('marketplace', 'installed');
+        // A recorded failure the operator can neither retry nor cancel must be
+        // clearable, or the detail panel is a dead end on every visit.
+        await wrapper.get('[data-testid="marketplace-dismiss-operation"]').trigger('click');
+        await flush();
+        expect(wrapper.find('[data-testid="marketplace-install-status"]').exists()).toBe(false);
         vi.unstubAllGlobals();
         vi.stubGlobal('$fetch', fetchMock);
     });
@@ -297,7 +303,11 @@ describe('MarketplaceDiscover', () => {
     beforeEach(() => {
         fetchMock.mockReset();
         fetchMock.mockImplementation((url: string) => Promise.resolve(responseFor(url)));
+        // Dismissed outcomes are remembered per browser, so each test starts
+        // from a store the previous test cannot have written to.
+        localStorage.clear();
         confirmationState.activation = null;
+        setMarketplaceSetupPlugin(null);
         // The contained profile is qualified on Chromium; tests decide when a
         // different engine is under test.
         userAgentSpy = vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(CHROME_UA);
@@ -385,6 +395,166 @@ describe('MarketplaceDiscover', () => {
         expect(wrapper.text()).toContain('Sample Utility');
         expect(wrapper.text()).toContain('Summarise a document.');
         expect(wrapper.text()).toContain('1.0.0');
+    });
+
+    it('replaces the install warning with actions for an installed plugin', async () => {
+        fetchMock.mockImplementation((url: string) => {
+            if (url.startsWith('/api/admin/plugins-page')) {
+                return Promise.resolve({
+                    plugins: [],
+                    role: 'owner',
+                    workspaceId: 'ws-1',
+                    enabledPlugins: ['or3.sample-utility'],
+                    packagePlugins: [
+                        {
+                            pluginId: 'or3.sample-utility',
+                            workspaceEnabled: true,
+                            pointer: {
+                                current: { packageDigest: `sha256-${'a'.repeat(64)}` },
+                                candidate: null,
+                                previous: null,
+                            },
+                            startup: {
+                                status: 'ready',
+                                selectedSlot: 'current',
+                                selectedDigest: `sha256-${'a'.repeat(64)}`,
+                                issueCodes: [],
+                            },
+                            display: {
+                                version: '1.0.0',
+                                selectedDigest: `sha256-${'a'.repeat(64)}`,
+                                candidateVersion: null,
+                                candidateDigest: null,
+                                canOpen: true,
+                            },
+                        },
+                    ],
+                });
+            }
+            if (url.startsWith('/api/plugins/marketplace/preflight')) {
+                return Promise.resolve(
+                    preflightResponse({
+                        blocks: [
+                            {
+                                code: 'already-installed',
+                                message: 'This plugin is already installed.',
+                                action: 'use-installed',
+                            },
+                        ],
+                    })
+                );
+            }
+            return Promise.resolve(responseFor(url));
+        });
+
+        const wrapper = mount(MarketplaceDiscover, { global: { stubs } });
+        await flush();
+        await wrapper.get('[data-testid="marketplace-card"]').trigger('click');
+        await flush();
+
+        expect(wrapper.get('[data-testid="marketplace-installed-actions"]').text()).toContain(
+            'Configure'
+        );
+        expect(wrapper.get('[data-testid="marketplace-installed-actions"]').text()).toContain(
+            'Uninstall'
+        );
+        expect(wrapper.find('[data-testid="marketplace-install"]').exists()).toBe(false);
+        expect(wrapper.find('[data-testid="marketplace-block"]').exists()).toBe(false);
+        await wrapper.get('[data-testid="marketplace-installed-configure"]').trigger('click');
+        expect(openPageMock).toHaveBeenCalledWith('marketplace', 'configure');
+    });
+
+    it('uses the preflight installed signal when the admin package projection is unavailable', async () => {
+        fetchMock.mockImplementation((url: string) => {
+            if (url.startsWith('/api/admin/plugins-page')) {
+                return Promise.reject(new Error('Forbidden'));
+            }
+            if (url.startsWith('/api/plugins/marketplace/preflight')) {
+                return Promise.resolve(
+                    preflightResponse({
+                        blocks: [
+                            {
+                                code: 'already-installed',
+                                message: 'This plugin is already installed.',
+                                action: 'use-installed',
+                            },
+                        ],
+                    })
+                );
+            }
+            return Promise.resolve(responseFor(url));
+        });
+
+        const wrapper = mount(MarketplaceDiscover, { global: { stubs } });
+        await flush();
+        await wrapper.get('[data-testid="marketplace-card"]').trigger('click');
+        await flush();
+
+        expect(wrapper.get('[data-testid="marketplace-installed-actions"]').text()).toContain(
+            'Configure'
+        );
+        expect(wrapper.find('[data-testid="marketplace-install"]').exists()).toBe(false);
+        expect(wrapper.find('[data-testid="marketplace-installed-uninstall"]').exists()).toBe(false);
+    });
+
+    it('keeps recovery status visible for a candidate-only package pointer', async () => {
+        const candidateDigest = `sha256-${'d'.repeat(64)}`;
+        fetchMock.mockImplementation((url: string) => {
+            if (url.startsWith('/api/admin/plugins-page')) {
+                return Promise.resolve({
+                    plugins: [],
+                    role: 'owner',
+                    workspaceId: 'ws-1',
+                    enabledPlugins: [],
+                    packagePlugins: [
+                        {
+                            pluginId: 'or3.sample-utility',
+                            workspaceEnabled: false,
+                            pointer: {
+                                current: null,
+                                candidate: { packageDigest: candidateDigest },
+                                previous: null,
+                            },
+                            startup: {
+                                status: 'inactive',
+                                selectedSlot: null,
+                                selectedDigest: null,
+                                issueCodes: [],
+                            },
+                            display: {
+                                version: null,
+                                selectedDigest: null,
+                                candidateVersion: '1.0.0',
+                                candidateDigest,
+                                canOpen: false,
+                            },
+                        },
+                    ],
+                });
+            }
+            if (url.startsWith('/api/plugins/marketplace/preflight')) {
+                return Promise.resolve(
+                    preflightResponse({
+                        blocks: [
+                            {
+                                code: 'already-installed',
+                                message: 'This plugin is already installed.',
+                                action: 'use-installed',
+                            },
+                        ],
+                    })
+                );
+            }
+            return Promise.resolve(responseFor(url));
+        });
+
+        const wrapper = mount(MarketplaceDiscover, { global: { stubs } });
+        await flush();
+        await wrapper.get('[data-testid="marketplace-card"]').trigger('click');
+        await flush();
+
+        expect(wrapper.find('[data-testid="marketplace-installed-actions"]').exists()).toBe(false);
+        expect(wrapper.find('[data-testid="marketplace-block"]').exists()).toBe(true);
     });
 
     it('selects the plugin named by a request deep link', async () => {

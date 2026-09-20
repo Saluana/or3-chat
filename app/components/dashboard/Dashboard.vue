@@ -3,9 +3,9 @@
         id="dashboard-modal-shell"
         v-bind="dashboardModalProps"
         v-model:open="open"
-        :modal="false"
+        :modal="true"
         title="Dashboard"
-        :dismissible="false"
+        :dismissible="true"
         description="Browse all apps, plugins, and settings."
     >
         <template #body>

@@ -29,6 +29,47 @@ import { acquisitionRequestError } from '~~/shared/plugins/acquisition/failure-p
 import { ACTIVATION_CONFIRMATION_TIMEOUT_MS } from '~~/shared/plugins/lifecycle/lifecycle-view';
 
 /**
+ * Outcomes the operator has cleared from the detail panel, remembered per
+ * browser.
+ *
+ * A finished failure is worth reporting once, but the durable record stays
+ * listed for the plugin forever. Re-adopting it on every visit is what made
+ * refreshing the marketplace look broken, so the dismissal — not the record —
+ * is what this browser remembers.
+ */
+const DISMISSED_OPERATIONS_KEY = 'or3.marketplace.dismissedOperations';
+const DISMISSED_OPERATIONS_LIMIT = 50;
+
+function readDismissedOperations(): Set<string> {
+    if (typeof localStorage === 'undefined') return new Set();
+    try {
+        const stored: unknown = JSON.parse(
+            localStorage.getItem(DISMISSED_OPERATIONS_KEY) ?? '[]'
+        );
+        return Array.isArray(stored)
+            ? new Set(stored.filter((id): id is string => typeof id === 'string'))
+            : new Set();
+    } catch {
+        return new Set();
+    }
+}
+
+function rememberDismissedOperation(operationId: string): void {
+    if (typeof localStorage === 'undefined') return;
+    const dismissed = readDismissedOperations();
+    dismissed.delete(operationId);
+    dismissed.add(operationId);
+    try {
+        localStorage.setItem(
+            DISMISSED_OPERATIONS_KEY,
+            JSON.stringify([...dismissed].slice(-DISMISSED_OPERATIONS_LIMIT))
+        );
+    } catch {
+        // A full or unavailable store costs the dismissal, never the install.
+    }
+}
+
+/**
  * Nuxt's typed routes cannot express runtime-composed API paths, so every call
  * goes through these two helpers and the result is narrowed by the caller.
  */
@@ -536,10 +577,15 @@ export function useMarketplaceInstall() {
         const matching = operations.filter((operation) =>
             options.workspaceId === undefined || operation.workspaceId === options.workspaceId
         );
+        // Completed and canceled records are history, and a record the operator
+        // already cleared must stay cleared: re-showing it on every visit left
+        // the detail panel stuck on a dead result with no control that helped.
+        const dismissed = readDismissedOperations();
         const unfinished = matching.filter(
             (operation) =>
                 operation.status !== 'completed' &&
                 operation.status !== 'canceled' &&
+                !dismissed.has(operation.operationId) &&
                 !matching.some((newer) => newer.workspaceId === operation.workspaceId &&
                     newer.status === 'completed' && newer.updatedAt > operation.updatedAt)
         );
@@ -674,8 +720,32 @@ export function useMarketplaceInstall() {
         }
     };
 
+    /**
+     * A running pipeline observes the cancel flag before its next side effect,
+     * so the recorded status can stay `running` for a while after the request.
+     * Follow it briefly so the operator sees the outcome instead of a control
+     * that appeared to do nothing.
+     */
+    const followCancellation = async (
+        id: string,
+        generation: number
+    ): Promise<void> => {
+        if (status.value === null || !canCancel.value) return;
+        for (let attempt = 0; attempt < 10; attempt++) {
+            await new Promise((resolve) => setTimeout(resolve, 1_000));
+            if (generation !== operationGeneration || operationId.value !== id) return;
+            const view = await poll(id).catch(() => null);
+            if (!view) return;
+            if (!['pending', 'running', 'paused'].includes(view.status)) return;
+        }
+    };
+
     const cancel = async (): Promise<void> => {
-        if (!operationId.value || !canCancel.value || canceling.value) return;
+        if (canceling.value) return;
+        if (!operationId.value || !canCancel.value) {
+            error.value = 'This install already finished, so it cannot be canceled.';
+            return;
+        }
         const id = operationId.value;
         const generation = operationGeneration;
         canceling.value = true;
@@ -688,6 +758,7 @@ export function useMarketplaceInstall() {
             const view = unwrapAcquisitionOperation(response);
             if (view) status.value = view;
             else await poll(id);
+            await followCancellation(id, generation);
         } catch (caught) {
             if (generation === operationGeneration) error.value = acquisitionRequestError(caught);
         } finally {
@@ -854,6 +925,17 @@ export function useMarketplaceInstall() {
         activationTimedOut.value = false;
     };
 
+    /**
+     * Clear the displayed outcome for good in this browser. The durable
+     * operation stays on the server for diagnostics; it simply stops being
+     * re-adopted, which is what made refreshing look like nothing happened.
+     */
+    const dismiss = (): void => {
+        const id = operationId.value;
+        if (id !== null) rememberDismissedOperation(id);
+        reset();
+    };
+
     return {
         operationId,
         status,
@@ -876,6 +958,7 @@ export function useMarketplaceInstall() {
         detachActivationConfirmation,
         observeActivationNow,
         reset,
+        dismiss,
     };
 }
 
@@ -1006,17 +1089,17 @@ export function useMarketplaceInstalled() {
         error.value = null;
         try {
             const response = await apiGet<{
-                plugins: readonly Record<string, unknown>[];
-                role: string;
-                workspaceId: string;
-                enabledPlugins: readonly string[];
-                packagePlugins: readonly InstalledPackageView[];
+                plugins?: readonly Record<string, unknown>[];
+                role?: string | null;
+                workspaceId?: string | null;
+                enabledPlugins?: readonly string[];
+                packagePlugins?: readonly InstalledPackageView[];
             }>('/api/admin/plugins-page');
-            plugins.value = response.plugins;
-            role.value = response.role;
-            workspaceId.value = response.workspaceId;
-            enabled.value = response.enabledPlugins;
-            packages.value = response.packagePlugins;
+            plugins.value = response.plugins ?? [];
+            role.value = response.role ?? null;
+            workspaceId.value = response.workspaceId ?? null;
+            enabled.value = response.enabledPlugins ?? [];
+            packages.value = response.packagePlugins ?? [];
         } catch (caught) {
             error.value =
                 caught instanceof Error

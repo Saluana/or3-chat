@@ -7,7 +7,7 @@
  * install authority gets a copyable administrator request instead of a
  * misleading action.
  */
-import { computed, onMounted, ref } from 'vue';
+import { computed, inject, onMounted, ref } from 'vue';
 import { useRuntimeConfig, useToast } from '#imports';
 import MarketplaceFailure from './MarketplaceFailure.vue';
 import {
@@ -25,6 +25,7 @@ import type {
     MarketplaceInstallTarget,
     MarketplacePreflight,
 } from '~/composables/marketplace/useMarketplace';
+import type { AcquisitionStatusView } from '~~/shared/plugins/acquisition/contracts';
 import {
     marketplacePluginDeepLink,
     marketplaceTargetKey,
@@ -35,7 +36,14 @@ import {
     useMarketplaceDetail,
     useMarketplaceInstall,
     useMarketplacePreflight,
+    useMarketplaceInstalled,
 } from '~/composables/marketplace/useMarketplace';
+import { useDashboardNavigation } from '~/composables/dashboard/useDashboardPlugins';
+import { setMarketplaceSetupPlugin } from '~/composables/marketplace/useMarketplaceSetup';
+import {
+    getPortableClientSource,
+} from '~/composables/plugins/portable-client-runtime';
+import { openPortablePane } from '~/composables/plugins/portable-pane';
 
 const toast = useToast();
 const catalog = useMarketplaceCatalog();
@@ -44,16 +52,52 @@ const preflight = useMarketplacePreflight();
 const install = useMarketplaceInstall();
 const consent = useMarketplaceConsent();
 const account = useMarketplaceAccount();
+const installed = useMarketplaceInstalled();
+const navigation = useDashboardNavigation();
+const closeDashboard = inject<() => void>('or3:dashboard:close', () => {});
 
 const selectedPluginId = ref<string | null>(null);
 const adminRequestCopied = ref(false);
 /** Confirmation the exact installed package runs in this browser/workspace. */
 const confirmationBusy = ref(false);
+/** Keep the just-installed reviewed tuple available after preflight becomes blocked as installed. */
+const confirmationTarget = ref<MarketplaceInstallTarget | null>(null);
+const installedActionBusy = ref<string | null>(null);
 /** Search field keeps focus after the detail closes, so keyboard users land somewhere predictable. */
 const searchField = ref<{ $el?: unknown } | null>(null);
+/** Pending debounce for search-as-you-type, so one keystroke is not one request. */
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Apply the current search term immediately (Enter, Refresh, or clearing). */
+function applySearchNow(): void {
+    if (searchTimer !== null) {
+        clearTimeout(searchTimer);
+        searchTimer = null;
+    }
+    void Promise.all([catalog.load(), installed.load()]);
+}
+
+/**
+ * The field filters as the operator types: requiring Enter left the visible
+ * catalog and the typed term disagreeing until they pressed a key nothing on
+ * screen asked for.
+ */
+function onSearchInput(): void {
+    if (searchTimer !== null) clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+        searchTimer = null;
+        void catalog.load();
+    }, 300);
+}
+
+function clearSearch(): void {
+    catalog.search.value = '';
+    applySearchNow();
+}
 
 function closeDetail(): void {
     selectedPluginId.value = null;
+    confirmationTarget.value = null;
     install.detachActivationConfirmation();
     const input = searchField.value?.$el;
     if (input instanceof HTMLInputElement) input.focus();
@@ -76,7 +120,7 @@ const browserEngine = ref<string | null>(null);
 
 onMounted(async () => {
     browserEngine.value = detectBrowserEngine();
-    await Promise.all([catalog.load(), account.load()]);
+    await Promise.all([catalog.load(), account.load(), installed.load()]);
     // A request link selects one plugin: open it rather than dropping the reader
     // on the catalog. The dashboard query is read from the document URL because
     // the marketplace runs inside the shell's modal, not on a route of its own.
@@ -98,6 +142,7 @@ onMounted(async () => {
  */
 async function openDetail(pluginId: string): Promise<void> {
     selectedPluginId.value = pluginId;
+    confirmationTarget.value = null;
     approvedTargetKey.value = null;
     install.reset();
     detail.clear();
@@ -173,6 +218,124 @@ function boundPreflight(): MarketplacePreflight | null {
 const selectedRelease = computed(() => boundPreflight()?.release ?? null);
 const selectedBlocks = computed(() => boundPreflight()?.blocks ?? []);
 const selectedAdvisories = computed(() => boundPreflight()?.advisories ?? null);
+const selectedPackageEntry = computed(() =>
+    installed.packages.value.find((entry) => entry.pluginId === selectedPluginId.value) ?? null
+);
+const selectedInstalledEntry = computed(() => {
+    const entry = selectedPackageEntry.value;
+    if (!entry) return null;
+    const selectedDigest =
+        entry.display?.selectedDigest ??
+        entry.pointer?.current?.packageDigest ??
+        entry.startup.selectedDigest;
+    // A candidate-only pointer is a pending acquisition, not an installed
+    // package. Keep its operation controls visible so setup/retry/cancel can
+    // recover the acquisition instead of turning it into a dead detail card.
+    return selectedDigest ? entry : null;
+});
+const selectedIsInstalled = computed(
+    () =>
+        selectedInstalledEntry.value !== null ||
+        (selectedPackageEntry.value === null &&
+            selectedBlocks.value.some((block) => block.code === 'already-installed'))
+);
+const selectedBlocksForDisplay = computed(() =>
+    selectedIsInstalled.value
+        ? selectedBlocks.value.filter((block) => block.code !== 'already-installed')
+        : selectedBlocks.value
+);
+
+function openConfigure(pluginId: string): void {
+    setMarketplaceSetupPlugin(pluginId);
+    void navigation.openPage('marketplace', 'configure');
+}
+
+async function openSelectedPlugin(): Promise<void> {
+    const pluginId = selectedPluginId.value;
+    if (!pluginId) return;
+    if (!getPortableClientSource(pluginId)) {
+        toast.add({
+            title: 'Plugin interface unavailable',
+            description:
+                'The plugin runtime is not available in this workspace. Configure it from the dashboard or check runtime diagnostics.',
+            color: 'warning',
+        });
+        return;
+    }
+    try {
+        await openPortablePane(pluginId);
+        closeDashboard();
+    } catch (error) {
+        toast.add({
+            title: 'Could not open plugin',
+            description:
+                error instanceof Error ? error.message : 'The workspace pane is unavailable.',
+            color: 'warning',
+        });
+    }
+}
+
+async function toggleSelectedPlugin(): Promise<void> {
+    const pluginId = selectedPluginId.value;
+    if (!pluginId || !selectedInstalledEntry.value) return;
+    installedActionBusy.value = pluginId;
+    try {
+        await installed.setEnabled(pluginId, !installed.enabled.value.includes(pluginId));
+        toast.add({
+            title: installed.enabled.value.includes(pluginId) ? 'Plugin enabled' : 'Plugin disabled',
+            color: 'success',
+        });
+    } catch (error) {
+        toast.add({
+            title: 'Could not change the workspace state',
+            description: error instanceof Error ? error.message : 'The request was refused.',
+            color: 'error',
+        });
+    } finally {
+        installedActionBusy.value = null;
+    }
+}
+
+async function uninstallSelectedPlugin(): Promise<void> {
+    const pluginId = selectedPluginId.value;
+    if (!pluginId || !selectedInstalledEntry.value) return;
+    installedActionBusy.value = pluginId;
+    try {
+        await installed.uninstall(pluginId);
+        toast.add({
+            title: 'Plugin removed',
+            description: 'Its data is kept unless you delete it explicitly.',
+            color: 'success',
+        });
+        closeDetail();
+    } catch (error) {
+        toast.add({
+            title: 'Could not remove the plugin',
+            description: error instanceof Error ? error.message : 'The request was refused.',
+            color: 'error',
+        });
+    } finally {
+        installedActionBusy.value = null;
+    }
+}
+
+async function rollbackSelectedPlugin(): Promise<void> {
+    const pluginId = selectedPluginId.value;
+    if (!pluginId || !selectedInstalledEntry.value?.pointer?.previous) return;
+    installedActionBusy.value = pluginId;
+    try {
+        await installed.rollback(pluginId);
+        toast.add({ title: 'Rolled back to the previous version', color: 'success' });
+    } catch (error) {
+        toast.add({
+            title: 'Rollback was refused',
+            description: error instanceof Error ? error.message : 'State compatibility may block it.',
+            color: 'error',
+        });
+    } finally {
+        installedActionBusy.value = null;
+    }
+}
 
 /** The exact reviewed target; null until the matching preflight is complete. */
 const installTarget = computed<MarketplaceInstallTarget | null>(() => {
@@ -196,6 +359,22 @@ const installTarget = computed<MarketplaceInstallTarget | null>(() => {
 function signedGrants(release: MarketplacePreflight['release']): readonly string[] {
     const value: unknown = release?.requestedGrants;
     return Array.isArray(value) ? value.filter((grant): grant is string => typeof grant === 'string') : [];
+}
+
+/** Rebuild the confirmation tuple when a resumed operation outlives its preflight answer. */
+function targetFromAcquisition(
+    operation: AcquisitionStatusView | null
+): MarketplaceInstallTarget | null {
+    if (!operation) return null;
+    return {
+        pluginId: operation.pluginId,
+        releaseId: operation.release.releaseId,
+        version: operation.version,
+        archiveSha256: operation.release.archiveSha256,
+        packageTreeSha256: operation.release.packageTreeSha256,
+        authoritySha256: operation.release.authoritySha256,
+        requestedGrants: [],
+    };
 }
 
 const installTargetKey = computed(() =>
@@ -225,6 +404,36 @@ const grantsApproved = computed({
 const consentOutstanding = computed(
     () => consentRequired.value && !grantsApproved.value
 );
+
+/**
+ * A recorded outcome the operator can neither retry nor cancel is history: the
+ * durable record stays for diagnostics, but the panel must be clearable.
+ * Otherwise a finished failure owned the detail view with no control that did
+ * anything.
+ */
+const operationIsHistory = computed(() => {
+    const current = install.status.value;
+    if (!current) return false;
+    return !install.canCancel.value && !current.retryable && !current.needsSetup;
+});
+
+/** Keep activation feedback visible while a just-completed install is being confirmed. */
+const showInstallStatus = computed(() => {
+    const current = install.status.value;
+    if (!current) return false;
+    return (
+        !selectedIsInstalled.value ||
+        confirmationBusy.value ||
+        install.activationConfirmation.value !== null ||
+        install.activationTimedOut.value
+    );
+});
+
+/** Clear the displayed outcome for good in this browser. The server record stays. */
+function dismissOperation(): void {
+    confirmationTarget.value = null;
+    install.dismiss();
+}
 
 /** Qualified browser list the preflight answer exposes for the client profile. */
 function qualifiedBrowsersFrom(answer: MarketplacePreflight | null): readonly string[] {
@@ -328,6 +537,7 @@ async function runInstall(): Promise<void> {
     if (result.status === 'completed') {
         approvedTargetKey.value = null;
         await preflight.run(target.pluginId, undefined, browserEngine.value ?? undefined);
+        await installed.load();
         await confirmRunning(target);
         return;
     }
@@ -344,6 +554,7 @@ async function runInstall(): Promise<void> {
  * separately: a timeout keeps the install and offers retry/diagnostics.
  */
 async function confirmRunning(target: MarketplaceInstallTarget): Promise<void> {
+    confirmationTarget.value = target;
     const workspaceId = install.status.value?.workspaceId;
     if (!workspaceId) {
         toast.add({
@@ -379,9 +590,9 @@ async function confirmRunning(target: MarketplaceInstallTarget): Promise<void> {
 }
 
 async function retryConfirmation(): Promise<void> {
-    const target = installTarget.value;
+    const target = confirmationTarget.value ?? installTarget.value;
     const workspaceId = install.status.value?.workspaceId;
-    if (!target || !workspaceId) return;
+    if (!target || target.pluginId !== selectedPluginId.value || !workspaceId) return;
     confirmationBusy.value = true;
     try {
         await install.retryActivationConfirmation({
@@ -422,11 +633,13 @@ async function copyInstallDiagnostics(): Promise<void> {
 async function retryInstall(): Promise<void> {
     const pluginId = selectedPluginId.value;
     if (!pluginId) return;
+    const targetBeforeRetry = installTarget.value ?? confirmationTarget.value;
     const result = await install.retry(pluginId);
     if (result?.status === 'completed') {
-        const target = installTarget.value;
+        const target = targetBeforeRetry ?? targetFromAcquisition(result);
         await preflight.run(pluginId, undefined, browserEngine.value ?? undefined);
-        if (target && sameMarketplaceTarget(installTarget.value, target)) {
+        await installed.load();
+        if (target) {
             await confirmRunning(target);
         } else {
             toast.add({ title: 'Installed', description: `${detailName.value} was installed. Check Installed for workspace activation and setup.`, color: 'success' });
@@ -462,8 +675,8 @@ function blockActionLabel(block: { action: string }): string | null {
 </script>
 
 <template>
-    <div class="flex flex-col gap-5" data-testid="marketplace-discover">
-        <div class="flex flex-wrap items-center gap-2">
+    <div class="dashboard-page-frame" data-testid="marketplace-discover">
+        <div class="flex flex-wrap items-center gap-3">
             <UInput
                 ref="searchField"
                 v-model="catalog.search.value"
@@ -471,14 +684,26 @@ function blockActionLabel(block: { action: string }): string | null {
                 placeholder="Search the marketplace"
                 class="min-w-56 flex-1"
                 data-testid="marketplace-search"
-                @keydown.enter="catalog.load()"
+                :aria-busy="catalog.loading.value"
+                @input="onSearchInput"
+                @keydown.enter="applySearchNow"
+            />
+            <UButton
+                v-if="catalog.search.value.trim().length > 0"
+                color="neutral"
+                variant="ghost"
+                icon="i-lucide-x"
+                aria-label="Clear search"
+                data-testid="marketplace-search-clear"
+                @click="clearSearch"
             />
             <UButton
                 color="neutral"
                 variant="soft"
                 icon="i-lucide-refresh-cw"
                 :loading="catalog.loading.value"
-                @click="catalog.load()"
+                :aria-busy="catalog.loading.value"
+                @click="applySearchNow"
             >
                 Refresh
             </UButton>
@@ -506,11 +731,11 @@ function blockActionLabel(block: { action: string }): string | null {
             :description="catalog.notice.value"
         />
 
-        <div v-if="selectedPluginId" class="flex flex-col gap-4 rounded-lg border border-(--ui-border) p-4" data-testid="marketplace-detail">
-            <div class="flex items-start justify-between gap-3">
+        <div v-if="selectedPluginId" class="flex flex-col gap-5 rounded-lg border border-(--ui-border) p-5" data-testid="marketplace-detail">
+            <div class="flex items-start justify-between gap-4">
                 <div>
                     <h3 class="text-lg font-medium">{{ detailName }}</h3>
-                    <p class="text-sm text-(--ui-text-muted)">{{ summary }}</p>
+                    <p class="mt-1 text-sm text-(--ui-text-muted)">{{ summary }}</p>
                 </div>
                 <UButton
                     color="neutral"
@@ -521,7 +746,7 @@ function blockActionLabel(block: { action: string }): string | null {
                 />
             </div>
 
-            <dl v-if="selectedRelease" class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            <dl v-if="selectedRelease" class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
                 <dt class="text-(--ui-text-muted)">Version</dt>
                 <dd>{{ selectedRelease.version }}</dd>
                 <dt class="text-(--ui-text-muted)">Profile</dt>
@@ -551,7 +776,7 @@ function blockActionLabel(block: { action: string }): string | null {
             />
 
             <UAlert
-                v-for="block in selectedBlocks"
+                v-for="block in selectedBlocksForDisplay"
                 :key="block.code"
                 color="warning"
                 variant="subtle"
@@ -560,8 +785,88 @@ function blockActionLabel(block: { action: string }): string | null {
                 data-testid="marketplace-block"
             />
 
+            <section
+                v-if="selectedIsInstalled"
+                class="flex flex-col gap-3 rounded-lg border border-(--ui-border) bg-(--ui-success-container)/30 p-4"
+                data-testid="marketplace-installed-actions"
+            >
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <p class="font-medium">Installed in this workspace</p>
+                        <p class="text-sm text-(--ui-text-muted)">
+                            Version {{ selectedInstalledEntry?.display?.version ?? selectedRelease?.version ?? 'unknown' }} is selected for this plugin.
+                        </p>
+                    </div>
+                    <UBadge color="success" variant="soft">Installed</UBadge>
+                </div>
+                <p class="text-sm text-(--ui-text-muted)">
+                    <template v-if="selectedInstalledEntry">
+                        Manage the plugin here instead of starting another install.
+                    </template>
+                    <template v-else>
+                        This plugin is installed in the workspace. Configure it here;
+                        workspace administration controls are available to administrators.
+                    </template>
+                </p>
+                <div class="flex flex-wrap gap-2">
+                    <UButton
+                        v-if="selectedInstalledEntry?.display?.canOpen"
+                        color="primary"
+                        variant="soft"
+                        icon="i-lucide-play"
+                        :disabled="!installed.enabled.value.includes(selectedInstalledEntry?.pluginId ?? '')"
+                        :loading="installedActionBusy === selectedInstalledEntry?.pluginId"
+                        data-testid="marketplace-installed-open"
+                        @click="openSelectedPlugin"
+                    >
+                        Open
+                    </UButton>
+                    <UButton
+                        color="neutral"
+                        variant="soft"
+                        icon="i-lucide-settings-2"
+                        data-testid="marketplace-installed-configure"
+                        @click="openConfigure(selectedPluginId!)"
+                    >
+                        Configure
+                    </UButton>
+                    <UButton
+                        v-if="selectedInstalledEntry"
+                        color="neutral"
+                        variant="soft"
+                        :loading="installedActionBusy === selectedInstalledEntry?.pluginId"
+                        data-testid="marketplace-installed-toggle"
+                        @click="toggleSelectedPlugin"
+                    >
+                        {{ installed.enabled.value.includes(selectedInstalledEntry?.pluginId ?? '') ? 'Disable' : 'Enable' }}
+                    </UButton>
+                    <UButton
+                        v-if="selectedInstalledEntry?.pointer?.previous"
+                        color="neutral"
+                        variant="ghost"
+                        icon="i-lucide-undo-2"
+                        :loading="installedActionBusy === selectedInstalledEntry?.pluginId"
+                        data-testid="marketplace-installed-rollback"
+                        @click="rollbackSelectedPlugin"
+                    >
+                        Roll back
+                    </UButton>
+                    <UButton
+                        v-if="selectedInstalledEntry"
+                        color="error"
+                        variant="ghost"
+                        icon="i-lucide-trash-2"
+                        :loading="installedActionBusy === selectedInstalledEntry?.pluginId"
+                        data-testid="marketplace-installed-uninstall"
+                        @click="uninstallSelectedPlugin"
+                    >
+                        Uninstall
+                    </UButton>
+                </div>
+            </section>
+
             <UAlert
-                v-if="!installSupported"
+                v-if="!selectedIsInstalled && !installSupported"
                 color="info"
                 variant="subtle"
                 title="Installation is not available in this mode"
@@ -570,7 +875,7 @@ function blockActionLabel(block: { action: string }): string | null {
             />
 
             <UAlert
-                v-if="browserUnsupported"
+                v-if="!selectedIsInstalled && browserUnsupported"
                 color="warning"
                 variant="subtle"
                 title="This browser cannot install this plugin"
@@ -579,8 +884,8 @@ function blockActionLabel(block: { action: string }): string | null {
             />
 
             <div
-                v-if="installSupported && account.canInstall.value && consentRequired && browserQualified"
-                class="flex flex-col gap-2 rounded-lg border border-(--ui-border) p-3"
+                v-if="!selectedIsInstalled && installSupported && account.canInstall.value && consentRequired && browserQualified"
+                class="flex flex-col gap-3 rounded-lg border border-(--ui-border) p-4"
                 data-testid="marketplace-grant-consent"
             >
                 <p class="text-sm font-medium">Permissions this plugin asks for</p>
@@ -592,7 +897,7 @@ function blockActionLabel(block: { action: string }): string | null {
                         <code>{{ grant }}</code>
                     </li>
                 </ul>
-                <details v-if="selectedRelease?.authority" class="rounded border border-(--ui-border) p-2 text-xs">
+                <details v-if="selectedRelease?.authority" class="rounded-lg border border-(--ui-border) p-3 text-xs">
                     <summary class="cursor-pointer font-medium">Review complete authority</summary>
                     <div class="mt-2 flex flex-col gap-2">
                         <p><strong>Trust:</strong> {{ selectedRelease.authority.trust }}</p>
@@ -628,9 +933,9 @@ function blockActionLabel(block: { action: string }): string | null {
                 </label>
             </div>
 
-            <div class="flex flex-wrap items-center gap-2">
+            <div v-if="!selectedIsInstalled" class="flex flex-wrap items-center gap-3">
                 <UButton
-                    v-if="installSupported && account.canInstall.value && browserQualified"
+                    v-if="!selectedIsInstalled && installSupported && account.canInstall.value && browserQualified"
                     :disabled="!installTarget || install.running.value || consentOutstanding"
                     :loading="install.running.value || consent.saving.value"
                     icon="i-lucide-download"
@@ -639,7 +944,7 @@ function blockActionLabel(block: { action: string }): string | null {
                 >
                     Install
                 </UButton>
-                <template v-else-if="browserUnsupported">
+                <template v-else-if="!selectedIsInstalled && browserUnsupported">
                     <UButton
                         color="warning"
                         variant="soft"
@@ -653,7 +958,7 @@ function blockActionLabel(block: { action: string }): string | null {
                         You can still read the listing here.
                     </span>
                 </template>
-                <template v-else-if="installSupported && canRequestFromAdmin">
+                <template v-else-if="!selectedIsInstalled && installSupported && canRequestFromAdmin">
                     <UButton
                         color="neutral"
                         variant="soft"
@@ -669,7 +974,7 @@ function blockActionLabel(block: { action: string }): string | null {
                 </template>
             </div>
 
-            <div v-if="install.status.value" class="flex flex-col gap-2 text-sm" data-testid="marketplace-install-status">
+            <div v-if="showInstallStatus" class="flex flex-col gap-3 text-sm" data-testid="marketplace-install-status">
                 <div class="flex items-center gap-2">
                     <UBadge color="neutral" variant="subtle">{{ install.status.value.status }}</UBadge>
                     <span>{{ install.status.value.stage }} ({{ install.status.value.percentComplete }}%)</span>
@@ -679,7 +984,8 @@ function blockActionLabel(block: { action: string }): string | null {
                 </p>
                 <MarketplaceFailure v-if="install.status.value.failure" :operation="install.status.value" />
                 <p v-if="['failed', 'blocked'].includes(install.status.value.status)" class="text-(--ui-text-muted)">
-                    This is a saved installation result. Refreshing does not retry it.
+                    This is a saved installation result. Refreshing does not retry it; the record is
+                    kept for diagnostics until you dismiss it.
                 </p>
                 <p v-if="install.status.value.status === 'completed'" class="text-(--ui-text-muted)">
                     This version is already selected and cannot be cancelled. Use Installed → Roll back where a previous version exists.
@@ -689,7 +995,7 @@ function blockActionLabel(block: { action: string }): string | null {
                     role="status"
                     aria-live="polite"
                     aria-atomic="true"
-                    class="flex flex-col gap-2 rounded-lg border border-(--ui-border) p-3"
+                    class="flex flex-col gap-3 rounded-lg border border-(--ui-border) p-4"
                     data-testid="marketplace-activation-confirmation"
                 >
                     <p v-if="confirmationBusy" class="text-(--ui-text-muted)">
@@ -724,7 +1030,7 @@ function blockActionLabel(block: { action: string }): string | null {
                         </UButton>
                     </div>
                 </div>
-                <div class="flex gap-2">
+                <div class="flex flex-wrap gap-2">
                     <UButton
                         v-if="install.status.value.retryable"
                         size="sm"
@@ -754,33 +1060,50 @@ function blockActionLabel(block: { action: string }): string | null {
                         color="primary"
                         variant="soft"
                         icon="i-lucide-settings"
-                        :to="{
-                            path: `/plugins/${selectedPluginId}/setup`,
-                            query: install.operationId.value
-                                ? { operationId: install.operationId.value }
-                                : undefined,
-                        }"
+                        @click="openConfigure(selectedPluginId!)"
                     >
                         Finish setup
+                    </UButton>
+                    <UButton
+                        v-if="operationIsHistory"
+                        size="sm"
+                        color="neutral"
+                        variant="ghost"
+                        icon="i-lucide-x"
+                        data-testid="marketplace-dismiss-operation"
+                        @click="dismissOperation"
+                    >
+                        Dismiss
                     </UButton>
                 </div>
             </div>
             <p v-if="install.error.value" role="alert" class="text-sm">{{ install.error.value }}</p>
         </div>
 
-        <div v-if="catalog.loading.value" class="text-sm text-(--ui-text-muted)">Loading plugins…</div>
+        <!-- Keep the previous results on screen while a new term loads, so typing
+             does not flash the catalog away and back on every keystroke. -->
+        <div
+            v-if="catalog.loading.value && catalog.cards.value.length === 0"
+            class="text-sm text-(--ui-text-muted)"
+        >
+            Loading plugins…
+        </div>
         <div v-else-if="catalog.cards.value.length === 0 && catalog.configured.value" class="text-sm text-(--ui-text-muted)">
             No published plugins matched.
         </div>
-        <ul v-else class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <ul
+            v-else
+            class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+            :aria-busy="catalog.loading.value"
+        >
             <li
                 v-for="card in catalog.cards.value"
                 :key="pluginIdOf(card)"
-                class="rounded-lg border border-(--ui-border) p-3"
+                class="rounded-lg border border-(--ui-border) p-4"
             >
                 <button
                     type="button"
-                    class="flex w-full flex-col items-start gap-1 text-left"
+                    class="flex w-full flex-col items-start gap-2 text-left"
                     data-testid="marketplace-card"
                     @click="openDetail(pluginIdOf(card))"
                 >

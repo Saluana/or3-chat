@@ -15,6 +15,7 @@ import { stripBrokenOpenRouterSourcemapsPlugin } from './plugins/vite-strip-brok
 import { resolveConnectCloudflareReadiness } from './shared/cloud/wizard/cloudflare-attestation';
 import { DEFAULT_WEBHOOKS_BLOCK_PRIVATE_IPS } from './shared/config/constants';
 import { resolveDevProviderModule } from './shared/dev/local-providers';
+import { resolveLocalPackageAliases } from './shared/dev/local-packages';
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
@@ -62,45 +63,14 @@ const sqliteNativeTraceIncludes =
           ? []
           : [resolve(__dirname, 'node_modules/better-sqlite3/lib/index.js')];
 
-const useLocalPackages = process.env.OR3_USE_LOCAL_PACKAGES === 'true';
-const localPackageCandidates = [
-    {
-        find: /^or3-scroll$/,
-        replacement: resolve(__dirname, '../or3-vsc/src/lib/index.ts'),
-    },
-    {
-        find: /^or3-workflow-vue\/style\.css$/,
-        replacement: resolve(
-            __dirname,
-            '../or3-workflows/packages/workflow-vue/src/styles/variables.css',
-        ),
-    },
-    {
-        find: /^or3-workflow-vue$/,
-        replacement: resolve(
-            __dirname,
-            '../or3-workflows/packages/workflow-vue/src/index.ts',
-        ),
-    },
-    {
-        find: /^or3-workflow-core$/,
-        replacement: resolve(
-            __dirname,
-            '../or3-workflows/packages/workflow-core/src/index.ts',
-        ),
-    },
-];
-const localPackageAliases = useLocalPackages
-    ? localPackageCandidates.filter(({ replacement }) =>
-          existsSync(replacement)
-      )
-    : [];
-const localWorkflowCoreSource = resolve(
-    __dirname,
-    '../or3-workflows/packages/workflow-core/src/index.ts',
-);
-const hasLocalWorkflowCoreSource =
-    useLocalPackages && existsSync(localWorkflowCoreSource);
+// Sibling source checkouts are used for every `nuxt dev` run and fall back to
+// the installed registry package per alias, so one missing or renamed checkout
+// never breaks the app.
+const localPackages = resolveLocalPackageAliases(__dirname);
+const localPackageAliases = [...localPackages.aliases];
+const localWorkflowCoreSource = localPackageAliases.find(
+    ({ find }) => find instanceof RegExp && find.source === '^or3-workflow-core$',
+)?.replacement;
 
 // The SDK checkout exposes TypeScript source through its `exports`. Vite can
 // transpile that source, but Nitro's Rollup pipeline cannot parse TypeScript
@@ -933,7 +903,7 @@ export default defineNuxtConfig({
         // Keep server-side workflow execution on the same sibling source tree
         // that Vite uses for the editor during local multi-repo development.
         alias: {
-            ...(hasLocalWorkflowCoreSource
+            ...(localWorkflowCoreSource
                 ? { 'or3-workflow-core': localWorkflowCoreSource }
                 : {}),
             ...pluginSdkSourceAliases,
@@ -1414,6 +1384,7 @@ export default defineNuxtConfig({
                     syncProvider: or3CloudConfig.sync.provider,
                     storageEnabled: effectiveStorageEnabled,
                     storageProvider: or3CloudConfig.storage.provider,
+                    localPackages: localPackages.selected,
                 });
             }, 1200);
         },

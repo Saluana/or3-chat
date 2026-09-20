@@ -14,7 +14,9 @@ workspace; clicking Install again does not create a second copy. Candidate
 preparation also refuses the already-current package without changing its pointer.
 
 For enabled portable packages, **Open** opens the plugin's running dashboard
-surface; **Configure** opens setup. Disabled packages must be enabled first.
+surface. **Configure** opens the Marketplace dashboard's Configure page, with a
+back button to Installed; the direct `/plugins/<pluginId>/setup` route remains
+available for deep links. Disabled packages must be enabled first.
 The instance also needs `OR3_PLUGIN_MODULE_LOADER_V2_ENABLED=true` and the target
 workspace must be included in `OR3_PLUGIN_MODULE_LOADER_V2_WORKSPACE_IDS` when that
 allowlist is set. A stored or enabled package alone does not establish runtime

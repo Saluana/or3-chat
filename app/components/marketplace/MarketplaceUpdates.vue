@@ -9,6 +9,7 @@
  */
 import { computed, onMounted, ref } from 'vue';
 import { useToast } from '#imports';
+import { useDashboardNavigation } from '~/composables/dashboard/useDashboardPlugins';
 import MarketplaceFailure from './MarketplaceFailure.vue';
 import { acquisitionDiagnosticReport, acquisitionFailureHelp } from '~~/shared/plugins/acquisition/failure-presentation';
 import { ACTIVATION_NOT_CONFIRMED_COPY } from '~~/shared/plugins/lifecycle/lifecycle-view';
@@ -29,8 +30,10 @@ import {
     detectBrowserEngine,
     QUALIFIED_BROWSER_ENGINES,
 } from '~~/shared/plugins/isolation/portable-bootstrap';
+import { setMarketplaceSetupPlugin } from '~/composables/marketplace/useMarketplaceSetup';
 
 const toast = useToast();
+const navigation = useDashboardNavigation();
 const installed = useMarketplaceInstalled();
 const install = useMarketplaceInstall();
 const consent = useMarketplaceConsent();
@@ -55,6 +58,11 @@ const confirmationBusy = ref<Record<string, boolean>>({});
 const confirmationFailed = ref<Record<string, boolean>>({});
 const confirmationTimedOut = ref<Record<string, boolean>>({});
 const confirmationFailureCode = ref<Record<string, string | null>>({});
+
+function openConfigure(pluginId: string): void {
+    setMarketplaceSetupPlugin(pluginId);
+    void navigation.openPage('marketplace', 'configure');
+}
 
 /** Record one confirmation outcome: status text follows the result, not the attempt. */
 function settleConfirmation(
@@ -503,9 +511,9 @@ async function activate(entry: {
 </script>
 
 <template>
-    <div class="flex flex-col gap-4" data-testid="marketplace-updates">
+    <div class="dashboard-page-frame" data-testid="marketplace-updates">
         <MarketplaceFailure v-if="install.status.value?.failure" :operation="install.status.value" />
-        <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex flex-wrap items-center justify-between gap-3">
             <p class="text-xs text-(--ui-text-muted)">
                 Checking reads the catalog. Nothing is staged until you review a release.
             </p>
@@ -526,17 +534,19 @@ async function activate(entry: {
         </p>
         <ul
             v-if="availableUpdates.length > 0"
-            class="flex flex-col gap-3"
+            class="flex flex-col gap-4"
             data-testid="marketplace-update-available"
         >
             <li
                 v-for="entry in availableUpdates"
                 :key="entry.pluginId"
-                class="flex flex-col gap-2 rounded-lg border border-(--ui-border) p-3"
+                class="flex flex-col gap-3 rounded-lg border border-(--ui-border) p-4"
             >
                 <div class="flex flex-wrap items-center gap-2">
                     <span class="font-medium">{{ entry.pluginId }}</span>
-                    <UBadge color="info" variant="subtle">v{{ entry.latestVersion }}</UBadge>
+                    <span
+                        class="font-medium inline-flex items-center text-xs px-2 py-1 gap-1 rounded-md ring ring-inset bg-info text-[var(--md-on-info)] ring-[var(--md-info)]/25"
+                    >v{{ entry.latestVersion }}</span>
                     <span class="text-xs text-(--ui-text-muted)">
                         installed {{ entry.installedVersion }}
                     </span>
@@ -545,7 +555,7 @@ async function activate(entry: {
                     Requested authority:
                     {{ entry.release?.requestedGrants.join(', ') || 'none' }}
                 </p>
-                <details v-if="entry.release?.authority" class="rounded border border-(--ui-border) p-2 text-xs">
+                <details v-if="entry.release?.authority" class="rounded-lg border border-(--ui-border) p-3 text-xs">
                     <summary class="cursor-pointer font-medium">Review complete authority</summary>
                     <div class="mt-2 flex flex-col gap-2">
                         <p><strong>Trust:</strong> {{ entry.release.authority.trust }}</p>
@@ -599,7 +609,7 @@ async function activate(entry: {
                 </div>
             </li>
         </ul>
-        <div v-if="problemChecks.length > 0" class="flex flex-col gap-1">
+        <div v-if="problemChecks.length > 0" class="flex flex-col gap-2">
             <p
                 v-for="entry in problemChecks"
                 :key="entry.pluginId"
@@ -614,17 +624,19 @@ async function activate(entry: {
             No reviewed release is staged right now. Use “Check for updates” to look for a newer
             version.
         </div>
-        <ul v-else class="flex flex-col gap-3">
+        <ul v-else class="flex flex-col gap-4">
             <li
                 v-for="entry in candidates"
                 :key="entry.pluginId"
-                class="flex flex-col gap-2 rounded-lg border border-(--ui-border) p-3"
+                class="flex flex-col gap-3 rounded-lg border border-(--ui-border) p-4"
             >
                 <div class="flex flex-wrap items-center gap-2">
                     <span class="font-medium">{{ entry.pluginId }}</span>
-                    <UBadge color="info" variant="subtle">
+                    <span
+                        class="font-medium inline-flex items-center text-xs px-2 py-1 gap-1 rounded-md ring ring-inset bg-info text-[var(--md-on-info)] ring-[var(--md-info)]/25"
+                    >
                         candidate {{ entry.display?.candidateVersion ?? entry.display?.candidateDigest }}
-                    </UBadge>
+                    </span>
                     <span class="text-xs text-(--ui-text-muted)">
                         current {{ entry.display?.version ?? 'none' }}
                     </span>
@@ -648,7 +660,7 @@ async function activate(entry: {
                     role="status"
                     aria-live="polite"
                     aria-atomic="true"
-                    class="flex flex-col gap-2 rounded border border-(--ui-border) p-2 text-xs"
+                    class="flex flex-col gap-3 rounded-lg border border-(--ui-border) p-4 text-xs"
                     data-testid="marketplace-update-confirmation"
                 >
                     <p v-if="confirmationBusy[entry.pluginId]" class="text-(--ui-text-muted)">
@@ -705,7 +717,7 @@ async function activate(entry: {
                         size="sm"
                         color="neutral"
                         variant="ghost"
-                        :to="`/plugins/${entry.pluginId}/setup`"
+                        @click="openConfigure(entry.pluginId)"
                     >
                         Review setup
                     </UButton>
