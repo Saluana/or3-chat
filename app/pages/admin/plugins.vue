@@ -14,9 +14,22 @@
                 </UBadge>
             </div>
             <p class="text-sm opacity-70">
-                Activate plugins for the selected workspace. Installation and
-                diagnostics are available under advanced controls.
+                Manage plugins for the selected workspace. Find reviewed releases
+                in the Marketplace; runtime diagnostics are available below.
             </p>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)] p-4">
+            <div>
+                <h3 class="text-base font-medium">Marketplace</h3>
+                <p class="text-sm opacity-70">
+                    Browse and install reviewed plugins in Chat’s Dashboard.
+                    Sign in with your Chat account; the admin login is separate.
+                </p>
+            </div>
+            <UButton to="/chat?dashboard=marketplace" icon="i-lucide-store">
+                Browse Marketplace
+            </UButton>
         </div>
 
         <div

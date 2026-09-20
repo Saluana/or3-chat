@@ -93,3 +93,7 @@ OR3 repository for the full rule set.
   source file, so a missing build entry would otherwise ship a subpath that
   resolves to nothing.
 - The package bundles no third-party runtime code; see `THIRD_PARTY_NOTICES`.
+
+The V2 manifest supports optional `license` metadata containing the publisher’s
+SPDX identifier or expression. Reviewed marketplace releases require it; the
+host must not infer it from the presence of a LICENSE file.

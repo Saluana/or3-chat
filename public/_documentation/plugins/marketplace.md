@@ -4,6 +4,10 @@ Dashboard > Marketplace is the user-facing place to find, install and manage plu
 
 Discovery works on any instance. Installing requires an OR3 Cloud profile with a configured registry — a static or local build shows that installation is unsupported instead of hiding the surface.
 
+Admin > Plugins includes a **Browse Marketplace** link to this dashboard. Sign in
+with a regular Chat account: the system admin login is a separate session and
+does not make authenticated dashboard apps visible to a guest.
+
 ## Configuration
 
 The marketplace reads the same reviewed-acquisition configuration as the install pipeline:
@@ -99,3 +103,8 @@ listing labels. Hover, focus with the keyboard, or tap to read an explanation.
 Support URL is a public HTTPS help page; Privacy URL explains the plugin’s data
 use and removal, including when it does not collect data. External costs names
 any required paid services outside the marketplace price.
+
+Reviewed releases declare their SPDX license in the V2 manifest’s `license`
+field. The host preserves this bounded publisher metadata while continuing to
+reject undeclared V2 fields; the registry checks the license expression when
+reviewing the submission.

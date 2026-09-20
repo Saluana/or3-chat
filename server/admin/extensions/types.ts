@@ -348,6 +348,11 @@ export const Or3ExtensionManifestV2Schema = z
     .object({
         ...Or3ExtensionManifestFields,
         kind: z.literal('plugin'),
+        // Publisher-declared metadata signed by the registry; never infer it
+        // from the presence of LICENSE or the host's own license.
+        license: z.string().min(1).max(128)
+            .refine((value) => value.trim().length > 0 && !/[\u0000-\u001f\u007f]/.test(value), 'Invalid license metadata')
+            .optional(),
         id: V2PluginIdSchema,
         version: z.string().refine((value) => valid(value) !== null, 'Invalid semantic version'),
         engines: z

@@ -92,6 +92,15 @@ describe('extension manifest version dispatch', () => {
         ).toBe(false);
     });
 
+    it('preserves the publisher license required by reviewed marketplace releases', () => {
+        const manifest = validV2Manifest({ license: 'GPL-3.0-only' });
+        expect(Or3ExtensionManifestV2Schema.parse(manifest)).toEqual(manifest);
+    });
+
+    it.each(['', '   ', 'x'.repeat(129), 'MIT\nInjected'])('rejects malformed license metadata %j', (license) => {
+        expect(Or3ExtensionManifestV2Schema.safeParse(validV2Manifest({ license })).success).toBe(false);
+    });
+
     it('accepts the complete V2 package contract', () => {
         const manifest = validV2Manifest({
             runtime: {

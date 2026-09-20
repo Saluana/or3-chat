@@ -29,6 +29,8 @@ export interface PluginManifestV2 {
     readonly name: string;
     readonly version: string;
     readonly description?: string;
+    /** Publisher-declared SPDX license identifier or expression. */
+    readonly license?: string;
     readonly capabilities?: readonly string[];
     readonly engines: {
         readonly or3: string;
