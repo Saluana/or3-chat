@@ -58,6 +58,11 @@ export function pluginDevEnvironment(projectRoot = process.cwd()): NodeJS.Proces
             process.env.OR3_SQLITE_DB_PATH ?? join(profileRoot, 'sqlite', 'or3-sync.sqlite'),
         OR3_BASIC_AUTH_DB_PATH:
             process.env.OR3_BASIC_AUTH_DB_PATH ?? join(profileRoot, 'auth', 'or3-basic-auth.sqlite'),
+        // Admitted candidates run through the immutable package flow, which
+        // needs the V2 module loader. An explicit false keeps working but
+        // leaves nothing to run the candidate.
+        OR3_PLUGIN_MODULE_LOADER_V2_ENABLED:
+            process.env.OR3_PLUGIN_MODULE_LOADER_V2_ENABLED ?? 'true',
     };
 }
 
