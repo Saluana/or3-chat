@@ -236,10 +236,14 @@ export default defineEventHandler(async (event) => {
             }
             const expectedPackageDigest = fieldText(form ?? [], 'expectedPackageDigest');
             const expectedAuthoritySha256 = fieldText(form ?? [], 'expectedAuthoritySha256');
+            // Both digests bind the approval to the exact displayed bytes: the
+            // package digest is the receipt's, and the authority digest is the
+            // tree-derived review identity the blocked response returned (the
+            // same value the owner echoed back).
             if (
                 approved !== null &&
                 expectedPackageDigest === receipt.packageTreeSha256 &&
-                expectedAuthoritySha256 === receipt.authoritySha256
+                expectedAuthoritySha256 === grantCandidate.authoritySha256
             ) {
                 grantReview = await setPluginGrantReview(settings, workspaceId, receipt.pluginId, {
                     candidate: grantCandidate,

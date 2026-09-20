@@ -145,7 +145,7 @@ function receiptFor(overrides: Record<string, unknown> = {}) {
         packageTreeSha256: `sha256-${'a'.repeat(64)}`,
         manifestSha256: `sha256-${'b'.repeat(64)}`,
         sourceSha256: sha256Hex(SOURCE_BYTES),
-        authoritySha256: `sha256-${'c'.repeat(64)}`,
+        authoritySha256: `sha256-${'d'.repeat(64)}`,
         buildProvenanceSha256: buildProvenanceSha256(source, build),
         requiredHostFeatures: ['or3-portable-client-v1'],
         source,
@@ -279,7 +279,9 @@ describe('development admission boundary', () => {
             ...verifiableParts(receipt),
             { name: 'approvedGrants', data: Buffer.from(JSON.stringify(['settings.read'])) },
             { name: 'expectedPackageDigest', data: Buffer.from(receipt.packageTreeSha256 as string) },
-            { name: 'expectedAuthoritySha256', data: Buffer.from(receipt.authoritySha256 as string) },
+            // The echoed authority is the tree-derived review identity the
+            // blocked response returned, not the receipt's informational digest.
+            { name: 'expectedAuthoritySha256', data: Buffer.from(`sha256-${'c'.repeat(64)}`) },
         ];
         multipartParts = approvalParts;
         const result = (await handler(event)) as { ok: boolean; packageDigest: string; provenance: string };
