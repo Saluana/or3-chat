@@ -19,6 +19,16 @@ The owner-only raw-ZIP upload path (`/api/admin/extensions/install`) is separate
 
 An instance with no origin or no release key refuses every acquisition with `registry-unconfigured`.
 
+## Staging preparation (advanced source development)
+
+For a source development host, use `https://staging.marketplace.or3.chat` as the
+registry origin and pin the release public key registered by the marketplace
+administrator at `/admin/keys`. An empty trusted-key list is not install-ready.
+Restart the development server after changing its environment, and verify the
+signed checkpoint before publishing the first test plugin. Staging may use
+recent first-factor verification while its temporary MFA exception is enabled;
+this does not change host signature checks or production's MFA requirement.
+
 ## Routes
 
 - `POST /api/admin/plugins/acquisitions` — start (or refuse) an acquisition. Body: `{ pluginId, version?, workspaceId? }`. Bounded per-admin rate limit. Answers `202` with the durable operation as soon as it is recorded, before the long-running work, so the id can be polled and cancelled.
