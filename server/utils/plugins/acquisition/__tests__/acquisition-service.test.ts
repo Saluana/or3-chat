@@ -447,7 +447,7 @@ describe('recovery and cancellation (5.3)', () => {
         ).toBe(fixture.treeDigest);
     });
 
-    it('cancels a paused operation without promoting', async () => {
+    it('cancels a paused operation and releases its candidate pointer', async () => {
         const fixture = await releaseFixture({ version: '1.0.0', requiredField: true });
         const harness = makeHarness({ fixture });
         const started = await harness.start({ version: '1.0.0' });
@@ -458,7 +458,32 @@ describe('recovery and cancellation (5.3)', () => {
         expect(canceled.failure?.code).toBe('canceled');
         const pointer = await harness.services.pointers.readPointer('alpha');
         expect(pointer?.current).toBeNull();
-        expect(pointer?.candidate?.packageDigest).toBe(fixture.treeDigest);
+        // The canceled operation's candidate is released so later setup
+        // resolves the running version instead of a dead candidate.
+        expect(pointer?.candidate).toBeNull();
+    });
+
+    it('restages the candidate when retrying a canceled setup pause', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0', requiredField: true });
+        const harness = makeHarness({ fixture });
+        const started = await harness.start({ version: '1.0.0' });
+        if (!started.ok) throw new Error('expected a recorded operation');
+
+        const canceled = await harness.service.cancel(started.operation.operationId);
+        expect(canceled.status).toBe('canceled');
+        expect((await harness.services.pointers.readPointer('alpha'))?.candidate).toBeNull();
+
+        await harness.settings.set(
+            'ws-1',
+            setupValuesKey('alpha'),
+            JSON.stringify({ token: 'secret-value' })
+        );
+        const restarted = await harness.service.retry(started.operation.operationId);
+        expect(restarted.stage).toBe('receipt-recorded');
+        expect(restarted.status).toBe('completed');
+        expect(
+            (await harness.services.pointers.readPointer('alpha'))?.current?.packageDigest
+        ).toBe(fixture.treeDigest);
     });
 
     it('blocks a global promotion when another enabled workspace lacks setup', async () => {

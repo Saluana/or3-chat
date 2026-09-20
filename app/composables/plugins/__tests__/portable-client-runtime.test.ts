@@ -52,6 +52,12 @@ vi.mock('~/db/client', () => ({
     getDb: () => ({ kv: kvTable }),
 }));
 
+const reconcileMock = vi.fn();
+vi.mock('../bundled-v1-manager-runtime', () => ({
+    requestWorkspacePluginReconcile: (...args: unknown[]) =>
+        reconcileMock(...(args as [])),
+}));
+
 import {
     activatePortableClient,
     clearPortableClientSources,
@@ -110,6 +116,7 @@ function startedRuntime(label: string) {
 
 beforeEach(async () => {
     startPortableWorkerMock.mockReset();
+    reconcileMock.mockReset();
     fetchMock.mockReset();
     kvRows.clear();
     getKvByNameMock.mockClear();
@@ -174,6 +181,73 @@ describe('portable settings services', () => {
         await expect(services.settings.get({ key: 'missing' })).resolves.toEqual({
             value: null,
         });
+    });
+
+    it('binds settings writes to the executing package digest and activation', async () => {
+        fetchMock.mockResolvedValue({ ok: true });
+        const digest = `sha256-${'d'.repeat(64)}`;
+        const services = createPortableSettingsServices(
+            'sample.plugin',
+            digest,
+            'act_test_1'
+        );
+        await services.settings.set({ key: 'greeting', value: 'Hi' });
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            '/api/plugins/sample.plugin/setup-values?slot=current',
+            {
+                method: 'POST',
+                headers: { 'x-or3-plugin-intent': 'plugin' },
+                body: {
+                    values: { greeting: 'Hi' },
+                    expectedPackageDigest: digest,
+                    activationId: 'act_test_1',
+                },
+            }
+        );
+    });
+
+    it('reports a lifecycle-refused write to the stale handler without replaying it', async () => {
+        const onActivationStale = vi.fn();
+        const services = createPortableSettingsServices(
+            'sample.plugin',
+            `sha256-${'d'.repeat(64)}`,
+            'act_test_1',
+            { onActivationStale }
+        );
+        fetchMock.mockRejectedValueOnce(
+            Object.assign(new Error('Activation was revoked: plugin-disabled'), {
+                statusCode: 409,
+                data: { code: 'activation-revoked' },
+            })
+        );
+
+        await expect(
+            services.settings.set({ key: 'greeting', value: 'Hi' })
+        ).rejects.toMatchObject({ rpcCode: 'policy-denied' });
+        expect(onActivationStale).toHaveBeenCalledWith('activation-revoked');
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves an ordinary settings failure to the plugin', async () => {
+        const onActivationStale = vi.fn();
+        const services = createPortableSettingsServices(
+            'sample.plugin',
+            `sha256-${'d'.repeat(64)}`,
+            'act_test_1',
+            { onActivationStale }
+        );
+        fetchMock.mockRejectedValueOnce(
+            Object.assign(new Error('The settings changed'), {
+                statusCode: 409,
+                data: { code: 'setup-values-conflict' },
+            })
+        );
+
+        await expect(
+            services.settings.set({ key: 'greeting', value: 'Hi' })
+        ).rejects.toThrow('The settings changed');
+        expect(onActivationStale).not.toHaveBeenCalled();
     });
 });
 
@@ -408,5 +482,216 @@ describe('overlapping activations', () => {
         first.resolve(startedRuntime('first'));
         await activation;
         expect(getPortableActivation('sample.plugin')?.view).toBeNull();
+    });
+});
+
+describe('stale handle lifecycle', () => {
+    type StartedCall = {
+        methods: Array<{
+            method: string;
+            handler: (
+                params: Record<string, unknown>,
+                context: {
+                    pluginId: string;
+                    workspaceId: string;
+                    generation: number;
+                    requestId: string;
+                    signal: AbortSignal;
+                    deadlineMs: number;
+                }
+            ) => Promise<unknown>;
+        }>;
+        onEvent: (event: unknown) => void;
+    };
+
+    function networkDescriptor(): PackageV2PluginDescriptor {
+        return { ...descriptor(), effectiveGrants: ['network.http'] };
+    }
+
+    /** Serve a lifecycle refusal for capability calls; delegate the rest. */
+    function refuseCapabilityWith(code: string, message: string): void {
+        const previousFetch = globalThis.fetch;
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+                if (String(url) === '/api/plugins/isolation/capability') {
+                    return new Response(
+                        JSON.stringify({
+                            statusCode: 409,
+                            statusMessage: message,
+                            data: { code },
+                        }),
+                        { status: 409, headers: { 'content-type': 'application/json' } }
+                    );
+                }
+                return (previousFetch as typeof fetch)(url, init);
+            })
+        );
+    }
+
+    function startedCall(index: number): StartedCall {
+        const call = startPortableWorkerMock.mock.calls[index]?.[0] as
+            | StartedCall
+            | undefined;
+        if (!call) throw new Error('Expected the sandbox start to be attempted');
+        return call;
+    }
+
+    it('stops the matching activation when the server reports a stale handle', async () => {
+        // Installed before activation: the capability transport captures
+        // `fetch` when it is created.
+        refuseCapabilityWith('activation-expired', 'Activation has expired; start the plugin again');
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('stale'));
+        const activation = await activatePortableClient({
+            descriptor: networkDescriptor(),
+            workspaceId: 'ws-1',
+        });
+        expect(activation.status).toBe('active');
+
+        const call = startedCall(0);
+        call.onEvent({
+            status: 'rendered',
+            title: 'Summary',
+            nodes: [{ type: 'text', text: 'hello' }],
+        });
+        expect(getPortableActivation('sample.plugin')?.view?.nodes).toHaveLength(1);
+
+        const complete = call.methods.find((spec) => spec.method === 'ai.complete');
+        if (!complete) throw new Error('Expected the ai.complete capability to be registered');
+        // The plugin sees the generic RPC vocabulary, not handle internals.
+        await expect(
+            complete.handler(
+                { model: 'm', prompt: 'p' },
+                {
+                    pluginId: 'sample.plugin',
+                    workspaceId: 'ws-1',
+                    generation: activation.generation,
+                    requestId: 'rpc-1',
+                    signal: new AbortController().signal,
+                    deadlineMs: 5_000,
+                }
+            )
+        ).rejects.toMatchObject({ rpcCode: 'policy-denied' });
+
+        // The host stops the matching activation, keeps the rendered state
+        // for the restart surface, revokes the dead handle and refreshes the
+        // package source — without replaying the failed operation.
+        const stopped = getPortableActivation('sample.plugin');
+        expect(stopped?.status).toBe('stopped');
+        expect(stopped?.blockCode).toBe('activation-expired');
+        expect(stopped?.blockMessage).toContain('expired');
+        expect(stopped?.view?.nodes).toHaveLength(1);
+        expect(revocationRequests).toEqual(['act_test_1']);
+        expect(reconcileMock).toHaveBeenCalledWith('manifest-revision-change');
+    });
+
+    it('ignores a stale refusal for a superseded generation', async () => {
+        refuseCapabilityWith('activation-revoked', 'Activation was revoked: plugin-disabled');
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('superseded'));
+        const first = await activatePortableClient({
+            descriptor: networkDescriptor(),
+            workspaceId: 'ws-1',
+        });
+        const firstCall = startedCall(0);
+
+        await deactivatePortableClient('sample.plugin');
+        const second = await activatePortableClient({
+            descriptor: networkDescriptor(),
+            workspaceId: 'ws-1',
+        });
+        expect(second.status).toBe('active');
+        expect(second.generation).not.toBe(first.generation);
+
+        const complete = firstCall.methods.find((spec) => spec.method === 'ai.complete');
+        if (!complete) throw new Error('Expected the ai.complete capability to be registered');
+        await expect(
+            complete.handler(
+                { model: 'm', prompt: 'p' },
+                {
+                    pluginId: 'sample.plugin',
+                    workspaceId: 'ws-1',
+                    generation: first.generation,
+                    requestId: 'rpc-late',
+                    signal: new AbortController().signal,
+                    deadlineMs: 5_000,
+                }
+            )
+        ).rejects.toBeTruthy();
+
+        // The replacement activation is untouched and its handle unrevoked.
+        expect(getPortableActivation('sample.plugin')?.status).toBe('active');
+        expect(getPortableActivation('sample.plugin')?.generation).toBe(second.generation);
+        expect(revocationRequests).toEqual(['act_test_1']);
+    });
+
+    it('leaves the activation running for non-lifecycle refusals', async () => {
+        refuseCapabilityWith('budget-exceeded', 'Budget exhausted');
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('budget'));
+        const activation = await activatePortableClient({
+            descriptor: networkDescriptor(),
+            workspaceId: 'ws-1',
+        });
+        expect(activation.status).toBe('active');
+
+        const call = startedCall(0);
+        const complete = call.methods.find((spec) => spec.method === 'ai.complete');
+        if (!complete) throw new Error('Expected the ai.complete capability to be registered');
+        await expect(
+            complete.handler(
+                { model: 'm', prompt: 'p' },
+                {
+                    pluginId: 'sample.plugin',
+                    workspaceId: 'ws-1',
+                    generation: activation.generation,
+                    requestId: 'rpc-budget',
+                    signal: new AbortController().signal,
+                    deadlineMs: 5_000,
+                }
+            )
+        ).rejects.toMatchObject({ rpcCode: 'budget-exceeded' });
+
+        expect(getPortableActivation('sample.plugin')?.status).toBe('active');
+        expect(revocationRequests).toEqual([]);
+    });
+
+    it('stops the matching activation when a settings write reports a stale handle', async () => {
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('settings-stale'));
+        const activation = await activatePortableClient({
+            descriptor: descriptor(),
+            workspaceId: 'ws-1',
+        });
+        expect(activation.status).toBe('active');
+        const call = startPortableWorkerMock.mock.calls[0]?.[0] as {
+            services: {
+                settings: { set: (params: Record<string, unknown>) => Promise<unknown> };
+            };
+            onEvent: (event: unknown) => void;
+        };
+        call.onEvent({
+            status: 'rendered',
+            title: 'Summary',
+            nodes: [{ type: 'text', text: 'hello' }],
+        });
+
+        fetchMock.mockRejectedValueOnce(
+            Object.assign(new Error('Activation was revoked: plugin-disabled'), {
+                statusCode: 409,
+                data: { code: 'activation-revoked' },
+            })
+        );
+        await expect(
+            call.services.settings.set({ key: 'greeting', value: 'Hi' })
+        ).rejects.toMatchObject({ rpcCode: 'policy-denied' });
+
+        // A settings-only plugin gets the same handling as remote capabilities:
+        // the surface stops, keeps the rendered state, revokes the handle and
+        // does not replay the failed write.
+        const stopped = getPortableActivation('sample.plugin');
+        expect(stopped?.status).toBe('stopped');
+        expect(stopped?.blockCode).toBe('activation-revoked');
+        expect(stopped?.blockMessage).toContain('typed values are kept');
+        expect(stopped?.view?.nodes).toHaveLength(1);
+        expect(revocationRequests).toEqual(['act_test_1']);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 });

@@ -17,6 +17,8 @@ import type { WorkspaceSettingsStore } from '../../../admin/stores/types';
 
 const SCHEMA_VERSION = 2;
 const MAX_CAS_ATTEMPTS = 5;
+/** Structural ceiling: a window must never persist more reservations than the parser accepts. */
+export const MAX_PERSISTENT_AI_RESERVATIONS = 64;
 const KEY_PREFIX = 'plugins.ai-budget.v2.';
 /** One explicitly named, stable UTC budget window. */
 export const PLUGIN_AI_BUDGET_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -97,7 +99,7 @@ function parseBudget(raw: string | null, expectedWindowId: number, now: number):
             !Number.isFinite(value.spendUsd) ||
             value.spendUsd < 0 ||
             !Array.isArray(value.reservations) ||
-            value.reservations.length > 64 ||
+            value.reservations.length > MAX_PERSISTENT_AI_RESERVATIONS ||
             value.reservations.some(
                 (reservation) =>
                     !reservation ||
@@ -294,6 +296,15 @@ export async function reservePersistentPluginAiSpend(input: {
         now,
         windowId,
         update: (current) => {
+            // Structural ceiling is enforced inside the CAS loop, after expired
+            // reservations have been recovered, so a successful write can never
+            // create state the next read considers corrupt.
+            if (current.reservations.length >= MAX_PERSISTENT_AI_RESERVATIONS) {
+                return {
+                    code: 'budget-exceeded',
+                    message: `Too many in-flight plugin AI reservations (limit ${MAX_PERSISTENT_AI_RESERVATIONS})`,
+                };
+            }
             const committed =
                 current.spendUsd +
                 current.reservations.reduce((total, reservation) => total + reservation.amountUsd, 0) +

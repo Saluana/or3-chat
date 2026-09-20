@@ -49,10 +49,12 @@ import {
     type HostFrameElementPort,
 } from '~~/shared/plugins/isolation/portable-frame-transport';
 import {
+    CAPABILITY_LIFECYCLE_CODES,
     REMOTE_CAPABILITY_METHODS,
     createHttpCapabilityTransport,
     createRemoteCapabilityMethods,
 } from '~~/shared/plugins/isolation/capability-bridge';
+import { requestWorkspacePluginReconcile } from './bundled-v1-manager-runtime';
 import { resolvePackageDescriptor } from '~~/shared/plugins/descriptor-resolver';
 import { getKvByName, hardDeleteKvByName, setKvByName } from '~/db/kv';
 import { getDb } from '~/db/client';
@@ -166,6 +168,24 @@ export function addWindowMessageListener(
 }
 
 /**
+ * Lifecycle refusal code carried by a settings-save HTTP failure. The route
+ * answers stale/revoked/disabled handles with `data.code`, the same vocabulary
+ * the capability bridge treats as activation death.
+ */
+function settingsLifecycleCode(error: unknown): string | null {
+    const data = (error as { data?: unknown } | null)?.data;
+    if (!data || typeof data !== 'object') return null;
+    const record = data as { code?: unknown; rpcCode?: unknown };
+    const code =
+        typeof record.code === 'string'
+            ? record.code
+            : typeof record.rpcCode === 'string'
+              ? record.rpcCode
+              : null;
+    return code !== null && CAPABILITY_LIFECYCLE_CODES.has(code) ? code : null;
+}
+
+/**
  * Settings are workspace-scoped package settings: the same validated document
  * the setup page edits, so a plugin cannot invent keys or write secrets.
  *
@@ -174,7 +194,20 @@ export function addWindowMessageListener(
  * runtime offers sandboxes: without it a plugin's `storage.*` calls are
  * refused, so a product that persists presets must not pretend otherwise.
  */
-export function createPortableSettingsServices(pluginId: string): {
+export function createPortableSettingsServices(
+    pluginId: string,
+    packageDigest?: string | null,
+    activationId?: string | null,
+    lifecycle?: {
+        /**
+         * Invoked when a settings write is refused because the activation
+         * itself died. Runs the same epoch/generation-scoped stale handler the
+         * remote capability bridge uses, so a settings-only plugin also stops
+         * and offers an explicit restart.
+         */
+        readonly onActivationStale: (code: string) => void;
+    }
+): {
     readonly settings: {
         readonly get: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
         readonly set: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
@@ -233,16 +266,42 @@ export function createPortableSettingsServices(pluginId: string): {
                     });
                 }
                 const url: string = `/api/plugins/${pluginId}/setup-values?slot=current`;
-                await (
-                    $fetch as unknown as (
-                        input: string,
-                        options: Record<string, unknown>
-                    ) => Promise<unknown>
-                )(url, {
-                    method: 'POST',
-                    headers: { 'x-or3-plugin-intent': 'plugin' },
-                    body: { values: { [key]: params.value ?? null } },
-                });
+                try {
+                    await (
+                        $fetch as unknown as (
+                            input: string,
+                            options: Record<string, unknown>
+                        ) => Promise<unknown>
+                    )(url, {
+                        method: 'POST',
+                        headers: { 'x-or3-plugin-intent': 'plugin' },
+                        // The digest this activation is executing binds the write:
+                        // after a promotion the old activation's save is refused
+                        // instead of landing in the new package's configuration.
+                        // The activation handle proves the writer is still the
+                        // live, enabled, unrevoked activation for those bytes.
+                        body: {
+                            values: { [key]: params.value ?? null },
+                            ...(packageDigest ? { expectedPackageDigest: packageDigest } : {}),
+                            ...(activationId ? { activationId } : {}),
+                        },
+                    });
+                } catch (error) {
+                    const code = settingsLifecycleCode(error);
+                    if (code) {
+                        // The failed write is never replayed: the host stops the
+                        // matching activation, keeps the rendered view (and the
+                        // user's typed values), and requires an explicit restart.
+                        lifecycle?.onActivationStale(code);
+                        const failure =
+                            error instanceof Error
+                                ? error
+                                : new Error('The settings write was refused');
+                        Object.assign(failure, { rpcCode: 'policy-denied' });
+                        throw failure;
+                    }
+                    throw error;
+                }
                 return { ok: true };
             },
             async list() {
@@ -369,11 +428,16 @@ async function mintHostActivation(
     }
 }
 
-/** Best-effort, authenticated revocation for client stop/logout/workspace switch. */
-async function revokeHostActivationHandle(activationId: string): Promise<void> {
-    if (!activationId) return;
+/**
+ * Best-effort, authenticated revocation for client stop/logout/workspace
+ * switch. Returns whether the server confirmed the teardown: callers run
+ * while the session is still valid, so a refusal is unexpected and worth
+ * surfacing in development instead of silently leaving a live handle behind.
+ */
+async function revokeHostActivationHandle(activationId: string): Promise<boolean> {
+    if (!activationId) return true;
     try {
-        await fetch('/api/plugins/isolation/activation', {
+        const response = await fetch('/api/plugins/isolation/activation', {
             method: 'DELETE',
             credentials: 'same-origin',
             keepalive: true,
@@ -383,8 +447,15 @@ async function revokeHostActivationHandle(activationId: string): Promise<void> {
             },
             body: JSON.stringify({ activationId }),
         });
+        if (!response.ok && import.meta.dev) {
+            console.warn(
+                `[portable-client] activation teardown was not confirmed (${response.status})`
+            );
+        }
+        return response.ok;
     } catch {
         // The server's TTL remains the fallback when the tab is already offline.
+        return false;
     }
 }
 
@@ -569,12 +640,29 @@ export async function activatePortableClient(
         workspaceId,
         generation,
         grants,
-        services: createPortableSettingsServices(pluginId),
+        services: createPortableSettingsServices(
+            pluginId,
+            descriptor.artifact.packageDigest,
+            minted.activationId,
+            {
+                // Settings-only plugins get the same lifecycle handling as
+                // remote capabilities: a refused save stops this activation.
+                onActivationStale: (code) =>
+                    markPortableClientActivationStale(pluginId, epoch, generation, code),
+            }
+        ),
         methods: createRemoteCapabilityMethods({
             transport,
             session: () => ({ activationId }),
             grants,
             capabilities: Object.values(REMOTE_CAPABILITY_METHODS),
+            // A lifecycle refusal means the handle itself is dead: stop the
+            // matching activation so the surface offers an explicit restart
+            // instead of staying "Running" with an unusable handle.
+            onCapabilityRefusal: (refusal) => {
+                if (!CAPABILITY_LIFECYCLE_CODES.has(refusal.code)) return;
+                markPortableClientActivationStale(pluginId, epoch, generation, refusal.code);
+            },
         }),
         loadServedBytes: async (url) => {
             const response = await fetch(url, { credentials: 'same-origin' });
@@ -773,6 +861,66 @@ export async function deactivatePortableClient(pluginId: string): Promise<void> 
     });
     runtime?.dispose();
     if (activationId) await revokeHostActivationHandle(activationId);
+}
+
+/** User-facing stopped reason for each lifecycle refusal code. */
+function staleActivationMessage(code: string): string {
+    switch (code) {
+        case 'activation-expired':
+            return "This plugin's contained session expired. Your typed values are kept below.";
+        case 'activation-unknown':
+        case 'activation-revoked':
+            return "This plugin's session was stopped on the host. Your typed values are kept below.";
+        case 'activation-stale':
+        case 'grant-review-stale':
+        case 'grant-review-unresolved':
+            return "This plugin was updated or its permissions changed. Your typed values are kept below.";
+        case 'activation-session-mismatch':
+            return 'The workspace or sign-in changed. Your typed values are kept below.';
+        case 'plugin-disabled':
+            return 'This plugin was disabled. Your typed values are kept below.';
+        case 'plugin-uninstalled':
+            return 'This plugin was uninstalled. Your typed values are kept below.';
+        case 'plugin-access-denied':
+            return 'Access to this plugin changed. Your typed values are kept below.';
+        default:
+            return "This plugin's contained session ended. Your typed values are kept below.";
+    }
+}
+
+/**
+ * Stop one activation after the server reports its handle stale. Only the
+ * matching epoch and generation stop: a late refusal for a superseded
+ * activation is ignored. Rendered state and host fields survive (the view
+ * owns the field store), the handle is revoked best-effort, and a manifest
+ * reconcile refreshes the package source so an explicit restart mints
+ * through current authority checks. The failed operation is never replayed.
+ */
+function markPortableClientActivationStale(
+    pluginId: string,
+    epoch: number,
+    generation: number,
+    code: string
+): void {
+    if (!holdsActivationEpoch(pluginId, epoch)) return;
+    const current = activations.get(pluginId);
+    if (!current || current.epoch !== epoch || current.generation !== generation) return;
+    if (current.status !== 'active' && current.status !== 'starting') return;
+    claimActivationEpoch(pluginId);
+    const stopped = activations.get(pluginId);
+    if (!stopped) return;
+    const runtime = stopped.runtime;
+    const activationId = stopped.activationId;
+    Object.assign(stopped, {
+        runtime: null,
+        activationId: null,
+        status: 'stopped',
+        blockCode: code,
+        blockMessage: staleActivationMessage(code),
+    });
+    runtime?.dispose();
+    if (activationId) void revokeHostActivationHandle(activationId);
+    requestWorkspacePluginReconcile('manifest-revision-change');
 }
 
 export function stopAllPortableClients(): void {

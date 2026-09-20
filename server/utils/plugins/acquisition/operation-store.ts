@@ -555,9 +555,17 @@ export class PluginAcquisitionOperationStore {
      * Retry a failed or blocked operation: keeps the identity and stage, clears
      * the failure, and records that another attempt is beginning. Another active
      * operation for the plugin, or a live runner on this one, refuses the retry
-     * instead of letting two runs share one staging directory.
+     * instead of letting two runs share one staging directory. A caller may
+     * restage an earlier step (and clear the recorded candidate) when the
+     * previous attempt already released state that the resumed stage expects.
      */
-    async retry(operationId: string): Promise<PluginAcquisitionOperation> {
+    async retry(
+        operationId: string,
+        options: {
+            readonly restage?: PluginAcquisitionStage;
+            readonly candidateDigest?: null;
+        } = {}
+    ): Promise<PluginAcquisitionOperation> {
         return await this.#withLock(async () => {
             const current = await this.requireRecord(operationId);
             if (current.status === 'completed') {
@@ -595,6 +603,10 @@ export class PluginAcquisitionOperationStore {
                 cancelRequested: false,
                 attempts: current.attempts + 1,
                 completedAt: null,
+                ...(options.restage === undefined ? {} : { restage: options.restage }),
+                ...(options.candidateDigest === undefined
+                    ? {}
+                    : { candidateDigest: options.candidateDigest }),
             });
         });
     }

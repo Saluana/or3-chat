@@ -621,3 +621,40 @@ describe('connection ownership and identifiers (findings 12, 20)', () => {
         expect(reloaded.connection.ownerUserId).toBe('user_1');
     });
 });
+
+describe('connection dispatch cancellation', () => {
+    it('hands the caller signal to the transport so revocation aborts the request', async () => {
+        const controller = new AbortController();
+        let observedSignal: AbortSignal | undefined;
+        const pending = dispatchApprovedConnectionOperation({
+            provider: FAKE_CONNECTION_PROVIDER,
+            operationId: 'items.list',
+            url: 'https://fake.provider.test/v1/items',
+            grantedScopes: ['read:items'],
+            credential: 'tok_live_123',
+            policy: READ_ONLY_POLICY,
+            policyRequired: true,
+            signal: controller.signal,
+            timeoutMs: 5_000,
+            transport: async (request) => {
+                observedSignal = request.signal;
+                // Mimic fetch: reject once the signal aborts.
+                await new Promise<void>((resolve, reject) => {
+                    request.signal?.addEventListener('abort', () =>
+                        reject(new Error('aborted'))
+                    );
+                });
+                return { status: 200, headers: {}, body: '{}' };
+            },
+        });
+
+        // Abort after dispatch is underway; the transport must observe it.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        controller.abort('revoked');
+        const outcome = await pending;
+        expect(observedSignal).toBe(controller.signal);
+        // The abort surfaces as a failed provider call; the RPC broker
+        // converts it to `cancelled` because its own signal is aborted.
+        expect(outcome).toMatchObject({ status: 'failed' });
+    });
+});

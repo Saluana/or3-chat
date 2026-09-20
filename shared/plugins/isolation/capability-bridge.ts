@@ -61,6 +61,26 @@ const REMOTE_RPC_CODES: ReadonlySet<string> = new Set([
     'internal',
 ]);
 
+/**
+ * Lifecycle refusal codes: the activation handle itself is dead (expired,
+ * revoked, superseded, disabled, uninstalled), so the host runtime must stop
+ * the matching activation and offer an explicit restart rather than leaving
+ * the surface "Running" with an unusable handle. The server answers these
+ * with `data.code` (not `data.rpcCode`).
+ */
+export const CAPABILITY_LIFECYCLE_CODES: ReadonlySet<string> = new Set([
+    'activation-unknown',
+    'activation-expired',
+    'activation-revoked',
+    'activation-stale',
+    'activation-session-mismatch',
+    'grant-review-stale',
+    'grant-review-unresolved',
+    'plugin-disabled',
+    'plugin-access-denied',
+    'plugin-uninstalled',
+]);
+
 /** HTTP status fallbacks when a response carries no structured rpcCode. */
 const STATUS_RPC_CODES: Readonly<Record<number, string>> = Object.freeze({
     400: 'policy-denied',
@@ -115,6 +135,13 @@ export type RemoteCapabilityTransport = (
     call: RemoteCapabilityCall
 ) => Promise<RemoteCapabilityResponse>;
 
+/** Raw server refusal, delivered before the code is collapsed for the plugin. */
+export interface CapabilityRefusal {
+    readonly method: RemoteCapabilityMethod;
+    readonly code: string;
+    readonly message: string;
+}
+
 export interface CreateRemoteCapabilityMethodsInput {
     readonly transport: RemoteCapabilityTransport;
     /** Host-minted activation echo, re-resolved per call so rotation is picked up. */
@@ -122,6 +149,12 @@ export interface CreateRemoteCapabilityMethodsInput {
     readonly grants: PluginGrantReviewSnapshot;
     /** Capabilities to expose; defaults to every bridged method. */
     readonly capabilities?: readonly RemoteCapabilityMethod[];
+    /**
+     * Invoked with the raw server refusal on every failed call, so the host
+     * runtime can stop a stale activation. Must never throw into the refusal
+     * path; the bridge guards it regardless.
+     */
+    readonly onCapabilityRefusal?: (refusal: CapabilityRefusal) => void;
 }
 
 /**
@@ -147,6 +180,17 @@ export function createRemoteCapabilityMethods(
                 signal: context.signal,
             });
             if (!response.ok) {
+                // The host sees the raw code (including lifecycle codes the
+                // plugin never needs); the plugin sees only the RPC vocabulary.
+                try {
+                    input.onCapabilityRefusal?.({
+                        method,
+                        code: response.code,
+                        message: response.message,
+                    });
+                } catch {
+                    // A host callback must never break the refusal itself.
+                }
                 // Preserve the server's own refusal code; only an unknown code
                 // is collapsed, so a spent budget never looks like a permission
                 // problem to the plugin.
@@ -200,11 +244,12 @@ export function createHttpCapabilityTransport(input: {
             if (!response.ok) {
                 let message = `Capability call failed (${response.status})`;
                 let code: string | null = null;
+                let details: Readonly<Record<string, unknown>> | undefined;
                 try {
                     const payload = (await response.json()) as {
                         statusMessage?: unknown;
                         message?: unknown;
-                        data?: { rpcCode?: unknown };
+                        data?: { rpcCode?: unknown; code?: unknown; details?: unknown };
                     };
                     const detail =
                         typeof payload.statusMessage === 'string'
@@ -215,9 +260,21 @@ export function createHttpCapabilityTransport(input: {
                     if (detail) message = detail;
                     // h3 serializes our structured refusal as `data.rpcCode`;
                     // dropping it turned every provider/budget refusal into a
-                    // permission problem.
+                    // permission problem. Lifecycle refusals (expired, revoked,
+                    // stale handles) instead carry `data.code`, which the host
+                    // runtime needs to stop the matching activation.
                     if (typeof payload.data?.rpcCode === 'string') {
                         code = payload.data.rpcCode;
+                    } else if (typeof payload.data?.code === 'string') {
+                        code = payload.data.code;
+                    }
+                    if (
+                        payload.data?.details !== undefined &&
+                        typeof payload.data.details === 'object' &&
+                        payload.data.details !== null &&
+                        !Array.isArray(payload.data.details)
+                    ) {
+                        details = payload.data.details as Readonly<Record<string, unknown>>;
                     }
                 } catch {
                     // A non-JSON error body still maps to the status-derived text.
@@ -226,6 +283,7 @@ export function createHttpCapabilityTransport(input: {
                     ok: false,
                     code: code ?? STATUS_RPC_CODES[response.status] ?? 'policy-denied',
                     message,
+                    ...(details === undefined ? {} : { details }),
                 };
             }
             const payload = (await response.json()) as { result?: unknown };

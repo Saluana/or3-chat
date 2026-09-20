@@ -69,6 +69,18 @@ switch, update, disable and fatal teardown explicitly revoke the handle, while
 server expiry remains a bounded fallback; a replacement sandbox therefore
 cannot reuse the previous activation's authority.
 
+Admission state (in-flight calls, recent request IDs, cancellation handles)
+is keyed by the activation handle and spans HTTP requests: two calls that share
+an activation and request ID are a duplicate whether they arrive on one
+connection or two, and concurrent calls share one per-activation limit (8).
+The same request ID under a different activation is a different call. Pure
+reads keep a bounded, expiring window (256 IDs, 5-minute TTL); side-effecting
+calls (`ai.complete`, `connections.dispatch`) keep their fingerprints for the
+life of the activation (bounded at 1000, matching the per-activation call
+budget), and further side effects are refused once that history fills rather
+than evicting still-relevant entries. Activation teardown forgets both
+histories together.
+
 ### Host capabilities
 
 The runtime registers host methods for an activation **only when the activation's
@@ -84,10 +96,30 @@ workspace, user, generation, digest and grants are read from the record, never
 from the request. A handle that is unknown, expired, revoked, used from another
 session, or whose selected package changed is refused before any method runs, and
 the endpoint dispatches through the same host RPC broker as the in-page bridge,
-so grant denial, replay, backpressure, the host-clamped deadline and cancellation
-apply identically. Disconnecting the client aborts the in-flight handler. The AI
-spend governor is keyed to the acting identity, not the activation, so a new
-activation cannot reset a spent budget.
+so grant denial, the host-clamped deadline and cancellation apply identically.
+Replay and concurrency are enforced at activation scope across requests (see
+above), not per broker. Disconnecting the client aborts the in-flight handler,
+and revoking the activation aborts every remaining call. The AI spend governor
+is keyed to the acting identity, not the activation, so a new activation cannot
+reset a spent budget.
+
+Replay policy is fail-closed for every method: a duplicate request ID within
+the replay window is rejected as `replay`, even when the method or params
+differ. A pure read (`ai.models`) may be issued again under a new request ID
+to recompute safely. A provider call (`ai.complete`) or external write
+(`connections.dispatch`) with an uncertain outcome — lost response, timeout,
+disconnect, crash — is never auto-retried: the caller surfaces the failure and
+waits for an explicit user-driven retry under a new ID. `ai.complete` reserves
+worst-case spend in the durable ledger before dispatch (at most 64 in-flight
+reservations per budget window) and settles worst-case on crash, so a second
+attempt cannot double-spend the same reservation; `connections.dispatch` has no
+provider idempotency guarantee, so a lost response is an unknown outcome.
+
+Lifecycle refusals (expired, revoked, stale handles) preserve the server's
+`data.code` to the host runtime, which stops only the matching activation
+generation — rendered state and typed fields survive — and offers an explicit
+restart. Restart refreshes the package source and mints through current
+authority checks; the failed operation is never replayed.
 
 ### UI events and contributions
 
@@ -201,21 +233,76 @@ Setup is host-generated from the package's own `or3.setup.json` and
   saved values*, and saving sends a patch of only the fields you edited, so a
   refresh can never replace stored values with defaults you never touched. A
   save carries the revision the form loaded; a concurrent save is refused with
-  `setup-values-conflict` instead of overwritten;
+  `setup-values-conflict` instead of overwritten. Patch-style writes without a
+  form revision (a plugin setting one key while you edit another) retry inside
+  the store's compare-and-set loop, so both edits land. The plan returns the
+  values and the revision from one settings read, so a concurrent write can
+  never pair stale values with a newer revision;
+* every setup consumer resolves the same verified package selection. A pointer
+  that recovered to `previous` selects that verified version everywhere; a
+  blocked pointer (corrupt pointer file, or an unavailable current version with
+  no usable previous) is reported as blocked and is never silently replaced by
+  a legacy extension directory with the same id. Only a plugin with no V2
+  pointer at all resolves as a legacy extension. A recorded candidate that no
+  longer verifies is a blocker, not a reason to silently configure the running
+  version;
+* a setup save runs under the same per-plugin lifecycle lease as promotion and
+  rollback: the package selection, acquisition binding and settings write are
+  revalidated while the lease is held, so a successful save cannot be lost to a
+  promotion that copies the candidate overlay and swaps the pointer. A save
+  that arrives after promotion conflicts (`setup-operation-conflict`) instead of
+  writing into a document the promotion already committed;
 * preparing an update writes the candidate's configuration under the
   candidate's digest, never the running version's document. A canceled, failed
   or crashed update therefore leaves live configuration untouched, and
   promotion commits the pair by swapping the pointer. Values saved before
   digest scoping, or an update that never saved its own, are inherited through
   the unscoped document for the first read only; a scoped document, once it
-  exists, is authoritative — corrupt included;
+  exists, is authoritative — corrupt included. A reinstall inherits the
+  retained record for the exact package digest, and its first patch merges
+  against those values rather than replacing them;
 * the running plugin reads and writes its own version: runtime settings
-  requests resolve `current` (never a candidate), while the setup page and the
-  acquisition readiness check resolve the candidate while one is pending;
+  requests resolve `current` (never a candidate) and must present both the
+  exact package digest their activation executes and the host activation handle
+  that sealed it. The handle's user, workspace, plugin, digest, enablement,
+  access policy and approved grants are re-checked live, so a write from a
+  revoked, expired, disabled or superseded activation is refused instead of
+  landing after disable or rollback. Activation validity is checked again inside
+  the settings commit guard — on every compare-and-set attempt and after the
+  write, with the previous document restored if a revocation landed while the
+  write was in flight — so revoking during a descriptor or settings read cannot
+  be outrun. The setup page and the acquisition readiness check resolve the
+  candidate while one is pending;
+* a plugin that only saves settings (no AI or connection calls) gets the same
+  lifecycle handling as remote capabilities: a refused settings write stops the
+  matching activation through the epoch/generation-scoped stale handler, keeps
+  the rendered view and typed values, and requires an explicit restart. The
+  failed write is never replayed;
+* capability preparation is raced against the call deadline and client
+  disconnect: a stalled budget read no longer retains an admission slot, and an
+  abandoned preparation cannot dispatch after the request fails closed;
 * required connections must be bound to the slot the package declares, connected
   **and** pass their test. A stored credential satisfies only the slot it was
   created for, and a slot is refused when the registered provider does not
-  implement its declared mechanism, scopes or operations;
+  implement its declared mechanism, scopes or operations. Credentials stay
+  scoped to the acting local user, workspace, plugin and slot; another member
+  never inherits the installer's connection;
+* a connection created for a pending candidate is bound to the acquisition
+  operation that recorded that exact digest. A candidate whose operation is
+  missing, replaced, ambiguous or belongs to another workspace is refused with
+  `setup-operation-conflict`; a runtime connection request that names a stale
+  operation is refused the same way, and a stale setup page that names a
+  different package digest is refused with `setup-package-conflict`. The
+  connection **test** applies the same binding, so an orphaned or
+  foreign-workspace candidate can never drive a test with your credentials.
+  Both creation and testing hold the per-plugin lifecycle lease across
+  selection, binding and the credential write/dispatch, so a promotion,
+  rollback or cancellation cannot replace the candidate between the decision
+  and the action; a busy lifecycle answers `setup-package-busy`;
+* a setup plan for a candidate whose owning operation is missing or ambiguous is
+  refused with `setup-operation-conflict` rather than rendered with an empty
+  operation, and a plan whose package identity changes while it is built is
+  retried once and then refused with `setup-package-conflict`;
 * the setup page can connect the account: it stores the credential for a declared
   slot (the provider and scopes come from the package policy, not the request) and
   then tests it. When the host has no encryption key, the page says so and
@@ -258,6 +345,25 @@ budget window, while output and concurrency remain activation-local:
 Paid completions are not reachable through generic connection dispatch: that
 operation is declared as governed by `ai.complete`, so there is only one policy
 in front of the provider charge.
+
+## Activation renewal and restart behavior
+
+Stale calls fail closed: an unknown, expired or revoked handle is refused
+before any method runs, and a replacement activation is minted only after the
+current installed/enabled/access/package/review checks pass. The last rendered
+tree plus the host field store survive a stop so typed values are not lost, but
+uncertain external writes are never auto-replayed.
+
+| Event | Behavior |
+|---|---|
+| Activation expiry while the tab remains open | In-flight calls run to their deadline; the next call is refused as `activation-expired` and the surface offers a restart, which mints a fresh handle after the current authority checks. |
+| Server restart | Handles and admission state are process-local and forgotten together; every old handle is refused as `activation-unknown` and the surface must remint. Committed AI spend survives in the durable ledger; in-flight reservations recover as worst-case spend after their TTL. |
+| Capacity eviction (512 activations) | The oldest handle is dropped and its in-flight calls aborted; the next call on it is refused as `activation-unknown` and must remint. |
+| Plugin/package update (promotion) or rollback | The promotion service revokes live handles at its shared commit point and aborts their in-flight calls; further calls are refused and the surface restarts on the newly selected package after fresh consent when authority widened. |
+| Disable | Live handles for that plugin and workspace are revoked proactively and their in-flight calls aborted; data and acquired versions remain. |
+| Logout | Basic-auth sign-out revokes the user's handles at the sign-out route while the session is still valid. The client also stops every runtime and attempts teardown; teardown accepts a same-user handle from any workspace, so post-transition cleanup succeeds. Clerk sign-out has no server signal in-repo: local runtimes stop in every tab and handles expire within 30 minutes; every call re-validates live authority, so a handle reused after re-login grants nothing beyond current authorization. |
+| Workspace switch | The server revokes the switching user's handles in the workspace being left when the switch commits (never workspace-wide, so other users are unaffected); the client stops its runtimes and its teardown DELETE succeeds cross-workspace for the same user. |
+| Multi-process routing | Not supported at launch. The qualified topology is a single Node process per host; handles must not be shared across replicas, and a load balancer must provide session affinity or, preferably, a single instance. |
 
 ## Qualifying containment
 

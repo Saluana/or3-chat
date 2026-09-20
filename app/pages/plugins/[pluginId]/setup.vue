@@ -128,7 +128,12 @@ async function testConnection(connection: { id: string; connectionRef?: string }
             {
                 method: 'POST',
                 headers: mutationHeaders(),
-                body: { ref: connection.connectionRef, pluginId: pluginId.value },
+                body: {
+                    ref: connection.connectionRef,
+                    pluginId: pluginId.value,
+                    operationId: data.value?.operationId ?? null,
+                    expectedPackageDigest: data.value?.packageDigest ?? null,
+                },
             }
         );
         message.value =
@@ -155,9 +160,12 @@ async function connectConnection(input: { slotId: string; credential: string }):
             body: {
                 pluginId: pluginId.value,
                 // The slot names the requirement; provider and scopes come from
-                // the package policy on the server.
+                // the package policy on the server. A pending candidate is
+                // bound server-side to the operation that owns it.
                 slotId: input.slotId,
                 credential: input.credential,
+                operationId: data.value?.operationId ?? null,
+                expectedPackageDigest: data.value?.packageDigest ?? null,
             },
         });
         message.value = 'Credential stored. Test it to finish setup.';

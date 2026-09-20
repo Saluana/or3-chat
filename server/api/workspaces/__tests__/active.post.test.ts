@@ -112,6 +112,48 @@ describe('POST /api/workspaces/active', () => {
         });
     });
 
+    it('revokes only the switching user activations in the old workspace', async () => {
+        const {
+            clearHostActivationsForTests,
+            registerHostActivation,
+            resolveHostActivation,
+        } = await import('../../../utils/plugins/isolation/activation-registry');
+        clearHostActivationsForTests();
+        const grants = {
+            requestedGrants: [],
+            approvedGrants: [],
+            revision: 'g1',
+            status: 'current' as const,
+            authoritySha256: null,
+            packageDigest: null,
+        };
+        const leaver = registerHostActivation({
+            pluginId: 'example.plugin',
+            workspaceId: 'ws-1',
+            userId: 'user-1',
+            packageDigest: null,
+            grants,
+        });
+        const otherUser = registerHostActivation({
+            pluginId: 'example.plugin',
+            workspaceId: 'ws-1',
+            userId: 'user-2',
+            packageDigest: null,
+            grants,
+        });
+
+        const handler = (await import('../active.post')).default as (event: H3Event) => Promise<unknown>;
+        readBodyMock.mockResolvedValue({ id: 'ws-2' });
+        await expect(handler(makeEvent())).resolves.toEqual({ ok: true });
+
+        expect(resolveHostActivation(leaver.activationId)).toMatchObject({
+            ok: false,
+            code: 'activation-revoked',
+        });
+        expect(resolveHostActivation(otherUser.activationId).ok).toBe(true);
+        clearHostActivationsForTests();
+    });
+
     it('rejects a target workspace where the user has no membership', async () => {
         const handler = (await import('../active.post')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue({ id: 'ws-other' });

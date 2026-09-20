@@ -287,6 +287,8 @@ describe('PortableClientView host actions', () => {
             'sample.plugin',
             activation({
                 status: 'stopped',
+                blockCode: 'activation-expired',
+                blockMessage: "This plugin's contained session expired. Your typed values are kept below.",
                 view: {
                     title: null,
                     nodes: [
@@ -300,6 +302,8 @@ describe('PortableClientView host actions', () => {
         // The tree survives the stop (disabled) so typed values are still there.
         expect((wrapper.find('textarea').element as HTMLTextAreaElement).value).toBe('kept');
         expect(wrapper.find('textarea').attributes('disabled')).toBeDefined();
+        // A stale stop explains itself instead of the generic ended text.
+        expect(wrapper.get('[data-testid="portable-plugin-stopped"]').text()).toContain('expired');
 
         await wrapper.get('[data-testid="portable-plugin-stopped"] button').trigger('click');
         await flushPromises();

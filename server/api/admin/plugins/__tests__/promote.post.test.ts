@@ -85,6 +85,7 @@ describe('promote route guard', () => {
             status: 'promoted',
             packageDigest: `sha256-${'a'.repeat(64)}`,
             pointer: { previous: { packageDigest: `sha256-${'b'.repeat(64)}` } },
+            wasInstalled: true,
         });
         setEnabledMock.mockReset().mockResolvedValue(['or3.sample-utility']);
         preflightMock.mockReset().mockResolvedValue({ checked: 1, blocking: [] });
@@ -133,6 +134,7 @@ describe('promote route guard', () => {
             status: 'promoted',
             packageDigest: `sha256-${'a'.repeat(64)}`,
             pointer: { previous: null },
+            wasInstalled: false,
         });
         await callRoute();
         expect(setEnabledMock).toHaveBeenCalledWith({}, 'ws-1', 'or3.sample-utility', true);

@@ -552,6 +552,39 @@ describe('GET /api/plugins/runtime-manifest', () => {
         });
     });
 
+    it('never serves a legacy directory for an inactive V2-owned identity', async () => {
+        listSelectedPackagesMock.mockResolvedValue([
+            { status: 'inactive', pluginId: 'alpha' },
+        ]);
+        listInstalledExtensionsMock.mockResolvedValue([
+            {
+                kind: 'plugin',
+                id: 'alpha',
+                name: 'Alpha Legacy',
+                version: '9.9.9',
+                capabilities: [],
+                path: '/tmp/alpha-legacy',
+                runtime: { client: { entry: 'plugin.client.ts' } },
+            },
+        ]);
+        getEnabledPluginsMock.mockResolvedValue(['alpha']);
+
+        const handler = (await import('../runtime-manifest.get')).default as (
+            event: H3Event
+        ) => Promise<any>;
+        const result = await handler(makeEvent());
+
+        // The id is installed but V2-owned and selects nothing: it must be
+        // reported unavailable, never loaded from the same-id legacy directory.
+        expect(result.installedPluginIds).toContain('alpha');
+        expect(result.enabledPluginIds).toEqual([]);
+        expect(result.runtime.alpha).toMatchObject({
+            loadAllowed: false,
+            descriptorStatus: 'blocked',
+            blockCode: 'package-inactive',
+        });
+    });
+
     it('blocks selected V2 dependency cycles before issuing descriptors', async () => {
         useRuntimeConfigMock.mockReturnValue({
             admin: {

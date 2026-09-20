@@ -123,8 +123,17 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
         packageCatalog.listSelected(),
     ]);
 
+    // A recorded V2 pointer owns the plugin identity even when it currently
+    // selects nothing (candidate-only or cleared). Such an id must not be
+    // served by the legacy V1 loader with the same id.
+    const v2OwnedPluginIds = new Set(
+        selectedPackageCatalogs.map((catalog) => catalog.pluginId)
+    );
     const installedPlugins = installedExtensions
-        .filter((entry) => entry.kind === 'plugin')
+        .filter(
+            (entry) =>
+                entry.kind === 'plugin' && !v2OwnedPluginIds.has(entry.id)
+        )
         .sort((a, b) => a.id.localeCompare(b.id));
     const bundledV1Plugins = installedPlugins.filter((plugin) => !isLegacyV2Plugin(plugin));
     const legacyV2Plugins = installedPlugins.filter(isLegacyV2Plugin);
@@ -136,11 +145,16 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
         (catalog): catalog is Extract<typeof catalog, { status: 'blocked' }> =>
             catalog.status === 'blocked'
     );
+    const inactivePackageCatalogs = selectedPackageCatalogs.filter(
+        (catalog): catalog is Extract<typeof catalog, { status: 'inactive' }> =>
+            catalog.status === 'inactive'
+    );
     const installedPluginIds = Array.from(
         new Set([
             ...installedPlugins.map((plugin) => plugin.id),
             ...selectedPackages.map((catalog) => catalog.pluginId),
             ...blockedPackageCatalogs.map((catalog) => catalog.pluginId),
+            ...inactivePackageCatalogs.map((catalog) => catalog.pluginId),
         ])
     ).sort((a, b) => a.localeCompare(b));
     const installedSet = new Set(installedPluginIds);
@@ -277,6 +291,19 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
             lifecycleCoverage: 'managed-v2',
             descriptorStatus: 'blocked',
             blockCode: catalog.blockCode,
+        };
+    }
+    // A candidate-only or cleared pointer is V2-owned but selects nothing to
+    // run. Report it as unavailable rather than letting a legacy directory with
+    // the same id supply a different release.
+    for (const catalog of inactivePackageCatalogs) {
+        runtime[catalog.pluginId] = {
+            hasServerRoutes: false,
+            loadAllowed: false,
+            loadDeniedReason: 'package-inactive',
+            lifecycleCoverage: 'managed-v2',
+            descriptorStatus: 'blocked',
+            blockCode: 'package-inactive',
         };
     }
 

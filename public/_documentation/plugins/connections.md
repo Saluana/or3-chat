@@ -13,7 +13,16 @@ supported yet.
    provider credential once, against the connection slot the package declares.
    The binding is explicit: the provider, scopes and operations come from the
    package policy and are validated against the registered provider, so a stored
-   credential only satisfies the slot it was created for.
+   credential only satisfies the slot it was created for. The package is the
+   verified selection (a pending candidate during setup, the running version
+   otherwise); a candidate is bound to the acquisition operation that recorded
+   its exact digest, and a setup page that names a different package is refused
+   instead of storing a credential against the wrong release. Creating and
+   testing a connection hold the per-plugin lifecycle lease across selection,
+   binding and the credential write or test dispatch, so a promotion, rollback
+   or cancellation cannot replace the candidate mid-decision; a busy lifecycle
+   answers `setup-package-busy`. Cancelling a staged update releases its
+   candidate pointer, so the setup page resolves the running version again.
 2. OR3 encrypts it (AES-256-GCM) with a key held **outside** the database
    (`OR3_PLUGIN_CONNECTION_SECRET`) and stores only the ciphertext. The key is
    never a build default: a prebuilt container reads it at startup, where

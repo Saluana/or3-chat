@@ -8,6 +8,7 @@ import {
     readPluginStateSnapshot,
     restorePluginStateSnapshot,
 } from '../../../../../admin/plugins/package-operation-support';
+import { revokeHostActivationsForPlugin } from '../../../../../utils/plugins/isolation/activation-registry';
 
 const BodySchema = z.object({ workspaceId: z.string().min(1).optional() });
 
@@ -32,6 +33,11 @@ export default defineEventHandler(async (event) => {
             restorePluginStateSnapshot(services, workspaceId, pluginId, snapshot),
     });
     if (result.status === 'rolled-back') {
+        // The selected package changed for every workspace: revoke live handles
+        // so an activation from the rolled-back version cannot keep acting (or
+        // saving settings) after the rollback, even if the digest it names is
+        // selected again later.
+        revokeHostActivationsForPlugin(pluginId, 'selected-package-changed');
         await event.context.adminHooks?.doAction('admin.plugin:action:rolled-back', {
             id: pluginId,
             workspaceId,

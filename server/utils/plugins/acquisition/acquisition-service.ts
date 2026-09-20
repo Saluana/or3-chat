@@ -52,7 +52,6 @@ import {
     type PluginGrantCandidate,
 } from '../../../admin/plugins/workspace-plugin-store';
 import { PluginPackageRouteCatalog } from '../../../admin/plugins/package-route-catalog';
-import type { PluginPackagePointer } from '../../../admin/plugins/package-pointer-store';
 import {
     packageGrantCandidate,
     readPackageGrantReview,
@@ -374,11 +373,18 @@ export class PluginAcquisitionService {
      * committed there is nothing left to cancel: the installation is live, and
      * reporting it as "canceled before activation" would be a lie, so the
      * operation is finished as completed instead.
+     *
+     * The canceled operation's candidate reference is released first (under the
+     * lifecycle lease): leaving it behind would make every later setup resolve
+     * to a candidate owned by a canceled operation and refuse to configure the
+     * still-valid running version. Current/previous slots and their saved
+     * configuration history are preserved.
      */
     async #cancelNow(current: PluginAcquisitionOperation): Promise<PluginAcquisitionOperation> {
         if (acquisitionStageIndex(current.stage) >= acquisitionStageIndex('promoted')) {
             return (await this.#receipt(current)).operation;
         }
+        await this.#clearCanceledCandidate(current);
         return await this.#finalize(current, 'canceled', {
             code: 'canceled',
             stage: current.stage,
@@ -388,11 +394,66 @@ export class PluginAcquisitionService {
     }
 
     /**
+     * Drop only this operation's candidate slot, revision-checked under the
+     * lifecycle lease. A slot that no longer names this operation's digest (a
+     * promotion, rollback or another operation already moved it) is left alone.
+     * Slots whose immutable bytes no longer verify are dropped rather than
+     * blocking the cleanup write.
+     */
+    async #clearCanceledCandidate(record: PluginAcquisitionOperation): Promise<void> {
+        const candidateDigest = record.candidateDigest;
+        if (!candidateDigest) return;
+        const { packages, pointers } = this.#deps.services;
+        await packages.runPluginOperation(record.pluginId, async () => {
+            const pointer = await pointers.readPointer(record.pluginId);
+            if (!pointer?.candidate || pointer.candidate.packageDigest !== candidateDigest) {
+                return;
+            }
+            const verifiedTarget = async (
+                target: typeof pointer.current
+            ): Promise<typeof pointer.current> => {
+                if (!target) return null;
+                try {
+                    const verification = await packages.verifyStoredPackage(
+                        record.pluginId,
+                        target.packageDigest
+                    );
+                    return verification.manifestDigest === target.manifestDigest
+                        ? target
+                        : null;
+                } catch {
+                    return null;
+                }
+            };
+            const next = {
+                schemaVersion: 1 as const,
+                pluginId: record.pluginId,
+                revision: pointer.revision + 1,
+                current: await verifiedTarget(pointer.current),
+                candidate: null,
+                previous: await verifiedTarget(pointer.previous),
+            };
+            await pointers.writePointerWithinOperation(record.pluginId, next);
+        });
+    }
+
+    /**
      * Retry a failed or blocked operation. The recorded stage is the resume point,
-     * so a retry continues instead of restarting from the beginning.
+     * so a retry continues instead of restarting from the beginning. A canceled
+     * operation whose candidate pointer was released restages to `verified`, so
+     * the candidate is recorded again from the retained staging bytes before the
+     * pipeline resumes.
      */
     async retry(operationId: string): Promise<PluginAcquisitionOperation> {
-        await this.#deps.store.retry(operationId);
+        const current = await this.#deps.store.requireRecord(operationId);
+        const restageCandidate =
+            current.status === 'canceled' &&
+            current.candidateDigest !== null &&
+            acquisitionStageIndex(current.stage) >= acquisitionStageIndex('candidate-recorded');
+        await this.#deps.store.retry(
+            operationId,
+            restageCandidate ? { restage: 'verified', candidateDigest: null } : {}
+        );
         return await this.advance(operationId);
     }
 
@@ -1256,7 +1317,9 @@ export class PluginAcquisitionService {
         // candidate, so the promotion already happened and only the receipt is
         // outstanding.
         if (pointer?.current?.packageDigest === record.candidateDigest) {
-            const enabled = await this.#enableFirstInstall(record, pointer);
+            // Crash recovery after the pointer write: the retained previous is
+            // the only durable signal available here for update-vs-install.
+            const enabled = await this.#enableFirstInstall(record, pointer.previous !== null);
             if (!enabled.ok) return await this.#fail(record, enabled.code, enabled.message, true);
             return {
                 kind: 'continue',
@@ -1366,8 +1429,7 @@ export class PluginAcquisitionService {
                     record.pluginId,
                     snapshot
                 ),
-            prepareSetupPromotion: async () => {
-                const pointer = await this.#deps.services.pointers.readPointer(record.pluginId);
+            prepareSetupPromotion: async ({ running }) => {
                 const workspaceIds = new Set(await this.#deps.listWorkspaceIds());
                 workspaceIds.add(record.workspaceId);
                 const undos: Array<() => void | Promise<void>> = [];
@@ -1386,7 +1448,10 @@ export class PluginAcquisitionService {
                             record.pluginId,
                             record.candidateDigest!,
                             record.operationId,
-                            pointer?.current?.packageDigest ?? null
+                            // Inherit from the verified running version (the
+                            // recovered previous when current is unreadable),
+                            // never from an unverified pointer slot.
+                            running?.packageDigest ?? null
                         );
                         if (undo) undos.push(undo);
                     }
@@ -1434,8 +1499,10 @@ export class PluginAcquisitionService {
                 restage
             );
         }
-        const enabled = await this.#enableFirstInstall(record, result.pointer);
+        const enabled = await this.#enableFirstInstall(record, result.wasInstalled);
         if (!enabled.ok) return await this.#fail(record, enabled.code, enabled.message, true);
+        // Live-handle revocation happens in the promotion service's own commit
+        // hook, which every promotion caller shares.
         return {
             kind: 'continue',
             operation: await this.#advanceTo(record, 'promoted', {}),
@@ -1443,17 +1510,19 @@ export class PluginAcquisitionService {
     }
 
     /**
-     * A first install (no previous selection) enables the plugin for the
-     * installing workspace. Reporting an install as ready while the runtime gate
-     * refused the still-disabled package was a promise the operator could not
-     * use; an update never changes enablement, so a deliberate disable survives.
-     * Idempotent, so a retry after the pointer write cannot double-apply.
+     * A first install (no prior selection or installation record) enables the
+     * plugin for the installing workspace. Reporting an install as ready while
+     * the runtime gate refused the still-disabled package was a promise the
+     * operator could not use; an update never changes enablement, so a
+     * deliberate disable survives — including when a failed current had to be
+     * dropped and the new pointer retains no previous. Idempotent, so a retry
+     * after the pointer write cannot double-apply.
      */
     async #enableFirstInstall(
         record: PluginAcquisitionOperation,
-        pointer: PluginPackagePointer
+        wasInstalled: boolean
     ): Promise<{ readonly ok: true } | { readonly ok: false; readonly code: 'internal-error'; readonly message: string }> {
-        if (pointer.previous !== null) return { ok: true };
+        if (wasInstalled) return { ok: true };
         try {
             await setPluginEnabled(
                 this.#deps.services.settings,

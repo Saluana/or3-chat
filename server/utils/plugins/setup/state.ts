@@ -31,8 +31,14 @@ import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
 import type { PluginConnectionService } from '../connections/service';
 import { listConnectionProviders } from '../connections/providers/registry';
 import { loadPackageDescriptors } from './load-descriptors';
-import { resolvePluginPackage, type PluginPackageSlot } from './discovery';
-import { readSetupValues } from './settings-store';
+import {
+    resolvePluginPackage,
+    type PackageSelectionIssue,
+    type PluginPackageSlot,
+    type ResolvedPluginPackage,
+    type VerifiedPackageSelectionStatus,
+} from './discovery';
+import { readSetupValuesSnapshot } from './settings-store';
 
 export interface SetupDestinationView {
     readonly id: string;
@@ -41,11 +47,21 @@ export interface SetupDestinationView {
     readonly scopes: readonly string[];
 }
 
+/** Verified selection summary for callers that must distinguish blocked from missing. */
+export interface SetupSelectionView {
+    readonly status: VerifiedPackageSelectionStatus;
+    readonly selectedSlot: 'current' | 'previous' | 'candidate' | null;
+    readonly pointerRevision: number | null;
+    readonly issues: readonly PackageSelectionIssue[];
+}
+
 export interface SetupState {
     readonly pluginId: string;
     readonly installed: boolean;
     /** Exact package these values belong to; null for a legacy extension. */
     readonly packageDigest: string | null;
+    /** Verified selection this state was built from; null when nothing resolved. */
+    readonly selection: SetupSelectionView | null;
     readonly plan: SetupPlan | null;
     readonly status: ReturnType<typeof describeSetupStatus>;
     readonly firstAction: FirstActionHandoff;
@@ -55,6 +71,8 @@ export interface SetupState {
     readonly credentialsAvailable: boolean;
     /** Validated settings in effect; the only source the form hydrates from. */
     readonly values: Readonly<Record<string, PortableProfileFieldValue>>;
+    /** Revision of the exact document `values` was read from. */
+    readonly setupRevision: number;
     readonly settingsErrors: readonly SetupValueError[];
     /** Package descriptors, when they loaded; used by the connection routes. */
     readonly setup: Or3SetupDescriptorV1 | null;
@@ -76,6 +94,12 @@ export interface LoadSetupStateInput {
      * `current` resolves the running selection (runtime settings reads).
      */
     readonly slot?: PluginPackageSlot;
+    /**
+     * Pre-resolved verified selection. Callers that already resolved and bound
+     * the package pass it so the plan cannot be built from a second, possibly
+     * different, resolution.
+     */
+    readonly selection?: ResolvedPluginPackage;
 }
 
 /** Registered provider capabilities, projected for plan validation. */
@@ -91,22 +115,36 @@ export function hostConnectionCapabilities(): readonly HostConnectionCapability[
 }
 
 export async function loadSetupState(input: LoadSetupStateInput): Promise<SetupState> {
-    // The resolved package may be an immutable candidate awaiting setup (an
-    // acquisition), not only a legacy extension directory. Runtime reads pass
-    // `current` so they never follow an unpromoted candidate.
-    const installed = await resolvePluginPackage(
-        input.pluginId,
-        EXTENSIONS_BASE_DIR,
-        input.slot ?? 'auto'
-    );
+    // The verified selection may be an immutable candidate awaiting setup (an
+    // acquisition) or the recovered previous version, not only a legacy
+    // extension directory. Runtime reads pass `current` so they never follow an
+    // unpromoted candidate. A blocked V2 pointer is never replaced by a legacy
+    // directory with the same id.
+    const selection =
+        input.selection ??
+        (await resolvePluginPackage(
+            input.pluginId,
+            EXTENSIONS_BASE_DIR,
+            input.slot ?? 'auto'
+        ));
+    const selectionView: SetupSelectionView | null = selection
+        ? {
+              status: selection.status,
+              selectedSlot: selection.selectedSlot,
+              pointerRevision: selection.pointerRevision,
+              issues: selection.issues,
+          }
+        : null;
+    // A blocked/inactive selection carries no path; it resolves to no state.
+    const installed = selection !== null && selection.path !== null;
     const current = await resolvePluginPackage(
         input.pluginId,
         EXTENSIONS_BASE_DIR,
         'current'
     );
     const storedValues = installed
-        ? await readSetupValues(input.event, input.workspaceId, input.pluginId, {
-              packageDigest: installed.digest,
+        ? await readSetupValuesSnapshot(input.event, input.workspaceId, input.pluginId, {
+              packageDigest: selection.digest,
               ...(input.setupOperationId === undefined
                   ? {}
                   : { operationId: input.setupOperationId }),
@@ -114,28 +152,43 @@ export async function loadSetupState(input: LoadSetupStateInput): Promise<SetupS
                   ? {}
                   : { basePackageDigest: current.digest }),
           })
-        : {};
+        : { values: {}, revision: 0 };
 
     const destinations: SetupDestinationView[] = [];
-    if (!installed) {
+    if (!installed || !selection.path) {
+        const blockedIssues = selection?.issues.map((issue) => issue.message) ?? [];
+        const problems = selection
+            ? blockedIssues.length > 0
+                ? blockedIssues
+                : ['This plugin is not installed']
+            : ['This plugin is not installed'];
         return {
             pluginId: input.pluginId,
             installed: false,
             packageDigest: null,
+            selection: selectionView,
             plan: null,
-            status: { status: 'blocked', label: 'Not installed', blocked: true },
+            status: {
+                status: 'blocked',
+                label: 'Not installed',
+                blocked: true,
+            },
             firstAction: {
                 operationId: '',
                 label: 'Unavailable',
                 contextKind: 'sample',
                 ready: false,
-                reason: 'This plugin is not installed',
+                reason:
+                    selection?.status === 'blocked'
+                        ? 'This plugin package is blocked'
+                        : 'This plugin is not installed',
             },
-            problems: ['This plugin is not installed'],
+            problems,
             destinations,
             durableConnections: input.durableConnections,
             credentialsAvailable: input.service.available,
             values: Object.freeze({}),
+            setupRevision: storedValues.revision,
             settingsErrors: Object.freeze([]),
             setup: null,
             policy: null,
@@ -144,7 +197,7 @@ export async function loadSetupState(input: LoadSetupStateInput): Promise<SetupS
 
     const descriptors = await loadPackageDescriptors({
         extensionsBaseDir: EXTENSIONS_BASE_DIR,
-        packagePath: installed.path,
+        packagePath: selection.path,
     });
     for (const destination of descriptors.policy?.destinations ?? []) {
         destinations.push({
@@ -161,7 +214,8 @@ export async function loadSetupState(input: LoadSetupStateInput): Promise<SetupS
         return {
             pluginId: input.pluginId,
             installed: true,
-            packageDigest: installed.digest,
+            packageDigest: selection.digest,
+            selection: selectionView,
             plan: null,
             status: { status: 'blocked', label: 'Setup unavailable', blocked: true },
             firstAction: {
@@ -176,6 +230,7 @@ export async function loadSetupState(input: LoadSetupStateInput): Promise<SetupS
             durableConnections: input.durableConnections,
             credentialsAvailable: input.service.available,
             values: Object.freeze({}),
+            setupRevision: storedValues.revision,
             settingsErrors: Object.freeze([]),
             setup: descriptors.setup,
             policy: descriptors.policy,
@@ -187,7 +242,7 @@ export async function loadSetupState(input: LoadSetupStateInput): Promise<SetupS
     // must not count as supplied.
     const validated = validateSetupValues({
         fields: descriptors.setup.fields,
-        values: storedValues,
+        values: storedValues.values,
     });
     for (const error of validated.errors) {
         problems.push(`Saved setting "${error.key}" is no longer valid: ${error.message}`);
@@ -241,7 +296,8 @@ export async function loadSetupState(input: LoadSetupStateInput): Promise<SetupS
     return {
         pluginId: input.pluginId,
         installed: true,
-        packageDigest: installed.digest,
+        packageDigest: selection.digest,
+        selection: selectionView,
         plan,
         status: describeSetupStatus(plan),
         firstAction: buildFirstActionHandoff({
@@ -253,6 +309,7 @@ export async function loadSetupState(input: LoadSetupStateInput): Promise<SetupS
         durableConnections: input.durableConnections,
         credentialsAvailable: input.service.available,
         values: validated.values,
+        setupRevision: storedValues.revision,
         settingsErrors: validated.errors,
         setup: descriptors.setup,
         policy: descriptors.policy,

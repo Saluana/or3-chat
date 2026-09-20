@@ -18,14 +18,23 @@
  *   was minted with the record.
  * - The map is in-memory and bounded. A restart forgets handles, so a new
  *   activation must be minted rather than reusing a stale one.
+ * - Teardown (revoke, expiry, eviction, disable, update, workspace switch,
+ *   logout) also aborts the activation's in-flight capability calls and forgets
+ *   its replay history, so a stale handle leaves no runnable work behind.
  *
  * Non-Goals:
  * - Grant evaluation per method (the `HostRpcBroker` owns that).
  * - Deciding whether an activation may start (the mint route owns that).
+ * - Cross-process coordination. The launch topology is a single Node process
+ *   per host; handles and admission state are process-local by design.
  */
 
 import { randomBytes } from 'node:crypto';
 import type { PluginGrantReviewSnapshot } from '~~/shared/plugins/grant-review';
+import {
+    abortActivationCalls,
+    clearAllActivationAdmissionsForTests,
+} from './activation-admission';
 import {
     releaseSelectionAuthority,
     retainSelectionAuthority,
@@ -85,6 +94,7 @@ function bound(): void {
                 entry.record.generation
             );
         }
+        abortActivationCalls(oldest, 'activation-evicted');
         activations.delete(oldest);
     }
 }
@@ -156,13 +166,15 @@ export function resolveHostActivation(
     }
     if ((options.now ?? (() => Date.now()))() > entry.record.expiresAt) {
         // Expiry is teardown too: a stale handle must not keep the selection
-        // authority that lets first-action handoff mint a live-looking handle.
+        // authority that lets first-action handoff mint a live-looking handle,
+        // nor any in-flight capability work.
         entry.revoked = 'expired';
         releaseSelectionAuthority(
             entry.record.pluginId,
             entry.record.workspaceId,
             entry.record.generation
         );
+        abortActivationCalls(activationId, 'expired');
         return {
             ok: false,
             code: 'activation-expired',
@@ -182,7 +194,79 @@ export function revokeHostActivation(activationId: string, reason: string): bool
         entry.record.workspaceId,
         entry.record.generation
     );
+    // Mid-call revocation aborts in-flight work; the capability route releases
+    // its admission slot when the broker settles as cancelled.
+    abortActivationCalls(activationId, reason);
     return true;
+}
+
+/**
+ * Revoke every activation matching a lifecycle scope. Used proactively on
+ * disable, package promotion/uninstall, workspace switch and logout so
+ * in-flight calls are aborted instead of running to completion on stale
+ * authority. Returns the revoked handles.
+ */
+export function revokeHostActivationsMatching(
+    predicate: (record: HostActivationRecord) => boolean,
+    reason: string
+): readonly string[] {
+    const revoked: string[] = [];
+    for (const [activationId, entry] of activations) {
+        if (entry.revoked !== null) continue;
+        if (!predicate(entry.record)) continue;
+        revokeHostActivation(activationId, reason);
+        revoked.push(activationId);
+    }
+    return revoked;
+}
+
+/** Revoke every live activation for one plugin (package promotion/uninstall). */
+export function revokeHostActivationsForPlugin(pluginId: string, reason: string): readonly string[] {
+    return revokeHostActivationsMatching((record) => record.pluginId === pluginId, reason);
+}
+
+/** Revoke every live activation for one plugin in one workspace (disable). */
+export function revokeHostActivationsForPluginWorkspace(
+    pluginId: string,
+    workspaceId: string,
+    reason: string
+): readonly string[] {
+    return revokeHostActivationsMatching(
+        (record) => record.pluginId === pluginId && record.workspaceId === workspaceId,
+        reason
+    );
+}
+
+/** Revoke every live activation in one workspace (workspace switch). */
+export function revokeHostActivationsForWorkspace(
+    workspaceId: string,
+    reason: string
+): readonly string[] {
+    return revokeHostActivationsMatching(
+        (record) => record.workspaceId === workspaceId,
+        reason
+    );
+}
+
+/**
+ * Revoke one user's live activations in one workspace. This is the switch
+ * scope: a workspace-wide revocation would stop other users sharing the
+ * workspace the switcher is leaving.
+ */
+export function revokeHostActivationsForUserWorkspace(
+    userId: string,
+    workspaceId: string,
+    reason: string
+): readonly string[] {
+    return revokeHostActivationsMatching(
+        (record) => record.userId === userId && record.workspaceId === workspaceId,
+        reason
+    );
+}
+
+/** Revoke every live activation for one user (logout). */
+export function revokeHostActivationsForUser(userId: string, reason: string): readonly string[] {
+    return revokeHostActivationsMatching((record) => record.userId === userId, reason);
 }
 
 /** Test helper: forget every minted activation between cases. */
@@ -195,5 +279,6 @@ export function clearHostActivationsForTests(): void {
         );
     }
     activations.clear();
+    clearAllActivationAdmissionsForTests();
     generationCounter = 0;
 }

@@ -1,12 +1,20 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ImmutablePluginPackageStore } from '../../../../admin/plugins/package-store';
 import { PluginPackagePointerStore } from '../../../../admin/plugins/package-pointer-store';
 import { resolvePluginPackage } from '../discovery';
 
 const PLUGIN_ID = 'or3.discovery-test';
+
+const mocks = vi.hoisted(() => ({
+    listInstalledExtensions: vi.fn(),
+}));
+
+vi.mock('../../../../admin/extensions/extension-manager', () => ({
+    listInstalledExtensions: mocks.listInstalledExtensions,
+}));
 
 const stateCompatibility = Object.freeze({
     version: 1,
@@ -35,7 +43,7 @@ async function setup() {
     const pointers = new PluginPackagePointerStore(root, packages);
     const current = await packages.installPackage(PLUGIN_ID, source('1.0.0'));
     const candidate = await packages.installPackage(PLUGIN_ID, source('2.0.0'));
-    return { root, pointers, current, candidate };
+    return { root, packages, pointers, current, candidate };
 }
 
 function target(
@@ -48,6 +56,21 @@ function target(
         stateCompatibility,
     };
 }
+
+/** Corrupt one byte of an installed, read-only package tree. */
+function corruptPackage(packages: ImmutablePluginPackageStore, digest: string): void {
+    const file = resolve(packages.packagePath(PLUGIN_ID, digest as never), 'client.mjs');
+    chmodSync(file, 0o644);
+    writeFileSync(file, 'corrupt');
+}
+
+function legacyExtension(id: string) {
+    return { kind: 'plugin', id, path: `/legacy/${id}` };
+}
+
+beforeEach(() => {
+    mocks.listInstalledExtensions.mockReset().mockResolvedValue([]);
+});
 
 describe('plugin package discovery slots', () => {
     it('prefers the pending candidate for setup and resolves it by default', async () => {
@@ -62,7 +85,13 @@ describe('plugin package discovery slots', () => {
         });
 
         const resolved = await resolvePluginPackage(PLUGIN_ID, root);
-        expect(resolved?.digest).toBe(candidate.digest);
+        expect(resolved).toMatchObject({
+            status: 'candidate',
+            selectedSlot: 'candidate',
+            digest: candidate.digest,
+            manifestDigest: candidate.verification.manifestDigest,
+            pointerRevision: 1,
+        });
     });
 
     it('resolves only the running selection for runtime settings', async () => {
@@ -77,10 +106,14 @@ describe('plugin package discovery slots', () => {
         });
 
         const resolved = await resolvePluginPackage(PLUGIN_ID, root, 'current');
-        expect(resolved?.digest).toBe(current.digest);
+        expect(resolved).toMatchObject({
+            status: 'ready',
+            selectedSlot: 'current',
+            digest: current.digest,
+        });
     });
 
-    it('does not resolve a candidate that has no promoted version', async () => {
+    it('reports a candidate-only pointer as inactive for runtime reads but selectable for setup', async () => {
         const { root, pointers, candidate } = await setup();
         await pointers.writePointer(PLUGIN_ID, {
             schemaVersion: 1,
@@ -91,8 +124,161 @@ describe('plugin package discovery slots', () => {
             previous: null,
         });
 
-        await expect(resolvePluginPackage(PLUGIN_ID, root, 'current')).resolves.toBeNull();
+        const runtime = await resolvePluginPackage(PLUGIN_ID, root, 'current');
+        expect(runtime).toMatchObject({
+            status: 'inactive',
+            path: null,
+            digest: null,
+            pointerRevision: 1,
+        });
         const auto = await resolvePluginPackage(PLUGIN_ID, root);
-        expect(auto?.digest).toBe(candidate.digest);
+        expect(auto).toMatchObject({ status: 'candidate', digest: candidate.digest });
+        // A pointer owns the plugin identity; no legacy lookup may happen.
+        expect(mocks.listInstalledExtensions).not.toHaveBeenCalled();
+    });
+
+    it('blocks setup on a recorded candidate that no longer verifies', async () => {
+        const { root, packages, pointers, current, candidate } = await setup();
+        await pointers.writePointer(PLUGIN_ID, {
+            schemaVersion: 1,
+            pluginId: PLUGIN_ID,
+            revision: 1,
+            current: target(current),
+            candidate: target(candidate),
+            previous: null,
+        });
+        corruptPackage(packages, candidate.digest);
+
+        // Setup must not silently configure the running package when the
+        // recorded candidate is the thing being installed.
+        const auto = await resolvePluginPackage(PLUGIN_ID, root);
+        expect(auto).toMatchObject({
+            status: 'blocked',
+            path: null,
+            digest: null,
+        });
+        expect(auto?.issues).toEqual(
+            expect.arrayContaining([expect.objectContaining({ code: 'candidate-unavailable' })])
+        );
+        // Runtime reads still resolve the running version.
+        const runtime = await resolvePluginPackage(PLUGIN_ID, root, 'current');
+        expect(runtime).toMatchObject({
+            status: 'ready',
+            selectedSlot: 'current',
+            digest: current.digest,
+        });
+    });
+
+    it('does not reconstruct recovery for a pointer with no current slot', async () => {
+        const { root, pointers, current, candidate } = await setup();
+        await pointers.writePointer(PLUGIN_ID, {
+            schemaVersion: 1,
+            pluginId: PLUGIN_ID,
+            revision: 1,
+            current: null,
+            candidate: target(candidate),
+            previous: target(current),
+        });
+
+        // The verifier reports inactive (no selected target); a valid previous
+        // slot alone must not become a running selection.
+        const runtime = await resolvePluginPackage(PLUGIN_ID, root, 'current');
+        expect(runtime).toMatchObject({ status: 'inactive', path: null, digest: null });
+        const auto = await resolvePluginPackage(PLUGIN_ID, root);
+        expect(auto).toMatchObject({ status: 'candidate', digest: candidate.digest });
+    });
+
+    it('honors recovery to the previous version for runtime reads and auto setup', async () => {
+        const { root, packages, pointers, current, candidate } = await setup();
+        await pointers.writePointer(PLUGIN_ID, {
+            schemaVersion: 1,
+            pluginId: PLUGIN_ID,
+            revision: 1,
+            current: target(candidate),
+            candidate: null,
+            previous: target(current),
+        });
+        corruptPackage(packages, candidate.digest);
+
+        const runtime = await resolvePluginPackage(PLUGIN_ID, root, 'current');
+        expect(runtime).toMatchObject({
+            status: 'recovered',
+            selectedSlot: 'previous',
+            digest: current.digest,
+            manifestDigest: current.verification.manifestDigest,
+        });
+        expect(runtime?.issues).toEqual(
+            expect.arrayContaining([expect.objectContaining({ code: 'current-unavailable' })])
+        );
+
+        const auto = await resolvePluginPackage(PLUGIN_ID, root);
+        expect(auto).toMatchObject({ status: 'recovered', digest: current.digest });
+    });
+
+    it('never falls through to a legacy extension when the V2 pointer is blocked', async () => {
+        const { root, packages, pointers, current } = await setup();
+        await pointers.writePointer(PLUGIN_ID, {
+            schemaVersion: 1,
+            pluginId: PLUGIN_ID,
+            revision: 1,
+            current: target(current),
+            candidate: null,
+            previous: null,
+        });
+        corruptPackage(packages, current.digest);
+        mocks.listInstalledExtensions.mockResolvedValue([legacyExtension(PLUGIN_ID)]);
+
+        const runtime = await resolvePluginPackage(PLUGIN_ID, root, 'current');
+        expect(runtime).toMatchObject({ status: 'blocked', path: null, digest: null });
+        const auto = await resolvePluginPackage(PLUGIN_ID, root);
+        expect(auto).toMatchObject({ status: 'blocked', path: null });
+        expect(mocks.listInstalledExtensions).not.toHaveBeenCalled();
+    });
+
+    it('blocks a corrupt pointer instead of using a legacy extension with the same id', async () => {
+        const { root } = await setup();
+        const activeRoot = resolve(root, '.active');
+        mkdirSync(activeRoot, { recursive: true });
+        writeFileSync(resolve(activeRoot, `${PLUGIN_ID}.json`), '{partial');
+        mocks.listInstalledExtensions.mockResolvedValue([legacyExtension(PLUGIN_ID)]);
+
+        const resolved = await resolvePluginPackage(PLUGIN_ID, root);
+        expect(resolved).toMatchObject({ status: 'blocked', path: null });
+        expect(mocks.listInstalledExtensions).not.toHaveBeenCalled();
+    });
+
+    it('resolves a legacy extension only when no V2 pointer exists', async () => {
+        const { root } = await setup();
+        mocks.listInstalledExtensions.mockResolvedValue([legacyExtension(PLUGIN_ID)]);
+
+        const resolved = await resolvePluginPackage(PLUGIN_ID, root);
+        expect(resolved).toMatchObject({
+            status: 'legacy',
+            source: 'extension',
+            path: `/legacy/${PLUGIN_ID}`,
+            digest: null,
+            manifestDigest: null,
+        });
+    });
+
+    it('prefers the V2 selection when a legacy extension has the same id', async () => {
+        const { root, pointers, current } = await setup();
+        await pointers.writePointer(PLUGIN_ID, {
+            schemaVersion: 1,
+            pluginId: PLUGIN_ID,
+            revision: 1,
+            current: target(current),
+            candidate: null,
+            previous: null,
+        });
+        mocks.listInstalledExtensions.mockResolvedValue([legacyExtension(PLUGIN_ID)]);
+
+        const resolved = await resolvePluginPackage(PLUGIN_ID, root);
+        expect(resolved).toMatchObject({
+            status: 'ready',
+            source: 'package',
+            digest: current.digest,
+        });
+        expect(mocks.listInstalledExtensions).not.toHaveBeenCalled();
     });
 });

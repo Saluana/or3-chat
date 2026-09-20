@@ -460,7 +460,7 @@ async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
                 data-testid="portable-plugin-stopped"
             >
                 <p class="text-sm">
-                    This plugin's contained session ended. Your typed values are kept below.
+                    {{ activation.blockMessage ?? "This plugin's contained session ended. Your typed values are kept below." }}
                 </p>
                 <UButton
                     v-if="canRestart"

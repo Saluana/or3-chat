@@ -22,6 +22,7 @@ export type PluginRuntimeManifestBlockCode =
     | 'module-loader-disabled'
     | 'module-loader-static-host'
     | 'module-loader-outside-canary'
+    | 'package-inactive'
     | 'package-pointer-unavailable'
     | 'package-manifest-invalid'
     | 'package-policy-denied'

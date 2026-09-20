@@ -203,6 +203,64 @@ describe('server capability bridge (finding 4)', () => {
         ).rejects.toMatchObject({ rpcCode: 'budget-exceeded' });
     });
 
+    it('preserves a lifecycle refusal code the server answers with data.code', async () => {
+        const fetchImpl = vi.fn(async () =>
+            new Response(
+                JSON.stringify({
+                    statusCode: 409,
+                    statusMessage: 'Activation has expired; start the plugin again',
+                    data: { code: 'activation-expired' },
+                }),
+                { status: 409, headers: { 'content-type': 'application/json' } }
+            )
+        );
+        const transport = createHttpCapabilityTransport({
+            fetchImpl: fetchImpl as unknown as typeof fetch,
+        });
+        const response = await transport({
+            method: REMOTE_CAPABILITY_METHODS.aiComplete,
+            params: {},
+            session,
+            requestId: 'rpc-lifecycle',
+            deadlineMs: 5_000,
+        });
+        expect(response).toMatchObject({
+            ok: false,
+            code: 'activation-expired',
+            message: 'Activation has expired; start the plugin again',
+        });
+    });
+
+    it('reports the raw refusal to the host while the plugin sees the RPC vocabulary', async () => {
+        const refusals: Array<{ code: string }> = [];
+        const [aiSpec] = createRemoteCapabilityMethods({
+            transport: async () => ({
+                ok: false,
+                code: 'activation-expired',
+                message: 'Activation has expired; start the plugin again',
+            }),
+            session: () => session,
+            grants: grants(['network.http']),
+            onCapabilityRefusal: (refusal) => {
+                refusals.push(refusal);
+            },
+        });
+        await expect(
+            aiSpec!.handler(
+                { model: 'm', prompt: 'hi' },
+                {
+                    pluginId: 'example.plugin',
+                    workspaceId: 'ws_1',
+                    generation: 3,
+                    requestId: 'rpc-5',
+                    signal: new AbortController().signal,
+                    deadlineMs: 5_000,
+                }
+            )
+        ).rejects.toMatchObject({ rpcCode: 'policy-denied' });
+        expect(refusals).toMatchObject([{ code: 'activation-expired' }]);
+    });
+
     it('derives a refusal code from the HTTP status when no rpcCode is present', async () => {
         const cases: ReadonlyArray<[number, string]> = [
             [429, 'budget-exceeded'],

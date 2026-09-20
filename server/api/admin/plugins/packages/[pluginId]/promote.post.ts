@@ -134,8 +134,7 @@ export default defineEventHandler(async (event) => {
             }),
         restoreState: (snapshot) =>
             restorePluginStateSnapshot(services, workspaceId, pluginId, snapshot),
-        prepareSetupPromotion: async () => {
-            const pointer = await services.pointers.readPointer(pluginId);
+        prepareSetupPromotion: async ({ running }) => {
             const workspaceIds = new Set(await listAllWorkspaceIds(event));
             workspaceIds.add(workspaceId);
             const undos: Array<() => void | Promise<void>> = [];
@@ -168,7 +167,10 @@ export default defineEventHandler(async (event) => {
                         pluginId,
                         body.data.candidateDigest,
                         setupOperation?.operationId ?? 'direct-promotion',
-                        pointer?.current?.packageDigest ?? null
+                        // Inherit from the verified running version (the
+                        // recovered previous when current is unreadable), never
+                        // from an unverified pointer slot.
+                        running?.packageDigest ?? null
                     );
                     if (undo) undos.push(undo);
                 }
@@ -183,10 +185,13 @@ export default defineEventHandler(async (event) => {
         // A first promotion installs the plugin for this workspace, so it is
         // enabled here too: the runtime gate refuses a disabled package, and
         // "promoted" without enablement would be a version nothing runs. An
-        // update leaves enablement as the workspace set it.
-        if (result.pointer.previous === null) {
+        // update leaves enablement as the workspace set it, even when a failed
+        // current had to be dropped and the new pointer retains no previous.
+        if (!result.wasInstalled) {
             await setPluginEnabled(services.settings, workspaceId, pluginId, true);
         }
+        // Live-handle revocation happens in the promotion service's own commit
+        // hook, which every promotion caller shares.
         await event.context.adminHooks?.doAction('admin.plugin:action:promoted', {
             id: pluginId,
             workspaceId,

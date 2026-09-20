@@ -6,6 +6,7 @@ import { getWorkspaceSettingsStore } from '../../../../../admin/stores/registry'
 import { ImmutablePluginPackageStore } from '../../../../../admin/plugins/package-store';
 import { PluginPackagePointerStore } from '../../../../../admin/plugins/package-pointer-store';
 import { PluginPackageLifecycleService } from '../../../../../admin/plugins/package-lifecycle';
+import { revokeHostActivationsForPlugin } from '../../../../../utils/plugins/isolation/activation-registry';
 
 const BodySchema = z.object({ workspaceId: z.string().min(1).optional() });
 
@@ -32,6 +33,9 @@ export default defineEventHandler(async (event) => {
     );
     const disabled = await lifecycle.disable(workspaceId, pluginId);
     const result = await lifecycle.uninstallPackage(pluginId);
+    // Uninstall ends execution everywhere: revoke live handles and abort their
+    // in-flight calls so nothing finishes on removed bytes.
+    revokeHostActivationsForPlugin(pluginId, 'plugin-uninstalled');
     await event.context.adminHooks?.doAction('admin.plugin:action:uninstalled-v2', {
         id: pluginId,
         workspaceId,

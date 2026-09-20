@@ -2,8 +2,10 @@
  * Revoke a portable activation during client teardown.
  *
  * The browser supplies only the opaque handle it received from the activation
- * endpoint. Session and workspace ownership are checked before revocation so a
- * stale tab cannot revoke another user's activation.
+ * endpoint. User ownership is checked before revocation so a stale tab cannot
+ * revoke another user's activation. The workspace may differ: teardown after a
+ * workspace switch revokes the previous workspace's handle from the new one,
+ * which is exactly the cleanup that must succeed.
  */
 
 import { createError, defineEventHandler } from 'h3';
@@ -54,13 +56,16 @@ export default defineEventHandler(async (event) => {
         return { ok: true, alreadyRevoked: true, code: resolution.code };
     }
     const record = resolution.record;
-    if (record.workspaceId !== workspaceId || record.userId !== userId) {
+    if (record.userId !== userId) {
         throw createError({
             statusCode: 403,
-            statusMessage: 'This activation belongs to another session',
+            statusMessage: 'This activation belongs to another user',
             data: { code: 'activation-session-mismatch' },
         });
     }
+    // The record workspace may be the one just left; the caller still holds
+    // `workspace.write` in the current workspace (checked above), and only
+    // the owning user reaches this point.
     revokeHostActivation(activationId, 'client-teardown');
     return { ok: true, alreadyRevoked: false };
 });

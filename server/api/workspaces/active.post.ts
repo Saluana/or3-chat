@@ -12,6 +12,7 @@ import {
 } from './_helpers';
 import { requireCan } from '../../auth/can';
 import { invalidateSharedSessionCacheForIdentity } from '../../auth/session';
+import { revokeHostActivationsForUserWorkspace } from '../../utils/plugins/isolation/activation-registry';
 import { useRuntimeConfig } from '#imports';
 
 type SetActiveBody = { id?: string };
@@ -42,10 +43,27 @@ export default defineEventHandler(async (event) => {
         id: workspaceId,
     });
 
+    // The session still carries the workspace being left; capture it before the
+    // switch commits so stale portable handles can be revoked authoritatively.
+    const previousWorkspaceId = session.workspace?.id;
+
     await store.setActiveWorkspace({
         userId: session.user.id,
         workspaceId,
     });
+
+    // Authoritative switch teardown, scoped to this user and the workspace
+    // being left: the client's own DELETE runs after the session already
+    // changed (and other tabs never send one), so the server revokes here.
+    // Never workspace-wide — that would stop other users sharing the old
+    // workspace.
+    if (previousWorkspaceId && previousWorkspaceId !== workspaceId) {
+        revokeHostActivationsForUserWorkspace(
+            session.user.id,
+            previousWorkspaceId,
+            'workspace-switch'
+        );
+    }
 
     // Session cache includes workspace context; invalidate so the next session
     // fetch reflects this switch immediately.

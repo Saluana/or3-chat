@@ -4,8 +4,8 @@ import { resolve, sep } from 'node:path';
 import { requireCan, requireSession } from '../../../auth/can';
 import { resolveSessionContext } from '../../../auth/session';
 import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
-import { listInstalledExtensions } from '../../../admin/extensions/extension-manager';
 import { loadPackageDescriptors } from '../../../utils/plugins/setup/load-descriptors';
+import { resolvePluginPackage } from '../../../utils/plugins/setup/discovery';
 
 /** Bounded: the sample is a small, human-reviewable starting point. */
 const MAX_SAMPLE_BYTES = 32 * 1024;
@@ -13,10 +13,13 @@ const MAX_SAMPLE_BYTES = 32 * 1024;
 /**
  * The package's declared first-action sample.
  *
- * The path comes from the installed package's own `or3.setup.json`
+ * The path comes from the verified selected package's own `or3.setup.json`
  * (`firstAction.samplePath`) and is resolved inside the package directory, so a
- * package can never point the host at an arbitrary file. Only a package that
- * declares a sample is served; anything else is reported, never guessed.
+ * package can never point the host at an arbitrary file. The selection is the
+ * same running selection the first-action handoff uses: an immutable-only
+ * package resolves from the pointer store, and a same-id legacy directory can
+ * never supply the sample for a V2-owned identity. Only a package that declares
+ * a sample is served; anything else is reported, never guessed.
  */
 export default defineEventHandler(async (event) => {
     const session = await resolveSessionContext(event);
@@ -32,16 +35,25 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'pluginId is required' });
     }
 
-    const installed = (await listInstalledExtensions()).find(
-        (extension) => extension.kind === 'plugin' && extension.id === pluginId
+    const selection = await resolvePluginPackage(
+        pluginId,
+        EXTENSIONS_BASE_DIR,
+        'current'
     );
-    if (!installed) {
+    if (!selection) {
         throw createError({ statusCode: 404, statusMessage: 'Plugin is not installed' });
+    }
+    if (selection.status === 'blocked' || !selection.path) {
+        throw createError({
+            statusCode: 409,
+            statusMessage: 'The selected plugin package is blocked or inactive.',
+            data: { code: 'plugin-package-blocked', issues: selection.issues },
+        });
     }
 
     const descriptors = await loadPackageDescriptors({
         extensionsBaseDir: EXTENSIONS_BASE_DIR,
-        packagePath: installed.path,
+        packagePath: selection.path,
     });
     const firstAction = descriptors.setup?.firstAction;
     if (!firstAction || !firstAction.usesSampleContext || !firstAction.samplePath) {
@@ -51,7 +63,7 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const packageRoot = resolve(installed.path);
+    const packageRoot = resolve(selection.path);
     const samplePath = resolve(packageRoot, firstAction.samplePath);
     if (samplePath !== packageRoot && !samplePath.startsWith(`${packageRoot}${sep}`)) {
         throw createError({ statusCode: 400, statusMessage: 'The declared sample path is invalid' });

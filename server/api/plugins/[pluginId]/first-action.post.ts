@@ -79,6 +79,14 @@ export default defineEventHandler(async (event) => {
         slot: 'current',
     });
     if (!state.installed) {
+        if (state.selection?.status === 'blocked') {
+            throw createError({
+                statusCode: 409,
+                statusMessage:
+                    'This plugin package is blocked; its selected version could not be verified.',
+                data: { code: 'plugin-package-blocked', issues: state.selection.issues },
+            });
+        }
         throw createError({ statusCode: 404, statusMessage: 'Plugin is not installed' });
     }
     if (!state.plan) {
@@ -93,7 +101,7 @@ export default defineEventHandler(async (event) => {
     // this route mints one. Unselected reads (no handle) and unapproved writes
     // (host action executor) fail on their own boundaries too.
     const installed = await resolvePluginPackage(pluginId, EXTENSIONS_BASE_DIR, 'current');
-    if (installed?.digest) {
+    if (installed?.path && installed.digest) {
         const candidate = await packageGrantCandidate({
             packagePath: installed.path,
             packageDigest: installed.digest,

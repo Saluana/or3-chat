@@ -10,6 +10,7 @@ import { requireAdminApiContext } from '../../../admin/api';
 import { getWorkspaceSettingsStore } from '../../../admin/stores/registry';
 import { setPluginEnabled } from '../../../admin/plugins/workspace-plugin-store';
 import { resolveAdminWorkspaceTarget } from '../../../admin/workspace-target';
+import { revokeHostActivationsForPluginWorkspace } from '../../../utils/plugins/isolation/activation-registry';
 
 const BodySchema = z.object({
     pluginId: z.string().min(1),
@@ -52,6 +53,17 @@ export default defineEventHandler(async (event) => {
         body.data.pluginId,
         body.data.enabled
     );
+
+    if (!body.data.enabled) {
+        // Disable ends execution immediately: revoke live handles and abort
+        // their in-flight capability calls instead of letting them run until
+        // the next call lazily notices the disable.
+        revokeHostActivationsForPluginWorkspace(
+            body.data.pluginId,
+            workspaceId,
+            'plugin-disabled'
+        );
+    }
 
     await event.context.adminHooks?.doAction(
         body.data.enabled

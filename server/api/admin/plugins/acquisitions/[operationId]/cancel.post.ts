@@ -8,8 +8,10 @@
  * Behavior:
  * - Owner-only, super-admin-only mutation.
  * - Cancellation never promotes, so the working pointer keeps its previous
- *   selected version. A recorded candidate is retained until a lifecycle call
- *   removes it.
+ *   selected version. The canceled operation's candidate pointer is released
+ *   under the lifecycle lease (current/previous and their configuration are
+ *   preserved), so later setup resolves the running version instead of a dead
+ *   candidate. A retry restages the candidate from its retained staging bytes.
  */
 import { createError, defineEventHandler, getRouterParam } from 'h3';
 import { requireAdminApiContext } from '../../../../../admin/api';

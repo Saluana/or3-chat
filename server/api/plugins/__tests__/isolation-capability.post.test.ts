@@ -4,8 +4,10 @@ import type { PluginGrantReviewSnapshot } from '~~/shared/plugins/grant-review';
 import {
     clearHostActivationsForTests,
     registerHostActivation,
+    revokeHostActivation,
     type HostActivationRecord,
 } from '../../../utils/plugins/isolation/activation-registry';
+import { getActivationAdmissionStats } from '../../../utils/plugins/isolation/activation-admission';
 
 /**
  * Authorization tests for the portable capability endpoint (finding 1).
@@ -115,8 +117,9 @@ vi.mock('../../../utils/plugins/connections/resolve', () => ({
     resolveConnectionService: resolveConnectionServiceMock as any,
 }));
 
+const listProvidersMock = vi.fn((): Array<{ readonly id: string }> => []);
 vi.mock('../../../utils/plugins/connections/providers/registry', () => ({
-    listConnectionProviders: () => [],
+    listConnectionProviders: listProvidersMock as any,
 }));
 
 vi.mock('../../../utils/plugins/connections/transport', () => ({
@@ -128,10 +131,17 @@ vi.mock('../../../utils/plugins/connections/dispatch', () => ({
     dispatchApprovedConnectionOperation: dispatchMock as any,
 }));
 
-const descriptorsMock = vi.fn(async () => ({ setup: null, policy: null, problems: [] }));
+const descriptorsMock = vi.fn(
+    async (): Promise<{ setup: null; policy: unknown; problems: unknown[] }> => ({
+        setup: null,
+        policy: null,
+        problems: [],
+    })
+);
+const toDispatchPolicyMock = vi.fn((): unknown => null);
 vi.mock('../../../utils/plugins/setup/load-descriptors', () => ({
     loadPackageDescriptors: descriptorsMock as any,
-    toConnectionDispatchPolicy: () => null,
+    toConnectionDispatchPolicy: toDispatchPolicyMock as any,
 }));
 
 type MockCapabilityMethod = {
@@ -252,6 +262,10 @@ describe('POST /api/plugins/isolation/capability', () => {
         });
         dispatchMock.mockReset();
         resolveConnectionServiceMock.mockReset();
+        listProvidersMock.mockReset();
+        listProvidersMock.mockReturnValue([]);
+        toDispatchPolicyMock.mockReset();
+        toDispatchPolicyMock.mockReturnValue(null);
         resolveSessionContextMock.mockReset().mockResolvedValue({
             authenticated: true,
             role: 'owner',
@@ -695,5 +709,411 @@ describe('POST /api/plugins/isolation/capability', () => {
 
         await expectStatus(handler(makeEvent()), 403);
         expect(dispatchMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects a duplicate request ID across separate HTTP requests', async () => {
+        readBodyMock.mockResolvedValue({
+            activationId: record.activationId,
+            method: 'ai.models',
+            requestId: 'rpc-cross-request-dup',
+        });
+        await expect(handler(makeEvent())).resolves.toMatchObject({ ok: true });
+
+        // A second HTTP request reusing the same activation and request ID is
+        // a replay, even though it gets a fresh broker.
+        await expect(handler(makeEvent())).rejects.toMatchObject({
+            statusCode: 400,
+            data: { rpcCode: 'replay' },
+        });
+    });
+
+    it('rejects a reused request ID with a different method as a replay', async () => {
+        readBodyMock.mockResolvedValueOnce({
+            activationId: record.activationId,
+            method: 'ai.models',
+            requestId: 'rpc-reused-id',
+        });
+        await expect(handler(makeEvent())).resolves.toMatchObject({ ok: true });
+
+        // The same ID must never silently become a different side effect.
+        readBodyMock.mockResolvedValueOnce({
+            activationId: record.activationId,
+            method: 'ai.complete',
+            params: { model: 'm', prompt: 'p' },
+            requestId: 'rpc-reused-id',
+        });
+        await expect(handler(makeEvent())).rejects.toMatchObject({
+            statusCode: 400,
+            data: { rpcCode: 'replay' },
+        });
+    });
+
+    it('allows the same request ID under different activations', async () => {
+        const second = registerHostActivation({
+            pluginId: 'example.plugin',
+            workspaceId: 'ws_1',
+            userId: 'user_1',
+            packageDigest: DIGEST,
+            grants: grants(['network.http']),
+        });
+        readBodyMock.mockResolvedValueOnce({
+            activationId: record.activationId,
+            method: 'ai.models',
+            requestId: 'rpc-shared-id',
+        });
+        await expect(handler(makeEvent())).resolves.toMatchObject({ ok: true });
+
+        readBodyMock.mockResolvedValueOnce({
+            activationId: second.activationId,
+            method: 'ai.models',
+            requestId: 'rpc-shared-id',
+        });
+        await expect(handler(makeEvent())).resolves.toMatchObject({ ok: true });
+    });
+
+    it('enforces the concurrency ceiling across simultaneous requests', async () => {
+        configMock.mockReturnValue({
+            auth: { enabled: true },
+            openrouterApiKey: 'sk-or-host',
+            openrouterBaseUrl: 'https://openrouter.ai/api/v1',
+            admin: {
+                pluginModelPrices: { m: { promptPerMillion: 1, completionPerMillion: 2 } },
+                pluginAllowedModels: ['m'],
+            },
+        });
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        aiFactoryMock.mockReturnValue({
+            method: 'ai.complete',
+            grant: 'network.http',
+            handler: async () => {
+                await gate;
+                return { text: 'ok' };
+            },
+        });
+        let callIndex = 0;
+        readBodyMock.mockImplementation(async () => {
+            callIndex += 1;
+            return {
+                activationId: record.activationId,
+                method: 'ai.complete',
+                params: { model: 'm', prompt: 'p' },
+                requestId: `rpc-concurrent-${callIndex}`,
+            };
+        });
+
+        const pending = Array.from({ length: 9 }, () =>
+            handler(makeEvent()).then(
+                (result) => ({ ok: true as const, result }),
+                (error: unknown) => ({ ok: false as const, error })
+            )
+        );
+        // Let every request reach the blocking handler before releasing.
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        release();
+        const results = await Promise.all(pending);
+
+        const refused = results.filter((result) => !result.ok);
+        expect(refused).toHaveLength(1);
+        expect(refused[0]).toMatchObject({
+            ok: false,
+            error: expect.objectContaining({
+                statusCode: 400,
+                data: expect.objectContaining({ rpcCode: 'backpressure' }),
+            }),
+        });
+    });
+
+    it('threads the broker cancellation signal into connection dispatch', async () => {
+        resolveConnectionServiceMock.mockReturnValue({
+            service: {
+                resolve: vi.fn(async () => ({
+                    status: 'resolved',
+                    connection: { providerId: 'fake.provider', scopes: ['read:items'] },
+                })),
+                revealCredential: vi.fn(() => 'tok_live_123'),
+            },
+            storeId: 'durable',
+            durable: true,
+        });
+        listProvidersMock.mockReturnValue([{ id: 'fake.provider' }]);
+        descriptorsMock.mockResolvedValue({ setup: null, policy: { id: 'p' }, problems: [] });
+        toDispatchPolicyMock.mockReturnValue({ connections: [], destinations: [] });
+        let observedSignal: AbortSignal | undefined;
+        let aborted = false;
+        dispatchMock.mockImplementation(async (input: { signal?: AbortSignal }) => {
+            observedSignal = input.signal;
+            await new Promise<void>((resolve, reject) => {
+                input.signal?.addEventListener('abort', () => {
+                    aborted = true;
+                    reject(new Error('aborted'));
+                });
+            });
+            return { status: 'ok', operationId: 'items.list', response: {} };
+        });
+        readBodyMock.mockResolvedValue({
+            activationId: record.activationId,
+            method: 'connections.dispatch',
+            params: { ref: 'orc_a_r1', operationId: 'items.list', url: 'https://x.test/v1/' },
+            requestId: 'rpc-conn-cancel',
+        });
+
+        const { event, close } = makeCloseableEvent();
+        const pending = handler(event);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        close(false);
+
+        await expectStatus(pending, 499);
+        expect(observedSignal).toBeInstanceOf(AbortSignal);
+        expect(aborted).toBe(true);
+    });
+
+    it('never starts the external request when cancellation lands during lookup', async () => {
+        let releaseLookup!: () => void;
+        const lookupGate = new Promise<void>((resolve) => {
+            releaseLookup = resolve;
+        });
+        resolveConnectionServiceMock.mockReturnValue({
+            service: {
+                resolve: vi.fn(async () => {
+                    await lookupGate;
+                    return {
+                        status: 'resolved',
+                        connection: { providerId: 'fake.provider', scopes: [] },
+                    };
+                }),
+                revealCredential: vi.fn(() => 'tok_live_123'),
+            },
+            storeId: 'durable',
+            durable: true,
+        });
+        listProvidersMock.mockReturnValue([{ id: 'fake.provider' }]);
+        descriptorsMock.mockResolvedValue({ setup: null, policy: { id: 'p' }, problems: [] });
+        toDispatchPolicyMock.mockReturnValue({ connections: [], destinations: [] });
+        dispatchMock.mockResolvedValue({ status: 'ok', operationId: 'items.list', response: {} });
+        readBodyMock.mockResolvedValue({
+            activationId: record.activationId,
+            method: 'connections.dispatch',
+            params: { ref: 'orc_a_r1', operationId: 'items.list', url: 'https://x.test/v1/' },
+            requestId: 'rpc-conn-precancel',
+        });
+
+        const { event, close } = makeCloseableEvent();
+        const pending = handler(event);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        // Disconnect while the connection lookup is still suspended.
+        close(false);
+        releaseLookup();
+
+        await expectStatus(pending, 499);
+        expect(dispatchMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses without admission when revocation lands during the grant lookup', async () => {
+        let releaseLookup!: (review: PluginGrantReviewSnapshot) => void;
+        const lookupGate = new Promise<PluginGrantReviewSnapshot>((resolve) => {
+            releaseLookup = resolve;
+        });
+        getPluginGrantReviewMock.mockImplementationOnce(() => lookupGate);
+        readBodyMock.mockResolvedValue({
+            activationId: record.activationId,
+            method: 'ai.models',
+            requestId: 'rpc-race-grant',
+        });
+
+        const pending = handler(makeEvent());
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        revokeHostActivation(record.activationId, 'plugin-disabled');
+        releaseLookup(grants(['network.http']));
+
+        await expectFailure(pending, 409, 'activation-revoked');
+        // Refused before admission: no method was built and no admission
+        // state was recreated for the dead handle.
+        expect(aiFactoryMock).not.toHaveBeenCalled();
+        expect(getActivationAdmissionStats(record.activationId)).toEqual({
+            inFlight: 0,
+            seen: 0,
+            sideEffected: 0,
+        });
+    });
+
+    it('refuses without dispatching when revocation lands during method preparation', async () => {
+        configMock.mockReturnValue({
+            auth: { enabled: true },
+            openrouterApiKey: 'sk-or-host',
+            openrouterBaseUrl: 'https://openrouter.ai/api/v1',
+            admin: {
+                pluginModelPrices: { m: { promptPerMillion: 1, completionPerMillion: 2 } },
+                pluginAllowedModels: ['m'],
+            },
+        });
+        let releaseRead!: (raw: string | null) => void;
+        const readGate = new Promise<string | null>((resolve) => {
+            releaseRead = resolve;
+        });
+        settingsStore.get.mockImplementationOnce(() => readGate);
+        const governed = vi.fn(async () => ({ text: 'ok' }));
+        aiFactoryMock.mockReturnValue({
+            method: 'ai.complete',
+            grant: 'network.http',
+            handler: governed,
+        });
+        readBodyMock.mockResolvedValue({
+            activationId: record.activationId,
+            method: 'ai.models',
+            requestId: 'rpc-race-prep',
+        });
+
+        const pending = handler(makeEvent());
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        // Revocation aborts the admission controller while the budget read is
+        // still suspended; the abort must not be lost before dispatch.
+        revokeHostActivation(record.activationId, 'plugin-disabled');
+        releaseRead(null);
+
+        await expectFailure(pending, 409, 'activation-revoked');
+        expect(governed).not.toHaveBeenCalled();
+        expect(getActivationAdmissionStats(record.activationId)).toEqual({
+            inFlight: 0,
+            seen: 0,
+            sideEffected: 0,
+        });
+    });
+
+    it('refuses preparation when the client is already disconnected', async () => {
+        configMock.mockReturnValue({
+            auth: { enabled: true },
+            openrouterApiKey: 'sk-or-host',
+            openrouterBaseUrl: 'https://openrouter.ai/api/v1',
+            admin: {
+                pluginModelPrices: { m: { promptPerMillion: 1, completionPerMillion: 2 } },
+                pluginAllowedModels: ['m'],
+            },
+        });
+        readBodyMock.mockResolvedValue({
+            activationId: record.activationId,
+            method: 'ai.models',
+            requestId: 'rpc-early-disconnect',
+        });
+        const res = {
+            on: () => undefined,
+            off: () => undefined,
+            writableEnded: false,
+            destroyed: true,
+        };
+
+        await expectStatus(handler(makeEvent(res)), 499);
+        // The slot was admitted and released, but no method was prepared.
+        expect(aiFactoryMock).not.toHaveBeenCalled();
+        expect(getActivationAdmissionStats(record.activationId).inFlight).toBe(0);
+    });
+
+    it('reports a mid-dispatch timeout as deadline-exceeded rather than cancelled', async () => {
+        configMock.mockReturnValue({
+            auth: { enabled: true },
+            openrouterApiKey: 'sk-or-host',
+            openrouterBaseUrl: 'https://openrouter.ai/api/v1',
+            admin: {
+                pluginModelPrices: { m: { promptPerMillion: 1, completionPerMillion: 2 } },
+                pluginAllowedModels: ['m'],
+            },
+        });
+        aiFactoryMock.mockReturnValue({
+            method: 'ai.complete',
+            grant: 'network.http',
+            handler: async () => {
+                await new Promise((resolve) => setTimeout(resolve, 100));
+                return { text: 'too late' };
+            },
+        });
+        readBodyMock.mockResolvedValue({
+            activationId: record.activationId,
+            method: 'ai.complete',
+            params: { model: 'm', prompt: 'p' },
+            requestId: 'rpc-dispatch-deadline',
+            deadlineMs: 10,
+        });
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({
+            statusCode: 504,
+            data: { rpcCode: 'deadline-exceeded' },
+        });
+        expect(getActivationAdmissionStats(record.activationId).inFlight).toBe(0);
+    });
+
+    it('applies the call deadline to preparation as well as dispatch', async () => {
+        configMock.mockReturnValue({
+            auth: { enabled: true },
+            openrouterApiKey: 'sk-or-host',
+            openrouterBaseUrl: 'https://openrouter.ai/api/v1',
+            admin: {
+                pluginModelPrices: { m: { promptPerMillion: 1, completionPerMillion: 2 } },
+                pluginAllowedModels: ['m'],
+            },
+        });
+        settingsStore.get.mockImplementationOnce(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            return null;
+        });
+        const governed = vi.fn(async () => ({ text: 'ok' }));
+        aiFactoryMock.mockReturnValue({
+            method: 'ai.complete',
+            grant: 'network.http',
+            handler: governed,
+        });
+        readBodyMock.mockResolvedValue({
+            activationId: record.activationId,
+            method: 'ai.complete',
+            params: { model: 'm', prompt: 'p' },
+            requestId: 'rpc-prep-deadline',
+            deadlineMs: 10,
+        });
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({
+            statusCode: 504,
+            data: { rpcCode: 'deadline-exceeded' },
+        });
+        expect(governed).not.toHaveBeenCalled();
+        expect(getActivationAdmissionStats(record.activationId).inFlight).toBe(0);
+    });
+
+    it('releases the admission slot at the deadline without waiting for a stalled preparation', async () => {
+        configMock.mockReturnValue({
+            auth: { enabled: true },
+            openrouterApiKey: 'sk-or-host',
+            openrouterBaseUrl: 'https://openrouter.ai/api/v1',
+            admin: {
+                pluginModelPrices: { m: { promptPerMillion: 1, completionPerMillion: 2 } },
+                pluginAllowedModels: ['m'],
+            },
+        });
+        let releaseRead!: (raw: string | null) => void;
+        const readGate = new Promise<string | null>((resolve) => {
+            releaseRead = resolve;
+        });
+        settingsStore.get.mockImplementationOnce(() => readGate);
+        readBodyMock.mockResolvedValue({
+            activationId: record.activationId,
+            method: 'ai.complete',
+            params: { model: 'm', prompt: 'p' },
+            requestId: 'rpc-prep-stall',
+            deadlineMs: 10,
+        });
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({
+            statusCode: 504,
+            data: { rpcCode: 'deadline-exceeded' },
+        });
+        // Preparation is still suspended, but the slot was released at the
+        // deadline instead of waiting for the stalled budget read.
+        expect(getActivationAdmissionStats(record.activationId).inFlight).toBe(0);
+        releaseRead(null);
+        await new Promise((resolve) => setTimeout(resolve, 0));
     });
 });

@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -9,6 +9,12 @@ import { PluginPackagePromotionService } from '../package-promotion';
 import { PluginPackagePointerStore, type PluginPackagePointer } from '../package-pointer-store';
 import { ImmutablePluginPackageStore } from '../package-store';
 import type { WorkspaceSettingsStore } from '../../stores/types';
+import {
+    clearHostActivationsForTests,
+    registerHostActivation,
+    resolveHostActivation,
+} from '../../../utils/plugins/isolation/activation-registry';
+import { tryAdmitActivationCall } from '../../../utils/plugins/isolation/activation-admission';
 import {
     promoteScopedSetupValues,
     readSetupValuesFor,
@@ -77,7 +83,7 @@ async function setup(stateCompatibility: {
         now: () => 100,
     });
     const service = new PluginPackagePromotionService(packages, pointers, canary);
-    return { packages, pointers, canary, service, current, candidate };
+    return { root, packages, pointers, canary, service, current, candidate };
 }
 
 describe('PluginPackagePromotionService', () => {
@@ -111,6 +117,90 @@ describe('PluginPackagePromotionService', () => {
         expect(rolled.pointer.current?.packageDigest).toBe(current.digest);
         const selection = await pointers.readStartupSelection('alpha');
         expect(selection.selected?.packageDigest).toBe(current.digest);
+    });
+
+    it('revokes live activations and aborts outstanding calls when promotion or rollback commits', async () => {
+        clearHostActivationsForTests();
+        const { service, candidate } = await setup();
+        const grants = {
+            requestedGrants: [],
+            approvedGrants: [],
+            revision: 'g1',
+            status: 'current' as const,
+            authoritySha256: null,
+            packageDigest: null,
+        };
+
+        const beforePromote = registerHostActivation({
+            pluginId: 'alpha',
+            workspaceId: 'workspace-1',
+            userId: 'user-1',
+            packageDigest: candidate.digest,
+            grants,
+        });
+        const inFlight = tryAdmitActivationCall(beforePromote.activationId, {
+            requestId: 'rpc-promote-race',
+            method: 'ai.complete',
+            params: {},
+        });
+        expect(inFlight.ok).toBe(true);
+        let aborted = 0;
+        if (inFlight.ok) {
+            inFlight.controller.signal.addEventListener('abort', () => {
+                aborted += 1;
+            });
+        }
+
+        const promoted = await service.promote({
+            pluginId: 'alpha',
+            workspaceId: 'workspace-1',
+            expectedCandidateDigest: candidate.digest,
+            storedStateVersion: 1,
+            snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: currentGrantReview,
+            restoreState: vi.fn(),
+            now: () => 200,
+        });
+        expect(promoted.status).toBe('promoted');
+        expect(resolveHostActivation(beforePromote.activationId)).toMatchObject({
+            ok: false,
+            code: 'activation-revoked',
+        });
+        expect(aborted).toBe(1);
+
+        const beforeRollback = registerHostActivation({
+            pluginId: 'alpha',
+            workspaceId: 'workspace-1',
+            userId: 'user-1',
+            packageDigest: candidate.digest,
+            grants,
+        });
+        const rollingBack = tryAdmitActivationCall(beforeRollback.activationId, {
+            requestId: 'rpc-rollback-race',
+            method: 'connections.dispatch',
+            params: {},
+        });
+        expect(rollingBack.ok).toBe(true);
+        if (rollingBack.ok) {
+            rollingBack.controller.signal.addEventListener('abort', () => {
+                aborted += 1;
+            });
+        }
+
+        const rolled = await service.rollback({
+            pluginId: 'alpha',
+            storedStateVersion: 1,
+            snapshotState: () => ({ settings: { count: 1 } }),
+            restoreState: vi.fn(),
+            now: () => 300,
+        });
+        expect(rolled.status).toBe('rolled-back');
+        expect(resolveHostActivation(beforeRollback.activationId)).toMatchObject({
+            ok: false,
+            code: 'activation-revoked',
+        });
+        expect(aborted).toBe(2);
+        clearHostActivationsForTests();
     });
 
     it('restores state and leaves current unchanged when promotion fails before pointer swap', async () => {
@@ -293,6 +383,217 @@ describe('PluginPackagePromotionService', () => {
         expect(result).toMatchObject({ status: 'promoted' });
         expect(restoreState).not.toHaveBeenCalled();
         expect((await pointers.readPointer('alpha'))?.current?.packageDigest).toBe(candidate.digest);
+    });
+
+    it('recovers from a corrupt current by committing the verified previous target', async () => {
+        const { packages, pointers, service, current, candidate } = await setup();
+        await service.promote({
+            pluginId: 'alpha',
+            workspaceId: 'workspace-1',
+            expectedCandidateDigest: candidate.digest,
+            storedStateVersion: 1,
+            snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: currentGrantReview,
+            restoreState: vi.fn(),
+            now: () => 200,
+        });
+        // The promoted current package is now corrupt.
+        const file = resolve(packages.packagePath('alpha', candidate.digest), 'client.mjs');
+        chmodSync(file, 0o644);
+        writeFileSync(file, 'corrupt');
+
+        const rolled = await service.rollback({
+            pluginId: 'alpha',
+            storedStateVersion: 1,
+            snapshotState: () => ({ settings: { count: 1 } }),
+            restoreState: vi.fn(),
+            now: () => 300,
+        });
+        expect(rolled).toMatchObject({ status: 'rolled-back' });
+        if (rolled.status !== 'rolled-back') throw new Error('expected rolled-back');
+        expect(rolled.pointer.current?.packageDigest).toBe(current.digest);
+        // The broken reference is removed instead of being retained as previous.
+        expect(rolled.pointer.previous).toBeNull();
+        const selection = await pointers.readStartupSelection('alpha');
+        expect(selection.status).toBe('ready');
+        expect(selection.selected?.packageDigest).toBe(current.digest);
+    });
+
+    it('qualifies a candidate while the current slot is recovered', async () => {
+        const { root, packages, pointers, current, candidate } = await setup();
+        const third = await packages.installPackage('alpha', source('3.0.0'));
+        const compatibility = {
+            version: 1,
+            reads: { minimum: 1, maximum: 1 },
+            rollback: 'safe' as const,
+        };
+        await pointers.writePointer('alpha', {
+            schemaVersion: 1,
+            pluginId: 'alpha',
+            revision: 2,
+            current: {
+                packageDigest: candidate.digest,
+                manifestDigest: candidate.verification.manifestDigest,
+                recordedAt: 3,
+                stateCompatibility: compatibility,
+            },
+            candidate: {
+                packageDigest: third.digest,
+                manifestDigest: third.verification.manifestDigest,
+                recordedAt: 4,
+                stateCompatibility: compatibility,
+            },
+            previous: {
+                packageDigest: current.digest,
+                manifestDigest: current.verification.manifestDigest,
+                recordedAt: 1,
+                stateCompatibility: compatibility,
+            },
+        });
+        const file = resolve(packages.packagePath('alpha', candidate.digest), 'client.mjs');
+        chmodSync(file, 0o644);
+        writeFileSync(file, 'corrupt');
+
+        const canary = new PluginPackageCandidateCanaryService(packages, pointers, root);
+        const result = await canary.run({
+            pluginId: 'alpha',
+            workspaceId: 'workspace-1',
+            packageDigest: third.digest,
+            clientId: 'designated-client-1',
+            snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: currentGrantReview,
+            serverDryRun: () => ({ status: 'passed' }),
+            clientHiddenPrepare: () => ({ status: 'passed' }),
+            now: () => 100,
+        });
+        expect(result.status).toBe('passed');
+    });
+
+    it('promotes a fresh install with no previous and reports it as not previously installed', async () => {
+        const root = mkdtempSync(resolve(tmpdir(), 'or3-promote-fresh-'));
+        const packages = new ImmutablePluginPackageStore(root);
+        const pointers = new PluginPackagePointerStore(root, packages);
+        const candidate = await packages.installPackage('alpha', source('1.0.0'));
+        const compatibility = {
+            version: 1,
+            reads: { minimum: 1, maximum: 1 },
+            rollback: 'safe' as const,
+        };
+        await pointers.writePointer('alpha', {
+            schemaVersion: 1,
+            pluginId: 'alpha',
+            revision: 1,
+            current: null,
+            candidate: {
+                packageDigest: candidate.digest,
+                manifestDigest: candidate.verification.manifestDigest,
+                recordedAt: 2,
+                stateCompatibility: compatibility,
+            },
+            previous: null,
+        });
+        const canary = new PluginPackageCandidateCanaryService(packages, pointers, root);
+        await canary.run({
+            pluginId: 'alpha',
+            workspaceId: 'workspace-1',
+            packageDigest: candidate.digest,
+            clientId: 'designated-client-1',
+            snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: currentGrantReview,
+            serverDryRun: () => ({ status: 'passed' }),
+            clientHiddenPrepare: () => ({ status: 'passed' }),
+            now: () => 100,
+        });
+        const service = new PluginPackagePromotionService(packages, pointers, canary);
+        let runningDigest: string | null | undefined;
+        const result = await service.promote({
+            pluginId: 'alpha',
+            workspaceId: 'workspace-1',
+            expectedCandidateDigest: candidate.digest,
+            storedStateVersion: null,
+            snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: currentGrantReview,
+            restoreState: vi.fn(),
+            prepareSetupPromotion: async ({ running }) => {
+                runningDigest = running?.packageDigest ?? null;
+            },
+        });
+        expect(result).toMatchObject({ status: 'promoted', wasInstalled: false });
+        if (result.status !== 'promoted') throw new Error('expected promoted');
+        expect(result.pointer.previous).toBeNull();
+        expect(runningDigest).toBeNull();
+    });
+
+    it('promotes over a recovered previous and retains it as the verified running target', async () => {
+        const { root, packages, pointers, current, candidate } = await setup();
+        const third = await packages.installPackage('alpha', source('3.0.0'));
+        const compatibility = {
+            version: 1,
+            reads: { minimum: 1, maximum: 1 },
+            rollback: 'safe' as const,
+        };
+        // The runtime runs the previous (v1) while current (v2) is unreadable.
+        // A raw pointer read would drop the rollback target and inherit v2.
+        await pointers.writePointer('alpha', {
+            schemaVersion: 1,
+            pluginId: 'alpha',
+            revision: 2,
+            current: {
+                packageDigest: candidate.digest,
+                manifestDigest: candidate.verification.manifestDigest,
+                recordedAt: 3,
+                stateCompatibility: compatibility,
+            },
+            candidate: {
+                packageDigest: third.digest,
+                manifestDigest: third.verification.manifestDigest,
+                recordedAt: 4,
+                stateCompatibility: compatibility,
+            },
+            previous: {
+                packageDigest: current.digest,
+                manifestDigest: current.verification.manifestDigest,
+                recordedAt: 1,
+                stateCompatibility: compatibility,
+            },
+        });
+        const file = resolve(packages.packagePath('alpha', candidate.digest), 'client.mjs');
+        chmodSync(file, 0o644);
+        writeFileSync(file, 'corrupt');
+
+        const canary = new PluginPackageCandidateCanaryService(packages, pointers, root);
+        await canary.run({
+            pluginId: 'alpha',
+            workspaceId: 'workspace-1',
+            packageDigest: third.digest,
+            clientId: 'designated-client-1',
+            snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: currentGrantReview,
+            serverDryRun: () => ({ status: 'passed' }),
+            clientHiddenPrepare: () => ({ status: 'passed' }),
+            now: () => 100,
+        });
+        const service = new PluginPackagePromotionService(packages, pointers, canary);
+        let runningDigest: string | null | undefined;
+        const result = await service.promote({
+            pluginId: 'alpha',
+            workspaceId: 'workspace-1',
+            expectedCandidateDigest: third.digest,
+            storedStateVersion: 1,
+            snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: currentGrantReview,
+            restoreState: vi.fn(),
+            prepareSetupPromotion: async ({ running }) => {
+                runningDigest = running?.packageDigest ?? null;
+            },
+            now: () => 200,
+        });
+
+        expect(result).toMatchObject({ status: 'promoted', wasInstalled: true });
+        if (result.status !== 'promoted') throw new Error('expected promoted');
+        expect(result.pointer.current?.packageDigest).toBe(third.digest);
+        expect(result.pointer.previous?.packageDigest).toBe(current.digest);
+        expect(runningDigest).toBe(current.digest);
     });
 
     it('blocks incompatible rollback before mutating the pointer', async () => {

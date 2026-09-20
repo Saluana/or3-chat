@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkspaceSettingsStore } from '../../../../admin/stores/types';
 import {
+    MAX_PERSISTENT_AI_RESERVATIONS,
     readPersistentPluginAiBudget,
     reservePersistentPluginAiSpend,
     settlePersistentPluginAiSpend,
@@ -273,5 +274,73 @@ describe('persistent plugin AI budget ledger', () => {
                 now: start + 2_000,
             })
         ).resolves.toMatchObject({ ok: true, budget: { spendUsd: 0.1, reservedUsd: 0 } });
+    });
+
+    it('admits 64 reservations and refuses the 65th without corrupting the window', async () => {
+        const store = memoryStore();
+        const now = 1_700_000_000_000;
+        // A high spend limit isolates the structural reservation ceiling.
+        const limitUsd = 1_000_000;
+        for (let index = 0; index < MAX_PERSISTENT_AI_RESERVATIONS; index += 1) {
+            const result = await reservePersistentPluginAiSpend({
+                store,
+                ...identity,
+                amountUsd: 0.01,
+                limitUsd,
+                now,
+            });
+            expect(result.ok).toBe(true);
+        }
+        await expect(
+            reservePersistentPluginAiSpend({
+                store,
+                ...identity,
+                amountUsd: 0.01,
+                limitUsd,
+                now,
+            })
+        ).resolves.toMatchObject({ ok: false, code: 'budget-exceeded' });
+
+        // The refused 65th write left structurally valid state behind: the
+        // next read succeeds instead of reporting corruption.
+        const reread = await readPersistentPluginAiBudget({
+            store,
+            ...identity,
+            limitUsd,
+            now,
+        });
+        expect(reread.ok).toBe(true);
+        if (!reread.ok) return;
+        expect(reread.budget.reservedUsd).toBeCloseTo(
+            MAX_PERSISTENT_AI_RESERVATIONS * 0.01,
+            10
+        );
+    });
+
+    it('recovers expired reservations before enforcing the reservation ceiling', async () => {
+        const store = memoryStore();
+        const start = 1_700_000_000_000;
+        const limitUsd = 1_000_000;
+        for (let index = 0; index < MAX_PERSISTENT_AI_RESERVATIONS; index += 1) {
+            const result = await reservePersistentPluginAiSpend({
+                store,
+                ...identity,
+                amountUsd: 0.01,
+                limitUsd,
+                now: start,
+            });
+            expect(result.ok).toBe(true);
+        }
+        // After the reservation TTL the expired slots are recovered as
+        // worst-case spend, so a new reservation is admitted again.
+        await expect(
+            reservePersistentPluginAiSpend({
+                store,
+                ...identity,
+                amountUsd: 0.01,
+                limitUsd,
+                now: start + 3 * 60 * 1000,
+            })
+        ).resolves.toMatchObject({ ok: true });
     });
 });

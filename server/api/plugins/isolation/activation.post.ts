@@ -58,12 +58,20 @@ export default defineEventHandler(async (event) => {
     }
 
     // Marketplace packages live in the digest-addressed immutable store and do
-    // not appear in the legacy extension inventory. Resolve the selected
-    // package first; every policy and grant decision below must come from these
-    // exact bytes rather than from a caller-facing inventory cache.
+    // not appear in the legacy extension inventory. Resolve the verified
+    // current selection first; a blocked or inactive V2 pointer is refused
+    // rather than silently activating a legacy directory with the same id.
     const selected = await resolvePluginPackage(pluginId, EXTENSIONS_BASE_DIR, 'current');
     if (!selected) {
         throw createError({ statusCode: 404, statusMessage: 'Plugin is not installed' });
+    }
+    if (selected.status === 'blocked' || !selected.path) {
+        throw createError({
+            statusCode: 409,
+            statusMessage:
+                'The selected plugin package is blocked or inactive; recovery is required.',
+            data: { code: 'plugin-package-blocked', issues: selected.issues },
+        });
     }
     let manifest;
     try {
