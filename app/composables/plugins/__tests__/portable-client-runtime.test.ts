@@ -800,6 +800,67 @@ describe('contribution readiness and replacement safeguards', () => {
         expect(isPortableActivationReady(activation)).toBe(true);
     });
 
+    it('inherits tool discovery settled for the same descriptor across restarts', async () => {
+        const withTools = { ...descriptor(), effectiveGrants: ['tools.register.client'] as never[] };
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('tools-restart'));
+        setPortableClientSource({ descriptor: withTools, workspaceId: 'ws-1', runtimeEntry: undefined });
+        const first = await ensurePortableClientActivation('sample.plugin');
+        for (const surface of ['pane', 'sidebar', 'tools'] as const) {
+            reportPortableContributionReadiness('sample.plugin', surface, 'ready', {
+                descriptorKey: first!.descriptorKey,
+                workspaceId: 'ws-1',
+            });
+        }
+        expect(isPortableActivationReady(getPortableActivation('sample.plugin')!)).toBe(true);
+        // Restart without stopping the source: host tool registrations stay
+        // alive, so the new activation inherits readiness instead of waiting
+        // for a discovery run the sync path will not repeat.
+        await deactivatePortableClient('sample.plugin');
+        const restarted = await ensurePortableClientActivation('sample.plugin');
+        expect(restarted?.contributionReadiness.tools).toBe('ready');
+        expect(isPortableActivationReady(restarted!)).toBe(true);
+    });
+
+    it('retains a failed tool discovery with its code across restarts', async () => {
+        const withTools = { ...descriptor(), effectiveGrants: ['tools.register.client'] as never[] };
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('tools-failed-restart'));
+        setPortableClientSource({ descriptor: withTools, workspaceId: 'ws-1', runtimeEntry: undefined });
+        const first = await ensurePortableClientActivation('sample.plugin');
+        for (const surface of ['pane', 'sidebar'] as const) {
+            reportPortableContributionReadiness('sample.plugin', surface, 'ready', {
+                descriptorKey: first!.descriptorKey,
+                workspaceId: 'ws-1',
+            });
+        }
+        reportPortableContributionReadiness('sample.plugin', 'tools', 'failed', {
+            descriptorKey: first!.descriptorKey,
+            workspaceId: 'ws-1',
+            code: 'catalog-too-large',
+        });
+        await deactivatePortableClient('sample.plugin');
+        const restarted = await ensurePortableClientActivation('sample.plugin');
+        expect(restarted?.contributionReadiness.tools).toBe('failed');
+        expect(restarted?.degradedContributions).toEqual(['tools:catalog-too-large']);
+        expect(isPortableActivationReady(restarted!)).toBe(true);
+    });
+
+    it('does not inherit tool readiness for different bytes', async () => {
+        const withTools = { ...descriptor(), effectiveGrants: ['tools.register.client'] as never[] };
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('tools-bytes'));
+        setPortableClientSource({ descriptor: withTools, workspaceId: 'ws-1', runtimeEntry: undefined });
+        const first = await ensurePortableClientActivation('sample.plugin');
+        reportPortableContributionReadiness('sample.plugin', 'tools', 'ready', {
+            descriptorKey: first!.descriptorKey,
+            workspaceId: 'ws-1',
+        });
+        await deactivatePortableClient('sample.plugin');
+        const next = { ...withTools, descriptorKey: `sha256-${'f'.repeat(64)}` };
+        setPortableClientSource({ descriptor: next, workspaceId: 'ws-1', runtimeEntry: undefined });
+        const restarted = await activatePortableClient({ descriptor: next, workspaceId: 'ws-1' });
+        expect(restarted?.contributionReadiness.tools).toBe('pending');
+        expect(isPortableActivationReady(restarted!)).toBe(false);
+    });
+
     it('preserves plugin storage across replacement and stops the old sandbox', async () => {
         const services = createPortableSettingsServices('sample.plugin');
         await services.storage.set({ key: 'preset', value: { theme: 'dark' } });

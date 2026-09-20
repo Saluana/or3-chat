@@ -20,6 +20,11 @@ const ENV_KEYS = [
     'OR3_EXTENSIONS_ROOT',
     'OR3_SQLITE_DB_PATH',
     'OR3_BASIC_AUTH_DB_PATH',
+    'OR3_AUTH_PROVIDER',
+    'AUTH_PROVIDER',
+    'OR3_SYNC_PROVIDER',
+    'NUXT_PUBLIC_STORAGE_PROVIDER',
+    'OR3_STORAGE_FS_ROOT',
 ] as const;
 
 const saved = new Map<string, string | undefined>();
@@ -44,6 +49,10 @@ function eligibleEnv(): void {
     process.env.OR3_EXTENSIONS_ROOT = '/tmp/or3-dev-profile/extensions';
     process.env.OR3_SQLITE_DB_PATH = '/tmp/or3-dev-profile/sqlite/or3-sync.sqlite';
     process.env.OR3_BASIC_AUTH_DB_PATH = '/tmp/or3-dev-profile/auth/or3-basic-auth.sqlite';
+    process.env.OR3_AUTH_PROVIDER = 'basic-auth';
+    process.env.OR3_SYNC_PROVIDER = 'sqlite';
+    process.env.NUXT_PUBLIC_STORAGE_PROVIDER = 'fs';
+    process.env.OR3_STORAGE_FS_ROOT = '/tmp/or3-dev-profile/storage';
 }
 
 beforeEach(() => {
@@ -146,6 +155,10 @@ describe('development eligibility', () => {
         process.env.OR3_EXTENSIONS_ROOT = join(profile, 'extensions');
         process.env.OR3_SQLITE_DB_PATH = join(profile, 'sqlite', 'or3-sync.sqlite');
         process.env.OR3_BASIC_AUTH_DB_PATH = join(profile, 'auth', 'or3-basic-auth.sqlite');
+        process.env.OR3_AUTH_PROVIDER = 'basic-auth';
+        process.env.OR3_SYNC_PROVIDER = 'sqlite';
+        process.env.NUXT_PUBLIC_STORAGE_PROVIDER = 'fs';
+        process.env.OR3_STORAGE_FS_ROOT = join(profile, 'storage');
         writeFileSync(join(profile, 'launcher.json'), JSON.stringify({ host: '127.0.0.1', port: '3101' }));
         // The local dev proxy inserts a single loopback forwarder entry.
         expect(
@@ -184,6 +197,56 @@ describe('development eligibility', () => {
                 DEV_BUILD
             ).reasons
         ).toContain('non-loopback-access');
+    });
+
+    it('rejects remote backing services even when every path is inside the profile', () => {
+        eligibleEnv();
+        delete process.env.OR3_AUTH_PROVIDER;
+        expect(
+            resolvePluginDevelopmentEligibility(loopbackEvent(), DEV_BUILD).reasons
+        ).toContain('remote-auth-provider');
+
+        eligibleEnv();
+        process.env.OR3_AUTH_PROVIDER = 'clerk';
+        expect(
+            resolvePluginDevelopmentEligibility(loopbackEvent(), DEV_BUILD).reasons
+        ).toContain('remote-auth-provider');
+
+        eligibleEnv();
+        delete process.env.OR3_SYNC_PROVIDER;
+        expect(
+            resolvePluginDevelopmentEligibility(loopbackEvent(), DEV_BUILD).reasons
+        ).toContain('remote-sync-provider');
+
+        eligibleEnv();
+        process.env.OR3_SYNC_PROVIDER = 'convex';
+        expect(
+            resolvePluginDevelopmentEligibility(loopbackEvent(), DEV_BUILD).reasons
+        ).toContain('remote-sync-provider');
+
+        eligibleEnv();
+        delete process.env.NUXT_PUBLIC_STORAGE_PROVIDER;
+        expect(
+            resolvePluginDevelopmentEligibility(loopbackEvent(), DEV_BUILD).reasons
+        ).toContain('remote-storage-provider');
+
+        eligibleEnv();
+        process.env.NUXT_PUBLIC_STORAGE_PROVIDER = 's3';
+        expect(
+            resolvePluginDevelopmentEligibility(loopbackEvent(), DEV_BUILD).reasons
+        ).toContain('remote-storage-provider');
+
+        eligibleEnv();
+        process.env.OR3_STORAGE_FS_ROOT = '/data/shared/storage';
+        expect(
+            resolvePluginDevelopmentEligibility(loopbackEvent(), DEV_BUILD).reasons
+        ).toContain('storage-root-outside-profile');
+
+        eligibleEnv();
+        delete process.env.OR3_STORAGE_FS_ROOT;
+        expect(
+            resolvePluginDevelopmentEligibility(loopbackEvent(), DEV_BUILD).reasons
+        ).toContain('storage-root-outside-profile');
     });
 
     it('explains every reason without leaking configuration values', () => {

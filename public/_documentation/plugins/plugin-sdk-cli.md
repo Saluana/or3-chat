@@ -72,14 +72,22 @@ or3-plugin candidate --qualify ./example --candidate ./example-candidate-1
   plugin code. A fresh install reports `eligible`/`state-initialization`.
 - `candidate` builds one immutable candidate — sibling `package.zip`,
   `source.zip` and `receipt.json` in a new directory — over the existing
-  validate/build/pack helpers. The receipt (schema version 1, at most 16 KiB)
-  binds plugin/version, package/manifest/source/authority digests, required
+  validate/build/pack helpers. The receipt (schema version 2, at most 16 KiB)
+  binds plugin/version, the package archive/tree/manifest digests, the source
+  tree content digest plus the source archive byte digest, the complete
+  effective authority digest (grants, destinations, scopes, writes, setup
+  hooks, engines and dependencies — the same derivation and serialization the
+  host and marketplace use, so genuine receipts bind on every side), required
   host features, the source revision with dirty-snapshot status, and the
   actual SDK, lockfile and runtime inputs; unknown fields and oversized input
-  are rejected. `--verify` recomputes every digest from the frozen files
-  without rebuilding. `--qualify` requires the exact clean source commit with
-  matching SDK and dependency inputs, rebuilds in a scratch directory, and
-  fails unless the bytes compare equal — it never replaces the tested
+  are rejected. The source snapshot includes authoring configuration and tests
+  (only version-control, dependency, build-output and secret files are
+  excluded), because qualification rebuilds from it. `--verify` recomputes
+  every digest from the frozen files without rebuilding. `--qualify` requires
+  the exact clean source commit with matching SDK and dependency inputs,
+  extracts the frozen snapshot into an isolated directory, installs its frozen
+  dependencies, rebuilds there, and fails unless the bytes compare equal — it
+  never rebuilds from the live checkout and never replaces the tested
   archive. Dirty snapshots test locally but never qualify, and a published
   version keeps immutable bytes (different bytes need an unused version).
 

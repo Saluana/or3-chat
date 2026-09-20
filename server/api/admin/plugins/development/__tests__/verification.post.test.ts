@@ -71,6 +71,7 @@ function passedEvidence() {
 beforeEach(() => {
     eligibilityMock.mockReset().mockReturnValue({ eligible: true, reasons: [], profileRoot: '/tmp/profile' });
     admissionMock.mockReset().mockResolvedValue({
+        schemaVersion: 2,
         pluginId: 'or3.sample-utility',
         packageDigest: DIGEST,
         receiptSha256: `sha256-${'e'.repeat(64)}`,
@@ -133,6 +134,7 @@ describe('development verification receipts', () => {
             data: { code: 'not-a-development-candidate' },
         });
         admissionMock.mockResolvedValue({
+            schemaVersion: 2,
             pluginId: 'or3.sample-utility',
             packageDigest: DIGEST,
             receiptSha256: `sha256-${'e'.repeat(64)}`,
@@ -142,6 +144,20 @@ describe('development verification receipts', () => {
         await expect(handler(event)).rejects.toMatchObject({
             statusCode: 409,
             data: { code: 'canary-evidence-required' },
+        });
+    });
+
+    it('refuses export for pre-canonical (schema 1) admissions', async () => {
+        admissionMock.mockResolvedValue({
+            schemaVersion: 1,
+            pluginId: 'or3.sample-utility',
+            packageDigest: DIGEST,
+            receiptSha256: `sha256-${'e'.repeat(64)}`,
+            admittedAt: new Date(0).toISOString(),
+        });
+        await expect(handler(event)).rejects.toMatchObject({
+            statusCode: 409,
+            data: { code: 'receipt-hash-legacy' },
         });
     });
 

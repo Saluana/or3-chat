@@ -67,6 +67,16 @@ export default defineEventHandler(async (event) => {
             data: { code: 'not-a-development-candidate' },
         });
     }
+    // Schema 1 sidecars recorded the raw upload hash, which the marketplace
+    // cannot bind to a canonical receipt. Re-admit the candidate so its
+    // canonical receipt identity is recorded, then export again.
+    if (admission.schemaVersion !== 2) {
+        throw createError({
+            statusCode: 409,
+            statusMessage: 'This admission predates canonical receipt identities. Re-admit the candidate, then export the verification receipt again.',
+            data: { code: 'receipt-hash-legacy' },
+        });
+    }
     if (body.data.scope === 'recorded-interaction-check' && body.data.attestedInteraction !== true) {
         throw createError({
             statusCode: 400,

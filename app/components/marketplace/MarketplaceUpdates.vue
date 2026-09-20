@@ -46,6 +46,45 @@ const approvedUpdates = ref<Record<string, string>>({});
 /** Last confirmation target per plugin, so a timeout can retry observation only. */
 const confirmationTargets = ref<Record<string, { pluginId: string; packageTreeSha256: string; workspaceId: string }>>({});
 const confirmationBusy = ref<Record<string, boolean>>({});
+/**
+ * Per-plugin confirmation outcome, derived from the confirmation result —
+ * never from a global flag. Recovery actions render whenever the installed
+ * update is not confirmed running, whether the observation timed out or the
+ * activation itself failed.
+ */
+const confirmationFailed = ref<Record<string, boolean>>({});
+const confirmationTimedOut = ref<Record<string, boolean>>({});
+const confirmationFailureCode = ref<Record<string, string | null>>({});
+
+/** Record one confirmation outcome: status text follows the result, not the attempt. */
+function settleConfirmation(
+    pluginId: string,
+    confirmation: { readonly confirmed: boolean; readonly reason?: string; readonly code?: string } | null
+): boolean {
+    if (confirmation?.confirmed === true) {
+        canaryNote.value = { ...canaryNote.value, [pluginId]: 'running' };
+        confirmationFailed.value = { ...confirmationFailed.value, [pluginId]: false };
+        confirmationTimedOut.value = { ...confirmationTimedOut.value, [pluginId]: false };
+        confirmationFailureCode.value = { ...confirmationFailureCode.value, [pluginId]: null };
+        const { [pluginId]: _cleared, ...rest } = updateNote.value;
+        updateNote.value = rest;
+        const { [pluginId]: _target, ...targets } = confirmationTargets.value;
+        confirmationTargets.value = targets;
+        return true;
+    }
+    const timedOut = confirmation?.reason === 'timeout';
+    canaryNote.value = {
+        ...canaryNote.value,
+        [pluginId]: timedOut ? 'activation not confirmed' : `activation failed (${confirmation?.code ?? confirmation?.reason ?? 'not observed'})`,
+    };
+    confirmationFailed.value = { ...confirmationFailed.value, [pluginId]: true };
+    confirmationTimedOut.value = { ...confirmationTimedOut.value, [pluginId]: timedOut };
+    confirmationFailureCode.value = {
+        ...confirmationFailureCode.value,
+        [pluginId]: timedOut ? null : (confirmation?.code ?? confirmation?.reason ?? null),
+    };
+    return false;
+}
 
 function updateTarget(entry: MarketplaceUpdateCheckPlugin): MarketplaceInstallTarget | null {
     if (!entry.latestVersion || !entry.release || entry.release.version !== entry.latestVersion) {
@@ -244,8 +283,7 @@ async function confirmUpdateRunning(pluginId: string, view: AcquisitionStatusVie
     confirmationBusy.value = { ...confirmationBusy.value, [pluginId]: true };
     try {
         const confirmation = await install.confirmActivation(target);
-        canaryNote.value = { ...canaryNote.value, [pluginId]: install.activationTimedOut.value ? 'activation not confirmed' : 'running' };
-        if (confirmation?.confirmed === true) {
+        if (settleConfirmation(pluginId, confirmation)) {
             toast.add({
                 title: 'Updated and running',
                 description: `Version ${view.version} is running in this workspace.`,
@@ -276,10 +314,7 @@ async function retryUpdateConfirmation(pluginId: string): Promise<void> {
     confirmationBusy.value = { ...confirmationBusy.value, [pluginId]: true };
     try {
         const confirmation = await install.retryActivationConfirmation(target);
-        canaryNote.value = { ...canaryNote.value, [pluginId]: install.activationTimedOut.value ? 'activation not confirmed' : 'running' };
-        if (confirmation?.confirmed === true) {
-            const { [pluginId]: _cleared, ...rest } = updateNote.value;
-            updateNote.value = rest;
+        if (settleConfirmation(pluginId, confirmation)) {
             toast.add({ title: 'Running', description: 'The installed update was observed in this workspace.', color: 'success' });
         }
     } finally {
@@ -307,8 +342,7 @@ async function confirmPromotedCandidate(
     confirmationBusy.value = { ...confirmationBusy.value, [pluginId]: true };
     try {
         const confirmation = await install.confirmActivation(target);
-        canaryNote.value = { ...canaryNote.value, [pluginId]: install.activationTimedOut.value ? 'activation not confirmed' : 'running' };
-        if (confirmation?.confirmed === true) {
+        if (settleConfirmation(pluginId, confirmation)) {
             toast.add({
                 title: 'Updated and running',
                 description: `Version ${candidateVersion} is running in this workspace.`,
@@ -338,7 +372,7 @@ async function copyUpdateDiagnostics(pluginId: string): Promise<void> {    const
     try {
         await navigator.clipboard.writeText(
             acquisitionDiagnosticReport(operation, {
-                activationTimedOut: install.activationTimedOut.value,
+                activationTimedOut: confirmationTimedOut.value[pluginId] === true,
             })
         );
         toast.add({ title: 'Diagnostics copied', description: 'Only operation and release identities are included.', color: 'success' });
@@ -620,31 +654,40 @@ async function activate(entry: {
                     <p v-if="confirmationBusy[entry.pluginId]" class="text-(--ui-text-muted)">
                         Confirming the installed update runs in this workspace…
                     </p>
-                    <p v-else-if="install.activationTimedOut.value" class="text-(--ui-text-muted)">
-                        {{ ACTIVATION_NOT_CONFIRMED_COPY }}. The installation stands.
-                    </p>
-                    <div v-else class="flex flex-wrap gap-2">
-                        <UButton
-                            size="sm"
-                            color="neutral"
-                            variant="soft"
-                            icon="i-lucide-rotate-ccw"
-                            data-testid="marketplace-update-retry-confirmation"
-                            @click="retryUpdateConfirmation(entry.pluginId)"
-                        >
-                            Retry confirmation
-                        </UButton>
-                        <UButton
-                            size="sm"
-                            color="neutral"
-                            variant="ghost"
-                            icon="i-lucide-clipboard-list"
-                            data-testid="marketplace-update-copy-diagnostics"
-                            @click="copyUpdateDiagnostics(entry.pluginId)"
-                        >
-                            Copy diagnostics
-                        </UButton>
-                    </div>
+                    <template v-else>
+                        <p v-if="confirmationTimedOut[entry.pluginId]" class="text-(--ui-text-muted)">
+                            {{ ACTIVATION_NOT_CONFIRMED_COPY }}. The installation stands.
+                        </p>
+                        <p v-else-if="confirmationFailed[entry.pluginId]" class="text-(--ui-text-muted)">
+                            Activation did not complete{{
+                                confirmationFailureCode[entry.pluginId]
+                                    ? ` (${confirmationFailureCode[entry.pluginId]})`
+                                    : ''
+                            }}. The installation stands.
+                        </p>
+                        <div class="flex flex-wrap gap-2">
+                            <UButton
+                                size="sm"
+                                color="neutral"
+                                variant="soft"
+                                icon="i-lucide-rotate-ccw"
+                                data-testid="marketplace-update-retry-confirmation"
+                                @click="retryUpdateConfirmation(entry.pluginId)"
+                            >
+                                Retry confirmation
+                            </UButton>
+                            <UButton
+                                size="sm"
+                                color="neutral"
+                                variant="ghost"
+                                icon="i-lucide-clipboard-list"
+                                data-testid="marketplace-update-copy-diagnostics"
+                                @click="copyUpdateDiagnostics(entry.pluginId)"
+                            >
+                                Copy diagnostics
+                            </UButton>
+                        </div>
+                    </template>
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <UButton

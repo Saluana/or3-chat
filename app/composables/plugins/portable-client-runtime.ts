@@ -631,7 +631,9 @@ export async function activatePortableClient(
             workspaceId,
             descriptor.effectiveGrants.includes('tools.register.client')
         ),
-        degradedContributions: [],
+        degradedContributions: [
+            ...inheritedToolsDegradation(pluginId, descriptor.descriptorKey, workspaceId),
+        ],
         logs: [],
         crashed: false,
         startedAt: Date.now(),
@@ -967,6 +969,14 @@ interface SurfaceRegistration {
     readonly workspaceId: string;
     readonly pane: PortableContributionReadiness;
     readonly sidebar: PortableContributionReadiness;
+    /**
+     * Tool discovery outcome for these bytes. Tool registrations live on the
+     * host and survive an activation restart of the same descriptor, so a new
+     * activation inherits the settled outcome instead of waiting for a
+     * discovery run the registration path will not repeat.
+     */
+    readonly tools: PortableContributionReadiness;
+    readonly toolsCode: string | null;
 }
 
 const surfaceRegistrations = new Map<string, SurfaceRegistration>();
@@ -975,7 +985,7 @@ function surfaceFor(
     descriptorKey: string,
     workspaceId: string
 ): SurfaceRegistration {
-    return { descriptorKey, workspaceId, pane: 'pending', sidebar: 'pending' };
+    return { descriptorKey, workspaceId, pane: 'pending', sidebar: 'pending', tools: 'pending', toolsCode: null };
 }
 
 /**
@@ -999,7 +1009,13 @@ export function reportPortableContributionReadiness(
         return;
     }
     const previous = surfaceRegistrations.get(pluginId);
-    const base = previous ?? surfaceFor(descriptorKey, workspaceId);
+    // A report for new bytes starts a fresh record: settled outcomes (tools
+    // included) belong to one descriptor in one workspace, never carried over.
+    const sameBytes =
+        previous !== undefined &&
+        previous.descriptorKey === descriptorKey &&
+        previous.workspaceId === workspaceId;
+    const base = sameBytes && previous !== undefined ? previous : surfaceFor(descriptorKey, workspaceId);
     surfaceRegistrations.set(pluginId, { ...base, descriptorKey, workspaceId, [surface]: status });
     const current = activations.get(pluginId);
     if (
@@ -1026,6 +1042,25 @@ function reportToolReadiness(
     if (descriptorKey && current.descriptorKey !== descriptorKey) return;
     if (workspaceId && current.workspaceId !== workspaceId) return;
     if (!holdsActivationEpoch(pluginId, current.epoch)) return;
+    // Persist the settled outcome for the next activation of these bytes: the
+    // host-side tool registrations it describes outlive an activation restart,
+    // and the registration path does not rediscover them for an already
+    // registered descriptor.
+    if (descriptorKey && workspaceId) {
+        const previous = surfaceRegistrations.get(pluginId);
+        const sameBytes =
+            previous !== undefined &&
+            previous.descriptorKey === descriptorKey &&
+            previous.workspaceId === workspaceId;
+        const base = sameBytes && previous !== undefined ? previous : surfaceFor(descriptorKey, workspaceId);
+        surfaceRegistrations.set(pluginId, {
+            ...base,
+            descriptorKey,
+            workspaceId,
+            tools: status,
+            toolsCode: status === 'failed' ? (code ?? null) : null,
+        });
+    }
     if (status === 'failed') {
         const entry = code ? `tools:${code}` : 'tools:discovery-failed';
         update(pluginId, current.epoch, {
@@ -1061,8 +1096,26 @@ function inheritedReadiness(
     return {
         pane: matches ? recorded.pane : 'pending',
         sidebar: matches ? recorded.sidebar : 'pending',
-        tools: toolsRequired ? 'pending' : 'not-required',
+        tools: !toolsRequired ? 'not-required' : matches ? recorded.tools : 'pending',
     };
+}
+
+/** Retained tool-degradation entry for an inherited failed discovery. */
+function inheritedToolsDegradation(
+    pluginId: string,
+    descriptorKey: string,
+    workspaceId: string
+): readonly string[] {
+    const recorded = surfaceRegistrations.get(pluginId);
+    if (
+        !recorded ||
+        recorded.descriptorKey !== descriptorKey ||
+        recorded.workspaceId !== workspaceId ||
+        recorded.tools !== 'failed'
+    ) {
+        return [];
+    }
+    return [`tools:${recorded.toolsCode ?? 'discovery-failed'}`];
 }
 
 /**

@@ -36,15 +36,19 @@ bun run dev:plugin
 ```
 
 This creates `.or3-plugin-dev/` (extensions, SQLite sync database,
-basic-auth database), sets `OR3_PLUGIN_DEVELOPMENT=1` and
-`OR3_PLUGIN_DEV_PROFILE`, enables the V2 module loader that runs admitted
+basic-auth database, filesystem blob storage), sets `OR3_PLUGIN_DEVELOPMENT=1` and
+`OR3_PLUGIN_DEV_PROFILE`, pins the effective backing services to the local
+profile (`basic-auth`/`sqlite`/`fs`), enables the V2 module loader that runs admitted
 packages, and serves SSR on `127.0.0.1:3101`. Package
 selection stays instance-wide inside that instance; the ordinary app's
 registry, production package pointers and user data are outside it.
 
 Admission requires all of these independently: the flag, a development build
 (production builds reject admission even with the flag set), the dedicated
-profile with all data roots inside it, a direct loopback connection
+profile with all data roots inside it, local backing providers (a remote
+auth, sync or storage provider — including the defaults inherited from the
+surrounding environment — makes the instance ineligible rather than silently
+sharing production identity, data or blobs), a direct loopback connection
 (forwarded headers are never trusted), an authenticated owner, and a
 same-origin mutation context.
 
@@ -63,12 +67,20 @@ In the development instance, open Admin > Plugins > Development candidate:
 4. Export the verification receipt (runtime canary, or a separately labeled
    recorded interaction check). Receipts are developer-supplied evidence bound
    to the candidate and host build; they never substitute for trusted
-   marketplace validation, reviewer approval or signer authorization.
+   marketplace validation, reviewer approval or signer authorization. The
+   receipt names the candidate by its canonical receipt digest (not the raw
+   upload bytes), which is the identity the marketplace binds the report to.
 
 Replacing a candidate of the same version admits the new digest, preserves
 the instance's plugin data, cleans up the old activation, and requires fresh
 authority review where grants changed. There is no automatic data-safe
 rollback, and storage is never cleared by admission or replacement.
+
+When the candidate is ready for review, attach its frozen `receipt.json` (and
+optionally the verification receipt) to a marketplace draft submission: the
+marketplace binds the receipt to the exact uploaded bytes, freezes it with
+the revision, and keeps it visibly distinct from trusted validation evidence.
+Approval still rests on independently inspected runner evidence alone.
 
 ## Trust boundary
 

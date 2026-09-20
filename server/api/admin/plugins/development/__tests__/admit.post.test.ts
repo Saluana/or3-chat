@@ -59,11 +59,13 @@ vi.mock('../../../../../admin/plugins/package-operation-support', () => ({
         migration: { getStateVersion: async () => 1 },
         candidates: { prepare: () => prepareMock() },
     }),
+    // The tree-derived review identity matches a genuine receipt's authority
+    // digest now that SDK, host and marketplace share one derivation.
     packageGrantCandidate: async () => ({
         requestedGrants: ['settings.read'],
         releaseId: null,
         packageDigest: `sha256-${'a'.repeat(64)}`,
-        authoritySha256: `sha256-${'c'.repeat(64)}`,
+        authoritySha256: `sha256-${'d'.repeat(64)}`,
         authority: null,
     }),
 }));
@@ -111,6 +113,7 @@ vi.mock('../../../../../utils/rate-limit', () => ({
 vi.mock('../../../../../admin/plugins/local-admission', () => ({
     LOCAL_ADMISSION_PROVENANCE: 'local-development',
     recordLocalAdmission: () => recordMock(),
+    upgradeLocalAdmissionDigest: async () => undefined,
 }));
 
 vi.mock('../../../../../utils/plugins/development/development-eligibility', () => ({
@@ -230,6 +233,30 @@ describe('development admission boundary', () => {
         });
     });
 
+    it('refuses a receipt whose authority understates the package bytes', async () => {
+        readPackageZipMock.mockResolvedValueOnce({
+            digest: `sha256-${'a'.repeat(64)}`,
+            entries: 3,
+            extractedRoot: null,
+        });
+        multipartParts = verifiableParts(receiptFor({ authoritySha256: `sha256-${'0'.repeat(64)}` }));
+        await expect(handler(event)).rejects.toMatchObject({
+            statusCode: 422,
+            data: { code: 'candidate-authority-mismatch' },
+        });
+        expect(recordMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses source archive bytes that do not match a schema 2 receipt', async () => {
+        const receipt = receiptFor({ schemaVersion: 2, sourceArchiveSha256: `sha256-${'0'.repeat(64)}` });
+        multipartParts = verifiableParts(receipt);
+        await expect(handler(event)).rejects.toMatchObject({
+            statusCode: 422,
+            data: { code: 'candidate-source-archive-mismatch' },
+        });
+        expect(recordMock).not.toHaveBeenCalled();
+    });
+
     it('refuses archives that fail canonical verification', async () => {
         // A well-formed source snapshot lets the flow reach package
         // verification, where the garbage package bytes are refused.
@@ -280,8 +307,8 @@ describe('development admission boundary', () => {
             { name: 'approvedGrants', data: Buffer.from(JSON.stringify(['settings.read'])) },
             { name: 'expectedPackageDigest', data: Buffer.from(receipt.packageTreeSha256 as string) },
             // The echoed authority is the tree-derived review identity the
-            // blocked response returned, not the receipt's informational digest.
-            { name: 'expectedAuthoritySha256', data: Buffer.from(`sha256-${'c'.repeat(64)}`) },
+            // blocked response returned, which equals the genuine receipt digest.
+            { name: 'expectedAuthoritySha256', data: Buffer.from(`sha256-${'d'.repeat(64)}`) },
         ];
         multipartParts = approvalParts;
         const result = (await handler(event)) as { ok: boolean; packageDigest: string; provenance: string };

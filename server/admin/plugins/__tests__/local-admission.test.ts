@@ -6,6 +6,7 @@ import {
     LOCAL_ADMISSION_PROVENANCE,
     readLocalAdmission,
     recordLocalAdmission,
+    upgradeLocalAdmissionDigest,
 } from '../local-admission';
 
 /** Local provenance is explicit, bounded and digest-scoped: never a signature. */
@@ -69,6 +70,57 @@ describe('local admission provenance', () => {
             await expect(
                 readLocalAdmission('../escape', `sha256-${'a'.repeat(64)}`, extensionsRoot)
             ).resolves.toBeNull();
+        } finally {
+            rmSync(extensionsRoot, { recursive: true, force: true });
+        }
+    });
+
+    it('upgrades a schema 1 record to the canonical digest for identical bytes', async () => {
+        const extensionsRoot = root();
+        try {
+            await recordLocalAdmission(record({ schemaVersion: 1 }), extensionsRoot);
+            const upgraded = record({
+                schemaVersion: 2,
+                receiptSha256: `sha256-${'f'.repeat(64)}`,
+            });
+            await upgradeLocalAdmissionDigest(
+                'or3.sample-utility',
+                `sha256-${'a'.repeat(64)}`,
+                upgraded,
+                extensionsRoot
+            );
+            const read = await readLocalAdmission(
+                'or3.sample-utility',
+                `sha256-${'a'.repeat(64)}`,
+                extensionsRoot
+            );
+            expect(read?.schemaVersion).toBe(2);
+            expect(read?.receiptSha256).toBe(`sha256-${'f'.repeat(64)}`);
+        } finally {
+            rmSync(extensionsRoot, { recursive: true, force: true });
+        }
+    });
+
+    it('refuses upgrades with drifted bytes or without a prior record', async () => {
+        const extensionsRoot = root();
+        try {
+            await recordLocalAdmission(record({ schemaVersion: 1 }), extensionsRoot);
+            await expect(
+                upgradeLocalAdmissionDigest(
+                    'or3.sample-utility',
+                    `sha256-${'a'.repeat(64)}`,
+                    record({ schemaVersion: 2, archiveSha256: `sha256-${'0'.repeat(64)}` }),
+                    extensionsRoot
+                )
+            ).rejects.toMatchObject({ code: 'EEXIST' });
+            await expect(
+                upgradeLocalAdmissionDigest(
+                    'or3.sample-utility',
+                    `sha256-${'b'.repeat(64)}`,
+                    record({ schemaVersion: 2 }),
+                    extensionsRoot
+                )
+            ).rejects.toMatchObject({ code: 'EEXIST' });
         } finally {
             rmSync(extensionsRoot, { recursive: true, force: true });
         }

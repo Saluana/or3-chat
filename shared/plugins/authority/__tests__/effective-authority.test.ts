@@ -446,3 +446,51 @@ describe('selection handles (4.6)', () => {
         ).toMatchObject({ status: 'denied', code: 'handle-stale' });
     });
 });
+
+describe('cross-repo authority vector', () => {
+    it('derives the pinned digest from descriptor bytes', async () => {
+        const { toEffectiveAuthority } = await import(
+            '~~/server/utils/plugins/setup/load-descriptors'
+        );
+        const authority = toEffectiveAuthority({
+            manifest: {
+                trust: 'isolated-client',
+                requestedGrants: ['storage.read', 'network.http'],
+                features: { required: ['or3-portable-client-v1'] },
+                engines: { or3: '^0.3.0', pluginApi: '^2.0.0' },
+                dependencies: {
+                    required: [
+                        { id: 'b-lib', range: '^1.0.0', features: ['zeta', 'alpha'] },
+                        { id: 'a-lib', range: '^2.0.0' },
+                    ],
+                    optional: [{ id: 'c-lib', range: '^1.2.0' }],
+                },
+            } as never,
+            policy: {
+                policyVersion: 1,
+                profile: 'or3-portable-client-v1',
+                destinations: [
+                    {
+                        id: 'api',
+                        methods: ['POST', 'GET'],
+                        hosts: ['b.example.com', 'a.example.com'],
+                        scopes: ['/v2', '/v1'],
+                    },
+                ],
+                connections: [{ id: 'repo', scopes: ['write', 'read'], operations: ['sync'] }],
+                dataScopes: ['documents.read'],
+                writes: ['tasks.append'],
+                requiredFeatures: ['or3-portable-client-v1'],
+            } as never,
+            setup: {
+                testAction: { operationId: 'z-test' },
+                firstAction: { operationId: 'a-first' },
+            } as never,
+        });
+        // Pinned across SDK, host and marketplace: any derivation or
+        // serialization drift fails here instead of shipping unbindable receipts.
+        await expect(computeAuthorityHash(authority)).resolves.toBe(
+            'sha256-399295ea37a06a01d4b1a49fbeae04f069fa7b16478d5536da0628408e54302c'
+        );
+    });
+});

@@ -47,6 +47,10 @@ export type DevelopmentEligibilityCode =
     | 'dedicated-profile-missing'
     | 'extension-root-outside-profile'
     | 'data-root-outside-profile'
+    | 'remote-auth-provider'
+    | 'remote-sync-provider'
+    | 'remote-storage-provider'
+    | 'storage-root-outside-profile'
     | 'non-loopback-access';
 
 export interface DevelopmentEligibility {
@@ -151,6 +155,26 @@ export function resolvePluginDevelopmentEligibility(
         if (!insideProfile(profileRoot, sqliteDb) || !insideProfile(profileRoot, basicAuthDb)) {
             reasons.push('data-root-outside-profile');
         }
+        // Backing services are part of isolation: a remote auth, sync or
+        // storage provider keeps the instance's identity, data or blobs in
+        // shared services even when every path resolves inside the profile.
+        // Effective defaults mirror the cloud config resolution (clerk /
+        // convex / convex), so an unset provider is a remote provider.
+        const authProvider = process.env.OR3_AUTH_PROVIDER ?? process.env.AUTH_PROVIDER ?? 'clerk';
+        if (authProvider !== 'basic-auth') {
+            reasons.push('remote-auth-provider');
+        }
+        const syncProvider = process.env.OR3_SYNC_PROVIDER ?? 'convex';
+        if (syncProvider !== 'sqlite') {
+            reasons.push('remote-sync-provider');
+        }
+        const storageProvider = process.env.NUXT_PUBLIC_STORAGE_PROVIDER ?? 'convex';
+        if (storageProvider !== 'fs') {
+            reasons.push('remote-storage-provider');
+        }
+        if (!insideProfile(profileRoot, process.env.OR3_STORAGE_FS_ROOT)) {
+            reasons.push('storage-root-outside-profile');
+        }
     }
 
     if (!isLocalConnection(event, profileRoot)) {
@@ -177,6 +201,14 @@ export function developmentIneligibilityHelp(code: DevelopmentEligibilityCode): 
             return 'OR3_EXTENSIONS_ROOT must resolve inside the dedicated profile root, not the shared extensions directory.';
         case 'data-root-outside-profile':
             return 'OR3_SQLITE_DB_PATH and OR3_BASIC_AUTH_DB_PATH must resolve inside the dedicated profile root.';
+        case 'remote-auth-provider':
+            return 'The auth provider must be basic-auth: a shared identity provider would own development accounts.';
+        case 'remote-sync-provider':
+            return 'The sync provider must be sqlite: a remote sync service would receive development data.';
+        case 'remote-storage-provider':
+            return 'The storage provider must be fs: a remote blob service would receive development files.';
+        case 'storage-root-outside-profile':
+            return 'OR3_STORAGE_FS_ROOT must resolve inside the dedicated profile root.';
         case 'non-loopback-access':
             return 'Development admission accepts loopback access only: a loopback socket, or a loopback bind with a loopback Host and loopback-only forwarder entries.';
     }

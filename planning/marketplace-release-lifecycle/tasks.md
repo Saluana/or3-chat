@@ -132,46 +132,46 @@ Phase B exit: a developer can build a frozen candidate, open it as a real plugin
 
 ## 7. Submission Receipt Binding
 
-- [ ] 7.1 Add bounded revision-specific receipt storage (2-4h)
+- [x] 7.1 Add bounded revision-specific receipt storage (2-4h)
       Component: Submission Flow. Repository: `or3-marketplace`.
       Requirements: R7.AC2-R7.AC4, R8.AC1.
       Done when: an additive migration adds nullable receipt fields, combined input is limited to 64 KiB, freezing rules protect submitted revisions, existing submissions remain readable, and migration/immutability tests pass without replacing existing evidence tables.
 
-- [ ] 7.2 Validate receipt-to-upload correspondence in the submission service (3-4h)
+- [x] 7.2 Validate receipt-to-upload correspondence in the submission service (3-4h)
       Component: Submission Flow. Repository: `or3-marketplace`.
       Requirements: R5.AC2-R5.AC5, R7.AC2-R7.AC3, R8.AC1.
       Done when: authenticated owned drafts accept matching existing artifacts/receipts, mismatched package/source/provenance identity blocks submission, and replacement uses a new revision without overwriting published bytes.
 
-- [ ] 7.3 Keep trusted runner evidence distinct from developer metadata (2-4h)
+- [x] 7.3 Keep trusted runner evidence distinct from developer metadata (2-4h)
       Component: Submission Flow, Verification Receipt. Repository: `or3-marketplace`.
       Requirements: R7.AC2-R7.AC4.
       Done when: trusted evidence binds independently inspected source/provenance, developer reports cannot set approval-required checks, and stale/mismatched receipts are visibly inapplicable with regression coverage.
 
 ## 8. Publisher and Signer Journey
 
-- [ ] 8.1 Connect candidate upload and next-action presentation (3-4h)
+- [x] 8.1 Connect candidate upload and next-action presentation (3-4h)
       Component: Submission Flow. Repository: `or3-marketplace`.
       Requirements: R7.AC4, R8.AC1, R9.AC1, R9.AC3-R9.AC4.
       Done when: existing developer submission pages accept the frozen files and receipts, show artifact identities and verification scope, and identify the next required stage/actor without introducing another wizard state machine.
 
-- [ ] 8.2 Preserve context across role and authentication gates (2-4h)
+- [x] 8.2 Preserve context across role and authentication gates (2-4h)
       Component: Submission Flow, Publication Flow. Repository: `or3-marketplace`.
       Requirements: R8.AC2-R8.AC3.
       Done when: submission and publication-intent context survives sign-in/recent-factor interruption via validated same-origin return paths; reviewer/signer authorization is rechecked and no credentials are transferred between host and marketplace.
 
-- [ ] 8.3 Present resumable publication and its final receipt (2-4h)
+- [x] 8.3 Present resumable publication and its final receipt (2-4h)
       Component: Publication Flow, Diagnostic Projection. Repository: `or3-marketplace`.
       Requirements: R5.AC5, R8.AC3-R8.AC4, R9.AC1-R9.AC2.
       Done when: retries reconcile the existing intent, UI distinguishes review/auth/signing/publication blockers, and success displays release/source/digest facts from committed records rather than inferred client state.
 
 ## 9. Marketplace Gate
 
-- [ ] 9.1 Extend integrity, authorization, and retry regressions (3-4h)
+- [x] 9.1 Extend integrity, authorization, and retry regressions (3-4h)
       Component: Submission Flow, Publication Flow. Repository: `or3-marketplace`.
       Requirements: R5.AC5, R7, R8.
       Done when: tests cover malformed/oversized receipts, metadata freezing, source mismatch, changed review evidence, unauthorized actors, expired sessions, repeated publish, and interruption around signing/commit; old signed releases remain unchanged.
 
-- [ ] 9.2 Qualify and document Phase C (2-4h)
+- [x] 9.2 Qualify and document Phase C (2-4h)
       Component: Submission Flow, Publication Flow. Repository: `or3-marketplace`; cross-links in `or3-chat` docs.
       Requirements: R8, R9.AC3-R9.AC5.
       Done when: `bun run check` is green, relevant READMEs and public workflow documentation match actual behavior, and responsive/keyboard checks cover new publisher/admin states. Do not migrate or deploy staging until separately authorized and environment-checked.

@@ -86,7 +86,9 @@ install or update completes, the UI reconciles the runtime and observes the
 activation for up to 30 seconds before reporting success: when nothing
 confirms in time it shows **Installed; activation not confirmed**, keeps the
 server installation intact, and offers confirmation retry plus diagnostics
-instead of reinstalling. A late matching activation may still update the
+instead of reinstalling. When the activation itself fails (blocked or
+stopped), the status names the failure instead of claiming running, with the
+same retry and diagnostics. A late matching activation may still update the
 visible status; it never starts another acquisition.
 
 A release that declares a contained client runtime needs a real browser canary. The host issues a single-use ticket bound to the plugin, package digest, workspace, client id and nonce; the admin's browser performs a hidden activation of the candidate's exact bytes in the contained sandbox, re-hashes them and reports the outcome. Until that evidence exists the operation stays pending with `client-canary-pending`, and the UI completes the check and retries the same operation. A server-side check alone never substitutes for it.

@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({source: null as any, call:vi.fn(), register:vi.fn(), dispose:vi.fn()}));
 vi.mock('../portable-client-runtime',()=>({getPortableClientSource:()=>mocks.source,invokePortableToolRequest:mocks.call}));
 vi.mock('~/utils/chat/tools-public',()=>({useToolRegistry:()=>({registerTool:mocks.register})}));
-import {registerPortableTools} from '../portable-tools';
+import {registerPortableTools, TOOL_DISCOVERY_CODES, toolDiscoveryCode, ToolDiscoveryError} from '../portable-tools';
 const definition={type:'function',function:{name:'or3sal_tasks_search_lists',description:'Find lists',parameters:{type:'object',properties:{query:{type:'string'}},additionalProperties:false}}};
 beforeEach(()=>{
  vi.clearAllMocks();
@@ -45,4 +45,10 @@ it('cleans up partial registration and strips publisher enablement metadata',asy
  await expect(registerPortableTools('or3sal.tasks')).rejects.toThrow('collision');
  expect(mocks.dispose).toHaveBeenCalledOnce();
  expect(mocks.register.mock.calls[0]![0].defaultEnabled).toBeUndefined();
+});
+it('reports allowlisted codes instead of raw exception text',()=>{
+ expect(toolDiscoveryCode(new ToolDiscoveryError('invalid-tool-definition','Plugin tool is invalid: {"secret":"x"}'))).toBe('invalid-tool-definition');
+ expect(toolDiscoveryCode(new Error('sk-live-abc123 connection blew up'))).toBe('discovery-failed');
+ expect(toolDiscoveryCode('weird')).toBe('discovery-failed');
+ for(const code of TOOL_DISCOVERY_CODES) expect(typeof code).toBe('string');
 });

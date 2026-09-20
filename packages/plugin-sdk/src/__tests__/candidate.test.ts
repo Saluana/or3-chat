@@ -269,8 +269,36 @@ describe('qualifyCandidateDirectory', () => {
         ).rejects.toThrow(/exact clean source commit/);
 
         appendFileSync(join(root, 'client.mjs'), '// drift\n');
+        // Checkout drift after freezing does not affect qualification: the
+        // rebuild runs from the frozen snapshot, never the live checkout.
         await expect(
             qualifyCandidateDirectory(root, clean.candidateDirectory, { probeSourceControl: CLEAN_PROBE })
-        ).rejects.toThrow(/different bytes|exact clean source commit/);
+        ).resolves.toBeDefined();
+    });
+
+    it('rejects a snapshot that omits rebuild inputs', async () => {
+        const root = track(makePackage());
+        // Authoring configuration and tests travel in the snapshot even
+        // though packaging excludes them: the snapshot is rebuild input, not
+        // the shipped archive.
+        mkdirSync(join(root, '.authoring'), { recursive: true });
+        writeFileSync(join(root, '.authoring', 'profile.config.mjs'), 'export default {};\n');
+        mkdirSync(join(root, '__tests__'), { recursive: true });
+        writeFileSync(join(root, '__tests__', 'smoke.test.mjs'), 'export {};\n');
+        const created = await createV2Candidate(root, {
+            outputDirectory: track(makeOut()),
+            probeSourceControl: CLEAN_PROBE,
+        });
+        expect(created.receipt.sourceArchiveSha256).toMatch(/^sha256-/);
+        const { readFileZipEntries } = await import('../cli/archive');
+        const names = (await readFileZipEntries(readFileSync(join(created.candidateDirectory, 'source.zip')))).map(
+            (entry) => entry.path
+        );
+        expect(names).toContain('.authoring/profile.config.mjs');
+        expect(names).toContain('__tests__/smoke.test.mjs');
+        const qualified = await qualifyCandidateDirectory(root, created.candidateDirectory, {
+            probeSourceControl: CLEAN_PROBE,
+        });
+        expect(qualified.receiptSha256).toBe(candidateReceiptSha256(created.receipt));
     });
 });

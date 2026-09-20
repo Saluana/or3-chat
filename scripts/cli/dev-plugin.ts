@@ -10,10 +10,15 @@
  *
  * Behavior:
  * - Creates `<repo>/.or3-plugin-dev/` (extensions, SQLite sync DB, basic-auth
- *   DB) and points `OR3_EXTENSIONS_ROOT`, `OR3_SQLITE_DB_PATH` and
- *   `OR3_BASIC_AUTH_DB_PATH` at it, unless the operator already set them (an
- *   override outside the profile makes admission ineligible with a reason,
- *   rather than silently sharing state).
+ *   DB, filesystem blob storage) and points `OR3_EXTENSIONS_ROOT`,
+ *   `OR3_SQLITE_DB_PATH`, `OR3_BASIC_AUTH_DB_PATH` and `OR3_STORAGE_FS_ROOT`
+ *   at it, unless the operator already set them (an override outside the
+ *   profile makes admission ineligible with a reason, rather than silently
+ *   sharing state).
+ * - Pins the effective backing services to the local profile
+ *   (`basic-auth`/`sqlite`/`fs`) unless the operator explicitly chose
+ *   otherwise — a remote provider choice makes admission ineligible rather
+ *   than silently sharing production identity, sync or storage.
  * - Sets `OR3_PLUGIN_DEVELOPMENT=1` and `OR3_PLUGIN_DEV_PROFILE` for this
  *   process tree only, then delegates to the standard dev launcher, defaulting
  *   to SSR on 127.0.0.1:3101.
@@ -50,6 +55,7 @@ export function pluginDevEnvironment(projectRoot = process.cwd()): NodeJS.Proces
     mkdirSync(join(profileRoot, 'extensions'), { recursive: true });
     mkdirSync(join(profileRoot, 'sqlite'), { recursive: true });
     mkdirSync(join(profileRoot, 'auth'), { recursive: true });
+    mkdirSync(join(profileRoot, 'storage'), { recursive: true });
     return {
         OR3_PLUGIN_DEVELOPMENT: '1',
         OR3_PLUGIN_DEV_PROFILE: profileRoot,
@@ -58,6 +64,15 @@ export function pluginDevEnvironment(projectRoot = process.cwd()): NodeJS.Proces
             process.env.OR3_SQLITE_DB_PATH ?? join(profileRoot, 'sqlite', 'or3-sync.sqlite'),
         OR3_BASIC_AUTH_DB_PATH:
             process.env.OR3_BASIC_AUTH_DB_PATH ?? join(profileRoot, 'auth', 'or3-basic-auth.sqlite'),
+        // The dedicated instance must not borrow shared backing services: pin
+        // the effective auth, sync and storage providers to the local profile.
+        // An explicit operator override is preserved, and the admission gate
+        // then reports the instance ineligible instead of sharing state.
+        OR3_AUTH_PROVIDER:
+            process.env.OR3_AUTH_PROVIDER ?? process.env.AUTH_PROVIDER ?? 'basic-auth',
+        OR3_SYNC_PROVIDER: process.env.OR3_SYNC_PROVIDER ?? 'sqlite',
+        NUXT_PUBLIC_STORAGE_PROVIDER: process.env.NUXT_PUBLIC_STORAGE_PROVIDER ?? 'fs',
+        OR3_STORAGE_FS_ROOT: process.env.OR3_STORAGE_FS_ROOT ?? join(profileRoot, 'storage'),
         // Admitted candidates run through the immutable package flow, which
         // needs the V2 module loader. An explicit false keeps working but
         // leaves nothing to run the candidate.

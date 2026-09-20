@@ -26,7 +26,12 @@ import { EXTENSIONS_BASE_DIR } from '../extensions/paths';
 export const LOCAL_ADMISSION_PROVENANCE = 'local-development' as const;
 
 export interface LocalAdmissionRecord {
-    readonly schemaVersion: 1;
+    /**
+     * Schema 1 recorded the raw uploaded receipt bytes' hash; schema 2
+     * records the canonical receipt digest the marketplace binds to. Only
+     * schema 2 records are exportable as verification receipts.
+     */
+    readonly schemaVersion: 1 | 2;
     readonly pluginId: string;
     readonly packageDigest: Sha256;
     readonly manifestDigest: Sha256;
@@ -83,7 +88,11 @@ export async function readLocalAdmission(
             'utf8'
         );
         const parsed = JSON.parse(raw) as LocalAdmissionRecord;
-        if (parsed.schemaVersion !== 1 || parsed.pluginId !== pluginId || parsed.packageDigest !== packageDigest) {
+        if (
+            (parsed.schemaVersion !== 1 && parsed.schemaVersion !== 2) ||
+            parsed.pluginId !== pluginId ||
+            parsed.packageDigest !== packageDigest
+        ) {
             return null;
         }
         return parsed;
@@ -93,4 +102,37 @@ export async function readLocalAdmission(
         }
         throw error;
     }
+}
+
+/**
+ * Replace a schema 1 sidecar with its schema 2 form for the same admitted
+ * bytes. Only an exact identity match upgrades: any digest drift keeps the
+ * original record and reports EEXIST, so an upgrade can never smuggle changed
+ * bytes into an existing admission.
+ */
+export async function upgradeLocalAdmissionDigest(
+    pluginId: string,
+    packageDigest: Sha256,
+    record: LocalAdmissionRecord,
+    extensionsRoot = EXTENSIONS_BASE_DIR
+): Promise<void> {
+    const existing = await readLocalAdmission(pluginId, packageDigest, extensionsRoot);
+    if (
+        !existing ||
+        existing.schemaVersion !== 1 ||
+        existing.manifestDigest !== record.manifestDigest ||
+        existing.archiveSha256 !== record.archiveSha256 ||
+        existing.sourceSha256 !== record.sourceSha256 ||
+        existing.candidateVersion !== record.candidateVersion
+    ) {
+        const conflict = new Error('Local admission already recorded') as Error & { code: string };
+        conflict.code = 'EEXIST';
+        throw conflict;
+    }
+    const path = admissionFile(pluginId, packageDigest, extensionsRoot);
+    const payload = JSON.stringify(record, null, 2);
+    if (Buffer.byteLength(payload, 'utf8') > 4 * 1024) {
+        throw new Error('Local admission record exceeds 4 KiB');
+    }
+    await fs.writeFile(path, `${payload}\n`);
 }

@@ -32,7 +32,7 @@ import { promises as fs } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createError, defineEventHandler, readMultipartFormData } from 'h3';
-import { parseCandidateReceipt, buildProvenanceSha256, hashSnapshotEntries } from '@or3/plugin-sdk/candidate';
+import { parseCandidateReceipt, buildProvenanceSha256, candidateReceiptSha256, hashSnapshotEntries } from '@or3/plugin-sdk/candidate';
 import { readFileZipEntries, readPackageZip } from '@or3/plugin-sdk/package-archive';
 import { requireAdminApiContext } from '../../../../admin/api';
 import { getClientIp } from '../../../../admin/auth/rate-limit';
@@ -53,6 +53,7 @@ import { checkRateLimit } from '../../../../utils/rate-limit';
 import {
     LOCAL_ADMISSION_PROVENANCE,
     recordLocalAdmission,
+    upgradeLocalAdmissionDigest,
 } from '../../../../admin/plugins/local-admission';
 import {
     developmentIneligibilityHelp,
@@ -162,6 +163,15 @@ export default defineEventHandler(async (event) => {
             data: { code: 'candidate-source-mismatch' },
         });
     }
+    // Schema 2 receipts additionally bind the source archive bytes: the same
+    // file the marketplace binds to the finalized source upload.
+    if (typeof receipt.sourceArchiveSha256 === 'string' && sha256Hex(sourceBytes) !== receipt.sourceArchiveSha256) {
+        throw createError({
+            statusCode: 422,
+            statusMessage: 'The uploaded source.zip bytes do not match the receipt source-archive digest.',
+            data: { code: 'candidate-source-archive-mismatch' },
+        });
+    }
 
     const workspaceId = resolveAdminWorkspaceTarget(
         adminContext,
@@ -220,6 +230,16 @@ export default defineEventHandler(async (event) => {
             packagePath: treeRoot,
             packageDigest: receipt.packageTreeSha256,
         });
+        // The receipt authority must equal the tree-derived review identity:
+        // with aligned derivation a genuine candidate always matches, and a
+        // receipt that understates its authority is refused before review.
+        if (grantCandidate.authoritySha256 !== receipt.authoritySha256) {
+            throw createError({
+                statusCode: 422,
+                statusMessage: 'The candidate receipt authority does not match the authority derived from its package bytes.',
+                data: { code: 'candidate-authority-mismatch' },
+            });
+        }
         let grantReview = await getPluginGrantReview(settings, workspaceId, receipt.pluginId, grantCandidate);
         const approvalRaw = fieldText(form ?? [], 'approvedGrants');
         if (grantReview.status !== 'current') {
@@ -310,23 +330,45 @@ export default defineEventHandler(async (event) => {
 
         const principal = adminContext.principal;
         const admittedBy = principal.kind === 'super_admin' ? principal.username : principal.userId;
+        // The recorded receipt hash is the canonical receipt digest — the same
+        // identity the marketplace binds a verification report to. A
+        // pretty-printed upload hashes differently byte-for-byte, so the raw
+        // upload hash must never stand in for it.
+        const receiptDigest = candidateReceiptSha256(receipt);
         try {
             await recordLocalAdmission({
-                schemaVersion: 1,
+                schemaVersion: 2,
                 pluginId: receipt.pluginId,
                 packageDigest: result.stored.digest,
                 manifestDigest: result.stored.verification.manifestDigest,
                 archiveSha256: receipt.archiveSha256,
                 sourceSha256: receipt.sourceSha256,
-                receiptSha256: sha256Hex(receiptBytes) as `sha256-${string}`,
+                receiptSha256: receiptDigest,
                 candidateVersion: receipt.version,
                 admittedAt: new Date().toISOString(),
                 admittedBy,
             });
         } catch (error) {
-            // The candidate is safely staged; only the provenance sidecar
-            // failed (for example a concurrent retry already recorded it).
-            if (!(error instanceof Error && 'code' in error && (error as { code?: string }).code === 'EEXIST')) {
+            // A v1 sidecar (raw upload hash) for the same bytes upgrades to
+            // the canonical identity; anything else keeps the EEXIST behavior.
+            if (error instanceof Error && 'code' in error && (error as { code?: string }).code === 'EEXIST') {
+                await upgradeLocalAdmissionDigest(
+                    receipt.pluginId,
+                    result.stored.digest,
+                    {
+                        schemaVersion: 2,
+                        pluginId: receipt.pluginId,
+                        packageDigest: result.stored.digest,
+                        manifestDigest: result.stored.verification.manifestDigest,
+                        archiveSha256: receipt.archiveSha256,
+                        sourceSha256: receipt.sourceSha256,
+                        receiptSha256: receiptDigest,
+                        candidateVersion: receipt.version,
+                        admittedAt: new Date().toISOString(),
+                        admittedBy,
+                    }
+                );
+            } else {
                 throw error;
             }
         }

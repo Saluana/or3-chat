@@ -2,19 +2,23 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { encodeFileZip, writeDeterministicPackageZip } from './cli/archive';
 import { buildV2Package } from './cli/build';
 import {
     assertPackageRoot,
-    listPackageFiles,
     packageRootFromCli,
     posix,
     readJsonObject,
     writeStableJson,
 } from './cli/shared';
 import { validateV2Package } from './cli/validate';
-import { PORTABLE_PROFILE_ID } from './profile';
+import {
+    deriveCandidateAuthoritySha256,
+    type CandidateAuthorityManifest,
+} from './authority';
+import { PORTABLE_PROFILE_ID, PACKAGE_POLICY_FILE, PACKAGE_SETUP_FILE } from './profile';
+import type { Or3PackagePolicyV1, Or3SetupDescriptorV1 } from './profile';
 
 /**
  * @module packages/plugin-sdk/src/candidate
@@ -44,7 +48,9 @@ import { PORTABLE_PROFILE_ID } from './profile';
  * - Publishing, signing or uploading (marketplace flows own those).
  */
 
-export const CANDIDATE_RECEIPT_SCHEMA_VERSION = 1 as const;
+export const CANDIDATE_RECEIPT_SCHEMA_VERSION = 2 as const;
+/** Schema 1 receipts predate the source-archive digest; they verify tree-only. */
+export const CANDIDATE_RECEIPT_SCHEMA_VERSION_MIN = 1 as const;
 export const VERIFICATION_RECEIPT_SCHEMA_VERSION = 1 as const;
 export const MAX_CANDIDATE_RECEIPT_BYTES = 16 * 1024;
 export const MAX_VERIFICATION_RECEIPT_BYTES = 4 * 1024;
@@ -71,14 +77,31 @@ export interface CandidateBuildInputs {
 }
 
 export interface CandidateReceipt {
-    readonly schemaVersion: 1;
+    readonly schemaVersion: 1 | 2;
     readonly pluginId: string;
     readonly version: string;
     readonly profile: string;
     readonly archiveSha256: Sha256;
     readonly packageTreeSha256: Sha256;
     readonly manifestSha256: Sha256;
+    /**
+     * Content identity of the source tree (path-sorted `path:filehash` lines),
+     * independent of archive encoding. This is NOT the source.zip byte hash:
+     * uploading source.zip and hashing the upload never reproduces it.
+     */
     readonly sourceSha256: Sha256;
+    /**
+     * Byte identity of the frozen `source.zip`. Schema 2 only; null on schema
+     * 1 receipts, which bind the tree alone. Submission binds this digest to
+     * the uploaded source bytes.
+     */
+    readonly sourceArchiveSha256: Sha256 | null;
+    /**
+     * Host-parity digest of the complete effective authority derived from the
+     * manifest, package policy and setup descriptors (grants, destinations,
+     * scopes, writes, setup hooks, engines, dependencies). Must equal the
+     * host and marketplace digests for the same descriptor bytes.
+     */
     readonly authoritySha256: Sha256;
     readonly buildProvenanceSha256: Sha256;
     readonly requiredHostFeatures: readonly string[];
@@ -177,6 +200,7 @@ const CANDIDATE_RECEIPT_FIELDS = new Set([
     'packageTreeSha256',
     'manifestSha256',
     'sourceSha256',
+    'sourceArchiveSha256',
     'authoritySha256',
     'buildProvenanceSha256',
     'requiredHostFeatures',
@@ -198,9 +222,10 @@ export function parseCandidateReceipt(raw: unknown): CandidateReceipt {
             fail('field-invalid', `Candidate receipt has an unknown field: ${key}`);
         }
     }
-    if (record.schemaVersion !== CANDIDATE_RECEIPT_SCHEMA_VERSION) {
+    if (record.schemaVersion !== CANDIDATE_RECEIPT_SCHEMA_VERSION && record.schemaVersion !== CANDIDATE_RECEIPT_SCHEMA_VERSION_MIN) {
         fail('schema-unsupported', `Candidate receipt schema ${String(record.schemaVersion)} is not supported`);
     }
+    const schemaVersion = record.schemaVersion as 1 | 2;
     const pluginId = checkString(record.pluginId, 'pluginId', 128);
     if (!PLUGIN_ID_PATTERN.test(pluginId)) fail('identity-invalid', 'Candidate receipt pluginId is malformed');
     const source = record.source as Record<string, unknown> | undefined;
@@ -212,7 +237,7 @@ export function parseCandidateReceipt(raw: unknown): CandidateReceipt {
         fail('identity-invalid', 'Candidate receipt needs build inputs');
     }
     const receipt: CandidateReceipt = {
-        schemaVersion: CANDIDATE_RECEIPT_SCHEMA_VERSION,
+        schemaVersion,
         pluginId,
         version: checkString(record.version, 'version', 64),
         profile: checkString(record.profile, 'profile', 128),
@@ -220,6 +245,10 @@ export function parseCandidateReceipt(raw: unknown): CandidateReceipt {
         packageTreeSha256: checkDigest(record.packageTreeSha256, 'packageTreeSha256'),
         manifestSha256: checkDigest(record.manifestSha256, 'manifestSha256'),
         sourceSha256: checkDigest(record.sourceSha256, 'sourceSha256'),
+        sourceArchiveSha256:
+            schemaVersion === 2
+                ? checkDigest(record.sourceArchiveSha256, 'sourceArchiveSha256')
+                : null,
         authoritySha256: checkDigest(record.authoritySha256, 'authoritySha256'),
         buildProvenanceSha256: checkDigest(record.buildProvenanceSha256, 'buildProvenanceSha256'),
         requiredHostFeatures: checkStringArray(record.requiredHostFeatures, 'requiredHostFeatures', 64, 128),
@@ -397,24 +426,75 @@ function isSecretFile(relativePath: string): boolean {
 }
 
 /**
- * Deterministic source snapshot: every non-ignored file (including tests),
- * secrets excluded. Returns the file list so the caller can report what a
- * dirty snapshot actually contains.
+ * Names that are never part of a source snapshot. Unlike packaging (which
+ * skips every dot-entry and `__tests__`), the snapshot must contain the
+ * authoring configuration and vendored dependencies a rebuild needs — for
+ * example `.authoring/` — so only version-control, dependency, build-output
+ * and local-artifact directories are excluded.
+ */
+const SOURCE_SNAPSHOT_IGNORE_NAMES = new Set([
+    'node_modules',
+    '.git',
+    '.hg',
+    '.svn',
+    'dist',
+    'coverage',
+    '.turbo',
+    '.output',
+    '.or3-pack',
+    '.DS_Store',
+]);
+
+function isSnapshotIgnoredName(name: string): boolean {
+    if (SOURCE_SNAPSHOT_IGNORE_NAMES.has(name)) return true;
+    if (name === '.candidate-build' || name === '.candidate-pack') return true;
+    return (
+        name.startsWith('dist-') ||
+        name.startsWith('pack-')
+    );
+}
+
+/**
+ * Deterministic source snapshot: every rebuild-required file, including
+ * dot-directories such as authoring configuration and tests. Secrets are
+ * excluded. Returns the file list so the caller can report what a dirty
+ * snapshot actually contains.
+ *
+ * Qualification extracts exactly this file set into an isolated directory and
+ * rebuilds there, so an omission the walker makes is an omission the rebuild
+ * feels — it can never silently succeed from the live checkout instead.
  */
 export function collectSourceSnapshot(packageRoot: string, excludeRoots: readonly string[] = []): {
     readonly files: readonly string[];
     readonly excludedSecrets: readonly string[];
 } {
+    const resolvedExcludes = excludeRoots.map((entry) => resolve(entry));
+    const isExcluded = (absolute: string): boolean =>
+        resolvedExcludes.some(
+            (excluded) => absolute === excluded || absolute.startsWith(`${excluded}${sep}`)
+        );
     const files: string[] = [];
     const excludedSecrets: string[] = [];
-    for (const absolute of listPackageFiles(packageRoot, { excludeRoots: [...excludeRoots] })) {
-        const relativePath = posix(relative(packageRoot, absolute));
-        if (isSecretFile(relativePath)) {
-            excludedSecrets.push(relativePath);
-            continue;
+    const visit = (directory: string): void => {
+        if (isExcluded(directory)) return;
+        for (const entry of readdirSync(directory, { withFileTypes: true })) {
+            if (isSnapshotIgnoredName(entry.name)) continue;
+            const absolute = resolve(directory, entry.name);
+            if (isExcluded(absolute)) continue;
+            if (entry.isDirectory()) {
+                visit(absolute);
+            } else if (entry.isFile()) {
+                const relativePath = posix(relative(packageRoot, absolute));
+                if (isSecretFile(relativePath)) {
+                    excludedSecrets.push(relativePath);
+                    continue;
+                }
+                files.push(relativePath);
+            }
         }
-        files.push(relativePath);
-    }
+    };
+    visit(packageRoot);
+    files.sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
     return { files: Object.freeze(files), excludedSecrets: Object.freeze(excludedSecrets) };
 }
 
@@ -438,7 +518,12 @@ export function hashSnapshotEntries(
     return sha256Hex(lines.join('\n'));
 }
 
-/** Local authority identity: the exact grants/trust/features the candidate asks for. */
+/**
+ * Legacy subset authority identity, superseded by the complete descriptor
+ * derivation in `./authority`. Kept for reference only: receipts must carry
+ * the host-parity digest, never this subset hash.
+ * @deprecated Use `deriveCandidateAuthoritySha256` from `./authority`.
+ */
 export function deriveAuthoritySha256(manifest: Record<string, unknown>): Sha256 {
     const runtime = (manifest.runtime ?? {}) as Record<string, unknown>;
     return sha256Hex(
@@ -521,6 +606,7 @@ export async function createV2Candidate(
             }))
         );
         const sourceSha256 = hashSourceSnapshot(sourceRoot, snapshot.files);
+        const sourceArchiveSha256 = sha256Hex(sourceBytes);
 
         const probe = options.probeSourceControl ?? (() => probeGitSourceControl(sourceRoot));
         const sourceControl = probe();
@@ -530,6 +616,14 @@ export async function createV2Candidate(
         const requiredHostFeatures = Array.isArray(features.required)
             ? (features.required.filter((entry): entry is string => typeof entry === 'string'))
             : [];
+        // The authority digest is derived from the same validated descriptors
+        // the host and marketplace derive it from, so the receipt hash equals
+        // theirs for identical bytes. A subset hash would fail receipt binding.
+        const authoritySha256 = deriveCandidateAuthoritySha256({
+            manifest: manifest as unknown as CandidateAuthorityManifest,
+            policy: readJsonObject(join(sourceRoot, PACKAGE_POLICY_FILE)) as unknown as Or3PackagePolicyV1,
+            setup: readJsonObject(join(sourceRoot, PACKAGE_SETUP_FILE)) as unknown as Or3SetupDescriptorV1,
+        });
 
         const source: CandidateSourceIdentity = {
             revision: sourceControl.revision,
@@ -551,7 +645,8 @@ export async function createV2Candidate(
             packageTreeSha256: build.pack.verification.digest,
             manifestSha256: build.pack.verification.manifestDigest,
             sourceSha256,
-            authoritySha256: deriveAuthoritySha256(manifest),
+            sourceArchiveSha256,
+            authoritySha256,
             buildProvenanceSha256: buildProvenanceSha256(source, buildInputs),
             requiredHostFeatures,
             source,
@@ -621,6 +716,9 @@ export async function verifyCandidateDirectory(candidateDirectory: string): Prom
         throw new CandidateValidationError('digest-invalid', 'Candidate package.zip tree does not match the receipt package digest');
     }
     const sourceBytes = readFileSync(sourcePath);
+    if (receipt.sourceArchiveSha256 !== null && sha256Hex(sourceBytes) !== receipt.sourceArchiveSha256) {
+        throw new CandidateValidationError('digest-invalid', 'Candidate source.zip bytes do not match the receipt source-archive digest');
+    }
     let sourceEntries: { readonly path: string; readonly bytes: Uint8Array }[];
     try {
         sourceEntries = await readFileZipEntries(sourceBytes);
@@ -646,6 +744,12 @@ export interface QualifyCandidateOptions {
  * candidate. Dirty snapshots, moved revisions, changed lockfiles/SDK bytes or
  * byte mismatches fail and require a new candidate; the frozen files are never
  * modified.
+ *
+ * The rebuild runs from the frozen `source.zip` — extracted into an isolated
+ * scratch directory with frozen dependencies installed — never from the live
+ * checkout. A snapshot omission (for example authoring configuration the
+ * snapshot walker dropped) therefore fails here instead of silently passing
+ * against checkout files the release will not contain.
  */
 export async function qualifyCandidateDirectory(
     packageRoot: string,
@@ -682,14 +786,41 @@ export async function qualifyCandidateDirectory(
     const scratch = resolve(tmpdir(), `or3-candidate-qualify-${Date.now()}`);
     mkdirSync(scratch, { recursive: true });
     try {
-        const build = await buildV2Package(sourceRoot, {
+        // Rebuild from the frozen snapshot, not the checkout: extract
+        // source.zip, confirm it carries the recorded lockfile, install its
+        // frozen dependencies, and build there.
+        const { readFileZipEntries } = await import('./cli/archive');
+        const sourceBytes = readFileSync(join(resolve(candidateDirectory), CANDIDATE_SOURCE_FILENAME));
+        const snapshotDir = join(scratch, 'snapshot');
+        mkdirSync(snapshotDir, { recursive: true });
+        const { writeFileSync: writeSnapshotFile, mkdirSync: makeSnapshotDir } = await import('node:fs');
+        for (const entry of await readFileZipEntries(sourceBytes)) {
+            const target = resolve(snapshotDir, entry.path);
+            if (target !== snapshotDir && !target.startsWith(`${snapshotDir}${sep}`)) {
+                throw new CandidateValidationError('digest-invalid', 'Candidate source.zip contains an unsafe path');
+            }
+            makeSnapshotDir(dirname(target), { recursive: true });
+            writeSnapshotFile(target, entry.bytes);
+        }
+        if (hashPackageLockfile(snapshotDir) !== receipt.build.lockfileSha256) {
+            throw new CandidateValidationError(
+                'digest-invalid',
+                'The frozen source snapshot does not carry the recorded dependency lockfile; create a new candidate'
+            );
+        }
+        // Install only what the receipt froze: a package that pins nothing
+        // builds directly, exactly as creation did.
+        if (receipt.build.lockfileSha256 !== null) {
+            installFrozenDependencies(snapshotDir);
+        }
+        const build = await buildV2Package(snapshotDir, {
             buildDirectory: join(scratch, 'build'),
             packDirectory: join(scratch, 'pack'),
         });
         if (build.pack.verification.digest !== receipt.packageTreeSha256) {
             throw new CandidateValidationError(
                 'digest-invalid',
-                'A clean rebuild produced different bytes; the candidate is stale and needs a new candidate'
+                'A clean rebuild from the frozen snapshot produced different bytes; the candidate is stale and needs a new candidate'
             );
         }
     } finally {
@@ -697,6 +828,27 @@ export async function qualifyCandidateDirectory(
         rmSync(scratch, { recursive: true, force: true });
     }
     return verified;
+}
+
+/**
+ * Install the snapshot's frozen dependencies for an isolated rebuild. Only a
+ * recorded lockfile installs: without one there is nothing frozen to install.
+ */
+export function installFrozenDependencies(snapshotDir: string): void {
+    if (hashPackageLockfile(snapshotDir) === null) {
+        throw new CandidateValidationError(
+            'field-invalid',
+            'Qualification needs a recorded dependency lockfile; create a candidate from a source with one'
+        );
+    }
+    try {
+        execFileSync('bun', ['install', '--frozen-lockfile'], { cwd: snapshotDir, stdio: 'pipe' });
+    } catch (error) {
+        throw new CandidateValidationError(
+            'field-invalid',
+            `Qualification could not install the snapshot's frozen dependencies: ${error instanceof Error ? error.message.split('\n')[0] : 'bun install failed'}`
+        );
+    }
 }
 
 /** True when every sibling output exists (consumers still verify before use). */

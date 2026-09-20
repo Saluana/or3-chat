@@ -44,12 +44,11 @@ import {
     type DashboardPluginPage,
 } from '~/composables/dashboard/useDashboardPlugins';
 import { WORKSPACE_PLUGIN_RECONCILE_EVENT } from '~/composables/plugins/bundled-v1-manager-runtime';
+import { registerPortableTools, toolDiscoveryCode } from '~/composables/plugins/portable-tools';
 
 import { usePaneApps } from "~/composables/core/usePaneApps";
 import { registerSidebarPage } from "~/composables/sidebar/registerSidebarPage";
 import { portablePaneId } from "~/composables/plugins/portable-pane";
-
-import { registerPortableTools } from "~/composables/plugins/portable-tools";
 
 const DASHBOARD_PLUGIN_PREFIX = 'portable:';
 
@@ -236,7 +235,7 @@ export default defineNuxtPlugin(() => {
                     reportPortableContributionReadiness(pluginId, 'tools', 'failed', {
                         descriptorKey: descriptor.descriptorKey,
                         workspaceId,
-                        code: error instanceof Error ? error.message.slice(0, 128) : 'discovery-failed',
+                        code: toolDiscoveryCode(error),
                     });
                 });
             }
