@@ -6,60 +6,79 @@ The named components below are defined in `design.md`. Every implementation task
 
 ## 1. Establish the executable contract and early risk gates
 
-- [ ] 1.1 Record the method/profile support inventory in the existing qualification registry (2h).
+- [x] 1.1 Record the method/profile support inventory in the existing qualification registry (2h).
       Component: SDK Context, Activation Boundary. Requirements: R1.AC1, R1.AC4, R17.AC3.
       Done when: every proposed namespace has a current/proposed method list, production adapter, grant and test reference; portable setup is distinguished from generic trusted V2 activation.
-- [ ] 1.2 Specify the context, result codes and registration acknowledgment contract (3h).
+- [x] 1.2 Specify the context, result codes and registration acknowledgment contract (3h).
       Component: SDK Context. Requirements: R1.AC1–R1.AC3, R2.AC3.
       Done when: SDK type fixtures compile a command/pane example, normalize RPC errors, and reject private imports/unsupported registrations with actionable diagnostics.
-- [ ] 1.3 Specify new grants, feature versions and review deltas in existing schemas (3h).
+- [x] 1.3 Specify new grants, feature versions and review deltas in existing schemas (3h).
       Component: Activation Boundary. Requirements: R1.AC4, R2.AC1, R2.AC4.
       Done when: manifest/policy tests deny undeclared authority and block expanded grants on an existing review; no proposed feature is advertised prematurely.
-- [ ] 1.4 Characterize current Agents behavior and its complete dependency graph (3h).
+- [x] 1.4 Characterize current Agents behavior and its complete dependency graph (3h).
       Component: Agents Migration. Requirements: R18.AC1–R18.AC4.
       Done when: an inventory covers entry point, UI, controller, credentials, attachments, Connect inventory/removal and navigation, with existing tests mapped to each parity scenario.
-- [ ] 1.5 Prototype long-lived stream admission against the current budget ledger (4h).
+- [x] 1.5 Prototype long-lived stream admission against the current budget ledger (4h).
       Component: Network Transport, Activation Boundary. Requirements: R11.AC3, R11.AC4.
       Done when: an injected-clock experiment demonstrates which lifetime limits must change and records bounded callback, stream, spend and revocation semantics before implementation.
-- [ ] 1.6 Run the custom-view containment feasibility probes (4h).
+- [x] 1.6 Run the custom-view containment feasibility probes (4h).
       Component: Surface Adapters. Requirements: R3.AC3, R3.AC5, R2.AC1.
       Done when: supported browser candidates have explicit pass/fail evidence for parent access, self-navigation/URL exfiltration, forms, networking, storage and packaged assets; failures have a recorded blocking decision, not a trust fallback.
-- [ ] 1.7 Add the recommended `createTestHost()` shell over real SDK dispatch (4h).
+- [x] 1.7 Add the recommended `createTestHost()` shell over real SDK dispatch (4h).
       Component: Test Host. Requirements: R16.AC1, R16.AC3.
       Done when: install/disable execute actual setup/cleanup, unknown calls fail, and one compiled fixture can use both this entry point and the existing portable dispatcher.
 
 ## 2. Make ownership, data and workspace transitions dependable
 
-- [ ] 2.1 Bind all context clients to captured host identity and operation controllers (3h).
+- [x] 2.1 Bind all context clients to captured host identity and operation controllers (3h).
       Component: Activation Boundary. Requirements: R2.AC1, R2.AC2, R12.AC1.
       Done when: forged scope fields cannot alter authority and an old context cannot read/write after workspace or selected-package replacement.
-- [ ] 2.2 Implement transactional registration activation and common disposal (4h).
+- [x] 2.2 Implement transactional registration activation and common disposal (4h).
       Component: Activation Boundary. Requirements: R1.AC2, R2.AC2, R2.AC3.
       Done when: setup failure, crash, double dispose and cleanup exceptions leave no live contribution/handler/operation in production and the harness.
-- [ ] 2.3 Add scoped storage revision/quota metadata and adapter boundary validation (3h).
+- [x] 2.3 Add scoped storage revision/quota metadata and adapter boundary validation (3h).
       Component: Plugin Data. Requirements: R6.AC1–R6.AC3.
       Done when: values carry revisions and byte accounting without changing unrelated KV records; invalid/oversized writes retain the previous value.
-- [ ] 2.4 Implement storage CAS and paginated prefix listing (4h).
+- [x] 2.4 Implement storage CAS and paginated prefix listing (4h).
       Component: Plugin Data. Requirements: R6.AC1–R6.AC4.
       Done when: two tabs writing one revision produce one success/one conflict, paging stays scoped, and disable/update retains values.
-- [ ] 2.5 Extend settings schemas for user preferences while preserving workspace configuration (3h).
+      Evidence: host and portable test-host paths use the same deterministic
+      cursor ordering; `ifRevision: null` is create-if-absent CAS and the
+      transactional KV adapter rechecks the clock inside its write transaction.
+- [x] 2.5 Extend settings schemas for user preferences while preserving workspace configuration (3h).
       Component: Plugin Data. Requirements: R7.AC1–R7.AC3.
       Done when: schema/role tests distinguish user and workspace scope, validate defaults, and route credential fields away from ordinary settings.
-- [ ] 2.6 Complete settings get/set/delete adapters and change delivery (3h).
+      Evidence: setup descriptors preserve explicit `user`/`workspace` scope and
+      `secret` markers; setup value/plan tests validate defaults and keep secret
+      fields out of readiness and ordinary settings writes.
+- [x] 2.6 Complete settings get/set/delete adapters and change delivery (3h).
       Component: Plugin Data, Public Events. Requirements: R7.AC2, R16.AC2.
       Done when: delete resets defaults, denied changes preserve old values, and real runtime/harness deliver the same scoped change event.
+      Evidence: portable `settings.list`/`set`/`delete` are registered through the
+      isolated RPC broker, host-authored `settings.changed` events carry the
+      returned revision, and the test host covers default reset and denial behavior.
 - [ ] 2.7 Implement workspace snapshots, change lifecycle and authorized switch requests (4h).
       Component: Public Events, Activation Boundary. Requirements: R12.AC1, R12.AC2, R12.AC4.
       Done when: success/cancel/failure switches preserve the documented authority boundary, new setup receives the right scope and delayed old writes are rejected.
-- [ ] 2.8 Add two-plugin/two-workspace harness scenarios and typed event filtering (3h).
+      Harness evidence: successful, failed and concurrent authorized switches
+      are transactional and stale contexts are rejected; production workspace
+      manager integration and cancellation snapshots remain to be qualified.
+- [x] 2.8 Add two-plugin/two-workspace harness scenarios and typed event filtering (3h).
       Component: Test Host, Public Events. Requirements: R12.AC2, R12.AC3, R16.AC2, R16.AC4.
       Done when: shared tests prove isolation, disposal and content filtering; no test host can access another plugin's store through ordinary context methods.
+      Evidence: the harness keys settings, storage, secrets, files and Activity
+      registrations by workspace/plugin owner, scopes chat resources to the
+      active workspace, and the conformance tests cover plugin replacement,
+      workspace switching, stale contexts and cleanup.
 
 ## 3. Ship the first installed application milestone
 
-- [ ] 3.1 Define pane registration/data schemas and opaque instance routing (3h).
+- [x] 3.1 Define pane registration/data schemas and opaque instance routing (3h).
       Component: Surface Adapters, Pane Navigation. Requirements: R3.AC1, R4.AC1–R4.AC3.
       Done when: SDK/wire validators represent app versus pane instance and reject oversized/invalid restore data.
+      Evidence: `pane-schema.ts` validates registration ids, targets, opaque
+      instance keys, JSON depth/item limits and serialized restore bytes; the
+      harness uses the same validator before creating pane refs.
 - [ ] 3.2 Map pane/sidebar/card registrations to existing host adapters (4h).
       Component: Surface Adapters. Requirements: R3.AC1, R2.AC3.
       Done when: an installed fixture visibly registers each surface and teardown removes only its owned entries.
@@ -75,18 +94,24 @@ The named components below are defined in `design.md`. Every implementation task
 - [ ] 3.6 Add action buttons, accessible toast/confirm/progress adapters (3h).
       Component: Surface Adapters. Requirements: R3.AC1, R3.AC4, R15.AC3.
       Done when: mediated handlers work, progress disposes, keyboard focus returns correctly, and generic confirm cannot mint an operation approval.
-- [ ] 3.7 Extend harness pane/command/UI inspectors and shared conformance cases (3h).
+- [x] 3.7 Extend harness pane/command/UI inspectors and shared conformance cases (3h).
       Component: Test Host. Requirements: R16.AC1, R16.AC4, R4.AC2, R5.AC1.
       Done when: the design's install → command → pane → storage example passes through real SDK dispatch with scoped assertions.
+      Evidence: `PluginTestHost` exposes command, pane and UI registration
+      inspectors and the install/command/pane/storage test exercises CAS,
+      scoping, teardown and invalid restore data.
 - [ ] 3.8 Build/install the command-pane-storage fixture in an external directory (4h).
       Component: Authoring Toolchain, Surface Adapters. Requirements: R1.AC4, R17.AC1.
       Done when: a named bounded SDK E2E script runs packed artifacts without sibling aliases through actual V2 installation, grants, activation, palette, two panes, reload and disable; **milestone 1 is complete**.
 
 ## 4. Provide host secrets and files
 
-- [ ] 4.1 Define secret-owner records, reference revisions and provider contract (3h).
+- [x] 4.1 Define secret-owner records, reference revisions and provider contract (3h).
       Component: Secret Custody. Requirements: R8.AC1–R8.AC3.
       Done when: types/validation distinguish own secrets, managed connections, memory, persistent, locked and missing states; no storage fallback is permitted.
+      Evidence: `secret-schema.ts` and `PluginSecretRef` carry owner,
+      persistence and state metadata; settings validation rejects secret fields,
+      and the harness has no storage fallback for secret reads.
 - [ ] 4.2 Adapt the existing memory/encrypted browser vault behind host custody (4h).
       Component: Secret Custody. Requirements: R8.AC3, R8.AC4.
       Done when: unlock/reload/lock tests pass and wrong PIN/corrupt ciphertext never exposes or overwrites a valid token.
@@ -120,9 +145,13 @@ The named components below are defined in `design.md`. Every implementation task
 - [ ] 5.3 Add credential-reference injection and bounded multipart upload (4h).
       Component: Network Transport, Secret Custody, File Access. Requirements: R8.AC2, R8.AC5, R9.AC4, R10.AC1.
       Done when: credentials reach only their approved endpoint and a staged selected-file upload can cancel without a whole-file RPC envelope.
-- [ ] 5.4 Define stream/socket control envelopes and lifetime budgets (3h).
+- [x] 5.4 Define stream/socket control envelopes and lifetime budgets (3h).
       Component: Network Transport, Activation Boundary. Requirements: R11.AC1, R11.AC3, R11.AC4.
       Done when: stream IDs, owner checks, pull/ack/cancel/terminal messages and rolling versus cumulative limits have validated schemas and deterministic ledger tests.
+      Evidence: `stream-protocol.ts` validates versioned control envelopes,
+      `StreamOwnershipRegistry` enforces activation ownership, and
+      `StreamBudgetLedger` has injected-clock tests for queue, rolling and
+      cumulative byte/chunk limits.
 - [ ] 5.5 Implement raw-byte streaming and slow-consumer behavior (4h).
       Component: Network Transport. Requirements: R11.AC1, R11.AC3.
       Done when: bytes arrive before response completion, bounded queues backpressure upstream, abort reaches the transport and terminal settlement occurs once.
@@ -144,18 +173,25 @@ The named components below are defined in `design.md`. Every implementation task
 
 ## 6. Complete conversation, model and activity integration
 
-- [ ] 6.1 Define public transcript/composer/approval DTOs from Agents scenarios (3h).
+- [x] 6.1 Define public transcript/composer/approval DTOs from Agents scenarios (3h).
       Component: Surface Adapters, Chat and Models. Requirements: R3.AC2, R14.AC4.
       Done when: DTO fixtures cover streaming text, tool events, attachments, model choices and approval prompts without host component imports or unapproved chat content.
+      Evidence: `chat-schema.ts` defines transcript/composer/approval DTOs and
+      validates roles, bounded content, file ids and attachment metadata; the
+      harness covers retry idempotency and malformed messages.
 - [ ] 6.2 Implement host transcript and composer adapters (4h).
       Component: Surface Adapters. Requirements: R3.AC2, R3.AC4.
       Done when: existing theme/message/composer behavior is reachable through public primitives, with keyboard/narrow-pane fixtures and per-pane state.
 - [ ] 6.3 Integrate attachment/model/approval controls into those primitives (4h).
       Component: Surface Adapters, File Access. Requirements: R3.AC2, R9.AC2, R15.AC3.
       Done when: selections and submit/cancel/approval events reach only their current pane/operation and protected approvals retain host authority.
-- [ ] 6.4 Add context AI model/completion facades and shared error mapping (3h).
+- [x] 6.4 Add context AI model/completion facades and shared error mapping (3h).
       Component: Chat and Models. Requirements: R13.AC1, R13.AC3.
       Done when: approved/unavailable models, limits, real usage, spend and denial behavior match the current governed implementation.
+      Evidence: portable `context.ai.models()`/`complete()` route through the
+      host capability bridge under the reviewed `network.http` authority; the
+      SDK maps structured refusal codes and the portable harness covers catalog,
+      completion usage/spend and unconfigured responses.
 - [ ] 6.5 Add AI streaming with final accounting and cancellation (4h).
       Component: Chat and Models, Network Transport. Requirements: R13.AC2, R11.AC3.
       Done when: partial output/abort/error retains accurate outcome and accounting, and unsupported hosts advertise the missing feature.
@@ -168,9 +204,12 @@ The named components below are defined in `design.md`. Every implementation task
 - [ ] 6.8 Bridge scoped chat/settings/connection/resume events (3h).
       Component: Public Events. Requirements: R7.AC2, R12.AC2, R12.AC3, R14.AC4.
       Done when: payloads are versioned plain data, inaccessible content is filtered and reload recovery uses snapshots rather than assumed event replay.
-- [ ] 6.9 Add SDK Activity source mapping and action dispatch (4h).
+- [x] 6.9 Add SDK Activity source mapping and action dispatch (4h).
       Component: Activity Projection. Requirements: R15.AC1, R15.AC2.
       Done when: replay/terminal-state behavior matches the existing registry, failed actions preserve canonical state and one broken source cannot stop others.
+      Evidence: `app/core/activity/adapters/plugin-sdk.ts` maps SDK summaries,
+      details, events and actions into the existing registry; adapter tests cover
+      dispatch, disposal and isolation of a broken source.
 - [ ] 6.10 Connect safe diagnostics and integration fixture qualification (4h).
       Component: Surface Adapters, Test Host, Authoring Toolchain. Requirements: R15.AC4, R16.AC4, R1.AC4.
       Done when: a clean installed fixture combines secret/file/network/stream/activity/chat capabilities, denied cases expose safe actionable errors, and **milestone 2 is complete**.

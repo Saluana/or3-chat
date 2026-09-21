@@ -69,12 +69,15 @@ export interface WorkerSdkBridgeServices {
     };
     readonly storage?: {
         get?: HostRpcHandler;
+        getRecord?: HostRpcHandler;
         set?: HostRpcHandler;
         delete?: HostRpcHandler;
         list?: HostRpcHandler;
+        listPage?: HostRpcHandler;
     };
     readonly settings?: {
         get?: HostRpcHandler;
+        list?: HostRpcHandler;
         set?: HostRpcHandler;
         delete?: HostRpcHandler;
     };
@@ -189,10 +192,13 @@ function buildLogicMethodSpecs(
     add('hooks.onAction', services.hooks?.onAction);
     add('hooks.onFilter', services.hooks?.onFilter);
     add('storage.get', services.storage?.get);
+    add('storage.getRecord', services.storage?.getRecord);
     add('storage.set', services.storage?.set);
     add('storage.delete', services.storage?.delete);
     add('storage.list', services.storage?.list);
+    add('storage.listPage', services.storage?.listPage);
     add('settings.get', services.settings?.get);
+    add('settings.list', services.settings?.list);
     add('settings.set', services.settings?.set);
     add('settings.delete', services.settings?.delete);
     return specs;

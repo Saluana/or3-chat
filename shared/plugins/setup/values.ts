@@ -14,8 +14,8 @@
  *   cannot disagree.
  *
  * Constraints:
- * - Pure data: no I/O, no host services, no secret handling (secrets belong in a
- *   connection record).
+ * - Pure data: no I/O, no host services, no secret handling (secret values
+ *   belong in Secret Custody through the SDK or a host connection record).
  *
  * Non-Goals:
  * - Persisting settings (the workspace settings store owns that).
@@ -47,9 +47,10 @@ function utf8Bytes(value: string): number {
  * though the key exists.
  */
 export function isSetupValuePresent(
-    field: Pick<Or3SetupField, 'kind'>,
+    field: Pick<Or3SetupField, 'kind' | 'secret'>,
     value: PortableProfileFieldValue | undefined
 ): boolean {
+    if (field.secret === true) return false;
     if (value === undefined) return false;
     switch (field.kind) {
         case 'toggle':
@@ -70,6 +71,9 @@ type Normalized =
 
 /** Validate and normalize one raw value for one declared field. */
 function normalizeFieldValue(field: Or3SetupField, raw: unknown): Normalized {
+    if (field.secret === true) {
+        return { ok: false, message: 'is a secret; store it with the plugin secrets API' };
+    }
     switch (field.kind) {
         case 'text': {
             if (typeof raw !== 'string') {
@@ -163,7 +167,7 @@ export function validateSetupValues(input: {
 
     if (input.requireAll === true) {
         for (const field of input.fields) {
-            if (!field.required) continue;
+            if (!field.required || field.secret === true) continue;
             if (field.default !== undefined && !(field.key in values)) continue;
             if (isSetupValuePresent(field, values[field.key])) continue;
             errors.push({ key: field.key, message: `${field.label} is required` });
@@ -198,6 +202,13 @@ export function applySetupValuesPatch(input: {
             continue;
         }
         if (raw === null) {
+            if (field.secret === true) {
+                errors.push({
+                    key,
+                    message: `${field.label} is a secret; store it with the plugin secrets API`,
+                });
+                continue;
+            }
             delete merged[key];
             continue;
         }

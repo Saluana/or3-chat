@@ -15,7 +15,7 @@ production workspace activation path does not yet call a V2 definition's
 ## Core exports
 
 - `defineOr3Plugin()` + Manifest V2 types
-- Host-created `PluginContext` (identity, generation, grants, logger, hooks, contributions, settings, storage, http, cleanup)
+- Host-created `PluginContext` (identity, generation, grants, logger, hooks, contributions, settings, storage, and typed capability namespaces)
 - Result helpers (`pluginOk` / `pluginError`)
 - `@or3/plugin-sdk/testing` fake host for local activation/failure tests
 
@@ -36,6 +36,46 @@ Scaffold:
 bun run plugin-runtime:cli -- create --id or3.example --dir ./example
 ```
 
+The context is intentionally capability-shaped:
+
+```ts
+context.ai; context.ui; context.panes; context.commands; context.chat;
+context.workspace; context.storage; context.settings; context.secrets;
+context.files; context.http; context.network; context.activity; context.events;
+```
+
+Each namespace is typed, grant-checked, and host-mediated. A host may expose a
+stable namespace while returning `unsupported` until its production adapter is
+qualified; adding a grant string alone never enables a method. Storage records
+include revisions and byte accounting through `getRecord()`, and writes accept
+`ifRevision` for compare-and-set updates. Plugin code should not import Dexie,
+Vue composables, Nuxt APIs, Pinia stores, database tables, or internal OR3
+services.
+
+`context.activity.registerSource()` accepts an owner-scoped source with bounded
+run summaries. A source may also expose details, typed live events, and explicit
+cancel/retry/approval actions; the host adapts those records into the Activity
+center and isolates a failing source from other sources. The production V2
+grant remains unqualified until installed-package conformance is complete,
+while the trusted host adapter and test harness exercise the same mapping.
+
+Pane registrations and open calls validate opaque ids and restore data before
+navigation. Data is limited by serialized bytes, nesting depth, and item
+count. File APIs return host-issued metadata handles without filesystem paths;
+reads are bounded async byte streams and writes use replacement revisions.
+Chat messages validate roles, content, and attachment metadata, and
+`requestId` makes a retried append idempotent. Setup descriptors can mark a
+field `scope: "user" | "workspace"`; a `secret: true` field is never accepted
+by ordinary setup settings and must use the secrets client.
+Registering a command does not grant cross-plugin execution: a plugin needs the
+reviewed `commands.run.public` grant to invoke a command owned by another
+plugin.
+
+`PluginSseDecoder` is available for mediated SSE streams. It handles split
+UTF-8 and CRLF chunks, multiline data, event ids, and heartbeat comments within
+bounded line and event sizes. Transport admission, destination policy,
+reconnect, and lifetime budgets remain host responsibilities.
+
 ## Host capabilities (portable AI)
 
 The root export also carries typed helpers for the host's governed model
@@ -53,7 +93,10 @@ silent empty result.
 
 ## Testing a portable package
 
-`@or3/plugin-sdk/testing` exports `createPortableTestHost()`. It implements the
+`@or3/plugin-sdk/testing` exports `createPluginTestHost()` and
+`createPortableTestHost()`. The host harness covers activation teardown,
+generation-scoped storage CAS, panes, commands, chat, secrets and bounded file
+fixtures. The portable host implements the
 same `PortableClient` contract the sandbox shim provides — canned capability
 answers (including refusals), working settings/storage stores, captured renders,
 contributions and events — so a package's own `client.mjs` runs through the real

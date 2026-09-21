@@ -22,6 +22,9 @@ import type {
     PaletteCommandHandler,
     PalettePostSourceDefinition,
 } from '~/core/search/command-palette/types';
+import { getActivityRegistry } from '~/core/activity/registry';
+import { registerPluginActivitySource } from '~/core/activity/adapters/plugin-sdk';
+import type { PluginActivitySource } from '@or3/plugin-sdk';
 
 export type WorkspacePluginSource = 'builtin' | 'extension';
 
@@ -43,6 +46,7 @@ export interface Or3WorkspacePluginApi {
         definition: PaletteCommandDefinition,
         handler: PaletteCommandHandler
     ) => RegistrationHandle;
+    registerActivitySource: (source: PluginActivitySource) => RegistrationHandle;
     onCleanup: (fn: () => void | Promise<void>) => void;
 }
 
@@ -179,6 +183,16 @@ export function createManagedWorkspacePluginRuntime(options?: {
             const handle = registerPaletteCommand(definition, handler, {
                 pluginId: palettePluginId,
             });
+            scope.onCleanup(() => {
+                handle.dispose();
+            });
+            return handle;
+        },
+        registerActivitySource(source) {
+            const handle = registerPluginActivitySource(
+                getActivityRegistry(),
+                source
+            );
             scope.onCleanup(() => {
                 handle.dispose();
             });

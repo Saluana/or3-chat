@@ -34,6 +34,7 @@ import type {
     PluginContribution,
     WorkerIsolationRuntime,
 } from '~~/shared/plugins/isolation/worker-runtime';
+import type { HostRpcHandlerContext } from '~~/shared/plugins/isolation/host-rpc-broker';
 import type { PortableUiNode } from '~~/shared/plugins/isolation/ui-primitives';
 import {
     PORTABLE_CLIENT_FEATURE,
@@ -222,18 +223,27 @@ export function createPortableSettingsServices(
          * and offers an explicit restart.
          */
         readonly onActivationStale: (code: string) => void;
-    }
+    },
+    workspaceId?: string | null
 ): {
     readonly settings: {
         readonly get: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
-        readonly set: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
+        readonly set: (
+            params: Readonly<Record<string, unknown>>,
+            context?: Pick<HostRpcHandlerContext, 'emitEvent'>
+        ) => Promise<unknown>;
         readonly list: () => Promise<unknown>;
-        readonly delete: () => Promise<unknown>;
+        readonly delete: (
+            params: Readonly<Record<string, unknown>>,
+            context?: Pick<HostRpcHandlerContext, 'emitEvent'>
+        ) => Promise<unknown>;
     };
     readonly storage: {
         readonly get: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
+        readonly getRecord: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
         readonly set: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
         readonly list: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
+        readonly listPage: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
         readonly delete: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
     };
 } {
@@ -251,6 +261,19 @@ export function createPortableSettingsServices(
     };
 
     const storagePrefix = `plugin-storage:${pluginId}:`;
+    // Capture the active workspace database once per activation. Async storage
+    // work must never resolve the globally active DB halfway through a write.
+    const capturedDb = getDb();
+    const getStorageKv = (name: string) =>
+        workspaceId ? getKvByName(name, capturedDb) : getKvByName(name);
+    const setStorageKv = (name: string, value: string | null, options?: { readonly ifClock?: number | null }) =>
+        workspaceId
+            ? setKvByName(name, value, capturedDb, options)
+            : options === undefined
+              ? setKvByName(name, value)
+              : setKvByName(name, value, undefined, options);
+    const deleteStorageKv = (name: string) =>
+        workspaceId ? hardDeleteKvByName(name, capturedDb) : hardDeleteKvByName(name);
     const invalid = (message: string) =>
         Object.assign(new Error(message), { rpcCode: 'invalid-input' });
     const readStorageKey = (params: Readonly<Record<string, unknown>>): string => {
@@ -260,30 +283,31 @@ export function createPortableSettingsServices(
         }
         return key;
     };
+    const readSettingsKey = (params: Readonly<Record<string, unknown>>): string => {
+        const key = typeof params.key === 'string' ? params.key : '';
+        if (!key || key.length > 200 || key.includes('\u0000')) {
+            throw invalid('settings calls require a key of 1–200 characters');
+        }
+        return key;
+    };
     const MAX_STORAGE_VALUE_BYTES = 32 * 1024;
+
+    function comparePluginStorageKeys(left: string, right: string): number {
+        return left < right ? -1 : left > right ? 1 : 0;
+    }
 
     return {
         settings: {
             async get(params) {
-                const key = typeof params.key === 'string' ? params.key : '';
-                if (!key) {
-                    throw Object.assign(new Error('settings.get requires a key'), {
-                        rpcCode: 'invalid-input',
-                    });
-                }
+                const key = readSettingsKey(params);
                 const values = await loadValues();
                 return { value: values[key] ?? null };
             },
-            async set(params) {
-                const key = typeof params.key === 'string' ? params.key : '';
-                if (!key) {
-                    throw Object.assign(new Error('settings.set requires a key'), {
-                        rpcCode: 'invalid-input',
-                    });
-                }
+            async set(params, context) {
+                const key = readSettingsKey(params);
                 const url: string = `/api/plugins/${pluginId}/setup-values?slot=current`;
                 try {
-                    await (
+                    const response = await (
                         $fetch as unknown as (
                             input: string,
                             options: Record<string, unknown>
@@ -302,6 +326,18 @@ export function createPortableSettingsServices(
                             ...(activationId ? { activationId } : {}),
                         },
                     });
+                    const revision =
+                        response && typeof response === 'object' &&
+                        typeof (response as { revision?: unknown }).revision === 'number'
+                            ? (response as { revision: number }).revision
+                            : null;
+                    if (revision !== null) {
+                        context?.emitEvent?.('settings.changed', {
+                            key,
+                            revision,
+                            deleted: false,
+                        });
+                    }
                 } catch (error) {
                     const code = settingsLifecycleCode(error);
                     if (code) {
@@ -323,17 +359,53 @@ export function createPortableSettingsServices(
             async list() {
                 return { values: await loadValues() };
             },
-            async delete() {
-                throw Object.assign(
-                    new Error('Portable plugins cannot delete settings yet'),
-                    { rpcCode: 'permission-denied' }
-                );
+            async delete(params, context) {
+                const key = readSettingsKey(params);
+                const url: string = `/api/plugins/${pluginId}/setup-values?slot=current`;
+                try {
+                    const response = await (
+                        $fetch as unknown as (
+                            input: string,
+                            options: Record<string, unknown>
+                        ) => Promise<unknown>
+                    )(url, {
+                        method: 'POST',
+                        headers: { 'x-or3-plugin-intent': 'plugin' },
+                        body: {
+                            values: { [key]: null },
+                            ...(packageDigest ? { expectedPackageDigest: packageDigest } : {}),
+                            ...(activationId ? { activationId } : {}),
+                        },
+                    });
+                    const revision =
+                        response && typeof response === 'object' &&
+                        typeof (response as { revision?: unknown }).revision === 'number'
+                            ? (response as { revision: number }).revision
+                            : null;
+                    if (revision !== null) {
+                        context?.emitEvent?.('settings.changed', {
+                            key,
+                            revision,
+                            deleted: true,
+                        });
+                    }
+                } catch (error) {
+                    const code = settingsLifecycleCode(error);
+                    if (code) {
+                        lifecycle?.onActivationStale(code);
+                        const failure = error instanceof Error ? error : new Error('The settings delete was refused');
+                        Object.assign(failure, { rpcCode: 'policy-denied' });
+                        throw failure;
+                    }
+                    throw error;
+                }
+                return { ok: true };
             },
         },
         storage: {
             async get(params) {
                 const key = readStorageKey(params);
-                const row = await getKvByName(`${storagePrefix}${key}`);
+                const row = await getStorageKv(`${storagePrefix}${key}`);
                 if (!row || row.value === null || row.value === undefined) {
                     return { value: null };
                 }
@@ -343,34 +415,131 @@ export function createPortableSettingsServices(
                     return { value: null };
                 }
             },
+            async getRecord(params) {
+                const key = readStorageKey(params);
+                const row = await getStorageKv(`${storagePrefix}${key}`);
+                if (!row || row.value === null || row.value === undefined) {
+                    return { value: null, revision: row ? row.clock : 0, sizeBytes: 0, updatedAt: row ? row.updated_at * 1000 : 0 };
+                }
+                try {
+                    const rowRevision = (row as unknown as { clock?: unknown }).clock;
+                    return {
+                        value: JSON.parse(row.value) as unknown,
+                        revision: typeof rowRevision === 'number' ? rowRevision : 0,
+                        sizeBytes: new TextEncoder().encode(row.value).byteLength,
+                        updatedAt: row.updated_at * 1000,
+                    };
+                } catch {
+                    const rowRevision = (row as unknown as { clock?: unknown }).clock;
+                    return {
+                        value: null,
+                        revision: typeof rowRevision === 'number' ? rowRevision : 0,
+                        sizeBytes: 0,
+                        updatedAt: row.updated_at * 1000,
+                    };
+                }
+            },
             async set(params) {
                 const key = readStorageKey(params);
                 const value = params.value ?? null;
-                const serialized = JSON.stringify(value);
+                let serialized: string;
+                try {
+                    const encoded = JSON.stringify(value);
+                    if (typeof encoded !== 'string') throw invalid('storage values must be JSON-serializable');
+                    serialized = encoded;
+                } catch (error) {
+                    if (error && typeof error === 'object' && 'rpcCode' in error) throw error;
+                    throw invalid('storage values must be JSON-serializable');
+                }
                 if (new TextEncoder().encode(serialized).byteLength > MAX_STORAGE_VALUE_BYTES) {
                     throw invalid(`storage values must be at most ${MAX_STORAGE_VALUE_BYTES} bytes`);
                 }
-                await setKvByName(`${storagePrefix}${key}`, serialized);
+                try {
+                    const rawIfRevision = params.ifRevision;
+                    const ifRevision =
+                        rawIfRevision === null || typeof rawIfRevision === 'number'
+                            ? rawIfRevision
+                            : undefined;
+                    if (ifRevision === undefined) {
+                        await setStorageKv(`${storagePrefix}${key}`, serialized);
+                    } else {
+                        await setStorageKv(`${storagePrefix}${key}`, serialized, {
+                            ifClock: ifRevision,
+                        });
+                    }
+                } catch (error) {
+                    if (error && typeof error === 'object' && 'rpcCode' in error) {
+                        const code = (error as { rpcCode?: unknown }).rpcCode;
+                        if (code === 'conflict') throw error;
+                    }
+                    throw error;
+                }
                 return { ok: true };
             },
             async list(params) {
                 const prefix = typeof params.prefix === 'string' ? params.prefix : '';
                 if (prefix.length > 200) throw invalid('storage.list prefix is too long');
-                const rows = await getDb()
+                const rows = await capturedDb
                     .kv.where('name')
                     .startsWith(`${storagePrefix}${prefix}`)
                     .toArray();
                 return {
-                    entries: rows.map((row) => ({
-                        key: row.name.slice(storagePrefix.length),
-                        sizeBytes: typeof row.value === 'string' ? row.value.length : 0,
-                        updatedAt: row.updated_at * 1000,
-                    })),
+                    entries: rows
+                        .sort((left, right) => comparePluginStorageKeys(left.name, right.name))
+                        .map((row) => {
+                            const rowRevision = (row as unknown as { clock?: unknown }).clock;
+                            return {
+                                key: row.name.slice(storagePrefix.length),
+                                sizeBytes: typeof row.value === 'string' ? new TextEncoder().encode(row.value).byteLength : 0,
+                                updatedAt: row.updated_at * 1000,
+                                ...(typeof rowRevision === 'number' ? { revision: rowRevision } : {}),
+                            };
+                        }),
+                };
+            },
+            async listPage(params) {
+                const prefix = typeof params.prefix === 'string' ? params.prefix : '';
+                if (prefix.length > 200 || prefix.includes('\u0000')) {
+                    throw invalid('storage.listPage prefix is too long or invalid');
+                }
+                if (params.cursor !== undefined && (typeof params.cursor !== 'string' || !params.cursor.startsWith('cursor:'))) {
+                    throw invalid('storage.listPage cursor is invalid');
+                }
+                const cursor = typeof params.cursor === 'string' && params.cursor.startsWith('cursor:')
+                    ? params.cursor.slice(7)
+                    : '';
+                if (cursor.length > 200 || cursor.includes('\u0000')) {
+                    throw invalid('storage.listPage cursor is invalid');
+                }
+                const requestedLimit = typeof params.limit === 'number' && Number.isFinite(params.limit)
+                    ? Math.floor(params.limit)
+                    : 100;
+                const limit = Math.max(1, Math.min(200, requestedLimit));
+                const rows = (await capturedDb
+                    .kv.where('name')
+                    .startsWith(`${storagePrefix}${prefix}`)
+                    .toArray())
+                    .filter((row) => comparePluginStorageKeys(row.name, `${storagePrefix}${cursor}`) > 0)
+                    .sort((left, right) => comparePluginStorageKeys(left.name, right.name));
+                const page = rows.slice(0, limit);
+                return {
+                    entries: page.map((row) => {
+                        const rowRevision = (row as unknown as { clock?: unknown }).clock;
+                        return {
+                            key: row.name.slice(storagePrefix.length),
+                            sizeBytes: typeof row.value === 'string' ? new TextEncoder().encode(row.value).byteLength : 0,
+                            updatedAt: row.updated_at * 1000,
+                            ...(typeof rowRevision === 'number' ? { revision: rowRevision } : {}),
+                        };
+                    }),
+                    ...(rows.length > page.length && page.length > 0
+                        ? { nextCursor: `cursor:${page[page.length - 1]!.name.slice(storagePrefix.length)}` }
+                        : {}),
                 };
             },
             async delete(params) {
                 const key = readStorageKey(params);
-                await hardDeleteKvByName(`${storagePrefix}${key}`);
+                await deleteStorageKv(`${storagePrefix}${key}`);
                 return { ok: true };
             },
         },
@@ -675,7 +844,8 @@ export async function activatePortableClient(
                 // remote capabilities: a refused save stops this activation.
                 onActivationStale: (code) =>
                     markPortableClientActivationStale(pluginId, epoch, generation, code),
-            }
+            },
+            workspaceId
         ),
         methods: createRemoteCapabilityMethods({
             transport,
@@ -1015,7 +1185,7 @@ export function reportPortableContributionReadiness(
         previous !== undefined &&
         previous.descriptorKey === descriptorKey &&
         previous.workspaceId === workspaceId;
-    const base = sameBytes && previous !== undefined ? previous : surfaceFor(descriptorKey, workspaceId);
+    const base = previous && sameBytes ? previous : surfaceFor(descriptorKey, workspaceId);
     surfaceRegistrations.set(pluginId, { ...base, descriptorKey, workspaceId, [surface]: status });
     const current = activations.get(pluginId);
     if (
@@ -1052,7 +1222,7 @@ function reportToolReadiness(
             previous !== undefined &&
             previous.descriptorKey === descriptorKey &&
             previous.workspaceId === workspaceId;
-        const base = sameBytes && previous !== undefined ? previous : surfaceFor(descriptorKey, workspaceId);
+        const base = previous && sameBytes ? previous : surfaceFor(descriptorKey, workspaceId);
         surfaceRegistrations.set(pluginId, {
             ...base,
             descriptorKey,

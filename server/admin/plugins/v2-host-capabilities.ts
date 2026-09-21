@@ -124,6 +124,42 @@ export const OR3_PLUGIN_V2_GRANT_REGISTRY: readonly Or3PluginV2GrantQualificatio
                 id: 'usePortableHostActions.document-write',
             },
         },
+        // Contract inventory only. These grants are deliberately unqualified
+        // until a production adapter and conformance fixture exist.
+        ...[
+            'ui.sidebar.register',
+            'ui.pane.register',
+            'ui.card.register',
+            'ui.action.register',
+            'ui.toast',
+            'ui.confirm',
+            'ui.progress',
+            'panes.open',
+            'commands.register',
+            'commands.run.public',
+            'chat.create',
+            'chat.read',
+            'chat.message.write',
+            'workspace.read',
+            'workspace.switch',
+            'workspace.connections.read',
+            'workspace.connections.manage',
+            'events.register',
+            'ai.models',
+            'ai.complete',
+            'secrets.read',
+            'secrets.write',
+            'secrets.use',
+            'files.pick',
+            'files.read',
+            'files.write',
+            'network.stream',
+            'activity.register',
+        ].map((grant) => ({
+            grant,
+            status: 'unqualified' as const,
+            registration: { kind: 'test' as const, id: `proposed.${grant}` },
+        })),
     ]);
 
 const qualifiedGrants = OR3_PLUGIN_V2_GRANT_REGISTRY

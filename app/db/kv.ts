@@ -224,7 +224,8 @@ export async function getKvByName(name: string, targetDb: Or3DB = getDb()) {
 export async function setKvByName(
     name: string,
     value: string | null,
-    targetDb: Or3DB = getDb()
+    targetDb: Or3DB = getDb(),
+    options: { readonly ifClock?: number | null } = {}
 ): Promise<Kv> {
     await ensureDbOpen(targetDb);
     const hooks = useHooks();
@@ -233,6 +234,18 @@ export async function setKvByName(
         { op: 'read', entity: 'kv', action: 'getByName' }
     );
     const now = nowSec();
+    const currentClock = existing?.clock ?? 0;
+    if (
+        options.ifClock !== undefined &&
+        (options.ifClock === null
+            ? existing !== undefined
+            : options.ifClock !== currentClock)
+    ) {
+        throw Object.assign(new Error('KV revision is stale'), {
+            rpcCode: 'conflict',
+            currentRevision: currentClock,
+        });
+    }
     const record: Kv = {
         id: existing?.id ?? `kv:${name}`,
         name,
@@ -250,19 +263,46 @@ export async function setKvByName(
         'id' in filtered && 'created_at' in filtered
             ? (filtered as Kv)
             : record;
+    let committedEntity = kvEntity;
     await targetDb.transaction(
         'rw',
         getWriteTxTableNames(targetDb, 'kv'),
         async () => {
-        parseOrThrow(KvSchema, kvEntity);
+        // Re-read inside the write transaction. The initial read provides a
+        // useful fast refusal, but only this check makes ifClock a real CAS
+        // boundary when two tabs race on the same key.
+        const current = await dbTry(
+            () => targetDb.kv.where('name').equals(name).first(),
+            { op: 'read', entity: 'kv', action: 'getByName' }
+        );
+        const currentClockInTransaction = current?.clock ?? 0;
+        if (
+            options.ifClock !== undefined &&
+            (options.ifClock === null
+                ? current !== undefined
+                : options.ifClock !== currentClockInTransaction)
+        ) {
+            throw Object.assign(new Error('KV revision is stale'), {
+                rpcCode: 'conflict',
+                currentRevision: currentClockInTransaction,
+            });
+        }
+        const transactionEntity: Kv = {
+            ...kvEntity,
+            id: current?.id ?? kvEntity.id,
+            created_at: current?.created_at ?? kvEntity.created_at,
+            clock: nextClock(current?.clock),
+        };
+        committedEntity = transactionEntity;
+        parseOrThrow(KvSchema, transactionEntity);
         await dbTry(
-            () => targetDb.kv.put(kvEntity),
+            () => targetDb.kv.put(transactionEntity),
             { op: 'write', entity: 'kv', action: 'upsertByName' },
             { rethrow: true }
         );
-        await hooks.doAction('db.kv.upsertByName:action:after', kvEntity);
+        await hooks.doAction('db.kv.upsertByName:action:after', transactionEntity);
     });
-    return kvEntity;
+    return committedEntity;
 }
 
 /**

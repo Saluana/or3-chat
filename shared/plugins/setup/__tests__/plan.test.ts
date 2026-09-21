@@ -116,6 +116,40 @@ describe('setup plan (4.10)', () => {
         expect(verbose).toMatchObject({ deferred: true, defaultValue: false });
     });
 
+    it('exposes setting ownership and keeps secret fields out of readiness blockers', () => {
+        const plan = buildSetupPlan({
+            setup: {
+                ...setup,
+                fields: [
+                    ...setup.fields,
+                    {
+                        key: 'apiKey',
+                        label: 'API key',
+                        kind: 'text',
+                        required: true,
+                        order: 4,
+                        scope: 'user',
+                        secret: true,
+                    },
+                ],
+            },
+            policy,
+            hostConnections,
+            values: { workspace: 'Team notes' },
+        });
+        expect(plan.fields.find((field) => field.key === 'workspace')).toMatchObject({
+            scope: 'workspace',
+            secret: false,
+        });
+        expect(plan.fields.find((field) => field.key === 'apiKey')).toMatchObject({
+            scope: 'user',
+            secret: true,
+            deferred: true,
+            missing: false,
+        });
+        expect(plan.blockers.some((blocker) => blocker.includes('API key'))).toBe(false);
+    });
+
     it('is never ready while a required connection is untested (IN02)', () => {
         const plan = buildSetupPlan({
             setup,

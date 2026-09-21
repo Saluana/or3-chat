@@ -117,16 +117,20 @@ describe('createPortablePlugin', () => {
 
     it('reports a failed activation instead of acknowledging readiness', async () => {
         const fake = fakeClient();
-        createPortablePlugin(
+        let signal: AbortSignal | undefined;
+        const handle = createPortablePlugin(
             {
                 manifest,
-                setup() {
+                setup(context) {
+                    signal = context.signal;
                     throw new Error('plugin refused to start');
                 },
             },
             { client: fake.client, bootstrap: bootstrap() }
         );
         await new Promise((resolve) => setTimeout(resolve, 0));
+        await expect(handle.ready).rejects.toThrow('plugin refused to start');
+        expect(signal?.aborted).toBe(true);
 
         const failure = fake.events.find(
             (event) => event.name === PORTABLE_BOOTSTRAP_FAILED_EVENT
@@ -209,5 +213,25 @@ describe('createPortablePlugin', () => {
         );
         await new Promise((resolve) => setTimeout(resolve, 0));
         expect(fake.events.map((event) => event.name)).toContain(PORTABLE_BOOTSTRAP_READY_EVENT);
+    });
+
+    it('requires workspace authority for workspace lifecycle subscriptions', async () => {
+        const fake = fakeClient();
+        createPortablePlugin(
+            {
+                manifest,
+                setup(context) {
+                    context.workspace.onChange(() => undefined);
+                },
+            },
+            {
+                client: fake.client,
+                bootstrap: bootstrap(['events.register']),
+            }
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(fake.events.map((event) => event.name)).toContain(PORTABLE_BOOTSTRAP_FAILED_EVENT);
+        expect(fake.events.map((event) => event.name)).not.toContain(PORTABLE_BOOTSTRAP_READY_EVENT);
     });
 });

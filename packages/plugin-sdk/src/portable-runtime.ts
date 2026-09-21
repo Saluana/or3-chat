@@ -40,11 +40,21 @@ import type {
 } from './contracts';
 import { hostCreatedPluginContext } from './contracts';
 import type { PluginManifestV2 } from './manifest';
+import {
+    createUnsupportedPluginClients,
+    type PluginEventName,
+    type PluginHostClients,
+    type PluginWorkspaceChange,
+} from './capabilities';
 import type {
     PluginJsonValue,
     PluginSettingsClient,
     PluginStorageClient,
     PluginStorageListEntry,
+    PluginStorageListOptions,
+    PluginStoragePage,
+    PluginStorageMutationOptions,
+    PluginStorageRecord,
 } from './clients';
 import {
     pluginError,
@@ -77,6 +87,7 @@ export const PORTABLE_DASHBOARD_CONTRIBUTION_KIND = 'ui.dashboard.card';
 
 export interface PortableBootstrapPayload {
     readonly pluginId?: string;
+    readonly workspaceId?: string;
     readonly abiVersion?: number;
     readonly features?: readonly string[];
     readonly grants?: readonly string[];
@@ -132,6 +143,9 @@ const HOST_ERROR_CODES: Readonly<Record<string, PluginErrorCode>> = Object.freez
     'not-found': 'not-found',
     'invalid-input': 'invalid-input',
     conflict: 'conflict',
+    unsupported: 'unsupported',
+    locked: 'locked',
+    'stale-context': 'stale-context',
     'budget-exceeded': 'quota-exceeded',
     'deadline-exceeded': 'timeout',
     cancelled: 'aborted',
@@ -181,6 +195,72 @@ function readValue<T>(result: unknown): T | null {
     return (value ?? null) as T | null;
 }
 
+function readonlySet<T>(values: readonly T[]): ReadonlySet<T> {
+    const set = new Set(values);
+    const facade = {
+        get size() {
+            return set.size;
+        },
+        has: (value: T) => set.has(value),
+        forEach: (
+            callback: (value: T, value2: T, set: ReadonlySet<T>) => void,
+            thisArg?: unknown
+        ) => set.forEach((value) => callback.call(thisArg, value, value, facade)),
+        entries: () => set.entries(),
+        keys: () => set.keys(),
+        values: () => set.values(),
+        [Symbol.iterator]: () => set[Symbol.iterator](),
+    } as ReadonlySet<T>;
+    return Object.freeze(facade);
+}
+
+function notifyEventListener(
+    listener: (payload: never) => void | Promise<void>,
+    payload: never
+): void {
+    try {
+        const result = listener(payload);
+        if (result && typeof (result as Promise<void>).then === 'function') {
+            void (result as Promise<void>).catch(() => undefined);
+        }
+    } catch {
+        // Event subscribers cannot affect host delivery or other subscribers.
+    }
+}
+
+function validEventPayload(name: PluginEventName, payload: unknown): boolean {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
+    const value = payload as Record<string, unknown>;
+    switch (name) {
+        case 'workspace.changed':
+            return (
+                typeof value.previousId === 'string' &&
+                typeof value.id === 'string' &&
+                (value.reason === 'user' || value.reason === 'restore' || value.reason === 'host')
+            );
+        case 'settings.changed':
+            return (
+                typeof value.key === 'string' &&
+                Number.isSafeInteger(value.revision) &&
+                (value.revision as number) >= 0 &&
+                typeof value.deleted === 'boolean'
+            );
+        case 'chat.created':
+            return typeof value.chatId === 'string' &&
+                (value.title === undefined || typeof value.title === 'string');
+        case 'chat.message.created':
+            return (
+                typeof value.chatId === 'string' &&
+                typeof value.messageId === 'string' &&
+                (value.role === 'user' || value.role === 'assistant' || value.role === 'system' || value.role === 'tool')
+            );
+        case 'connections.changed':
+            return Number.isSafeInteger(value.revision) && (value.revision as number) >= 0;
+        case 'host.resumed':
+            return typeof value.at === 'number' && Number.isFinite(value.at);
+    }
+}
+
 /**
  * Resolve a plugin definition into a runnable portable client. Returns a handle
  * whose `definition` is the original definition, so a package entry still
@@ -196,6 +276,7 @@ export function createPortablePlugin<const TManifest extends PluginManifestV2>(
     let context: PortablePluginContext | null = null;
     let active = false;
     let settled = false;
+    let activationController: AbortController | null = null;
     const cleanups: Array<() => void | Promise<void>> = [];
     const activations: Array<() => void | Promise<void>> = [];
     const contributionDisposers = new Map<string, () => void>();
@@ -245,6 +326,9 @@ export function createPortablePlugin<const TManifest extends PluginManifestV2>(
                 if (!grants.has('ui.dashboard.register')) {
                     throw new Error('Grant ui.dashboard.register was not approved');
                 }
+                if (contributionDisposers.has(contribution.id)) {
+                    throw new Error(`Contribution ${contribution.id} is already registered`);
+                }
                 const view = contribution.definition as unknown;
                 if (!isPortableView(view)) {
                     throw new Error(
@@ -285,7 +369,7 @@ export function createPortablePlugin<const TManifest extends PluginManifestV2>(
                     'settings.list'
                 );
                 if (!result.ok) return result;
-                const values = result.value?.values;
+                const values = result.value.values;
                 return pluginOk(
                     values && typeof values === 'object' ? values : ({} as Record<string, PluginJsonValue>)
                 );
@@ -313,10 +397,20 @@ export function createPortablePlugin<const TManifest extends PluginManifestV2>(
                 const result = await call<{ value: T | null }>(client, 'storage.get', { key });
                 return result.ok ? pluginOk(readValue<T>(result.value)) : result;
             },
-            async set(key: string, value: PluginJsonValue) {
+            async getRecord<T extends PluginJsonValue = PluginJsonValue>(key: string) {
+                const denied = grantGuard(grants, 'storage.read');
+                if (denied) return { ok: false, error: denied };
+                const result = await call<PluginStorageRecord<T>>(client, 'storage.getRecord', { key });
+                return result.ok ? pluginOk(result.value) : result;
+            },
+            async set(key: string, value: PluginJsonValue, options?: PluginStorageMutationOptions) {
                 const denied = grantGuard(grants, 'storage.write');
                 if (denied) return { ok: false, error: denied };
-                const result = await call<void>(client, 'storage.set', { key, value });
+                const result = await call<void>(client, 'storage.set', {
+                    key,
+                    value,
+                    ...(options?.ifRevision === undefined ? {} : { ifRevision: options.ifRevision }),
+                });
                 return result.ok ? pluginOk(undefined) : result;
             },
             async delete(key: string) {
@@ -334,16 +428,107 @@ export function createPortablePlugin<const TManifest extends PluginManifestV2>(
                     prefix === undefined ? {} : { prefix }
                 );
                 if (!result.ok) return result;
-                const entries = result.value?.entries;
+                const entries = result.value.entries;
                 return pluginOk(Array.isArray(entries) ? entries : ([] as PluginStorageListEntry[]));
+            },
+            async listPage(options: PluginStorageListOptions = {}) {
+                const denied = grantGuard(grants, 'storage.read');
+                if (denied) return { ok: false, error: denied };
+                const result = await call<PluginStoragePage>(
+                    client,
+                    'storage.listPage',
+                    options as unknown as Readonly<Record<string, unknown>>
+                );
+                return result.ok ? pluginOk(result.value) : result;
+            },
+        };
+    }
+
+    function createClients(
+        grants: ReadonlySet<string>,
+        bootstrap: PortableBootstrapPayload
+    ): PluginHostClients {
+        const workspaceId = bootstrap.workspaceId ?? 'portable';
+        const base = createUnsupportedPluginClients({ workspaceId });
+        const allowedAi = (grant: string) =>
+            grants.has(grant) || grants.has('network.http');
+        const requireRegistrationGrant = (grant: string): void => {
+            const denied = grantGuard(grants, grant);
+            if (denied) throw new Error(denied.message);
+        };
+        const events = {
+            on(name: PluginEventName, listener: (payload: never) => void | Promise<void>) {
+                requireRegistrationGrant('events.register');
+                const unsubscribe = client.onEvent((event) => {
+                    if (event.name !== name) return;
+                    if (!validEventPayload(name, event.payload)) return;
+                    notifyEventListener(listener, event.payload as never);
+                });
+                let disposed = false;
+                const dispose = () => {
+                    if (disposed) return;
+                    disposed = true;
+                    unsubscribe();
+                };
+                cleanups.push(dispose);
+                return { dispose };
+            },
+        } as PluginHostClients['events'];
+        const workspaceOnChange = (
+            listener: (payload: PluginWorkspaceChange) => void | Promise<void>
+        ): PluginRegistrationHandle => {
+            requireRegistrationGrant('workspace.read');
+            const unsubscribe = client.onEvent((event) => {
+                if (event.name !== 'workspace.changed') return;
+                if (!validEventPayload('workspace.changed', event.payload)) return;
+                notifyEventListener(
+                    listener as (payload: never) => void | Promise<void>,
+                    event.payload as never
+                );
+            });
+            let disposed = false;
+            const dispose = () => {
+                if (disposed) return;
+                disposed = true;
+                unsubscribe();
+            };
+            cleanups.push(dispose);
+            return { dispose };
+        };
+        return {
+            ...base,
+            ai: {
+                models: async () => {
+                    const denied = allowedAi('ai.models') ? null : refusedGrant('ai.models');
+                    if (denied) return { ok: false, error: denied };
+                    return call(client, 'ai.models');
+                },
+                complete: async (input) => {
+                    const denied = allowedAi('ai.complete') ? null : refusedGrant('ai.complete');
+                    if (denied) return { ok: false, error: denied };
+                    return call(client, 'ai.complete', input as unknown as Readonly<Record<string, unknown>>);
+                },
+            },
+            events,
+            workspace: {
+                ...base.workspace,
+                id: workspaceId,
+                onChange: workspaceOnChange,
+                switch: async (id) => {
+                    const denied = grantGuard(grants, 'workspace.switch');
+                    if (denied) return { ok: false, error: denied };
+                    const result = await call<{ id: string }>(client, 'workspace.switch', { id });
+                    return result.ok ? pluginOk(result.value) : result;
+                },
             },
         };
     }
 
     function buildContext(bootstrap: PortableBootstrapPayload): PortablePluginContext {
-        const grants = new Set(bootstrap.grants ?? []);
-        const features = new Set(bootstrap.features ?? []);
+        const grants = readonlySet(bootstrap.grants ?? []);
+        const features = readonlySet(bootstrap.features ?? []);
         const controller = new AbortController();
+        activationController = controller;
         const featureNegotiation: PluginFeatureNegotiation = {
             has: (feature: string) => features.has(feature),
             require: (feature: string) => {
@@ -376,6 +561,7 @@ export function createPortablePlugin<const TManifest extends PluginManifestV2>(
             contributions: createContributions(grants),
             settings: createSettingsClient(grants),
             storage: createStorageClient(grants),
+            ...createClients(grants, bootstrap),
             onCleanup(callback: () => void | Promise<void>) {
                 cleanups.push(callback);
             },
@@ -392,7 +578,9 @@ export function createPortablePlugin<const TManifest extends PluginManifestV2>(
                 method: string,
                 handler: (params: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>
             ) {
-                return client.onRequest(method, handler);
+                const unsubscribe = client.onRequest(method, handler);
+                cleanups.push(unsubscribe);
+                return unsubscribe;
             },
         };
         return built as unknown as PortablePluginContext;
@@ -400,6 +588,8 @@ export function createPortablePlugin<const TManifest extends PluginManifestV2>(
 
     async function runCleanups(): Promise<void> {
         active = false;
+        activationController?.abort('plugin activation stopped');
+        activationController = null;
         for (const callback of [...cleanups].reverse()) {
             try {
                 await callback();

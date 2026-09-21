@@ -8,6 +8,7 @@ import {
     PORTABLE_PROFILE_ID,
     applyPortableProfileToManifest,
     defineOr3PortableProfile,
+    parseSetupDescriptor,
     validatePortableProfile,
     type Or3PackagePolicyV1,
     type Or3PortableProfileConfig,
@@ -300,6 +301,58 @@ describe('validatePortableProfile', () => {
         expect(findings.map((finding) => finding.code)).not.toContain(
             'portable-setup-operation-unknown'
         );
+    });
+
+    it('preserves user/workspace scope and secret markers in the generated setup schema', () => {
+        const profile = defineOr3PortableProfile({
+            ...baseConfig,
+            fields: [
+                { ...baseConfig.fields[0]!, scope: 'user' },
+                {
+                    key: 'apiKey',
+                    label: 'API key',
+                    kind: 'text',
+                    required: false,
+                    order: 2,
+                    scope: 'user',
+                    secret: true,
+                },
+                {
+                    key: 'teamLabel',
+                    label: 'Team label',
+                    kind: 'text',
+                    required: false,
+                    order: 3,
+                    scope: 'workspace',
+                },
+            ],
+        });
+
+        expect(profile.setup.fields).toMatchObject([
+            { key: 'units', scope: 'user' },
+            { key: 'apiKey', scope: 'user', secret: true },
+            { key: 'teamLabel', scope: 'workspace' },
+        ]);
+        const parsed = JSON.parse(profile.files[PACKAGE_SETUP_FILE]) as unknown;
+        expect(parseSetupDescriptor(parsed).value?.fields).toEqual(profile.setup.fields);
+    });
+
+    it('rejects malformed setting ownership metadata', () => {
+        const input = validInput();
+        const setup = {
+            ...input.setup,
+            fields: [
+                {
+                    ...input.setup.fields[0],
+                    scope: 'tenant',
+                    secret: 'yes',
+                },
+            ],
+        };
+        const findings = validatePortableProfile({ ...input, setup });
+        expect(findings.map((finding) => finding.code)).toContain('portable-profile-invalid');
+        expect(findings.some((finding) => finding.subject.includes('.fields[0].scope'))).toBe(true);
+        expect(findings.some((finding) => finding.subject.includes('.fields[0].secret'))).toBe(true);
     });
 
     // Regression: descriptors are untrusted JSON. A non-object value used to be

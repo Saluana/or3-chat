@@ -41,6 +41,8 @@ export interface SetupFieldPlan {
     readonly kind: Or3SetupField['kind'];
     readonly order: number;
     readonly required: boolean;
+    readonly scope: Or3SetupField['scope'];
+    readonly secret: boolean;
     readonly deferred: boolean;
     readonly choices?: readonly string[];
     readonly defaultValue?: PortableProfileFieldValue;
@@ -142,9 +144,10 @@ export function buildSetupPlan(input: BuildSetupPlanInput): SetupPlan {
             // decided by the same helper the save endpoint validates with.
             const provided = isSetupValuePresent(field, values[field.key]);
             const hasDefault = field.default !== undefined;
-            const missing = field.required && !provided && !hasDefault;
+            const secret = field.secret === true;
+            const missing = field.required && !secret && !provided && !hasDefault;
             // Optional settings are always configurable later, never blockers.
-            const deferred = !field.required;
+            const deferred = secret || !field.required;
             if (missing) {
                 blockers.push(`Required setting "${field.label}" has no value`);
             }
@@ -154,6 +157,8 @@ export function buildSetupPlan(input: BuildSetupPlanInput): SetupPlan {
                 kind: field.kind,
                 order: field.order,
                 required: field.required,
+                scope: field.scope ?? 'workspace',
+                secret,
                 deferred,
                 ...(field.choices === undefined ? {} : { choices: field.choices }),
                 ...(field.default === undefined ? {} : { defaultValue: field.default }),

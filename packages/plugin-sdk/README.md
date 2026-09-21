@@ -24,7 +24,7 @@ developer-oriented `src/` is included for source inspection.
 
 | Subpath | Exports |
 | --- | --- |
-| `@or3/plugin-sdk` | `defineOr3Plugin()` and Manifest V2 types, result helpers, mediated client types |
+| `@or3/plugin-sdk` | `defineOr3Plugin()` and Manifest V2 types, result helpers, typed mediated client types |
 | `@or3/plugin-sdk/manifest` | Manifest V2 / grant / trust types |
 | `@or3/plugin-sdk/host` | Host-only context construction boundary |
 | `@or3/plugin-sdk/testing` | `PluginTestHost` fake host |
@@ -39,9 +39,28 @@ cancellation, client scoping, and cleanup. Plugin-facing client calls never
 accept a plugin or workspace identity parameter.
 
 Plugin packages can use `@or3/plugin-sdk/testing` for the local fake host. It
-supports activation, reviewed-grant denial, feature negotiation, one-shot
-service failures, stale generations, and cleanup/activation-failure assertions
-without importing OR3 application internals.
+supports activation, reviewed-grant denial, feature negotiation, generation
+teardown, storage revisions/CAS, pane and command dispatch, chat, secrets and
+bounded file fixtures without importing OR3 application internals. The context
+shape is stable across hosts (`ai`, `ui`, `panes`, `commands`, `chat`,
+`workspace`, `storage`, `settings`, `secrets`, `files`, `http`, `network`,
+`activity`, `events`); unavailable production adapters return typed
+`unsupported` results rather than exposing OR3 internals.
+
+Activity sources use an owner-scoped id and can provide bounded run summaries,
+optional details, live events, and explicit actions. The host maps these values
+into its Activity registry and contains source failures; plugins never receive
+the registry or its internal records. Pane restore data, file handles, chat
+messages, and secret references are validated as opaque host-facing values.
+Secret-marked setup fields are rejected by ordinary settings writes and must
+use the secrets client.
+Command registration grants a plugin its own command execution; invoking a
+command owned by another plugin additionally requires the reviewed
+`commands.run.public` grant.
+
+`PluginSseDecoder` is an incremental, bounded decoder for host-provided SSE
+streams. It preserves event ids and names across split UTF-8/CRLF chunks,
+emits heartbeats as comments, and refuses oversized lines or events.
 
 ## CLI
 

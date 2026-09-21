@@ -19,6 +19,7 @@ export const PACKAGE_SETUP_FILE = 'or3.setup.json';
 export type PortableProfileHttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export type PortableProfileConnectionMechanism = 'browser' | 'server';
 export type PortableProfileFieldKind = 'text' | 'select' | 'toggle' | 'number';
+export type Or3SetupFieldScope = 'workspace' | 'user';
 export type PortableProfileFieldValue = string | number | boolean;
 export type Or3ProfileRevision = `sha256-${string}`;
 
@@ -56,6 +57,10 @@ export interface Or3SetupField {
     readonly kind: PortableProfileFieldKind;
     readonly required: boolean;
     readonly order: number;
+    /** Where the host stores this non-secret preference. Defaults to workspace. */
+    readonly scope?: Or3SetupFieldScope;
+    /** Secret fields are never accepted by setup-values; use context.secrets. */
+    readonly secret?: boolean;
     readonly default?: PortableProfileFieldValue;
     readonly choices?: readonly string[];
 }
@@ -196,6 +201,7 @@ const PORTABLE_FIELD_KINDS = new Set<PortableProfileFieldKind>([
     'toggle',
     'number',
 ]);
+const SETUP_FIELD_SCOPES = new Set<Or3SetupFieldScope>(['workspace', 'user']);
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -405,6 +411,16 @@ export function parseSetupDescriptor(input: unknown): DescriptorShapeResult<Or3S
             }
             if (typeof entry.required !== 'boolean') at(`${path}.required`, 'required must be a boolean.');
             if (typeof entry.order !== 'number') at(`${path}.order`, 'order must be a number.');
+            if (
+                entry.scope !== undefined &&
+                (typeof entry.scope !== 'string' ||
+                    !SETUP_FIELD_SCOPES.has(entry.scope as Or3SetupFieldScope))
+            ) {
+                at(`${path}.scope`, 'scope must be "workspace" or "user" when present.');
+            }
+            if (entry.secret !== undefined && typeof entry.secret !== 'boolean') {
+                at(`${path}.secret`, 'secret must be a boolean when present.');
+            }
             if (entry.default !== undefined && !isFieldValue(entry.default)) {
                 at(`${path}.default`, 'default must be a string, number or boolean when present.');
             }
@@ -417,7 +433,11 @@ export function parseSetupDescriptor(input: unknown): DescriptorShapeResult<Or3S
                 typeof entry.kind === 'string' &&
                 PORTABLE_FIELD_KINDS.has(entry.kind as PortableProfileFieldKind) &&
                 typeof entry.required === 'boolean' &&
-                typeof entry.order === 'number'
+                typeof entry.order === 'number' &&
+                (entry.scope === undefined ||
+                    (typeof entry.scope === 'string' &&
+                        SETUP_FIELD_SCOPES.has(entry.scope as Or3SetupFieldScope))) &&
+                (entry.secret === undefined || typeof entry.secret === 'boolean')
             ) {
                 fields.push({
                     key: entry.key,
@@ -425,6 +445,8 @@ export function parseSetupDescriptor(input: unknown): DescriptorShapeResult<Or3S
                     kind: entry.kind as PortableProfileFieldKind,
                     required: entry.required,
                     order: entry.order,
+                    ...(entry.scope === undefined ? {} : { scope: entry.scope as Or3SetupFieldScope }),
+                    ...(entry.secret === undefined ? {} : { secret: entry.secret }),
                     ...(isFieldValue(entry.default) ? { default: entry.default } : {}),
                     ...(isStringArray(entry.choices) ? { choices: entry.choices } : {}),
                 });
@@ -615,6 +637,8 @@ function normalizeField(field: Or3SetupField): Or3SetupField {
         kind: field.kind,
         required: field.required,
         order: field.order,
+        ...(field.scope === undefined ? {} : { scope: field.scope }),
+        ...(field.secret === undefined ? {} : { secret: field.secret }),
         ...(field.default === undefined ? {} : { default: field.default }),
         ...(field.choices === undefined ? {} : { choices: uniqueSorted(field.choices) }),
     };

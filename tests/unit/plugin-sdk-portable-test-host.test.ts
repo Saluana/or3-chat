@@ -31,6 +31,11 @@ describe('portable test host', () => {
         const host = createPortableTestHost({
             approvedGrants: ['network.http', 'settings.read', 'settings.write'],
             responses: {
+                'ai.models': {
+                    configured: true,
+                    models: [{ id: 'vendor/alpha', label: 'alpha', priced: false }],
+                    limits: { maxOutputTokens: 128, spendLimitUsd: 1, maxConcurrentCalls: 1, deadlineMs: 5_000 },
+                },
                 'ai.complete': {
                     text: 'Answer',
                     model: 'vendor/alpha',
@@ -44,16 +49,15 @@ describe('portable test host', () => {
             async setup(context) {
                 context.features.require('or3-portable-client-v1')
                 const tone = await context.settings.get<string>('tone')
+                const models = await context.ai.models()
+                const completion = await context.ai.complete({ model: 'vendor/alpha', prompt: 'hi' })
                 context.render(definePortableUi({ nodes: [ui.text(tone.ok ? String(tone.value) : 'none')] }))
                 context.onRequest('runtime.ui-event', async (params) => {
-                    const completion = await host.client.call<{ text: string }>('ai.complete', {
-                        model: 'vendor/alpha',
-                        prompt: 'hi',
-                    })
                     return {
                         action: params.action,
                         tone: tone.ok ? tone.value : null,
-                        answer: completion.ok ? completion.result.text : null,
+                        configured: models.ok ? models.value.configured : false,
+                        answer: completion.ok ? completion.value.text : null,
                     }
                 })
             },
@@ -66,15 +70,14 @@ describe('portable test host', () => {
         expect(host.events.some((event) => event.name === 'runtime.bootstrap.ready')).toBe(true)
         expect(host.hasRequestHandler('runtime.ui-event')).toBe(true)
 
-        const answer = (await host.invokeRequest('runtime.ui-event', { action: 'go' })) as {
-            action: string
-            tone: string | null
-            answer: string | null
-        }
-        expect(answer).toEqual({ action: 'go', tone: 'plain', answer: 'Answer' })
+        const answer = await host.invokeRequest('runtime.ui-event', { action: 'go' })
+        expect(answer).toEqual({
+            ok: true,
+            result: { action: 'go', tone: 'plain', configured: true, answer: 'Answer' },
+        })
         // Settings reads happen through the same mediated channel as capabilities.
-        expect(host.calls.map((call) => call.method)).toEqual(['settings.get', 'ai.complete'])
-        expect(host.calls[1]).toMatchObject({ method: 'ai.complete', params: { model: 'vendor/alpha', prompt: 'hi' } })
+        expect(host.calls.map((call) => call.method)).toEqual(['settings.get', 'ai.models', 'ai.complete'])
+        expect(host.calls[2]).toMatchObject({ method: 'ai.complete', params: { model: 'vendor/alpha', prompt: 'hi' } })
     })
 
     it('records capability calls and reports an unconfigured response as a refusal', async () => {
@@ -89,5 +92,35 @@ describe('portable test host', () => {
         expect(await host.client.call('ai.models')).toMatchObject({ ok: true })
         expect(host.calls[0]).toMatchObject({ method: 'ai.models' })
         expect(await host.client.call('nope.method')).toMatchObject({ ok: false, code: 'not-found' })
+    })
+
+    it('supports create-if-absent CAS and deterministic cursor ordering', async () => {
+        const host = createPortableTestHost({
+            approvedGrants: ['storage.read', 'storage.write'],
+            initialStorage: { 'a-10': 10, 'a-2': 2, 'a-A': 1 },
+        })
+
+        expect(await host.client.call('storage.set', {
+            key: 'new',
+            value: 'created',
+            ifRevision: null,
+        })).toMatchObject({ ok: true })
+        expect(await host.client.call('storage.set', {
+            key: 'new',
+            value: 'overwrite',
+            ifRevision: null,
+        })).toMatchObject({ ok: false, code: 'conflict' })
+
+        const first = await host.client.call<{ entries: readonly { key: string }[]; nextCursor?: string }>(
+            'storage.listPage',
+            { prefix: 'a-', limit: 1 }
+        )
+        expect(first).toMatchObject({ ok: true, result: { entries: [{ key: 'a-10' }], nextCursor: 'cursor:a-10' } })
+        const nextCursor = first.ok ? first.result.nextCursor : undefined
+        expect(await host.client.call('storage.listPage', {
+            prefix: 'a-',
+            limit: 10,
+            cursor: nextCursor,
+        })).toMatchObject({ ok: true, result: { entries: [{ key: 'a-2' }, { key: 'a-A' }] } })
     })
 })

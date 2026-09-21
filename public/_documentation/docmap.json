@@ -1343,7 +1343,7 @@
                     "name": "plugin-sdk.md",
                     "path": "/plugins/plugin-sdk",
                     "category": "Reference",
-                    "summary": "Stable Plugin Runtime V2 authoring surface. Import only this package (or documented subpaths: /manifest, /host, /testing, /profile, /package-tree, /package-archive, /state-compatibility). Host capability helpers (ai.models, ai.complete) and a portable-profile test host make model-backed packages testable without a browser; a setup first action may declare a package sample path. The package is not yet published to npm; install it from a packed tarball. It is currently an authoring and compatibility-test surface. OR3's"
+                    "summary": "Stable Plugin Runtime V2 authoring surface with a host-created, typed capability context (AI, UI, panes, commands, chat, workspace, storage, settings, secrets, files, HTTP, network, activity and events). Storage supports revisions and compare-and-set writes; the test host exercises activation, teardown and scoped services. Unqualified namespaces remain explicit unsupported results until production adapters pass review. The package is not yet published to npm; install it from a packed tarball."
                 },
                 {
                     "name": "plugin-sdk-cli.md",

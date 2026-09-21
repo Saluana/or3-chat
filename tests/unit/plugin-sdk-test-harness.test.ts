@@ -12,15 +12,19 @@ import {
     assertValidPortableTestView,
     createPluginTestHost,
     createPortableTestHost,
+    createTestHost,
 } from '../../packages/plugin-sdk/src/testing';
 import { validateRenderPayload } from '../../shared/plugins/isolation/worker-runtime';
 import type { PortableUiNode } from '../../packages/plugin-sdk/src/ui';
 
-function manifest(requestedGrants: readonly PluginGrant[] = []): PluginManifestV2 {
+function manifest(
+    requestedGrants: readonly PluginGrant[] = [],
+    id = 'sample.harness'
+): PluginManifestV2 {
     return {
         manifestVersion: 2,
         kind: 'plugin',
-        id: 'sample.harness',
+        id,
         name: 'Harness Sample',
         version: '2.0.0',
         engines: { or3: '^0.3.0', pluginApi: '^2.0.0' },
@@ -46,9 +50,10 @@ function manifest(requestedGrants: readonly PluginGrant[] = []): PluginManifestV
 
 function plugin(
     setup: Or3PluginDefinition['setup'],
-    requestedGrants: readonly PluginGrant[] = []
+    requestedGrants: readonly PluginGrant[] = [],
+    id = 'sample.harness'
 ) {
-    return defineOr3Plugin({ manifest: manifest(requestedGrants), setup });
+    return defineOr3Plugin({ manifest: manifest(requestedGrants, id), setup });
 }
 
 describe('Plugin SDK test harness', () => {
@@ -126,6 +131,376 @@ describe('Plugin SDK test harness', () => {
         });
     });
 
+    it('runs the ergonomic install/command/pane/storage path with scoped CAS', async () => {
+        const grants = [
+            'storage.read',
+            'storage.write',
+            'commands.register',
+            'panes.open',
+            'workspace.read',
+            'workspace.switch',
+            'events.register',
+        ] as const;
+        let firstContext: PluginContext | undefined;
+        const host = createTestHost({
+            workspaceId: 'workspace-a',
+            approvedGrants: grants,
+        });
+        const definition = plugin((context) => {
+            firstContext = context;
+            context.commands.register(
+                { id: 'sample.open', label: 'Open sample' },
+                async () => {
+                    const pane = await context.panes.open({
+                        app: 'sample.app',
+                        instanceKey: 'session-1',
+                        data: { sessionId: 'session-1' },
+                    });
+                    return pane.ok ? pluginOk(pane.value) : pane;
+                }
+            );
+        }, grants);
+
+        expect((await host.install(definition)).ok).toBe(true);
+        const command = await host.commands.run('sample.open');
+        expect(command).toMatchObject({ ok: true, value: { app: 'sample.app' } });
+        expect(host.ui.panes()).toHaveLength(1);
+
+        const firstWrite = await firstContext!.storage.set('sessions', { count: 1 });
+        expect(firstWrite.ok).toBe(true);
+        const circular: Record<string, unknown> = {};
+        circular.self = circular;
+        expect(await firstContext!.storage.set('invalid', circular as unknown as PluginJsonValue)).toMatchObject({
+            ok: false,
+            error: { code: 'invalid-input' },
+        });
+        const createIfAbsent = await firstContext!.storage.set('new-session', { count: 0 }, { ifRevision: null });
+        expect(createIfAbsent).toMatchObject({ ok: true });
+        const record = await firstContext!.storage.getRecord('sessions');
+        expect(record).toMatchObject({ ok: true, value: { revision: 1 } });
+        const revision = record.ok ? record.value.revision : -1;
+        expect(await firstContext!.storage.set('sessions', { count: 2 }, { ifRevision: revision })).toMatchObject({ ok: true });
+        expect(await firstContext!.storage.set('sessions', { count: 3 }, { ifRevision: revision })).toMatchObject({
+            ok: false,
+            error: { code: 'conflict' },
+        });
+        await firstContext!.storage.set('sessions-next', { count: 4 });
+        const firstPage = await firstContext!.storage.listPage({ prefix: 'sessions', limit: 1 });
+        expect(firstPage).toMatchObject({ ok: true, value: { entries: [{ key: 'sessions' }], nextCursor: 'cursor:sessions' } });
+
+        const oldContext = firstContext!;
+        await oldContext.workspace.switch('workspace-b');
+        expect(await oldContext.storage.get('sessions')).toMatchObject({
+            ok: false,
+            error: { code: 'conflict' },
+        });
+        expect(host.snapshot()).toMatchObject({ active: true, workspaceId: 'workspace-b' });
+        expect(await firstContext!.storage.get('sessions')).toEqual(pluginOk(null));
+    });
+
+    it('scopes test-host state by plugin and workspace', async () => {
+        const grants = ['storage.read', 'storage.write', 'secrets.read', 'secrets.write'] as const;
+        const host = createTestHost({
+            approvedGrants: grants,
+            initialStorage: { shared: 'plugin-a' },
+            initialSecrets: { token: 'plugin-a' },
+        });
+        let pluginA!: PluginContext;
+        expect((await host.install(plugin((context) => { pluginA = context; }, grants, 'sample.a'))).ok).toBe(true);
+        expect(await pluginA.storage.get('shared')).toEqual(pluginOk('plugin-a'));
+        expect(await pluginA.secrets.get('token')).toEqual(pluginOk('plugin-a'));
+        await pluginA.storage.set('private', 'a');
+        await host.disable();
+
+        let pluginB!: PluginContext;
+        expect((await host.install(plugin((context) => { pluginB = context; }, grants, 'sample.b'))).ok).toBe(true);
+        expect(await pluginB.storage.get('shared')).toEqual(pluginOk(null));
+        expect(await pluginB.storage.get('private')).toEqual(pluginOk(null));
+        expect(await pluginB.secrets.get('token')).toEqual(pluginOk(null));
+    });
+
+    it('keeps workspace settings isolated across an authorized switch', async () => {
+        const host = createPluginTestHost({
+            approvedGrants: ['settings.read', 'settings.write', 'workspace.read', 'workspace.switch'],
+            initialSettings: { mode: 'compact' },
+        });
+        let context!: PluginContext;
+        const changes: unknown[] = [];
+        const definition = plugin((value) => {
+            context = value;
+            context.workspace.onChange((change) => changes.push(change));
+        }, ['settings.read', 'settings.write', 'workspace.read', 'workspace.switch'], 'sample.settings');
+        expect((await host.install(definition)).ok).toBe(true);
+        expect(await context.settings.get('mode')).toEqual(pluginOk('compact'));
+        expect(await context.settings.set('mode', 'workspace-a')).toEqual(pluginOk(undefined));
+
+        expect(await host.switchWorkspace('workspace-b')).toEqual(pluginOk({ id: 'workspace-b' }));
+        expect(changes).toEqual([{ previousId: 'local', id: 'workspace-b', reason: 'user' }]);
+        expect((await host.install(definition)).ok).toBe(true);
+        expect(await context.settings.get('mode')).toEqual(pluginOk(null));
+        expect(await context.settings.set('mode', 'workspace-b')).toEqual(pluginOk(undefined));
+
+        expect(await host.switchWorkspace('local')).toEqual(pluginOk({ id: 'local' }));
+        expect((await host.install(definition)).ok).toBe(true);
+        expect(await context.settings.get('mode')).toEqual(pluginOk('workspace-a'));
+    });
+
+    it('contains subscriber failures during settings writes and workspace switches', async () => {
+        const host = createPluginTestHost({
+            approvedGrants: ['settings.write', 'workspace.read', 'workspace.switch', 'events.register'],
+        });
+        let context!: PluginContext;
+        const definition = plugin((value) => {
+            context = value;
+            context.events.on('settings.changed', () => {
+                throw new Error('settings subscriber failed');
+            });
+            context.workspace.onChange(() => {
+                throw new Error('workspace subscriber failed');
+            });
+        }, ['settings.write', 'workspace.read', 'workspace.switch', 'events.register'], 'sample.subscribers');
+
+        expect((await host.install(definition)).ok).toBe(true);
+        await expect(context.settings.set('mode', 'compact')).resolves.toEqual(pluginOk(undefined));
+        await expect(host.switchWorkspace('workspace-b')).resolves.toEqual(pluginOk({ id: 'workspace-b' }));
+    });
+
+    it('keeps the old workspace when the replacement activation fails', async () => {
+        const host = createPluginTestHost({
+            approvedGrants: ['workspace.read', 'workspace.switch', 'storage.read'],
+            initialStorage: { marker: 'old-scope' },
+        });
+        let context!: PluginContext;
+        const definition = plugin((value) => {
+            context = value;
+            if (value.workspace.id === 'workspace-b') {
+                throw new Error('replacement setup failed');
+            }
+        }, ['workspace.read', 'workspace.switch', 'storage.read'], 'sample.switch-rollback');
+
+        expect((await host.install(definition)).ok).toBe(true);
+        const oldContext = context;
+        const switched = await host.switchWorkspace('workspace-b');
+
+        expect(switched).toMatchObject({
+            ok: false,
+            error: { code: 'internal', message: 'Workspace switch activated no plugin: replacement setup failed' },
+        });
+        expect(host.snapshot()).toMatchObject({ active: true, workspaceId: 'local' });
+        expect(context.workspace.id).toBe('local');
+        expect(await oldContext.storage.get('marker')).toMatchObject({
+            ok: false,
+            error: { code: 'conflict' },
+        });
+        expect(await context.storage.get('marker')).toEqual(pluginOk('old-scope'));
+    });
+
+    it('keeps chat resources scoped to their workspace', async () => {
+        const grants = ['chat.create', 'chat.read', 'chat.message.write', 'workspace.read', 'workspace.switch'] as const;
+        const host = createTestHost({ approvedGrants: grants });
+        let context!: PluginContext;
+        const definition = plugin((value) => { context = value; }, grants, 'sample.chat-scope');
+        expect((await host.install(definition)).ok).toBe(true);
+
+        const created = await context.chat.create({ title: 'Workspace A' });
+        expect(created.ok).toBe(true);
+        if (!created.ok) return;
+        expect(await context.chat.appendMessage(created.value.id, { role: 'user', content: 'private' })).toMatchObject({ ok: true });
+
+        const oldContext = context;
+        expect(await host.switchWorkspace('workspace-b')).toEqual(pluginOk({ id: 'workspace-b' }));
+        expect(await context.chat.open(created.value.id)).toMatchObject({
+            ok: false,
+            error: { code: 'not-found' },
+        });
+        expect(await oldContext.chat.open(created.value.id)).toMatchObject({
+            ok: false,
+            error: { code: 'conflict' },
+        });
+    });
+
+    it('serializes concurrent workspace switch requests', async () => {
+        const grants = ['workspace.read', 'workspace.switch'] as const;
+        const host = createTestHost({ approvedGrants: grants });
+        expect((await host.install(plugin(() => undefined, grants, 'sample.switch-queue'))).ok).toBe(true);
+
+        const [first, second] = await Promise.all([
+            host.switchWorkspace('workspace-b'),
+            host.switchWorkspace('workspace-c'),
+        ]);
+        expect(first).toEqual(pluginOk({ id: 'workspace-b' }));
+        expect(second).toEqual(pluginOk({ id: 'workspace-c' }));
+        expect(host.snapshot().workspaceId).toBe('workspace-c');
+    });
+
+    it('keeps secrets and selected files outside ordinary plugin storage', async () => {
+        const host = createTestHost({
+            approvedGrants: [
+                'secrets.read',
+                'secrets.write',
+                'secrets.use',
+                'files.pick',
+                'files.read',
+                'files.write',
+            ],
+            initialSecrets: { 'hermes-token': 'secret-token' },
+            initialFiles: [
+                {
+                    id: 'file-1',
+                    name: 'prompt.txt',
+                    mimeType: 'text/plain',
+                    size: 6,
+                    revision: 1,
+                    data: new TextEncoder().encode('hello\n'),
+                },
+            ],
+        });
+        let context!: PluginContext;
+        const result = await host.install(
+            plugin((value) => {
+                context = value;
+            }, [
+                'secrets.read',
+                'secrets.write',
+                'secrets.use',
+                'files.pick',
+                'files.read',
+                'files.write',
+            ])
+        );
+        expect(result.ok).toBe(true);
+        expect(await context.secrets.get('hermes-token')).toEqual(pluginOk('secret-token'));
+        expect(await context.secrets.set('remembered', 'value', { persistence: 'remember' })).toEqual(pluginOk(undefined));
+        expect(await context.secrets.ref('remembered')).toMatchObject({
+            ok: true,
+            value: { persistence: 'persistent', state: 'available' },
+        });
+        expect(await context.storage.get('hermes-token')).toMatchObject({
+            ok: false,
+            error: { code: 'permission-denied' },
+        });
+        const picked = await context.files.pick({ accept: ['text/plain'] });
+        expect(picked).toMatchObject({ ok: true, value: [{ id: 'file-1' }] });
+        const read = await context.files.read('file-1');
+        expect(read.ok).toBe(true);
+        const chunks: Uint8Array[] = [];
+        if (read.ok) {
+            for await (const chunk of read.value) chunks.push(chunk);
+            expect(await read.value.result).toMatchObject({ ok: true });
+        }
+        expect(new TextDecoder().decode(chunks[0])).toBe('hello\n');
+        expect(await context.files.write({
+            name: 'prompt.txt',
+            mimeType: 'text/plain',
+            data: (async function* () { yield new TextEncoder().encode('updated'); })(),
+            replace: { id: 'file-1', ifRevision: 0 },
+        })).toMatchObject({ ok: false, error: { code: 'conflict' } });
+        const cancelled = new AbortController();
+        cancelled.abort();
+        expect(await context.files.pick({ signal: cancelled.signal })).toMatchObject({
+            ok: false,
+            error: { code: 'aborted' },
+        });
+    });
+
+    it('allocates a fresh file id when the first generated id is already present', async () => {
+        const host = createTestHost({
+            approvedGrants: ['files.write'],
+            initialFiles: [{
+                id: 'file-2',
+                name: 'existing.txt',
+                mimeType: 'text/plain',
+                size: 8,
+                revision: 1,
+                data: new TextEncoder().encode('existing'),
+            }],
+        });
+        let context!: PluginContext;
+        expect((await host.install(plugin((value) => { context = value; }, ['files.write']))).ok).toBe(true);
+
+        const created = await context.files.write({
+            name: 'new.txt',
+            mimeType: 'text/plain',
+            data: (async function* () { yield new TextEncoder().encode('new'); })(),
+        });
+        expect(created).toMatchObject({ ok: true, value: { id: 'file-3' } });
+        expect(await context.files.write({
+            name: 'another.txt',
+            mimeType: 'text/plain',
+            data: (async function* () { yield new TextEncoder().encode('another'); })(),
+        })).toMatchObject({ ok: true, value: { id: 'file-4' } });
+    });
+
+    it('keeps chat retries idempotent and validates public transcript messages', async () => {
+        const host = createPluginTestHost({ approvedGrants: ['chat.create', 'chat.read', 'chat.message.write'] });
+        let context!: PluginContext;
+        expect((await host.install(plugin((value) => { context = value; }, ['chat.create', 'chat.read', 'chat.message.write']))).ok).toBe(true);
+        const chat = await context.chat.create({ title: 'Session' });
+        expect(chat.ok).toBe(true);
+        if (!chat.ok) return;
+        const first = await context.chat.appendMessage(chat.value.id, { role: 'user', content: 'hello' }, { requestId: 'req-1' });
+        const retry = await context.chat.appendMessage(chat.value.id, { role: 'user', content: 'hello' }, { requestId: 'req-1' });
+        expect(first).toMatchObject({ ok: true });
+        expect(retry).toEqual(first);
+        expect(await context.chat.appendMessage(chat.value.id, { role: 'user', content: 42 as unknown as string })).toMatchObject({
+            ok: false,
+            error: { code: 'invalid-input' },
+        });
+        expect(await context.chat.appendMessage(chat.value.id, {
+            role: 'user',
+            content: 'no',
+            attachments: [{ fileId: '../outside' }],
+        })).toMatchObject({
+            ok: false,
+            error: { code: 'invalid-input' },
+        });
+        expect(await context.chat.appendMessage(chat.value.id, {
+            role: 'user',
+            content: 'missing attachment',
+            fileIds: ['file-missing'],
+        })).toMatchObject({
+            ok: false,
+            error: { code: 'not-found' },
+        });
+    });
+
+    it('records activity sources with owner-scoped cleanup', async () => {
+        const host = createPluginTestHost({ approvedGrants: ['activity.register'] });
+        const result = await host.install(plugin((context) => {
+            context.activity.registerSource({
+                id: 'example.agent',
+                label: 'Example agent',
+                list: async () => pluginOk([]),
+            });
+        }, ['activity.register']));
+        expect(result.ok).toBe(true);
+        expect(host.snapshot().activitySources).toEqual([
+            { id: 'example.agent', label: 'Example agent' },
+        ]);
+        await host.disable();
+        expect(host.activity.sources()).toEqual([]);
+    });
+
+    it('inspects owned UI registrations and rejects invalid pane restore data', async () => {
+        const host = createPluginTestHost({
+            approvedGrants: ['ui.pane.register', 'panes.open'],
+        });
+        let context!: PluginContext;
+        expect((await host.install(plugin((value) => {
+            context = value;
+            context.ui.registerPane({ id: 'sessions', label: 'Sessions', dataVersion: 1 });
+        }, ['ui.pane.register', 'panes.open']))).ok).toBe(true);
+        expect(host.snapshot().uiRegistrations).toEqual([{ surface: 'pane', id: 'sessions' }]);
+        expect(await context.panes.open({ app: 'or3.sessions', data: { sessionId: 'one' }, instanceKey: 'one' })).toMatchObject({ ok: true });
+        expect(host.ui.panes()).toHaveLength(1);
+        expect(await context.panes.open({ app: 'or3.sessions', data: { bad: 'x'.repeat(70_000) } })).toMatchObject({
+            ok: false,
+            error: { code: 'quota-exceeded' },
+        });
+        await host.disable();
+        expect(host.snapshot().uiRegistrations).toEqual([]);
+    });
+
     it('rolls back staged registrations and runs cleanup on activation failure', async () => {
         const cleanup = vi.fn();
         const host = createPluginTestHost({
@@ -198,9 +573,7 @@ describe('Plugin SDK test harness', () => {
         expect(host.snapshot()).toMatchObject({ active: false, cleanupCount: 0 });
     });
 
-    it('exposes no outbound HTTP client on the plugin context', async () => {
-        // Outbound network is a host-mediated capability (approved connections
-        // and governed model calls), never a client the sandbox calls directly.
+    it('exposes only a host-mediated HTTP client on the plugin context', async () => {
         let context: unknown;
         const host = createPluginTestHost({ approvedGrants: ['network.http'] });
         await host.activate(
@@ -210,7 +583,12 @@ describe('Plugin SDK test harness', () => {
         );
 
         expect(context).toBeTruthy();
-        expect('http' in (context as Record<string, unknown>)).toBe(false);
+        expect('http' in (context as Record<string, unknown>)).toBe(true);
+        const response = await (context as PluginContext).http.fetch({
+            url: 'https://example.com',
+            destination: 'example',
+        });
+        expect(response).toMatchObject({ ok: false, error: { code: 'unsupported' } });
     });
 });
 

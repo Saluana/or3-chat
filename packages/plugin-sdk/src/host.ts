@@ -1,5 +1,9 @@
 import type { PluginSettingsClient, PluginStorageClient } from './clients';
 import {
+    createUnsupportedPluginClients,
+    type PluginHostClients,
+} from './capabilities';
+import {
     hostCreatedPluginContext,
     type PluginContext,
     type PluginContributions,
@@ -12,6 +16,7 @@ import type { PluginGrant, PluginTrustMode } from './manifest';
 export interface HostPluginScope {
     readonly pluginId: string;
     readonly version: string;
+    readonly workspaceId: string;
     readonly generation: number;
     readonly trust: PluginTrustMode;
     readonly grants: ReadonlySet<PluginGrant>;
@@ -21,12 +26,14 @@ export interface HostPluginScope {
 export interface HostPluginClientFactories {
     createSettingsClient(scope: HostPluginScope): PluginSettingsClient;
     createStorageClient(scope: HostPluginScope): PluginStorageClient;
+    createClients?(scope: HostPluginScope): PluginHostClients;
 }
 
 export interface CreateHostPluginContextInput {
     readonly identity: {
         readonly pluginId: string;
         readonly version: string;
+        readonly workspaceId?: string;
         readonly generation: number;
         readonly trust: PluginTrustMode;
     };
@@ -70,9 +77,12 @@ export function createHostPluginContext(input: CreateHostPluginContextInput): Pl
         version: input.identity.version,
         generation: input.identity.generation,
         trust: input.identity.trust,
+        workspaceId: input.identity.workspaceId ?? 'local',
         grants,
         signal: input.signal,
     });
+    const clients = input.clients.createClients?.(scope) ??
+        createUnsupportedPluginClients({ workspaceId: scope.workspaceId });
     return Object.freeze({
         [hostCreatedPluginContext]: true as const,
         pluginId: scope.pluginId,
@@ -87,6 +97,18 @@ export function createHostPluginContext(input: CreateHostPluginContextInput): Pl
         contributions: input.contributions,
         settings: input.clients.createSettingsClient(scope),
         storage: input.clients.createStorageClient(scope),
+        ai: clients.ai,
+        ui: clients.ui,
+        panes: clients.panes,
+        commands: clients.commands,
+        chat: clients.chat,
+        workspace: clients.workspace,
+        events: clients.events,
+        secrets: clients.secrets,
+        files: clients.files,
+        http: clients.http,
+        network: clients.network,
+        activity: clients.activity,
         onCleanup: input.onCleanup,
         onActivate: input.onActivate,
     });

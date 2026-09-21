@@ -25,11 +25,25 @@ const fetchMock = vi.fn();
 vi.stubGlobal('$fetch', fetchMock);
 const revocationRequests: string[] = [];
 
-const kvRows = new Map<string, { name: string; value: string | null; updated_at: number }>();
+const kvRows = new Map<string, { name: string; value: string | null; updated_at: number; clock: number }>();
 const getKvByNameMock = vi.fn(async (name: string) => kvRows.get(name));
-const setKvByNameMock = vi.fn(async (name: string, value: string | null) => {
-    kvRows.set(name, { name, value, updated_at: 1 });
-    return { id: `kv:${name}`, name, value, updated_at: 1 };
+const setKvByNameMock = vi.fn(async (
+    name: string,
+    value: string | null,
+    _db?: unknown,
+    options?: { readonly ifClock?: number | null }
+) => {
+    const current = kvRows.get(name);
+    const currentClock = current?.clock ?? 0;
+    if (
+        options?.ifClock !== undefined &&
+        (options.ifClock === null ? current !== undefined : options.ifClock !== currentClock)
+    ) {
+        throw Object.assign(new Error('KV revision is stale'), { rpcCode: 'conflict' });
+    }
+    const row = { name, value, updated_at: 1, clock: currentClock + 1 };
+    kvRows.set(name, row);
+    return { id: `kv:${name}`, ...row };
 });
 const hardDeleteKvByNameMock = vi.fn(async (name: string) => {
     kvRows.delete(name);
@@ -188,6 +202,17 @@ describe('portable settings services', () => {
         });
     });
 
+    it('rejects malformed setting keys before reading or writing the setup document', async () => {
+        const services = createPortableSettingsServices('sample.plugin');
+        await expect(services.settings.get({ key: '' })).rejects.toMatchObject({
+            rpcCode: 'invalid-input',
+        });
+        await expect(services.settings.set({ key: `bad\u0000key`, value: 'x' })).rejects.toMatchObject({
+            rpcCode: 'invalid-input',
+        });
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it('binds settings writes to the executing package digest and activation', async () => {
         fetchMock.mockResolvedValue({ ok: true });
         const digest = `sha256-${'d'.repeat(64)}`;
@@ -209,6 +234,22 @@ describe('portable settings services', () => {
                     activationId: 'act_test_1',
                 },
             }
+        );
+    });
+
+    it('deletes a setting through the host schema so its default can apply', async () => {
+        fetchMock.mockResolvedValue({ ok: true });
+        const services = createPortableSettingsServices('sample.plugin', null, 'act_test_1');
+        await expect(services.settings.delete({ key: 'theme' })).resolves.toEqual({ ok: true });
+        expect(fetchMock).toHaveBeenCalledWith(
+            '/api/plugins/sample.plugin/setup-values?slot=current',
+            expect.objectContaining({
+                method: 'POST',
+                body: expect.objectContaining({
+                    values: { theme: null },
+                    activationId: 'act_test_1',
+                }),
+            })
         );
     });
 
@@ -371,15 +412,17 @@ describe('portable storage services', () => {
             name: 'plugin-storage:sample.plugin:presets',
             value: JSON.stringify({ version: 1 }),
             updated_at: 3,
+            clock: 1,
         });
         kvRows.set('plugin-storage:other.plugin:presets', {
             name: 'plugin-storage:other.plugin:presets',
             value: JSON.stringify({ version: 9 }),
             updated_at: 4,
+            clock: 1,
         });
         const services = createPortableSettingsServices('sample.plugin');
         await expect(services.storage.list({})).resolves.toEqual({
-            entries: [{ key: 'presets', sizeBytes: JSON.stringify({ version: 1 }).length, updatedAt: 3000 }],
+            entries: [{ key: 'presets', sizeBytes: JSON.stringify({ version: 1 }).length, updatedAt: 3000, revision: 1 }],
         });
         await services.storage.delete({ key: 'presets' });
         expect(hardDeleteKvByNameMock).toHaveBeenCalledWith('plugin-storage:sample.plugin:presets');
@@ -395,6 +438,20 @@ describe('portable storage services', () => {
             services.storage.set({ key: 'big', value: 'x'.repeat(40 * 1024) })
         ).rejects.toMatchObject({ rpcCode: 'invalid-input' });
         expect(setKvByNameMock).not.toHaveBeenCalled();
+    });
+
+    it('passes create-if-absent storage CAS through to the transactional KV adapter', async () => {
+        const services = createPortableSettingsServices('sample.plugin');
+        await expect(services.storage.set({ key: 'new', value: 'created', ifRevision: null })).resolves.toEqual({ ok: true });
+        expect(setKvByNameMock).toHaveBeenLastCalledWith(
+            'plugin-storage:sample.plugin:new',
+            JSON.stringify('created'),
+            undefined,
+            { ifClock: null }
+        );
+        await expect(services.storage.set({ key: 'new', value: 'overwrite', ifRevision: null })).rejects.toMatchObject({
+            rpcCode: 'conflict',
+        });
     });
 });
 
@@ -854,7 +911,10 @@ describe('contribution readiness and replacement safeguards', () => {
             workspaceId: 'ws-1',
         });
         await deactivatePortableClient('sample.plugin');
-        const next = { ...withTools, descriptorKey: `sha256-${'f'.repeat(64)}` };
+        const next: PackageV2PluginDescriptor = {
+            ...withTools,
+            descriptorKey: `sha256-${'f'.repeat(64)}` as Sha256,
+        };
         setPortableClientSource({ descriptor: next, workspaceId: 'ws-1', runtimeEntry: undefined });
         const restarted = await activatePortableClient({ descriptor: next, workspaceId: 'ws-1' });
         expect(restarted?.contributionReadiness.tools).toBe('pending');

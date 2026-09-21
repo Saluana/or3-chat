@@ -120,6 +120,14 @@ describe('worker-runtime (8.4-8.6)', () => {
                 },
                 settings: {
                     get: () => ({ theme: 'retro' }),
+                    list: (_params, context) => {
+                        context.emitEvent?.('settings.changed', {
+                            key: 'theme',
+                            revision: 2,
+                            deleted: false,
+                        });
+                        return { values: { theme: 'retro' } };
+                    },
                 },
                 hooks: {
                     onAction: () => ({ registered: true }),
@@ -151,6 +159,23 @@ describe('worker-runtime (8.4-8.6)', () => {
         expect(response && 'result' in response ? response.result : null).not.toBe(
             storage
         );
+
+        fake.emit(
+            serializeRpcEnvelope(
+                createRpcRequest({
+                    id: 'w-settings-list',
+                    method: 'settings.list',
+                    params: {},
+                })
+            )
+        );
+        await vi.waitFor(() => {
+            expect(inbox.some((e) => e.kind === 'response' && e.id === 'w-settings-list')).toBe(true);
+        });
+        expect(inbox.find((e) => e.kind === 'response' && e.id === 'w-settings-list')).toMatchObject({
+            result: { values: { theme: 'retro' } },
+        });
+        expect(inbox.some((e) => e.kind === 'event' && e.name === 'settings.changed')).toBe(true);
 
         runtime.dispose();
     });

@@ -8,6 +8,7 @@ import {
     type PluginGrantReviewSnapshot,
 } from '../grant-review';
 import {
+    createRpcEvent,
     parseRpcEnvelope,
     type RpcEnvelope,
     type RpcErrorCode,
@@ -63,6 +64,8 @@ export interface HostRpcHandlerContext {
     readonly signal: AbortSignal;
     /** Deadline the host actually applied after clamping. */
     readonly deadlineMs: number;
+    /** Emit a host-authored event to this activation's sandbox. */
+    readonly emitEvent?: (name: string, payload?: Readonly<Record<string, unknown>>) => void;
 }
 
 export interface HostRpcBudgetPort {
@@ -150,6 +153,7 @@ export class HostRpcBroker {
     readonly #requireHostSession: boolean;
     readonly #budget: HostRpcBudgetPort | undefined;
     #grants: PluginGrantReviewSnapshot;
+    #eventSequence = 0;
     #disposed = false;
 
     constructor(options: HostRpcBrokerOptions) {
@@ -409,6 +413,21 @@ export class HostRpcBroker {
                 requestId: request.id,
                 signal: controller.signal,
                 deadlineMs,
+                emitEvent: (name, payload = {}) => {
+                    if (this.#disposed) return;
+                    try {
+                        this.#send(
+                            createRpcEvent({
+                                id: `host-event-${++this.#eventSequence}`,
+                                name,
+                                payload,
+                            })
+                        );
+                    } catch {
+                        // Event delivery is best effort; a disposed transport
+                        // must not turn a completed host mutation into failure.
+                    }
+                },
             });
 
             if (controller.signal.aborted) {
@@ -487,10 +506,13 @@ export const SDK_LOGIC_RPC_METHODS = {
     'hooks.onAction': 'hooks.register',
     'hooks.onFilter': 'hooks.register',
     'storage.get': 'storage.read',
+    'storage.getRecord': 'storage.read',
     'storage.set': 'storage.write',
     'storage.delete': 'storage.write',
     'storage.list': 'storage.read',
+    'storage.listPage': 'storage.read',
     'settings.get': 'settings.read',
+    'settings.list': 'settings.read',
     'settings.set': 'settings.write',
     'settings.delete': 'settings.write',
 } as const satisfies Readonly<Record<string, HostRpcMethodGrant>>;

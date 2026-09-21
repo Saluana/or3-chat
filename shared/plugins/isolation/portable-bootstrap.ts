@@ -555,6 +555,7 @@ export async function startPortableWorker(
         bootstrapPayload: {
             abiVersion: input.abi.version,
             transport: PORTABLE_TRANSPORT,
+            workspaceId: input.workspaceId,
             // The plugin's advertised feature set and the grants this activation
             // actually approved. The sandbox has no other way to learn them, and
             // the broker's grant list is host-side only.

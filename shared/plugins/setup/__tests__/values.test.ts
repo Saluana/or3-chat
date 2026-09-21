@@ -18,6 +18,15 @@ const fields: Or3SetupField[] = [
     },
     { key: 'verbose', label: 'Verbose', kind: 'toggle', required: false, order: 3, default: false },
     { key: 'retries', label: 'Retries', kind: 'number', required: false, order: 4 },
+    {
+        key: 'apiKey',
+        label: 'API key',
+        kind: 'text',
+        required: true,
+        order: 5,
+        scope: 'user',
+        secret: true,
+    },
 ];
 
 describe('setup value validation (review 4.5)', () => {
@@ -91,5 +100,23 @@ describe('setup value validation (review 4.5)', () => {
             patch: { nope: 1 },
         });
         expect(result.unknownKeys).toEqual(['nope']);
+    });
+
+    it('keeps secret fields out of ordinary setup values', () => {
+        const result = validateSetupValues({
+            fields,
+            values: { apiKey: 'top-secret' },
+            requireAll: true,
+        });
+        expect(result.values.apiKey).toBeUndefined();
+        expect(result.errors[0]).toMatchObject({ key: 'apiKey' });
+        expect(result.errors[0]?.message).toContain('secrets API');
+
+        const cleared = applySetupValuesPatch({
+            fields,
+            current: { workspace: 'Team notes' },
+            patch: { apiKey: null },
+        });
+        expect(cleared.errors[0]?.message).toContain('secrets API');
     });
 });
