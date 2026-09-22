@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 import { runPluginCli } from '../dist/cli/index.js';
 
 runPluginCli(process.argv.slice(2))

@@ -98,6 +98,73 @@ describe('ActivityRegistry', () => {
         ]);
     });
 
+    it('degrades a hung source instead of stalling the aggregate', async () => {
+        const registry = new ActivityRegistry({ sourceTimeoutMs: 20 });
+        registry.register(
+            source('hung', {
+                listRuns: () => new Promise<never>(() => {}),
+            })
+        );
+        registry.register(source('workflow'));
+        const result = await registry.listRuns();
+        expect(result.runs.map((run) => run.id)).toEqual(['workflow-run']);
+        expect(result.degradedSources).toMatchObject([
+            { code: 'source_failure', sourceId: 'hung', message: expect.stringContaining('timed out') },
+        ]);
+    });
+
+    it('stops subscription legs and drops late callbacks on unregister', async () => {
+        const registry = new ActivityRegistry();
+        let emit: ((event: ActivityEvent) => void) | undefined;
+        let fail: (() => void) | undefined;
+        const dispose = vi.fn();
+        registry.register(
+            source('workflow', {
+                subscribe(input) {
+                    emit = input.onEvent;
+                    fail = () => input.onError?.({ code: 'source_failure', sourceId: 'workflow', message: 'late' });
+                    return dispose;
+                },
+            })
+        );
+        const seen: ActivityEvent[] = [];
+        const errors: { code: string }[] = [];
+        const subscription = registry.subscribe({
+            onEvent: (event) => seen.push(event),
+            onError: (error) => errors.push(error),
+        });
+        expect(registry.unregister('workflow')).toBe(true);
+        expect(dispose).toHaveBeenCalledTimes(1);
+        // A retained source closure emitting after teardown is dropped with a
+        // stale-event diagnostic, never delivered.
+        emit?.(event('e1', 'status', { status: 'running' }, { sourceId: 'workflow' }));
+        expect(seen).toEqual([]);
+        fail?.();
+        expect(errors).toMatchObject([{ code: 'stale_event' }]);
+        subscription.dispose();
+        expect(dispose).toHaveBeenCalledTimes(1);
+    });
+
+    it('drops events from a superseded registration after id reuse', async () => {
+        const registry = new ActivityRegistry();
+        let emitOld: ((event: ActivityEvent) => void) | undefined;
+        registry.register(
+            source('workflow', {
+                subscribe(input) {
+                    emitOld = input.onEvent;
+                    return () => {};
+                },
+            })
+        );
+        const seen: ActivityEvent[] = [];
+        registry.subscribe({ onEvent: (event) => seen.push(event) });
+        registry.unregister('workflow');
+        registry.register(source('workflow'));
+        // The old leg was stopped at unregister; even a leaked emit is dropped.
+        emitOld?.(event('e-old', 'status', { status: 'running' }, { sourceId: 'workflow' }));
+        expect(seen).toEqual([]);
+    });
+
     it('does not dispatch unsupported actions', async () => {
         const executeAction = vi.fn(async () => activityOk(undefined));
         const registry = new ActivityRegistry();

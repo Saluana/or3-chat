@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PackageV2PluginDescriptor, Sha256 } from '~~/shared/plugins/runtime-descriptor';
 import { invokePortableUiEvent } from '../portable-client-runtime';
 
@@ -25,7 +25,7 @@ const fetchMock = vi.fn();
 vi.stubGlobal('$fetch', fetchMock);
 const revocationRequests: string[] = [];
 
-const kvRows = new Map<string, { name: string; value: string | null; updated_at: number; clock: number }>();
+const kvRows = new Map<string, { name: string; value: string | null; updated_at: number; clock: number; deleted?: boolean }>();
 const getKvByNameMock = vi.fn(async (name: string) => kvRows.get(name));
 const setKvByNameMock = vi.fn(async (
     name: string,
@@ -34,10 +34,11 @@ const setKvByNameMock = vi.fn(async (
     options?: { readonly ifClock?: number | null }
 ) => {
     const current = kvRows.get(name);
+    const live = current && !current.deleted ? current : undefined;
     const currentClock = current?.clock ?? 0;
     if (
         options?.ifClock !== undefined &&
-        (options.ifClock === null ? current !== undefined : options.ifClock !== currentClock)
+        (options.ifClock === null ? live !== undefined : options.ifClock !== currentClock)
     ) {
         throw Object.assign(new Error('KV revision is stale'), { rpcCode: 'conflict' });
     }
@@ -48,19 +49,41 @@ const setKvByNameMock = vi.fn(async (
 const hardDeleteKvByNameMock = vi.fn(async (name: string) => {
     kvRows.delete(name);
 });
+const tombstoneKvByNameMock = vi.fn(async (name: string) => {
+    const current = kvRows.get(name);
+    if (!current || current.deleted) return;
+    kvRows.set(name, { ...current, value: null, updated_at: 1, clock: current.clock + 1, deleted: true });
+});
 
 vi.mock('~/db/kv', () => ({
     getKvByName: (...args: unknown[]) => getKvByNameMock(...(args as [string])),
+    getKvRecordByName: async (name: string) => ({ row: kvRows.get(name), revision: kvRows.get(name)?.clock ?? 0 }),
     setKvByName: (...args: unknown[]) => setKvByNameMock(...(args as [string, string | null])),
     hardDeleteKvByName: (...args: unknown[]) => hardDeleteKvByNameMock(...(args as [string])),
+    tombstoneKvByName: (...args: unknown[]) => tombstoneKvByNameMock(...(args as [string])),
 }));
 
+type Row = NonNullable<ReturnType<typeof kvRows.get>>;
+function collection(rows: Row[]) {
+    return {
+        filter: (predicate: (row: Row) => boolean) => collection(rows.filter(predicate)),
+        until: (predicate: (row: Row) => boolean) => {
+            const end = rows.findIndex(predicate);
+            return collection(end < 0 ? rows : rows.slice(0, end));
+        },
+        limit: (n: number) => collection(rows.slice(0, n)),
+        toArray: async () => rows,
+    };
+}
 const kvTable = {
-    where: () => ({
-        startsWith: (prefix: string) => ({
-            toArray: async () => [...kvRows.values()].filter((row) => row.name.startsWith(prefix)),
-        }),
-    }),
+    where: () => {
+        const rows = [...kvRows.values()].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+        return {
+            startsWith: (prefix: string) => collection(rows.filter((r) => r.name.startsWith(prefix))),
+            above: (low: string) => collection(rows.filter((r) => r.name > low)),
+            aboveOrEqual: (low: string) => collection(rows.filter((r) => r.name >= low)),
+        };
+    },
 };
 
 vi.mock('~/db/client', () => ({
@@ -75,14 +98,19 @@ vi.mock('../bundled-v1-manager-runtime', () => ({
 
 import {
     activatePortableClient,
+    claimPortableRecoveryAttempt,
     clearPortableClientSources,
     clearPortableSurfaceRegistrations,
     createPortableSettingsServices,
     deactivatePortableClient,
     ensurePortableClientActivation,
     getPortableActivation,
+    getPortableClientDraft,
+    removePortableClientSource,
     isPortableActivationReady,
+    isRecoverablePortableStop,
     reportPortableContributionReadiness,
+    schedulePortableClientRecovery,
     setPortableClientSource,
 } from '../portable-client-runtime';
 
@@ -140,6 +168,7 @@ beforeEach(async () => {
     getKvByNameMock.mockClear();
     setKvByNameMock.mockClear();
     hardDeleteKvByNameMock.mockClear();
+    tombstoneKvByNameMock.mockClear();
     // The runtime mints a server-side activation handle before it starts any
     // sandbox; the host answers here with a fresh generation each time.
     let activationCounter = 0;
@@ -176,6 +205,10 @@ beforeEach(async () => {
     revocationRequests.length = 0;
     clearPortableClientSources();
     clearPortableSurfaceRegistrations('sample.plugin');
+});
+
+afterEach(() => {
+    vi.useRealTimers();
 });
 
 describe('portable settings services', () => {
@@ -395,7 +428,14 @@ describe('portable storage services', () => {
         await services.storage.set({ key: 'presets', value: { version: 1, presets: [] } });
         expect(setKvByNameMock).toHaveBeenCalledWith(
             'plugin-storage:sample.plugin:presets',
-            JSON.stringify({ version: 1, presets: [] })
+            JSON.stringify({ version: 1, presets: [] }),
+            expect.objectContaining({ kv: kvTable }),
+            expect.objectContaining({
+                quota: expect.objectContaining({
+                    maxBytes: 1024 * 1024,
+                    prefix: 'plugin-storage:sample.plugin:',
+                }),
+            })
         );
         await expect(services.storage.get({ key: 'presets' })).resolves.toEqual({
             value: { version: 1, presets: [] },
@@ -425,8 +465,15 @@ describe('portable storage services', () => {
             entries: [{ key: 'presets', sizeBytes: JSON.stringify({ version: 1 }).length, updatedAt: 3000, revision: 1 }],
         });
         await services.storage.delete({ key: 'presets' });
-        expect(hardDeleteKvByNameMock).toHaveBeenCalledWith('plugin-storage:sample.plugin:presets');
+        expect(tombstoneKvByNameMock).toHaveBeenCalledWith(
+            'plugin-storage:sample.plugin:presets',
+            expect.objectContaining({ kv: kvTable }),
+            undefined
+        );
         expect(kvRows.has('plugin-storage:other.plugin:presets')).toBe(true);
+        // The tombstoned key reads as absent and is excluded from listings.
+        await expect(services.storage.get({ key: 'presets' })).resolves.toEqual({ value: null });
+        await expect(services.storage.list({})).resolves.toEqual({ entries: [] });
     });
 
     it('refuses an invalid key or an oversized value as invalid input', async () => {
@@ -446,12 +493,137 @@ describe('portable storage services', () => {
         expect(setKvByNameMock).toHaveBeenLastCalledWith(
             'plugin-storage:sample.plugin:new',
             JSON.stringify('created'),
-            undefined,
-            { ifClock: null }
+            expect.objectContaining({ kv: kvTable }),
+            expect.objectContaining({
+                ifClock: null,
+                quota: expect.objectContaining({
+                    maxKeys: 1000,
+                    prefix: 'plugin-storage:sample.plugin:',
+                }),
+            })
         );
         await expect(services.storage.set({ key: 'new', value: 'overwrite', ifRevision: null })).rejects.toMatchObject({
             rpcCode: 'conflict',
         });
+    });
+
+    it('refuses a revoked storage mutation before it can commit', async () => {
+        const services = createPortableSettingsServices('sample.plugin');
+        const controller = new AbortController();
+        controller.abort('revoked');
+        setKvByNameMock.mockClear();
+        await expect(
+            services.storage.set({ key: 'revoked', value: 1 }, { signal: controller.signal })
+        ).rejects.toMatchObject({ rpcCode: 'cancelled' });
+        expect(setKvByNameMock).not.toHaveBeenCalled();
+        await expect(
+            services.storage.delete({ key: 'revoked' }, { signal: controller.signal })
+        ).rejects.toMatchObject({ rpcCode: 'cancelled' });
+        expect(tombstoneKvByNameMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects malformed revisions instead of writing unconditionally', async () => {
+        const services = createPortableSettingsServices('sample.plugin');
+        for (const ifRevision of ['1', 1.5, Number.NaN, -1, true, {}]) {
+            setKvByNameMock.mockClear();
+            await expect(
+                services.storage.set({ key: 'guarded', value: 'x', ifRevision })
+            ).rejects.toMatchObject({ rpcCode: 'invalid-input' });
+            expect(setKvByNameMock).not.toHaveBeenCalled();
+        }
+        expect(kvRows.has('plugin-storage:sample.plugin:guarded')).toBe(false);
+    });
+
+    it('pages through an index seek without loading the whole keyspace', async () => {
+        const services = createPortableSettingsServices('sample.plugin');
+        for (let index = 0; index < 5; index += 1) {
+            kvRows.set(`plugin-storage:sample.plugin:k${index}`, {
+                name: `plugin-storage:sample.plugin:k${index}`,
+                value: JSON.stringify(index),
+                updated_at: 1,
+                clock: 1,
+            });
+        }
+        const first = (await services.storage.listPage({ limit: 2 })) as {
+            entries: { key: string }[];
+            nextCursor?: string;
+        };
+        expect(first.entries.map((entry) => entry.key)).toEqual(['k0', 'k1']);
+        expect(first.nextCursor).toMatch(/^cursor:/);
+        const second = (await services.storage.listPage({ limit: 2, cursor: first.nextCursor })) as {
+            entries: { key: string }[];
+            nextCursor?: string;
+        };
+        expect(second.entries.map((entry) => entry.key)).toEqual(['k2', 'k3']);
+        expect(second.nextCursor).toMatch(/^cursor:/);
+        const third = (await services.storage.listPage({ limit: 2, cursor: second.nextCursor })) as {
+            entries: { key: string }[];
+            nextCursor?: string;
+        };
+        expect(third.entries.map((entry) => entry.key)).toEqual(['k4']);
+        expect(third.nextCursor).toBeUndefined();
+    });
+
+    it('a stale pre-delete revision cannot match a recreated incarnation', async () => {
+        const services = createPortableSettingsServices('sample.plugin');
+        await services.storage.set({ key: 'cycle', value: 'v1' });
+        const first = (await services.storage.getRecord({ key: 'cycle' })) as { revision: number };
+        expect(first.revision).toBe(1);
+        await services.storage.delete({ key: 'cycle' });
+        await services.storage.set({ key: 'cycle', value: 'v2' });
+        const second = (await services.storage.getRecord({ key: 'cycle' })) as { revision: number };
+        // Delete consumed revision 2, so the recreate landed on 3, not 1 again.
+        expect(second.revision).toBe(3);
+        await expect(
+            services.storage.set({ key: 'cycle', value: 'stale', ifRevision: first.revision })
+        ).rejects.toMatchObject({ rpcCode: 'conflict' });
+        await expect(services.storage.get({ key: 'cycle' })).resolves.toEqual({ value: 'v2' });
+    });
+});
+
+describe('content-bearing handoffs', () => {
+    it('refuses to deliver authorized content into a replacement activation', async () => {
+        const base = startedRuntime('handoff');
+        startPortableWorkerMock.mockResolvedValue({
+            ...base,
+            runtime: {
+                capabilities: [],
+                dispose: vi.fn(),
+                callPlugin: async () => ({ ok: true }),
+            },
+        });
+        setPortableClientSource({
+            descriptor: descriptor(),
+            workspaceId: 'ws-1',
+            runtimeEntry: undefined,
+        });
+        const activated = await ensurePortableClientActivation('sample.plugin');
+        expect(activated?.status).toBe('active');
+        const expected = {
+            workspaceId: activated!.workspaceId,
+            packageDigest: activated!.packageDigest,
+            generation: activated!.generation,
+        };
+        // Same generation delivers.
+        await expect(
+            invokePortableUiEvent('sample.plugin', { action: 'host.first-action.run' }, expected)
+        ).resolves.toEqual({ ok: true });
+        // A replacement generation never receives the old content, and the
+        // call is never retried automatically.
+        await expect(
+            invokePortableUiEvent(
+                'sample.plugin',
+                { action: 'host.first-action.run' },
+                { ...expected, generation: expected.generation + 1 }
+            )
+        ).rejects.toThrow('activation changed');
+        await expect(
+            invokePortableUiEvent(
+                'sample.plugin',
+                { action: 'host.first-action.run' },
+                { ...expected, workspaceId: 'ws-2' }
+            )
+        ).rejects.toThrow('activation changed');
     });
 });
 
@@ -773,6 +945,137 @@ describe('stale handle lifecycle', () => {
     });
 });
 
+describe('centralized recovery', () => {
+    it('allows only transient stop codes to recover automatically', () => {
+        for (const code of [
+            'activation-unknown',
+            'activation-expired',
+            'activation-revoked',
+            'activation-stale',
+        ]) {
+            expect(isRecoverablePortableStop(code)).toBe(true);
+        }
+        for (const code of [
+            'plugin-disabled',
+            'plugin-uninstalled',
+            'plugin-access-denied',
+            'activation-session-mismatch',
+            'grant-review-stale',
+            'grant-review-unresolved',
+            'containment-violation',
+            'worker-crashed',
+            null,
+            undefined,
+        ]) {
+            expect(isRecoverablePortableStop(code)).toBe(false);
+        }
+    });
+
+    it('bounds recovery with a rolling window that a successful restart does not reset', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(0);
+        const pluginId = 'recovery.plugin';
+        const workspaceId = 'ws-recovery';
+        expect(claimPortableRecoveryAttempt(pluginId, workspaceId)).toMatchObject({
+            allowed: true,
+            attempt: 1,
+        });
+        expect(claimPortableRecoveryAttempt(pluginId, workspaceId)).toMatchObject({
+            allowed: true,
+            attempt: 2,
+        });
+        expect(claimPortableRecoveryAttempt(pluginId, workspaceId)).toMatchObject({
+            allowed: true,
+            attempt: 3,
+        });
+        // A fourth attempt inside the window is refused even though the three
+        // earlier activations all succeeded.
+        expect(claimPortableRecoveryAttempt(pluginId, workspaceId).allowed).toBe(false);
+        vi.setSystemTime(4 * 60 * 1000);
+        expect(claimPortableRecoveryAttempt(pluginId, workspaceId).allowed).toBe(false);
+        // The window rolls forward instead of being reset by success.
+        vi.setSystemTime(10 * 60 * 1000);
+        expect(claimPortableRecoveryAttempt(pluginId, workspaceId).allowed).toBe(true);
+    });
+
+    it('schedules one silent restart shared by every surface', async () => {
+        vi.useFakeTimers();
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('recovered'));
+        setPortableClientSource({
+            descriptor: descriptor(),
+            workspaceId: 'ws-1',
+            runtimeEntry: undefined,
+        });
+        await ensurePortableClientActivation('sample.plugin');
+        const call = startPortableWorkerMock.mock.calls[0]?.[0] as {
+            services: {
+                settings: { set: (params: Record<string, unknown>) => Promise<unknown> };
+            };
+        };
+        fetchMock.mockRejectedValueOnce(
+            Object.assign(new Error('Activation was revoked: plugin-disabled'), {
+                statusCode: 409,
+                data: { code: 'activation-revoked' },
+            })
+        );
+        await expect(
+            call.services.settings.set({ key: 'greeting', value: 'Hi' })
+        ).rejects.toMatchObject({ rpcCode: 'policy-denied' });
+        expect(getPortableActivation('sample.plugin')?.status).toBe('stopped');
+
+        // The sidebar and the pane both observe the stop; only one restart is
+        // scheduled and the shared budget is charged once.
+        schedulePortableClientRecovery('sample.plugin');
+        schedulePortableClientRecovery('sample.plugin');
+        await vi.advanceTimersByTimeAsync(300);
+        expect(startPortableWorkerMock).toHaveBeenCalledTimes(2);
+        expect(getPortableActivation('sample.plugin')?.status).toBe('active');
+    });
+
+    it('does not let an old recovery timer restart a replacement generation', async () => {
+        vi.useFakeTimers();
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('old'));
+        const source = { descriptor: descriptor(), workspaceId: 'ws-1', runtimeEntry: undefined };
+        setPortableClientSource(source);
+        await activatePortableClient(source);
+        const first = startPortableWorkerMock.mock.calls[0]![0] as { services: { settings: { set: (params: Record<string, unknown>) => Promise<unknown> } } };
+        fetchMock.mockRejectedValueOnce(Object.assign(new Error('expired'), { statusCode: 409, data: { code: 'activation-expired' } }));
+        await expect(first.services.settings.set({ key: 'greeting', value: 'Hi' })).rejects.toThrow();
+        schedulePortableClientRecovery('sample.plugin');
+        await activatePortableClient(source);
+        const second = startPortableWorkerMock.mock.calls[1]![0] as typeof first;
+        fetchMock.mockRejectedValueOnce(Object.assign(new Error('disabled'), { statusCode: 409, data: { code: 'plugin-disabled' } }));
+        await expect(second.services.settings.set({ key: 'greeting', value: 'Hi' })).rejects.toThrow();
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(startPortableWorkerMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('never restarts an activation whose failure is not on the allowlist', async () => {
+        vi.useFakeTimers();
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('terminal'));
+        setPortableClientSource({
+            descriptor: descriptor(),
+            workspaceId: 'ws-1',
+            runtimeEntry: undefined,
+        });
+        const activation = await activatePortableClient({
+            descriptor: descriptor(),
+            workspaceId: 'ws-1',
+        });
+        const start = startPortableWorkerMock.mock.calls[0]?.[0] as {
+            onCrash: (report: { fatal: boolean; reason: string }) => void;
+        };
+        start.onCrash({ fatal: true, reason: 'worker-crashed' });
+        expect(getPortableActivation('sample.plugin')?.status).toBe('stopped');
+        expect(activation.generation).toBeGreaterThan(0);
+
+        schedulePortableClientRecovery('sample.plugin');
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(startPortableWorkerMock).toHaveBeenCalledTimes(1);
+        expect(getPortableActivation('sample.plugin')?.status).toBe('stopped');
+    });
+});
+
 describe('contribution readiness and replacement safeguards', () => {
     it('records the exact package digest and waits for required surfaces', async () => {
         startPortableWorkerMock.mockResolvedValue(startedRuntime('readiness'));
@@ -943,5 +1246,24 @@ describe('contribution readiness and replacement safeguards', () => {
         await expect(services.storage.get({ key: 'preset' })).resolves.toEqual({
             value: { theme: 'dark' },
         });
+    });
+});
+
+
+describe('portable draft lifecycle', () => {
+    it('retains drafts across mounts and removes them with their source or workspace', () => {
+        setPortableClientSource({ descriptor: descriptor(), workspaceId: 'ws-1', runtimeEntry: undefined });
+        const draft = getPortableClientDraft('sample.plugin', 'ws-1', 'pane');
+        draft.values.notes = 'private';
+        draft.dirty.add('notes');
+        expect(getPortableClientDraft('sample.plugin', 'ws-1', 'pane')).toBe(draft);
+        expect(getPortableClientDraft('sample.plugin', 'ws-1', 'sidebar').values).toEqual({});
+        removePortableClientSource('sample.plugin');
+        expect(getPortableClientDraft('sample.plugin', 'ws-1', 'pane').values).toEqual({});
+        getPortableClientDraft('sample.plugin', 'ws-1', 'pane').values.notes = 'private';
+        setPortableClientSource({ descriptor: descriptor(), workspaceId: 'ws-2', runtimeEntry: undefined });
+        expect(getPortableClientDraft('sample.plugin', 'ws-1', 'pane').values).toEqual({});
+        clearPortableClientSources();
+        expect(getPortableClientDraft('sample.plugin', 'ws-1', 'pane').values).toEqual({});
     });
 });

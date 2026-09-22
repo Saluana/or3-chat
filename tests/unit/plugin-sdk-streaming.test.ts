@@ -23,6 +23,60 @@ describe('Plugin SDK SSE decoder', () => {
         expect(decoder.push('data: late\n')).toMatchObject({ ok: false });
     });
 
+    it('supports CR-only line endings', () => {
+        const decoder = new PluginSseDecoder();
+        expect(decoder.push('data: x\r\r')).toEqual({
+            ok: true,
+            chunks: [{ kind: 'data', data: 'x' }],
+        });
+        expect(decoder.finish()).toEqual({ ok: true, chunks: [] });
+    });
+
+    it('emits a trailing CR immediately and suppresses only the following LF', () => {
+        const decoder = new PluginSseDecoder();
+        expect(decoder.push('data: first\r\n\r')).toMatchObject({ chunks: [{ data: 'first' }] });
+        expect(decoder.push('\ndata: second\r\r')).toMatchObject({ chunks: [{ data: 'second' }] });
+        expect(decoder.finish()).toMatchObject({ chunks: [] });
+    });
+
+    it('decodes a large LF-only batch without losing lines', () => {
+        const decoder = new PluginSseDecoder();
+        const result = decoder.push(': heartbeat\n'.repeat(8000) + 'data: done\n\n');
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+            expect(result.chunks).toHaveLength(8001);
+            expect(result.chunks.at(-1)).toEqual({ kind: 'data', data: 'done' });
+        }
+    });
+
+    it('handles a CRLF pair split across chunks', () => {
+        const decoder = new PluginSseDecoder();
+        expect(decoder.push('data: split\r')).toEqual({ ok: true, chunks: [] });
+        const second = decoder.push('\n\r\n');
+        expect(second).toEqual({ ok: true, chunks: [{ kind: 'data', data: 'split' }] });
+        expect(decoder.finish()).toEqual({ ok: true, chunks: [] });
+    });
+
+    it('discards unterminated event data at EOF', () => {
+        const decoder = new PluginSseDecoder();
+        expect(decoder.push('data: incomplete')).toEqual({ ok: true, chunks: [] });
+        expect(decoder.finish()).toEqual({ ok: true, chunks: [] });
+
+        const terminated = new PluginSseDecoder();
+        expect(terminated.push('data: no-blank-line\n')).toEqual({ ok: true, chunks: [] });
+        expect(terminated.finish()).toEqual({ ok: true, chunks: [] });
+    });
+
+    it('keeps the last event id across a discarded EOF event', () => {
+        const decoder = new PluginSseDecoder();
+        expect(decoder.push('id: 7\ndata: first\n\n')).toEqual({
+            ok: true,
+            chunks: [{ kind: 'data', id: '7', data: 'first' }],
+        });
+        expect(decoder.push('data: orphan\n')).toEqual({ ok: true, chunks: [] });
+        expect(decoder.finish()).toEqual({ ok: true, chunks: [] });
+    });
+
     it('fails closed for invalid UTF-8 and an incomplete oversized line', () => {
         const invalid = new PluginSseDecoder();
         expect(invalid.push(new Uint8Array([0xc3, 0x28]))).toMatchObject({

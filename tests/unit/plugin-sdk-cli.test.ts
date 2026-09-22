@@ -9,6 +9,7 @@ import {
 import { buildV2Package } from '../../packages/plugin-sdk/src/cli/build';
 import { checkV2PackageConformance } from '../../packages/plugin-sdk/src/cli/conformance';
 import { createV2Package } from '../../packages/plugin-sdk/src/cli/create';
+import { runPluginCli } from '../../packages/plugin-sdk/src/cli/index';
 import { inspectV2Package } from '../../packages/plugin-sdk/src/cli/inspect';
 import { packV2Package } from '../../packages/plugin-sdk/src/cli/pack';
 import { validateV2Package } from '../../packages/plugin-sdk/src/cli/validate';
@@ -40,6 +41,16 @@ function createPortable(prefix: string): string {
 }
 
 describe('@or3/plugin-sdk standalone CLI', () => {
+    it('requires an SDK source and build output at the executable boundary', async () => {
+        const directory = resolve(tempDir('or3-sdk-cli-inputs-'), 'plugin');
+        await expect(runPluginCli(['create', '--id', 'or3.example', '--dir', directory]))
+            .rejects.toThrow('Missing required --sdk-source');
+        expect(() => createV2Package({ pluginId: 'or3.example', directory, sdkSource: resolve(directory, 'missing.tgz') }))
+            .toThrow('SDK source does not exist');
+        createV2Package({ pluginId: 'or3.example', directory });
+        await expect(runPluginCli(['pack', directory])).rejects.toThrow('Missing build output');
+    });
+
     it('creates a portable starter that is conformant with zero findings', async () => {
         const directory = createPortable('or3-sdk-cli-create-');
         const report = await validateV2Package(directory);

@@ -42,7 +42,45 @@ export type RpcErrorCode =
     | 'policy-denied'
     | 'budget-exceeded'
     | 'unavailable'
-    | 'internal';
+    | 'internal'
+    | 'invalid-input'
+    | 'conflict'
+    | 'locked'
+    | 'stale-context'
+    | 'quota-exceeded';
+
+/**
+ * Single authoritative wire error vocabulary. Handlers raise these codes via
+ * a thrown `rpcCode`; the broker, envelope validators and SDK mapping all
+ * defer to this set so a supported error survives the full round trip
+ * instead of degrading to `internal` at one layer.
+ */
+const WIRE_RPC_ERROR_CODES: ReadonlySet<string> = new Set<string>([
+    'invalid-envelope',
+    'unknown-version',
+    'malformed-id',
+    'oversized',
+    'unknown-method',
+    'grant-denied',
+    'deadline-exceeded',
+    'cancelled',
+    'replay',
+    'backpressure',
+    'runtime-crash',
+    'policy-denied',
+    'budget-exceeded',
+    'unavailable',
+    'internal',
+    'invalid-input',
+    'conflict',
+    'locked',
+    'stale-context',
+    'quota-exceeded',
+]);
+
+export function isRpcErrorCode(value: unknown): value is RpcErrorCode {
+    return typeof value === 'string' && WIRE_RPC_ERROR_CODES.has(value);
+}
 
 export interface RpcRequestEnvelope {
     readonly v: typeof RPC_ENVELOPE_VERSION;

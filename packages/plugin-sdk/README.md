@@ -12,11 +12,17 @@ workflows contain no SDK publication job, so publishing requires adding that
 release integration. Install it from a packed tarball:
 
 ```sh
-npm pack <path-to-sdk>              # e.g. npm pack ./packages/plugin-sdk
-npm install ./or3-plugin-sdk-2.0.0.tgz
+# From an SDK checkout with its build dependencies installed:
+cd <path-to-sdk-checkout>
+mkdir -p /absolute/path/to/external-workspace
+bun pm pack --destination /absolute/path/to/external-workspace
+cd /absolute/path/to/external-workspace
+printf '{"private":true,"type":"module"}\n' > package.json
+bun add ./or3-plugin-sdk-2.0.0.tgz
 ```
 
-Node.js 24 or newer. The tarball ships prebuilt ESM + type declarations under
+Bun 1.3.6 or newer must be on PATH for the CLI, bundling and starter tests.
+The library also supports Node.js 24 or newer. The tarball ships prebuilt ESM + type declarations under
 `dist/`; no TypeScript toolchain is required to consume it. The
 developer-oriented `src/` is included for source inspection.
 
@@ -61,6 +67,17 @@ command owned by another plugin additionally requires the reviewed
 `PluginSseDecoder` is an incremental, bounded decoder for host-provided SSE
 streams. It preserves event ids and names across split UTF-8/CRLF chunks,
 emits heartbeats as comments, and refuses oversized lines or events.
+CR-only event terminators dispatch immediately; incomplete events are discarded
+at EOF. Delimiter scanning is linear within each input batch.
+
+Portable storage enforces local admission limits of 1000 live keys, 1 MiB of
+serialized values, and 10,000 retained names (including deleted names) per
+plugin/workspace. Deleting frees live usage; names remain retained for CAS
+safety and can be reused. `getRecord()` preserves deletion revisions, including
+sync snapshot history. Lists skip deletions and return at most 200 keys in key
+order; use `listPage()` to continue. The portable fake matches these limits and
+returns copied settings values, including through `settings.list()`. Storage writes
+use JSON wire semantics; conflicts include `details.currentRevision`.
 
 ## CLI
 
@@ -81,18 +98,20 @@ The package installs an `or3-plugin` binary that works with no OR3 checkout and
 no private path aliases:
 
 ```sh
-or3-plugin create --id or3.example --dir ./example
-or3-plugin validate ./example
-or3-plugin test ./example
-or3-plugin build ./example
-or3-plugin pack ./example --archive ./example.or3pkg
-or3-plugin inspect ./example            # or ./example.or3pkg
-or3-plugin candidate ./example --out ./example-candidate-1
-or3-plugin candidate --verify ./example-candidate-1
-or3-plugin candidate --qualify ./example --candidate ./example-candidate-1
+./node_modules/.bin/or3-plugin create --id or3.example --dir ./example --sdk-source ./or3-plugin-sdk-2.0.0.tgz
+(cd example && bun install)
+./node_modules/.bin/or3-plugin validate ./example
+./node_modules/.bin/or3-plugin test ./example
+./node_modules/.bin/or3-plugin build ./example
+./node_modules/.bin/or3-plugin pack ./example --archive ./example.or3pkg
+./node_modules/.bin/or3-plugin inspect ./example.or3pkg
 ```
 
-- `create` copies a starter. The default `portable-v1` template is conformant
+- `create` requires `--sdk-source`, a local tarball or SDK directory. It writes
+  an absolute `file:` development dependency so installation resolves the chosen SDK from
+  the generated directory. Keep that source available; update the dependency
+  when moving the project. The optional peer range records SDK compatibility
+  without fetching the unpublished package from npm. It copies a starter. The default `portable-v1` template is conformant
   with the `or3-portable-client-v1` profile (isolated-client worker, generated
   `or3.package-policy.json` + `or3.setup.json`, settings schema, client entry and
   a passing test). `minimal-v2` scaffolds the trusted-host V2 shape instead.
@@ -101,7 +120,10 @@ or3-plugin candidate --qualify ./example --candidate ./example-candidate-1
 - `test` runs the package's own tests: `bun run test` when `package.json` has a
   `test` script, otherwise `bun test` (Bun is the supported runtime).
 - `build` materializes a deterministic build tree and packs it.
-- `pack` writes a deterministic ZIP (`.or3pkg`/`.zip`) using the canonical
+- `pack` requires a preceding `build` and consumes `<package-root>/dist`,
+  including the bundled entry. Source edits require another build; it does not
+  silently rebuild. The lower-level `packV2Package` helper packs its explicit
+  tree (also used internally for source snapshots). It writes a deterministic ZIP (`.or3pkg`/`.zip`) using the canonical
   package-tree digest.
 - `inspect` reports the digest, manifest digest, module graph, grants, trust,
   state compatibility and conformance status without importing plugin code.
@@ -132,9 +154,9 @@ OR3 repository for the full rule set.
 
 - The repository checkout exposes `exports` that resolve to `./src/*.ts` so the
   OR3 host can consume the live source.
-- `npm pack` runs `scripts/build.mjs` (Bun bundler + `tsc --emitDeclarationOnly`)
+- `bun pm pack` runs `scripts/build.mjs` (Bun bundler + `tsc --emitDeclarationOnly`)
   and `scripts/publish-manifest.mjs`, which rewrites the publish `exports` to
-  `./dist/*` for the tarball only, then restores the repository manifest. npm
+  `./dist/*` for the tarball only, then restores the repository manifest. The package manager
   does not apply `publishConfig.exports`, so this prepack rewrite is required.
 - The published subpaths and the JavaScript build entries live together in
   `scripts/publish-entries.mjs`, and `tests/unit/plugin-sdk-publish-surface.test.ts`

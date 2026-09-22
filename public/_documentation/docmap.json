@@ -1343,13 +1343,13 @@
                     "name": "plugin-sdk.md",
                     "path": "/plugins/plugin-sdk",
                     "category": "Reference",
-                    "summary": "Stable Plugin Runtime V2 authoring surface with a host-created, typed capability context (AI, UI, panes, commands, chat, workspace, storage, settings, secrets, files, HTTP, network, activity and events). Storage supports revisions and compare-and-set writes; the test host exercises activation, teardown and scoped services. Unqualified namespaces remain explicit unsupported results until production adapters pass review. The package is not yet published to npm; install it from a packed tarball."
+                    "summary": "Stable Plugin Runtime V2 authoring surface with a host-created, typed capability context (AI, UI, panes, commands, chat, workspace, storage, settings, secrets, files, HTTP, network, activity and events). Storage supports snapshot-safe revisions, CAS, deletion-aware pagination, local live-value quotas and a 10,000-name history cap; real-Dexie conformance covers the portable test host. Unqualified namespaces remain explicit unsupported results until production adapters pass review. The package is not yet published to npm; install it from a packed tarball."
                 },
                 {
                     "name": "plugin-sdk-cli.md",
                     "path": "/plugins/plugin-sdk-cli",
                     "category": "Reference",
-                    "summary": "@or3/plugin-sdk is not yet on npm: install it from a packed tarball. It provides prebuilt ESM + types under dist/ and a standalone or3-plugin CLI (create, validate, test, build, pack, inspect) that works without an OR3 checkout or private path aliases, plus the portable-v1 starter with a hidden .authoring/ generator. Publishing requires adding an SDK job to the release workflows."
+                    "summary": "@or3/plugin-sdk is not yet on npm: install it from a packed tarball. Bun is required for the CLI; create takes --sdk-source, install the generated dependencies, then build before pack consumes dist. It provides prebuilt ESM + types under dist/ and a standalone or3-plugin CLI (create, validate, test, build, pack, inspect) that works without an OR3 checkout or private path aliases, plus the portable-v1 starter with a hidden .authoring/ generator. Publishing requires adding an SDK job to the release workflows."
                 },
                 {
                     "name": "portable-profile.md",
@@ -1367,7 +1367,7 @@
                     "name": "portable-containment-and-setup.md",
                     "path": "/plugins/portable-containment-and-setup",
                     "category": "Reference",
-                    "summary": "What the portable client sandbox can and cannot reach (parent DOM, cookies, web storage, IndexedDB, fetch/WebSocket/imports/nested workers, navigation) proved by an uncontained control worker against reachable targets, the measured wire bounds and the one-ledger-plus-watchdog budgets, mandatory host-minted session binding stamped by the frame shim with generation invalidation, the granted-capability registry and authenticated server capability bridge, the host-rendered UI primitives and markdown sanitizer with validated ui.render/ui.contribute events, effective-authority hashing with release-bound consent, action approvals that only the host UI can mint so AI cannot authorize purchases or destructive writes, and how host-generated setup reaches a first useful action."
+                    "summary": "What the portable client sandbox can and cannot reach (parent DOM, cookies, web storage, IndexedDB, fetch/WebSocket/imports/nested workers, navigation) proved by an uncontained control worker against reachable targets, the measured wire bounds and the one-ledger-plus-watchdog budgets, mandatory host-minted session binding stamped by the frame shim with generation invalidation, the granted-capability registry and authenticated server capability bridge, the host-rendered UI primitives with workspace-scoped draft retention and activation-bound replies, grant revocation of in-flight calls, and markdown sanitizer with validated ui.render/ui.contribute events, effective-authority hashing with release-bound consent, action approvals that only the host UI can mint so AI cannot authorize purchases or destructive writes, and how host-generated setup reaches a first useful action."
                 },
                 {
                     "name": "selected-document-utility.md",

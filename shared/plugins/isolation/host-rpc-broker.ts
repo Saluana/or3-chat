@@ -9,31 +9,13 @@ import {
 } from '../grant-review';
 import {
     createRpcEvent,
+    isRpcErrorCode,
     parseRpcEnvelope,
     type RpcEnvelope,
     type RpcErrorCode,
     type RpcRequestEnvelope,
 } from './rpc-envelope';
 import { respondError, respondOk, RpcSession } from './rpc-session';
-
-/** Error codes a handler may raise; anything else is reported as `internal`. */
-const BROKER_RPC_ERROR_CODES: ReadonlySet<string> = new Set([
-    'invalid-envelope',
-    'unknown-version',
-    'malformed-id',
-    'oversized',
-    'unknown-method',
-    'grant-denied',
-    'deadline-exceeded',
-    'cancelled',
-    'replay',
-    'backpressure',
-    'runtime-crash',
-    'policy-denied',
-    'budget-exceeded',
-    'unavailable',
-    'internal',
-]);
 
 export type HostRpcMethodGrant =
     | 'hooks.register'
@@ -55,6 +37,8 @@ export type HostRpcHandler = (
 ) => Promise<unknown> | unknown;
 
 export interface HostRpcHandlerContext {
+    /** A mutation has durably completed; acknowledge it even if cancellation raced its reply. */
+    readonly markCommitted?: () => void;
     readonly pluginId: string;
     readonly workspaceId: string;
     /** Host-resolved acting user for this activation; never plugin-supplied. */
@@ -148,6 +132,7 @@ export class HostRpcBroker {
     readonly #methods = new Map<string, HostRpcMethodSpec>();
     readonly #session: RpcSession;
     readonly #controllers = new Map<string, AbortController>();
+    readonly #inFlightGrants = new Map<string, HostRpcMethodGrant>();
     readonly #maxInFlight: number;
     readonly #verifyInbound: HostRpcBrokerOptions['verifyInbound'];
     readonly #requireHostSession: boolean;
@@ -195,6 +180,11 @@ export class HostRpcBroker {
 
     setGrants(grants: PluginGrantReviewSnapshot): void {
         this.#grants = grants;
+        for (const [id, grant] of this.#inFlightGrants) {
+            if (!evaluateReviewedPluginGrant(grants, grant).allowed) {
+                this.#controllers.get(id)?.abort('grant-revoked');
+            }
+        }
     }
 
     /** Ingest a raw transport payload and dispatch if it is a request. */
@@ -230,7 +220,7 @@ export class HostRpcBroker {
             const controller = this.#controllers.get(envelope.id);
             if (controller) {
                 controller.abort(envelope.reason ?? 'cancelled');
-                this.#controllers.delete(envelope.id);
+                // Keep charging the slot until the handler actually settles.
             }
             return { status: 'handled' };
         }
@@ -250,6 +240,7 @@ export class HostRpcBroker {
             controller.abort('broker disposed');
         }
         this.#controllers.clear();
+        this.#inFlightGrants.clear();
         this.#session.dispose('broker disposed');
     }
 
@@ -369,10 +360,12 @@ export class HostRpcBroker {
 
         const controller = new AbortController();
         this.#controllers.set(request.id, controller);
+        this.#inFlightGrants.set(request.id, spec.grant);
 
         const admitted = this.#budget?.admitCall() ?? { ok: true };
         if (!admitted.ok) {
             this.#controllers.delete(request.id);
+            this.#inFlightGrants.delete(request.id);
             const message = admitted.message ?? 'Containment budget exceeded';
             this.#send(respondError(request, 'budget-exceeded', message));
             if (admitted.terminate) {
@@ -393,43 +386,8 @@ export class HostRpcBroker {
             }, deadlineMs);
         }
 
+        let committed = false;
         try {
-            if (controller.signal.aborted) {
-                this.#send(
-                    respondError(request, 'deadline-exceeded', 'RPC deadline exceeded')
-                );
-                return {
-                    status: 'rejected',
-                    code: 'deadline-exceeded',
-                    message: 'RPC deadline exceeded',
-                };
-            }
-
-            const result = await spec.handler(request.params, {
-                pluginId: this.#pluginId,
-                workspaceId: this.#workspaceId,
-                ...(this.#userId === undefined ? {} : { userId: this.#userId }),
-                generation: this.#generation,
-                requestId: request.id,
-                signal: controller.signal,
-                deadlineMs,
-                emitEvent: (name, payload = {}) => {
-                    if (this.#disposed) return;
-                    try {
-                        this.#send(
-                            createRpcEvent({
-                                id: `host-event-${++this.#eventSequence}`,
-                                name,
-                                payload,
-                            })
-                        );
-                    } catch {
-                        // Event delivery is best effort; a disposed transport
-                        // must not turn a completed host mutation into failure.
-                    }
-                },
-            });
-
             if (controller.signal.aborted) {
                 const reason =
                     controller.signal.reason === 'deadline-exceeded'
@@ -447,6 +405,38 @@ export class HostRpcBroker {
                 return { status: 'rejected', code: reason, message: reason };
             }
 
+            const result = await spec.handler(request.params, {
+                pluginId: this.#pluginId,
+                workspaceId: this.#workspaceId,
+                ...(this.#userId === undefined ? {} : { userId: this.#userId }),
+                generation: this.#generation,
+                requestId: request.id,
+                signal: controller.signal,
+                deadlineMs,
+                markCommitted: () => { committed = true; },
+                emitEvent: (name, payload = {}) => {
+                    if (this.#disposed) return;
+                    try {
+                        this.#send(
+                            createRpcEvent({
+                                id: `host-event-${++this.#eventSequence}`,
+                                name,
+                                payload,
+                            })
+                        );
+                    } catch {
+                        // Event delivery is best effort; a disposed transport
+                        // must not turn a completed host mutation into failure.
+                    }
+                },
+            });
+
+            if (controller.signal.aborted && !committed) {
+                const code = controller.signal.reason === 'deadline-exceeded'
+                    ? 'deadline-exceeded' : 'cancelled';
+                this.#send(respondError(request, code, code));
+                return { status: 'rejected', code, message: code };
+            }
             this.#send(respondOk(request, result));
             return { status: 'handled' };
         } catch (error) {
@@ -468,15 +458,28 @@ export class HostRpcBroker {
             }
             const message =
                 error instanceof Error ? error.message : 'Internal RPC handler error';
-            const rpcCode =
+            // The wire vocabulary is authoritative (see `isRpcErrorCode`): a
+            // handler-raised code outside it degrades to `internal`, while a
+            // supported code — including SDK-domain errors like `conflict` or
+            // `invalid-input` — survives to the sandbox with safe details.
+            const rpcCode: RpcErrorCode =
                 typeof error === 'object' &&
                 error !== null &&
                 'rpcCode' in error &&
-                typeof (error as { rpcCode: unknown }).rpcCode === 'string' &&
-                BROKER_RPC_ERROR_CODES.has((error as { rpcCode: string }).rpcCode)
-                    ? ((error as { rpcCode: RpcErrorCode }).rpcCode)
+                isRpcErrorCode((error as { rpcCode: unknown }).rpcCode)
+                    ? (error as { rpcCode: RpcErrorCode }).rpcCode
                     : 'internal';
-            this.#send(respondError(request, rpcCode, message));
+            const rawDetails =
+                typeof error === 'object' && error !== null && 'details' in error
+                    ? (error as { details: unknown }).details
+                    : undefined;
+            const details =
+                typeof rawDetails === 'object' &&
+                rawDetails !== null &&
+                !Array.isArray(rawDetails)
+                    ? (rawDetails as Readonly<Record<string, unknown>>)
+                    : undefined;
+            this.#send(respondError(request, rpcCode, message, details));
             return {
                 status: 'rejected',
                 code: rpcCode,
@@ -487,6 +490,7 @@ export class HostRpcBroker {
                 clearTimeout(deadlineTimer);
             }
             this.#controllers.delete(request.id);
+            this.#inFlightGrants.delete(request.id);
             this.#budget?.releaseCall();
         }
     }

@@ -7,7 +7,7 @@
  * markup (markdown goes through the host sanitizer), and every interactive node
  * raises a host-mediated event.
  */
-import { computed, onBeforeUnmount, reactive, watch } from 'vue';
+import { computed, onBeforeUnmount, reactive, useId, watch } from 'vue';
 import PortableWorkspace from './PortableWorkspace.vue';
 import {
     renderSanitizedMarkdown,
@@ -84,6 +84,8 @@ const props = defineProps<{
      * in the tree.
      */
     readonly dirtyKeys?: Set<string>;
+    /** Root draft ownership persists across surface remounts. */
+    readonly retainedDirtyKeys?: Set<string>;
     /**
      * Host execution lock (a write or a plugin request is in flight). A disabled
      * tree refuses interaction, so a double click cannot start a second write.
@@ -92,6 +94,21 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{ (event: 'ui-event', payload: PortableUiEvent): void }>();
+
+/**
+ * Host-generated render-instance prefix. SDK field ids stay logical, but DOM
+ * ids are scoped to this rendered tree, so two plugins (or two visible surfaces
+ * of one plugin) cannot render identical ids and steal each other's labels.
+ */
+const renderPrefix = `r${useId().replace(/[^A-Za-z0-9_-]/g, '')}`;
+
+function fieldDomId(id: string): string {
+    return `portable-${renderPrefix}-${id}`;
+}
+
+function fieldDescriptionId(id: string): string {
+    return `${fieldDomId(id)}-description`;
+}
 
 // Workspace notices follow the active surface, including a modal inspector.
 const workspaceNode = computed(() => {
@@ -109,7 +126,7 @@ const values = computed<Record<string, string | boolean>>(
 
 /** Ids the user edited; a declarative update must never discard their typing. */
 const ownedDirty = new Set<string>();
-const dirty = computed<Set<string>>(() => props.dirtyKeys ?? ownedDirty);
+const dirty = computed<Set<string>>(() => props.dirtyKeys ?? props.retainedDirtyKeys ?? ownedDirty);
 /** Field ids seen in the last render, so removed fields release their state. */
 const knownFields = new Set<string>();
 /** Only the root reconciles: it walks the whole tree and shares the dirty set. */
@@ -156,6 +173,7 @@ function syncFields(nodes: readonly PortableUiNode[]): void {
                 case 'field.select':
                 case 'field.toggle': {
                     seen.add(node.id);
+                    if (dirty.value.has(node.id) && Object.hasOwn(values.value, node.id)) break;
                     if (!knownFields.has(node.id)) {
                         values.value[node.id] = initialValue(node);
                         break;
@@ -185,8 +203,9 @@ function syncFields(nodes: readonly PortableUiNode[]): void {
 }
 
 watch(
-    () => props.nodes,
-    (nodes) => {
+    () => [props.nodes, props.store] as const,
+    ([nodes, store], previous) => {
+        if (previous && store !== previous[1]) knownFields.clear();
         if (ownsFieldState.value) syncFields(nodes);
     },
     { immediate: true, deep: false }
@@ -315,6 +334,37 @@ function visibleColumns(node: {
     return node.children.filter(
         (child) => child.type !== 'column' || child.children.length > 0
     );
+}
+
+/** The logical row a workspace inspector belongs to, if the plugin marks one. */
+function selectedItemId(nodes: readonly PortableUiNode[]): string | null {
+    for (const node of nodes) {
+        if (node.type === 'item') {
+            if (node.selected) return node.id;
+            const nested = selectedItemId(node.children ?? []);
+            if (nested) return nested;
+            continue;
+        }
+        const children = childrenOf(node);
+        if (children) {
+            const found = selectedItemId(children);
+            if (found) return found;
+        }
+    }
+    return null;
+}
+
+/**
+ * Inspector identity for a workspace band. It changes only when the plugin
+ * selects a different row, never on an ordinary redraw that rebuilds the same
+ * selection, so a manually closed narrow-layout drawer stays closed.
+ */
+function inspectorKeyFor(node: {
+    readonly layout?: 'workspace';
+    readonly children: readonly PortableUiNode[];
+}): string | null {
+    if (!visibleColumns(node)[1]) return null;
+    return selectedItemId(visibleColumns(node));
 }
 
 /** A select with a declared change action applies immediately (filter, sort). */
@@ -458,6 +508,7 @@ defineOptions({ name: 'PortableUiTree' });
         <PortableWorkspace
             v-else-if="node.type === 'columns' && node.layout === 'workspace'"
             :inspector="visibleColumns(node)[1]"
+            :inspector-key="inspectorKeyFor(node)"
         >
             <template #notices>
                 <PortableUiTree v-if="workspaceNode === node" :nodes="workspaceNotices" :store="values" :form="form" :dirty-keys="dirty" :disabled="disabled" @ui-event="(payload) => emit('ui-event', payload)" />
@@ -618,12 +669,14 @@ defineOptions({ name: 'PortableUiTree' });
         </form>
 
         <div v-else-if="node.type === 'field.text'" class="flex flex-col gap-1">
-            <label :class="fieldLabelClass(node.label)" :for="`portable-${node.id}`">{{ node.label }}</label>
+            <label :class="fieldLabelClass(node.label)" :for="fieldDomId(node.id)">{{ node.label }}</label>
             <UInput
-                :id="`portable-${node.id}`"
+                :id="fieldDomId(node.id)"
+                :data-portable-field="node.id"
                 :model-value="values[node.id] as unknown as string"
                 :placeholder="node.placeholder"
                 :aria-label="node.label || node.placeholder || node.id"
+                :aria-describedby="node.description ? fieldDescriptionId(node.id) : undefined"
                 :required="node.required"
                 :disabled="disabled"
                 :icon="node.search ? 'i-lucide-search' : undefined"
@@ -631,42 +684,53 @@ defineOptions({ name: 'PortableUiTree' });
                 class="w-full"
                 @update:model-value="(value: unknown) => onTextFieldChange(node, value)"
             />
-            <p v-if="node.description" class="text-xs opacity-70">{{ node.description }}</p>
+            <p v-if="node.description" :id="fieldDescriptionId(node.id)" class="text-xs opacity-70">
+                {{ node.description }}
+            </p>
         </div>
 
         <div v-else-if="node.type === 'field.textarea'" class="flex flex-col gap-1">
-            <label :class="fieldLabelClass(node.label)" :for="`portable-${node.id}`">{{ node.label }}</label>
+            <label :class="fieldLabelClass(node.label)" :for="fieldDomId(node.id)">{{ node.label }}</label>
             <UTextarea
-                :id="`portable-${node.id}`"
+                :id="fieldDomId(node.id)"
+                :data-portable-field="node.id"
                 :model-value="values[node.id] as unknown as string"
                 :rows="node.rows ?? 4"
+                :aria-describedby="node.description ? fieldDescriptionId(node.id) : undefined"
                 :required="node.required"
                 :disabled="disabled"
                 class="w-full"
                 @update:model-value="(value: unknown) => setField(node.id, value, 'text')"
             />
-            <p v-if="node.description" class="text-xs opacity-70">{{ node.description }}</p>
+            <p v-if="node.description" :id="fieldDescriptionId(node.id)" class="text-xs opacity-70">
+                {{ node.description }}
+            </p>
         </div>
 
         <div v-else-if="node.type === 'field.select'" class="portable-select flex flex-col gap-1">
-            <label :class="fieldLabelClass(node.label)" :for="`portable-${node.id}`">{{ node.label }}</label>
+            <label :class="fieldLabelClass(node.label)" :for="fieldDomId(node.id)">{{ node.label }}</label>
             <USelectMenu
-                :id="`portable-${node.id}`"
+                :id="fieldDomId(node.id)"
+                :data-portable-field="node.id"
                 :model-value="values[node.id] as unknown as string"
                 :items="[...node.options]"
                 value-key="value"
                 label-key="label"
                 class="w-full"
                 :aria-label="node.label"
+                :aria-describedby="node.description ? fieldDescriptionId(node.id) : undefined"
                 :disabled="disabled"
                 @update:model-value="(value: unknown) => onSelectChange(node, value)"
             />
-            <p v-if="node.description" class="text-xs opacity-70">{{ node.description }}</p>
+            <p v-if="node.description" :id="fieldDescriptionId(node.id)" class="text-xs opacity-70">
+                {{ node.description }}
+            </p>
         </div>
 
         <div v-else-if="node.type === 'field.toggle'" class="flex items-center gap-2">
             <UCheckbox
-                :id="`portable-${node.id}`"
+                :id="fieldDomId(node.id)"
+                :data-portable-field="node.id"
                 :model-value="Boolean(values[node.id])"
                 :label="node.label"
                 :disabled="disabled"
@@ -710,7 +774,17 @@ defineOptions({ name: 'PortableUiTree' });
         </component>
 
         <div v-else-if="node.type === 'progress'" class="portable-progress flex flex-col gap-1">
-            <UProgress :model-value="node.value" :max="node.max ?? 100" />
+            <!--
+                `getValueLabel` is the host progress primitive's accessible-name
+                hook: it names the element that carries `role="progressbar"`,
+                which plain attribute fallthrough cannot reach. Without a
+                declared label the primitive's percentage label stays.
+            -->
+            <UProgress
+                :model-value="node.value"
+                :max="node.max ?? 100"
+                :get-value-label="node.label ? () => node.label : undefined"
+            />
             <p v-if="node.label" class="text-xs opacity-70">{{ node.label }}</p>
         </div>
 
@@ -748,6 +822,7 @@ defineOptions({ name: 'PortableUiTree' });
                 color="neutral"
                 variant="soft"
                 size="sm"
+                :disabled="disabled"
                 @click="emit('ui-event', { kind: 'open-document', documentId: node.documentId })"
             >
                 {{ node.label }}
@@ -755,11 +830,19 @@ defineOptions({ name: 'PortableUiTree' });
         </div>
 
         <div v-else-if="node.type === 'open-pane'" class="flex">
+            <!--
+                No host registry maps a portable pane id to a navigable surface,
+                so this primitive is refused rather than rendered as an enabled
+                control that silently does nothing.
+            -->
             <UButton
                 color="neutral"
                 variant="soft"
                 size="sm"
-                @click="emit('ui-event', { kind: 'open-pane', paneId: node.paneId })"
+                disabled
+                data-portable-unsupported="open-pane"
+                :title="`${node.label}: opening plugin panes is not supported on this host`"
+                :aria-label="`${node.label}: opening plugin panes is not supported on this host`"
             >
                 {{ node.label }}
             </UButton>

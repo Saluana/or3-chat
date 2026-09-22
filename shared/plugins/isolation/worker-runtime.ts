@@ -245,6 +245,15 @@ export function validateRenderPayload(payload: Readonly<Record<string, unknown>>
     };
 }
 
+/**
+ * Slot → reviewed grant mapping. Dashboard and command-palette contributions
+ * carry distinct grants; the host boundary enforces them even when a publisher
+ * bypasses the SDK `contributions.register()` guard with a raw wire event.
+ */
+export function grantForContributionSlot(slot: PluginContribution['slot']): string {
+    return slot === 'command-palette' ? 'ui.command-palette.register' : 'ui.dashboard.register';
+}
+
 /** Validate a `ui.contribute` payload into a host-owned contribution record. */
 export function validateContributionPayload(
     payload: Readonly<Record<string, unknown>>,
@@ -293,6 +302,7 @@ export class WorkerIsolationRuntime {
     readonly #budgets: ContainmentBudgets;
     readonly #capabilityNames: readonly string[];
     readonly #contributions = new Map<string, PluginContribution>();
+    #grants: PluginGrantReviewSnapshot;
     #worker: IsolatedWorkerMessagePort | null = null;
     #disposed = false;
     #crashReports: WorkerCrashReport[] = [];
@@ -325,6 +335,7 @@ export class WorkerIsolationRuntime {
             now: options.now,
         });
 
+        this.#grants = options.grants;
         const registered = this.#registerMethods(options);
         this.#capabilityNames = Object.freeze(registered.map((spec) => spec.method));
 
@@ -473,7 +484,9 @@ export class WorkerIsolationRuntime {
     }
 
     setGrants(grants: PluginGrantReviewSnapshot): void {
+        this.#grants = grants;
         this.#broker.setGrants(grants);
+        this.#pruneRevokedContributions();
     }
 
     async start(): Promise<void> {
@@ -757,6 +770,19 @@ export class WorkerIsolationRuntime {
                 });
                 return true;
             }
+            // Host-boundary authorization: the SDK guard is bypassable via the
+            // raw wire event, so the slot grant is re-checked here against the
+            // activation's reviewed grants before the contribution is accepted.
+            const requiredGrant = grantForContributionSlot(validated.contribution.slot);
+            const decision = evaluateReviewedPluginGrant(this.#grants, requiredGrant);
+            if (!decision.allowed) {
+                this.#deliverEvent({
+                    status: 'invalid',
+                    name: event.name,
+                    reason: `Grant ${requiredGrant} was not approved (${decision.reason})`,
+                });
+                return true;
+            }
             this.#contributions.set(
                 validated.contribution.contributionId,
                 validated.contribution
@@ -796,6 +822,30 @@ export class WorkerIsolationRuntime {
             name: UI_WITHDRAW_EVENT,
             contributionIds: ids,
         });
+    }
+
+    /**
+     * Drop contributions whose slot grant is no longer approved. Accepted
+     * registrations belong to this activation only; revocation removes them so
+     * a stale dashboard or palette entry cannot outlive its authority.
+     */
+    #pruneRevokedContributions(): void {
+        if (this.#contributions.size === 0) return;
+        const revoked: string[] = [];
+        for (const [id, contribution] of this.#contributions) {
+            const requiredGrant = grantForContributionSlot(contribution.slot);
+            if (!evaluateReviewedPluginGrant(this.#grants, requiredGrant).allowed) {
+                this.#contributions.delete(id);
+                revoked.push(id);
+            }
+        }
+        if (revoked.length > 0) {
+            this.#deliverEvent({
+                status: 'withdrawn',
+                name: UI_WITHDRAW_EVENT,
+                contributionIds: revoked,
+            });
+        }
     }
 
     #settleBootstrapWaiters(outcome: {

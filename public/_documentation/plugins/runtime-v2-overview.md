@@ -85,12 +85,13 @@ generation-safe manager; they do not enable V2 packages.
 ## Tooling
 
 ```sh
-bun run plugin-runtime:cli -- create --id or3.my-plugin --dir ./my-plugin
+bun run plugin-runtime:cli -- create --id or3.my-plugin --dir ./my-plugin --sdk-source ./packages/plugin-sdk
+(cd my-plugin && bun install)
 bun run plugin-runtime:cli -- validate ./my-plugin
 bun run plugin-runtime:cli -- test ./my-plugin
 bun run plugin-runtime:cli -- build ./my-plugin
 bun run plugin-runtime:cli -- pack ./my-plugin
-bun run plugin-runtime:cli -- inspect ./my-plugin
+bun run plugin-runtime:cli -- inspect ./my-plugin/.or3-pack
 ```
 
 Report-only V1 private-import warnings:

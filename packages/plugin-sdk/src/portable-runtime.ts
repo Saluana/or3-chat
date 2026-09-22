@@ -140,13 +140,19 @@ export interface PortablePluginHandle<TManifest extends PluginManifestV2 = Plugi
 const HOST_ERROR_CODES: Readonly<Record<string, PluginErrorCode>> = Object.freeze({
     'permission-denied': 'permission-denied',
     'policy-denied': 'permission-denied',
+    // The broker refuses ungranted methods with `grant-denied`; to plugin code
+    // that is a permission refusal, identical to the test host's answer.
+    'grant-denied': 'permission-denied',
     'not-found': 'not-found',
     'invalid-input': 'invalid-input',
     conflict: 'conflict',
     unsupported: 'unsupported',
+    // The broker answers unregistered methods with `unknown-method`.
+    'unknown-method': 'unsupported',
     locked: 'locked',
     'stale-context': 'stale-context',
     'budget-exceeded': 'quota-exceeded',
+    'quota-exceeded': 'quota-exceeded',
     'deadline-exceeded': 'timeout',
     cancelled: 'aborted',
     aborted: 'aborted',
@@ -157,10 +163,18 @@ const HOST_ERROR_CODES: Readonly<Record<string, PluginErrorCode>> = Object.freez
 function toPluginError(
     result: Extract<PortableHostResult<unknown>, { ok: false }>
 ): PluginError {
+    const details =
+        'details' in result &&
+        typeof result.details === 'object' &&
+        result.details !== null &&
+        !Array.isArray(result.details)
+            ? (result.details as Readonly<Record<string, unknown>>)
+            : undefined;
     return {
         code: HOST_ERROR_CODES[result.code] ?? 'internal',
         message: result.message,
         retryable: result.code === 'network-failure' || result.code === 'unavailable',
+        ...(details === undefined ? {} : { details }),
     };
 }
 

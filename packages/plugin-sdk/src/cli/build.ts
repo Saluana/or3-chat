@@ -53,17 +53,15 @@ export async function bundleClientEntry(
     const source = readFileSync(resolve(sourceRoot, entry), 'utf8');
     if (unresolvedBareImports(source).length === 0) return;
 
-    // Bundling needs Bun's bundler. The shipped executable has a Node shebang, so
-    // this is exactly where a Node run lands: fail with the reason instead of
-    // packing a package whose SDK import no sandbox can resolve.
+    // The shipped executable runs under Bun. Direct API callers must also use
+    // Bun or supply a bundler explicitly.
     const bundler =
         options.bundler ??
         (globalThis as { Bun?: ClientEntryBundler }).Bun;
     if (!bundler) {
         throw new Error(
             `${entry} imports a bare specifier, so it must be bundled before it can be packed, ` +
-                'and bundling needs Bun. Run `bunx or3-plugin build` (Bun is the supported ' +
-                'package runtime), or bundle the entry yourself so it imports nothing at runtime.'
+                'and bundling needs Bun. Run the installed `or3-plugin` executable with Bun on PATH.'
         );
     }
 

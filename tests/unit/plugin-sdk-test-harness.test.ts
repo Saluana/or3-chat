@@ -14,6 +14,7 @@ import {
     createPortableTestHost,
     createTestHost,
 } from '../../packages/plugin-sdk/src/testing';
+import { validatePluginChatMessage } from '../../packages/plugin-sdk/src/chat-schema';
 import { validateRenderPayload } from '../../shared/plugins/isolation/worker-runtime';
 import type { PortableUiNode } from '../../packages/plugin-sdk/src/ui';
 
@@ -295,6 +296,79 @@ describe('Plugin SDK test harness', () => {
         expect(await context.storage.get('marker')).toEqual(pluginOk('old-scope'));
     });
 
+    it('never commits a setup that was superseded while awaiting', async () => {
+        const host = createPluginTestHost({ approvedGrants: ['ui.dashboard.register'] });
+        let resolveA!: () => void;
+        const gateA = new Promise<void>((resolve) => {
+            resolveA = resolve;
+        });
+        const definitionA = plugin(async (ctx) => {
+            await gateA;
+            ctx.contributions.register({
+                kind: 'ui.dashboard.card',
+                id: 'card-a',
+                title: 'A',
+                view: { nodes: [] },
+            } as never);
+        }, ['ui.dashboard.register'], 'sample.superseded-a');
+        const definitionB = plugin(() => undefined, [], 'sample.superseded-b');
+
+        const pendingA = host.install(definitionA);
+        const installedB = await host.install(definitionB);
+        expect(installedB.ok).toBe(true);
+        resolveA();
+        const settledA = await pendingA;
+        expect(settledA).toMatchObject({ ok: false, error: { code: 'aborted' } });
+        const snapshot = host.snapshot();
+        expect(snapshot).toMatchObject({ active: true });
+        // A's late contribution never reached the committed host state.
+        expect(JSON.stringify(snapshot)).not.toContain('card-a');
+    });
+
+    it('reports a superseded rejection without clearing the replacement', async () => {
+        const host = createPluginTestHost({});
+        let rejectA!: (error: unknown) => void;
+        const gateA = new Promise<void>((_resolve, reject) => {
+            rejectA = reject;
+        });
+        const definitionA = plugin(() => gateA, [], 'sample.rejected-a');
+        const definitionB = plugin(() => undefined, [], 'sample.rejected-b');
+
+        const pendingA = host.install(definitionA);
+        expect((await host.install(definitionB)).ok).toBe(true);
+        rejectA(new Error('A failed late'));
+        await expect(pendingA).resolves.toMatchObject({ ok: false, error: { code: 'aborted' } });
+        expect(host.snapshot()).toMatchObject({ active: true });
+    });
+
+    it('reports an explicit rollback failure when restoration also fails', async () => {
+        const host = createPluginTestHost({
+            approvedGrants: ['workspace.read', 'workspace.switch'],
+        });
+        let failLocal = false;
+        const definition = plugin(
+            (value) => {
+                if (value.workspace.id === 'workspace-b') throw new Error('target setup failed');
+                if (failLocal) throw new Error('restore setup failed');
+            },
+            ['workspace.read', 'workspace.switch'],
+            'sample.rollback-twice'
+        );
+        expect((await host.install(definition)).ok).toBe(true);
+        // Poison the restore path: the rollback reactivation of the old scope
+        // fails as well, so the host runs no plugin for either workspace.
+        failLocal = true;
+        const switched = await host.switchWorkspace('workspace-b');
+        expect(switched).toMatchObject({
+            ok: false,
+            error: { code: 'internal', message: expect.stringContaining('rollback failed') },
+        });
+        expect(switched).toMatchObject({
+            error: { details: { rollback: 'failed' } },
+        });
+        expect(host.snapshot()).toMatchObject({ active: false });
+    });
+
     it('keeps chat resources scoped to their workspace', async () => {
         const grants = ['chat.create', 'chat.read', 'chat.message.write', 'workspace.read', 'workspace.switch'] as const;
         const host = createTestHost({ approvedGrants: grants });
@@ -431,6 +505,71 @@ describe('Plugin SDK test harness', () => {
         })).toMatchObject({ ok: true, value: { id: 'file-4' } });
     });
 
+    it('settles file reads exactly once when the consumer breaks out early', async () => {
+        const host = createTestHost({
+            approvedGrants: ['files.read'],
+            initialFiles: [{
+                id: 'file-1',
+                name: 'big.txt',
+                mimeType: 'text/plain',
+                size: 200_000,
+                revision: 1,
+                data: new Uint8Array(200_000),
+            }],
+        });
+        let context!: PluginContext;
+        expect((await host.install(plugin((value) => { context = value; }, ['files.read']))).ok).toBe(true);
+        const read = await context.files.read('file-1');
+        expect(read.ok).toBe(true);
+        if (!read.ok) return;
+        for await (const _chunk of read.value) {
+            break;
+        }
+        await expect(read.value.result).resolves.toMatchObject({
+            ok: false,
+            error: { code: 'aborted' },
+        });
+    });
+
+    it('settles an idle file read when the generation is torn down', async () => {
+        const host = createTestHost({
+            approvedGrants: ['files.read'],
+            initialFiles: [{
+                id: 'file-1',
+                name: 'idle.txt',
+                mimeType: 'text/plain',
+                size: 5,
+                revision: 1,
+                data: new TextEncoder().encode('hello'),
+            }],
+        });
+        let context!: PluginContext;
+        expect((await host.install(plugin((value) => { context = value; }, ['files.read']))).ok).toBe(true);
+        const read = await context.files.read('file-1');
+        expect(read.ok).toBe(true);
+        if (!read.ok) return;
+        await host.disable();
+        await expect(read.value.result).resolves.toMatchObject({
+            ok: false,
+            error: { code: 'aborted' },
+        });
+    });
+
+    it('refuses to commit a file write cancelled during its final chunk', async () => {
+        const host = createTestHost({ approvedGrants: ['files.write', 'files.read'] });
+        let context!: PluginContext;
+        expect((await host.install(plugin((value) => { context = value; }, ['files.write', 'files.read']))).ok).toBe(true);
+        const aborter = new AbortController();
+        const data = (async function* () {
+            yield new TextEncoder().encode('part');
+            aborter.abort();
+        })();
+        await expect(
+            context.files.write({ name: 'late.txt', mimeType: 'text/plain', data, signal: aborter.signal })
+        ).resolves.toMatchObject({ ok: false, error: { code: 'aborted' } });
+        expect(host.snapshot()).toMatchObject({ active: true });
+    });
+
     it('keeps chat retries idempotent and validates public transcript messages', async () => {
         const host = createPluginTestHost({ approvedGrants: ['chat.create', 'chat.read', 'chat.message.write'] });
         let context!: PluginContext;
@@ -462,6 +601,67 @@ describe('Plugin SDK test harness', () => {
             ok: false,
             error: { code: 'not-found' },
         });
+    });
+
+    it('isolates stored settings and storage values from caller mutations', async () => {
+        const host = createPluginTestHost({
+            approvedGrants: ['settings.read', 'settings.write', 'storage.read', 'storage.write'],
+        });
+        let context!: PluginContext;
+        expect(
+            (await host.install(plugin((value) => { context = value; }, ['settings.read', 'settings.write', 'storage.read', 'storage.write']))).ok
+        ).toBe(true);
+
+        const incomingSettings = { mode: 'light', nested: { level: 1 } };
+        expect(await context.settings.set('theme', incomingSettings)).toEqual(pluginOk(undefined));
+        incomingSettings.mode = 'hacked';
+        incomingSettings.nested.level = 99;
+        expect(await context.settings.get('theme')).toEqual(
+            pluginOk({ mode: 'light', nested: { level: 1 } })
+        );
+
+        const readSettings = await context.settings.get<{ mode: string; nested: { level: number } }>('theme');
+        expect(readSettings.ok).toBe(true);
+        if (readSettings.ok) {
+            readSettings.value.nested.level = 99;
+            readSettings.value.mode = 'hacked';
+        }
+        expect(await context.settings.get('theme')).toEqual(
+            pluginOk({ mode: 'light', nested: { level: 1 } })
+        );
+
+        const listed = await context.settings.list();
+        expect(listed.ok).toBe(true);
+        if (listed.ok) {
+            (listed.value.theme as { nested: { level: number } }).nested.level = 99;
+        }
+        expect(await context.settings.get('theme')).toEqual(
+            pluginOk({ mode: 'light', nested: { level: 1 } })
+        );
+
+        const incomingStorage = { tags: ['a'] };
+        expect(await context.storage.set('prefs', incomingStorage)).toEqual(pluginOk(undefined));
+        incomingStorage.tags.push('hacked');
+        expect(await context.storage.get('prefs')).toEqual(pluginOk({ tags: ['a'] }));
+
+        const record = await context.storage.getRecord<{ tags: string[] }>('prefs');
+        expect(record.ok).toBe(true);
+        if (record.ok) record.value.value?.tags.push('hacked');
+        expect(await context.storage.get('prefs')).toEqual(pluginOk({ tags: ['a'] }));
+    });
+
+    it('rebuilds chat attachments so later mutations cannot smuggle fileIds', async () => {
+        const attachment = { fileId: 'file-1', name: 'prompt.txt' };
+        const validated = validatePluginChatMessage({
+            role: 'user',
+            content: 'see attached',
+            attachments: [attachment],
+        });
+        expect(validated.ok).toBe(true);
+        if (!validated.ok) return;
+        expect(validated.value.attachments?.[0]).not.toBe(attachment);
+        attachment.fileId = '../outside';
+        expect(validated.value.attachments).toEqual([{ fileId: 'file-1', name: 'prompt.txt' }]);
     });
 
     it('records activity sources with owner-scoped cleanup', async () => {
@@ -735,7 +935,56 @@ describe('portable test host contracts', () => {
                 stored = await context.storage.get('presets');
             }
         );
-        expect(stored).toMatchObject({ ok: false, error: { code: 'not-found' } });
+        expect(stored).toMatchObject({ ok: false, error: { code: 'unsupported' } });
         expect(host.calls.some((call) => call.method === 'storage.get')).toBe(true);
+    });
+});
+
+describe('palette registration ownership', () => {
+    it('removes committed entries and updates counts when individually disposed', async () => {
+        const host = createPluginTestHost({ approvedGrants: ['ui.command-palette.register'] });
+        const handles: Array<{ dispose(): void }> = [];
+        await host.install(plugin((context) => {
+            for (const kind of ['ui.command-palette.command', 'ui.command-palette.post-source'] as const) {
+                handles.push(context.contributions.register({ kind, id: kind, definition: {} }));
+            }
+        }, ['ui.command-palette.register']));
+        for (const handle of handles) { handle.dispose(); handle.dispose(); }
+        expect(host.snapshot()).toMatchObject({ contributionCount: 0, paletteCommands: [], palettePostSources: [] });
+        await host.disable();
+    });
+
+    it('does not delete a replacement handler or run stale activation callbacks', async () => {
+        const host = createPluginTestHost({ approvedGrants: ['ui.command-palette.register'] });
+        let release!: () => void;
+        let entered!: () => void;
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        const started = new Promise<void>((resolve) => { entered = resolve; });
+        const staleActivate = vi.fn();
+        const old = host.install(plugin(async (context) => {
+            context.contributions.register({ kind: 'ui.command-palette.command', id: 'same', definition: {} });
+            context.onActivate(staleActivate);
+            entered();
+            await gate;
+        }, ['ui.command-palette.register']));
+        await started;
+        await host.install(plugin((context) => {
+            context.contributions.register({ kind: 'ui.command-palette.command', id: 'same', definition: {} });
+            host.registerMediatedPaletteCommandHandler('same', () => 'replacement');
+        }, ['ui.command-palette.register']));
+        release();
+        expect(await old).toMatchObject({ ok: false, error: { code: 'aborted' } });
+        expect(staleActivate).not.toHaveBeenCalled();
+        await expect(host.executePaletteCommand('same')).resolves.toBe('replacement');
+        await host.disable();
+    });
+
+    it('does not expose nested settings through portable listings', async () => {
+        const host = createPortableTestHost({ approvedGrants: ['settings.read', 'settings.write'] });
+        await host.client.call('settings.set', { key: 'x', value: { nested: { value: 1 } } });
+        const listed = await host.client.call<{ values: { x: { nested: { value: number } } } }>('settings.list');
+        if (!listed.ok) throw new Error(listed.message);
+        listed.result.values.x.nested.value = 99;
+        expect(await host.client.call('settings.get', { key: 'x' })).toMatchObject({ result: { value: { nested: { value: 1 } } } });
     });
 });

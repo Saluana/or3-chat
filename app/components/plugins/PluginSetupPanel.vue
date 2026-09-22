@@ -19,6 +19,8 @@ type SetupFieldPlan = {
     kind: 'text' | 'select' | 'toggle' | 'number';
     order: number;
     required: boolean;
+    /** Secret fields are never rendered, hydrated or saved by this form. */
+    secret: boolean;
     deferred: boolean;
     choices?: readonly string[];
     defaultValue?: string | number | boolean;
@@ -102,6 +104,9 @@ function defaultValueFor(field: SetupFieldPlan): string | number | boolean {
 function hydrate(settings: { values: Readonly<Record<string, string | number | boolean>> }): void {
     const next: Record<string, string | number | boolean> = {};
     for (const field of props.plan.fields) {
+        // Secret values are host custody's business: they are never hydrated
+        // into, edited in, or saved from this ordinary settings form.
+        if (field.secret) continue;
         if (dirty.value.has(field.key) && field.key in values.value) {
             next[field.key] = values.value[field.key]!;
             continue;
@@ -114,17 +119,46 @@ function hydrate(settings: { values: Readonly<Record<string, string | number | b
 
 watch(() => props.settings, hydrate, { immediate: true, deep: true });
 
-// A successful save confirms the exact revision that was written, so edits made
-// after the request started stay dirty.
+/**
+ * The exact patch the last save submitted. When the server confirms it, only
+ * fields whose current value still matches the acknowledged submission are
+ * cleared; an edit made while the request was in flight stays dirty and is not
+ * silently marked as saved.
+ */
+const submittedPatch = ref<Record<string, string | number | boolean | null> | null>(null);
+
 watch(
     () => props.saveState,
     (state) => {
-        if (state === 'saved') dirty.value = new Set();
+        if (state === 'error') {
+            submittedPatch.value = null;
+            return;
+        }
+        if (state !== 'saved') return;
+        const submitted = submittedPatch.value;
+        submittedPatch.value = null;
+        if (!submitted) return;
+        const next = new Set(dirty.value);
+        for (const [key, acknowledged] of Object.entries(submitted)) {
+            const current = values.value[key];
+            const unchanged =
+                acknowledged === null
+                    ? current === '' || current === undefined
+                    : current === acknowledged;
+            if (unchanged) next.delete(key);
+        }
+        dirty.value = next;
     }
 );
 
-const requiredFields = computed(() => props.plan.fields.filter((field) => field.required));
-const deferredFields = computed(() => props.plan.fields.filter((field) => !field.required));
+const secretFields = computed(() => props.plan.fields.filter((field) => field.secret));
+const editableFields = computed(() => props.plan.fields.filter((field) => !field.secret));
+const requiredFields = computed(() => editableFields.value.filter((field) => field.required));
+const deferredFields = computed(() => editableFields.value.filter((field) => !field.required));
+const secretLabels = computed(() => secretFields.value.map((field) => field.label).join(', '));
+const requiredSecretMissing = computed(() =>
+    secretFields.value.some((field) => field.required && field.missing)
+);
 
 function onEdit(field: SetupFieldPlan, value: unknown): void {
     if (field.kind === 'toggle') values.value[field.key] = value === true;
@@ -142,15 +176,22 @@ function errorFor(field: SetupFieldPlan): string | undefined {
     );
 }
 
-/** Only edited fields are sent; clearing an optional field sends an explicit null. */
+/**
+ * Only edited, non-secret fields are sent; clearing an optional field sends an
+ * explicit null. The submitted patch is remembered so the acknowledgement can
+ * clear only the edits it actually wrote.
+ */
 function save(): void {
+    if (submittedPatch.value || props.saveState === 'saving') return;
     const patch: Record<string, string | number | boolean | null> = {};
-    for (const field of props.plan.fields) {
+    for (const field of editableFields.value) {
         if (!dirty.value.has(field.key)) continue;
         const value = values.value[field.key];
         patch[field.key] =
             value === '' && !field.required ? null : (value ?? defaultValueFor(field));
     }
+    if (Object.keys(patch).length === 0) return;
+    submittedPatch.value = patch;
     emit('save-settings', patch);
 }
 
@@ -199,8 +240,21 @@ function canConnect(connection: SetupConnectionPlan): boolean {
             <code>NUXT_ADMIN_PLUGIN_CONNECTION_SECRET</code>) and restart the instance.
         </div>
 
+        <div
+            v-if="secretFields.length > 0"
+            class="rounded border border-[var(--md-outline-variant)] p-3 text-xs"
+            role="note"
+        >
+            Secret settings ({{ secretLabels }}) are stored by host secret custody and are
+            never entered or saved through this form.
+            <template v-if="requiredSecretMissing">
+                This deployment does not provide secret custody, so the plugin stays blocked
+                until its package no longer requires a secret.
+            </template>
+        </div>
+
         <form
-            v-if="plan.fields.length > 0"
+            v-if="editableFields.length > 0"
             class="flex flex-col gap-3"
             @submit.prevent="save"
         >
@@ -307,7 +361,7 @@ function canConnect(connection: SetupConnectionPlan): boolean {
                     Save settings
                 </UButton>
                 <span v-if="saveState === 'saved'" class="text-xs opacity-70" role="status">
-                    Settings saved.
+                    {{ dirty.size > 0 ? 'You have unsaved changes.' : 'Settings saved.' }}
                 </span>
                 <span
                     v-else-if="saveState === 'error'"

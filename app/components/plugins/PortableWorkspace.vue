@@ -3,14 +3,28 @@ import { computed, ref, watch } from 'vue';
 import { useResizeObserver } from '@vueuse/core';
 import type { PortableUiNode } from '~~/shared/plugins/isolation/ui-primitives';
 
-const props = defineProps<{ inspector?: PortableUiNode }>();
+const props = defineProps<{
+    inspector?: PortableUiNode;
+    /**
+     * Logical identity of what the inspector shows (the selected workspace
+     * row). Ordinary rerenders produce new node objects but keep this identity,
+     * so a drawer the user closed stays closed until the selection actually
+     * changes.
+     */
+    inspectorKey?: string | null;
+}>();
 const root = ref<HTMLElement>();
 const narrow = ref(false);
 const open = ref(true);
 useResizeObserver(root, ([entry]) => {
     if (entry) narrow.value = entry.contentRect.width < 760;
 });
-watch(() => props.inspector, () => { open.value = true; });
+watch(
+    () => props.inspectorKey,
+    (next, previous) => {
+        if (next !== null && next !== undefined && next !== previous) open.value = true;
+    }
+);
 const drawerOpen = computed({
     get: () => narrow.value && !!props.inspector && open.value,
     set: (value: boolean) => { open.value = value; },

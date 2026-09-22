@@ -116,7 +116,7 @@ describe('setup plan (4.10)', () => {
         expect(verbose).toMatchObject({ deferred: true, defaultValue: false });
     });
 
-    it('exposes setting ownership and keeps secret fields out of readiness blockers', () => {
+    it.each([undefined, 'unsafe-default'])('blocks required secrets even with default %s', (defaultValue) => {
         const plan = buildSetupPlan({
             setup: {
                 ...setup,
@@ -130,6 +130,7 @@ describe('setup plan (4.10)', () => {
                         order: 4,
                         scope: 'user',
                         secret: true,
+                        ...(defaultValue === undefined ? {} : { default: defaultValue }),
                     },
                 ],
             },
@@ -145,9 +146,46 @@ describe('setup plan (4.10)', () => {
             scope: 'user',
             secret: true,
             deferred: true,
+            missing: true,
+        });
+        expect(
+            plan.blockers.some(
+                (blocker) => blocker.includes('API key') && blocker.includes('secret custody')
+            )
+        ).toBe(true);
+        // Ordinary settings can never satisfy the secret, so the package is
+        // blocked rather than offered as something the user can finish.
+        expect(plan.status).toBe('blocked');
+        expect(describeSetupStatus(plan)).toMatchObject({ status: 'blocked', blocked: true });
+    });
+
+    it('keeps an optional secret deferred instead of blocking readiness', () => {
+        const plan = buildSetupPlan({
+            setup: {
+                ...setup,
+                fields: [
+                    ...setup.fields,
+                    {
+                        key: 'apiKey',
+                        label: 'API key',
+                        kind: 'text',
+                        required: false,
+                        order: 4,
+                        secret: true,
+                    },
+                ],
+            },
+            policy,
+            hostConnections,
+            values: { workspace: 'Team notes' },
+        });
+        expect(plan.fields.find((field) => field.key === 'apiKey')).toMatchObject({
+            secret: true,
+            deferred: true,
             missing: false,
         });
         expect(plan.blockers.some((blocker) => blocker.includes('API key'))).toBe(false);
+        expect(plan.status).toBe('needs-setup');
     });
 
     it('is never ready while a required connection is untested (IN02)', () => {

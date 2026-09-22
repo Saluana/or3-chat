@@ -22,7 +22,9 @@ import {
     activatePortableClient,
     ensurePortableClientActivation,
     getPortableClientSource,
+    getPortableClientDraft,
     invokePortableUiEvent,
+    schedulePortableClientRecovery,
     usePortableActivations,
 } from '~/composables/plugins/portable-client-runtime';
 import {
@@ -45,21 +47,12 @@ import type { PortableUiEvent } from '~~/shared/plugins/isolation/ui-primitives'
 const props = defineProps<{ readonly pluginId: string; readonly surface?: 'sidebar' | 'pane' }>();
 
 /**
- * A stopped activation is usually the containment session expiring (a host
- * restart, a stale handle) rather than a refusal the user must act on. Recover
- * it automatically at most twice per session, with a short backoff, so a
- * surface never stays dead with its values still on screen. Refusals that only
- * the user can clear are left to the explicit restart action.
+ * Recovery of a stopped activation is centralized in the runtime: a rolling
+ * attempt budget shared by every surface, an allowlist of transient stop codes,
+ * and one restart timer per plugin/workspace. Refusals that only the user can
+ * clear (disabled, uninstalled, access, containment) are left to the explicit
+ * restart action instead of looking like ordinary transient failures.
  */
-const NON_RECOVERABLE_STOP_CODES = new Set([
-    'plugin-disabled',
-    'plugin-uninstalled',
-    'plugin-access-denied',
-    'activation-session-mismatch',
-]);
-const MAX_AUTO_RECOVERY_ATTEMPTS = 2;
-/** Shared across the sidebar and pane surfaces for the same plugin. */
-const recoveryAttempts = new Map<string, number>();
 
 const toast = useToast();
 const route = useRoute();
@@ -67,10 +60,16 @@ const activations = usePortableActivations();
 const hostActions = usePortableHostActions();
 const activation = computed(() => activations.get(props.pluginId) ?? null);
 const busy = ref(false);
-const fieldStore = ref<Record<string, string | boolean>>({});
-watch(() => activation.value?.view?.key, () => {
-    if (props.surface !== 'sidebar') fieldStore.value = {};
+
+/** Draft ownership follows the runtime source rather than the mounted view. */
+const emptyDraft = { values: {}, dirty: new Set<string>() };
+const fieldDraft = computed(() => {
+    const workspaceId = getPortableClientSource(props.pluginId)?.workspaceId ?? activation.value?.workspaceId;
+    return workspaceId
+        ? getPortableClientDraft(props.pluginId, workspaceId, props.surface ?? 'default')
+        : emptyDraft;
 });
+const fieldStore = computed(() => fieldDraft.value.values);
 const treeRef = ref<{ replaceValues: (values: Record<string, string | boolean>) => void } | null>(
     null
 );
@@ -101,7 +100,7 @@ watch(
     async (next, previous) => {
         if (next === previous) return;
         nodes.value = [];
-        fieldStore.value = {};
+        pendingConfirm.value = null;
         if (next) {
             try {
                 await ensurePortableClientActivation(props.pluginId);
@@ -127,11 +126,31 @@ watch(
 
 /** A host action awaiting the user's confirmation (destructive writes only). */
 const pendingConfirm = ref<PreparedHostAction | null>(null);
+/**
+ * The host dialog primitive owns focus containment, Escape dismissal and focus
+ * restoration; closing it (including Escape) cancels the pending write. While
+ * the confirmed write is running the dialog cannot be dismissed.
+ */
+const confirmOpen = computed({
+    get: () => pendingConfirm.value !== null,
+    set: (open: boolean) => {
+        if (!open && !busy.value) pendingConfirm.value = null;
+    },
+});
+/** Initial focus lands on the safe action, not on the destructive one. */
+const cancelConfirmButton = ref<{ $el?: HTMLElement } | null>(null);
+
+function focusCancelAction(event: Event): void {
+    const element = cancelConfirmButton.value?.$el;
+    if (!element) return;
+    event.preventDefault();
+    element.focus();
+}
 const restartBusy = ref(false);
 
 /** The host execution lock: one write or plugin request at a time. */
 const locked = computed(
-    () => busy.value || pendingConfirm.value !== null || activation.value?.status !== 'active'
+    () => busy.value || firstActionBusy.value || pendingConfirm.value !== null || activation.value?.status !== 'active'
 );
 
 /** First action offered by the package plan, with its host-resolved context. */
@@ -144,6 +163,12 @@ interface FirstActionState {
 }
 const firstAction = ref<FirstActionState | null>(null);
 const firstActionBusy = ref(false);
+/**
+ * Unmount cancels an in-flight first-action handoff: the async reads above
+ * check this after every await, so unmounting never delivers authorized
+ * content to a later activation.
+ */
+let firstActionCancelled = false;
 
 function describeOutcome(status: string): string {
     if (status === 'created-document') return 'Created a new document from the plugin result.';
@@ -198,7 +223,7 @@ async function executePrepared(prepared: PreparedHostAction): Promise<void> {
  * immediately.
  */
 async function runHostAction(action: string): Promise<void> {
-    if (busy.value || pendingConfirm.value) return;
+    if (locked.value) return;
     busy.value = true;
     try {
         const prepared = await hostActions.prepare({
@@ -312,6 +337,27 @@ async function runFirstAction(): Promise<void> {
     if (!action?.ready || locked.value) return;
     const current = activation.value;
     if (!current || current.status !== 'active') return;
+    // Immutable identity that authorized this content read. Every
+    // content-producing await re-checks it, and the final handoff re-checks it
+    // again inside invokePortableUiEvent; a workspace change or package
+    // replacement aborts the handoff instead of delivering old content to the
+    // new runtime. The aborted action is never retried automatically.
+    const expected = {
+        workspaceId: current.workspaceId,
+        packageDigest: current.packageDigest,
+        generation: current.generation,
+    } as const;
+    const stillExpected = (): boolean => {
+        if (firstActionCancelled) return false;
+        const live = activation.value;
+        return (
+            !!live &&
+            live.status === 'active' &&
+            live.workspaceId === expected.workspaceId &&
+            live.packageDigest === expected.packageDigest &&
+            live.generation === expected.generation
+        );
+    };
     firstActionBusy.value = true;
     try {
         let title = action.label;
@@ -320,6 +366,7 @@ async function runFirstAction(): Promise<void> {
             const sample = await $fetch<{ content?: string; label?: string }>(
                 `/api/plugins/${encodeURIComponent(props.pluginId)}/sample`
             );
+            if (!stillExpected()) return;
             content = typeof sample.content === 'string' ? sample.content : null;
             if (typeof sample.label === 'string' && sample.label.length > 0) title = sample.label;
         } else {
@@ -343,6 +390,7 @@ async function runFirstAction(): Promise<void> {
                     generation: current.generation,
                 },
             });
+            if (!stillExpected()) return;
             const handle = resolved.handle;
             if (resolved.status !== 'ready' || !handle) {
                 toast.add({
@@ -352,7 +400,7 @@ async function runFirstAction(): Promise<void> {
                 });
                 return;
             }
-            if (handle.kind !== 'document' || handle.generation !== current.generation) {
+            if (handle.kind !== 'document' || handle.generation !== expected.generation) {
                 toast.add({
                     title: 'The first action could not start',
                     description: 'The selection handle is not valid for this activation.',
@@ -360,11 +408,13 @@ async function runFirstAction(): Promise<void> {
                 });
                 return;
             }
-            const db = getWorkspaceDb(current.workspaceId);
+            const db = getWorkspaceDb(expected.workspaceId);
             const document = await getDocumentInDb(db, handle.contextId);
-            content = document ? tipTapToText(document.content) : null;
+            if (!stillExpected()) return;
+            content = document && !document.deleted ? tipTapToText(document.content) : null;
             if (document && document.title) title = document.title;
         }
+        if (!stillExpected()) return;
         if (!content) {
             toast.add({
                 title: 'No starting content',
@@ -381,10 +431,15 @@ async function runFirstAction(): Promise<void> {
             });
             return;
         }
-        const response = await invokePortableUiEvent(props.pluginId, {
-            action: 'host.first-action.run',
-            context: { kind: action.contextKind, title, content },
-        });
+        const response = await invokePortableUiEvent(
+            props.pluginId,
+            {
+                action: 'host.first-action.run',
+                context: { kind: action.contextKind, title, content },
+            },
+            expected
+        );
+        if (!stillExpected()) return;
         applyFieldReplacement(response);
     } catch (error) {
         toast.add({
@@ -421,52 +476,23 @@ async function restartActivation(): Promise<void> {
     }
 }
 
-let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
-
-function clearRecoveryTimer(): void {
-    if (recoveryTimer === null) return;
-    clearTimeout(recoveryTimer);
-    recoveryTimer = null;
-}
-
-/** Restart a stopped activation silently: the surface is already on screen. */
-async function autoRecoverActivation(): Promise<void> {
-    recoveryTimer = null;
-    const source = getPortableClientSource(props.pluginId);
-    if (!source) return;
-    const attempts = recoveryAttempts.get(props.pluginId) ?? 0;
-    if (attempts >= MAX_AUTO_RECOVERY_ATTEMPTS) return;
-    recoveryAttempts.set(props.pluginId, attempts + 1);
-    try {
-        const recovered = await activatePortableClient(source);
-        if (recovered.status !== 'active') return;
-        nodes.value = surfaceNodes.value;
-        await loadFirstAction();
-    } catch (error) {
-        if (import.meta.dev) {
-            console.warn(`[portable-client-view] recovery failed for "${props.pluginId}"`, error);
-        }
-    }
-}
-
+/**
+ * Offer a stopped activation to the runtime's centralized recovery: the
+ * runtime owns the stop-code allowlist, the rolling attempt budget and the
+ * restart timer, so simultaneous surfaces cannot race duplicate restarts and a
+ * successful restart cannot reset the budget.
+ */
 watch(
-    () => [activation.value?.status, activation.value?.blockCode] as const,
-    ([status, code]) => {
-        if (status === 'active') {
-            recoveryAttempts.set(props.pluginId, 0);
-            clearRecoveryTimer();
-            return;
-        }
-        if (status !== 'stopped' || recoveryTimer !== null) return;
-        if (code && NON_RECOVERABLE_STOP_CODES.has(code)) return;
-        const attempts = recoveryAttempts.get(props.pluginId) ?? 0;
-        if (attempts >= MAX_AUTO_RECOVERY_ATTEMPTS) return;
-        recoveryTimer = setTimeout(() => void autoRecoverActivation(), 300 * (attempts + 1));
+    () => activation.value?.status,
+    (status) => {
+        if (status === 'stopped') schedulePortableClientRecovery(props.pluginId);
     },
     { immediate: true }
 );
 
-onBeforeUnmount(clearRecoveryTimer);
+onBeforeUnmount(() => {
+    firstActionCancelled = true;
+});
 
 onMounted(async () => {
     // A stopped activation is left to the recovery watcher above: it restarts
@@ -498,9 +524,89 @@ const canRestart = computed(
     () => activation.value?.status === 'stopped' && getPortableClientSource(props.pluginId) !== null
 );
 
+/**
+ * Host-owned navigation for the `open-document` primitive: the plugin names a
+ * document, and the host verifies the live activation, its read authority and
+ * the document's presence in that activation's workspace before navigating.
+ * The document is opened by the host; the plugin never navigates itself.
+ */
+async function openHostDocument(documentId: string): Promise<void> {
+    const state = activation.value;
+    if (!state || state.status !== 'active') {
+        toast.add({
+            title: 'The document could not be opened',
+            description: 'The plugin is not running.',
+            color: 'warning',
+        });
+        return;
+    }
+    if (!state.approvedGrants.includes('documents.read')) {
+        toast.add({
+            title: 'The document could not be opened',
+            description: 'This plugin has not been approved to read documents.',
+            color: 'warning',
+        });
+        return;
+    }
+    if (locked.value) return;
+    const expected = { workspaceId: state.workspaceId, generation: state.generation, packageDigest: state.packageDigest };
+    busy.value = true;
+    try {
+        const document = await getDocumentInDb(
+            getWorkspaceDb(state.workspaceId),
+            documentId
+        );
+        const live = activation.value;
+        if (
+            firstActionCancelled ||
+            !live ||
+            live.status !== 'active' ||
+            live.workspaceId !== expected.workspaceId ||
+            live.generation !== expected.generation ||
+            live.packageDigest !== expected.packageDigest ||
+            !live.approvedGrants.includes('documents.read')
+        ) {
+            return;
+        }
+        if (!document || document.deleted) {
+            toast.add({
+                title: 'The document could not be opened',
+                description: 'It is not in this workspace.',
+                color: 'warning',
+            });
+            return;
+        }
+        await navigateTo(`/docs/${encodeURIComponent(documentId)}`);
+    } catch (error) {
+        toast.add({
+            title: 'The document could not be opened',
+            description:
+                error instanceof Error ? error.message : 'The host could not open the document',
+            color: 'error',
+        });
+    } finally {
+        busy.value = false;
+    }
+}
+
 async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
+    if (payload.kind === 'open-document') {
+        await openHostDocument(payload.documentId);
+        return;
+    }
+    if (payload.kind === 'open-pane') {
+        // No host registry maps a portable pane id to a navigable surface, so
+        // this primitive is refused rather than silently doing nothing. The
+        // renderer disables the control; this is the defensive path.
+        toast.add({
+            title: 'Opening plugin panes is not supported',
+            description: 'This host cannot open the pane the plugin asked for.',
+            color: 'warning',
+        });
+        return;
+    }
     if (payload.kind !== 'action') return;
-    if (busy.value || pendingConfirm.value) return;
+    if (locked.value) return;
     // Host-reserved actions never reach the plugin as UI events: the host either
     // performs the approved write itself or reports that it cannot.
     if (isHostAction(payload.action)) {
@@ -515,13 +621,27 @@ async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
         await runHostAction(payload.action);
         return;
     }
+    const current = activation.value;
+    if (!current) return;
+    const pluginId = props.pluginId;
+    const expected = {
+        workspaceId: current.workspaceId,
+        packageDigest: current.packageDigest,
+        generation: current.generation,
+    };
     busy.value = true;
     try {
-        const response = await invokePortableUiEvent(props.pluginId, {
+        const response = await invokePortableUiEvent(pluginId, {
             action: payload.action,
             ...(payload.formId === undefined ? {} : { formId: payload.formId }),
             values: payload.values,
-        });
+        }, expected);
+        const live = activation.value;
+        if (
+            firstActionCancelled || props.pluginId !== pluginId || !live ||
+            live.status !== 'active' || live.workspaceId !== expected.workspaceId ||
+            live.packageDigest !== expected.packageDigest || live.generation !== expected.generation
+        ) return;
         const outcome = response as { ok?: boolean; message?: string; result?: { ok?: boolean; message?: string } };
         if (outcome.ok === false || outcome.result?.ok === false) {
             throw new Error(outcome.message ?? outcome.result?.message ?? 'The plugin could not complete this action.');
@@ -621,28 +741,30 @@ async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
                 </p>
             </div>
 
-            <div
-                v-if="pendingConfirm"
-                role="alertdialog"
-                aria-modal="true"
-                class="rounded-lg border border-(--ui-border) p-3"
-                data-testid="portable-host-confirm"
+            <UModal
+                v-model:open="confirmOpen"
+                :title="`${HOST_ACTION_LABELS[HOST_ACTIONS.replaceDocument]}?`"
+                description="This overwrites the selected document's current content with the plugin result."
+                :dismissible="!busy"
+                :content="{ onOpenAutoFocus: focusCancelAction }"
             >
-                <p class="text-sm font-medium">
-                    {{ HOST_ACTION_LABELS[HOST_ACTIONS.replaceDocument] }}?
-                </p>
-                <p class="mt-1 text-xs text-(--ui-text-muted)">
-                    This overwrites the selected document's current content with the plugin result.
-                </p>
-                <div class="mt-3 flex gap-2">
-                    <UButton size="sm" color="error" :loading="busy" @click="confirmPending">
-                        Replace
-                    </UButton>
-                    <UButton size="sm" variant="ghost" :disabled="busy" @click="pendingConfirm = null">
-                        Cancel
-                    </UButton>
-                </div>
-            </div>
+                <template #body>
+                    <div class="flex gap-2" data-testid="portable-host-confirm">
+                        <UButton size="sm" color="error" :loading="busy" @click="confirmPending">
+                            Replace
+                        </UButton>
+                        <UButton
+                            ref="cancelConfirmButton"
+                            size="sm"
+                            variant="ghost"
+                            :disabled="busy"
+                            @click="pendingConfirm = null"
+                        >
+                            Cancel
+                        </UButton>
+                    </div>
+                </template>
+            </UModal>
 
             <div
                 v-if="renderNodes.length > 0"
@@ -652,9 +774,10 @@ async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
             >
             <PortableUiTree
                 ref="treeRef"
-                :key="surface === 'sidebar' ? pluginId : activation?.view?.key ?? pluginId"
+                :key="pluginId"
                 :nodes="renderNodes"
                 :store="fieldStore"
+                :retained-dirty-keys="fieldDraft.dirty"
                 :disabled="locked"
                 @ui-event="forwardUiEvent"
             />

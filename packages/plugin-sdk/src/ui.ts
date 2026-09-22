@@ -306,11 +306,21 @@ export const ui = {
         ordered = false
     ): PortableUiNode => ({ type: 'list', items, ...(ordered ? { ordered: true } : {}) }),
     result: (label: string, text: string): PortableUiNode => ({ type: 'result', label, text }),
+    /**
+     * Host-owned navigation to a document. The host verifies the live
+     * activation, its read authority and the document's presence in that
+     * workspace before it navigates; it never lets the plugin navigate itself.
+     */
     openDocument: (label: string, documentId: string): PortableUiNode => ({
         type: 'open-document',
         label,
         documentId,
     }),
+    /**
+     * Refused by the portable renderer: no host registry maps a portable pane
+     * id to a navigable surface, so the host renders the control disabled with
+     * an explanation instead of an enabled control that does nothing.
+     */
     openPane: (label: string, paneId: string): PortableUiNode => ({
         type: 'open-pane',
         label,

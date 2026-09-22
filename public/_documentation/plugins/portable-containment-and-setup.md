@@ -121,13 +121,32 @@ generation — rendered state and typed fields survive — and offers an explici
 restart. Restart refreshes the package source and mints through current
 authority checks; the failed operation is never replayed.
 
+Transient handle failures (`activation-unknown`, `activation-expired`,
+`activation-revoked`, `activation-stale`) may recover silently once per stop:
+recovery is centralized per plugin and workspace, so simultaneous surfaces
+(sidebar and pane) share one restart timer and one rolling attempt budget.
+Successful restarts do not reset that budget, and terminal failures —
+containment violations, quota, policy, grant-review and access refusals, and
+disabled or uninstalled plugins — are never recovered automatically; they stay
+on the explicit restart or re-enable path.
+
 ### UI events and contributions
 
 Plugins send UI as data: `ui.render` is validated against the primitive schema
 and the UI-tree budgets before the host renders it, `ui.contribute` registers a
 slot contribution for this activation only, and `ui.withdraw` (or teardown)
-removes them. An invalid tree is reported, never rendered. The typed client for
-plugins is `createPortableClient` in `@or3/plugin-sdk/portable`.
+removes them. An invalid tree is reported, never rendered. The host boundary
+re-checks the slot's reviewed grant before accepting a contribution
+(`dashboard` needs `ui.dashboard.register`, `command-palette` needs
+`ui.command-palette.register`), so a raw wire event cannot bypass the SDK
+guard; revoking the grant withdraws the slot's contributions. The typed client
+for plugins is `createPortableClient` in `@or3/plugin-sdk/portable`.
+
+RPC cancellation and deadlines suppress late read results. Mutation handlers
+explicitly acknowledge durable completion through `markCommitted()`; only that
+acknowledgement allows a successful reply when cancellation races the reply.
+Storage mutations recheck cancellation before the transaction completes and
+roll back if authority was withdrawn before completion.
 
 The portable profile renders dashboard contributions (`ui.dashboard.card`) on the
 plugin's own dashboard surface: each registered card is shown with the same
@@ -182,7 +201,26 @@ submits the form, and it does so through the form's own submit event so native
 from Save and never submit implicitly. Field values are host-owned: a declarative
 update initializes newly introduced fields, leaves what you typed alone, follows
 the plugin's value for untouched fields, and drops state only when the field
-disappears. The host can replace or reset values explicitly.
+disappears. The host can replace or reset values explicitly. Typed values are
+kept per workspace, plugin and surface, so a plugin that renders a new view, or
+a surface that remounts, does not discard a draft; drafts never follow you into
+another workspace. Removing the plugin source or clearing workspace sources discards its drafts. Pending UI replies and document navigation are bound to the activation that started them; replacement or unmount discards the result.
+
+DOM ids are scoped to one rendered tree (a host-generated render prefix plus the
+logical field id), so two plugins, or two visible surfaces of one plugin, cannot
+collide on a label's `for` target. Labels, descriptions and the progress label
+are programmatically connected to the control they name. `open-document` is
+performed by the host after checking the live activation, its read authority and
+the document's presence in that workspace; `open-pane` has no host pane registry
+to resolve a portable pane id, so it is refused (disabled with an explanation)
+instead of rendering an enabled control that does nothing. A destructive write
+confirmation uses the host dialog primitive — named title and description, focus
+containment, Escape dismissal and focus restoration — rather than declaring
+`aria-modal` on an ordinary element. The narrow-layout details drawer reopens
+only when the plugin's selected row changes, never on an ordinary redraw, so a
+drawer you closed stays closed.
+
+Grant revocation aborts in-flight RPCs using the revoked grant. Cancelled handlers keep their concurrency slots until they settle, so cancellation cannot bypass backpressure. A recovery timer only restarts the same stopped activation if its current reason remains recoverable.
 
 ## Permissions and consent
 
@@ -228,10 +266,21 @@ Setup is host-generated from the package's own `or3.setup.json` and
   plan's "missing" flag and the save endpoint agree;
 * optional settings are configurable from the same form (under "Optional
   settings"); they are deferrable, not hidden;
+* secret fields (`secret: true`) are never rendered, hydrated or saved by the
+  ordinary settings form, and never enter a settings patch. A **required**
+  secret is a readiness blocker: the plan reports the package as blocked with an
+  explanation instead of inviting you to type a credential into a plaintext
+  field, and acquisition/update readiness refuses until the requirement is
+  gone. Optional secrets are deferred, never blockers. Until host secret
+  custody exists, a package that requires a secret is unsupported on this
+  deployment rather than partially configurable;
 * saved settings live in the workspace settings store, scoped to the exact
   package digest they were written for. The form hydrates from the *validated
   saved values*, and saving sends a patch of only the fields you edited, so a
   refresh can never replace stored values with defaults you never touched. A
+  successful save acknowledges only the exact patch it wrote. Further submissions wait for that acknowledgement; an edit made
+  while the request was in flight stays unsaved and is included in the next
+  save instead of being silently marked clean. A
   save carries the revision the form loaded; a concurrent save is refused with
   `setup-values-conflict` instead of overwritten. Patch-style writes without a
   form revision (a plugin setting one key while you edit another) retry inside

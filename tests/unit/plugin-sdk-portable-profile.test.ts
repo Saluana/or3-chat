@@ -303,6 +303,23 @@ describe('validatePortableProfile', () => {
         );
     });
 
+    it('refuses user-scoped fields during admission until a per-member store exists', () => {
+        const profile = defineOr3PortableProfile({
+            ...baseConfig,
+            fields: [{ ...baseConfig.fields[0]!, scope: 'user' }],
+        });
+        const input = validInput();
+        const findings = validatePortableProfile({
+            ...input,
+            manifest: applyPortableProfileToManifest(input.manifest, profile),
+            policy: profile.policy,
+            setup: profile.setup,
+        });
+        expect(findings.map((finding) => finding.code)).toContain(
+            'portable-user-scope-unsupported'
+        );
+    });
+
     it('preserves user/workspace scope and secret markers in the generated setup schema', () => {
         const profile = defineOr3PortableProfile({
             ...baseConfig,

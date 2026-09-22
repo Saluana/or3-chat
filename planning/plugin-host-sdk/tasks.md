@@ -4,14 +4,41 @@ Work in dependency order. Each checkbox is intended as roughly 1–4 hours of fo
 
 The named components below are defined in `design.md`. Every implementation task includes failure behavior and a concrete completion condition. Tests should extend the nearest canonical suite. Build the harness alongside production adapters; never postpone all validation to the end.
 
+A local implementation or harness test is not production qualification. Reopened
+items below retain their original acceptance conditions. Prior evidence notes are
+implementation pointers, not receipts for this working tree. Installed receipts
+must identify source commit and dirty state, package/archive digests, profile and
+version, host commit/runtime, browser name/version/platform, command, probe
+results and output path. A missing binding leaves qualification open.
+
 ## 1. Establish the executable contract and early risk gates
 
-- [x] 1.1 Record the method/profile support inventory in the existing qualification registry (2h).
+- [ ] 1.1 Record the method/profile support inventory in the existing qualification registry (2h).
       Component: SDK Context, Activation Boundary. Requirements: R1.AC1, R1.AC4, R17.AC3.
       Done when: every proposed namespace has a current/proposed method list, production adapter, grant and test reference; portable setup is distinguished from generic trusted V2 activation.
-- [x] 1.2 Specify the context, result codes and registration acknowledgment contract (3h).
+
+  Evidence gates (the Done when condition above remains unchanged):
+
+  - [x] Contract: Namespace/method contract inventory includes chat.
+  - [ ] Harness: qualify every stated behavior with named passing cases.
+  - [ ] Production adapter: demonstrate the acceptance condition through the real dispatch path.
+  - [ ] Installed qualification: record exact artifact/profile/host/runtime/browser evidence.
+
+  Current gap: Method-level harness references and production/installed support remain to be audited.
+
+- [ ] 1.2 Specify the context, result codes and registration acknowledgment contract (3h).
       Component: SDK Context. Requirements: R1.AC1–R1.AC3, R2.AC3.
       Done when: SDK type fixtures compile a command/pane example, normalize RPC errors, and reject private imports/unsupported registrations with actionable diagnostics.
+
+  Evidence gates (the Done when condition above remains unchanged):
+
+  - [x] Contract: Context/result/registration types exist.
+  - [ ] Harness: qualify every stated behavior with named passing cases.
+  - [ ] Production adapter: demonstrate the acceptance condition through the real dispatch path.
+  - [ ] Installed qualification: record exact artifact/profile/host/runtime/browser evidence.
+
+  Current gap: RPC normalization and actionable rejection require cross-boundary evidence.
+
 - [x] 1.3 Specify new grants, feature versions and review deltas in existing schemas (3h).
       Component: Activation Boundary. Requirements: R1.AC4, R2.AC1, R2.AC4.
       Done when: manifest/policy tests deny undeclared authority and block expanded grants on an existing review; no proposed feature is advertised prematurely.
@@ -21,55 +48,143 @@ The named components below are defined in `design.md`. Every implementation task
 - [x] 1.5 Prototype long-lived stream admission against the current budget ledger (4h).
       Component: Network Transport, Activation Boundary. Requirements: R11.AC3, R11.AC4.
       Done when: an injected-clock experiment demonstrates which lifetime limits must change and records bounded callback, stream, spend and revocation semantics before implementation.
-- [x] 1.6 Run the custom-view containment feasibility probes (4h).
+- [ ] 1.6 Run the custom-view containment feasibility probes (4h).
       Component: Surface Adapters. Requirements: R3.AC3, R3.AC5, R2.AC1.
       Done when: supported browser candidates have explicit pass/fail evidence for parent access, self-navigation/URL exfiltration, forms, networking, storage and packaged assets; failures have a recorded blocking decision, not a trust fallback.
-- [x] 1.7 Add the recommended `createTestHost()` shell over real SDK dispatch (4h).
+
+  Evidence gates (the Done when condition above remains unchanged):
+
+  - [x] Contract: Containment probe requirements are specified.
+  - [ ] Harness: qualify every stated behavior with named passing cases.
+  - [ ] Production adapter: demonstrate the acceptance condition through the real dispatch path.
+  - [ ] Installed qualification: record exact artifact/profile/host/runtime/browser evidence.
+
+  Current gap: September 17 portable evidence is historical; current artifact and custom-view browser qualification are missing.
+
+- [ ] 1.7 Add the recommended `createTestHost()` shell over real SDK dispatch (4h).
       Component: Test Host. Requirements: R16.AC1, R16.AC3.
       Done when: install/disable execute actual setup/cleanup, unknown calls fail, and one compiled fixture can use both this entry point and the existing portable dispatcher.
 
+  Evidence gates (the Done when condition above remains unchanged):
+
+  - [x] Contract: createTestHost contract exists.
+  - [ ] Harness: qualify every stated behavior with named passing cases.
+  - [ ] Production adapter: demonstrate the acceptance condition through the real dispatch path.
+  - [ ] Installed qualification: record exact artifact/profile/host/runtime/browser evidence.
+
+  Current gap: A single compiled fixture must demonstrate actual SDK setup/cleanup and portable dispatch.
+
 ## 2. Make ownership, data and workspace transitions dependable
 
-- [x] 2.1 Bind all context clients to captured host identity and operation controllers (3h).
+- [ ] 2.1 Bind all context clients to captured host identity and operation controllers (3h).
       Component: Activation Boundary. Requirements: R2.AC1, R2.AC2, R12.AC1.
       Done when: forged scope fields cannot alter authority and an old context cannot read/write after workspace or selected-package replacement.
-- [x] 2.2 Implement transactional registration activation and common disposal (4h).
+
+  Evidence gates (the Done when condition above remains unchanged):
+
+  - [x] Contract: Captured identity and lifecycle contracts exist.
+  - [ ] Harness: qualify every stated behavior with named passing cases.
+  - [ ] Production adapter: demonstrate the acceptance condition through the real dispatch path.
+  - [ ] Installed qualification: record exact artifact/profile/host/runtime/browser evidence.
+
+  Current gap: Comprehensive stale-context read/write rejection needs production and harness evidence.
+
+- [ ] 2.2 Implement transactional registration activation and common disposal (4h).
       Component: Activation Boundary. Requirements: R1.AC2, R2.AC2, R2.AC3.
       Done when: setup failure, crash, double dispose and cleanup exceptions leave no live contribution/handler/operation in production and the harness.
-- [x] 2.3 Add scoped storage revision/quota metadata and adapter boundary validation (3h).
+
+  Evidence gates (the Done when condition above remains unchanged):
+
+  - [x] Contract: Registration/disposal contract exists.
+  - [ ] Harness: qualify every stated behavior with named passing cases.
+  - [ ] Production adapter: demonstrate the acceptance condition through the real dispatch path.
+  - [ ] Installed qualification: record exact artifact/profile/host/runtime/browser evidence.
+
+  Current gap: Production and harness failure/cleanup parity remains unqualified.
+
+- [ ] 2.3 Add scoped storage revision/quota metadata and adapter boundary validation (3h).
       Component: Plugin Data. Requirements: R6.AC1–R6.AC3.
       Done when: values carry revisions and byte accounting without changing unrelated KV records; invalid/oversized writes retain the previous value.
-- [x] 2.4 Implement storage CAS and paginated prefix listing (4h).
+
+  Evidence gates (the Done when condition above remains unchanged):
+
+  - [x] Contract: Storage revision/quota contracts exist.
+  - [ ] Harness: qualify every stated behavior with named passing cases.
+  - [ ] Production adapter: demonstrate the acceptance condition through the real dispatch path.
+  - [ ] Installed qualification: record exact artifact/profile/host/runtime/browser evidence.
+
+  Current gap: Adapter validation has local tests; installed boundary evidence is missing.
+
+- [ ] 2.4 Implement storage CAS and paginated prefix listing (4h).
       Component: Plugin Data. Requirements: R6.AC1–R6.AC4.
       Done when: two tabs writing one revision produce one success/one conflict, paging stays scoped, and disable/update retains values.
       Evidence: host and portable test-host paths use the same deterministic
       cursor ordering; `ifRevision: null` is create-if-absent CAS and the
       transactional KV adapter rechecks the clock inside its write transaction.
-- [x] 2.5 Extend settings schemas for user preferences while preserving workspace configuration (3h).
+
+  Evidence gates (the Done when condition above remains unchanged):
+
+  - [x] Contract: CAS/pagination contracts exist.
+  - [ ] Harness: qualify every stated behavior with named passing cases.
+  - [ ] Production adapter: demonstrate the acceptance condition through the real dispatch path.
+  - [ ] Installed qualification: record exact artifact/profile/host/runtime/browser evidence.
+
+  Current gap: Local CAS tests do not establish installed two-tab races or update persistence.
+
+- [ ] 2.5 Extend settings schemas for user preferences while preserving workspace configuration (3h).
       Component: Plugin Data. Requirements: R7.AC1–R7.AC3.
       Done when: schema/role tests distinguish user and workspace scope, validate defaults, and route credential fields away from ordinary settings.
       Evidence: setup descriptors preserve explicit `user`/`workspace` scope and
       `secret` markers; setup value/plan tests validate defaults and keep secret
       fields out of readiness and ordinary settings writes.
-- [x] 2.6 Complete settings get/set/delete adapters and change delivery (3h).
+
+  Evidence gates (the Done when condition above remains unchanged):
+
+  - [x] Contract: Schema preserves user/workspace and secret markers.
+  - [ ] Harness: qualify every stated behavior with named passing cases.
+  - [ ] Production adapter: demonstrate the acceptance condition through the real dispatch path.
+  - [ ] Installed qualification: record exact artifact/profile/host/runtime/browser evidence.
+
+  Current gap: User scope is reserved, not implemented user preference behavior.
+
+- [ ] 2.6 Complete settings get/set/delete adapters and change delivery (3h).
       Component: Plugin Data, Public Events. Requirements: R7.AC2, R16.AC2.
       Done when: delete resets defaults, denied changes preserve old values, and real runtime/harness deliver the same scoped change event.
       Evidence: portable `settings.list`/`set`/`delete` are registered through the
       isolated RPC broker, host-authored `settings.changed` events carry the
       returned revision, and the test host covers default reset and denial behavior.
+
+  Evidence gates (the Done when condition above remains unchanged):
+
+  - [x] Contract: Settings methods and change-event contract exist.
+  - [ ] Harness: qualify every stated behavior with named passing cases.
+  - [ ] Production adapter: demonstrate the acceptance condition through the real dispatch path.
+  - [ ] Installed qualification: record exact artifact/profile/host/runtime/browser evidence.
+
+  Current gap: Runtime/harness scoped event equivalence still needs qualification.
+
 - [ ] 2.7 Implement workspace snapshots, change lifecycle and authorized switch requests (4h).
       Component: Public Events, Activation Boundary. Requirements: R12.AC1, R12.AC2, R12.AC4.
       Done when: success/cancel/failure switches preserve the documented authority boundary, new setup receives the right scope and delayed old writes are rejected.
       Harness evidence: successful, failed and concurrent authorized switches
       are transactional and stale contexts are rejected; production workspace
       manager integration and cancellation snapshots remain to be qualified.
-- [x] 2.8 Add two-plugin/two-workspace harness scenarios and typed event filtering (3h).
+- [ ] 2.8 Add two-plugin/two-workspace harness scenarios and typed event filtering (3h).
       Component: Test Host, Public Events. Requirements: R12.AC2, R12.AC3, R16.AC2, R16.AC4.
       Done when: shared tests prove isolation, disposal and content filtering; no test host can access another plugin's store through ordinary context methods.
       Evidence: the harness keys settings, storage, secrets, files and Activity
       registrations by workspace/plugin owner, scopes chat resources to the
       active workspace, and the conformance tests cover plugin replacement,
       workspace switching, stale contexts and cleanup.
+
+  Evidence gates (the Done when condition above remains unchanged):
+
+  - [x] Contract: Owner-scoping and typed event contracts exist.
+  - [ ] Harness: qualify every stated behavior with named passing cases.
+  - [ ] Production adapter: demonstrate the acceptance condition through the real dispatch path.
+  - [ ] Installed qualification: record exact artifact/profile/host/runtime/browser evidence.
+
+  Current gap: Harness coverage does not establish complete isolation across all contexts and production adapters.
 
 ## 3. Ship the first installed application milestone
 

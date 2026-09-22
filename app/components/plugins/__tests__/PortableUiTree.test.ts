@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
-import { nextTick } from 'vue';
+import { defineComponent, nextTick } from 'vue';
 import PortableUiTree from '../PortableUiTree.vue';
 import type { PortableUiNode } from '~~/shared/plugins/isolation/ui-primitives';
 
@@ -34,13 +34,16 @@ const stubs = {
             '<select :id="id" :aria-label="ariaLabel" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="item in items" :key="item.value" :value="item.value">{{ item.label }}</option></select>',
     },
     UCheckbox: {
+        inheritAttrs: false,
         props: ['modelValue', 'id', 'label'],
         emits: ['update:modelValue'],
-        template: '<label><input type="checkbox" :id="id" :aria-label="label" /></label>',
+        template:
+            '<label><input type="checkbox" v-bind="$attrs" :id="id" :aria-label="label" /></label>',
     },
     UProgress: {
-        props: ['modelValue', 'max'],
-        template: '<div role="progressbar" :aria-valuenow="modelValue" :aria-valuemax="max" />',
+        props: ['modelValue', 'max', 'getValueLabel'],
+        template:
+            '<div role="progressbar" :aria-valuenow="modelValue" :aria-valuemax="max" :aria-label="typeof getValueLabel === \'function\' ? getValueLabel(modelValue, max) : undefined" />',
     },
     UButton: {
         props: ['color', 'variant', 'size', 'disabled'],
@@ -64,7 +67,7 @@ describe('PortableUiTree host renderer (4.5)', () => {
             { type: 'column', children: [{ type: 'text', text: 'Task list' }] },
             { type: 'column', children: [{ type: 'field.text', id: 'title', label: 'Title', value: 'Saved title' }] },
         ] }]);
-        await wrapper.get('#portable-title').setValue('Unsaved edit');
+        await wrapper.get('[data-portable-field="title"]').setValue('Unsaved edit');
         resize.callback?.([{ contentRect: { width: 390 } }]);
         await nextTick();
         expect(wrapper.find('aside').exists()).toBe(false);
@@ -79,6 +82,58 @@ describe('PortableUiTree host renderer (4.5)', () => {
         resize.callback?.([{ contentRect: { width: 1000 } }]);
         await nextTick();
         expect(wrapper.get('aside input').element).toHaveProperty('value', 'Unsaved edit');
+        wrapper.unmount();
+    });
+
+    it('reopens the narrow inspector only when the selection changes', async () => {
+        const workspace = (selected: string) => [
+            {
+                type: 'columns' as const,
+                layout: 'workspace' as const,
+                children: [
+                    {
+                        type: 'column' as const,
+                        children: [
+                            {
+                                type: 'item' as const,
+                                id: 'task-1',
+                                label: 'Task one',
+                                action: 'tasks.select',
+                                selected: selected === 'task-1',
+                            },
+                            {
+                                type: 'item' as const,
+                                id: 'task-2',
+                                label: 'Task two',
+                                action: 'tasks.select',
+                                selected: selected === 'task-2',
+                            },
+                        ],
+                    },
+                    {
+                        type: 'column' as const,
+                        children: [
+                            { type: 'field.text' as const, id: 'title', label: 'Title', value: selected },
+                        ],
+                    },
+                ],
+            },
+        ];
+        const wrapper = mountTree(workspace('task-1'));
+        resize.callback?.([{ contentRect: { width: 390 } }]);
+        await nextTick();
+        await wrapper.get('[aria-label="Dismiss drawer"]').trigger('click');
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+
+        // An ordinary redraw of the same selection keeps the closed drawer.
+        await wrapper.setProps({ nodes: workspace('task-1') });
+        await nextTick();
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+
+        // Selecting another row is an intentional navigation action.
+        await wrapper.setProps({ nodes: workspace('task-2') });
+        await nextTick();
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(true);
         wrapper.unmount();
     });
     it('renders text, markdown, tables, lists and progress with host components', () => {
@@ -116,11 +171,11 @@ describe('PortableUiTree host renderer (4.5)', () => {
             },
         ]);
 
-        const label = wrapper.find('label[for="portable-name"]');
+        const nameInput = wrapper.get('input[data-portable-field="name"]');
+        const label = wrapper.get(`label[for="${nameInput.attributes('id')}"]`);
         expect(label.text()).toBe('Name');
-        expect(wrapper.find('input#portable-name').exists()).toBe(true);
         expect(
-            wrapper.find('input#portable-enabled').attributes('aria-label')
+            wrapper.get('input[data-portable-field="enabled"]').attributes('aria-label')
         ).toBe('Enabled');
         expect(wrapper.find('form').attributes('aria-label')).toBe('settings');
     });
@@ -137,7 +192,7 @@ describe('PortableUiTree host renderer (4.5)', () => {
             },
         ]);
 
-        await wrapper.find('input#portable-name').setValue('changed');
+        await wrapper.find('input[data-portable-field="name"]').setValue('changed');
         await wrapper.find('form').trigger('submit');
 
         const events = wrapper.emitted('ui-event');
@@ -164,7 +219,7 @@ describe('PortableUiTree host renderer (4.5)', () => {
             },
         ]);
 
-        await wrapper.find('input#portable-name').setValue('changed');
+        await wrapper.find('input[data-portable-field="name"]').setValue('changed');
         const buttons = wrapper.findAll('button');
         // Only the declaring `submit` button is a submitter; nothing here submits.
         expect(buttons[0]!.attributes('type')).toBe('button');
@@ -196,7 +251,7 @@ describe('PortableUiTree host renderer (4.5)', () => {
             },
         ]);
 
-        await wrapper.find('input#portable-name').setValue('changed');
+        await wrapper.find('input[data-portable-field="name"]').setValue('changed');
         await wrapper.find('form').trigger('submit');
 
         expect(wrapper.emitted('ui-event')?.[0]?.[0]).toMatchObject({
@@ -225,7 +280,7 @@ describe('PortableUiTree host renderer (4.5)', () => {
             },
         ]);
 
-        await wrapper.find('input#portable-title').setValue('Keyboard task');
+        await wrapper.find('input[data-portable-field="title"]').setValue('Keyboard task');
         await wrapper.find('form').trigger('submit', {
             submitter: wrapper.find('button').element,
         });
@@ -257,7 +312,7 @@ describe('PortableUiTree host renderer (4.5)', () => {
             },
         ]);
 
-        await wrapper.find('input#portable-query').setValue('design');
+        await wrapper.find('input[data-portable-field="query"]').setValue('design');
         await vi.advanceTimersByTimeAsync(199);
         expect(wrapper.emitted('ui-event')).toBeUndefined();
 
@@ -290,7 +345,7 @@ describe('PortableUiTree host renderer (4.5)', () => {
             },
         ]);
 
-        await wrapper.find('select#portable-filter').setValue('open');
+        await wrapper.find('select[data-portable-field="filter"]').setValue('open');
         expect(wrapper.emitted('ui-event')?.[0]?.[0]).toMatchObject({
             kind: 'action',
             action: 'tasks.toolbar',
@@ -308,7 +363,7 @@ describe('PortableUiTree host renderer (4.5)', () => {
             ],
         };
         const wrapper = mountTree([base]);
-        await wrapper.find('input#portable-name').setValue('typed');
+        await wrapper.find('input[data-portable-field="name"]').setValue('typed');
 
         // A progress update replaces the nodes array with an unrelated change.
         await wrapper.setProps({
@@ -322,7 +377,7 @@ describe('PortableUiTree host renderer (4.5)', () => {
                 },
             ],
         });
-        expect((wrapper.find('input#portable-name').element as HTMLInputElement).value).toBe(
+        expect((wrapper.find('input[data-portable-field="name"]').element as HTMLInputElement).value).toBe(
             'typed'
         );
 
@@ -338,7 +393,7 @@ describe('PortableUiTree host renderer (4.5)', () => {
                 },
             ],
         });
-        expect((wrapper.find('input#portable-name').element as HTMLInputElement).value).toBe(
+        expect((wrapper.find('input[data-portable-field="name"]').element as HTMLInputElement).value).toBe(
             'typed'
         );
 
@@ -346,7 +401,7 @@ describe('PortableUiTree host renderer (4.5)', () => {
         (wrapper.vm as unknown as { replaceValues: (next: Record<string, string>) => void })
             .replaceValues({ name: 'replaced' });
         await wrapper.vm.$nextTick();
-        expect((wrapper.find('input#portable-name').element as HTMLInputElement).value).toBe(
+        expect((wrapper.find('input[data-portable-field="name"]').element as HTMLInputElement).value).toBe(
             'replaced'
         );
     });
@@ -362,17 +417,17 @@ describe('PortableUiTree host renderer (4.5)', () => {
                 ],
             },
         ]);
-        await wrapper.find('input#portable-a').setValue('typed-a');
-        await wrapper.find('input#portable-b').setValue('typed-b');
+        await wrapper.find('input[data-portable-field="a"]').setValue('typed-a');
+        await wrapper.find('input[data-portable-field="b"]').setValue('typed-b');
 
         (wrapper.vm as unknown as { replaceValues: (next: Record<string, string>) => void })
             .replaceValues({ a: 'loaded-a', ghost: 'ignored' });
         await wrapper.vm.$nextTick();
-        expect((wrapper.find('input#portable-a').element as HTMLInputElement).value).toBe('loaded-a');
+        expect((wrapper.find('input[data-portable-field="a"]').element as HTMLInputElement).value).toBe('loaded-a');
         // Only the replaced field loses its dirty mark; the other edit survives.
-        expect((wrapper.find('input#portable-b').element as HTMLInputElement).value).toBe('typed-b');
+        expect((wrapper.find('input[data-portable-field="b"]').element as HTMLInputElement).value).toBe('typed-b');
         // An unknown id is refused rather than seeding an invisible field.
-        expect(wrapper.find('input#portable-ghost').exists()).toBe(false);
+        expect(wrapper.find('input[data-portable-field="ghost"]').exists()).toBe(false);
 
         // A replacement hands the field back to the plugin's declarative value;
         // the untouched dirty field still keeps what the user typed.
@@ -388,8 +443,8 @@ describe('PortableUiTree host renderer (4.5)', () => {
                 },
             ],
         });
-        expect((wrapper.find('input#portable-a').element as HTMLInputElement).value).toBe('declared-a');
-        expect((wrapper.find('input#portable-b').element as HTMLInputElement).value).toBe('typed-b');
+        expect((wrapper.find('input[data-portable-field="a"]').element as HTMLInputElement).value).toBe('declared-a');
+        expect((wrapper.find('input[data-portable-field="b"]').element as HTMLInputElement).value).toBe('typed-b');
     });
 
     it('drops field state when the field is removed from the tree', async () => {
@@ -411,12 +466,12 @@ describe('PortableUiTree host renderer (4.5)', () => {
                 },
             ],
         });
-        expect((wrapper.find('input#portable-gone').element as HTMLInputElement).value).toBe(
+        expect((wrapper.find('input[data-portable-field="gone"]').element as HTMLInputElement).value).toBe(
             'fresh'
         );
     });
 
-    it('raises open-document and open-pane as host events', async () => {
+    it('raises open-document as a host event and refuses open-pane', async () => {
         const wrapper = mountTree([
             { type: 'open-document', label: 'Open document', documentId: 'doc_9' },
             { type: 'open-pane', label: 'Open pane', paneId: 'pane_9' },
@@ -428,7 +483,52 @@ describe('PortableUiTree host renderer (4.5)', () => {
 
         const events = wrapper.emitted('ui-event');
         expect(events?.[0]?.[0]).toEqual({ kind: 'open-document', documentId: 'doc_9' });
-        expect(events?.[1]?.[0]).toEqual({ kind: 'open-pane', paneId: 'pane_9' });
+        // No host registry maps a portable pane id, so the control is refused
+        // rather than left enabled as a no-op.
+        expect(events).toHaveLength(1);
+        expect(buttons[1]!.attributes('disabled')).toBeDefined();
+    });
+
+    it('scopes field ids to the render instance so two surfaces cannot collide', () => {
+        const nodes: readonly PortableUiNode[] = [
+            { type: 'field.text', id: 'search', label: 'Search', description: 'Filters the list' },
+        ];
+        const Host = defineComponent({
+            components: { PortableUiTree },
+            setup: () => ({ nodes }),
+            template:
+                '<div><PortableUiTree :nodes="nodes" /><PortableUiTree :nodes="nodes" /></div>',
+        });
+        const wrapper = mount(Host, { global: { stubs } });
+
+        const inputs = wrapper.findAll('input[data-portable-field="search"]');
+        expect(inputs).toHaveLength(2);
+        expect(inputs[0]!.attributes('id')).not.toBe(inputs[1]!.attributes('id'));
+        for (const input of inputs) {
+            expect(wrapper.find(`label[for="${input.attributes('id')}"]`).exists()).toBe(true);
+        }
+    });
+
+    it('connects field descriptions to their control', () => {
+        const wrapper = mountTree([
+            {
+                type: 'field.text',
+                id: 'name',
+                label: 'Name',
+                description: 'Shown to other members',
+            },
+        ]);
+        const input = wrapper.get('input[data-portable-field="name"]');
+        const describedBy = input.attributes('aria-describedby');
+        expect(describedBy).toBeTruthy();
+        expect(wrapper.get(`#${describedBy}`).text()).toBe('Shown to other members');
+    });
+
+    it('names the progress control from its visible label', () => {
+        const wrapper = mountTree([
+            { type: 'progress', value: 5, max: 10, label: 'Working' },
+        ]);
+        expect(wrapper.get('[role="progressbar"]').attributes('aria-label')).toBe('Working');
     });
 
     it('marks a destructive action and honours a disabled button', () => {

@@ -256,6 +256,29 @@ export default defineEventHandler(async (event) => {
                     statusMessage: `This package's ${descriptors.problems.join('; ') || 'setup descriptor'} cannot validate settings`,
                 });
             }
+            // `scope: "user"` has no per-member store: saving it through the
+            // workspace document would silently share personal values and let
+            // members overwrite one another. Refuse until a user-keyed store
+            // with matching authorization exists.
+            const userScopedKeys = Object.keys(patch as Readonly<Record<string, unknown>>).filter(
+                (key) =>
+                    descriptors.setup!.fields.some(
+                        (field) => field.key === key && field.scope === 'user'
+                    )
+            );
+            if (userScopedKeys.length > 0) {
+                throw createError({
+                    statusCode: 400,
+                    statusMessage: `User-scoped settings are not yet supported: ${userScopedKeys.join(', ')}`,
+                    data: {
+                        code: 'setup-user-scope-unsupported',
+                        fieldErrors: userScopedKeys.map((key) => ({
+                            key,
+                            message: 'User-scoped settings are not yet supported',
+                        })),
+                    },
+                });
+            }
 
             const transform = (current: Readonly<Record<string, unknown>>) => {
                 const result = applySetupValuesPatch({

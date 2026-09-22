@@ -14,6 +14,7 @@ export class PluginSseDecoder {
     readonly #decoder = new TextDecoder('utf-8', { fatal: true });
     readonly #maxEventBytes: number;
     #lineBuffer = '';
+    #skipLf = false;
     #data: string[] = [];
     #event: string | undefined;
     #id: string | undefined;
@@ -38,7 +39,7 @@ export class PluginSseDecoder {
             return this.#fail('SSE input is not valid UTF-8');
         }
         this.#lineBuffer += text;
-        const drained = this.#drainLines(false);
+        const drained = this.#drainLines();
         if (!drained.ok) return this.#fail(drained.message);
         // A peer may withhold the newline indefinitely. Keep only the
         // incomplete trailing line bounded after complete lines have drained.
@@ -57,35 +58,41 @@ export class PluginSseDecoder {
         } catch {
             return this.#fail('SSE input is not valid UTF-8');
         }
-        const drained = this.#drainLines(true);
+        const drained = this.#drainLines();
         if (!drained.ok) return this.#fail(drained.message);
-        const chunks = [...drained.chunks];
-        if (this.#data.length > 0) {
-            const emitted = this.#dispatch();
-            if (!emitted.ok) return emitted;
-            chunks.push(...emitted.chunks);
-        }
-        return { ok: true, chunks };
+        // An event without its blank-line terminator is incomplete and must
+        // be discarded at EOF, never delivered as a complete event.
+        this.#lineBuffer = '';
+        this.#data = [];
+        this.#event = undefined;
+        this.#eventBytes = 0;
+        return { ok: true, chunks: drained.chunks };
     }
 
-    #drainLines(flushRemainder: boolean): PluginSseParseResult {
+    #drainLines(): PluginSseParseResult {
         const chunks: PluginStreamChunk[] = [];
-        while (true) {
-            const newline = this.#lineBuffer.indexOf('\n');
-            if (newline < 0) break;
-            let line = this.#lineBuffer.slice(0, newline);
-            this.#lineBuffer = this.#lineBuffer.slice(newline + 1);
-            if (line.endsWith('\r')) line = line.slice(0, -1);
-            const parsed = this.#line(line);
+        let start = 0;
+        // One pass over the buffer: searching the remaining suffix separately
+        // for CR and LF on every line makes LF-only batches quadratic.
+        for (let index = 0; index < this.#lineBuffer.length; index += 1) {
+            const character = this.#lineBuffer[index];
+            if (this.#skipLf) {
+                this.#skipLf = false;
+                if (character === '\n') {
+                    start = index + 1;
+                    continue;
+                }
+            }
+            if (character !== '\r' && character !== '\n') continue;
+            const parsed = this.#line(this.#lineBuffer.slice(start, index));
             if (!parsed.ok) return parsed;
             chunks.push(...parsed.chunks);
+            start = index + 1;
+            // CR terminates immediately, including at chunk boundaries. Only
+            // its optional following LF is deferred, never event delivery.
+            this.#skipLf = character === '\r';
         }
-        if (flushRemainder && this.#lineBuffer.length > 0) {
-            const parsed = this.#line(this.#lineBuffer);
-            this.#lineBuffer = '';
-            if (!parsed.ok) return parsed;
-            chunks.push(...parsed.chunks);
-        }
+        this.#lineBuffer = this.#lineBuffer.slice(start);
         return { ok: true, chunks };
     }
 

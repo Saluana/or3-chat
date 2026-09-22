@@ -13,6 +13,8 @@ export interface CreateCommandOptions {
     readonly pluginId: string;
     readonly directory: string;
     readonly name?: string;
+    /** Local SDK tarball or package directory, resolved from the caller's cwd. */
+    readonly sdkSource?: string;
     /**
      * Starter template directory under `templates/`. Defaults to the portable
      * profile starter, which is conformant with `or3-portable-client-v1`.
@@ -47,6 +49,12 @@ export function createV2Package(options: CreateCommandOptions): {
     if (!existsSync(templateRoot)) {
         throw new Error(`Unknown starter template "${template}"`);
     }
+    const sdkSource = options.sdkSource
+        ? resolve(options.sdkSource.replace(/^file:/, ''))
+        : packageRootFromCli();
+    if (!existsSync(sdkSource)) {
+        throw new Error(`SDK source does not exist: ${sdkSource}`);
+    }
     const root = resolve(options.directory);
     if (existsSync(resolve(root, 'or3.manifest.json'))) {
         throw new Error(`Refusing to overwrite existing package at ${root}`);
@@ -64,6 +72,10 @@ export function createV2Package(options: CreateCommandOptions): {
 
     const packageJson = readJsonObject(resolve(root, 'package.json'));
     packageJson.name = packageName;
+    packageJson.devDependencies = {
+        ...(packageJson.devDependencies as Record<string, unknown>),
+        '@or3/plugin-sdk': `file:${sdkSource}`,
+    };
     writeStableJson(resolve(root, 'package.json'), packageJson);
 
     // Rewrite the sample identity everywhere it appears in the starter,

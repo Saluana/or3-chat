@@ -64,6 +64,8 @@ export type PortableHostError = {
     readonly ok: false;
     readonly code: string;
     readonly message: string;
+    /** Safe handler-provided details, forwarded only when a plain object. */
+    readonly details?: Readonly<Record<string, unknown>>;
 };
 
 export type PortableHostResult<T> = { readonly ok: true; readonly result: T } | PortableHostError;
@@ -180,6 +182,12 @@ export function createPortableClient(
                     typeof envelope.message === 'string'
                         ? envelope.message
                         : 'Host refused the call',
+                ...('details' in envelope &&
+                typeof envelope.details === 'object' &&
+                envelope.details !== null &&
+                !Array.isArray(envelope.details)
+                    ? { details: envelope.details as Readonly<Record<string, unknown>> }
+                    : {}),
             });
             return;
         }

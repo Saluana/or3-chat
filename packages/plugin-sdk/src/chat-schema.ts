@@ -86,7 +86,24 @@ export function validatePluginChatMessage(input: unknown): PluginChatValidation 
             role: raw.role,
             content: raw.content,
             ...(fileIds.length === 0 ? {} : { fileIds: [...fileIds] as string[] }),
-            ...(attachments === undefined ? {} : { attachments: attachments as PluginChatAttachment[] }),
+            // Rebuild each attachment from its validated fields: retaining the
+            // caller's array (or its element objects) would let a later
+            // mutation smuggle an unauthorized fileId into the stored message.
+            ...(attachments === undefined
+                ? {}
+                : {
+                      attachments: attachments.map((attachment) => {
+                          const item = attachment as Record<string, unknown>;
+                          return Object.freeze({
+                              fileId: item.fileId as string,
+                              ...(item.name === undefined ? {} : { name: item.name as string }),
+                              ...(item.mimeType === undefined
+                                  ? {}
+                                  : { mimeType: item.mimeType as string }),
+                              ...(item.state === undefined ? {} : { state: item.state as 'pending' | 'ready' | 'failed' }),
+                          });
+                      }) as PluginChatAttachment[],
+                  }),
         }) as PluginChatMessage,
     };
 }

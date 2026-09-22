@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
 import { buildV2Package } from './build';
 import {
     isCandidateDirectory,
@@ -17,11 +18,11 @@ function usage(): string {
     return `Usage: or3-plugin <command> [options]
 
 Commands:
-  create --id <plugin-id> --dir <path> [--name <display-name>] [--template <name>]
+  create --id <plugin-id> --dir <path> --sdk-source <local-tarball-or-directory> [--name <display-name>] [--template <name>]
   validate <package-root>
   test <package-root> [-- <test-args...>]
   build <package-root>
-  pack <package-root> [--out <pack-dir>] [--archive <archive-path>]
+  pack <package-root> [--out <pack-dir>] [--archive <archive-path>] (consumes <package-root>/dist; build first)
   inspect <package-root-or-archive>
   candidate <package-root> --out <candidate-dir>
   candidate --verify <candidate-dir>
@@ -56,6 +57,7 @@ export async function runPluginCli(argv: readonly string[]): Promise<number> {
             const created = createV2Package({
                 pluginId: requireArg(rest, '--id'),
                 directory: requireArg(rest, '--dir'),
+                sdkSource: requireArg(rest, '--sdk-source'),
                 name: rest.includes('--name') ? requireArg(rest, '--name') : undefined,
                 template: rest.includes('--template')
                     ? requireArg(rest, '--template')
@@ -96,12 +98,15 @@ export async function runPluginCli(argv: readonly string[]): Promise<number> {
         case 'pack': {
             const root = rest[0];
             if (!root) throw new Error('pack requires <package-root>');
+            if (!existsSync(resolve(root, 'dist/or3.manifest.json'))) {
+                throw new Error('Missing build output. Run `or3-plugin build <package-root>` before packing.');
+            }
             const out = rest.includes('--out') ? requireArg(rest, '--out') : undefined;
             const archive = rest.includes('--archive')
                 ? requireArg(rest, '--archive')
                 : undefined;
-            const result = await packV2Package(root, {
-                outputDirectory: out,
+            const result = await packV2Package(resolve(root, 'dist'), {
+                outputDirectory: out ?? resolve(root, '.or3-pack'),
                 archivePath: archive,
             });
             printJson({

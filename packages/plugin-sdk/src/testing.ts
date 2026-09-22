@@ -113,6 +113,18 @@ function comparePluginStorageKeys(left: string, right: string): number {
     return left < right ? -1 : left > right ? 1 : 0;
 }
 
+/**
+ * Deep-clone a JSON value at the validation boundary. Stored state must never
+ * alias caller-owned objects (or vice versa): without this, a mutation after
+ * write/read changes host state with no revision increment, quota check,
+ * grant check, or change event.
+ */
+function cloneTestValue<T>(value: T): T {
+    return typeof structuredClone === 'function'
+        ? structuredClone(value)
+        : (JSON.parse(JSON.stringify(value)) as T);
+}
+
 function isUint8Chunk(value: unknown): value is Uint8Array {
     if (value instanceof Uint8Array) return true;
     return Boolean(
@@ -215,7 +227,7 @@ export class PluginTestHost {
     #paletteCommands: PluginContribution[] = [];
     #commandHandlers = new Map<
         string,
-        () => Promise<unknown> | unknown
+        { handler: () => Promise<unknown> | unknown; generation: number | undefined }
     >();
     #activeDefinition?: Or3PluginDefinition;
 
@@ -298,14 +310,14 @@ export class PluginTestHost {
         if (!handler) {
             throw new Error(`No mediated handler for command "${commandId}"`);
         }
-        return handler();
+        return handler.handler();
     }
 
     registerMediatedPaletteCommandHandler(
         commandId: string,
         handler: () => Promise<unknown> | unknown
     ): void {
-        this.#commandHandlers.set(commandId, handler);
+        this.#commandHandlers.set(commandId, { handler, generation: this.#activeGeneration });
     }
 
     async switchWorkspace(id: string): Promise<PluginResult<{ readonly id: string }>> {
@@ -352,7 +364,23 @@ export class PluginTestHost {
             // disposed by activate().
             this.#workspaceId = previousId;
             this.#activeDefinition = definition;
-            await this.activate(definition);
+            const restored = await this.activate(definition);
+            if (!restored.ok) {
+                // Restoration itself failed: the host now runs no plugin for
+                // either workspace. Report the rollback failure explicitly
+                // rather than implying the old plugin was restored.
+                return pluginError(
+                    'internal',
+                    `Workspace switch failed (${reactivated.error.message}) and rollback failed: ${restored.error.message}`,
+                    {
+                        details: {
+                            rollback: 'failed',
+                            switchError: reactivated.error.message,
+                            restoreError: restored.error.message,
+                        },
+                    }
+                );
+            }
             return pluginError(
                 reactivated.error.code,
                 `Workspace switch activated no plugin: ${reactivated.error.message}`,
@@ -423,8 +451,15 @@ export class PluginTestHost {
             cleanups.push(registration.dispose);
             return registration;
         };
+        // Palette registrations stay staged-local until commit: a setup that
+        // is superseded mid-flight must never publish into (or later remove
+        // from) the replacement generation's surfaces.
+        let stagedPalettePostSources: PluginContribution[] = [];
+        let stagedPaletteCommands: PluginContribution[] = [];
+        let committed = false;
         const contributions: PluginContributions = {
             register: <TDefinition>(contribution: PluginContribution<TDefinition>) => {
+                if (controller.signal.aborted) throw new Error('Plugin activation was aborted');
                 const kind = contribution.kind;
                 const needsPalette =
                     kind === 'ui.command-palette.post-source' ||
@@ -441,25 +476,31 @@ export class PluginTestHost {
                     throw new Error('Grant ui.dashboard.register was not approved');
                 }
                 stagedContributions += 1;
+                if (committed && this.#activeGeneration === generation) {
+                    this.#contributionCount = stagedContributions;
+                }
                 const recorded = contribution as PluginContribution;
                 if (kind === 'ui.command-palette.post-source') {
-                    this.#palettePostSources.push(recorded);
+                    stagedPalettePostSources.push(recorded);
                 }
                 if (kind === 'ui.command-palette.command') {
-                    this.#paletteCommands.push(recorded);
+                    stagedPaletteCommands.push(recorded);
                 }
                 return handle(() => {
                     stagedContributions = Math.max(0, stagedContributions - 1);
                     if (kind === 'ui.command-palette.post-source') {
-                        this.#palettePostSources = this.#palettePostSources.filter(
-                            (entry) => entry !== recorded
-                        );
+                        const index = stagedPalettePostSources.indexOf(recorded);
+                        if (index >= 0) stagedPalettePostSources.splice(index, 1);
                     }
                     if (kind === 'ui.command-palette.command') {
-                        this.#paletteCommands = this.#paletteCommands.filter(
-                            (entry) => entry !== recorded
-                        );
-                        this.#commandHandlers.delete(contribution.id);
+                        const index = stagedPaletteCommands.indexOf(recorded);
+                        if (index >= 0) stagedPaletteCommands.splice(index, 1);
+                        if (this.#commandHandlers.get(contribution.id)?.generation === generation) {
+                            this.#commandHandlers.delete(contribution.id);
+                        }
+                    }
+                    if (committed && this.#activeGeneration === generation) {
+                        this.#contributionCount = stagedContributions;
                     }
                 });
             },
@@ -516,25 +557,58 @@ export class PluginTestHost {
             onCleanup: (callback) => cleanups.push(callback),
             onActivate: (callback) => activations.push(callback),
         });
+        // The generation is published before awaiting setup so a concurrent
+        // disable/replacement can abort this attempt — but nothing commits to
+        // the shared host state until the epoch check below passes.
         this.#activeGeneration = generation;
         this.#controller = controller;
-        try {
-            await definition.setup(context);
-            for (const callback of activations) await callback();
-            this.#cleanups = cleanups;
-            this.#cleanupSink = undefined;
-            this.#activeContext = context;
-            this.#contributionCount = stagedContributions;
-            this.#hookCount = stagedHooks;
-            return pluginOk({ context, generation });
-        } catch (error) {
+        const disposeStaged = async (): Promise<void> => {
             controller.abort();
             for (const callback of [...cleanups].reverse()) {
                 try {
                     await callback();
                 } catch {
-                    // The original activation failure remains authoritative.
+                    // Disposal is best effort; settlement below stays authoritative.
                 }
+            }
+        };
+        try {
+            await definition.setup(context);
+            for (const callback of activations) {
+                if (controller.signal.aborted || this.#activeGeneration !== generation) break;
+                await callback();
+            }
+            if (controller.signal.aborted || this.#activeGeneration !== generation) {
+                // Superseded while setting up: dispose staged resources
+                // locally and never touch the replacement's committed state.
+                await disposeStaged();
+                return pluginError(
+                    'aborted',
+                    'Plugin activation was superseded before it could commit'
+                );
+            }
+            this.#cleanups = cleanups;
+            this.#cleanupSink = undefined;
+            this.#activeContext = context;
+            this.#contributionCount = stagedContributions;
+            this.#hookCount = stagedHooks;
+            this.#palettePostSources.push(...stagedPalettePostSources);
+            this.#paletteCommands.push(...stagedPaletteCommands);
+            // Re-point disposal at the committed arrays so a later dispose
+            // removes the global entry rather than a dropped staging copy.
+            stagedPalettePostSources = this.#palettePostSources;
+            stagedPaletteCommands = this.#paletteCommands;
+            committed = true;
+            return pluginOk({ context, generation });
+        } catch (error) {
+            await disposeStaged();
+            if (this.#activeGeneration !== generation) {
+                // A replacement owns the host now; its state must survive a
+                // predecessor settling late. The supersede is authoritative.
+                return pluginError(
+                    'aborted',
+                    'Plugin activation was superseded before it could commit'
+                );
             }
             this.#activeGeneration = undefined;
             this.#controller = undefined;
@@ -1027,6 +1101,7 @@ export class PluginTestHost {
                     settleResult = resolve;
                 });
                 let onAbort: (() => void) | undefined;
+                let onScopeAbort: (() => void) | undefined;
                 const settle = (value: PluginResult<void>) => {
                     if (settled) return;
                     settled = true;
@@ -1034,31 +1109,48 @@ export class PluginTestHost {
                     if (onAbort && options.signal) {
                         options.signal.removeEventListener('abort', onAbort);
                     }
+                    if (onScopeAbort) {
+                        scope.signal.removeEventListener('abort', onScopeAbort);
+                    }
                 };
                 const scopeFailure = () => this.#scopeFailure(scope, 'files.read');
-                onAbort = () => {
+                const abortRead = () => {
                     controller.abort();
                     settle(pluginError('aborted', 'File read was cancelled'));
                 };
+                onAbort = () => abortRead();
+                // Generation teardown while the iterator is idle must still
+                // settle the result: the activation signal aborts the read.
+                onScopeAbort = () => abortRead();
                 options.signal?.addEventListener('abort', onAbort, { once: true });
+                scope.signal.addEventListener('abort', onScopeAbort, { once: true });
                 if (options.signal?.aborted) {
                     controller.abort();
                     settle(pluginError('aborted', 'File read was cancelled'));
                 }
                 const chunks = async function* () {
-                    for (let offset = 0; offset < file.data.byteLength; offset += 64 * 1024) {
-                        const stale = scopeFailure();
-                        if (stale) {
-                            settle(asFailure<void>(stale));
-                            return;
+                    try {
+                        for (let offset = 0; offset < file.data.byteLength; offset += 64 * 1024) {
+                            const stale = scopeFailure();
+                            if (stale) {
+                                settle(asFailure<void>(stale));
+                                return;
+                            }
+                            if (controller.signal.aborted) {
+                                settle(pluginError('aborted', 'File read was cancelled'));
+                                return;
+                            }
+                            yield file.data.slice(offset, Math.min(offset + 64 * 1024, file.data.byteLength));
                         }
-                        if (controller.signal.aborted) {
+                        settle(pluginOk(undefined));
+                    } finally {
+                        // Breaking out of the iteration (or an idle generator
+                        // dropped by its consumer) still settles exactly once:
+                        // abandoning the stream cancels the transfer.
+                        if (!settled) {
                             settle(pluginError('aborted', 'File read was cancelled'));
-                            return;
                         }
-                        yield file.data.slice(offset, Math.min(offset + 64 * 1024, file.data.byteLength));
                     }
-                    settle(pluginOk(undefined));
                 };
                 const iterable: AsyncIterable<Uint8Array> = { [Symbol.asyncIterator]: chunks };
                 return pluginOk({
@@ -1104,6 +1196,12 @@ export class PluginTestHost {
                 } catch (error) {
                     if (input.signal?.aborted) return pluginError('aborted', 'File write was cancelled');
                     return pluginError('internal', error instanceof Error ? error.message : 'File input failed');
+                }
+                // The iterable may have finished after a cancellation landed
+                // in its final next(): check both the caller and generation
+                // signals again immediately before commit.
+                if (input.signal?.aborted || scope.signal.aborted) {
+                    return pluginError('aborted', 'File write was cancelled');
                 }
                 const stale = this.#scopeFailure(scope, 'files.write');
                 if (stale) return asFailure<PluginFileRef>(stale);
@@ -1185,19 +1283,22 @@ export class PluginTestHost {
                 if (denied) return asFailure<T | null>(denied);
                 const invalid = validateKey(key);
                 if (invalid) return asFailure<T | null>(invalid);
-                return pluginOk((settings.get(key) ?? null) as T | null);
+                const stored = settings.get(key) ?? null;
+                return pluginOk((stored === null ? null : cloneTestValue(stored)) as T | null);
             },
             list: async () => {
                 const denied = this.#guard(scope, 'settings.read', 'settings');
                 if (denied) return asFailure<Readonly<Record<string, PluginJsonValue>>>(denied);
-                return pluginOk(Object.freeze(Object.fromEntries(settings)));
+                const snapshot: Record<string, PluginJsonValue> = {};
+                for (const [key, value] of settings) snapshot[key] = cloneTestValue(value);
+                return pluginOk(Object.freeze(snapshot));
             },
             set: async (key: string, value: PluginJsonValue) => {
                 const denied = this.#guard(scope, 'settings.write', 'settings');
                 if (denied) return asFailure<void>(denied);
                 const invalid = validateKey(key);
                 if (invalid) return asFailure<void>(invalid);
-                settings.set(key, value);
+                settings.set(key, cloneTestValue(value));
                 const revision = (revisions.get(key) ?? 0) + 1;
                 revisions.set(key, revision);
                 for (const listener of this.#eventListeners.get('settings.changed') ?? []) {
@@ -1215,7 +1316,7 @@ export class PluginTestHost {
                 if (invalid) return asFailure<void>(invalid);
                 const defaultValue = defaults.get(key);
                 if (defaultValue === undefined) settings.delete(key);
-                else settings.set(key, defaultValue);
+                else settings.set(key, cloneTestValue(defaultValue));
                 const revision = (revisions.get(key) ?? 0) + 1;
                 revisions.set(key, revision);
                 for (const listener of this.#eventListeners.get('settings.changed') ?? []) {
@@ -1241,7 +1342,9 @@ export class PluginTestHost {
             settings = new Map();
             this.#settingsByWorkspace.set(scopeKey, settings);
             if (this.#claimInitialState(pluginId) && workspaceId === this.#initialWorkspaceId) {
-                for (const [key, value] of Object.entries(this.#initialSettings)) settings.set(key, value);
+                for (const [key, value] of Object.entries(this.#initialSettings)) {
+                    settings.set(key, cloneTestValue(value));
+                }
             }
         }
         return settings;
@@ -1254,7 +1357,9 @@ export class PluginTestHost {
             defaults = new Map();
             this.#settingsDefaultsByWorkspace.set(scopeKey, defaults);
             if (this.#claimInitialState(pluginId) && workspaceId === this.#initialWorkspaceId) {
-                for (const [key, value] of Object.entries(this.#initialSettingsDefaults)) defaults.set(key, value);
+                for (const [key, value] of Object.entries(this.#initialSettingsDefaults)) {
+                    defaults.set(key, cloneTestValue(value));
+                }
             }
         }
         return defaults;
@@ -1300,7 +1405,7 @@ export class PluginTestHost {
         }
         if (this.#claimInitialState(pluginId) && workspaceId === this.#initialWorkspaceId && values.size === 0) {
             for (const [key, value] of Object.entries(this.#initialStorage)) {
-                values.set(key, value);
+                values.set(key, cloneTestValue(value));
                 revisions.set(key, 1);
                 updatedAt.set(key, 0);
             }
@@ -1356,7 +1461,8 @@ export class PluginTestHost {
                 if (denied) return asFailure<T | null>(denied);
                 const invalid = validateKey(key);
                 if (invalid) return asFailure<T | null>(invalid);
-                return pluginOk((storage.values.get(key) ?? null) as T | null);
+                const stored = storage.values.get(key) ?? null;
+                return pluginOk((stored === null ? null : cloneTestValue(stored)) as T | null);
             },
             getRecord: async <T extends PluginJsonValue>(key: string) => {
                 const denied = this.#guard(scope, 'storage.read', 'storage');
@@ -1373,7 +1479,8 @@ export class PluginTestHost {
                     readonly sizeBytes: number;
                     readonly updatedAt: number;
                 }>(invalid);
-                const value = (storage.values.get(key) ?? null) as T | null;
+                const stored = (storage.values.get(key) ?? null) as T | null;
+                const value = stored === null ? null : cloneTestValue(stored);
                 return pluginOk({
                     value,
                     revision: storage.revisions.get(key) ?? 0,
@@ -1414,7 +1521,7 @@ export class PluginTestHost {
                         details: { key, expected: options.ifRevision, current: currentRevision },
                     });
                 }
-                storage.values.set(key, value);
+                storage.values.set(key, cloneTestValue(value));
                 storage.revisions.set(key, currentRevision + 1);
                 storage.updatedAt.set(key, Date.now());
                 return pluginOk(undefined);
@@ -1915,12 +2022,28 @@ export function createPortableTestHost(options: PortableTestHostOptions = {}): P
         string,
         (params: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>
     >();
-    const settings = new Map<string, PluginJsonValue>(Object.entries(options.initialSettings ?? {}));
-    const storage = new Map<string, PluginJsonValue>(Object.entries(options.initialStorage ?? {}));
+    const settings = new Map<string, PluginJsonValue>(
+        Object.entries(options.initialSettings ?? {}).map(([key, value]) => [key, cloneTestValue(value)])
+    );
+    const storage = new Map<string, PluginJsonValue>(
+        Object.entries(options.initialStorage ?? {}).map(([key, value]) => [key, cloneTestValue(value)])
+    );
     const storageRevisions = new Map<string, number>(
         [...storage.keys()].map((key) => [key, 1])
     );
     const storageUpdatedAt = new Map<string, number>();
+    // Match production live-value quotas and the retained name/history cap.
+    const TEST_STORAGE_MAX_KEYS = 1000;
+    const TEST_STORAGE_MAX_BYTES = 1024 * 1024;
+    const TEST_STORAGE_MAX_RETAINED_KEYS = 10_000;
+    const testValueBytes = (value: PluginJsonValue | null): number =>
+        new TextEncoder().encode(JSON.stringify(value)).byteLength;
+    let testQuotaBytes = 0;
+    let testQuotaKeys = 0;
+    for (const value of storage.values()) {
+        testQuotaBytes += testValueBytes(value);
+        testQuotaKeys += 1;
+    }
     const eventListeners = new Set<(event: { name: string; payload: Readonly<Record<string, unknown>> }) => void>();
     const unavailable = new Set<PluginTestCapability>(options.unavailableCapabilities ?? []);
     const responses = options.responses ?? {};
@@ -1973,45 +2096,136 @@ export function createPortableTestHost(options: PortableTestHostOptions = {}): P
             if (capability && unavailable.has(capability)) {
                 return {
                     ok: false,
-                    code: 'not-found',
+                    code: 'unknown-method',
                     message: `No host method ${method}`,
                 };
             }
-            const store = capability === 'settings' ? settings : capability === 'storage' ? storage : null;
-            const key = typeof params.key === 'string' ? params.key : '';
+            // Grant enforcement mirrors production dispatch (see
+            // `SDK_LOGIC_RPC_METHODS` in the host broker): an unapproved
+            // settings/storage call is refused before any handler runs.
+            const requiredGrant: string | null =
+                method === 'settings.get' || method === 'settings.list'
+                    ? 'settings.read'
+                    : method === 'settings.set' || method === 'settings.delete'
+                      ? 'settings.write'
+                      : method === 'storage.get' ||
+                          method === 'storage.getRecord' ||
+                          method === 'storage.list' ||
+                          method === 'storage.listPage'
+                        ? 'storage.read'
+                        : method === 'storage.set' || method === 'storage.delete'
+                          ? 'storage.write'
+                          : null;
+            if (requiredGrant && !(options.approvedGrants ?? []).includes(requiredGrant as never)) {
+                return {
+                    ok: false,
+                    code: 'permission-denied',
+                    message: `Grant ${requiredGrant} was not approved`,
+                };
+            }
+            const store = requiredGrant === null ? null : capability === 'settings' ? settings : capability === 'storage' ? storage : null;
+            // Key shape mirrors the production validators: malformed keys are
+            // refused, never coerced into an empty-key lookup. Listing methods
+            // take a prefix instead of a key and skip this check.
+            const takesKey =
+                method.endsWith('.get') ||
+                method === 'storage.getRecord' ||
+                method.endsWith('.set') ||
+                method.endsWith('.delete');
+            const rawKey = params.key;
+            const key = typeof rawKey === 'string' ? rawKey : '';
+            if (store && takesKey && (!key || key.length > 200 || key.includes('\u0000'))) {
+                return {
+                    ok: false,
+                    code: 'invalid-input',
+                    message: capability === 'settings'
+                        ? 'Setting keys must be 1–200 characters without NUL'
+                        : 'Storage keys must be 1–200 characters without NUL',
+                };
+            }
             if (store) {
                 if (method.endsWith('.get')) {
-                    return { ok: true, result: { value: store.get(key) ?? null } as T };
+                    const stored = store.get(key) ?? null;
+                    return {
+                        ok: true,
+                        result: { value: stored === null ? null : cloneTestValue(stored) } as T,
+                    };
                 }
                 if (method === 'storage.getRecord') {
-                    const value = store.get(key) ?? null;
+                    const stored = store.get(key) ?? null;
+                    const value = stored === null ? null : cloneTestValue(stored);
                     const serialized = JSON.stringify(value);
                     return {
                         ok: true,
                         result: {
                             value,
                             revision: storageRevisions.get(key) ?? 0,
-                            sizeBytes: value === null ? 0 : new TextEncoder().encode(serialized).byteLength,
+                            sizeBytes: store.has(key) ? new TextEncoder().encode(serialized).byteLength : 0,
                             updatedAt: storageUpdatedAt.get(key) ?? 0,
                         } as T,
                     };
                 }
                 if (method.endsWith('.set')) {
-                    const currentRevision = storageRevisions.get(key) ?? 0;
-                    if (
-                        method.startsWith('storage.') &&
-                        params.ifRevision !== undefined &&
-                        (params.ifRevision === null
-                            ? store.has(key)
-                            : params.ifRevision !== currentRevision)
-                    ) {
+                    let serialized: string;
+                    try {
+                        const encoded = JSON.stringify(params.value ?? null);
+                        if (typeof encoded !== 'string') throw new Error('not serializable');
+                        serialized = encoded;
+                    } catch {
                         return {
                             ok: false,
-                            code: 'conflict',
-                            message: 'Storage revision is stale',
+                            code: 'invalid-input',
+                            message: 'Storage values must be JSON-serializable',
                         };
                     }
-                    store.set(key, (params.value ?? null) as PluginJsonValue);
+                    if (method.startsWith('storage.') && new TextEncoder().encode(serialized).byteLength > 32 * 1024) {
+                        return {
+                            ok: false,
+                            code: 'invalid-input',
+                            message: 'Storage values must be at most 32768 bytes',
+                        };
+                    }
+                    const currentRevision = storageRevisions.get(key) ?? 0;
+                    // A malformed condition is refused, never degraded to an
+                    // unconditional write — same rule as production dispatch.
+                    if (method.startsWith('storage.') && params.ifRevision !== undefined) {
+                        const condition = params.ifRevision as unknown;
+                        if (
+                            condition !== null &&
+                            (!Number.isSafeInteger(condition) || (condition as number) < 0)
+                        ) {
+                            return {
+                                ok: false,
+                                code: 'invalid-input',
+                                message: 'storage.set ifRevision must be null or a non-negative safe integer',
+                            };
+                        }
+                        if (condition === null ? store.has(key) : condition !== currentRevision) {
+                            return {
+                                ok: false,
+                                code: 'conflict',
+                                message: 'Storage revision is stale',
+                                details: { currentRevision },
+                            };
+                        }
+                    }
+                    const incoming = JSON.parse(serialized) as PluginJsonValue;
+                    if (method.startsWith('storage.')) {
+                        const previous = store.get(key) ?? null;
+                        const nextBytes = testQuotaBytes - (store.has(key) ? testValueBytes(previous) : 0) + testValueBytes(incoming);
+                        const nextKeys = testQuotaKeys + (store.has(key) ? 0 : 1);
+                        if (nextBytes > TEST_STORAGE_MAX_BYTES || nextKeys > TEST_STORAGE_MAX_KEYS ||
+                            (!storageRevisions.has(key) && storageRevisions.size >= TEST_STORAGE_MAX_RETAINED_KEYS)) {
+                            return {
+                                ok: false,
+                                code: 'quota-exceeded',
+                                message: 'Storage quota exceeded',
+                            };
+                        }
+                        testQuotaBytes = nextBytes;
+                        testQuotaKeys = nextKeys;
+                    }
+                    store.set(key, incoming);
                     if (method.startsWith('storage.')) {
                         storageRevisions.set(key, currentRevision + 1);
                         storageUpdatedAt.set(key, Date.now());
@@ -2019,6 +2233,13 @@ export function createPortableTestHost(options: PortableTestHostOptions = {}): P
                     return { ok: true, result: {} as T };
                 }
                 if (method.endsWith('.delete')) {
+                    // Deleting a missing key is a no-op (no revision forged),
+                    // matching the production tombstone behavior.
+                    if (!store.has(key)) return { ok: true, result: {} as T };
+                    if (method.startsWith('storage.')) {
+                        testQuotaBytes = Math.max(0, testQuotaBytes - testValueBytes(store.get(key) ?? null));
+                        testQuotaKeys = Math.max(0, testQuotaKeys - 1);
+                    }
                     store.delete(key);
                     if (method.startsWith('storage.')) {
                         storageRevisions.set(key, (storageRevisions.get(key) ?? 0) + 1);
@@ -2028,10 +2249,42 @@ export function createPortableTestHost(options: PortableTestHostOptions = {}): P
                 }
                 if (method === 'storage.listPage') {
                     const prefix = typeof params.prefix === 'string' ? params.prefix : '';
-                    const cursor = typeof params.cursor === 'string' && params.cursor.startsWith('cursor:')
-                        ? params.cursor.slice(7)
-                        : '';
-                    const limit = Math.max(1, Math.min(200, Math.floor(typeof params.limit === 'number' ? params.limit : 100)));
+                    if (prefix.length > 200 || prefix.includes('\u0000')) {
+                        return {
+                            ok: false,
+                            code: 'invalid-input',
+                            message: 'storage.listPage prefix is too long or invalid',
+                        };
+                    }
+                    if (
+                        params.cursor !== undefined &&
+                        (typeof params.cursor !== 'string' || !(params.cursor as string).startsWith('cursor:'))
+                    ) {
+                        return {
+                            ok: false,
+                            code: 'invalid-input',
+                            message: 'storage.listPage cursor is invalid',
+                        };
+                    }
+                    const cursor =
+                        typeof params.cursor === 'string' && (params.cursor as string).startsWith('cursor:')
+                            ? (params.cursor as string).slice(7)
+                            : '';
+                    if (cursor.length > 200 || cursor.includes('\u0000')) {
+                        return {
+                            ok: false,
+                            code: 'invalid-input',
+                            message: 'storage.listPage cursor is invalid',
+                        };
+                    }
+                    if (cursor && !cursor.startsWith(prefix)) {
+                        return { ok: false, code: 'invalid-input', message: 'storage.listPage cursor does not match prefix' };
+                    }
+                    const requestedLimit =
+                        typeof params.limit === 'number' && Number.isFinite(params.limit)
+                            ? Math.floor(params.limit as number)
+                            : 100;
+                    const limit = Math.max(1, Math.min(200, requestedLimit));
                     const all = [...store.entries()]
                         .filter(([entryKey]) => entryKey.startsWith(prefix) && comparePluginStorageKeys(entryKey, cursor) > 0)
                         .sort(([left], [right]) => comparePluginStorageKeys(left, right))
@@ -2054,8 +2307,17 @@ export function createPortableTestHost(options: PortableTestHostOptions = {}): P
                 }
                 if (method.endsWith('.list')) {
                     const prefix = typeof params.prefix === 'string' ? params.prefix : '';
+                    if (prefix.length > 200) {
+                        return {
+                            ok: false,
+                            code: 'invalid-input',
+                            message: 'storage.list prefix is too long',
+                        };
+                    }
                     const entries = [...store.entries()]
                         .filter(([entryKey]) => entryKey.startsWith(prefix))
+                        .sort(([left], [right]) => comparePluginStorageKeys(left, right))
+                        .slice(0, 200)
                         .map(([entryKey, value]) => ({
                             key: entryKey,
                             sizeBytes: new TextEncoder().encode(JSON.stringify(value ?? null)).byteLength,
@@ -2065,14 +2327,16 @@ export function createPortableTestHost(options: PortableTestHostOptions = {}): P
                     return {
                         ok: true,
                         result: (method.startsWith('settings.')
-                            ? { values: Object.fromEntries(store.entries()) }
+                            ? { values: cloneTestValue(Object.fromEntries(store.entries())) }
                             : { entries }) as T,
                     };
                 }
             }
             const configured = responses[method];
             if (configured === undefined) {
-                return { ok: false, code: 'not-found', message: `No test response for ${method}` };
+                // Unregistered methods answer `unknown-method`, matching broker
+                // dispatch (mapped to `unsupported` by the SDK error codec).
+                return { ok: false, code: 'unknown-method', message: `No host method ${method}` };
             }
             const value: unknown =
                 typeof configured === 'function'

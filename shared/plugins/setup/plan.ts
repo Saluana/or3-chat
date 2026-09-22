@@ -9,6 +9,9 @@
  * Behavior:
  * - Required settings and connections with no safe default block "ready";
  *   optional settings are deferred to after first use.
+ * - A required secret field is always a blocker: ordinary settings can never
+ *   supply it, and without host secret custody the package is reported as
+ *   blocked rather than as something the user can finish in the setup form.
  * - A successful connection test is bound to the connection revision, so a
  *   credential change returns the plugin to "needs setup".
  * - A stored connection only satisfies a declared requirement through an
@@ -145,11 +148,17 @@ export function buildSetupPlan(input: BuildSetupPlanInput): SetupPlan {
             const provided = isSetupValuePresent(field, values[field.key]);
             const hasDefault = field.default !== undefined;
             const secret = field.secret === true;
-            const missing = field.required && !secret && !provided && !hasDefault;
-            // Optional settings are always configurable later, never blockers.
+            // A secret is never "provided" through ordinary settings, so a
+            // required one stays missing until host secret custody can answer
+            // for it; optional secrets remain deferred, never blockers.
+            const missing = field.required && (secret || (!provided && !hasDefault));
             const deferred = secret || !field.required;
             if (missing) {
-                blockers.push(`Required setting "${field.label}" has no value`);
+                blockers.push(
+                    secret
+                        ? `Required secret "${field.label}" needs host secret custody, which this deployment does not provide`
+                        : `Required setting "${field.label}" has no value`
+                );
             }
             return {
                 key: field.key,
@@ -276,7 +285,15 @@ export function buildSetupPlan(input: BuildSetupPlanInput): SetupPlan {
         blockers.push('The package declares no first action');
     }
 
-    const unsupported = connections.some((connection) => connection.unsupported);
+    // A required secret this host cannot hold is not something the user can
+    // resolve in the setup form: the package is blocked rather than "needs
+    // setup", and the blocker explains why.
+    const requiredSecretUnavailable = fields.some(
+        (field) => field.secret && field.required && field.missing
+    );
+    const unsupported =
+        requiredSecretUnavailable ||
+        connections.some((connection) => connection.unsupported);
     const status: SetupStatus = unsupported
         ? 'blocked'
         : blockers.length > 0

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PluginGrantReviewSnapshot } from '../../grant-review';
 import {
+    createRpcEvent,
     createRpcRequest,
     createRpcResponse,
     parseRpcEnvelope,
@@ -351,6 +352,68 @@ describe('worker-runtime (8.4-8.6)', () => {
         });
         expect(runtime.budgetTerminationReason).toContain('activation-ms');
         expect(fake.terminated()).toBe(true);
+    });
+
+    it('enforces slot grants on raw ui.contribute events and prunes on revocation', async () => {
+        const inbox: RpcEnvelope[] = [];
+        const fake = createFakeWorkerFactory(inbox);
+        const events: Array<{ status: string; name: string; reason?: string; contributionIds?: readonly string[] }> = [];
+        const runtime = new WorkerIsolationRuntime({
+            pluginId: 'iso.worker',
+            workspaceId: 'ws-1',
+            generation: 1,
+            moduleUrl: 'https://plugins.local/worker.mjs',
+            grants: grants(['ui.dashboard.register']),
+            createWorker: fake.factory,
+            services: {},
+            onEvent: (event) => {
+                events.push(event as { status: string; name: string; reason?: string; contributionIds?: readonly string[] });
+            },
+        });
+        await runtime.start();
+
+        const contribute = (id: string, slot: string) =>
+            fake.emit(
+                serializeRpcEnvelope(
+                    createRpcEvent({
+                        id: `ev-${id}`,
+                        name: 'ui.contribute',
+                        payload: {
+                            slot,
+                            id,
+                            title: 'Widget',
+                            nodes: [{ type: 'text', text: 'hello' }],
+                        },
+                    })
+                )
+            );
+        // Bypass the SDK register() guard with a raw wire event for a slot
+        // whose grant was not approved: the host boundary must refuse it.
+        contribute('palette-1', 'command-palette');
+        await vi.waitFor(() => {
+            expect(events.some((event) => event.status === 'invalid')).toBe(true);
+        });
+        expect(runtime.contributions).toHaveLength(0);
+        expect(events.at(-1)?.reason).toContain('ui.command-palette.register');
+
+        // The approved slot is accepted.
+        contribute('dash-1', 'dashboard');
+        await vi.waitFor(() => {
+            expect(runtime.contributions).toHaveLength(1);
+        });
+        expect(runtime.contributions[0]).toMatchObject({
+            contributionId: 'dash-1',
+            slot: 'dashboard',
+        });
+
+        // Revoking the grant removes the accepted registration.
+        events.length = 0;
+        runtime.setGrants(grants([]));
+        expect(runtime.contributions).toHaveLength(0);
+        expect(events).toContainEqual(
+            expect.objectContaining({ status: 'withdrawn', contributionIds: ['dash-1'] })
+        );
+        runtime.dispose();
     });
 
     it('adversarial: forbids host globals/DOM/network, revoked grants, and enforces deadlines', async () => {

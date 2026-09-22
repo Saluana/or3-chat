@@ -57,7 +57,12 @@ export interface Or3SetupField {
     readonly kind: PortableProfileFieldKind;
     readonly required: boolean;
     readonly order: number;
-    /** Where the host stores this non-secret preference. Defaults to workspace. */
+    /**
+     * Declared storage scope. Only `workspace` is currently honored: `user`
+     * is reserved for a future per-member store and is refused during
+     * admission until that store exists, so personal values are never silently
+     * shared as workspace configuration. Defaults to workspace.
+     */
     readonly scope?: Or3SetupFieldScope;
     /** Secret fields are never accepted by setup-values; use context.secrets. */
     readonly secret?: boolean;
@@ -146,7 +151,8 @@ export type PortableProfileFindingCode =
     | 'portable-policy-grant-mismatch'
     | 'portable-setup-connection-unknown'
     | 'portable-setup-operation-unknown'
-    | 'portable-feature-mismatch';
+    | 'portable-feature-mismatch'
+    | 'portable-user-scope-unsupported';
 
 /** Mirrors the conformance finding shape used by the reviewer and CLI. */
 export interface PortableProfileFinding {
@@ -1109,6 +1115,19 @@ export function validatePortableProfile(
                     settingsSchema === undefined ? 'unset' : `"${settingsSchema}"`
                 }) so the manifest and ${PACKAGE_SETUP_FILE} agree. applyPortableProfileToManifest() applies this.`
             );
+        }
+        // `scope: "user"` is declared but has no per-member store: the save
+        // path would silently share the value as workspace configuration.
+        // Refuse admission until a user-scoped store with matching read/write
+        // authorization exists.
+        for (const [index, field] of setupUsable.fields.entries()) {
+            if (field.scope === 'user') {
+                report(
+                    'portable-user-scope-unsupported',
+                    `${PACKAGE_SETUP_FILE}.fields[${index}].scope`,
+                    `Field "${field.key}" declares scope "user", which has no per-member store yet; remove the scope or set it to "workspace" until user-scoped settings are supported.`
+                );
+            }
         }
     }
 

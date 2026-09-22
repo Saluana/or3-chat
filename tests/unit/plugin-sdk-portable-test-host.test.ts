@@ -91,7 +91,7 @@ describe('portable test host', () => {
 
         expect(await host.client.call('ai.models')).toMatchObject({ ok: true })
         expect(host.calls[0]).toMatchObject({ method: 'ai.models' })
-        expect(await host.client.call('nope.method')).toMatchObject({ ok: false, code: 'not-found' })
+        expect(await host.client.call('nope.method')).toMatchObject({ ok: false, code: 'unknown-method' })
     })
 
     it('supports create-if-absent CAS and deterministic cursor ordering', async () => {
@@ -124,3 +124,25 @@ describe('portable test host', () => {
         })).toMatchObject({ ok: true, result: { entries: [{ key: 'a-2' }, { key: 'a-A' }] } })
     })
 })
+
+
+describe('portable method dispatch parity', () => {
+    it('does not run suffix lookalikes without a registered method', async () => {
+        const host = createPortableTestHost({ initialStorage: { private: 'secret' } });
+        for (const method of ['storage.extra.get', 'storage.extra.set', 'settings.extra.delete']) {
+            expect(await host.client.call(method, { key: 'private', value: 'overwrite' }))
+                .toMatchObject({ ok: false, code: 'unknown-method' });
+        }
+        expect(host.storage.get('private')).toBe('secret');
+    });
+
+    it('uses JSON wire values and returns the current revision on conflicts', async () => {
+        const host = createPortableTestHost({ approvedGrants: ['storage.read', 'storage.write'] });
+        await host.client.call('storage.set', { key: 'value', value: { ignored: undefined, number: NaN } });
+        expect(await host.client.call('storage.get', { key: 'value' }))
+            .toMatchObject({ ok: true, result: { value: { number: null } } });
+        expect(host.storage.get('value')).toEqual({ number: null });
+        expect(await host.client.call('storage.set', { key: 'value', value: 1, ifRevision: 0 }))
+            .toMatchObject({ ok: false, code: 'conflict', details: { currentRevision: 1 } });
+    });
+});

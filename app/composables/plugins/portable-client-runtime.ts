@@ -57,7 +57,7 @@ import {
 } from '~~/shared/plugins/isolation/capability-bridge';
 import { requestWorkspacePluginReconcile } from './bundled-v1-manager-runtime';
 import { resolvePackageDescriptor } from '~~/shared/plugins/descriptor-resolver';
-import { getKvByName, hardDeleteKvByName, setKvByName } from '~/db/kv';
+import { getKvByName, getKvRecordByName, setKvByName, tombstoneKvByName } from '~/db/kv';
 import { getDb } from '~/db/client';
 
 export type PortableActivationStatus =
@@ -230,21 +230,27 @@ export function createPortableSettingsServices(
         readonly get: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
         readonly set: (
             params: Readonly<Record<string, unknown>>,
-            context?: Pick<HostRpcHandlerContext, 'emitEvent'>
+            context?: Pick<HostRpcHandlerContext, 'emitEvent' | 'markCommitted'>
         ) => Promise<unknown>;
         readonly list: () => Promise<unknown>;
         readonly delete: (
             params: Readonly<Record<string, unknown>>,
-            context?: Pick<HostRpcHandlerContext, 'emitEvent'>
+            context?: Pick<HostRpcHandlerContext, 'emitEvent' | 'markCommitted'>
         ) => Promise<unknown>;
     };
     readonly storage: {
         readonly get: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
         readonly getRecord: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
-        readonly set: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
+        readonly set: (
+            params: Readonly<Record<string, unknown>>,
+            context?: Pick<HostRpcHandlerContext, 'signal' | 'markCommitted'>
+        ) => Promise<unknown>;
         readonly list: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
         readonly listPage: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
-        readonly delete: (params: Readonly<Record<string, unknown>>) => Promise<unknown>;
+        readonly delete: (
+            params: Readonly<Record<string, unknown>>,
+            context?: Pick<HostRpcHandlerContext, 'signal' | 'markCommitted'>
+        ) => Promise<unknown>;
     };
 } {
     const loadValues = async (): Promise<Record<string, unknown>> => {
@@ -265,15 +271,21 @@ export function createPortableSettingsServices(
     // work must never resolve the globally active DB halfway through a write.
     const capturedDb = getDb();
     const getStorageKv = (name: string) =>
-        workspaceId ? getKvByName(name, capturedDb) : getKvByName(name);
-    const setStorageKv = (name: string, value: string | null, options?: { readonly ifClock?: number | null }) =>
-        workspaceId
-            ? setKvByName(name, value, capturedDb, options)
-            : options === undefined
-              ? setKvByName(name, value)
-              : setKvByName(name, value, undefined, options);
-    const deleteStorageKv = (name: string) =>
-        workspaceId ? hardDeleteKvByName(name, capturedDb) : hardDeleteKvByName(name);
+        getKvByName(name, capturedDb);
+    const setStorageKv = (
+        name: string,
+        value: string | null,
+        options?: { readonly ifClock?: number | null },
+        guard?: { readonly signal?: AbortSignal }
+    ) => setKvByName(name, value, capturedDb, {
+        ...options, ...guard, quota: storageQuota,
+    });
+    const deleteStorageKv = (name: string, guard?: { readonly signal?: AbortSignal }) =>
+        tombstoneKvByName(name, capturedDb, guard);
+    // Tombstoned rows (deleted by `delete`, revision preserved) read as absent.
+    const isLiveStorageRow = <T extends { readonly deleted?: unknown }>(
+        row: T | undefined
+    ): row is T => row !== undefined && row.deleted !== true;
     const invalid = (message: string) =>
         Object.assign(new Error(message), { rpcCode: 'invalid-input' });
     const readStorageKey = (params: Readonly<Record<string, unknown>>): string => {
@@ -291,11 +303,21 @@ export function createPortableSettingsServices(
         return key;
     };
     const MAX_STORAGE_VALUE_BYTES = 32 * 1024;
-
-    function comparePluginStorageKeys(left: string, right: string): number {
-        return left < right ? -1 : left > right ? 1 : 0;
-    }
-
+    // Aggregate caps per plugin per workspace. Individual values are bounded
+    // above; these bound the total footprint across activations. Usage is
+    // derived from the live rows in scope inside the write transaction (see
+    // `StorageQuota`), so racing writers cannot over-admit and remote-applied
+    // rows stay accounted.
+    const MAX_STORAGE_KEYS = 1000;
+    const MAX_STORAGE_BYTES = 1024 * 1024;
+    /** Explicit bound for the legacy `list()` call; use `listPage()` beyond it. */
+    const MAX_STORAGE_LIST_ENTRIES = 200;
+    const storageQuota = {
+        prefix: storagePrefix,
+        maxBytes: MAX_STORAGE_BYTES,
+        maxKeys: MAX_STORAGE_KEYS,
+        maxRetainedKeys: 10_000,
+    };
     return {
         settings: {
             async get(params) {
@@ -326,6 +348,7 @@ export function createPortableSettingsServices(
                             ...(activationId ? { activationId } : {}),
                         },
                     });
+                    context?.markCommitted?.();
                     const revision =
                         response && typeof response === 'object' &&
                         typeof (response as { revision?: unknown }).revision === 'number'
@@ -377,6 +400,7 @@ export function createPortableSettingsServices(
                             ...(activationId ? { activationId } : {}),
                         },
                     });
+                    context?.markCommitted?.();
                     const revision =
                         response && typeof response === 'object' &&
                         typeof (response as { revision?: unknown }).revision === 'number'
@@ -406,7 +430,7 @@ export function createPortableSettingsServices(
             async get(params) {
                 const key = readStorageKey(params);
                 const row = await getStorageKv(`${storagePrefix}${key}`);
-                if (!row || row.value === null || row.value === undefined) {
+                if (!isLiveStorageRow(row) || row.value === null || row.value === undefined) {
                     return { value: null };
                 }
                 try {
@@ -417,29 +441,32 @@ export function createPortableSettingsServices(
             },
             async getRecord(params) {
                 const key = readStorageKey(params);
-                const row = await getStorageKv(`${storagePrefix}${key}`);
-                if (!row || row.value === null || row.value === undefined) {
-                    return { value: null, revision: row ? row.clock : 0, sizeBytes: 0, updatedAt: row ? row.updated_at * 1000 : 0 };
+                const { row, revision } = await getKvRecordByName(`${storagePrefix}${key}`, capturedDb);
+                if (!isLiveStorageRow(row) || row.value === null || row.value === undefined) {
+                    return { value: null, revision, sizeBytes: 0, updatedAt: 0 };
                 }
                 try {
-                    const rowRevision = (row as unknown as { clock?: unknown }).clock;
                     return {
                         value: JSON.parse(row.value) as unknown,
-                        revision: typeof rowRevision === 'number' ? rowRevision : 0,
+                        revision,
                         sizeBytes: new TextEncoder().encode(row.value).byteLength,
                         updatedAt: row.updated_at * 1000,
                     };
                 } catch {
-                    const rowRevision = (row as unknown as { clock?: unknown }).clock;
                     return {
                         value: null,
-                        revision: typeof rowRevision === 'number' ? rowRevision : 0,
+                        revision,
                         sizeBytes: 0,
                         updatedAt: row.updated_at * 1000,
                     };
                 }
             },
-            async set(params) {
+            async set(params, context) {
+                if (context?.signal?.aborted) {
+                    throw Object.assign(new Error('Storage operation was revoked'), {
+                        rpcCode: 'cancelled',
+                    });
+                }
                 const key = readStorageKey(params);
                 const value = params.value ?? null;
                 let serialized: string;
@@ -454,39 +481,27 @@ export function createPortableSettingsServices(
                 if (new TextEncoder().encode(serialized).byteLength > MAX_STORAGE_VALUE_BYTES) {
                     throw invalid(`storage values must be at most ${MAX_STORAGE_VALUE_BYTES} bytes`);
                 }
-                try {
-                    const rawIfRevision = params.ifRevision;
-                    const ifRevision =
-                        rawIfRevision === null || typeof rawIfRevision === 'number'
-                            ? rawIfRevision
-                            : undefined;
-                    if (ifRevision === undefined) {
-                        await setStorageKv(`${storagePrefix}${key}`, serialized);
-                    } else {
-                        await setStorageKv(`${storagePrefix}${key}`, serialized, {
-                            ifClock: ifRevision,
-                        });
-                    }
-                } catch (error) {
-                    if (error && typeof error === 'object' && 'rpcCode' in error) {
-                        const code = (error as { rpcCode?: unknown }).rpcCode;
-                        if (code === 'conflict') throw error;
-                    }
-                    throw error;
+                const ifRevision = params.ifRevision;
+                if (ifRevision !== undefined && ifRevision !== null &&
+                    (!Number.isSafeInteger(ifRevision) || (ifRevision as number) < 0)) {
+                    throw invalid('storage.set ifRevision must be null or a non-negative safe integer');
                 }
+                await setStorageKv(`${storagePrefix}${key}`, serialized,
+                    { ifClock: ifRevision as number | null | undefined },
+                    context?.signal === undefined ? undefined : { signal: context.signal });
+                context?.markCommitted?.();
                 return { ok: true };
             },
             async list(params) {
                 const prefix = typeof params.prefix === 'string' ? params.prefix : '';
                 if (prefix.length > 200) throw invalid('storage.list prefix is too long');
-                const rows = await capturedDb
-                    .kv.where('name')
+                const rows = await capturedDb.kv.where('name')
                     .startsWith(`${storagePrefix}${prefix}`)
+                    .filter(isLiveStorageRow)
+                    .limit(MAX_STORAGE_LIST_ENTRIES)
                     .toArray();
                 return {
-                    entries: rows
-                        .sort((left, right) => comparePluginStorageKeys(left.name, right.name))
-                        .map((row) => {
+                    entries: rows.map((row) => {
                             const rowRevision = (row as unknown as { clock?: unknown }).clock;
                             return {
                                 key: row.name.slice(storagePrefix.length),
@@ -515,13 +530,20 @@ export function createPortableSettingsServices(
                     ? Math.floor(params.limit)
                     : 100;
                 const limit = Math.max(1, Math.min(200, requestedLimit));
-                const rows = (await capturedDb
-                    .kv.where('name')
-                    .startsWith(`${storagePrefix}${prefix}`)
-                    .toArray())
-                    .filter((row) => comparePluginStorageKeys(row.name, `${storagePrefix}${cursor}`) > 0)
-                    .sort((left, right) => comparePluginStorageKeys(left.name, right.name));
+                if (cursor && !cursor.startsWith(prefix)) {
+                    throw invalid('storage.listPage cursor does not match prefix');
+                }
+                const fullPrefix = `${storagePrefix}${prefix}`;
+                const index = capturedDb.kv.where('name');
+                const range = cursor
+                    ? index.above(`${storagePrefix}${cursor}`)
+                    : index.aboveOrEqual(fullPrefix);
+                // Seek first, then skip deleted rows before applying the live-row
+                // limit. A run of tombstones must never terminate a page walk.
+                const rows = await range.until((row) => !row.name.startsWith(fullPrefix))
+                    .filter(isLiveStorageRow).limit(limit + 1).toArray();
                 const page = rows.slice(0, limit);
+                const hasMore = rows.length > limit;
                 return {
                     entries: page.map((row) => {
                         const rowRevision = (row as unknown as { clock?: unknown }).clock;
@@ -532,14 +554,23 @@ export function createPortableSettingsServices(
                             ...(typeof rowRevision === 'number' ? { revision: rowRevision } : {}),
                         };
                     }),
-                    ...(rows.length > page.length && page.length > 0
+                    ...(hasMore && page.length > 0
                         ? { nextCursor: `cursor:${page[page.length - 1]!.name.slice(storagePrefix.length)}` }
                         : {}),
                 };
             },
-            async delete(params) {
+            async delete(params, context) {
+                if (context?.signal?.aborted) {
+                    throw Object.assign(new Error('Storage operation was revoked'), {
+                        rpcCode: 'cancelled',
+                    });
+                }
                 const key = readStorageKey(params);
-                await deleteStorageKv(`${storagePrefix}${key}`);
+                await deleteStorageKv(
+                    `${storagePrefix}${key}`,
+                    context?.signal === undefined ? undefined : { signal: context.signal }
+                );
+                context?.markCommitted?.();
                 return { ok: true };
             },
         },
@@ -1009,16 +1040,49 @@ export interface PortableClientSource {
 
 const clientSources = shallowReactive(new Map<string, PortableClientSource>());
 
+/** Host drafts survive surface remounts, but never source removal or workspace teardown. */
+const clientDrafts = new Map<string, Map<string, {
+    workspaceId: string;
+    values: Record<string, string | boolean>;
+    dirty: Set<string>;
+}>>();
+
+export function getPortableClientDraft(pluginId: string, workspaceId: string, surface: string) {
+    let surfaces = clientDrafts.get(pluginId);
+    if (!surfaces) {
+        surfaces = new Map();
+        clientDrafts.set(pluginId, surfaces);
+    }
+    let draft = surfaces.get(surface);
+    if (!draft || draft.workspaceId !== workspaceId) {
+        draft = { workspaceId, values: reactive({}), dirty: new Set() };
+        surfaces.set(surface, draft);
+    }
+    return draft;
+}
+
 export function setPortableClientSource(source: PortableClientSource): void {
+    for (const [id, surfaces] of clientDrafts) {
+        if ([...surfaces.values()].some((draft) => draft.workspaceId !== source.workspaceId)) {
+            clientDrafts.delete(id);
+        }
+    }
     clientSources.set(source.descriptor.id, source);
 }
 
 export function removePortableClientSource(pluginId: string): void {
     clientSources.delete(pluginId);
+    clientDrafts.delete(pluginId);
+    cancelPortableClientRecovery(pluginId);
 }
 
 export function clearPortableClientSources(): void {
     clientSources.clear();
+    clientDrafts.clear();
+    for (const key of [...recoveryTimers.keys()]) {
+        clearTimeout(recoveryTimers.get(key));
+        recoveryTimers.delete(key);
+    }
 }
 
 export function getPortableClientSource(pluginId: string): PortableClientSource | null {
@@ -1045,12 +1109,107 @@ export async function ensurePortableClientActivation(
 }
 
 /**
+ * Stop codes a silent restart can plausibly clear: the activation handle itself
+ * expired, was revoked or was superseded by a host/package change. Containment,
+ * quota, grant-review and access failures are terminal for automatic recovery:
+ * they either need the user or would repeat identically, so they are not on the
+ * allowlist.
+ */
+export const RECOVERABLE_PORTABLE_STOP_CODES: ReadonlySet<string> = new Set([
+    'activation-unknown',
+    'activation-expired',
+    'activation-revoked',
+    'activation-stale',
+]);
+
+export function isRecoverablePortableStop(code: string | null | undefined): boolean {
+    return typeof code === 'string' && RECOVERABLE_PORTABLE_STOP_CODES.has(code);
+}
+
+/**
+ * Rolling recovery budget per plugin in one workspace. Attempts are counted
+ * when they are scheduled and are never reset by a successful restart, so a
+ * plugin that starts and immediately stops again cannot recover forever; the
+ * window still lets an occasional host restart recover without user action.
+ */
+const PORTABLE_RECOVERY_WINDOW_MS = 5 * 60 * 1000;
+const MAX_PORTABLE_RECOVERY_ATTEMPTS = 3;
+const recoveryAttempts = new Map<string, number[]>();
+
+function recoveryKey(pluginId: string, workspaceId: string): string {
+    return `${workspaceId}\u0000${pluginId}`;
+}
+
+export function claimPortableRecoveryAttempt(
+    pluginId: string,
+    workspaceId: string
+): { readonly allowed: boolean; readonly attempt: number } {
+    const key = recoveryKey(pluginId, workspaceId);
+    const now = Date.now();
+    const recent = (recoveryAttempts.get(key) ?? []).filter(
+        (at) => now - at < PORTABLE_RECOVERY_WINDOW_MS
+    );
+    if (recent.length >= MAX_PORTABLE_RECOVERY_ATTEMPTS) {
+        recoveryAttempts.set(key, recent);
+        return { allowed: false, attempt: recent.length };
+    }
+    recent.push(now);
+    recoveryAttempts.set(key, recent);
+    return { allowed: true, attempt: recent.length };
+}
+
+const recoveryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/**
+ * Schedule one silent restart for a stopped activation whose failure is
+ * transient. Recovery is centralized here, not per surface: one timer per
+ * plugin and workspace, a rolling attempt budget shared by every surface, and
+ * the allowlist above. The timer re-checks the live activation before it fires,
+ * so an activation that recovered meanwhile (or a workspace that changed) is
+ * never restarted twice.
+ */
+export function schedulePortableClientRecovery(pluginId: string): void {
+    const current = activations.get(pluginId);
+    const source = clientSources.get(pluginId);
+    if (!current || current.status !== 'stopped' || !source) return;
+    if (!isRecoverablePortableStop(current.blockCode)) return;
+    if (source.workspaceId !== current.workspaceId) return;
+    const key = recoveryKey(pluginId, current.workspaceId);
+    if (recoveryTimers.has(key)) return;
+    const claim = claimPortableRecoveryAttempt(pluginId, current.workspaceId);
+    if (!claim.allowed) return;
+    recoveryTimers.set(
+        key,
+        setTimeout(() => {
+            recoveryTimers.delete(key);
+            const live = activations.get(pluginId);
+            const liveSource = clientSources.get(pluginId);
+            if (!live || live.status !== 'stopped' || !liveSource) return;
+            if (live !== current || !isRecoverablePortableStop(live.blockCode)) return;
+            if (liveSource.workspaceId !== current.workspaceId) return;
+            void activatePortableClient(liveSource).catch(() => undefined);
+        }, 300 * claim.attempt)
+    );
+}
+
+/** Forget a plugin's pending recovery; a removed source must not restart. */
+export function cancelPortableClientRecovery(pluginId: string): void {
+    const suffix = `\u0000${pluginId}`;
+    for (const [key, timer] of [...recoveryTimers]) {
+        if (!key.endsWith(suffix)) continue;
+        clearTimeout(timer);
+        recoveryTimers.delete(key);
+    }
+}
+
+/**
  * Stop the current activation. Claims the next epoch first, so an in-flight
  * start for the stopped activation cannot publish afterwards, and a caller that
  * lost the race cannot dispose a newer sandbox.
  */
 export async function deactivatePortableClient(pluginId: string): Promise<void> {
     claimActivationEpoch(pluginId);
+    cancelPortableClientRecovery(pluginId);
     const current = activations.get(pluginId);
     if (!current) return;
     const runtime = current.runtime;
@@ -1059,6 +1218,11 @@ export async function deactivatePortableClient(pluginId: string): Promise<void> 
         runtime: null,
         activationId: null,
         status: 'stopped',
+        // An explicit teardown (logout, workspace switch, uninstall) is not a
+        // transient failure: clearing the stop reason also keeps the recovery
+        // watcher from scheduling a restart for a workspace the user left.
+        blockCode: null,
+        blockMessage: null,
         contributions: [],
         view: null,
     });
@@ -1312,16 +1476,43 @@ export async function stopAllPortableClientsAndAwait(): Promise<void> {
 }
 
 /**
+ * Immutable activation identity a content-bearing caller authorized before its
+ * content-producing awaits. The handoff aborts when the live activation no
+ * longer matches, so selected-document text authorized for one
+ * workspace/generation can never land in a replacement runtime.
+ */
+export interface PortableUiEventTarget {
+    readonly workspaceId: string;
+    readonly packageDigest: string;
+    readonly generation: number;
+}
+
+/**
  * Forward a UI event from a rendered view to the plugin. The plugin answers the
  * request and may render again; nothing is assumed about the outcome.
+ *
+ * When `expected` is supplied, the live activation must still carry the same
+ * workspace, package digest and generation that authorized the content read;
+ * any mismatch aborts instead of delivering to the replacement, and the call
+ * is never retried automatically into the new generation.
  */
 export async function invokePortableUiEvent(
     pluginId: string,
-    payload: Readonly<Record<string, unknown>>
+    payload: Readonly<Record<string, unknown>>,
+    expected?: PortableUiEventTarget
 ): Promise<unknown> {
     const current = activations.get(pluginId);
     if (!current?.runtime) {
         throw new Error('Plugin is not active');
+    }
+    if (expected) {
+        if (
+            current.workspaceId !== expected.workspaceId ||
+            current.packageDigest !== expected.packageDigest ||
+            current.generation !== expected.generation
+        ) {
+            throw new Error('The plugin activation changed before the content could be delivered.');
+        }
     }
     return await current.runtime.callPlugin(PORTABLE_UI_EVENT_REQUEST, {
         ...payload,
