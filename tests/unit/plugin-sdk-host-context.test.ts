@@ -1,3 +1,4 @@
+import { createUnsupportedPluginClients } from '../../packages/plugin-sdk/src/capabilities';
 import { describe, expect, it, vi } from 'vitest';
 import type {
     PluginContributions,
@@ -119,4 +120,22 @@ describe('host-created PluginContext', () => {
         expect(Object.isFrozen(failure)).toBe(true);
         expect(Object.isFrozen(failure.error)).toBe(true);
     });
+});
+
+
+it('reports synchronous unsupported registration errors with a stable code', () => {
+    const clients = createUnsupportedPluginClients({ workspaceId: 'workspace-a' });
+    const operations = [
+        () => clients.events.on('settings.changed', () => {}),
+        () => clients.workspace.onChange(() => {}),
+        () => clients.ui.registerSidebar({} as never),
+        () => clients.ui.registerPane({} as never),
+        () => clients.ui.registerCard({} as never),
+        () => clients.ui.registerAction({} as never),
+        () => clients.commands.register({} as never),
+        () => clients.activity.registerSource({} as never),
+    ];
+    for (const operation of operations) {
+        expect(operation).toThrow(expect.objectContaining({ code: 'unsupported', retryable: false }));
+    }
 });

@@ -1,7 +1,8 @@
+import { testV2Package } from '../../packages/plugin-sdk/src/cli/test';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     readPackageZip,
     writeDeterministicPackageZip,
@@ -258,5 +259,20 @@ describe('@or3/plugin-sdk standalone CLI', () => {
         writeFileSync(pathB, archiveB);
         const inspectedB = await inspectV2Package(pathB);
         expect(inspectedB.digest).not.toBe(inspectedA.digest);
+    });
+});
+
+
+describe('test runner exit status', () => {
+    it.each([
+        { status: null, signal: 'SIGTERM', message: 'terminated by SIGTERM' },
+        { status: null, signal: null, error: new Error('spawn failed'), message: 'failed to start: spawn failed' },
+    ])('rejects an abnormal runner exit: $message', (result) => {
+        const runner = vi.fn(() => result) as never;
+        expect(() => testV2Package(createPortable('or3-sdk-exit-'), { runner })).toThrow(result.message);
+    });
+    it.each([0, 1, 7, null])('only accepts an explicit zero exit (%s)', (status) => {
+        const runner = vi.fn(() => ({ status, signal: null })) as never;
+        expect(testV2Package(createPortable('or3-sdk-exit-'), { runner }).exitCode).toBe(status ?? 1);
     });
 });

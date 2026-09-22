@@ -7,6 +7,7 @@ import type {
     PluginActivitySource,
 } from '@or3/plugin-sdk';
 import {
+    ActivitySourceIdentitySchema,
     activityErr,
     activityOk,
     type ActivityError,
@@ -130,11 +131,56 @@ export function adaptPluginActivitySource(source: PluginActivitySource): Activit
 
 export interface PluginActivityRegistry {
     register(source: ActivitySource): RegistrationHandle;
+    get(sourceId: string): ActivitySource | undefined;
 }
 
 export function registerPluginActivitySource(
     registry: PluginActivityRegistry,
-    source: PluginActivitySource
+    source: PluginActivitySource,
+    owner: { readonly namespace: string; readonly signal: AbortSignal }
 ): RegistrationHandle {
-    return registry.register(adaptPluginActivitySource(source));
+    // Namespace and lifetime are issued by the host for one runtime instance.
+    // A plugin cannot claim another activation's source by choosing its id.
+    ActivitySourceIdentitySchema.parse(source);
+    if (source.id.length > 100) throw new Error('Plugin Activity source id is too long');
+    if (owner.signal.aborted) throw new Error('Plugin Activity activation has ended');
+    const adapted = adaptPluginActivitySource({ ...source, id: `${owner.namespace}.${source.id}` });
+    let live = true;
+    const stale = () => activityErr({
+        code: 'source_failure' as const,
+        sourceId: adapted.id,
+        message: 'Plugin Activity activation has ended',
+    });
+    const current = () => live && !owner.signal.aborted && registry.get(adapted.id) === ownedSource;
+    const ownedSource: ActivitySource = {
+        ...adapted,
+        async listRuns(input) {
+            if (!current()) return stale();
+            const result = await adapted.listRuns(input);
+            return current() ? result : stale();
+        },
+        async getRun(id) {
+            if (!current()) return stale();
+            const result = await adapted.getRun!(id);
+            return current() ? result : stale();
+        },
+        async executeAction(input) {
+            if (!current()) return stale();
+            const result = await adapted.executeAction!(input);
+            return current() ? result : stale();
+        },
+    };
+    const registration = registry.register(ownedSource);
+    const dispose = () => {
+        live = false;
+        owner.signal.removeEventListener('abort', dispose);
+        return registration.dispose();
+    };
+    owner.signal.addEventListener('abort', dispose, { once: true });
+    return {
+        id: registration.id,
+        owner: registration.owner,
+        get disposed() { return registration.disposed; },
+        dispose,
+    };
 }

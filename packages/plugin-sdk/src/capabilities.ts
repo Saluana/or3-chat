@@ -501,7 +501,10 @@ function unsupported<T>(capability: string): PluginResult<T> {
 }
 
 function unsupportedHandle(capability: string): PluginRegistrationHandle {
-    throw new Error(`${capability} is not available in this host`);
+    throw Object.assign(new Error(`${capability} is not available in this host`), {
+        code: 'unsupported' as const,
+        retryable: false,
+    });
 }
 
 /**

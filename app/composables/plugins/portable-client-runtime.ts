@@ -598,7 +598,7 @@ async function mintHostActivation(
     pluginId: string
 ): Promise<
     | { readonly ok: true; readonly activationId: string; readonly generation: number }
-    | { readonly ok: false; readonly message: string }
+    | { readonly ok: false; readonly message: string; readonly code: string }
 > {
     try {
         const response = await fetch('/api/plugins/isolation/activation', {
@@ -622,7 +622,7 @@ async function mintHostActivation(
             } catch {
                 // A non-JSON refusal keeps the status text.
             }
-            return { ok: false, message };
+            return { ok: false, message, code: response.status === 408 || response.status === 429 || response.status >= 500 ? 'activation-unavailable' : 'activation-refused' };
         }
         const payload = (await response.json()) as {
             activation?: { activationId?: unknown; generation?: unknown };
@@ -630,12 +630,13 @@ async function mintHostActivation(
         const activationId = payload.activation?.activationId;
         const generation = payload.activation?.generation;
         if (typeof activationId !== 'string' || typeof generation !== 'number') {
-            return { ok: false, message: 'The host returned no activation handle' };
+            return { ok: false, message: 'The host returned no activation handle', code: 'activation-invalid-response' };
         }
         return { ok: true, activationId, generation };
     } catch (error) {
         return {
             ok: false,
+            code: 'activation-unavailable',
             message:
                 error instanceof Error
                     ? error.message
@@ -692,6 +693,15 @@ function recordEvent(pluginId: string, epoch: number, event: HostPluginEvent): v
     const current = activations.get(pluginId);
     if (!current || current.epoch !== epoch) return;
     if (event.status === 'rendered') {
+        for (const [surface, draft] of clientDrafts.get(pluginId) ?? []) {
+            if (surface === 'sidebar') continue;
+            const key = event.key ?? null;
+            if (draft.viewKey !== undefined && draft.viewKey !== key) {
+                for (const name of Object.keys(draft.values)) delete draft.values[name];
+                draft.dirty.clear();
+            }
+            draft.viewKey = key;
+        }
         update(pluginId, epoch, { view: { key: event.key ?? null, title: event.title, nodes: event.nodes, navigation: event.navigation ?? [] } });
         return;
     }
@@ -802,7 +812,7 @@ export async function activatePortableClient(
             pluginId,
             descriptor,
             workspaceId,
-            'activation-refused',
+            minted.code,
             minted.message,
             epoch
         );
@@ -1045,6 +1055,7 @@ const clientDrafts = new Map<string, Map<string, {
     workspaceId: string;
     values: Record<string, string | boolean>;
     dirty: Set<string>;
+    viewKey?: string | null;
 }>>();
 
 export function getPortableClientDraft(pluginId: string, workspaceId: string, surface: string) {
@@ -1055,7 +1066,7 @@ export function getPortableClientDraft(pluginId: string, workspaceId: string, su
     }
     let draft = surfaces.get(surface);
     if (!draft || draft.workspaceId !== workspaceId) {
-        draft = { workspaceId, values: reactive({}), dirty: new Set() };
+        draft = { workspaceId, values: reactive({}), dirty: new Set(), viewKey: activations.get(pluginId)?.view?.key };
         surfaces.set(surface, draft);
     }
     return draft;
@@ -1106,6 +1117,26 @@ export async function ensurePortableClientActivation(
     const source = clientSources.get(pluginId);
     if (!source) return current ? snapshot(pluginId) : null;
     return await activatePortableClient(source);
+}
+
+/** Explicit recovery always refreshes the authoritative source and reauthorizes. */
+export async function restartPortableClient(pluginId: string): Promise<PortableActivation> {
+    const source = clientSources.get(pluginId);
+    if (!source) throw new Error('This plugin is unavailable in the current workspace.');
+    const response = await fetch('/api/plugins/runtime-manifest', { credentials: 'same-origin', cache: 'no-store' });
+    if (!response.ok) throw new Error('The plugin state could not be refreshed. Try again.');
+    const manifest = await response.json() as import('~~/shared/plugins/runtime-manifest').PluginRuntimeManifestResponse;
+    if (clientSources.get(pluginId) !== source || manifest.workspaceId !== source.workspaceId) {
+        throw new Error('The workspace or plugin selection changed.');
+    }
+    const entry = manifest.runtime[pluginId];
+    if (!manifest.enabledPluginIds.includes(pluginId) || !entry?.loadAllowed ||
+        entry.descriptorStatus !== 'ready' || entry.descriptor.manifestVersion !== 2) {
+        throw new Error('The host no longer permits this plugin to run.');
+    }
+    const fresh = { workspaceId: source.workspaceId, descriptor: entry.descriptor, runtimeEntry: entry };
+    setPortableClientSource(fresh);
+    return activatePortableClient(fresh);
 }
 
 /**

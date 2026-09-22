@@ -19,7 +19,6 @@ import PortableUiTree from './PortableUiTree.vue';
 import { openPortablePane } from '~/composables/plugins/portable-pane';
 import { $fetch, navigateTo, useRoute, useToast } from '#imports';
 import {
-    activatePortableClient,
     ensurePortableClientActivation,
     getPortableClientSource,
     getPortableClientDraft,
@@ -459,7 +458,8 @@ async function restartActivation(): Promise<void> {
     try {
         const source = getPortableClientSource(props.pluginId);
         if (!source) throw new Error('This plugin is not available in the current workspace.');
-        const restarted = await activatePortableClient(source);
+        const { restartPortableClient } = await import('~/composables/plugins/portable-client-runtime');
+        const restarted = await restartPortableClient(props.pluginId);
         if (restarted.status !== 'active') {
             throw new Error(restarted.blockMessage ?? 'The plugin could not start.');
         }
@@ -521,7 +521,8 @@ const statusLabel = computed(() => {
 });
 
 const canRestart = computed(
-    () => activation.value?.status === 'stopped' && getPortableClientSource(props.pluginId) !== null
+    () => (activation.value?.status === 'stopped' ||
+        ['activation-unavailable', 'activation-invalid-response'].includes(activation.value?.blockCode ?? '')) && getPortableClientSource(props.pluginId) !== null
 );
 
 /**
@@ -680,7 +681,11 @@ async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
             title="This plugin cannot run here"
             :description="`${activation.blockMessage ?? 'The host blocked this package.'} (${activation.blockCode ?? 'blocked'})`"
             data-testid="portable-plugin-blocked"
-        />
+        >
+            <template v-if="canRestart" #actions>
+                <UButton :loading="restartBusy" @click="restartActivation">Retry plugin startup</UButton>
+            </template>
+        </UAlert>
 
         <div v-else-if="activation.status === 'starting'" class="flex items-center gap-2 text-sm">
             <UIcon name="i-lucide-loader-circle" class="animate-spin" />

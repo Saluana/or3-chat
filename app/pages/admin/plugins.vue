@@ -343,11 +343,11 @@
                 Advanced runtime diagnostics
             </summary>
             <div class="border-t border-[var(--md-outline-variant)] p-4">
-                <PluginRuntimeInspector />
+                <AdminPluginRuntimeInspector />
             </div>
         </details>
 
-        <ConfirmDialog
+        <AdminConfirmDialog
             v-model="showInstallTrustConfirm"
             title="Install plugin from source?"
             message="This plugin zip is application code. It will execute with OR3 server privileges once activated and is not sandboxed."

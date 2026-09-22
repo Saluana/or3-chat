@@ -24,6 +24,7 @@
 
 import { computed, ref } from 'vue';
 import { requestWorkspacePluginReconcile } from '~/composables/plugins/bundled-v1-manager-runtime';
+import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import type { EffectiveAuthority } from '~~/shared/plugins/authority/effective-authority';
 import { acquisitionRequestError } from '~~/shared/plugins/acquisition/failure-presentation';
 import { ACTIVATION_CONFIRMATION_TIMEOUT_MS } from '~~/shared/plugins/lifecycle/lifecycle-view';
@@ -240,6 +241,9 @@ export function useMarketplaceAccount() {
 
 /** Browse the catalog through the local server. */
 export function useMarketplaceCatalog() {
+    let generation = 0;
+    let controller: AbortController | null = null;
+    const dispose = () => { generation++; controller?.abort(); };
     const loading = ref(false);
     const error = ref<string | null>(null);
     const notice = ref<string | null>(null);
@@ -250,6 +254,9 @@ export function useMarketplaceCatalog() {
     const category = ref<string | null>(null);
 
     const load = async (options: { readonly page?: number; readonly pageSize?: number } = {}) => {
+        const request = ++generation;
+        controller?.abort();
+        controller = new AbortController();
         loading.value = true;
         error.value = null;
         notice.value = null;
@@ -263,20 +270,22 @@ export function useMarketplaceCatalog() {
                 configured: boolean;
                 catalog: { items?: readonly Record<string, unknown>[]; total?: number } | null;
                 notice?: string;
-            }>(`/api/plugins/marketplace/catalog?${params.toString()}`);
+            }>(`/api/plugins/marketplace/catalog?${params.toString()}`, controller.signal);
+            if (request !== generation) return;
             configured.value = response.configured;
             notice.value = response.notice ?? null;
             cards.value = response.catalog?.items ?? [];
             total.value = response.catalog?.total ?? 0;
         } catch (caught) {
+            if (request !== generation) return;
             error.value =
                 caught instanceof Error ? caught.message : 'The marketplace could not be loaded.';
         } finally {
-            loading.value = false;
+            if (request === generation) loading.value = false;
         }
     };
 
-    return { loading, error, notice, configured, cards, total, search, category, load };
+    return { loading, error, notice, configured, cards, total, search, category, load, dispose };
 }
 
 /**
@@ -541,14 +550,24 @@ export function useMarketplaceInstall() {
     const activationConfirmation = ref<ActivationConfirmationState | null>(null);
     /** True once the 30s window elapsed without confirmation; server success stands. */
     const activationTimedOut = ref(false);
+    const otherWorkspaceOperation = ref<AcquisitionStatusView | null>(null);
 
-    const poll = async (expectedOperationId = operationId.value): Promise<AcquisitionStatusView | null> => {
+    const poll = async (
+        expectedOperationId = operationId.value,
+        expectedPluginId = status.value?.pluginId,
+        expectedWorkspaceId = status.value?.workspaceId
+    ): Promise<AcquisitionStatusView | null> => {
+        const generation = operationGeneration;
         if (!expectedOperationId || operationId.value !== expectedOperationId) return null;
         const response = await apiGet<AcquisitionResponse>(
             `/api/admin/plugins/acquisitions/${expectedOperationId}/status`
         );
         const view = unwrapAcquisitionOperation(response);
-        if (operationId.value === expectedOperationId) status.value = view;
+        if (generation !== operationGeneration || operationId.value !== expectedOperationId) return null;
+        if (view?.operationId !== expectedOperationId) return null;
+        if (expectedPluginId !== undefined && view.pluginId !== expectedPluginId) return null;
+        if (expectedWorkspaceId !== undefined && view.workspaceId !== expectedWorkspaceId) return null;
+        status.value = view;
         return view;
     };
 
@@ -574,8 +593,11 @@ export function useMarketplaceInstall() {
         const generation = ++operationGeneration;
         const operations = await listOperations(pluginId);
         if (generation !== operationGeneration) return null;
+        otherWorkspaceOperation.value = operations.find((operation) => options.workspaceId !== undefined &&
+            operation.workspaceId !== options.workspaceId && ['running', 'pending', 'paused'].includes(operation.status)) ?? null;
         const matching = operations.filter((operation) =>
-            options.workspaceId === undefined || operation.workspaceId === options.workspaceId
+            operation.pluginId === pluginId &&
+            (options.workspaceId === undefined || operation.workspaceId === options.workspaceId)
         );
         // Completed and canceled records are history, and a record the operator
         // already cleared must stay cleared: re-showing it on every visit left
@@ -601,15 +623,18 @@ export function useMarketplaceInstall() {
     };
 
     /** Complete a pending browser canary for the operation's candidate. */
-    const completeCanary = async (pluginId: string, workspaceId: string): Promise<boolean> => {
+    const completeCanary = async (pluginId: string, workspaceId: string, owns: () => boolean): Promise<boolean> => {
+        if (!owns()) return false;
         canaryStatus.value = 'checking';
         const { reportCandidateClientCanary } = await import(
             '~/composables/plugins/portable-canary'
         );
+        if (!owns()) return false;
         const issued = await apiPost<{
             ok?: boolean;
             clientCanary?: { status: string; ticket: Parameters<typeof reportCandidateClientCanary>[0] };
         }>(`/api/admin/plugins/packages/${pluginId}/canary`, { body: { workspaceId } });
+        if (!owns()) return false;
         if (issued.ok) {
             canaryStatus.value = 'passed';
             return true;
@@ -619,14 +644,22 @@ export function useMarketplaceInstall() {
             return false;
         }
         const outcome = await reportCandidateClientCanary(issued.clientCanary.ticket);
+        if (!owns()) return false;
         canaryStatus.value = outcome.status === 'passed' ? 'passed' : (outcome.code ?? 'blocked');
         return outcome.status === 'passed';
     };
 
     const waitForSettled = async (pluginId: string): Promise<AcquisitionStatusView | null> => {
+        const id = operationId.value;
+        const generation = operationGeneration;
+        const workspaceId = status.value?.workspaceId;
+        const owns = () => generation === operationGeneration && operationId.value === id;
+        if (!id) return null;
         for (let attempt = 0; attempt < 240; attempt++) {
-            const view = await poll();
-            if (!view) return null;
+            if (!owns()) return null;
+            const view = await poll(id);
+            if (!owns() || !view || view.pluginId !== pluginId || view.workspaceId !== workspaceId) return null;
+            if (view.interrupted) return view;
             if (view.status === 'completed' || view.status === 'canceled') return view;
             if (view.status === 'blocked') {
                 error.value =
@@ -637,9 +670,10 @@ export function useMarketplaceInstall() {
             if (view.status === 'paused' || (view.status === 'failed' && !view.retryable)) return view;
             if (view.failure?.code === 'client-canary-pending') {
                 canaryStatus.value = 'pending';
-                const passed = await completeCanary(pluginId, view.workspaceId);
+                const passed = await completeCanary(pluginId, view.workspaceId, owns);
+                if (!owns()) return null;
                 if (passed) {
-                    await apiPost(`/api/admin/plugins/acquisitions/${operationId.value}/retry`);
+                    await apiPost(`/api/admin/plugins/acquisitions/${id}/retry`);
                     continue;
                 }
                 return view;
@@ -647,6 +681,7 @@ export function useMarketplaceInstall() {
             if (view.status === 'failed') return view;
             await new Promise((resolve) => setTimeout(resolve, 1_000));
         }
+        if (!owns()) return null;
         error.value = 'The operation did not settle within the polling window. Check its status before retrying.';
         return status.value;
     };
@@ -670,7 +705,8 @@ export function useMarketplaceInstall() {
         readonly version?: string;
         readonly workspaceId?: string;
     }): Promise<AcquisitionStatusView | null> => {
-        operationGeneration += 1;
+        if (running.value) return null;
+        const generation = ++operationGeneration;
         running.value = true;
         error.value = null;
         canaryStatus.value = null;
@@ -685,8 +721,10 @@ export function useMarketplaceInstall() {
                     },
                 }
             );
+            if (generation !== operationGeneration) return null;
             const started = unwrapAcquisitionOperation(response);
-            if (!started) {
+            if (!started || started.pluginId !== input.pluginId ||
+                (input.workspaceId !== undefined && started.workspaceId !== input.workspaceId)) {
                 error.value = 'The server did not return an operation for this install.';
                 return null;
             }
@@ -694,29 +732,33 @@ export function useMarketplaceInstall() {
             status.value = started;
             return await settle(input.pluginId);
         } catch (caught) {
-            error.value = acquisitionRequestError(caught);
+            if (generation === operationGeneration) error.value = acquisitionRequestError(caught);
             return null;
         } finally {
-            running.value = false;
+            if (generation === operationGeneration) running.value = false;
         }
     };
 
     const retry = async (pluginId: string): Promise<AcquisitionStatusView | null> => {
-        if (!operationId.value) return null;
-        operationGeneration += 1;
+        if (!operationId.value || running.value || status.value?.pluginId !== pluginId) return null;
+        const id = operationId.value;
+        const workspaceId = status.value?.workspaceId;
+        const generation = ++operationGeneration;
         running.value = true;
         try {
             const response = await apiPost<AcquisitionResponse>(
-                `/api/admin/plugins/acquisitions/${operationId.value}/retry`
+                `/api/admin/plugins/acquisitions/${id}/retry`
             );
+            if (generation !== operationGeneration) return null;
             const view = unwrapAcquisitionOperation(response);
+            if (!view || view.operationId !== id || view.pluginId !== pluginId || view.workspaceId !== workspaceId) return null;
             if (view) status.value = view;
             return await settle(pluginId);
         } catch (caught) {
-            error.value = acquisitionRequestError(caught);
+            if (generation === operationGeneration) error.value = acquisitionRequestError(caught);
             return null;
         } finally {
-            running.value = false;
+            if (generation === operationGeneration) running.value = false;
         }
     };
 
@@ -747,7 +789,8 @@ export function useMarketplaceInstall() {
             return;
         }
         const id = operationId.value;
-        const generation = operationGeneration;
+        const generation = ++operationGeneration;
+        running.value = false;
         canceling.value = true;
         error.value = null;
         try {
@@ -762,7 +805,7 @@ export function useMarketplaceInstall() {
         } catch (caught) {
             if (generation === operationGeneration) error.value = acquisitionRequestError(caught);
         } finally {
-            canceling.value = false;
+            if (generation === operationGeneration) canceling.value = false;
         }
     };
 
@@ -849,9 +892,11 @@ export function useMarketplaceInstall() {
         readonly packageTreeSha256: string;
         readonly workspaceId: string;
     }): Promise<ActivationConfirmationState | null> => {
+        const generation = confirmationGeneration;
         const { getPortableActivation, isPortableActivationReady } = await import(
             '~/composables/plugins/portable-client-runtime'
         );
+        if (generation !== confirmationGeneration) return null;
         const activation = getPortableActivation(input.pluginId);
         if (
             !activation ||
@@ -894,16 +939,18 @@ export function useMarketplaceInstall() {
         running.value = true;
         error.value = null;
         operationId.value = recordedOperationId;
+        status.value = null;
         try {
-            const view = await poll(recordedOperationId);
+            const view = await poll(recordedOperationId, pluginId);
             if (generation !== operationGeneration) return null;
-            if (!view) return null;
+            if (!view || view.pluginId !== pluginId) return null;
             if (view.status !== 'completed' && view.status !== 'canceled' && view.retryable) {
+                running.value = false;
                 return await retry(pluginId);
             }
             return await settle(pluginId);
         } finally {
-            running.value = false;
+            if (generation === operationGeneration) running.value = false;
         }
     };
 
@@ -917,6 +964,8 @@ export function useMarketplaceInstall() {
         operationGeneration += 1;
         confirmationGeneration += 1;
         operationId.value = null;
+        otherWorkspaceOperation.value = null;
+        canceling.value = false;
         status.value = null;
         error.value = null;
         canaryStatus.value = null;
@@ -938,6 +987,7 @@ export function useMarketplaceInstall() {
 
     return {
         operationId,
+        otherWorkspaceOperation,
         status,
         error,
         running,
@@ -1074,8 +1124,18 @@ export interface InstalledPackageView {
     } | null;
 }
 
+export class MarketplaceRefreshError extends Error {
+    constructor() {
+        super('The change was saved, but the installed list could not be refreshed. Refresh before making another change.');
+        this.name = 'MarketplaceRefreshError';
+    }
+}
+
 /** Installed packages, enabled state and pending candidates for one workspace. */
 export function useMarketplaceInstalled() {
+    const stale = ref(true);
+    const mutating = ref(false);
+    let generation = 0;
     const loading = ref(false);
     const error = ref<string | null>(null);
     const role = ref<string | null>(null);
@@ -1084,7 +1144,31 @@ export function useMarketplaceInstalled() {
     const packages = ref<readonly InstalledPackageView[]>([]);
     const enabled = ref<readonly string[]>([]);
 
-    const load = async (): Promise<void> => {
+    const invalidate = () => {
+        generation++;
+        stale.value = true;
+        loading.value = false;
+        plugins.value = [];
+        packages.value = [];
+        enabled.value = [];
+        role.value = null;
+        workspaceId.value = null;
+    };
+
+    const clearOnAuthorizationLoss = (caught: unknown) => {
+        const error = caught as { statusCode?: number; status?: number } | null;
+        const code = error?.statusCode ?? error?.status;
+        if (code === 401 || code === 403) {
+            plugins.value = [];
+            packages.value = [];
+            enabled.value = [];
+            role.value = null;
+            workspaceId.value = null;
+        }
+    };
+
+    const load = async (expectedWorkspaceId?: string | null): Promise<boolean> => {
+        const request = ++generation;
         loading.value = true;
         error.value = null;
         try {
@@ -1095,18 +1179,30 @@ export function useMarketplaceInstalled() {
                 enabledPlugins?: readonly string[];
                 packagePlugins?: readonly InstalledPackageView[];
             }>('/api/admin/plugins-page');
+            if (request !== generation) return false;
+            if (expectedWorkspaceId && response.workspaceId !== expectedWorkspaceId) {
+                stale.value = true;
+                error.value = 'The active workspace changed. Refresh installed plugins.';
+                return false;
+            }
+            stale.value = false;
             plugins.value = response.plugins ?? [];
             role.value = response.role ?? null;
             workspaceId.value = response.workspaceId ?? null;
             enabled.value = response.enabledPlugins ?? [];
             packages.value = response.packagePlugins ?? [];
+            return true;
         } catch (caught) {
+            if (request !== generation) return false;
+            stale.value = true;
+            clearOnAuthorizationLoss(caught);
             error.value =
                 caught instanceof Error
                     ? caught.message
                     : 'Installed plugins could not be listed for this account.';
+            return false;
         } finally {
-            loading.value = false;
+            if (request === generation) loading.value = false;
         }
     };
 
@@ -1119,25 +1215,45 @@ export function useMarketplaceInstalled() {
         requestWorkspacePluginReconcile(reason);
     };
 
-    const setEnabled = async (pluginId: string, enable: boolean): Promise<void> => {
-        await apiPost('/api/admin/plugins/workspace-enable', {
-            body: { pluginId, enabled: enable },
-        });
-        reconcile('local-admin-change');
-        await load();
+    const assertFresh = () => {
+        if (stale.value || loading.value || mutating.value) throw new Error('Refresh installed plugins before making another change.');
+        const activeWorkspaceId = getCachedSessionContext()?.workspace?.id;
+        if (activeWorkspaceId && activeWorkspaceId !== workspaceId.value) {
+            invalidate();
+            throw new Error('The active workspace changed. Refresh installed plugins.');
+        }
+    };
+    const refreshCommitted = async () => {
+        stale.value = true;
+        if (!(await load(getCachedSessionContext()?.workspace?.id ?? null))) throw new MarketplaceRefreshError();
     };
 
-    const uninstall = async (pluginId: string): Promise<void> => {
-        await apiPost(`/api/admin/plugins/packages/${pluginId}/uninstall`, { body: {} });
-        reconcile('manifest-revision-change');
-        await load();
+    const mutate = async (url: string, body: Record<string, unknown>, reason: 'local-admin-change' | 'manifest-revision-change'): Promise<void> => {
+        assertFresh();
+        if (!workspaceId.value) throw new Error('Refresh installed plugins before making another change.');
+        const targetWorkspaceId = workspaceId.value;
+        const requestGeneration = generation;
+        mutating.value = true;
+        try {
+            await apiPost(url, { body: { ...body, expectedWorkspaceId: targetWorkspaceId } });
+            reconcile(reason);
+            if (requestGeneration !== generation) return;
+            await refreshCommitted();
+        } catch (caught) {
+            if (requestGeneration === generation) {
+                stale.value = true;
+                clearOnAuthorizationLoss(caught);
+                error.value = caught instanceof Error ? caught.message : 'Refresh installed plugins before continuing.';
+            }
+            throw caught;
+        } finally { mutating.value = false; }
     };
-
-    const rollback = async (pluginId: string): Promise<void> => {
-        await apiPost(`/api/admin/plugins/packages/${pluginId}/rollback`, { body: {} });
-        reconcile('manifest-revision-change');
-        await load();
-    };
+    const setEnabled = (pluginId: string, enable: boolean) =>
+        mutate('/api/admin/plugins/workspace-enable', { pluginId, enabled: enable }, 'local-admin-change');
+    const uninstall = (pluginId: string, expectedPackageDigest: string) =>
+        mutate(`/api/admin/plugins/packages/${pluginId}/uninstall`, { expectedPackageDigest }, 'manifest-revision-change');
+    const rollback = (pluginId: string) =>
+        mutate(`/api/admin/plugins/packages/${pluginId}/rollback`, {}, 'manifest-revision-change');
 
     /** Updates are candidates: same lifecycle, promoted through the package API. */
     const updates = computed(() =>
@@ -1146,6 +1262,8 @@ export function useMarketplaceInstalled() {
 
     return {
         loading,
+        stale,
+        mutating,
         error,
         role,
         workspaceId,
@@ -1154,6 +1272,7 @@ export function useMarketplaceInstalled() {
         enabled,
         updates,
         load,
+        invalidate,
         setEnabled,
         uninstall,
         rollback,

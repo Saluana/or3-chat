@@ -29,6 +29,7 @@ vi.mock('~/composables/plugins/portable-client-runtime', () => ({
 import {
     marketplacePluginDeepLink,
     sameMarketplaceTarget,
+    useMarketplaceCatalog,
     useMarketplaceConsent,
     useMarketplaceDetail,
     useMarketplaceInstall,
@@ -87,8 +88,9 @@ beforeEach(() => {
 describe('marketplace mutations reconcile the plugin runtime', () => {
     it('signals after enablement, removal and rollback', async () => {
         const installed = useMarketplaceInstalled();
+        await installed.load();
         await installed.setEnabled('sample.plugin', false);
-        await installed.uninstall('sample.plugin');
+        await installed.uninstall('sample.plugin', 'sha256-test');
         await installed.rollback('sample.plugin');
 
         expect(reconcileReasons()).toEqual([
@@ -96,6 +98,9 @@ describe('marketplace mutations reconcile the plugin runtime', () => {
             'manifest-revision-change',
             'manifest-revision-change',
         ]);
+        expect(fetchMock).toHaveBeenCalledWith('/api/admin/plugins/workspace-enable', expect.objectContaining({
+            body: expect.objectContaining({ expectedWorkspaceId: 'ws-1' }),
+        }));
     });
 
     it('signals when an install operation completes', async () => {
@@ -240,7 +245,7 @@ describe('durable operations are recovered', () => {
         });
 
         const install = useMarketplaceInstall();
-        const result = await install.adopt('sample.plugin', 'op-paused');
+        const result = await install.adopt('sample.plugin', 'op-1');
 
         expect(result?.status).toBe('completed');
         expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/retry'))).toBe(true);
@@ -261,7 +266,7 @@ describe('durable operations are recovered', () => {
         });
 
         const install = useMarketplaceInstall();
-        const result = await install.adopt('sample.plugin', 'op-running');
+        const result = await install.adopt('sample.plugin', 'op-1');
 
         expect(result?.status).toBe('completed');
         expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/retry'))).toBe(false);
@@ -602,4 +607,67 @@ describe('activation confirmation', () => {
         expect(install.activationTimedOut.value).toBe(false);
         expect(fetchMock).not.toHaveBeenCalled();
     });
+});
+
+describe('late response ownership and refresh failures', () => {
+    it('does not let a late start replace the restored selection', async () => {
+        let resolveStart!: (value: unknown) => void;
+        fetchMock.mockImplementation((url: string) => url.includes('?pluginId=')
+            ? Promise.resolve({ok: true, operations: [statusView({operationId: 'b', pluginId: 'other.plugin', status: 'paused'})]})
+            : new Promise((resolve) => { resolveStart = resolve; }));
+        const install = useMarketplaceInstall();
+        const pending = install.start({pluginId: 'sample.plugin'});
+        install.reset();
+        await install.restore('other.plugin');
+        resolveStart({ok: true, operation: statusView()});
+        expect(await pending).toBeNull();
+        expect(install.operationId.value).toBe('b');
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+    it('only publishes the newest catalog request', async () => {
+        const pending: ((value: unknown) => void)[] = [];
+        fetchMock.mockImplementation(() => new Promise((resolve) => pending.push(resolve)));
+        const catalog = useMarketplaceCatalog();
+        catalog.search.value = 'old'; const old = catalog.load();
+        catalog.search.value = 'new'; const fresh = catalog.load();
+        pending[1]!({configured: true, catalog: {items: [{name: 'new'}], total: 1}}); await fresh;
+        pending[0]!({configured: true, catalog: {items: [{name: 'old'}], total: 2}}); await old;
+        expect(catalog.cards.value).toEqual([{name: 'new'}]);
+        expect(catalog.total.value).toBe(1);
+    });
+    it('reports committed changes with failed refresh and blocks further mutations', async () => {
+        const installed = useMarketplaceInstalled();
+        await installed.load();
+        fetchMock.mockResolvedValueOnce({ok: true}).mockRejectedValueOnce(new Error('offline'));
+        await expect(installed.setEnabled('sample.plugin', true)).rejects.toThrow('change was saved');
+        expect(installed.stale.value).toBe(true);
+        await expect(installed.rollback('sample.plugin')).rejects.toThrow('Refresh');
+        fetchMock.mockResolvedValue(pageResponse);
+        expect(await installed.load()).toBe(true);
+        expect(installed.stale.value).toBe(false);
+    });
+});
+
+it('clears protected installed data when refresh loses authorization', async () => {
+    fetchMock.mockResolvedValue({...pageResponse, packagePlugins: [{pluginId: 'private'}], enabledPlugins: ['private']});
+    const installed = useMarketplaceInstalled(); await installed.load();
+    fetchMock.mockRejectedValue({statusCode: 403}); await installed.load();
+    expect(installed.packages.value).toEqual([]);
+    expect(installed.enabled.value).toEqual([]);
+    expect(installed.workspaceId.value).toBeNull();
+    expect(installed.stale.value).toBe(true);
+});
+it('blocks duplicate retries and ignores a retry response after selection changes', async () => {
+    const install = useMarketplaceInstall();
+    fetchMock.mockResolvedValue({ok: true, operations: [statusView({status: 'paused', retryable: true})]});
+    await install.restore('sample.plugin');
+    let resolveRetry!: (value: unknown) => void;
+    fetchMock.mockImplementation(() => new Promise((resolve) => {resolveRetry = resolve;}));
+    const pending = install.retry('sample.plugin');
+    expect(await install.retry('sample.plugin')).toBeNull();
+    install.reset();
+    resolveRetry({ok: true, operation: statusView()});
+    expect(await pending).toBeNull();
+    expect(install.operationId.value).toBeNull();
+    expect(reconcileMock).not.toHaveBeenCalled();
 });

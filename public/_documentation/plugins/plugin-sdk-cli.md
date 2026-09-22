@@ -151,3 +151,9 @@ as an installed dependency. Publishing that tarball to npm is not yet
 implemented (see the publication note above). See [`plugin-sdk`](./plugin-sdk)
 for the authoring surface and [`portable-profile`](./portable-profile) for the
 portable rule set.
+
+### Interrupted test runs
+
+`or3-plugin test` succeeds only when its runner exits normally with status zero.
+Signal termination and spawn failures report an explicit diagnostic and fail the
+CLI; an absent exit status also fails. Interrupted validation is never a pass.

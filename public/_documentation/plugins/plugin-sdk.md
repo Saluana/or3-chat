@@ -45,7 +45,7 @@ context.files; context.http; context.network; context.activity; context.events;
 ```
 
 Each namespace is typed, grant-checked, and host-mediated. A host may expose a
-stable namespace while returning `unsupported` until its production adapter is
+stable namespace while refusing an operation as `unsupported` until its production adapter is
 qualified; adding a grant string alone never enables a method. Storage records
 include revisions and byte accounting through `getRecord()`, and writes accept
 `ifRevision` for compare-and-set updates. `ifRevision` must be `null`
@@ -66,10 +66,39 @@ existing names may still be reused at that cap. Plugin code should not import De
 Vue composables, Nuxt APIs, Pinia stores, database tables, or internal OR3
 services.
 
+Registration and subscription methods are synchronous: `ui.registerSidebar`,
+`ui.registerPane`, `ui.registerCard`, `ui.registerAction`, `commands.register`,
+`activity.registerSource`, `events.on`, and `workspace.onChange` return a
+registration handle on success and **throw** when unavailable. Unsupported
+host defaults throw an `Error` with `code: "unsupported"` and
+`retryable: false`; handle this with `try/catch`. Other unavailable methods
+return a `PluginResult` with `error.code: "unsupported"` (asynchronously when
+the method returns a promise). Namespace presence does not establish operation
+support. Check the host's advertised features and grants, and still handle a
+refusal from each call.
+
+The lightweight portable test host records `client.emit()` as outbound only.
+Use `host.emitHostEvent(name, payload)` to deliver a host-origin event; it copies
+payloads and does not loop plugin-origin events back into subscriptions.
+Raw grant denials use the wire code `grant-denied`, which the SDK maps to
+`permission-denied`. Real-broker conformance covers cancellation, deadlines,
+in-flight limits and replacement across captured databases; the fake does not
+simulate transport timing or establish installed-browser qualification.
+
+The generic test host settles blocked file writes on caller cancellation or
+activation teardown, requests iterator cleanup without waiting for a stalled
+producer, and never commits a late chunk. If workspace-switch cleanup fails,
+it attempts to restore the previous definition. The failure includes
+`details.rollback` (`restored` or `failed`) and `details.active`, so callers can
+distinguish a restored plugin from an inactive host.
+
 `context.activity.registerSource()` accepts an owner-scoped source with bounded
 run summaries. A source may also expose details, typed live events, and explicit
 cancel/retry/approval actions; the host adapts those records into the Activity
-center and isolates a failing source from other sources. The production V2
+center and isolates a failing source from other sources. Registry source IDs
+include a host-issued activation namespace; plugin-supplied logical IDs stay
+local to that activation. Teardown removes subscriptions and rejects late
+list/detail/action results. The production V2
 grant remains unqualified until installed-package conformance is complete,
 while the trusted host adapter and test harness exercise the same mapping.
 

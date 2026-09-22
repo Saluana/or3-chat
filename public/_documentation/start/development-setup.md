@@ -113,16 +113,17 @@ stylesheet to that package source. Provider packages (`or3-provider-*`) are
 built from their sibling checkouts the same way. The dev banner prints which
 local sources were selected.
 
-Each alias resolves on its own: a missing, renamed, or partially checked-out
-sibling falls back to the installed `node_modules` package for that import, so
-one absent repository never breaks the app. Builds, deployment images, and
-generated projects never alias sibling source.
+Workflow core, UI and styles are selected together. Their declared dependency
+and peer ranges and reachable relative source files must resolve before selection;
+an unusable member rejects the whole workflow group with a startup diagnostic.
+The scroll package is checked separately. Rejected groups use installed packages.
+Production builds never alias sibling sources, even when the environment inherits
+`OR3_USE_LOCAL_PACKAGES=true`.
 
-Force the answer when you need to:
+To test installed packages during development:
 
 ```bash
 OR3_USE_LOCAL_PACKAGES=false bun run dev   # always use installed packages
-OR3_USE_LOCAL_PACKAGES=true bun run build # alias sibling source outside dev
 ```
 
 Local source graphs make each HMR invalidation more expensive, so turn them off

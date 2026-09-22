@@ -1009,3 +1009,52 @@ describe('covered releases acquire through the acting user Library link', () => 
         }
     });
 });
+
+describe('interrupted runners and cancellation boundaries', () => {
+    it('projects interruption without writing, then resumes the same operation', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const harness = makeHarness({ fixture });
+        await harness.reviewGrants();
+        const started = await harness.service.start({pluginId: 'alpha', version: '1.0.0', workspaceId: 'ws-1', requesterUserId: 'user-1', instanceId: 'instance-1'});
+        if (!started.ok) throw new Error('start failed');
+        const operation = await harness.store.update(started.operation.operationId, started.operation.revision, {status: 'running'});
+        const interrupted = await harness.service.isInterrupted(operation);
+        expect(describeAcquisitionStatus(operation, interrupted)).toMatchObject({interrupted: true, resumable: true, retryable: true});
+        expect((await harness.service.status(operation.operationId)).revision).toBe(operation.revision);
+        expect(await harness.service.retry(operation.operationId)).toMatchObject({operationId: operation.operationId, status: 'completed'});
+    });
+    it('finishes a pending cancellation after the runner disappears', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const harness = makeHarness({ fixture });
+        await harness.reviewGrants();
+        const started = await harness.service.start({pluginId: 'alpha', version: '1.0.0', workspaceId: 'ws-1', requesterUserId: 'user-1', instanceId: 'instance-1'});
+        if (!started.ok) throw new Error('start failed');
+        const running = await harness.store.update(started.operation.operationId, started.operation.revision, { status: 'running' });
+        const cancelRequested = await harness.store.requestCancel(running.operationId);
+        expect(describeAcquisitionStatus(cancelRequested, true)).toMatchObject({ interrupted: true, canceled: true, resumable: false, retryable: false });
+        expect(await harness.service.cancel(running.operationId)).toMatchObject({ status: 'canceled' });
+    });
+    it.each(['authorized', 'reserved', 'downloaded', 'verified', 'candidate-recorded', 'health-checked', 'promoted'] as const)('acknowledges cancel at %s without losing side-effect evidence', async (stage) => {
+        const fixture = await releaseFixture({version: '1.0.0'});
+        const harness = makeHarness({fixture});
+        const original = harness.store.recordProgress.bind(harness.store);
+        vi.spyOn(harness.store, 'recordProgress').mockImplementation(async (record, patch) => {
+            if (patch.stage === stage) await harness.store.requestCancel(record.operationId);
+            return original(record, patch);
+        });
+        const result = await harness.start({version: '1.0.0'});
+        if (!result.ok) throw new Error('start failed');
+        expect(result.operation.status).toBe(stage === 'promoted' ? 'completed' : 'canceled');
+        const pointer = await harness.services.pointers.readPointer('alpha');
+        expect(pointer?.candidate ?? null).toBeNull();
+        expect(pointer?.current?.packageDigest ?? null).toBe(stage === 'promoted' ? fixture.treeDigest : null);
+    });
+});
+
+it('cancels an abandoned running operation without its worker', async () => {
+    const harness = makeHarness({fixture: await releaseFixture({version: '1.0.0'})});
+    const started = await harness.service.start({pluginId: 'alpha', version: '1.0.0', workspaceId: 'ws-1', requesterUserId: 'user-1', instanceId: 'instance-1'});
+    if (!started.ok) throw new Error('start failed');
+    const operation = await harness.store.update(started.operation.operationId, started.operation.revision, {status: 'running', stage: 'verified'});
+    expect(await harness.service.cancel(operation.operationId)).toMatchObject({operationId: operation.operationId, status: 'canceled'});
+});

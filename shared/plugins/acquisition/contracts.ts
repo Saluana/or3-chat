@@ -275,6 +275,7 @@ export interface AcquisitionStatusView {
     readonly needsSetup: boolean;
     /** An unfinished operation this caller can pick up again from its stage. */
     readonly resumable: boolean;
+    readonly interrupted?: boolean;
     readonly retryable: boolean;
     readonly canceled: boolean;
     /** Exact selected identity, so the client can bind confirmation to these bytes. */
@@ -295,7 +296,8 @@ export interface AcquisitionStatusView {
  * says the operation is waiting on the caller rather than dead.
  */
 export function describeAcquisitionStatus(
-    operation: PluginAcquisitionOperation
+    operation: PluginAcquisitionOperation,
+    interrupted = false
 ): AcquisitionStatusView {
     const total = PLUGIN_ACQUISITION_STAGES.length - 1;
     const index = acquisitionStageIndex(operation.stage);
@@ -308,16 +310,17 @@ export function describeAcquisitionStatus(
         status: operation.status,
         percentComplete: total === 0 ? 100 : Math.round((index / total) * 100),
         needsSetup: operation.status === 'paused' && operation.failure?.code === 'setup-required',
-        resumable: operation.status === 'paused',
+        resumable: !operation.cancelRequested && (interrupted || operation.status === 'paused'),
+        interrupted,
         // A paused operation carries a retryable pause failure (for example
         // `setup-required`); hiding Retry behind the failed/blocked statuses
         // left the operator with a durable operation and no way to continue it.
         retryable:
-            operation.failure?.retryable === true &&
+            !operation.cancelRequested && (interrupted || (operation.failure?.retryable === true &&
             (operation.status === 'failed' ||
                 operation.status === 'blocked' ||
-                operation.status === 'paused'),
-        canceled: operation.cancelRequested || operation.status === 'canceled',
+                operation.status === 'paused'))),
+        canceled: operation.status !== 'completed' && (operation.cancelRequested || operation.status === 'canceled'),
         release: {
             releaseId: operation.release.releaseId,
             archiveSha256: operation.release.archiveSha256,

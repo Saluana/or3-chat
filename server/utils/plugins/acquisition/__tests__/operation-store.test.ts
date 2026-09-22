@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -9,6 +9,7 @@ import {
     parseAcquisitionOperation,
 } from '../operation-store';
 import type { PluginAcquisitionReleaseIdentity } from '~~/shared/plugins/acquisition/contracts';
+import { AdvisoryPluginOperationLock } from '../../../../admin/plugins/package-operation-lock';
 
 const roots: string[] = [];
 
@@ -286,4 +287,47 @@ describe('store concurrency and retention (5.1)', () => {
         expect(failed.status).toBe('failed');
         expect(await readdir(staging).catch(() => [])).toEqual([]);
     });
+});
+
+it('does not expire a living runner and fences cleanup by owner token', async () => {
+    const {store, root} = await makeStore();
+    await store.withRunnerLock('acme.sample', async (assertOwned) => {
+        const path = join(root, '.operations/runners/acme.sample.lock/owner.json');
+        const owner = JSON.parse(await readFile(path, 'utf8'));
+        await writeFile(path, JSON.stringify({ ...owner, heartbeatAt: Date.now() - 60_000 }));
+        expect(await store.isRunnerActive('acme.sample')).toBe(true);
+        await expect(new PluginAcquisitionOperationStore(root).withRunnerLock('acme.sample', async () => null)).rejects.toMatchObject({ code: 'operation-conflict' });
+        await assertOwned();
+        await writeFile(path, JSON.stringify({ ...owner, ownerId: 'successor' }));
+        await expect(assertOwned()).rejects.toMatchObject({ code: 'operation-conflict' });
+    });
+    const path = join(root, '.operations/runners/acme.sample.lock/owner.json');
+    expect(JSON.parse(await readFile(path, 'utf8')).ownerId).toBe('successor');
+});
+it('blocks a new runner on the pre-lease PID file at the shared path', async () => {
+    const { store, root } = await makeStore();
+    const path = join(root, '.operations/runners/acme.sample.lock');
+    await mkdir(join(root, '.operations/runners'), { recursive: true });
+    await writeFile(path, String(process.pid));
+    expect(await store.isRunnerActive('acme.sample')).toBe(true);
+    await expect(store.withRunnerLock('acme.sample', async () => null)).rejects.toMatchObject({ code: 'operation-conflict' });
+    await rm(path);
+    await expect(store.withRunnerLock('acme.sample', async () => 'ok')).resolves.toBe('ok');
+});
+it('blocks a runner held by the transitional nested lease layout', async () => {
+    const { store, root } = await makeStore();
+    const oldLease = await new AdvisoryPluginOperationLock(join(root, '.operations/runners')).acquire('acme.sample');
+    expect(await store.isRunnerActive('acme.sample')).toBe(true);
+    await expect(store.withRunnerLock('acme.sample', async () => null)).rejects.toMatchObject({ code: 'operation-conflict' });
+    await oldLease.release();
+    await expect(store.withRunnerLock('acme.sample', async () => 'ok')).resolves.toBe('ok');
+});
+it('merges cancellation into completed stage evidence but rejects other competing changes', async () => {
+    const {store} = await makeStore();
+    const record = await store.create(createInput());
+    await store.requestCancel(record.operationId);
+    const progressed = await store.recordProgress(record, {stage: 'candidate-recorded', candidateDigest: release.packageTreeSha256});
+    expect(progressed.cancelRequested).toBe(true);
+    expect(progressed.candidateDigest).toBe(release.packageTreeSha256);
+    await expect(store.recordProgress(record, {stage: 'verified'})).rejects.toMatchObject({code: 'operation-conflict'});
 });

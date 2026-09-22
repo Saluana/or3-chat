@@ -18,8 +18,8 @@
  *   failure and increments `attempts` rather than starting a new record.
  * - At most one active operation per plugin is allowed, and at most one runner
  *   advances a plugin at a time: both invariants are enforced with exclusive lock
- *   files, so two requests (or two processes) cannot interleave a download, a
- *   promotion or a retry.
+ *   store file locks and a per-plugin runner lease, so two requests (or two
+ *   processes) cannot interleave a download, a promotion or a retry.
  *
  * Constraints:
  * - No network, no plugin code. Secrets and signed URLs are never persisted.
@@ -31,6 +31,7 @@
 import { constants } from 'node:fs';
 import { promises as fs } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { AdvisoryPluginOperationLock, PackageOperationLockError } from '../../../admin/plugins/package-operation-lock';
 import { dirname, resolve, sep } from 'node:path';
 import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
 import type { Sha256 } from '~~/shared/plugins/runtime-descriptor';
@@ -53,7 +54,7 @@ export type OperationStoreErrorCode =
     | 'operation-id-invalid'
     | 'operation-directory-unavailable';
 
-/** Lock files are held for one mutation or one pipeline run, never longer. */
+/** Short record-mutation locks; runners use renewable ownership leases. */
 const LOCK_STALE_MS = 30_000;
 const LOCK_WAIT_MS = 5_000;
 
@@ -161,10 +162,18 @@ function isInside(root: string, candidate: string): boolean {
 export class PluginAcquisitionOperationStore {
     readonly #root: string;
     readonly #now: () => number;
+    readonly #runnerLocks: AdvisoryPluginOperationLock;
+    readonly #transitionRunnerLocks: AdvisoryPluginOperationLock;
 
     constructor(root = EXTENSIONS_BASE_DIR, now: () => number = () => Date.now()) {
         this.#root = resolve(root, '.operations');
         this.#now = now;
+        // Share the old runner's O_EXCL path during rolling upgrades. A legacy
+        // PID file blocks the new directory lease until the old runner exits.
+        this.#runnerLocks = new AdvisoryPluginOperationLock(resolve(this.#root, 'runners'), undefined, true);
+        // A short-lived lease implementation used runners/.locks. Hold both
+        // paths so an already-running process on that layout cannot overlap.
+        this.#transitionRunnerLocks = new AdvisoryPluginOperationLock(resolve(this.#root, 'runners'));
     }
 
     operationsDirectory(): string {
@@ -253,30 +262,43 @@ export class PluginAcquisitionOperationStore {
         return resolve(this.#root, '.lock');
     }
 
-    #runnerLockPath(pluginId: string): string {
+    /** Renewable, owner-token lease, separate from the short record lock. */
+    async withRunnerLock<T>(pluginId: string, fn: (assertOwned: () => Promise<void>) => Promise<T>): Promise<T> {
         assertPluginId(pluginId);
-        return resolve(this.#root, 'runners', `${pluginId}.lock`);
-    }
-
-    /**
-     * Run one pipeline for a plugin, holding a per-plugin runner lock. A second
-     * runner (another request, tab or process) is refused rather than allowed to
-     * advance the same staging bytes, and a retry of a crashed run can proceed
-     * once the stale lock is replaced.
-     */
-    async withRunnerLock<T>(pluginId: string, fn: () => Promise<T>): Promise<T> {
-        return await this.#under(this.#runnerLockPath(pluginId), fn);
-    }
-
-    /** Whether a runner currently holds the plugin's pipeline lock. */
-    async isRunnerActive(pluginId: string): Promise<boolean> {
-        const path = this.#runnerLockPath(pluginId);
+        let lease;
+        let transitionLease;
         try {
-            const stat = await fs.stat(path);
-            return Date.now() - stat.mtimeMs <= LOCK_STALE_MS;
-        } catch {
-            return false;
+            lease = await this.#runnerLocks.acquire(pluginId, { timeoutMs: 0, requireDeadOwner: true });
+            transitionLease = await this.#transitionRunnerLocks.acquire(pluginId, { timeoutMs: 0, requireDeadOwner: true });
+        } catch (error) {
+            await lease?.release();
+            if (error instanceof PackageOperationLockError) {
+                throw new PluginAcquisitionOperationError('operation-conflict', 'An acquisition runner already owns this plugin.');
+            }
+            throw error;
         }
+        const assertOwned = async () => {
+            if (!(await lease.heartbeat()) || !(await transitionLease.heartbeat())) {
+                throw new PluginAcquisitionOperationError('operation-conflict', 'The acquisition runner lost ownership.');
+            }
+        };
+        try { return await fn(assertOwned); }
+        finally {
+            try { await transitionLease.release(); }
+            finally { await lease.release(); }
+        }
+    }
+
+    async isRunnerActive(pluginId: string): Promise<boolean> {
+        assertPluginId(pluginId);
+        return (await this.#runnerLocks.isActive(pluginId, true)) ||
+            this.#transitionRunnerLocks.isActive(pluginId, true);
+    }
+
+    async recoverRemoteRunner(operationId: string, expectedOwnerId: string): Promise<boolean> {
+        const operation = await this.requireRecord(operationId);
+        return (await this.#runnerLocks.recoverConfirmedStoppedRemote(operation.pluginId, expectedOwnerId)) ||
+            this.#transitionRunnerLocks.recoverConfirmedStoppedRemote(operation.pluginId, expectedOwnerId);
     }
 
     async #write(record: PluginAcquisitionOperation, exclusive = false): Promise<void> {
@@ -468,6 +490,18 @@ export class PluginAcquisitionOperationStore {
         );
     }
 
+    /** Stage evidence may merge only a concurrent cancellation control write. */
+    async recordProgress(record: PluginAcquisitionOperation, patch: AcquisitionOperationPatch): Promise<PluginAcquisitionOperation> {
+        return this.#withLock(async () => {
+            const current = await this.requireRecord(record.operationId);
+            const evidence = ({ revision, updatedAt, cancelRequested, ...value }: PluginAcquisitionOperation) => value;
+            const cancellationOnly = current.cancelRequested &&
+                JSON.stringify(evidence(current)) === JSON.stringify(evidence(record));
+            return this.#updateUnlocked(record.operationId,
+                cancellationOnly ? current.revision : record.revision, patch);
+        });
+    }
+
     async #updateUnlocked(
         operationId: string,
         expectedRevision: number,
@@ -597,7 +631,7 @@ export class PluginAcquisitionOperationStore {
                     `Operation ${other.operationId} is already in progress for ${current.pluginId}.`
                 );
             }
-            if (isActiveAcquisitionStatus(current.status) && (await this.isRunnerActive(current.pluginId))) {
+            if (await this.isRunnerActive(current.pluginId)) {
                 throw new PluginAcquisitionOperationError(
                     'operation-conflict',
                     `Operation ${operationId} is already being run.`
@@ -624,7 +658,7 @@ export class PluginAcquisitionOperationStore {
     async requestCancel(operationId: string): Promise<PluginAcquisitionOperation> {
         return await this.#withLock(async () => {
             const current = await this.requireRecord(operationId);
-            if (isTerminalAcquisitionStatus(current.status)) return current;
+            if (isTerminalAcquisitionStatus(current.status) || current.cancelRequested) return current;
             return await this.#updateUnlocked(operationId, current.revision, {
                 cancelRequested: true,
             });

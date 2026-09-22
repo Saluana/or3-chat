@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PluginGrantReviewSnapshot } from '~~/shared/plugins/grant-review';
 import { HostRpcBroker, SDK_LOGIC_RPC_METHODS, type HostRpcHandlerContext } from '~~/shared/plugins/isolation/host-rpc-broker';
-import type { RpcEnvelope } from '~~/shared/plugins/isolation/rpc-envelope';
+import { createRpcEvent, type RpcEnvelope } from '~~/shared/plugins/isolation/rpc-envelope';
 import type { PluginResult } from '../../../../packages/plugin-sdk/src/results';
 import { createPortableClient, type PortableClient } from '../../../../packages/plugin-sdk/src/portable';
 import {
@@ -21,13 +21,12 @@ import { createPortableTestHost } from '../../../../packages/plugin-sdk/src/test
  * lightweight `createPortableTestHost()` fake. Outcomes are compared at the
  * plugin-visible `PluginResult` level: `{ ok, code }` must agree.
  *
- * INTENTIONAL DIFFERENCES (explicit, not covered here):
- * - `client.emit()` on the fake echoes into local listeners; production
- *   emits travel to the host and only host-origin events arrive via `onEvent`.
+ * Host-origin event direction and raw grant denials run against both hosts.
+ * INTENTIONAL DIFFERENCES:
  * - Transport budgets, per-call deadlines and cancellation timing are
  *   production-only; the fake answers synchronously.
- * - Activation lifecycle/generation staleness is production-only (covered by
- *   the handoff tests); the fake has no generations.
+ * - Activation replacement is tested below through real broker cancellation
+ *   and separate captured databases; the fake has no transport generations.
  * - `updatedAt`/id allocation are synthetic on both sides and not compared.
  * - Split grant layers (facade allows, broker refuses) exist only in
  *   production; the fake is single-layer. The mapping is pinned by dedicated
@@ -109,7 +108,10 @@ interface Side {
     rawCall(method: string, params?: Record<string, unknown>): Promise<{ ok: boolean; code?: string }>;
 }
 
-async function productionSide(facadeGrants: readonly string[], brokerGrants: readonly string[]): Promise<Side> {
+async function productionSide(facadeGrants: readonly string[], brokerGrants: readonly string[], options: {
+    beforeService?: (method: string, context: HostRpcHandlerContext) => Promise<void>;
+    maxInFlight?: number;
+} = {}) {
     const services = createPortableSettingsServices('sample.plugin');
     type StorageServices = typeof services.storage;
     const methods = (Object.keys(SDK_LOGIC_RPC_METHODS) as Array<keyof typeof SDK_LOGIC_RPC_METHODS>)
@@ -117,7 +119,8 @@ async function productionSide(facadeGrants: readonly string[], brokerGrants: rea
         .map((method) => ({
             method,
             grant: SDK_LOGIC_RPC_METHODS[method],
-            handler: (params: Readonly<Record<string, unknown>>, context: HostRpcHandlerContext) => {
+            handler: async (params: Readonly<Record<string, unknown>>, context: HostRpcHandlerContext) => {
+                await options.beforeService?.(method, context);
                 const name = method.slice('storage.'.length) as keyof StorageServices;
                 const service = services.storage[name] as (
                     params: Readonly<Record<string, unknown>>,
@@ -131,6 +134,7 @@ async function productionSide(facadeGrants: readonly string[], brokerGrants: rea
         pluginId: 'sample.plugin',
         workspaceId: 'ws-1',
         generation: 1,
+        ...(options.maxInFlight === undefined ? {} : { maxInFlight: options.maxInFlight }),
         grants: grantsSnapshot(brokerGrants),
         send: (envelope) => {
             sandboxListener?.({ data: envelope });
@@ -161,8 +165,11 @@ async function productionSide(facadeGrants: readonly string[], brokerGrants: rea
     });
     await handle.ready;
     return {
+        broker,
+        client,
+        emitHostEvent: (name: string, payload: Record<string, unknown> = {}) => sandboxListener?.({ data: createRpcEvent({ id: `event-${++counter}`, name, payload }) }),
         context: () => handle.context(),
-        async rawCall(method, params = {}) {
+        async rawCall(method: string, params: Record<string, unknown> = {}) {
             const result = await client.call(method, params);
             return result.ok ? { ok: true } : { ok: false, code: result.code };
         },
@@ -429,4 +436,79 @@ it('enforces the production retained-name cap in both hosts', async () => {
     expect(await fake.client.call('storage.set', { key: 'overflow', value: 1 })).toMatchObject({ ok: false, code: 'quota-exceeded' });
     expect(await services.storage.set({ key: names[0], value: 1 })).toEqual({ ok: true });
     expect(await fake.client.call('storage.set', { key: names[0], value: 1 })).toMatchObject({ ok: true });
+});
+
+
+describe('portable production transport conformance', () => {
+    it('enforces raw grant refusal and event direction in both hosts', async () => {
+        const prod = await productionSide([], []);
+        const fake = createPortableTestHost();
+        for (const side of [prod, fake]) {
+            expect(await side.client.call('storage.set', { key: 'raw', value: 1 })).toMatchObject({ ok: false, code: 'grant-denied' });
+            const received = vi.fn();
+            const unsubscribe = side.client.onEvent(received);
+            side.client.emit('settings.changed', { keys: ['spoofed'] });
+            expect(received).not.toHaveBeenCalled();
+            side.emitHostEvent('settings.changed', { keys: ['real'] });
+            expect(received).toHaveBeenCalledOnce();
+            expect(received).toHaveBeenCalledWith({ name: 'settings.changed', payload: { keys: ['real'] } });
+            unsubscribe();
+            side.emitHostEvent('settings.changed', { keys: ['late'] });
+            expect(received).toHaveBeenCalledOnce();
+        }
+        prod.broker.dispose();
+    });
+
+    it('keeps a revoked write charged and returns cancellation through the SDK', async () => {
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        const prod = await productionSide(['storage.read', 'storage.write'], ['storage.read', 'storage.write'], {
+            beforeService: async () => gate, maxInFlight: 1,
+        });
+        const write = prod.context()!.storage.set('pending', 'must-not-commit');
+        prod.broker.setGrants(grantsSnapshot(['storage.read']));
+        expect(await prod.client.call('storage.get', { key: 'pending' })).toMatchObject({ ok: false, code: 'backpressure' });
+        release();
+        expect(await write).toMatchObject({ ok: false, error: { code: 'aborted' } });
+        expect(await prod.context()!.storage.get('pending')).toEqual({ ok: true, value: null });
+        prod.broker.dispose();
+    });
+
+    it('returns deadline errors through the actual client transport', async () => {
+        vi.useFakeTimers();
+        try {
+            let release!: () => void;
+            const gate = new Promise<void>((resolve) => { release = resolve; });
+            const prod = await productionSide(['storage.read'], ['storage.read'], { beforeService: async () => gate });
+            const read = prod.client.call('storage.get', { key: 'late' }, { deadlineMs: 5 });
+            await vi.advanceTimersByTimeAsync(6);
+            release();
+            expect(await read).toMatchObject({ ok: false, code: 'deadline-exceeded' });
+            prod.broker.dispose();
+        } finally { vi.useRealTimers(); }
+    });
+
+    it('cannot commit a predecessor write into either workspace after replacement', async () => {
+        const previousDb = kvState.db!;
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        const previous = await productionSide(['storage.write'], ['storage.write'], { beforeService: async () => gate });
+        const pending = previous.context()!.storage.set('same', 'old');
+        previous.broker.dispose();
+        const nextDb = new Or3DB('portable-next-' + crypto.randomUUID());
+        await nextDb.open();
+        try {
+            kvState.db = nextDb;
+            const next = await productionSide(['storage.read', 'storage.write'], ['storage.read', 'storage.write']);
+            expect(await next.context()!.storage.set('same', 'new')).toMatchObject({ ok: true });
+            release();
+            expect(await pending).toMatchObject({ ok: false, error: { code: 'aborted' } });
+            expect(await next.context()!.storage.get('same')).toEqual({ ok: true, value: 'new' });
+            expect(await previousDb.kv.count()).toBe(0);
+            next.broker.dispose();
+        } finally {
+            kvState.db = previousDb;
+            await nextDb.delete();
+        }
+    });
 });

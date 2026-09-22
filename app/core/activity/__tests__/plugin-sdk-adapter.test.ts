@@ -1,12 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ActivityRegistry } from '../registry';
-import { registerPluginActivitySource } from '../adapters/plugin-sdk';
+import { registerPluginActivitySource as registerOwnedSource } from '../adapters/plugin-sdk';
 import {
     pluginError,
     pluginOk,
     type PluginActivityEvent,
     type PluginActivitySource,
 } from '@or3/plugin-sdk';
+
+function registerPluginActivitySource(registry: ActivityRegistry, value: PluginActivitySource) {
+    return registerOwnedSource(registry, value, {
+        namespace: 'plugin.test', signal: new AbortController().signal,
+    });
+}
 
 function source(overrides: Partial<PluginActivitySource> = {}): PluginActivitySource {
     return {
@@ -61,7 +67,7 @@ describe('Plugin SDK Activity adapter', () => {
         await expect(registry.listRuns()).resolves.toMatchObject({
             runs: [
                 {
-                    sourceId: 'example.agent',
+                    sourceId: 'plugin.test.example.agent',
                     id: 'run-1',
                     kind: 'plugin',
                     actions: ['cancel'],
@@ -69,15 +75,15 @@ describe('Plugin SDK Activity adapter', () => {
             ],
             degradedSources: [],
         });
-        await expect(registry.getRun('example.agent', 'run-1')).resolves.toMatchObject({
+        await expect(registry.getRun('plugin.test.example.agent', 'run-1')).resolves.toMatchObject({
             ok: true,
             value: {
-                sourceId: 'example.agent',
-                events: [{ sourceId: 'example.agent', runId: 'run-1' }],
+                sourceId: 'plugin.test.example.agent',
+                events: [{ sourceId: 'plugin.test.example.agent', runId: 'run-1' }],
             },
         });
         await expect(
-            registry.executeAction('example.agent', { runId: 'run-1', action: 'cancel' })
+            registry.executeAction('plugin.test.example.agent', { runId: 'run-1', action: 'cancel' })
         ).resolves.toEqual({ ok: true, value: undefined });
         expect(executeAction).toHaveBeenCalledWith({ runId: 'run-1', action: 'cancel' });
 
@@ -97,9 +103,9 @@ describe('Plugin SDK Activity adapter', () => {
 
         const result = await registry.listRuns();
         expect(result.runs).toHaveLength(1);
-        expect(result.runs[0]?.sourceId).toBe('healthy.source');
+        expect(result.runs[0]?.sourceId).toBe('plugin.test.healthy.source');
         expect(result.degradedSources).toMatchObject([
-            { sourceId: 'broken.source', code: 'source_failure' },
+            { sourceId: 'plugin.test.broken.source', code: 'source_failure' },
         ]);
     });
 
@@ -118,7 +124,7 @@ describe('Plugin SDK Activity adapter', () => {
         });
         const handle = registerPluginActivitySource(registry, sourceWithEvents);
         const subscription = registry.subscribe({
-            sourceIds: ['example.agent'],
+            sourceIds: ['plugin.test.example.agent'],
             onEvent,
         });
         const event = {
@@ -134,9 +140,62 @@ describe('Plugin SDK Activity adapter', () => {
         expect(subscription.disposed).toBe(false);
         expect(emit).toBeTypeOf('function');
         emit?.(event);
-        expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ sourceId: 'example.agent', runId: 'run-1' }));
+        expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ sourceId: 'plugin.test.example.agent', runId: 'run-1' }));
         subscription.dispose();
         handle.dispose();
         expect(subscription.disposed).toBe(true);
     });
+});
+
+
+it('isolates identical source ids across activation owners and rejects late results', async () => {
+    const registry = new ActivityRegistry();
+    const first = new AbortController();
+    const second = new AbortController();
+    let resolveList!: (value: ReturnType<typeof pluginOk<never[]>>) => void;
+    const list = new Promise<ReturnType<typeof pluginOk<never[]>>>((resolve) => { resolveList = resolve; });
+    let lateEvent!: (event: PluginActivityEvent) => void;
+    const unsubscribe = vi.fn();
+    const firstHandle = registerOwnedSource(registry, source({
+        list: () => list,
+        subscribe: ({ onEvent }) => { lateEvent = onEvent; return unsubscribe; },
+    }), { namespace: 'plugin.first', signal: first.signal });
+    const secondHandle = registerOwnedSource(registry, source(), { namespace: 'plugin.second', signal: second.signal });
+    expect(firstHandle.id).not.toBe(secondHandle.id);
+    const onEvent = vi.fn();
+    registry.subscribe({ sourceIds: [firstHandle.id], onEvent });
+    const pending = registry.listRuns();
+    first.abort();
+    resolveList(pluginOk([]));
+    const result = await pending;
+    expect(result.runs).toHaveLength(1);
+    expect(result.runs[0]?.sourceId).toBe(secondHandle.id);
+    expect(result.degradedSources).toMatchObject([{ sourceId: firstHandle.id, code: 'source_failure' }]);
+    expect(unsubscribe).toHaveBeenCalledOnce();
+    lateEvent({ id: 'late', runId: 'run-1', type: 'status', occurredAt: '2026-09-22T00:00:00Z', payload: {} });
+    expect(onEvent).not.toHaveBeenCalled();
+    expect(() => registerOwnedSource(registry, source(), { namespace: 'plugin.first', signal: first.signal })).toThrow('activation has ended');
+    second.abort();
+    expect(registry.listSources()).toEqual([]);
+});
+
+
+it('refuses retained actions and in-flight details after direct unregister', async () => {
+    const registry = new ActivityRegistry();
+    const executeAction = vi.fn(async () => pluginOk(undefined));
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => { finish = resolve; });
+    const original = source();
+    const handle = registerPluginActivitySource(registry, source({
+        get: async (id) => { await gate; return original.get!(id); },
+        executeAction,
+    }));
+    const retained = registry.get(handle.id)!;
+    const pending = registry.getRun(handle.id, 'run-1');
+    registry.unregister(handle.id);
+    finish();
+    expect(await pending).toMatchObject({ ok: false, error: { code: 'source_failure' } });
+    expect(await retained.executeAction!({ runId: 'run-1', action: 'cancel' })).toMatchObject({ ok: false });
+    expect(executeAction).not.toHaveBeenCalled();
+    handle.dispose();
 });

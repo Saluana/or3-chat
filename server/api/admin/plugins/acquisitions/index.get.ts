@@ -25,6 +25,7 @@ export default defineEventHandler(async (event) => {
         : await service.listAll();
     return {
         ok: true,
-        operations: operations.map((operation) => describeAcquisitionStatus(operation)),
+        operations: await Promise.all(operations.map(async (operation) =>
+            describeAcquisitionStatus(operation, await service.isInterrupted(operation)))),
     };
 });

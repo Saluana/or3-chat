@@ -29,6 +29,6 @@ export default defineEventHandler(async (event) => {
         ok: true,
         pluginId: operation.pluginId,
         workspaceId: operation.workspaceId,
-        operation: describeAcquisitionStatus(operation),
+        operation: describeAcquisitionStatus(operation, await service.isInterrupted(operation)),
     };
 });

@@ -1,6 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import MarketplaceInstalled from '../MarketplaceInstalled.vue';
+import type { Ref } from 'vue';
+
+vi.mock('~/composables/auth/useSessionContext', async () => {
+    const { ref } = await import('vue');
+    const workspace = ref<string | null>(null);
+    return {
+        getCachedSessionContext: () => workspace.value ? { workspace: { id: workspace.value } } : null,
+        testWorkspace: workspace,
+    };
+});
 
 /**
  * Pointer slots hold digests, never versions. The UI renders the server's
@@ -23,6 +33,7 @@ vi.mock('~/composables/plugins/portable-client-runtime', () => ({
 vi.stubGlobal('$fetch', fetchMock);
 
 const stubs = {
+    UModal: { props: ['open', 'title', 'description'], emits: ['update:open'], template: '<section v-if="open" role="dialog" @keydown.esc="$emit(\'update:open\', false)"><h2>{{ title }}</h2><slot name="body" /><slot name="footer" /></section>' },
     UButton: {
         props: ['disabled', 'loading', 'to'],
         emits: ['click'],
@@ -63,12 +74,34 @@ function pageResponse(
     };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
     fetchMock.mockReset();
     activationsState.current = new Map();
+    const auth = await import('~/composables/auth/useSessionContext') as unknown as { testWorkspace: Ref<string | null> };
+    auth.testWorkspace.value = null;
 });
 
 describe('MarketplaceInstalled', () => {
+    it('clears the old workspace list and uninstall confirmation on session switch', async () => {
+        const digest = `sha256-${'a'.repeat(64)}`;
+        const display = { version: '2.1.0', selectedDigest: digest, canOpen: true };
+        let resolveSecond: (value: unknown) => void = () => undefined;
+        fetchMock.mockResolvedValueOnce(pageResponse(display));
+        fetchMock.mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve; }));
+        const auth = await import('~/composables/auth/useSessionContext') as unknown as { testWorkspace: Ref<string | null> };
+        auth.testWorkspace.value = 'ws-1';
+        const wrapper = mount(MarketplaceInstalled, { global: { stubs } });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await wrapper.findAll('button').find((button) => button.text() === 'Uninstall')!.trigger('click');
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(true);
+        auth.testWorkspace.value = 'ws-2';
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+        expect(wrapper.text()).not.toContain('2.1.0');
+        resolveSecond({ ...pageResponse({ version: '3.0.0', selectedDigest: digest, canOpen: true }), workspaceId: 'ws-2' });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(wrapper.text()).toContain('3.0.0');
+    });
     it('shows the selected version and an Open action from the display DTO', async () => {
         fetchMock.mockResolvedValue(
             pageResponse({
@@ -206,4 +239,26 @@ describe('MarketplaceInstalled', () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
         expect(wrapper.text()).not.toContain('Roll back');
     });
+});
+
+it('requires versioned instance-wide confirmation and cancellation sends no mutation', async () => {
+    fetchMock.mockResolvedValue(pageResponse({version: '2.1.0', selectedDigest: 'sha256-' + 'a'.repeat(64)}));
+    const wrapper = mount(MarketplaceInstalled, {global: {stubs}});
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const button = (label: string) => wrapper.findAll('button').find((entry) => entry.text() === label)!;
+    const mutations = () => fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST');
+    await button('Uninstall').trigger('click');
+    expect(mutations()).toHaveLength(0);
+    expect(wrapper.get('[role="dialog"]').text()).toContain('sample.plugin 2.1.0');
+    expect(wrapper.get('[role="dialog"]').text()).toContain('every workspace');
+    await button('Cancel').trigger('click');
+    expect(mutations()).toHaveLength(0);
+    await button('Uninstall').trigger('click');
+    await wrapper.get('[role="dialog"]').trigger('keydown', {key: 'Escape'});
+    expect(mutations()).toHaveLength(0);
+    await button('Uninstall').trigger('click');
+    await button('Remove from every workspace').trigger('click');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mutations()).toHaveLength(1);
+    expect(mutations()[0]![1].body.expectedPackageDigest).toBe('sha256-' + 'a'.repeat(64));
 });

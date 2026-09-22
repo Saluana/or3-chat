@@ -109,6 +109,7 @@ export function createManagedWorkspacePluginRuntime(options?: {
             }
         },
     });
+    const activityOwner = { namespace: `plugin.${crypto.randomUUID()}`, signal: scope.signal };
     const { registerPaneApp } = usePaneApps();
     const tools = useToolRegistry();
 
@@ -191,7 +192,8 @@ export function createManagedWorkspacePluginRuntime(options?: {
         registerActivitySource(source) {
             const handle = registerPluginActivitySource(
                 getActivityRegistry(),
-                source
+                source,
+                activityOwner
             );
             scope.onCleanup(() => {
                 handle.dispose();

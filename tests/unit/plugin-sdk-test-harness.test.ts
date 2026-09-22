@@ -369,6 +369,24 @@ describe('Plugin SDK test harness', () => {
         expect(host.snapshot()).toMatchObject({ active: false });
     });
 
+    it.each([false, true])('restores or reports inactive after cleanup failure (restore fails: %s)', async (failRestore) => {
+        const host = createTestHost({ approvedGrants: ['workspace.switch'] });
+        let attempts = 0;
+        const definition = plugin((context) => {
+            attempts++;
+            if (attempts > 1 && failRestore) throw new Error('restore failed');
+            context.onCleanup(() => { throw new Error('cleanup failed'); });
+        }, ['workspace.switch']);
+        expect((await host.install(definition)).ok).toBe(true);
+        expect(await host.switchWorkspace('workspace-b')).toMatchObject({
+            ok: false,
+            error: { details: { rollback: failRestore ? 'failed' : 'restored', active: !failRestore } },
+        });
+        expect(attempts).toBe(2);
+        expect(host.snapshot().active).toBe(!failRestore);
+        expect(host.snapshot().workspaceId).not.toBe('workspace-b');
+    });
+
     it('keeps chat resources scoped to their workspace', async () => {
         const grants = ['chat.create', 'chat.read', 'chat.message.write', 'workspace.read', 'workspace.switch'] as const;
         const host = createTestHost({ approvedGrants: grants });
@@ -568,6 +586,29 @@ describe('Plugin SDK test harness', () => {
             context.files.write({ name: 'late.txt', mimeType: 'text/plain', data, signal: aborter.signal })
         ).resolves.toMatchObject({ ok: false, error: { code: 'aborted' } });
         expect(host.snapshot()).toMatchObject({ active: true });
+    });
+
+    it.each(['caller', 'generation'] as const)('settles a blocked file producer on %s cancellation', async (reason) => {
+        const host = createTestHost({ approvedGrants: ['files.write', 'files.pick'] });
+        let context!: PluginContext;
+        expect((await host.install(plugin((value) => { context = value; }, ['files.write', 'files.pick']))).ok).toBe(true);
+        const controller = new AbortController();
+        const close = vi.fn(() => new Promise<IteratorResult<Uint8Array>>(() => {}));
+        let release!: (value: IteratorResult<Uint8Array>) => void;
+        const pending = new Promise<IteratorResult<Uint8Array>>((resolve) => { release = resolve; });
+        const write = context.files.write({
+            name: 'blocked.txt', mimeType: 'text/plain', signal: controller.signal,
+            data: { [Symbol.asyncIterator]: () => ({ next: () => pending, return: close }) },
+        });
+        if (reason === 'caller') controller.abort();
+        else await host.disable();
+        await expect(write).resolves.toMatchObject({ ok: false, error: { code: 'aborted' } });
+        expect(close).toHaveBeenCalledOnce();
+        release({ done: true, value: undefined });
+        if (reason === 'generation') {
+            await host.install(plugin((value) => { context = value; }, ['files.write', 'files.pick']));
+        }
+        expect(await context.files.pick({ multiple: true })).toEqual({ ok: true, value: [] });
     });
 
     it('keeps chat retries idempotent and validates public transcript messages', async () => {

@@ -99,9 +99,9 @@ export async function listAllWorkspaceIds(event: H3Event): Promise<readonly stri
         for (const item of result.items) {
             if (!item.deleted) ids.push(item.id);
         }
-        if (result.items.length < WORKSPACE_PAGE_SIZE) break;
+        if (result.items.length < WORKSPACE_PAGE_SIZE) return ids;
     }
-    return ids;
+    throw new Error('Workspace enumeration exceeded the supported page limit');
 }
 
 /**

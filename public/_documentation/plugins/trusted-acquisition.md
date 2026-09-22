@@ -60,11 +60,36 @@ One selected code version is shared by every workspace. Before promotion, every 
 
 ## Recovery
 
-`retry` resumes from the recorded stage, so an expired download link, a partial download, a temporary registry outage, a since-disabled blocking workspace or newly saved setup all continue the same operation. Only one runner advances a plugin at a time (an exclusive runner lock), and a retry refuses while another operation for the same plugin is active or a runner is live, so two runs cannot share one staging directory. Host policy is re-read on every resumed stage: disabling installation or removing a trust key stops a downloaded candidate before activation. `cancel` stops the pipeline before the next side effect; once the pointer has been committed the operation finishes as completed rather than reporting "canceled before activation", because the installation is live. Both are reported through the status view (`percentComplete`, `needsSetup`, `retryable`, `canceled`, `failure`).
+`retry` resumes from the recorded stage, so an expired download link, a partial download, a temporary registry outage, a since-disabled blocking workspace or newly saved setup all continue the same operation. Only one runner advances a plugin at a time (a renewed ownership-token lease, separate from record mutation locks), and a retry refuses while another operation for the same plugin is active or a runner is live, so two runs cannot share one staging directory. Host policy is re-read on every resumed stage: disabling installation or removing a trust key stops a downloaded candidate before activation. `cancel` stops the pipeline before the next side effect; once the pointer has been committed the operation finishes as completed rather than reporting "canceled before activation", because the installation is live. Both are reported through the status view (`percentComplete`, `needsSetup`, `retryable`, `canceled`, `failure`).
 
 Every operation is reported with the workspace it installs into, and a paused operation is reported as `resumable` in addition to `needsSetup`, so a caller can tell "waiting on you" from "waiting on the registry" and offer to continue it.
 
 A promotion that fills an empty selection (a first install) also enables the plugin for the workspace the operation installs into; the runtime gate refuses a disabled package, so a completed install would otherwise be a version nothing runs. An update replaces the selection without touching enablement, so a workspace that disabled a plugin keeps it disabled after the update.
+
+A status read marks pending/running operations without a live runner as
+`interrupted` and `resumable`; they are `retryable` unless cancellation is already
+requested. It does not restart or rewrite them. Continue explicitly resumes the
+same operation ID. Finish cancellation completes a pending cancellation without
+the vanished worker. Live local processes keep ownership regardless of elapsed
+time; only a proven dead local owner can be replaced. Runner leases use the same
+`<extensions>/.operations/runners/{pluginId}.lock` path as the earlier PID-file
+runner, so an older process and a newer one cannot advance the same plugin.
+During the lease-layout transition, new runners also hold the intermediate
+`runners/.locks/{pluginId}.lock` lease.
+
+A remote-host lease is retained even after its heartbeat expires because time
+alone does not prove that host stopped. After verifying that the remote host and
+its runner are stopped, a super admin can read the exact `ownerId` from the
+blocking lease's `owner.json` (check both runner paths during the transition) and call
+`POST /api/admin/plugins/acquisitions/{operationId}/recover-runner` with
+`{"expectedOwnerId":"<owner UUID>","confirmedHostStopped":true}` and the normal
+admin-intent header. Recovery requires a heartbeat quiet for at least one minute
+and refuses a changed owner token. Then Continue or Finish cancellation can run.
+An older PID-file runner has no host identity; if it died without removing its
+file, verify its host is stopped before removing that exact legacy lock file.
+Stage evidence merges concurrent cancellation intent, so candidate cleanup and
+committed promotion remain distinguishable. Cancellation after promotion completes
+the receipt and reports the live installation.
 
 ## Permission consent
 

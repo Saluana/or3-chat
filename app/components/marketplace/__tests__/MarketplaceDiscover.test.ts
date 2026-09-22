@@ -96,6 +96,7 @@ function preflightResponse(overrides: Record<string, unknown> = {}) {
 }
 
 function responseFor(url: string): unknown {
+    if (url.startsWith('/api/admin/plugins-page')) return {workspaceId: 'ws-1', plugins: [], packagePlugins: [], enabledPlugins: []};
     // The real admin session contract: a principal kind, not a role.
     if (url.startsWith('/api/admin/auth/session')) {
         return { authenticated: true, kind: 'super_admin' };
@@ -324,7 +325,7 @@ describe('MarketplaceDiscover', () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
         expect(wrapper.text()).toContain('Sample Utility');
         expect(fetchMock).toHaveBeenCalledWith(
-            expect.stringContaining('/api/plugins/marketplace/catalog')
+            expect.stringContaining('/api/plugins/marketplace/catalog'), expect.objectContaining({signal: expect.any(AbortSignal)})
         );
     });
 

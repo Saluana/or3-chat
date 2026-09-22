@@ -51,11 +51,41 @@ bounded file fixtures without importing OR3 application internals. The context
 shape is stable across hosts (`ai`, `ui`, `panes`, `commands`, `chat`,
 `workspace`, `storage`, `settings`, `secrets`, `files`, `http`, `network`,
 `activity`, `events`); unavailable production adapters return typed
-`unsupported` results rather than exposing OR3 internals.
+`unsupported` results for ordinary calls. Registration and subscription methods
+use the synchronous exception contract below.
+
+Registration and subscription methods are synchronous: `ui.registerSidebar`,
+`ui.registerPane`, `ui.registerCard`, `ui.registerAction`, `commands.register`,
+`activity.registerSource`, `events.on`, and `workspace.onChange` return a
+registration handle on success and **throw** when unavailable. Unsupported
+host defaults throw an `Error` with `code: "unsupported"` and
+`retryable: false`; handle this with `try/catch`. Other unavailable methods
+return a `PluginResult` with `error.code: "unsupported"` (asynchronously when
+the method returns a promise). Namespace presence does not establish operation
+support. Check the host's advertised features and grants, and still handle a
+refusal from each call.
+
+The lightweight portable test host records `client.emit()` as outbound only.
+Use `host.emitHostEvent(name, payload)` to deliver a host-origin event; it copies
+payloads and does not loop plugin-origin events back into subscriptions.
+Raw grant denials use the wire code `grant-denied`, which the SDK maps to
+`permission-denied`. Real-broker conformance covers cancellation, deadlines,
+in-flight limits and replacement across captured databases; the fake does not
+simulate transport timing or establish installed-browser qualification.
+
+The generic test host settles blocked file writes on caller cancellation or
+activation teardown, requests iterator cleanup without waiting for a stalled
+producer, and never commits a late chunk. If workspace-switch cleanup fails,
+it attempts to restore the previous definition. The failure includes
+`details.rollback` (`restored` or `failed`) and `details.active`, so callers can
+distinguish a restored plugin from an inactive host.
 
 Activity sources use an owner-scoped id and can provide bounded run summaries,
 optional details, live events, and explicit actions. The host maps these values
-into its Activity registry and contains source failures; plugins never receive
+into its Activity registry using an opaque host activation namespace. Identical
+logical IDs in separate activations cannot collide. Teardown removes subscriptions
+and refuses late list/detail/action results. The host contains source failures;
+plugins never receive
 the registry or its internal records. Pane restore data, file handles, chat
 messages, and secret references are validated as opaque host-facing values.
 Secret-marked setup fields are rejected by ordinary settings writes and must

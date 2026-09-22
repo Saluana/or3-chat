@@ -27,19 +27,21 @@ function resolveTestCommand(root: string): string[] {
 
 export function testV2Package(
     packageRoot: string,
-    options: { readonly args?: readonly string[] } = {}
+    options: { readonly args?: readonly string[]; readonly runner?: typeof spawnSync } = {}
 ): TestCommandResult {
     const root = assertPackageRoot(packageRoot);
     const command = [...resolveTestCommand(root), ...(options.args ?? [])];
     const [executable, ...args] = command;
-    const result = spawnSync(executable!, args, {
+    const result = (options.runner ?? spawnSync)(executable!, args, {
         cwd: root,
         env: process.env,
         stdio: 'inherit',
     });
+    if (result.error) throw new Error(`Test runner failed to start: ${result.error.message}`);
+    if (result.signal) throw new Error(`Test runner terminated by ${result.signal}`);
     return {
         root,
         command,
-        exitCode: result.status ?? (result.error ? 1 : 0),
+        exitCode: result.status ?? 1,
     };
 }

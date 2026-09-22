@@ -7,9 +7,11 @@
  * list filters the same entries down to those with a recorded candidate so a
  * release is reviewed, health-checked and activated through the same services.
  */
-import { inject, onMounted, ref } from 'vue';
+import { computed, inject, onMounted, ref, watch } from 'vue';
+import ConfirmDialog from '~/components/admin/ConfirmDialog.vue';
 import { useToast } from '#imports';
-import { useMarketplaceInstalled } from '~/composables/marketplace/useMarketplace';
+import { MarketplaceRefreshError, useMarketplaceInstalled } from '~/composables/marketplace/useMarketplace';
+import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import { useDashboardNavigation } from '~/composables/dashboard/useDashboardPlugins';
 import { setMarketplaceSetupPlugin } from '~/composables/marketplace/useMarketplaceSetup';
 import {
@@ -26,18 +28,38 @@ import { openPortablePane } from '~/composables/plugins/portable-pane';
 
 const toast = useToast();
 const installed = useMarketplaceInstalled();
+const sessionWorkspaceId = computed(() => getCachedSessionContext()?.workspace?.id ?? null);
+const hasCurrentWorkspace = computed(() => !installed.stale.value &&
+    (sessionWorkspaceId.value === null || sessionWorkspaceId.value === installed.workspaceId.value));
+
+const pendingUninstall = ref<{ pluginId: string; version: string; digest: string; workspaceId: string | null } | null>(null);
+const uninstallOpen = computed({ get: () => pendingUninstall.value !== null, set: (open: boolean) => { if (!open) pendingUninstall.value = null; } });
+function requestUninstall(pluginId: string): void {
+    if (!hasCurrentWorkspace.value) return;
+    const entry = installed.packages.value.find((value) => value.pluginId === pluginId);
+    const digest = entry?.pointer?.current?.packageDigest;
+    if (digest) pendingUninstall.value = { pluginId, digest, version: entry?.display?.version ?? 'selected version', workspaceId: installed.workspaceId.value };
+}
 const navigation = useDashboardNavigation();
 const activations = usePortableActivations();
 const closeDashboard = inject<() => void>('or3:dashboard:close', () => {});
 const busyPluginId = ref<string | null>(null);
-onMounted(() => installed.load());
+onMounted(() => installed.load(sessionWorkspaceId.value));
+watch(sessionWorkspaceId, (next, previous) => {
+    if (next === previous) return;
+    pendingUninstall.value = null;
+    installed.invalidate();
+    void installed.load(next);
+}, { flush: 'sync' });
 
 function openConfigure(pluginId: string): void {
+    if (!hasCurrentWorkspace.value) return;
     setMarketplaceSetupPlugin(pluginId);
     void navigation.openPage('marketplace', 'configure');
 }
 
 async function openPlugin(pluginId: string): Promise<void> {
+    if (!hasCurrentWorkspace.value) return;
     if (!getPortableClientSource(pluginId)) {
         toast.add({ title: 'Plugin interface unavailable', description: 'The plugin runtime is not available in this workspace. Check runtime diagnostics in Admin → Plugins. Configure opens setup only.', color: 'warning' });
         return;
@@ -174,12 +196,13 @@ function canRollback(entry: InstalledEntry): boolean {
 }
 
 async function toggle(pluginId: string): Promise<void> {
+    if (!hasCurrentWorkspace.value) return;
     busyPluginId.value = pluginId;
     try {
         await installed.setEnabled(pluginId, !isEnabled(pluginId));
     } catch (error) {
         toast.add({
-            title: 'Could not change the workspace state',
+            title: error instanceof MarketplaceRefreshError ? 'Change saved; refresh needed' : 'Could not change the workspace state',
             description: error instanceof Error ? error.message : 'The request was refused.',
             color: 'error',
         });
@@ -188,10 +211,17 @@ async function toggle(pluginId: string): Promise<void> {
     }
 }
 
-async function uninstall(pluginId: string): Promise<void> {
+async function uninstall(): Promise<void> {
+    const confirmed = pendingUninstall.value;
+    pendingUninstall.value = null;
+    if (!confirmed) return;
+    const { pluginId } = confirmed;
     busyPluginId.value = pluginId;
     try {
-        await installed.uninstall(pluginId);
+        if (!hasCurrentWorkspace.value || confirmed.workspaceId !== installed.workspaceId.value || installed.packages.value.find((entry) => entry.pluginId === pluginId)?.pointer?.current?.packageDigest !== confirmed.digest) {
+            throw new Error('The selected package changed. Review it again before removing it.');
+        }
+        await installed.uninstall(pluginId, confirmed.digest);
         toast.add({
             title: 'Plugin removed',
             description: 'Its data is kept unless you delete it explicitly.',
@@ -199,7 +229,7 @@ async function uninstall(pluginId: string): Promise<void> {
         });
     } catch (error) {
         toast.add({
-            title: 'Could not remove the plugin',
+            title: error instanceof MarketplaceRefreshError ? 'Change saved; refresh needed' : 'Could not remove the plugin',
             description: error instanceof Error ? error.message : 'The request was refused.',
             color: 'error',
         });
@@ -209,13 +239,14 @@ async function uninstall(pluginId: string): Promise<void> {
 }
 
 async function rollback(pluginId: string): Promise<void> {
+    if (!hasCurrentWorkspace.value) return;
     busyPluginId.value = pluginId;
     try {
         await installed.rollback(pluginId);
         toast.add({ title: 'Rolled back to the previous version', color: 'success' });
     } catch (error) {
         toast.add({
-            title: 'Rollback was refused',
+            title: error instanceof MarketplaceRefreshError ? 'Change saved; refresh needed' : 'Rollback was refused',
             description: error instanceof Error ? error.message : 'State compatibility may block it.',
             color: 'error',
         });
@@ -279,6 +310,7 @@ async function apiGet<T>(url: string): Promise<T> {
     <div class="dashboard-page-frame">
         <div v-if="installed.error.value" class="text-sm text-(--ui-text-muted)" data-testid="marketplace-installed-error">
             {{ installed.error.value }}
+            <UButton :loading="installed.loading.value" @click="installed.load(sessionWorkspaceId)">Refresh installed plugins</UButton>
         </div>
 
         <div class="flex justify-end">
@@ -297,7 +329,7 @@ async function apiGet<T>(url: string): Promise<T> {
         <section class="flex flex-col gap-4" data-testid="marketplace-installed">
             <h3 class="text-base font-medium">Installed</h3>
             <div v-if="installed.loading.value" class="text-sm text-(--ui-text-muted)">Loading…</div>
-            <div v-else-if="installed.packages.value.length === 0" class="text-sm text-(--ui-text-muted)">
+            <div v-else-if="!installed.error.value && installed.packages.value.length === 0" class="text-sm text-(--ui-text-muted)">
                 No packages are installed yet. Browse the marketplace to add one.
             </div>
             <ul v-else class="flex flex-col gap-4">
@@ -347,7 +379,7 @@ async function apiGet<T>(url: string): Promise<T> {
                             color="primary"
                             variant="soft"
                             icon="i-lucide-play"
-                            :disabled="!isEnabled(entry.pluginId)"
+                            :disabled="!hasCurrentWorkspace || !isEnabled(entry.pluginId)"
                             @click="openPlugin(entry.pluginId)"
                         >
                             Open
@@ -357,6 +389,7 @@ async function apiGet<T>(url: string): Promise<T> {
                             color="neutral"
                             variant="soft"
                             icon="i-lucide-settings"
+                            :disabled="!hasCurrentWorkspace"
                             @click="openConfigure(entry.pluginId)"
                         >
                             Configure
@@ -366,6 +399,7 @@ async function apiGet<T>(url: string): Promise<T> {
                             color="neutral"
                             variant="soft"
                             :loading="busyPluginId === entry.pluginId"
+                            :disabled="!hasCurrentWorkspace || installed.loading.value || installed.mutating.value"
                             @click="toggle(entry.pluginId)"
                         >
                             {{ isEnabled(entry.pluginId) ? 'Disable' : 'Enable' }}
@@ -376,7 +410,8 @@ async function apiGet<T>(url: string): Promise<T> {
                             variant="ghost"
                             icon="i-lucide-trash-2"
                             :loading="busyPluginId === entry.pluginId"
-                            @click="uninstall(entry.pluginId)"
+                            :disabled="!hasCurrentWorkspace || installed.loading.value || installed.mutating.value"
+                            @click="requestUninstall(entry.pluginId)"
                         >
                             Uninstall
                         </UButton>
@@ -388,6 +423,7 @@ async function apiGet<T>(url: string): Promise<T> {
                             icon="i-lucide-undo-2"
                             title="Restores the previous code selection. Plugin data is kept, not migrated: data written by the newer version may not be readable."
                             :loading="busyPluginId === entry.pluginId"
+                            :disabled="!hasCurrentWorkspace || installed.loading.value || installed.mutating.value"
                             @click="rollback(entry.pluginId)"
                         >
                             Roll back
@@ -401,4 +437,7 @@ async function apiGet<T>(url: string): Promise<T> {
             Advanced package operations and raw uploads remain on the admin plugins page.
         </p>
     </div>
+    <ConfirmDialog v-model="uninstallOpen" title="Remove plugin from this instance?"
+        :message="pendingUninstall ? pendingUninstall.pluginId + ' ' + pendingUninstall.version + ' will stop in every workspace. Its data is retained. To stop it only here, cancel and choose Disable.' : ''"
+        confirm-text="Remove from every workspace" danger @confirm="uninstall" />
 </template>

@@ -7,8 +7,10 @@
  * install authority gets a copyable administrator request instead of a
  * misleading action.
  */
-import { computed, inject, onMounted, ref } from 'vue';
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRuntimeConfig, useToast } from '#imports';
+import ConfirmDialog from '~/components/admin/ConfirmDialog.vue';
+import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import MarketplaceFailure from './MarketplaceFailure.vue';
 import {
     acquisitionDiagnosticReport,
@@ -27,6 +29,7 @@ import type {
 } from '~/composables/marketplace/useMarketplace';
 import type { AcquisitionStatusView } from '~~/shared/plugins/acquisition/contracts';
 import {
+    MarketplaceRefreshError,
     marketplacePluginDeepLink,
     marketplaceTargetKey,
     sameMarketplaceTarget,
@@ -53,6 +56,28 @@ const install = useMarketplaceInstall();
 const consent = useMarketplaceConsent();
 const account = useMarketplaceAccount();
 const installed = useMarketplaceInstalled();
+
+const pendingUninstall = ref<{ pluginId: string; version: string; digest: string; workspaceId: string | null } | null>(null);
+const uninstallOpen = computed({ get: () => pendingUninstall.value !== null, set: (open: boolean) => { if (!open) pendingUninstall.value = null; } });
+function requestUninstall(pluginId: string): void {
+    if (installed.stale.value) return;
+    const entry = installed.packages.value.find((value) => value.pluginId === pluginId);
+    const digest = entry?.pointer?.current?.packageDigest;
+    if (digest) pendingUninstall.value = { pluginId, digest, version: entry?.display?.version ?? 'selected version', workspaceId: installed.workspaceId.value };
+}
+let selectionGeneration = 0;
+const activeWorkspaceId = computed(() => getCachedSessionContext()?.workspace?.id ?? installed.workspaceId.value);
+watch(activeWorkspaceId, (next, previous) => {
+    if (next === previous) return;
+    selectionGeneration++;
+    install.reset(); pendingUninstall.value = null;
+    if (previous !== null) void installed.load();
+});
+onBeforeUnmount(() => {
+    selectionGeneration++;
+    if (searchTimer !== null) clearTimeout(searchTimer);
+    catalog.dispose(); detail.clear(); preflight.clear(); install.reset();
+});
 const navigation = useDashboardNavigation();
 const closeDashboard = inject<() => void>('or3:dashboard:close', () => {});
 
@@ -96,9 +121,12 @@ function clearSearch(): void {
 }
 
 function closeDetail(): void {
+    selectionGeneration++;
+    confirmationBusy.value = false;
     selectedPluginId.value = null;
     confirmationTarget.value = null;
-    install.detachActivationConfirmation();
+    pendingUninstall.value = null;
+    install.reset();
     const input = searchField.value?.$el;
     if (input instanceof HTMLInputElement) input.focus();
     else if (input instanceof HTMLElement) input.querySelector('input')?.focus();
@@ -141,6 +169,9 @@ onMounted(async () => {
  * selection with the old target's evidence.
  */
 async function openDetail(pluginId: string): Promise<void> {
+    selectionGeneration++;
+    const workspaceId = activeWorkspaceId.value;
+    pendingUninstall.value = null;
     selectedPluginId.value = pluginId;
     confirmationTarget.value = null;
     approvedTargetKey.value = null;
@@ -152,14 +183,11 @@ async function openDetail(pluginId: string): Promise<void> {
     if (loaded.superseded || selectedPluginId.value !== pluginId) return;
     const version = resolveLatestVersion(loaded.entry);
     const answer = await preflight.run(pluginId, version, browserEngine.value ?? undefined);
-    if (!answer || selectedPluginId.value !== pluginId) return;
+    if (!answer || selectedPluginId.value !== pluginId || activeWorkspaceId.value !== workspaceId) return;
     // A durable operation outlives this page: pick it up so the operator can
     // resume or cancel it instead of losing it on reload.
     try {
-        await install.restore(
-            pluginId,
-            answer.release ? { version: answer.release.version } : {}
-        );
+        if (workspaceId) await install.restore(pluginId, { workspaceId, ...(answer.release ? { version: answer.release.version } : {}) });
     } catch {
         // Restoring is a convenience: a refused list must not break discovery.
     }
@@ -287,7 +315,7 @@ async function toggleSelectedPlugin(): Promise<void> {
         });
     } catch (error) {
         toast.add({
-            title: 'Could not change the workspace state',
+            title: error instanceof MarketplaceRefreshError ? 'Change saved; refresh needed' : 'Could not change the workspace state',
             description: error instanceof Error ? error.message : 'The request was refused.',
             color: 'error',
         });
@@ -297,11 +325,16 @@ async function toggleSelectedPlugin(): Promise<void> {
 }
 
 async function uninstallSelectedPlugin(): Promise<void> {
-    const pluginId = selectedPluginId.value;
-    if (!pluginId || !selectedInstalledEntry.value) return;
+    const confirmed = pendingUninstall.value;
+    pendingUninstall.value = null;
+    if (!confirmed || selectedPluginId.value !== confirmed.pluginId) return;
+    const { pluginId } = confirmed;
     installedActionBusy.value = pluginId;
     try {
-        await installed.uninstall(pluginId);
+        if (confirmed.workspaceId !== installed.workspaceId.value || installed.packages.value.find((entry) => entry.pluginId === pluginId)?.pointer?.current?.packageDigest !== confirmed.digest) {
+            throw new Error('The selected package changed. Review it again before removing it.');
+        }
+        await installed.uninstall(pluginId, confirmed.digest);
         toast.add({
             title: 'Plugin removed',
             description: 'Its data is kept unless you delete it explicitly.',
@@ -310,7 +343,7 @@ async function uninstallSelectedPlugin(): Promise<void> {
         closeDetail();
     } catch (error) {
         toast.add({
-            title: 'Could not remove the plugin',
+            title: error instanceof MarketplaceRefreshError ? 'Change saved; refresh needed' : 'Could not remove the plugin',
             description: error instanceof Error ? error.message : 'The request was refused.',
             color: 'error',
         });
@@ -328,7 +361,7 @@ async function rollbackSelectedPlugin(): Promise<void> {
         toast.add({ title: 'Rolled back to the previous version', color: 'success' });
     } catch (error) {
         toast.add({
-            title: 'Rollback was refused',
+            title: error instanceof MarketplaceRefreshError ? 'Change saved; refresh needed' : 'Rollback was refused',
             description: error instanceof Error ? error.message : 'State compatibility may block it.',
             color: 'error',
         });
@@ -492,6 +525,7 @@ async function copyAdminRequest(): Promise<void> {
 }
 
 async function runInstall(): Promise<void> {
+    const generation = selectionGeneration;
     // Capture the reviewed tuple before the first await: approval, install and
     // every message act on this exact target, not on whatever is selected later.
     const target = installTarget.value;
@@ -517,6 +551,7 @@ async function runInstall(): Promise<void> {
     }
     // The confirmation is only valid for the tuple the operator reviewed: a
     // selection or release change while approval was in flight invalidates it.
+    if (generation !== selectionGeneration) return;
     if (!sameMarketplaceTarget(installTarget.value, target)) {
         toast.add({
             title: 'The reviewed release changed',
@@ -525,8 +560,13 @@ async function runInstall(): Promise<void> {
         });
         return;
     }
-    const result = await install.start({ pluginId: target.pluginId, version: target.version });
+    const result = await install.start({
+        ...(activeWorkspaceId.value ? { workspaceId: activeWorkspaceId.value } : {}),
+        pluginId: target.pluginId, version: target.version,
+    });
+    if (generation !== selectionGeneration) return;
     if (!result) {
+        if (install.canceling.value || install.status.value?.canceled) return;
         toast.add({
             title: 'Install did not complete',
             description: install.error.value ?? 'The operation could not start.',
@@ -537,7 +577,9 @@ async function runInstall(): Promise<void> {
     if (result.status === 'completed') {
         approvedTargetKey.value = null;
         await preflight.run(target.pluginId, undefined, browserEngine.value ?? undefined);
+        if (generation !== selectionGeneration) return;
         await installed.load();
+        if (generation !== selectionGeneration) return;
         await confirmRunning(target);
         return;
     }
@@ -554,6 +596,8 @@ async function runInstall(): Promise<void> {
  * separately: a timeout keeps the install and offers retry/diagnostics.
  */
 async function confirmRunning(target: MarketplaceInstallTarget): Promise<void> {
+    const generation = selectionGeneration;
+    if (selectedPluginId.value !== target.pluginId) return;
     confirmationTarget.value = target;
     const workspaceId = install.status.value?.workspaceId;
     if (!workspaceId) {
@@ -571,6 +615,7 @@ async function confirmRunning(target: MarketplaceInstallTarget): Promise<void> {
             packageTreeSha256: target.packageTreeSha256,
             workspaceId,
         });
+        if (generation !== selectionGeneration) return;
         if (confirmation?.confirmed === true) {
             toast.add({
                 title: 'Installed and running',
@@ -585,11 +630,12 @@ async function confirmRunning(target: MarketplaceInstallTarget): Promise<void> {
             color: 'warning',
         });
     } finally {
-        confirmationBusy.value = false;
+        if (generation === selectionGeneration) confirmationBusy.value = false;
     }
 }
 
 async function retryConfirmation(): Promise<void> {
+    const generation = selectionGeneration;
     const target = confirmationTarget.value ?? installTarget.value;
     const workspaceId = install.status.value?.workspaceId;
     if (!target || target.pluginId !== selectedPluginId.value || !workspaceId) return;
@@ -601,7 +647,7 @@ async function retryConfirmation(): Promise<void> {
             workspaceId,
         });
     } finally {
-        confirmationBusy.value = false;
+        if (generation === selectionGeneration) confirmationBusy.value = false;
     }
 }
 
@@ -631,14 +677,18 @@ async function copyInstallDiagnostics(): Promise<void> {
 }
 
 async function retryInstall(): Promise<void> {
+    const generation = selectionGeneration;
     const pluginId = selectedPluginId.value;
     if (!pluginId) return;
     const targetBeforeRetry = installTarget.value ?? confirmationTarget.value;
     const result = await install.retry(pluginId);
+    if (generation !== selectionGeneration) return;
     if (result?.status === 'completed') {
         const target = targetBeforeRetry ?? targetFromAcquisition(result);
         await preflight.run(pluginId, undefined, browserEngine.value ?? undefined);
+        if (generation !== selectionGeneration) return;
         await installed.load();
+        if (generation !== selectionGeneration) return;
         if (target) {
             await confirmRunning(target);
         } else {
@@ -675,6 +725,15 @@ function blockActionLabel(block: { action: string }): string | null {
 </script>
 
 <template>
+    <UAlert v-if="installed.error.value" title="Installed state needs refreshing" :description="installed.error.value">
+        <template #actions><UButton @click="installed.load()">Refresh installed plugins</UButton></template>
+    </UAlert>
+    <UAlert v-if="install.otherWorkspaceOperation.value" title="Installation belongs to another workspace"
+        :description="'Workspace ' + install.otherWorkspaceOperation.value.workspaceId + ' owns this operation. Switch to that workspace to resume or cancel it.'">
+        <template #actions>
+            <UButton @click="navigation.openPage('workspaces', 'manage')">Choose workspace</UButton>
+        </template>
+    </UAlert>
     <div class="dashboard-page-frame" data-testid="marketplace-discover">
         <div class="flex flex-wrap items-center gap-3">
             <UInput
@@ -814,8 +873,8 @@ function blockActionLabel(block: { action: string }): string | null {
                         color="primary"
                         variant="soft"
                         icon="i-lucide-play"
-                        :disabled="!installed.enabled.value.includes(selectedInstalledEntry?.pluginId ?? '')"
                         :loading="installedActionBusy === selectedInstalledEntry?.pluginId"
+                        :disabled="installed.stale.value || installed.loading.value || installed.mutating.value || !installed.enabled.value.includes(selectedInstalledEntry?.pluginId ?? '')"
                         data-testid="marketplace-installed-open"
                         @click="openSelectedPlugin"
                     >
@@ -835,6 +894,7 @@ function blockActionLabel(block: { action: string }): string | null {
                         color="neutral"
                         variant="soft"
                         :loading="installedActionBusy === selectedInstalledEntry?.pluginId"
+                        :disabled="installed.stale.value || installed.loading.value || installed.mutating.value"
                         data-testid="marketplace-installed-toggle"
                         @click="toggleSelectedPlugin"
                     >
@@ -846,6 +906,7 @@ function blockActionLabel(block: { action: string }): string | null {
                         variant="ghost"
                         icon="i-lucide-undo-2"
                         :loading="installedActionBusy === selectedInstalledEntry?.pluginId"
+                        :disabled="installed.stale.value || installed.loading.value || installed.mutating.value"
                         data-testid="marketplace-installed-rollback"
                         @click="rollbackSelectedPlugin"
                     >
@@ -857,8 +918,9 @@ function blockActionLabel(block: { action: string }): string | null {
                         variant="ghost"
                         icon="i-lucide-trash-2"
                         :loading="installedActionBusy === selectedInstalledEntry?.pluginId"
+                        :disabled="installed.stale.value || installed.loading.value || installed.mutating.value"
                         data-testid="marketplace-installed-uninstall"
-                        @click="uninstallSelectedPlugin"
+                        @click="selectedPluginId && requestUninstall(selectedPluginId)"
                     >
                         Uninstall
                     </UButton>
@@ -974,13 +1036,18 @@ function blockActionLabel(block: { action: string }): string | null {
                 </template>
             </div>
 
-            <div v-if="showInstallStatus" class="flex flex-col gap-3 text-sm" data-testid="marketplace-install-status">
+            <div v-if="showInstallStatus && install.status.value" class="flex flex-col gap-3 text-sm" data-testid="marketplace-install-status">
                 <div class="flex items-center gap-2">
                     <UBadge color="neutral" variant="subtle">{{ install.status.value.status }}</UBadge>
                     <span>{{ install.status.value.stage }} ({{ install.status.value.percentComplete }}%)</span>
                 </div>
                 <p v-if="install.canaryStatus.value" class="text-(--ui-text-muted)">
                     Browser check: {{ install.canaryStatus.value }}
+                </p>
+                <p v-if="install.status.value.interrupted" role="status">
+                    {{ install.status.value.canceled
+                        ? 'This installation was interrupted after cancellation was requested. Finish cancellation to stop it.'
+                        : 'This installation was interrupted. Continue resumes this operation; Cancel stops it.' }}
                 </p>
                 <MarketplaceFailure v-if="install.status.value.failure" :operation="install.status.value" />
                 <p v-if="['failed', 'blocked'].includes(install.status.value.status)" class="text-(--ui-text-muted)">
@@ -1037,6 +1104,7 @@ function blockActionLabel(block: { action: string }): string | null {
                         color="neutral"
                         variant="soft"
                         icon="i-lucide-rotate-ccw"
+                        :loading="install.running.value"
                         data-testid="marketplace-continue"
                         @click="retryInstall"
                     >
@@ -1045,14 +1113,14 @@ function blockActionLabel(block: { action: string }): string | null {
                     <UButton
                         v-if="install.canCancel.value"
                         :loading="install.canceling.value"
-                        :disabled="install.status.value.canceled"
+                        :disabled="install.status.value.canceled && !install.status.value.interrupted"
                         size="sm"
                         color="error"
                         variant="ghost"
                         icon="i-lucide-ban"
                         @click="install.cancel()"
                     >
-                        {{ install.status.value.canceled ? 'Cancel requested' : 'Cancel' }}
+                        {{ install.status.value.canceled ? (install.status.value.interrupted ? 'Finish cancellation' : 'Cancel requested') : 'Cancel' }}
                     </UButton>
                     <UButton
                         v-if="install.status.value.needsSetup"
@@ -1116,4 +1184,8 @@ function blockActionLabel(block: { action: string }): string | null {
             </li>
         </ul>
     </div>
+
+                        <ConfirmDialog v-model="uninstallOpen" title="Remove plugin from this instance?"
+        :message="pendingUninstall ? pendingUninstall.pluginId + ' ' + pendingUninstall.version + ' will stop in every workspace. Its data is retained. To stop it only here, cancel and choose Disable.' : ''"
+        confirm-text="Remove from every workspace" danger @confirm="uninstallSelectedPlugin" />
 </template>

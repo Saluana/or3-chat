@@ -346,12 +346,20 @@ export class PluginTestHost {
         }
         if (deactivationFailure) {
             this.#workspaceId = previousId;
-            this.#activeDefinition = definition;
+            // deactivate() has cleared the old activation even if cleanup threw.
+            // Restore a running definition, not just its metadata.
+            const restored = definition ? await this.activate(definition) : undefined;
+            const active = restored?.ok === true;
             return pluginError(
                 'internal',
-                deactivationFailure instanceof Error
-                    ? `Workspace switch could not stop the current plugin: ${deactivationFailure.message}`
-                    : 'Workspace switch could not stop the current plugin'
+                `Workspace switch cleanup failed; ${active ? 'previous plugin restored' : 'no plugin is active'}`,
+                { details: {
+                    rollback: active ? 'restored' : 'failed',
+                    active,
+                    cleanupError: deactivationFailure instanceof Error
+                        ? deactivationFailure.message : String(deactivationFailure),
+                    ...(restored && !restored.ok ? { restoreError: restored.error.message } : {}),
+                } }
             );
         }
         this.#workspaceId = id;
@@ -1183,9 +1191,22 @@ export class PluginTestHost {
                 }
                 const parts: Uint8Array[] = [];
                 let size = 0;
+                let iterator: AsyncIterator<Uint8Array> | undefined;
+                let completed = false;
+                let cancel!: () => void;
+                const cancelled = new Promise<IteratorResult<Uint8Array>>((resolve) => {
+                    cancel = () => resolve({ done: true, value: undefined });
+                });
+                input.signal?.addEventListener('abort', cancel, { once: true });
+                scope.signal.addEventListener('abort', cancel, { once: true });
                 try {
-                    for await (const chunk of input.data) {
-                        if (input.signal?.aborted) return pluginError('aborted', 'File write was cancelled');
+                    if (input.signal?.aborted || scope.signal.aborted) return pluginError('aborted', 'File write was cancelled');
+                    iterator = input.data[Symbol.asyncIterator]();
+                    for (;;) {
+                        const next = await Promise.race([cancelled, iterator.next()]);
+                        if (input.signal?.aborted || scope.signal.aborted) return pluginError('aborted', 'File write was cancelled');
+                        if (next.done) { completed = true; break; }
+                        const chunk = next.value;
                         if (!isUint8Chunk(chunk)) {
                             return pluginError('invalid-input', 'File chunks must be Uint8Array values');
                         }
@@ -1194,8 +1215,17 @@ export class PluginTestHost {
                         parts.push(new Uint8Array(chunk));
                     }
                 } catch (error) {
-                    if (input.signal?.aborted) return pluginError('aborted', 'File write was cancelled');
+                    if (input.signal?.aborted || scope.signal.aborted) return pluginError('aborted', 'File write was cancelled');
                     return pluginError('internal', error instanceof Error ? error.message : 'File input failed');
+                } finally {
+                    input.signal?.removeEventListener('abort', cancel);
+                    scope.signal.removeEventListener('abort', cancel);
+                    // A producer may never settle next()/return(). Request cleanup
+                    // without allowing that producer to hold cancellation hostage.
+                    if (!completed) {
+                        try { void Promise.resolve(iterator?.return?.()).catch(() => {}); }
+                        catch { /* The transfer's original result stays authoritative. */ }
+                    }
                 }
                 // The iterable may have finished after a cancellation landed
                 // in its final next(): check both the caller and generation
@@ -1646,6 +1676,8 @@ export interface PortableTestHost {
     readonly renders: PortableUiView[];
     readonly contributions: readonly { readonly slot: string; readonly id: string; readonly view: PortableUiView }[];
     readonly events: readonly { readonly name: string; readonly payload: Readonly<Record<string, unknown>> }[];
+    /** Inject a host-origin event. client.emit() records outbound events only. */
+    emitHostEvent(name: string, payload?: Readonly<Record<string, unknown>>): void;
     readonly settings: Map<string, PluginJsonValue>;
     readonly storage: Map<string, PluginJsonValue>;
     /**
@@ -2053,8 +2085,7 @@ export function createPortableTestHost(options: PortableTestHostOptions = {}): P
     const client: PortableClient = {
         emit(name, payload = {}) {
             const event = { name, payload };
-            events.push(event);
-            for (const listener of eventListeners) listener(event);
+            events.push(cloneTestValue(event));
         },
         render(view) {
             // A test host that accepts any tree hides exactly the contract
@@ -2119,7 +2150,7 @@ export function createPortableTestHost(options: PortableTestHostOptions = {}): P
             if (requiredGrant && !(options.approvedGrants ?? []).includes(requiredGrant as never)) {
                 return {
                     ok: false,
-                    code: 'permission-denied',
+                    code: 'grant-denied',
                     message: `Grant ${requiredGrant} was not approved`,
                 };
             }
@@ -2375,6 +2406,9 @@ export function createPortableTestHost(options: PortableTestHostOptions = {}): P
         renders,
         contributions,
         events,
+        emitHostEvent(name, payload = {}) {
+            for (const listener of eventListeners) listener(cloneTestValue({ name, payload }));
+        },
         settings,
         storage,
         hasRequestHandler: (method) => requestHandlers.has(method),

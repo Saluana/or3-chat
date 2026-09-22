@@ -1,7 +1,7 @@
 import { createError, defineEventHandler, getRouterParam, readBody } from 'h3';
 import { z } from 'zod';
 import { requireAdminApiContext } from '../../../../../admin/api';
-import { resolveAdminWorkspaceTarget } from '../../../../../admin/workspace-target';
+import { assertExpectedAdminWorkspace, resolveAdminWorkspaceTarget } from '../../../../../admin/workspace-target';
 import { getWorkspaceSettingsStore } from '../../../../../admin/stores/registry';
 import {
     pluginPackageServices,
@@ -10,7 +10,7 @@ import {
 } from '../../../../../admin/plugins/package-operation-support';
 import { revokeHostActivationsForPlugin } from '../../../../../utils/plugins/isolation/activation-registry';
 
-const BodySchema = z.object({ workspaceId: z.string().min(1).optional() });
+const BodySchema = z.object({ workspaceId: z.string().min(1).optional(), expectedWorkspaceId: z.string().min(1).optional() });
 
 export default defineEventHandler(async (event) => {
     const context = await requireAdminApiContext(event, {
@@ -23,6 +23,7 @@ export default defineEventHandler(async (event) => {
     if (!pluginId || !body.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid request' });
     }
+    assertExpectedAdminWorkspace(context, body.data.expectedWorkspaceId);
     const workspaceId = resolveAdminWorkspaceTarget(context, body.data.workspaceId);
     const services = pluginPackageServices(getWorkspaceSettingsStore(event));
     const result = await services.promotion.rollback({

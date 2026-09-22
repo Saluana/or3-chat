@@ -332,15 +332,20 @@ export class PluginAcquisitionService {
     async advance(operationId: string): Promise<PluginAcquisitionOperation> {
         const record = await this.#deps.store.requireRecord(operationId);
         try {
-            return await this.#deps.store.withRunnerLock(record.pluginId, async () => {
+            return await this.#deps.store.withRunnerLock(record.pluginId, async (assertOwned) => {
                 for (;;) {
+                    await assertOwned();
                     const current = await this.#deps.store.requireRecord(operationId);
                     if (isTerminalAcquisitionStatus(current.status)) return current;
                     if (current.cancelRequested) {
                         return await this.#cancelNow(current);
                     }
                     const step = await this.#step(current);
-                    if (step.kind === 'rest') return step.operation;
+                    if (step.kind === 'rest') {
+                        const latest = await this.#deps.store.requireRecord(operationId);
+                        if (latest.cancelRequested && !isTerminalAcquisitionStatus(latest.status)) return this.#cancelNow(latest);
+                        return step.operation;
+                    }
                 }
             });
         } catch (error) {
@@ -370,6 +375,15 @@ export class PluginAcquisitionService {
      * configuration history are preserved.
      */
     async #cancelNow(current: PluginAcquisitionOperation): Promise<PluginAcquisitionOperation> {
+        // Promotion may have committed before its progress write survived.
+        if (current.stage === 'health-checked' && current.candidateDigest) {
+            const pointer = await this.#deps.services.pointers.readPointer(current.pluginId);
+            if (pointer?.current?.packageDigest === current.candidateDigest) {
+                const promoted = await this.#promote(current);
+                if (promoted.kind === 'rest') return promoted.operation;
+                return (await this.#receipt(promoted.operation)).operation;
+            }
+        }
         if (acquisitionStageIndex(current.stage) >= acquisitionStageIndex('promoted')) {
             return (await this.#receipt(current)).operation;
         }
@@ -390,7 +404,8 @@ export class PluginAcquisitionService {
      * blocking the cleanup write.
      */
     async #clearCanceledCandidate(record: PluginAcquisitionOperation): Promise<void> {
-        const candidateDigest = record.candidateDigest;
+        const candidateDigest = record.candidateDigest ??
+            (record.stage === 'verified' ? record.release.packageTreeSha256 : null);
         if (!candidateDigest) return;
         const { packages, pointers } = this.#deps.services;
         await packages.runPluginOperation(record.pluginId, async () => {
@@ -476,14 +491,19 @@ export class PluginAcquisitionService {
     async cancel(operationId: string): Promise<PluginAcquisitionOperation> {
         const requested = await this.#deps.store.requestCancel(operationId);
         if (isTerminalAcquisitionStatus(requested.status)) return requested;
-        if (requested.status === 'paused' || requested.status === 'pending') {
-            return await this.#cancelNow(requested);
+        if (!(await this.#deps.store.isRunnerActive(requested.pluginId))) {
+            return await this.advance(operationId);
         }
         return requested;
     }
 
     async status(operationId: string): Promise<PluginAcquisitionOperation> {
         return await this.#deps.store.requireRecord(operationId);
+    }
+
+    async isInterrupted(operation: PluginAcquisitionOperation): Promise<boolean> {
+        return (operation.status === 'running' || operation.status === 'pending') &&
+            !(await this.#deps.store.isRunnerActive(operation.pluginId));
     }
 
     async listForPlugin(pluginId: string): Promise<readonly PluginAcquisitionOperation[]> {
@@ -696,6 +716,10 @@ export class PluginAcquisitionService {
                     return await this.#fail(record, 'internal-error', 'Unknown acquisition stage.', false);
             }
         } catch (error) {
+            const latest = await this.#deps.store.requireRecord(record.operationId);
+            if (latest.cancelRequested && !isTerminalAcquisitionStatus(latest.status)) {
+                return { kind: 'rest', operation: await this.#cancelNow(latest) };
+            }
             console.error('[plugin-acquisition] step failed', {
                 operationId: record.operationId,
                 pluginId: record.pluginId,
@@ -1147,6 +1171,10 @@ export class PluginAcquisitionService {
             record.pluginId,
             candidate
         );
+        const beforeCandidate = await this.#deps.store.requireRecord(record.operationId);
+        if (beforeCandidate.cancelRequested) {
+            return { kind: 'rest', operation: await this.#cancelNow(beforeCandidate) };
+        }
         const result = await this.#deps.services.candidates.prepare({
             pluginId: record.pluginId,
             sourceRoot: treePath,
@@ -1427,6 +1455,10 @@ export class PluginAcquisitionService {
             );
         }
 
+        const beforePromotion = await this.#deps.store.requireRecord(record.operationId);
+        if (beforePromotion.cancelRequested) {
+            return { kind: 'rest', operation: await this.#cancelNow(beforePromotion) };
+        }
         const result = await this.#deps.services.promotion.promote({
             pluginId: record.pluginId,
             workspaceId: record.workspaceId,
@@ -1591,7 +1623,7 @@ export class PluginAcquisitionService {
         stage: PluginAcquisitionStage,
         patch: Parameters<PluginAcquisitionOperationStore['update']>[2]
     ): Promise<PluginAcquisitionOperation> {
-        return await this.#deps.store.update(record.operationId, record.revision, {
+        return await this.#deps.store.recordProgress(record, {
             ...patch,
             stage,
             status: patch.status ?? 'running',

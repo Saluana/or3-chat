@@ -11,6 +11,31 @@ must identify source commit and dirty state, package/archive digests, profile an
 version, host commit/runtime, browser name/version/platform, command, probe
 results and output path. A missing binding leaves qualification open.
 
+## Remaining-review fixes (local evidence only)
+
+- [x] M4: cleanup-failure workspace rollback attempts reactivation and reports
+  `rollback` and `active` explicitly; covered by `plugin-sdk-test-harness.test.ts`.
+- [x] M7: a blocked file input cannot prevent caller/generation cancellation
+  settling; producer cleanup is requested without awaiting a stalled return.
+- [x] M8: the trusted Activity adapter uses a host activation namespace and
+  abort-owned registration; late results and subscriptions cannot outlive it.
+- [x] M10: CLI signals, spawn failures and unknown exit status cannot pass.
+- [x] M11: synchronous unsupported registration errors have a stable code;
+  documentation names every affected registration/subscription method.
+- [x] M6: real broker/storage conformance covers grants, CAS, quotas, raw event
+  direction, cancellation under backpressure, deadlines and database replacement.
+  The portable fake now uses the wire grant error and explicit host event injection.
+
+These local checks do not qualify generic V2 production adapters, Agents
+extraction, or custom UI. Q1 and current-artifact containment/installed receipts
+(Q2) remain governed by the original gates below.
+
+Validation on September 22, 2026: focused SDK/Activity/transport suites and the
+external tarball workflow passed; SDK/minimal-consumer and full Nuxt typechecks
+passed. The containment attempt did not execute probes: Nuxt refused to start
+because another development server held this checkout's build-directory lock.
+No existing server was stopped and no containment receipt was promoted.
+
 ## 1. Establish the executable contract and early risk gates
 
 - [ ] 1.1 Record the method/profile support inventory in the existing qualification registry (2h).

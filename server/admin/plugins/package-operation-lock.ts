@@ -21,6 +21,8 @@ export interface PackageOperationLockOptions {
     readonly pollIntervalMs?: number;
     readonly staleAfterMs?: number;
     readonly signal?: AbortSignal;
+    /** Filesystem side effects cannot be fenced on a remote host by time alone. */
+    readonly requireDeadOwner?: boolean;
 }
 
 export interface PackageOperationLease {
@@ -134,7 +136,8 @@ async function readOwner(lockPath: string): Promise<LockOwnerRecord | null> {
 async function inspectLock(
     lockPath: string,
     localHostname: string,
-    staleAfterMs: number
+    staleAfterMs: number,
+    requireDeadOwner = false
 ): Promise<InspectedLock | null> {
     let stat;
     try {
@@ -142,6 +145,11 @@ async function inspectLock(
     } catch (error) {
         if (errorCode(error) === 'ENOENT') return null;
         throw error;
+    }
+    // Pre-lease acquisition runners used an O_EXCL PID file at this exact path.
+    // Its host is unknown, so never steal it based on a local PID or age.
+    if (!stat.isDirectory()) {
+        return { stale: false, inode: stat.ino, owner: null };
     }
     const owner = await readOwner(lockPath);
     if (!owner) {
@@ -153,7 +161,7 @@ async function inspectLock(
     }
     const stale = owner.hostname === localHostname
         ? !processIsAlive(owner.pid)
-        : Date.now() - owner.heartbeatAt > staleAfterMs;
+        : !requireDeadOwner && Date.now() - owner.heartbeatAt > staleAfterMs;
     return { stale, inode: stat.ino, owner };
 }
 
@@ -161,8 +169,8 @@ export class AdvisoryPluginOperationLock {
     readonly #locksRoot: string;
     readonly #hostname: string;
 
-    constructor(extensionsRoot = EXTENSIONS_BASE_DIR, localHostname = hostname()) {
-        this.#locksRoot = resolve(extensionsRoot, '.locks');
+    constructor(extensionsRoot = EXTENSIONS_BASE_DIR, localHostname = hostname(), directRoot = false) {
+        this.#locksRoot = directRoot ? resolve(extensionsRoot) : resolve(extensionsRoot, '.locks');
         this.#hostname = localHostname;
     }
 
@@ -170,11 +178,58 @@ export class AdvisoryPluginOperationLock {
         return this.#locksRoot;
     }
 
+    async isActive(pluginId: string, requireDeadOwner = false): Promise<boolean> {
+        assertPluginId(pluginId);
+        const lock = await inspectLock(resolve(this.#locksRoot, `${pluginId}.lock`), this.#hostname, 30_000, requireDeadOwner);
+        return lock !== null && !lock.stale;
+    }
+
+    /**
+     * Operator recovery for a stopped remote host. The caller must verify the
+     * host is down; age alone is never used to take ownership of remote work.
+     * The exact owner token prevents a stale confirmation removing a successor.
+     */
+    async recoverConfirmedStoppedRemote(pluginId: string, expectedOwnerId: string): Promise<boolean> {
+        assertPluginId(pluginId);
+        if (!expectedOwnerId) return false;
+        const lockPath = resolve(this.#locksRoot, `${pluginId}.lock`);
+        const recoveryPath = resolve(this.#locksRoot, `${pluginId}.recovery`);
+        try {
+            await fs.mkdir(recoveryPath, { mode: 0o700 });
+        } catch (error) {
+            if (errorCode(error) === 'EEXIST') return false;
+            throw error;
+        }
+        const quarantine = resolve(this.#locksRoot, `.${pluginId}.stale-${randomUUID()}`);
+        try {
+            const owner = await readOwner(lockPath);
+            if (!owner || owner.ownerId !== expectedOwnerId || owner.hostname === this.#hostname ||
+                Date.now() - owner.heartbeatAt < 60_000) return false;
+            try {
+                await fs.rename(lockPath, quarantine);
+            } catch (error) {
+                if (errorCode(error) === 'ENOENT') return false;
+                throw error;
+            }
+            const movedOwner = await readOwner(quarantine);
+            if (movedOwner?.ownerId !== expectedOwnerId ||
+                movedOwner.heartbeatAt !== owner.heartbeatAt) {
+                if (!(await exists(lockPath))) await fs.rename(quarantine, lockPath);
+                return false;
+            }
+            await fs.rm(quarantine, { recursive: true, force: true });
+            return true;
+        } finally {
+            await fs.rmdir(recoveryPath).catch(() => undefined);
+        }
+    }
+
     async #recoverStale(
         pluginId: string,
         lockPath: string,
         recoveryPath: string,
-        staleAfterMs: number
+        staleAfterMs: number,
+        requireDeadOwner = false
     ): Promise<boolean> {
         try {
             await fs.mkdir(recoveryPath, { mode: 0o700 });
@@ -187,7 +242,7 @@ export class AdvisoryPluginOperationLock {
             `.${pluginId}.stale-${randomUUID()}`
         );
         try {
-            const inspected = await inspectLock(lockPath, this.#hostname, staleAfterMs);
+            const inspected = await inspectLock(lockPath, this.#hostname, staleAfterMs, requireDeadOwner);
             if (!inspected?.stale) return false;
             try {
                 await fs.rename(lockPath, quarantine);
@@ -257,9 +312,9 @@ export class AdvisoryPluginOperationLock {
                 }
             }
 
-            const inspected = await inspectLock(lockPath, this.#hostname, staleAfterMs);
+            const inspected = await inspectLock(lockPath, this.#hostname, staleAfterMs, options.requireDeadOwner);
             if (inspected?.stale) {
-                await this.#recoverStale(pluginId, lockPath, recoveryPath, staleAfterMs);
+                await this.#recoverStale(pluginId, lockPath, recoveryPath, staleAfterMs, options.requireDeadOwner);
                 continue;
             }
             if (Date.now() - startedAt >= timeoutMs) {

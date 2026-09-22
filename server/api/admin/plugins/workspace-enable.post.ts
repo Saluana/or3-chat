@@ -9,13 +9,14 @@ import { z } from 'zod';
 import { requireAdminApiContext } from '../../../admin/api';
 import { getWorkspaceSettingsStore } from '../../../admin/stores/registry';
 import { setPluginEnabled } from '../../../admin/plugins/workspace-plugin-store';
-import { resolveAdminWorkspaceTarget } from '../../../admin/workspace-target';
+import { assertExpectedAdminWorkspace, resolveAdminWorkspaceTarget } from '../../../admin/workspace-target';
 import { revokeHostActivationsForPluginWorkspace } from '../../../utils/plugins/isolation/activation-registry';
 
 const BodySchema = z.object({
     pluginId: z.string().min(1),
     enabled: z.boolean(),
     workspaceId: z.string().min(1).optional(),
+    expectedWorkspaceId: z.string().min(1).optional(),
 });
 
 /**
@@ -40,6 +41,8 @@ export default defineEventHandler(async (event) => {
     if (!body.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid request' });
     }
+
+    assertExpectedAdminWorkspace(context, body.data.expectedWorkspaceId);
 
     const workspaceId = resolveAdminWorkspaceTarget(
         context,

@@ -97,7 +97,7 @@ A release that declares a contained client runtime needs a real browser canary. 
 
 Updates shows two things: staged candidates, and newer published releases found by an explicit, bounded catalog check ("Check for updates"). The check resolves each newer release through the same trust pipeline as acquisition, so a quarantined or unresolvable release is reported as blocked instead of advertised. Reviewing an available update starts the ordinary acquisition operation for that exact release — it never promotes directly — which is what surfaces the authority and setup differences. Checking for updates never stages anything by itself.
 
-Updates are recorded candidates on the same lifecycle, and an update a previous install recorded is resumed rather than re-implemented: when a candidate is owned by an unfinished install operation, Updates continues that operation so the pipeline's preflight, setup readiness and browser canary all still apply. The promotion boundary enforces this for every caller: it refuses a candidate an unfinished install operation owns (answering with the operation id), and it runs the instance-wide workspace preflight for any promotion, whatever created the candidate. Expanded authority needs fresh workspace consent before the check can pass. Rollback, pin and uninstall keep their existing package operations, and plugin data is kept unless deletion is requested explicitly.
+Updates are recorded candidates on the same lifecycle, and an update a previous install recorded is resumed rather than re-implemented: when a candidate is owned by an unfinished install operation, Updates continues that operation so the pipeline's preflight, setup readiness and browser canary all still apply. The promotion boundary enforces this for every caller: it refuses a candidate an unfinished install operation owns (answering with the operation id), and it runs the instance-wide workspace preflight for any promotion, whatever created the candidate. Expanded authority needs fresh workspace consent before the check can pass. Rollback, pin and uninstall keep their existing package operations. Uninstall disables the plugin in every live workspace before clearing the instance-wide selection; plugin data is kept unless deletion is requested explicitly. If a workspace write fails, the pointer remains selected and any workspaces already disabled stay disabled; retry after fixing the failing store.
 
 A durable operation outlives the page: opening a plugin's detail restores the unfinished operation the server recorded (matching version first, otherwise the newest), so an operator who reloaded or stepped away can continue or cancel it instead of losing it. Watching is not resuming: a paused, blocked or retryable-failed operation is advanced through the owner-authorized retry (which revalidates setup, consent and evidence server-side) before the UI polls again, and a running operation is only watched. Failures that cannot progress show their message instead of a spinning check. A setup pause is reported as `resumable` and rendered as Continue, and completed operations reconcile the running plugin runtime so enabled code starts, disabled code stops and an update replaces the sandbox.
 
@@ -186,3 +186,30 @@ Reviewed releases declare their SPDX license in the V2 manifest’s `license`
 field. The host preserves this bounded publisher metadata while continuing to
 reject undeclared V2 fields; the registry checks the license expression when
 reviewing the submission.
+
+## Recovery and management safety
+
+Discover restores operations only for the active workspace. An unfinished operation
+owned by another workspace is labelled with that workspace; switch there to resume
+or cancel it. Changing selection detaches browser polling and canary follow-up
+without cancelling the server operation. Catalog results belong to the latest search.
+
+Interrupted operations offer Continue and Cancel. Transient activation transport,
+server and malformed-response failures offer **Retry plugin startup** on the open
+surface. Retry refreshes the server manifest, repeats authorization and verifies
+package identity before starting. Policy and digest refusals remain blocked.
+Typed drafts survive a temporary missing view during restart, but a different logical
+view or workspace clears them.
+
+A saved management change whose list refresh fails is reported as saved with a
+refresh error. Retained rows are stale and further mutations are refused until refresh
+succeeds. Authorization loss clears the protected cached list.
+
+Uninstall first asks to remove the named version from **every workspace**. Cancel
+and use Disable for a workspace-only change. Confirmation binds the selected package
+digest; the server refuses a changed selection before disabling or removing it.
+Package bytes and saved data remain retained.
+
+The uninstall API requires `expectedPackageDigest` in the body of
+`POST /api/admin/plugins/packages/{pluginId}/uninstall`. A changed selection
+returns HTTP 409 without disabling the workspace or clearing the pointer.

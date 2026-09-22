@@ -41,6 +41,14 @@ vi.mock('../../../../../utils/plugins/acquisition/route-support', () => ({
     acquisitionServiceFor: acquisitionServiceForMock as never,
 }));
 
+const recoverRunnerMock = vi.fn();
+vi.mock('../../../../../utils/plugins/acquisition/operation-store', () => ({
+    PluginAcquisitionOperationError: class extends Error {},
+    PluginAcquisitionOperationStore: class {
+        recoverRemoteRunner(...args: unknown[]) { return recoverRunnerMock(...args); }
+    },
+}));
+
 const startMock = vi.fn();
 const statusMock = vi.fn();
 
@@ -52,6 +60,8 @@ function operationView(overrides: Record<string, unknown> = {}) {
     return {
         operationId: 'acq_abcdefgh',
         pluginId: 'alpha',
+        workspaceId: 'ws-1',
+        release: {releaseId: 'r1', archiveSha256: 'sha256-a', packageTreeSha256: 'sha256-b', manifestSha256: 'sha256-c', authoritySha256: 'sha256-d'},
         version: '1.0.0',
         stage: 'receipt-recorded',
         status: 'completed',
@@ -79,6 +89,7 @@ describe('acquisition routes', () => {
         acquisitionServiceForMock.mockReset().mockResolvedValue({
             start: startMock,
             status: statusMock,
+            isInterrupted: vi.fn().mockResolvedValue(false),
             retry: vi.fn(),
             cancel: vi.fn(),
             // The start route hands the id back before doing the work; the run
@@ -87,6 +98,7 @@ describe('acquisition routes', () => {
         });
         startMock.mockReset();
         statusMock.mockReset();
+        recoverRunnerMock.mockReset();
     });
 
     it('rejects an invalid start body before touching the pipeline', async () => {
@@ -120,6 +132,8 @@ describe('acquisition routes', () => {
             operation: {
                 operationId: 'acq_abcdefgh',
                 pluginId: 'alpha',
+                workspaceId: 'ws-1',
+                release: {releaseId: 'r1', archiveSha256: 'sha256-a', packageTreeSha256: 'sha256-b', manifestSha256: 'sha256-c', authoritySha256: 'sha256-d'},
                 version: '1.0.0',
                 stage: 'receipt-recorded',
                 status: 'completed',
@@ -168,11 +182,30 @@ describe('acquisition routes', () => {
         await expectStatus(handler(makeEvent()), 404);
     });
 
+    it('requires exact owner confirmation before recovering a remote runner', async () => {
+        getRouterParamMock.mockReturnValue('acq_abcdefgh');
+        const handler = (await import('../[operationId]/recover-runner.post')).default;
+        readBodyMock.mockResolvedValue({ expectedOwnerId: 'wrong', confirmedHostStopped: true });
+        await expectStatus(handler(makeEvent()), 400);
+        expect(recoverRunnerMock).not.toHaveBeenCalled();
+
+        const ownerId = 'e967b0db-bfe1-4c74-ae64-96c9d829c342';
+        readBodyMock.mockResolvedValue({ expectedOwnerId: ownerId, confirmedHostStopped: true });
+        recoverRunnerMock.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+        await expectStatus(handler(makeEvent()), 409);
+        await expect(handler(makeEvent())).resolves.toMatchObject({ recovered: true });
+        expect(recoverRunnerMock).toHaveBeenCalledWith('acq_abcdefgh', ownerId);
+        expect(requireAdminApiContextMock).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+            ownerOnly: true, mutation: true, superAdminOnly: true,
+        }));
+    });
+
     it('serves a recorded status without running the pipeline', async () => {
         getRouterParamMock.mockReset().mockReturnValue('acq_abcdefgh');
         statusMock.mockResolvedValue({
             operationId: 'acq_abcdefgh',
             pluginId: 'alpha',
+            release: {releaseId: 'r1', archiveSha256: 'sha256-a', packageTreeSha256: 'sha256-b', manifestSha256: 'sha256-c', authoritySha256: 'sha256-d'},
             version: '1.0.0',
             workspaceId: 'ws-1',
             stage: 'candidate-recorded',

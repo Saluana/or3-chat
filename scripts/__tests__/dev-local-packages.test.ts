@@ -11,7 +11,7 @@ const workspaces: string[] = [];
 
 /** Build a workspace root containing `or3-chat` plus the given siblings. */
 function workspace(
-    siblings: Record<string, { name?: string; entries?: readonly string[] } | null>,
+    siblings: Record<string, { name?: string; entries?: readonly string[]; dependencies?: Record<string, string> } | null>,
 ): string {
     const root = mkdtempSync(join(tmpdir(), 'or3-local-packages-'));
     workspaces.push(root);
@@ -23,7 +23,7 @@ function workspace(
         mkdirSync(dir, { recursive: true });
         writeFileSync(
             join(dir, 'package.json'),
-            JSON.stringify({ name: spec.name, version: '0.0.0' }),
+            JSON.stringify({ name: spec.name, version: '0.0.0', dependencies: spec.dependencies }),
         );
         for (const entry of spec.entries ?? []) {
             const entryPath = join(dir, entry);
@@ -47,7 +47,7 @@ describe('local package sources', () => {
         expect(localPackagesEnabled({})).toBe(false);
         expect(
             localPackagesEnabled({ NODE_ENV: 'production', OR3_USE_LOCAL_PACKAGES: 'true' }),
-        ).toBe(true);
+        ).toBe(false);
         expect(
             localPackagesEnabled({ NODE_ENV: 'development', OR3_USE_LOCAL_PACKAGES: 'false' }),
         ).toBe(false);
@@ -122,4 +122,24 @@ describe('local package sources', () => {
 
         expect(resolution).toEqual({ enabled: false, aliases: [], selected: [], skipped: [] });
     });
+});
+
+it('rejects the entire workflow group when core does not meet the UI range', () => {
+    const app = workspace({
+        'or3-workflows/packages/workflow-core': { name: 'or3-workflow-core', entries: ['src/index.ts'] },
+        'or3-workflows/packages/workflow-vue': { name: 'or3-workflow-vue', entries: ['src/index.ts', 'src/styles/variables.css'], dependencies: { 'or3-workflow-core': '^9.0.0' } },
+    });
+    const result = resolveLocalPackageAliases(app, { NODE_ENV: 'development' });
+    expect(result.aliases).toEqual([]);
+    expect(result.skipped.join(' ')).toContain('requires or3-workflow-core@^9.0.0');
+});
+it('rejects missing transitive source before selecting any workflow aliases', () => {
+    const app = workspace({
+        'or3-workflows/packages/workflow-core': { name: 'or3-workflow-core', entries: ['src/index.ts'] },
+        'or3-workflows/packages/workflow-vue': { name: 'or3-workflow-vue', entries: ['src/index.ts', 'src/styles/variables.css'] },
+    });
+    writeFileSync(join(app, '../or3-workflows/packages/workflow-core/src/index.ts'), "export * from './missing';");
+    const result = resolveLocalPackageAliases(app, { NODE_ENV: 'development' });
+    expect(result.aliases).toEqual([]);
+    expect(result.skipped.join(' ')).toContain('source import is missing');
 });

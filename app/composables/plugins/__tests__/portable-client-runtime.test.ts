@@ -98,6 +98,7 @@ vi.mock('../bundled-v1-manager-runtime', () => ({
 
 import {
     activatePortableClient,
+    restartPortableClient,
     claimPortableRecoveryAttempt,
     clearPortableClientSources,
     clearPortableSurfaceRegistrations,
@@ -1265,5 +1266,47 @@ describe('portable draft lifecycle', () => {
         expect(getPortableClientDraft('sample.plugin', 'ws-1', 'pane').values).toEqual({});
         clearPortableClientSources();
         expect(getPortableClientDraft('sample.plugin', 'ws-1', 'pane').values).toEqual({});
+    });
+});
+
+describe('explicit startup recovery and draft identity', () => {
+    it.each(['transport', '503'])('recovers a transient %s failure with fresh manifest and authorization', async (failure) => {
+        const originalFetch = globalThis.fetch;
+        let first = true;
+        const {createDescriptorKey} = await import('~~/shared/plugins/descriptor-key');
+        const {descriptorKey: ignored, ...identity} = descriptor();
+        const fresh = {...identity, descriptorKey: await createDescriptorKey(identity)};
+        const entry = {descriptorStatus: 'ready', descriptor: fresh, loadAllowed: true, hasServerRoutes: false, lifecycleCoverage: 'managed-v2'};
+        vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+            if (url === '/api/plugins/runtime-manifest') return new Response(JSON.stringify({workspaceId: 'ws-1', enabledPluginIds: ['sample.plugin'], runtime: {'sample.plugin': entry}}));
+            if (url === '/api/plugins/isolation/activation' && init?.method === 'POST' && first) {
+                first = false;
+                if (failure === 'transport') throw new Error('offline');
+                return new Response('{}', {status: 503});
+            }
+            return originalFetch(url, init);
+        }));
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('recovered'));
+        setPortableClientSource({descriptor: fresh, workspaceId: 'ws-1', runtimeEntry: entry});
+        expect((await ensurePortableClientActivation('sample.plugin'))?.blockCode).toBe('activation-unavailable');
+        expect((await restartPortableClient('sample.plugin')).status).toBe('active');
+        expect(startPortableWorkerMock).toHaveBeenCalledTimes(1);
+    });
+    it('keeps input through an absent restart view and clears it on logical navigation', async () => {
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('draft'));
+        const source = {descriptor: descriptor(), workspaceId: 'ws-1', runtimeEntry: undefined};
+        setPortableClientSource(source);
+        await activatePortableClient(source);
+        const emit = (index: number, key: string) => (startPortableWorkerMock.mock.calls[index]![0] as {onEvent: (value: unknown) => void}).onEvent({status: 'rendered', key, title: key, nodes: []});
+        emit(0, 'editor');
+        const draft = getPortableClientDraft('sample.plugin', 'ws-1', 'pane');
+        draft.values.title = 'unsaved';
+        await activatePortableClient(source);
+        expect(draft.values.title).toBe('unsaved');
+        emit(1, 'editor');
+        expect(draft.values.title).toBe('unsaved');
+        emit(1, 'other');
+        expect(draft.values.title).toBeUndefined();
+        expect(getPortableClientDraft('sample.plugin', 'ws-2', 'pane').values).toEqual({});
     });
 });

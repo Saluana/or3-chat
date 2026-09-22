@@ -48,3 +48,16 @@ export function resolveAdminWorkspaceTarget(
 
     return sessionWorkspaceId;
 }
+
+/** Bind a dashboard mutation to the workspace the browser just displayed. */
+export function assertExpectedAdminWorkspace(
+    context: AdminRequestContext,
+    expectedWorkspaceId?: string
+): void {
+    if (expectedWorkspaceId && context.session?.workspace?.id !== expectedWorkspaceId) {
+        throw createError({
+            statusCode: 409,
+            statusMessage: 'Active workspace changed; refresh before continuing',
+        });
+    }
+}
