@@ -155,6 +155,20 @@ A release that asks for authority cannot install, canary or be promoted until th
 
 Browsing needs only a workspace session. Installing needs an owner or super admin, so a member sees the detail and a copyable administrator request link instead of an install action. There is no ticket system and no misleading purchase step.
 
+Signed-in members can also view the packages installed on the instance and see
+whether each is enabled and available in their workspace. This read-only list
+uses the workspace-scoped runtime manifest. Administrators with the required
+grant can enable or disable packages for a workspace; site administrators can
+also uninstall or roll back packages. If the installed list cannot load, the
+Marketplace shows a padded error with a retry action and plain-language
+session guidance instead of an API error.
+
+Discover shows one retryable message when the catalog and installed-state
+requests fail together. A missing HTTP response is described as a connection
+problem because account access could not be checked; 401 and 403 responses
+instead explain session or workspace access. Failed catalog requests do not
+show the empty-results message or raw API URLs.
+
 The request link is a supported deep link: `/?dashboard=marketplace&plugin=<pluginId>`. Opening it opens the dashboard's Marketplace app and selects that plugin, so the administrator lands on the request instead of the catalog.
 
 ## Diagnostics

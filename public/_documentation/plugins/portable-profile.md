@@ -91,7 +91,10 @@ Text fields accept `date: true`. Publisher HTML, CSS and DOM access remain prohi
 
 The optional `tools.register.client` grant enables discovery through `runtime.tools`
 and invocation through `runtime.tool`. Names must use the plugin namespace; tools
-start disabled and are removed on workspace/version teardown.
+start disabled, appear together under the reviewed plugin name in chat settings,
+and are removed on workspace/version teardown. The host assigns the category;
+tool definitions cannot choose their own UI category. Selecting a category opens
+a tool-only view in the same popover, with a Back button and one scrolling list.
 
 The policy always requires the feature flag `or3-portable-client-v1`.
 `applyPortableProfileToManifest()` merges it into `manifest.features.required`

@@ -68,6 +68,9 @@ package and current grant review on every request. Stop, logout, workspace
 switch, update, disable and fatal teardown explicitly revoke the handle, while
 server expiry remains a bounded fallback; a replacement sandbox therefore
 cannot reuse the previous activation's authority.
+The authenticated teardown DELETE is idempotent: an unknown handle after a
+server restart, or a handle already expired or revoked, is treated as cleaned
+up. Capability calls with those handles remain refused.
 
 Admission state (in-flight calls, recent request IDs, cancellation handles)
 is keyed by the activation handle and spans HTTP requests: two calls that share
@@ -182,9 +185,11 @@ worker and cancels its outstanding work instead of only failing one call. These
 are host limits, not OS-level memory or CPU isolation.
 
 Because the budget is finite, activation is demand-driven: a package starts when
-its surface opens, not for every enabled plugin during manifest synchronization. A
-stopped package offers a restart from its surface, and the last rendered tree plus
-the host field store survive the stop so typed values are not lost.
+its surface opens, not for every enabled plugin during manifest synchronization.
+When the ordinary time limit ends an activation, the host starts a replacement
+automatically and keeps the last rendered tree and typed fields in place until
+the replacement renders. A failed replacement offers **Try again**; unexpected
+crashes and containment failures do not restart automatically.
 
 ## Grantable UI primitives
 

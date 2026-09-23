@@ -71,7 +71,7 @@ export async function registerPortableTools(pluginId: string): Promise<() => voi
     const handles: { dispose(): unknown }[] = [];
     try {
         for (const definition of definitions) handles.push(useToolRegistry().registerTool(
-            { ...definition, runtime: 'client', ui: {label: definition.function.name.slice(prefix.length).replaceAll('_', ' '), defaultEnabled: false} },
+            { ...definition, runtime: 'client', ui: {label: definition.function.name.slice(prefix.length).replaceAll('_', ' '), category: source.descriptor.name, defaultEnabled: false} },
             async (args) => {
                 if (!stillCurrent()) throw new Error('The plugin workspace or version changed.');
                 const result = await invokePortableToolRequest(pluginId, 'runtime.tool', {name:definition.function.name,args});

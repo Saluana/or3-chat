@@ -122,7 +122,7 @@ export function parseDefaultModels(input) {
     const models = [];
     for (const entry of entries) {
         const id = typeof entry === 'string' ? entry.trim() : '';
-        if (!/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,191}$/.test(id)) continue;
+        if (!/^[~A-Za-z0-9][A-Za-z0-9._:/-]{0,191}$/.test(id)) continue;
         if (models.includes(id)) continue;
         models.push(id);
         if (models.length >= COMPARE_LIMITS.maxModels) break;

@@ -1,152 +1,84 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
-import { defineComponent } from 'vue';
 import LazyEditorHost from '../LazyEditorHost.vue';
 
-// Mock the DocumentEditorRoot component
 vi.mock('../DocumentEditorRoot.vue', () => ({
     default: {
         name: 'DocumentEditorRoot',
-        template: '<div class="mock-editor" :data-document-id="documentId" :data-pane-id="paneId" :data-tab-id="tabId">Mock Editor</div>',
         props: ['documentId', 'paneId', 'tabId'],
+        emits: ['ready'],
+        template: '<div class="mock-editor" :data-document-id="documentId" :data-pane-id="paneId" :data-tab-id="tabId">Mock Editor</div>',
     },
 }));
 
-const SuspenseStub = defineComponent({
-    name: 'Suspense',
-    emits: ['resolve'],
-    template: '<div class="suspense-stub"><slot /></div>',
-});
-
-describe('LazyEditorHost - memory leaks', () => {
+describe('LazyEditorHost', () => {
     beforeEach(() => {
-        vi.clearAllMocks();
         vi.useFakeTimers();
     });
 
-    it('clears error timeout on unmount', () => {
-        const wrapper = mount(LazyEditorHost, {
-            props: {
-                documentId: 'doc1',
-            },
-            global: {
-                stubs: {
-                    Suspense: SuspenseStub,
-                },
-            },
-        });
-
-        // Error timeout should be set on mount
-        expect(vi.getTimerCount()).toBeGreaterThan(0);
-
-        wrapper.unmount();
-
-        // Advance timers - if timeout wasn't cleared, this could cause issues
-        vi.advanceTimersByTime(6000);
+    afterEach(() => {
+        vi.useRealTimers();
     });
 
-    it('clears error timeout when editor loads successfully', async () => {
+    it('keeps the skeleton visible until the document editor is ready', async () => {
         const wrapper = mount(LazyEditorHost, {
-            props: {
-                documentId: 'doc1',
-            },
-            global: {
-                stubs: {
-                    Suspense: SuspenseStub,
-                },
-            },
+            props: { documentId: 'doc1' },
         });
+        const editor = wrapper.getComponent({ name: 'DocumentEditorRoot' });
 
+        expect(wrapper.find('.document-editor-skeleton').exists()).toBe(true);
+        expect(wrapper.get('.mock-editor').classes()).toContain('invisible');
+
+        editor.vm.$emit('ready', 'stale-doc');
         await wrapper.vm.$nextTick();
+        expect(wrapper.find('.document-editor-skeleton').exists()).toBe(true);
 
-        // Simulate Suspense resolution
-        const suspenseEl = wrapper.findComponent({ name: 'Suspense' });
-        if (suspenseEl.exists()) {
-            await suspenseEl.vm.$emit('resolve');
-        }
-
-        // Error message should not show
-        expect(wrapper.find('.absolute.inset-0').exists()).toBe(false);
+        editor.vm.$emit('ready', 'doc1');
+        await wrapper.vm.$nextTick();
+        expect(wrapper.find('.document-editor-skeleton').exists()).toBe(false);
+        expect(wrapper.get('.mock-editor').classes()).not.toContain('invisible');
+        expect(vi.getTimerCount()).toBe(0);
 
         wrapper.unmount();
     });
 
-    it('resets error timeout when documentId changes', async () => {
+    it('hides the old document while switching in place', async () => {
         const wrapper = mount(LazyEditorHost, {
-            props: {
-                documentId: 'doc1',
-            },
-            global: {
-                stubs: {
-                    Suspense: SuspenseStub,
-                },
-            },
+            props: { documentId: 'doc1', paneId: 'pane-a', tabId: 'tab-a' },
         });
-
-        await wrapper.vm.$nextTick();
-
-        // Change documentId should reset state
-        await wrapper.setProps({ documentId: 'doc2' });
-        await wrapper.vm.$nextTick();
-
-        // Component should still work correctly after prop change
-        expect(wrapper.exists()).toBe(true);
-
-        wrapper.unmount();
-    });
-
-    it('switches documents in place and forwards workspace session identity', async () => {
-        const wrapper = mount(LazyEditorHost, {
-            props: {
-                documentId: 'doc1',
-                paneId: 'pane-a',
-                tabId: 'tab-a',
-            },
-            global: {
-                stubs: {
-                    Suspense: SuspenseStub,
-                },
-            },
-        });
-
+        const editor = wrapper.getComponent({ name: 'DocumentEditorRoot' });
         const initialEditorElement = wrapper.get('.mock-editor').element;
-        expect(wrapper.get('.mock-editor').attributes()).toMatchObject({
-            'data-document-id': 'doc1',
-            'data-pane-id': 'pane-a',
-            'data-tab-id': 'tab-a',
-        });
 
+        editor.vm.$emit('ready', 'doc1');
+        await wrapper.vm.$nextTick();
         await wrapper.setProps({ documentId: 'doc2', tabId: 'tab-b' });
 
-        const updatedEditor = wrapper.get('.mock-editor');
-        expect(updatedEditor.element).toBe(initialEditorElement);
-        expect(updatedEditor.attributes()).toMatchObject({
+        expect(wrapper.get('.mock-editor').element).toBe(initialEditorElement);
+        expect(wrapper.get('.mock-editor').attributes()).toMatchObject({
             'data-document-id': 'doc2',
             'data-pane-id': 'pane-a',
             'data-tab-id': 'tab-b',
         });
+        expect(wrapper.find('.document-editor-skeleton').exists()).toBe(true);
+
+        editor.vm.$emit('ready', 'doc1');
+        await wrapper.vm.$nextTick();
+        expect(wrapper.find('.document-editor-skeleton').exists()).toBe(true);
+
+        editor.vm.$emit('ready', 'doc2');
+        await wrapper.vm.$nextTick();
+        expect(wrapper.find('.document-editor-skeleton').exists()).toBe(false);
 
         wrapper.unmount();
     });
 
-    it('handles isMounted flag correctly', async () => {
+    it('clears its timeout on unmount', () => {
         const wrapper = mount(LazyEditorHost, {
-            props: {
-                documentId: 'doc1',
-            },
-            global: {
-                stubs: {
-                    Suspense: SuspenseStub,
-                },
-            },
+            props: { documentId: 'doc1' },
         });
-
-        // Component should be mounted
-        expect(wrapper.exists()).toBe(true);
+        expect(vi.getTimerCount()).toBeGreaterThan(0);
 
         wrapper.unmount();
-
-        // After unmount, advancing timers should not cause errors
-        vi.advanceTimersByTime(6000);
+        expect(vi.getTimerCount()).toBe(0);
     });
 });

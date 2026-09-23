@@ -8,7 +8,7 @@ Reactive controller for the model picker in a chat composer. It manages the sele
 
 -   `selectedModel` — the current model id (`Ref<string>`).
 -   `modelVariant` — OpenRouter routing variant (`Ref<OpenRouterModelVariant>`: `'off'` for standard routing, or `'online'` / `'nitro'` / `'floor'` to append that model suffix).
--   `thinkingEnabled` — extended thinking toggle.
+-   `thinkingEnabled` — extended thinking toggle, enabled by default for models that support it.
 -   `reasoningEffort` — reasoning effort level, kept in sync with the model.
 -   `modelReasoningEfforts` — reasoning efforts the selected model supports.
 -   `modelDefaultReasoningEffort` — the model's default effort; the thinking picker uses it to resolve the displayed level with the same normalization as the request path.
@@ -21,7 +21,8 @@ Behavior:
 -   Applies the fixed model from AI settings for new chats (no thread yet).
 -   Listens for `or3:model-selected` window events so the catalog page can update the picker.
 -   Calls `options.onChange(modelId)` whenever the model changes.
--   Disables thinking and resets reasoning effort for models that do not support them.
+-   Defaults to medium reasoning effort when the model supports it. For models without a medium option, uses the middle supported level. Models without reasoning support do not send reasoning settings.
+-   Preserves an explicit thinking choice when switching models or restoring a draft.
 
 ## Options
 
@@ -49,7 +50,7 @@ const { selectedModel, modelVariant, thinkingEnabled, reasoningEffort } =
 
 ## Notes
 
--   The fallback model is `openai/gpt-oss-120b`.
+-   The fallback model is `~openai/gpt-luna-latest`.
 -   The `:thinking` suffix is stripped when matching models against the catalog.
 -   `modelVariant` labels and one-line descriptions come from `MODEL_VARIANT_OPTIONS` in `shared/openrouter/model-variants.ts`. The dashboard AI preferences render them with `ChatModelVariantSelect`; the chat settings popover reuses the same metadata in its own row dropdown.
 

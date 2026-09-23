@@ -169,9 +169,8 @@
                         props.message.reasoning_text
                     "
                 >
-                    <LazyChatReasoningAccordion
+                    <ReasoningAccordion
                         class="reasoning-accordion"
-                        hydrate-on-visible
                         :content="props.message.reasoning_text"
                         :streaming="isStreamingReasoning as boolean"
                         :pending="props.message.pending === true"
@@ -417,6 +416,7 @@ import type {
 } from '~/utils/chat/uiMessages';
 import type { ChatMessageAction } from '~/composables/chat/useMessageActions';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
+import ReasoningAccordion from './ReasoningAccordion.vue';
 import { useRafFn, useClipboard } from '@vueuse/core';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';

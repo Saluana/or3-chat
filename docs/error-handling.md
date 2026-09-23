@@ -83,7 +83,7 @@ Attach small, flat metadata objects (string/number/bool) to power diagnostics & 
 | `domain`   | `chat`, `db`, `files`, `auth` | High-level feature area.            |
 | `threadId` | `t123`                        | Chat thread context.                |
 | `streamId` | `id-abc`                      | Streaming session.                  |
-| `modelId`  | `openai/gpt-oss-120b`         | LLM used.                           |
+| `modelId`  | `~openai/gpt-luna-latest`     | LLM used.                           |
 | `stage`    | `stream`, `abort`, `exchange` | Lifecycle stage.                    |
 | `op`       | `write`                       | DB/file operation action.           |
 | `entity`   | `messages`                    | Table or logical entity.            |

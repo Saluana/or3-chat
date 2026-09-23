@@ -146,6 +146,20 @@ function focusCancelAction(event: Event): void {
     element.focus();
 }
 const restartBusy = ref(false);
+const recovering = ref(false);
+const pluginName = computed(() => getPortableClientSource(props.pluginId)?.descriptor.name ?? 'the app');
+const stoppedMessage = computed(() => {
+    if (activation.value?.blockCode === 'activation-time-limit') {
+        return `Couldn't reconnect to ${pluginName.value}. Your typed values are still here.`;
+    }
+    return activation.value?.blockMessage ?? `${pluginName.value} stopped unexpectedly. Your typed values are still here.`;
+});
+const blockedMessage = computed(() => {
+    if (['activation-unavailable', 'activation-invalid-response'].includes(activation.value?.blockCode ?? '')) {
+        return `Couldn't reconnect to ${pluginName.value}. Please try again.`;
+    }
+    return activation.value?.blockMessage ?? `${pluginName.value} could not open in this workspace.`;
+});
 
 /** The host execution lock: one write or plugin request at a time. */
 const locked = computed(
@@ -467,8 +481,8 @@ async function restartActivation(): Promise<void> {
         await loadFirstAction();
     } catch (error) {
         toast.add({
-            title: 'The plugin could not restart',
-            description: error instanceof Error ? error.message : 'The sandbox did not start',
+            title: `Couldn't open ${pluginName.value}`,
+            description: error instanceof Error ? error.message : 'Please try again.',
             color: 'error',
         });
     } finally {
@@ -483,9 +497,9 @@ async function restartActivation(): Promise<void> {
  * successful restart cannot reset the budget.
  */
 watch(
-    () => activation.value?.status,
-    (status) => {
-        if (status === 'stopped') schedulePortableClientRecovery(props.pluginId);
+    () => [activation.value?.status, activation.value?.blockCode] as const,
+    ([status]) => {
+        recovering.value = status === 'stopped' && schedulePortableClientRecovery(props.pluginId);
     },
     { immediate: true }
 );
@@ -591,6 +605,9 @@ async function openHostDocument(documentId: string): Promise<void> {
 }
 
 async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
+    // The retained tree is display-only until the new activation renders its
+    // own view. Never send an old control into a replacement session.
+    if (!activation.value?.view) return;
     if (payload.kind === 'open-document') {
         await openHostDocument(payload.documentId);
         return;
@@ -678,18 +695,18 @@ async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
             v-else-if="activation.status === 'blocked'"
             color="warning"
             variant="subtle"
-            title="This plugin cannot run here"
-            :description="`${activation.blockMessage ?? 'The host blocked this package.'} (${activation.blockCode ?? 'blocked'})`"
+            :title="`Couldn't open ${pluginName}`"
+            :description="blockedMessage"
             data-testid="portable-plugin-blocked"
         >
             <template v-if="canRestart" #actions>
-                <UButton :loading="restartBusy" @click="restartActivation">Retry plugin startup</UButton>
+                <UButton :loading="restartBusy" @click="restartActivation">Try again</UButton>
             </template>
         </UAlert>
 
-        <div v-else-if="activation.status === 'starting'" class="flex items-center gap-2 text-sm">
+        <div v-else-if="(activation.status === 'starting' || recovering) && renderNodes.length === 0" class="flex items-center gap-2 text-sm">
             <UIcon name="i-lucide-loader-circle" class="animate-spin" />
-            <span>Starting {{ activation.version }}…</span>
+            <span>Opening {{ pluginName }}…</span>
         </div>
 
         <template v-else>
@@ -700,12 +717,12 @@ async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
             </div>
 
             <div
-                v-if="activation.status === 'stopped'"
+                v-if="activation.status === 'stopped' && !recovering"
                 class="rounded-lg border border-(--ui-border) p-3"
                 data-testid="portable-plugin-stopped"
             >
                 <p class="text-sm">
-                    {{ activation.blockMessage ?? "This plugin's contained session ended. Your typed values are kept below." }}
+                    {{ stoppedMessage }}
                 </p>
                 <UButton
                     v-if="canRestart"
@@ -714,10 +731,10 @@ async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
                     :loading="restartBusy"
                     @click="restartActivation"
                 >
-                    Restart plugin
+                    Try again
                 </UButton>
                 <p v-else class="mt-1 text-xs text-(--ui-text-muted)">
-                    Re-enable the plugin in the workspace to start it again.
+                    This app is unavailable in the current workspace.
                 </p>
             </div>
 
@@ -774,7 +791,7 @@ async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
             <div
                 v-if="renderNodes.length > 0"
                 :class="surface === 'pane' ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'flex flex-col gap-2'"
-                :aria-busy="busy"
+                :aria-busy="busy || activation.status !== 'active' || !activation.view"
                 data-testid="portable-plugin-view"
             >
             <PortableUiTree
@@ -783,7 +800,7 @@ async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
                 :nodes="renderNodes"
                 :store="fieldStore"
                 :retained-dirty-keys="fieldDraft.dirty"
-                :disabled="locked"
+                :disabled="locked || !activation.view"
                 @ui-event="forwardUiEvent"
             />
             </div>

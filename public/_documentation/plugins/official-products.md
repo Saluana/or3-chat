@@ -42,8 +42,9 @@ and notices. Their packaged archives are submitted through the publisher lane
   any content reaches the sandbox.
 - **Demand-driven, contained sessions.** A package is started when its surface
   opens, not for every enabled plugin at manifest sync. The containment watchdog
-  still ends a session after its wall-clock budget; a stopped package offers a
-  restart that keeps the fields already typed in the surface.
+  still ends a session after its wall-clock budget. The host reconnects that
+  surface automatically, retaining typed fields. If reconnection fails, the
+  surface offers **Try again** without losing those fields.
 - **Persistent plugin storage.** Prompt Workbench presets are stored in the
   workspace/plugin-scoped host storage service. The UI reports a preset as saved
   only after storage confirms the write; a refusal is shown instead of a preset
@@ -63,8 +64,8 @@ and notices. Their packaged archives are submitted through the publisher lane
 Model-backed features need operator configuration:
 
 ```text
-OR3_PLUGIN_ALLOWED_MODELS=openai/gpt-oss-120b,anthropic/claude-3.5-sonnet
-OR3_PLUGIN_MODEL_PRICES={"openai/gpt-oss-120b":{"promptPerMillion":0.2,"completionPerMillion":0.6}}
+OR3_PLUGIN_ALLOWED_MODELS=~openai/gpt-luna-latest,anthropic/claude-3.5-sonnet
+OR3_PLUGIN_MODEL_PRICES={"~openai/gpt-luna-latest":{"promptPerMillion":0.2,"completionPerMillion":0.6}}
 ```
 
 - Models without a price are refused (never recorded as free) and are shown as

@@ -178,7 +178,7 @@ export class ContainmentBudgetLedger {
      */
     checkActivation(): BudgetDecision {
         const ageMs = this.#now() - this.#startedAt;
-        if (ageMs > this.#budgets.maxActivationMs) {
+        if (ageMs >= this.#budgets.maxActivationMs) {
             return this.#exceed(
                 'activation-ms',
                 ageMs,

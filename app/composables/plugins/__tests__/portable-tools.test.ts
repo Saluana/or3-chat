@@ -6,7 +6,7 @@ import {registerPortableTools, TOOL_DISCOVERY_CODES, toolDiscoveryCode, ToolDisc
 const definition={type:'function',function:{name:'or3sal_tasks_search_lists',description:'Find lists',parameters:{type:'object',properties:{query:{type:'string'}},additionalProperties:false}}};
 beforeEach(()=>{
  vi.clearAllMocks();
- mocks.source={workspaceId:'one',descriptor:{descriptorKey:'v1',effectiveGrants:['tools.register.client']}};
+ mocks.source={workspaceId:'one',descriptor:{name:'OR3 Tasks',descriptorKey:'v1',effectiveGrants:['tools.register.client']}};
  mocks.call.mockResolvedValue([definition]);
  mocks.register.mockReturnValue({dispose:mocks.dispose});
 });
@@ -19,7 +19,7 @@ it('requires the workspace tool grant before starting discovery',async()=>{
 it('registers disabled client tools, runs in the sandbox, and disposes them',async()=>{
  const dispose=await registerPortableTools('or3sal.tasks');
  const [def,handler]=mocks.register.mock.calls[0]!;
- expect(def).toMatchObject({runtime:'client',ui:{defaultEnabled:false}});
+ expect(def).toMatchObject({runtime:'client',ui:{category:'OR3 Tasks',defaultEnabled:false}});
  mocks.call.mockResolvedValue({lists:[]});
  expect(await handler({query:'work'})).toBe('{"lists":[]}');
  expect(mocks.call).toHaveBeenLastCalledWith('or3sal.tasks','runtime.tool',{name:definition.function.name,args:{query:'work'}});
@@ -39,12 +39,12 @@ it('rejects foreign tool names and discards registration when discovery races te
  await registerPortableTools('or3sal.tasks');
  expect(mocks.register).not.toHaveBeenCalled();
 });
-it('cleans up partial registration and strips publisher enablement metadata',async()=>{
- mocks.call.mockResolvedValue([{...definition,defaultEnabled:true}, {...definition,function:{...definition.function,name:'or3sal_tasks_other'}}]);
+it('cleans up partial registration and strips publisher UI metadata',async()=>{
+ mocks.call.mockResolvedValue([{...definition,ui:{category:'Other',defaultEnabled:true}}, {...definition,function:{...definition.function,name:'or3sal_tasks_other'}}]);
  mocks.register.mockReturnValueOnce({dispose:mocks.dispose}).mockImplementationOnce(()=>{throw new Error('collision');});
  await expect(registerPortableTools('or3sal.tasks')).rejects.toThrow('collision');
  expect(mocks.dispose).toHaveBeenCalledOnce();
- expect(mocks.register.mock.calls[0]![0].defaultEnabled).toBeUndefined();
+ expect(mocks.register.mock.calls[0]![0].ui).toMatchObject({category:'OR3 Tasks',defaultEnabled:false});
 });
 it('reports allowlisted codes instead of raw exception text',()=>{
  expect(toolDiscoveryCode(new ToolDiscoveryError('invalid-tool-definition','Plugin tool is invalid: {"secret":"x"}'))).toBe('invalid-tool-definition');

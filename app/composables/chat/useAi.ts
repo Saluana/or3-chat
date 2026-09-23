@@ -87,9 +87,9 @@ import { state } from '~/state/global';
 // Import paths aligned with tests' vi.mock targets
 import { useUserApiKey } from '#imports';
 import { useActivePrompt } from '#imports';
-import { getDefaultPromptId } from '#imports';
 import { useHooks } from '#imports';
 import { consumeChatSendHandled } from '~/utils/chat/send-interception';
+import { DEFAULT_PROMPT_SELECTION } from '~/utils/chat/prompt-utils';
 import { resolveNotificationUserId } from '~/core/notifications/notification-user';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
@@ -128,7 +128,7 @@ import {
     userTranscriptData,
 } from '~/utils/chat/transcript';
 
-const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
+const DEFAULT_AI_MODEL = '~openai/gpt-luna-latest';
 
 const THINKING_SUFFIX = ':thinking';
 
@@ -1749,15 +1749,8 @@ export function useChat(
             return { status: 'rejected', requestId, reason: 'client_limit' };
 
         if (!requestScope.threadId) {
-            let effectivePromptId: string | null =
-                pendingPromptIdRef.value || null;
-            if (!effectivePromptId) {
-                try {
-                    effectivePromptId = await getDefaultPromptId();
-                } catch {
-                    /* intentionally empty */
-                }
-            }
+            const effectivePromptId =
+                pendingPromptIdRef.value || DEFAULT_PROMPT_SELECTION;
             try {
                 const { settings } = useAiSettings();
                 const settingsValue = settings.value as

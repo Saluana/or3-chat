@@ -113,13 +113,14 @@
         </UTooltip>
     </div>
     <component
+        v-if="settingsModalActivated"
         :is="modelCatalogModalComponent"
         v-model:showModal="showSettingsModal"
     />
 </template>
 
 <script lang="ts" setup>
-import { computed, defineAsyncComponent, ref, useAttrs } from 'vue';
+import { computed, defineAsyncComponent, ref, useAttrs, watch } from 'vue';
 import { useNuxtApp, useRuntimeConfig } from '#imports';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
@@ -165,6 +166,10 @@ const modeLinkProps = computed(() =>
 
 defineOptions({ inheritAttrs: false });
 const showSettingsModal = ref(false);
+const settingsModalActivated = ref(false);
+watch(showSettingsModal, (open) => {
+    if (open) settingsModalActivated.value = true;
+});
 const attrs = useAttrs();
 const rootAttrs = computed(() => {
     return Object.fromEntries(

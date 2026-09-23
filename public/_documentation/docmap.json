@@ -143,7 +143,7 @@
                     "name": "useChat.md",
                     "path": "/composables/useChat",
                     "category": "Chat",
-                    "summary": "The main composable for managing AI chat conversations in OR3. Handles sending messages, streaming responses, retrying failed messages, and managing conversation state. Think of useChat as your chat conversation manager — it keeps track of all messages, tal..."
+                    "summary": "Manages AI chat messages, streaming, and retries. Chat settings selects a saved system prompt, the current default, or Disabled per chat; the choice applies to future messages."
                 },
                 {
                     "name": "useChatAttachmentDisplay.md",
@@ -1355,7 +1355,7 @@
                     "name": "portable-profile.md",
                     "path": "/plugins/portable-profile",
                     "category": "Reference",
-                    "summary": "Portable authoring descriptors and isolated browser-only packages, plus the or3-portable-workspace-v1 sidebar, workspace tab, theme-aware 860px content layout, independently scrolling inspector and mobile slide-out, bounded live field actions and permission-gated chat-tool contract."
+                    "summary": "Portable authoring descriptors and isolated browser-only packages, plus the or3-portable-workspace-v1 sidebar, workspace tab, theme-aware 860px content layout, independently scrolling inspector and mobile slide-out, bounded live field actions and permission-gated chat tools grouped by reviewed plugin name in a dedicated chat settings subview."
                 },
                 {
                     "name": "connections.md",

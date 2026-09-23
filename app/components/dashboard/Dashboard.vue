@@ -154,20 +154,14 @@
 <script setup lang="ts">
 import { computed, provide } from 'vue';
 import PluginIcons from './PluginIcons.vue';
-import {
-    useDashboardNavigation,
-    registerDashboardPluginPage,
-    type DashboardPlugin,
-} from '~/composables/dashboard/useDashboardPlugins';
+import { useDashboardNavigation } from '~/composables/dashboard/useDashboardPlugins';
+import { createCoreDashboardItems } from '~/core/dashboard/core-items';
 import { useRuntimeConfig } from '#imports';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { isMobile } from '~/state/global';
-import {
-    listWorkspaceProfiles,
-    projectProfileItems,
-} from '~/core/workspace-profiles';
+import { projectProfileItems } from '~/core/workspace-profiles';
 
 const props = defineProps<{
     showModal: boolean;
@@ -193,69 +187,8 @@ const shouldDeferDashboardGrid = computed(
         sessionContext?.data.value === null
 );
 
-const coreAccess = ssrAuthEnabled ? { authRequired: true } : undefined;
-
 // Core (built-in) items; can be overridden by external plugin with same id
-const coreItems: DashboardPlugin[] = [
-    {
-        id: 'core:settings',
-        icon: useIcon('dashboard.settings').value,
-        label: 'Settings',
-        order: 1,
-        access: coreAccess,
-        pages: [
-            {
-                id: 'theme-settings',
-                title: 'Theme Settings',
-                description: 'Configure application theme and appearance.',
-                icon: useIcon('ui.view').value,
-                component: () => import('./ThemePage.vue'),
-            },
-            {
-                id: 'ai-settings',
-                title: 'AI Settings',
-                description: 'Configure AI-related preferences and options.',
-                icon: useIcon('dashboard.plugins').value,
-                component: () => import('./AiPage.vue'),
-            },
-            {
-                id: 'workspace-profile-settings',
-                title: 'Workspace Profile',
-                description:
-                    'Choose how navigation, dashboard tools, commands, and initial panes are arranged.',
-                icon: 'i-lucide-panels-top-left',
-                component: () => import('./WorkspaceProfileSettings.vue'),
-                isAvailable: () => listWorkspaceProfiles().length > 1,
-            },
-        ],
-    },
-    {
-        id: 'core:images',
-        icon: useIcon('dashboard.images').value,
-        label: 'Images',
-        order: 10,
-        access: coreAccess,
-        pages: [
-            {
-                id: 'images-library',
-                title: 'Images',
-                description: 'Browse saved and generated images.',
-                icon: useIcon('dashboard.images').value,
-                component: () => import('~/pages/images/index.vue'),
-            },
-        ],
-    },
-];
-
-// Register any inline pages defined on core items with the shared dashboard page registry
-// so that onPluginClick() finds them (core items themselves are not registered as plugins).
-for (const item of coreItems) {
-    if (Array.isArray((item as any).pages)) {
-        for (const p of (item as any).pages) {
-            registerDashboardPluginPage(item.id, p as any);
-        }
-    }
-}
+const coreItems = createCoreDashboardItems(ssrAuthEnabled);
 
 const {
     state,

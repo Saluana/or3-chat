@@ -151,7 +151,11 @@ describe('DELETE /api/plugins/isolation/activation', () => {
 
     it('is idempotent for unknown and already-revoked handles', async () => {
         readBodyMock.mockResolvedValue({ activationId: 'act_forged' });
-        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 404 });
+        await expect(handler(makeEvent())).resolves.toMatchObject({
+            ok: true,
+            alreadyRevoked: true,
+            code: 'activation-unknown',
+        });
 
         const record = registerHostActivation({
             pluginId: 'example.plugin',

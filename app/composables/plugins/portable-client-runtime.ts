@@ -919,15 +919,16 @@ export async function activatePortableClient(
             // A fatal crash terminates the sandbox, so the activation is no
             // longer active. A non-fatal containment report leaves the runtime
             // usable, so its handle must remain valid for later calls.
+            const timeLimitReached = report.fatal && report.reason === 'budget-exceeded:activation-ms';
             if (report.fatal) void revokeHostActivationHandle(activationId);
             update(pluginId, epoch, {
-                crashed: report.fatal,
+                crashed: report.fatal && !timeLimitReached,
                 ...(report.fatal
                     ? {
                           status: 'stopped' as const,
                           runtime: null,
                           activationId: null,
-                          blockCode: report.reason,
+                          blockCode: timeLimitReached ? 'activation-time-limit' : report.reason,
                       }
                     : {}),
             });
@@ -1151,6 +1152,7 @@ export const RECOVERABLE_PORTABLE_STOP_CODES: ReadonlySet<string> = new Set([
     'activation-expired',
     'activation-revoked',
     'activation-stale',
+    'activation-time-limit',
 ]);
 
 export function isRecoverablePortableStop(code: string | null | undefined): boolean {
@@ -1199,16 +1201,16 @@ const recoveryTimers = new Map<string, ReturnType<typeof setTimeout>>();
  * so an activation that recovered meanwhile (or a workspace that changed) is
  * never restarted twice.
  */
-export function schedulePortableClientRecovery(pluginId: string): void {
+export function schedulePortableClientRecovery(pluginId: string): boolean {
     const current = activations.get(pluginId);
     const source = clientSources.get(pluginId);
-    if (!current || current.status !== 'stopped' || !source) return;
-    if (!isRecoverablePortableStop(current.blockCode)) return;
-    if (source.workspaceId !== current.workspaceId) return;
+    if (!current || current.status !== 'stopped' || !source) return false;
+    if (!isRecoverablePortableStop(current.blockCode)) return false;
+    if (source.workspaceId !== current.workspaceId) return false;
     const key = recoveryKey(pluginId, current.workspaceId);
-    if (recoveryTimers.has(key)) return;
+    if (recoveryTimers.has(key)) return true;
     const claim = claimPortableRecoveryAttempt(pluginId, current.workspaceId);
-    if (!claim.allowed) return;
+    if (!claim.allowed) return false;
     recoveryTimers.set(
         key,
         setTimeout(() => {
@@ -1218,9 +1220,25 @@ export function schedulePortableClientRecovery(pluginId: string): void {
             if (!live || live.status !== 'stopped' || !liveSource) return;
             if (live !== current || !isRecoverablePortableStop(live.blockCode)) return;
             if (liveSource.workspaceId !== current.workspaceId) return;
-            void activatePortableClient(liveSource).catch(() => undefined);
+            const attempt = activatePortableClient(liveSource);
+            const attemptEpoch = activationEpochs.get(pluginId);
+            void attempt.catch((error) => {
+                if (attemptEpoch === undefined || !holdsActivationEpoch(pluginId, attemptEpoch)) return;
+                const failed = activations.get(pluginId);
+                if (!failed || failed.workspaceId !== current.workspaceId || failed.status === 'active') return;
+                if (failed.activationId) void revokeHostActivationHandle(failed.activationId);
+                Object.assign(failed, {
+                    status: 'stopped',
+                    activationId: null,
+                    runtime: null,
+                    blockCode: 'recovery-failed',
+                    blockMessage: 'The view could not reconnect. Your typed values are still here.',
+                });
+                if (import.meta.dev) console.warn('[portable-client] automatic recovery failed', pluginId, error);
+            });
         }, 300 * claim.attempt)
     );
+    return true;
 }
 
 /** Forget a plugin's pending recovery; a removed source must not restart. */

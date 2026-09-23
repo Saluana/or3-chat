@@ -565,7 +565,9 @@ export class WorkerIsolationRuntime {
         this.#withdrawContributions();
         this.#broker.dispose();
         this.#hostSession.dispose(reason);
-        if (reason !== 'host terminate') {
+        // Host cleanup is not a crash. #reportCrash already notified the host
+        // before calling terminate('crash').
+        if (reason !== 'host terminate' && reason !== 'host dispose' && reason !== 'crash') {
             this.#reportCrash(reason, true);
         }
     }

@@ -341,6 +341,7 @@ const props = defineProps<{
     paneId?: string;
     tabId?: string;
 }>();
+const emit = defineEmits<{ ready: [documentId: string] }>();
 const DocumentAiPanel = defineAsyncComponent(() => import('./DocumentAiPanel.vue'));
 const icons = reactive({
     search: useIcon('editor.search'),
@@ -790,6 +791,7 @@ async function loadActiveDocument(id: string) {
     if (didUnmount || props.documentId !== id) return;
     loadedDocumentId = id;
     registerActiveSession(id);
+    emit('ready', id);
 }
 
 watch(documentId, async (id, previous) => {

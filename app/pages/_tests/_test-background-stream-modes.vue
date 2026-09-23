@@ -212,7 +212,7 @@ type TestOutcome = {
     jobId?: string;
 };
 
-const DEFAULT_MODEL = 'openai/gpt-oss-120b';
+const DEFAULT_MODEL = '~openai/gpt-luna-latest';
 const POLL_INTERVAL_MS = 900;
 const JOB_TIMEOUT_MS = 120_000;
 

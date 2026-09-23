@@ -96,7 +96,7 @@ function preflightResponse(overrides: Record<string, unknown> = {}) {
 }
 
 function responseFor(url: string): unknown {
-    if (url.startsWith('/api/admin/plugins-page')) return {workspaceId: 'ws-1', plugins: [], packagePlugins: [], enabledPlugins: []};
+    if (url.startsWith('/api/admin/plugins-page')) return {workspaceId: 'ws-1', role: 'owner', canManageSitePlugins: true, plugins: [], packagePlugins: [], enabledPlugins: []};
     // The real admin session contract: a principal kind, not a role.
     if (url.startsWith('/api/admin/auth/session')) {
         return { authenticated: true, kind: 'super_admin' };
@@ -238,6 +238,51 @@ function entryFor(pluginId: string, name: string, summary: string, version: stri
 }
 
 describe('MarketplaceDiscover', () => {
+    it('shows one retryable connection error and no empty-results message when requests have no response', async () => {
+        fetchMock.mockImplementation((url: string) =>
+            url.startsWith('/api/plugins/marketplace/catalog') ||
+            url === '/api/admin/plugins-page' ||
+            url === '/api/plugins/runtime-manifest'
+                ? Promise.reject(new TypeError('Failed to fetch'))
+                : Promise.resolve(responseFor(url))
+        );
+        const wrapper = mount(MarketplaceDiscover, { global: { stubs } });
+        await flush();
+
+        const error = wrapper.get('[data-testid="marketplace-catalog-error"]');
+        expect(error.attributes('role')).toBe('alert');
+        expect(error.classes()).toContain('p-4');
+        expect(error.text()).toContain('account access was not checked');
+        expect(error.text()).toContain('Try again');
+        expect(wrapper.find('[data-testid="marketplace-installed-error"]').exists()).toBe(false);
+        expect(wrapper.text()).not.toContain('No published plugins matched');
+        expect(wrapper.text()).not.toContain('/api/plugins/marketplace/catalog');
+        const catalogRequests = () => fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/plugins/marketplace/catalog')).length;
+        const beforeRetry = catalogRequests();
+        await error.get('button').trigger('click');
+        await flush();
+        expect(catalogRequests()).toBe(beforeRetry + 1);
+        wrapper.unmount();
+    });
+
+    it('keeps an installed-state error inside the padded marketplace page', async () => {
+        fetchMock.mockImplementation((url: string) =>
+            url === '/api/admin/plugins-page' || url === '/api/plugins/runtime-manifest'
+                ? Promise.reject({ statusCode: 401, message: '[GET] /api/admin/plugins-page: 401 Unauthorized' })
+                : Promise.resolve(responseFor(url))
+        );
+        const wrapper = mount(MarketplaceDiscover, { global: { stubs } });
+        await flush();
+
+        const frame = wrapper.get('[data-testid="marketplace-discover"]');
+        const error = frame.get('[data-testid="marketplace-installed-error"]');
+        expect(error.attributes('role')).toBe('alert');
+        expect(error.classes()).toContain('p-4');
+        expect(error.text()).toContain('Sign in again');
+        expect(error.text()).not.toContain('/api/admin/plugins-page');
+        expect(error.text()).toContain('Try again');
+    });
+
     it.each([
         ['grant-review-required', 'Permission approval is needed'],
         ['setup-required', 'Finish plugin setup'],
@@ -404,6 +449,7 @@ describe('MarketplaceDiscover', () => {
                 return Promise.resolve({
                     plugins: [],
                     role: 'owner',
+                    canManageSitePlugins: true,
                     workspaceId: 'ws-1',
                     enabledPlugins: ['or3.sample-utility'],
                     packagePlugins: [

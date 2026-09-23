@@ -367,8 +367,16 @@ See the Tool Registry documentation for registering and managing tools.
 If you don't provide a `threadId`, the first `sendMessage` creates one automatically:
 
 -   Title: first 6 words of your message
--   System prompt: uses pending prompt or default
+-   System prompt: uses the pending selection or inherits the current default
 -   Timestamp: set to now
+
+Chat settings shows a system prompt selector beneath the model selector. It
+offers **Default**, **Disabled**, and saved prompts. Default follows the current
+default system prompt; Disabled sends no system prompt for that chat, including
+the master prompt. A saved prompt is attached to the chat until changed. The
+selector shows the current choice, and chats using a saved prompt or Disabled
+show a label beside the composer settings button. Changes affect future
+messages, not messages already sent.
 
 ### Retry behavior
 
@@ -449,7 +457,7 @@ If you don't specify a model, it uses:
 
 1. Last selected model (from localStorage)
 2. Fixed model (from settings)
-3. Fallback: `openai/gpt-oss-120b`
+3. Fallback: `~openai/gpt-luna-latest`
 
 ### Online mode
 

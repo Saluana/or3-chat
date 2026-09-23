@@ -41,7 +41,7 @@
                         :data-stream-id="item.stream_id"
                     >
                         <component
-                            :is="$theme.activeComponents.value['chat-message']"
+                            :is="resolveCoreChatComponent($theme.activeComponents.value['chat-message'], 'chat-message')"
                             :message="item"
                             :thread-id="props.threadId"
                             @retry="onRetry"
@@ -55,6 +55,18 @@
                     </div>
                 </template>
             </Or3Scroll>
+            <template #fallback>
+                <div
+                    class="chat-message-list flex-1 min-h-0 px-4 pt-8"
+                    :style="scrollParentStyle"
+                    aria-hidden="true"
+                >
+                    <div v-if="threadId" class="mx-auto max-w-[780px] space-y-6 animate-pulse">
+                        <div class="ml-auto h-12 w-2/3 bg-[var(--md-surface-variant)]" />
+                        <div class="h-24 w-5/6 bg-[var(--md-surface-variant)]" />
+                    </div>
+                </div>
+            </template>
         </ClientOnly>
 
         <!-- First-run welcome: true modal layer above mobile input (z-40) -->
@@ -99,7 +111,7 @@
                     />
                 </div>
                 <component
-                    :is="$theme.activeComponents.value['chat-input']"
+                    :is="resolveCoreChatComponent($theme.activeComponents.value['chat-input'], 'chat-input')"
                     :loading="inputLoading"
                     :streaming="streamingActive"
                     :container-width="containerWidth"
@@ -130,6 +142,7 @@ import {
     isRef,
     type Ref,
     type CSSProperties,
+    type Component,
     onBeforeUnmount,
     onMounted,
     nextTick,
@@ -149,6 +162,9 @@ import type {
     SendResult,
 } from '~/utils/chat/types';
 import { Or3Scroll } from 'or3-scroll';
+import ChatInputDropper from '~/components/chat/ChatInputDropper.vue';
+import ChatMessage from '~/components/chat/ChatMessage.vue';
+import { CORE_APP_COMPONENT_DEFAULTS } from '~/theme/_shared/theme-components-registry';
 import 'or3-scroll/style.css';
 import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
@@ -183,7 +199,15 @@ import type {
 
 // Debug utilities removed per request.
 
-const model = ref('openai/gpt-oss-120b');
+function resolveCoreChatComponent(
+    active: Component | undefined,
+    key: 'chat-input' | 'chat-message'
+): Component {
+    if (active && active !== CORE_APP_COMPONENT_DEFAULTS[key]) return active;
+    return key === 'chat-input' ? ChatInputDropper : ChatMessage;
+}
+
+const model = ref('~openai/gpt-luna-latest');
 const pendingPromptId = ref<string | null>(null);
 // Resize (Req 3.4): useElementSize -> reactive width
 const containerRoot: Ref<HTMLElement | null> = ref(null);

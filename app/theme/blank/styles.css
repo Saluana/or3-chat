@@ -2,6 +2,7 @@
 
 [data-theme="blank"] {
     --chat-composer-border-radius: 28px;
+    --blank-brand-accent: #2a8fd6;
 
     /* Workspace tabs: quiet chips that match blank's borderless shell. */
     --or3-workspace-chrome-size: 44px;
@@ -177,8 +178,8 @@
 
     /* Chats card: soft brand blue (pairs with docs green, echoes logo #2a8fd6) */
     .page-link-accent-chats .page-link-icon-container {
-        background: color-mix(in srgb, #2a8fd6 14%, var(--md-surface)) !important;
-        color: #2a8fd6 !important;
+        background: color-mix(in srgb, var(--blank-brand-accent) 14%, var(--md-surface)) !important;
+        color: var(--blank-brand-accent) !important;
     }
 
     /* Expanded: soft outer edge against main content */

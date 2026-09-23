@@ -257,8 +257,8 @@ export const sidebarCssSelectors = {
     '.page-link-accent-chats .page-link-icon-container': {
         style: {
             background:
-                'color-mix(in srgb, #2a8fd6 14%, var(--md-surface))',
-            color: '#2a8fd6',
+                'color-mix(in srgb, var(--blank-brand-accent) 14%, var(--md-surface))',
+            color: 'var(--blank-brand-accent)',
         },
     },
     '#nav-top-section .iconify': {

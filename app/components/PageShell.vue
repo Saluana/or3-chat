@@ -371,11 +371,12 @@
         </div>
         <component
             :is="dashboardModalComponent"
-            v-if="dashboardEnabled"
+            v-if="dashboardEnabled && dashboardModalActivated"
             v-model:showModal="showDashboardModal"
         />
         <ClientOnly>
             <component
+                v-if="systemPromptsModalActivated"
                 :is="systemPromptsModalComponent"
                 v-model:showModal="systemPromptsModalOpen"
                 :mode="systemPromptsModalRequest?.mode"
@@ -392,6 +393,7 @@
 // Generic PageShell merging chat + docs functionality.
 // Props allow initializing with a thread OR a document and choosing default mode.
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
+import ChatContainer from '~/components/chat/ChatContainer.vue';
 import { useMultiPane, type PaneState } from '~/composables/core/useMultiPane';
 import { useWorkspaceTabHost } from '~/composables/core/useWorkspaceTabHost';
 import { useWorkspaceTabs } from '~/composables/core/useWorkspaceTabs';
@@ -468,6 +470,10 @@ import {
     useDashboardNavigation,
 } from '~/composables/dashboard/useDashboardPlugins';
 import {
+    createCoreDashboardItems,
+    registerCoreDashboardPages,
+} from '~/core/dashboard/core-items';
+import {
     setPaletteHostContext,
     useCommandPalette,
 } from '~/composables/search/useCommandPalette';
@@ -511,6 +517,10 @@ const runtimeConfig = useRuntimeConfig();
 const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
 const sideNavExpandedRef = ref<any | null>(null);
 const showDashboardModal = ref(false);
+const dashboardModalActivated = ref(false);
+watch(showDashboardModal, (open) => {
+    if (open) dashboardModalActivated.value = true;
+});
 const hasSyncedInitial = ref(false);
 const or3Config = useOr3Config();
 const showNotificationBell = computed(
@@ -901,10 +911,10 @@ function resolvePaneComponent(pane: PaneState): Component {
         if (import.meta.dev) {
             console.debug('[PageShell] resolve component: chat');
         }
-        return (
-            themePlugin?.activeComponents.value['chat-page'] ??
-            CORE_APP_COMPONENT_DEFAULTS['chat-page']
-        );
+        const active = themePlugin?.activeComponents.value['chat-page'];
+        return !active || active === CORE_APP_COMPONENT_DEFAULTS['chat-page']
+            ? ChatContainer
+            : active;
     }
 
     // Built-in: doc (lazy loaded)
@@ -1832,7 +1842,12 @@ const themeToggleIcon = computed(() =>
 // --------------- Command palette ---------------
 // PageShell is the single host: it owns the navigation context the palette
 // actions dispatch through, and registers the core sources once per session.
-const dashboardNavigation = useDashboardNavigation();
+// Deep links and palette actions need core pages before the modal first opens.
+const coreDashboardItems = dashboardEnabled.value
+    ? createCoreDashboardItems(runtimeConfig.public.ssrAuthEnabled === true)
+    : [];
+registerCoreDashboardPages(coreDashboardItems);
+const dashboardNavigation = useDashboardNavigation({ baseItems: coreDashboardItems });
 const {
     open: openCommandPalette,
     close: closeCommandPalette,
@@ -1844,6 +1859,10 @@ const {
     open: openSystemPromptsModal,
     notifySelected: notifySystemPromptSelected,
 } = useSystemPromptsModal();
+const systemPromptsModalActivated = ref(systemPromptsModalOpen.value);
+watch(systemPromptsModalOpen, (open) => {
+    if (open) systemPromptsModalActivated.value = true;
+});
 let disposePaletteHostContext: (() => void) | null = null;
 let disposeWorkspaceTabPaletteProvider: (() => void) | null = null;
 let disposeWorkspaceResourceNavigation: (() => void) | null = null;

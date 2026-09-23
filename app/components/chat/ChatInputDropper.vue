@@ -72,6 +72,11 @@
                             <UPopover
                                 v-model:open="settingsPopoverOpen"
                                 class="chat-input-settings-popover"
+                                :content="{ side: 'top', collisionPadding: 16 }"
+                                :ui="{
+                                    content:
+                                        'data-[state=open]:animate-[scale-in_170ms_ease-out] data-[state=closed]:animate-[scale-out_120ms_ease-in] motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none',
+                                }"
                             >
                                 <UButton
                                     v-bind="settingsButtonProps"
@@ -97,6 +102,9 @@
                                         :reasoning-default-effort="
                                             modelDefaultReasoningEffort
                                         "
+                                        :thread-id="props.threadId"
+                                        :pane-id="promptOwnerId"
+                                        :prompt-selection-revision="promptSelectionRevision"
                                         v-model:model="selectedModel"
                                         v-model:model-variant="modelVariant"
                                         v-model:thinking-enabled="
@@ -112,11 +120,23 @@
                                         @open-model-catalog="
                                             openModelCatalogFromSettings
                                         "
+                                        @pending-prompt-selected="
+                                            (id: string) => emit('pending-prompt-selected', id)
+                                        "
+                                        @prompt-selected="promptSelectionRevision++"
                                     />
                                 </template>
                             </UPopover>
                         </ClientOnly>
                     </div>
+                    <span
+                        v-if="promptBadge"
+                        class="hidden max-w-40 truncate rounded-full border border-[var(--md-border-color)] px-2 py-1 text-xs text-[var(--md-on-surface-variant)] sm:inline-block"
+                        :title="promptBadge"
+                        :aria-label="`System prompt: ${promptBadge}`"
+                    >
+                        {{ promptBadge }}
+                    </span>
                 </div>
 
                 <div
@@ -317,10 +337,11 @@
         </div>
         <ClientOnly>
             <component
+                v-if="modelCatalogActivated"
                 :is="$theme.activeComponents.value['model-catalog-modal']"
                 v-model:showModal="showModelCatalog"
             />
-            <OpenRouterKeyModal v-model:open="showKeyModal" />
+            <OpenRouterKeyModal v-if="keyModalActivated" v-model:open="showKeyModal" />
         </ClientOnly>
     </ChatComposerShell>
 </template>
@@ -338,6 +359,13 @@ import {
 } from 'vue';
 import { useOr3Config } from '~/composables/useOr3Config';
 import { useSystemPromptsModal } from '~/composables/chat/useSystemPromptsModal';
+import { getPrompt } from '~/db/prompts';
+import { getThreadSystemPrompt } from '~/db/threads';
+import { usePanePendingPrompt } from '~/composables/core/usePanePrompt';
+import {
+    DEFAULT_PROMPT_SELECTION,
+    DISABLED_PROMPT_SELECTION,
+} from '~/utils/chat/prompt-utils';
 import { resolveOpenRouterKeyAvailability } from '~/core/auth/openRouterKeyAvailability';
 import { guardPendingAttachmentSend } from '~/composables/chat/pendingAttachmentGuard';
 import { Editor, EditorContent } from '@tiptap/vue-3';
@@ -536,14 +564,57 @@ onBeforeUnmount(() => {
 
 const showModelCatalog = ref(false);
 const showKeyModal = ref(false);
+const modelCatalogActivated = ref(false);
+const keyModalActivated = ref(false);
+watch(showModelCatalog, (open) => {
+    if (open) modelCatalogActivated.value = true;
+});
+watch(showKeyModal, (open) => {
+    if (open) keyModalActivated.value = true;
+});
 const settingsPopoverOpen = ref(false);
+const promptOwnerId = computed(() => props.tabId ?? props.paneId);
+const stagedPromptId = usePanePendingPrompt(promptOwnerId);
+const promptSelectionRevision = ref(0);
+const promptBadge = ref('');
+watch(settingsPopoverOpen, (open) => {
+    if (open) promptSelectionRevision.value++;
+});
+watch(
+    () => [props.threadId, stagedPromptId.value, promptSelectionRevision.value],
+    async (_value, _oldValue, onCleanup) => {
+        let cancelled = false;
+        onCleanup(() => {
+            cancelled = true;
+        });
+        try {
+            const selection = props.threadId
+                ? await getThreadSystemPrompt(props.threadId)
+                : stagedPromptId.value;
+            let label = '';
+            if (selection === DISABLED_PROMPT_SELECTION)
+                label = 'Prompt disabled';
+            else if (selection && selection !== DEFAULT_PROMPT_SELECTION) {
+                const prompt = await getPrompt(selection);
+                label = prompt?.title ?? 'Unavailable prompt';
+            }
+            if (!cancelled) promptBadge.value = label;
+        } catch {
+            if (!cancelled) promptBadge.value = '';
+        }
+    },
+    { immediate: true }
+);
 const systemPromptsModal = useSystemPromptsModal();
+watch(systemPromptsModal.isOpen, (open) => {
+    if (!open) promptSelectionRevision.value++;
+});
 
 function openSystemPrompts() {
     systemPromptsModal.open({
         mode: 'home',
         threadId: props.threadId,
-        paneId: props.paneId,
+        paneId: promptOwnerId.value,
         onSelected: handlePromptSelected,
     });
 }
@@ -1006,6 +1077,7 @@ onBeforeUnmount(() => {
 });
 
 const handlePromptSelected = (id: string) => {
+    promptSelectionRevision.value++;
     if (!props.threadId) emit('pending-prompt-selected', id);
 };
 

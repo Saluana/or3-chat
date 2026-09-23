@@ -48,11 +48,8 @@ export default defineEventHandler(async (event) => {
 
     const resolution = resolveHostActivation(activationId);
     if (!resolution.ok) {
-        // Teardown is idempotent: a handle that already expired or was revoked
-        // needs no further server mutation.
-        if (resolution.code === 'activation-unknown') {
-            throw createError({ statusCode: 404, statusMessage: resolution.message });
-        }
+        // A restarted host also forgets its handles. Teardown is complete
+        // when the handle is unknown, expired or already revoked.
         return { ok: true, alreadyRevoked: true, code: resolution.code };
     }
     const record = resolution.record;

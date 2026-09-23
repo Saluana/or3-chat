@@ -28,6 +28,7 @@ import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import type { EffectiveAuthority } from '~~/shared/plugins/authority/effective-authority';
 import { acquisitionRequestError } from '~~/shared/plugins/acquisition/failure-presentation';
 import { ACTIVATION_CONFIRMATION_TIMEOUT_MS } from '~~/shared/plugins/lifecycle/lifecycle-view';
+import type { PluginRuntimeManifestResponse } from '~~/shared/plugins/runtime-manifest';
 
 /**
  * Outcomes the operator has cleared from the detail panel, remembered per
@@ -273,13 +274,24 @@ export function useMarketplaceCatalog() {
             }>(`/api/plugins/marketplace/catalog?${params.toString()}`, controller.signal);
             if (request !== generation) return;
             configured.value = response.configured;
-            notice.value = response.notice ?? null;
+            notice.value = response.notice
+                ? 'The marketplace catalog is temporarily unavailable. Try again in a moment.'
+                : null;
             cards.value = response.catalog?.items ?? [];
             total.value = response.catalog?.total ?? 0;
         } catch (caught) {
             if (request !== generation) return;
-            error.value =
-                caught instanceof Error ? caught.message : 'The marketplace could not be loaded.';
+            const failure = caught as { statusCode?: number; status?: number } | null;
+            const code = failure?.statusCode ?? failure?.status;
+            if (code === 401) {
+                error.value = 'Your session has ended. Sign in again to browse the marketplace.';
+            } else if (code === 403) {
+                error.value = 'This account cannot browse the marketplace in this workspace. Switch accounts or workspaces.';
+            } else if (code === undefined || code === 0) {
+                error.value = 'Could not connect to this OR3 instance. Your account access was not checked. Try again.';
+            } else {
+                error.value = 'The marketplace could not be loaded. Try again in a moment.';
+            }
         } finally {
             if (request === generation) loading.value = false;
         }
@@ -1139,6 +1151,8 @@ export function useMarketplaceInstalled() {
     const loading = ref(false);
     const error = ref<string | null>(null);
     const role = ref<string | null>(null);
+    const canManageWorkspacePlugins = ref(false);
+    const canManageSitePlugins = ref(false);
     const workspaceId = ref<string | null>(null);
     const plugins = ref<readonly Record<string, unknown>[]>([]);
     const packages = ref<readonly InstalledPackageView[]>([]);
@@ -1152,6 +1166,8 @@ export function useMarketplaceInstalled() {
         packages.value = [];
         enabled.value = [];
         role.value = null;
+        canManageWorkspacePlugins.value = false;
+        canManageSitePlugins.value = false;
         workspaceId.value = null;
     };
 
@@ -1163,22 +1179,94 @@ export function useMarketplaceInstalled() {
             packages.value = [];
             enabled.value = [];
             role.value = null;
+            canManageWorkspacePlugins.value = false;
+            canManageSitePlugins.value = false;
             workspaceId.value = null;
         }
     };
+
+    const describeLoadError = (caught: unknown): string => {
+        const failure = caught as { statusCode?: number; status?: number } | null;
+        const code = failure?.statusCode ?? failure?.status;
+        if (code === 401) return 'Your session has ended. Sign in again to view installed plugins.';
+        if (code === 403) return 'You do not have access to installed plugins in this workspace.';
+        if (code === undefined || code === 0) {
+            return 'Could not connect to this OR3 instance. Your account access was not checked. Try again.';
+        }
+        return 'Installed plugins could not be loaded. Try again in a moment.';
+    };
+
+    /** Runtime metadata is already scoped to the signed-in workspace. */
+    const fromRuntimeManifest = (manifest: PluginRuntimeManifestResponse): InstalledPackageView[] =>
+        manifest.installedPluginIds.flatMap((pluginId) => {
+            const entry = manifest.runtime[pluginId];
+            if (entry?.lifecycleCoverage !== 'managed-v2') return [];
+            const descriptor = entry.descriptorStatus === 'ready' &&
+                entry.descriptor.manifestVersion === 2 ? entry.descriptor : null;
+            const digest = descriptor?.artifact.kind === 'package-v2'
+                ? descriptor.artifact.packageDigest : null;
+            return [{
+                pluginId,
+                workspaceEnabled: manifest.enabledPluginIds.includes(pluginId),
+                pointer: null,
+                startup: {
+                    status: entry.descriptorStatus,
+                    selectedDigest: digest,
+                    issueCodes: entry.descriptorStatus === 'blocked' ? [entry.blockCode] : [],
+                },
+                display: {
+                    version: descriptor?.version ?? null,
+                    selectedDigest: digest,
+                    candidateVersion: null,
+                    candidateDigest: null,
+                    canOpen: digest !== null && entry.loadAllowed,
+                },
+            }];
+        });
 
     const load = async (expectedWorkspaceId?: string | null): Promise<boolean> => {
         const request = ++generation;
         loading.value = true;
         error.value = null;
         try {
-            const response = await apiGet<{
+            const session = getCachedSessionContext();
+            type InstalledResponse = {
                 plugins?: readonly Record<string, unknown>[];
                 role?: string | null;
                 workspaceId?: string | null;
                 enabledPlugins?: readonly string[];
                 packagePlugins?: readonly InstalledPackageView[];
-            }>('/api/admin/plugins-page');
+                canManageSitePlugins?: boolean;
+            };
+            const readWorkspace = async (): Promise<InstalledResponse> => {
+                const manifest = await apiGet<PluginRuntimeManifestResponse>('/api/plugins/runtime-manifest');
+                return {
+                    role: session?.role ?? null,
+                    workspaceId: manifest.workspaceId,
+                    enabledPlugins: manifest.enabledPluginIds,
+                    packagePlugins: fromRuntimeManifest(manifest),
+                };
+            };
+            let response: InstalledResponse;
+            let adminLoaded = false;
+            if (session === null || session.deploymentAdmin === true) {
+                try {
+                    response = await apiGet<InstalledResponse>('/api/admin/plugins-page');
+                    adminLoaded = true;
+                } catch (caught) {
+                    const failure = caught as { statusCode?: number; status?: number } | null;
+                    const code = failure?.statusCode ?? failure?.status;
+                    if (code !== 401 && code !== 403) throw caught;
+                    if (request === generation) clearOnAuthorizationLoss(caught);
+                    response = await readWorkspace();
+                }
+                if (adminLoaded && session !== null && response.packagePlugins?.length === 0) {
+                    const workspace = await readWorkspace();
+                    response = { ...response, packagePlugins: workspace.packagePlugins };
+                }
+            } else {
+                response = await readWorkspace();
+            }
             if (request !== generation) return false;
             if (expectedWorkspaceId && response.workspaceId !== expectedWorkspaceId) {
                 stale.value = true;
@@ -1188,6 +1276,9 @@ export function useMarketplaceInstalled() {
             stale.value = false;
             plugins.value = response.plugins ?? [];
             role.value = response.role ?? null;
+            canManageSitePlugins.value = response.canManageSitePlugins === true;
+            canManageWorkspacePlugins.value = adminLoaded &&
+                (response.canManageSitePlugins === true || response.role === 'owner');
             workspaceId.value = response.workspaceId ?? null;
             enabled.value = response.enabledPlugins ?? [];
             packages.value = response.packagePlugins ?? [];
@@ -1196,10 +1287,7 @@ export function useMarketplaceInstalled() {
             if (request !== generation) return false;
             stale.value = true;
             clearOnAuthorizationLoss(caught);
-            error.value =
-                caught instanceof Error
-                    ? caught.message
-                    : 'Installed plugins could not be listed for this account.';
+            error.value = describeLoadError(caught);
             return false;
         } finally {
             if (request === generation) loading.value = false;
@@ -1217,6 +1305,7 @@ export function useMarketplaceInstalled() {
 
     const assertFresh = () => {
         if (stale.value || loading.value || mutating.value) throw new Error('Refresh installed plugins before making another change.');
+        if (!canManageWorkspacePlugins.value) throw new Error('An administrator must make this change.');
         const activeWorkspaceId = getCachedSessionContext()?.workspace?.id;
         if (activeWorkspaceId && activeWorkspaceId !== workspaceId.value) {
             invalidate();
@@ -1251,9 +1340,13 @@ export function useMarketplaceInstalled() {
     const setEnabled = (pluginId: string, enable: boolean) =>
         mutate('/api/admin/plugins/workspace-enable', { pluginId, enabled: enable }, 'local-admin-change');
     const uninstall = (pluginId: string, expectedPackageDigest: string) =>
-        mutate(`/api/admin/plugins/packages/${pluginId}/uninstall`, { expectedPackageDigest }, 'manifest-revision-change');
+        canManageSitePlugins.value
+            ? mutate(`/api/admin/plugins/packages/${pluginId}/uninstall`, { expectedPackageDigest }, 'manifest-revision-change')
+            : Promise.reject(new Error('An administrator must remove plugins.'));
     const rollback = (pluginId: string) =>
-        mutate(`/api/admin/plugins/packages/${pluginId}/rollback`, {}, 'manifest-revision-change');
+        canManageSitePlugins.value
+            ? mutate(`/api/admin/plugins/packages/${pluginId}/rollback`, {}, 'manifest-revision-change')
+            : Promise.reject(new Error('An administrator must roll back plugins.'));
 
     /** Updates are candidates: same lifecycle, promoted through the package API. */
     const updates = computed(() =>
@@ -1266,6 +1359,8 @@ export function useMarketplaceInstalled() {
         mutating,
         error,
         role,
+        canManageWorkspacePlugins,
+        canManageSitePlugins,
         workspaceId,
         plugins,
         packages,

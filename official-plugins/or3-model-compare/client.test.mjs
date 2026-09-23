@@ -296,18 +296,18 @@ test('renders host-safe identifiers for provider-qualified models', async () => 
     const host = await activate({
         catalogOverrides: {
             models: [
-                { id: 'openai/gpt-oss-120b', label: 'gpt-oss-120b', priced: true, promptPerMillion: 1, completionPerMillion: 2 },
+                { id: '~openai/gpt-luna-latest', label: 'gpt-luna-latest', priced: true, promptPerMillion: 1, completionPerMillion: 2 },
                 { id: 'anthropic/claude-3-5-sonnet-latest', label: 'claude-3-5-sonnet', priced: true, promptPerMillion: 3, completionPerMillion: 6 },
             ],
         },
         settings: {
-            defaultModels: 'openai/gpt-oss-120b,anthropic/claude-3-5-sonnet-latest',
+            defaultModels: '~openai/gpt-luna-latest,anthropic/claude-3-5-sonnet-latest',
         },
     });
     const { flat } = lastView(host);
     const list = flat.find((node) => node.type === 'list');
     expect(list.items.map((item) => item.label)).toEqual([
-        'openai/gpt-oss-120b',
+        '~openai/gpt-luna-latest',
         'anthropic/claude-3-5-sonnet-latest',
     ]);
     assertHostSafeIdentifiers(host);

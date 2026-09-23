@@ -24,6 +24,7 @@ const drafts = new Map<string, { values: Record<string, string | boolean>; dirty
 
 vi.mock('~/composables/plugins/portable-client-runtime', () => ({
     activatePortableClient: (...args: unknown[]) => activateMock(...args),
+    restartPortableClient: (...args: unknown[]) => activateMock(sourceMock(...args)),
     usePortableActivations: () => activations,
     invokePortableUiEvent: (...args: unknown[]) => invokeMock(...args),
     ensurePortableClientActivation: (...args: unknown[]) => ensureMock(...args),
@@ -86,6 +87,7 @@ beforeEach(() => {
     activateMock.mockReset();
     activateMock.mockResolvedValue(activation());
     scheduleRecoveryMock.mockReset();
+    scheduleRecoveryMock.mockReturnValue(false);
     sourceMock.mockReset();
     getDocumentInDbMock.mockReset();
     fetchMock.mockReset();
@@ -333,6 +335,49 @@ describe('PortableClientView host actions', () => {
         await flushPromises();
         expect(activateMock).toHaveBeenCalledWith(sourceMock.mock.results[0]!.value);
     })
+
+    it('keeps the existing view without a warning during a normal reconnect', async () => {
+        sourceMock.mockReturnValue({ descriptor: { name: 'Tasks' }, workspaceId: 'ws-1' });
+        scheduleRecoveryMock.mockReturnValue(true);
+        activations.set('sample.plugin', activation({
+            status: 'stopped',
+            blockCode: 'activation-time-limit',
+            view: { title: null, nodes: [{ type: 'field.textarea', id: 'notes', label: 'Notes', value: 'draft' }] } as never,
+        }));
+        const wrapper = mount(PortableClientView, { props: { pluginId: 'sample.plugin' }, global });
+        await flushPromises();
+
+        expect(wrapper.find('[data-testid="portable-plugin-stopped"]').exists()).toBe(false);
+        expect(wrapper.get('[data-testid="portable-plugin-view"]').attributes('aria-busy')).toBe('true');
+        expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('draft');
+        expect(wrapper.get('textarea').attributes('disabled')).toBeDefined();
+    });
+
+    it('keeps the old tree disabled until the replacement renders', async () => {
+        sourceMock.mockReturnValue({ descriptor: { name: 'Tasks' }, workspaceId: 'ws-1' });
+        activations.set('sample.plugin', activation({
+            view: { title: null, nodes: [{ type: 'button', id: 'save', label: 'Save', action: 'tasks.save' }] } as never,
+        }));
+        const wrapper = mount(PortableClientView, { props: { pluginId: 'sample.plugin' }, global });
+        await flushPromises();
+        expect(wrapper.get('button[data-action="tasks.save"]').attributes('disabled')).toBeUndefined();
+
+        activations.set('sample.plugin', activation({ status: 'starting', view: null }));
+        await flushPromises();
+        expect(wrapper.find('[data-testid="portable-plugin-view"]').exists()).toBe(true);
+        expect(wrapper.get('button[data-action="tasks.save"]').attributes('disabled')).toBeDefined();
+    });
+
+    it('offers a plain retry if automatic reconnection is exhausted', async () => {
+        sourceMock.mockReturnValue({ descriptor: { name: 'Tasks' }, workspaceId: 'ws-1' });
+        activations.set('sample.plugin', activation({ status: 'stopped', blockCode: 'activation-time-limit' }));
+        const wrapper = mount(PortableClientView, { props: { pluginId: 'sample.plugin' }, global });
+        await flushPromises();
+
+        const stopped = wrapper.get('[data-testid="portable-plugin-stopped"]');
+        expect(stopped.text()).toContain("Couldn't reconnect to Tasks");
+        expect(stopped.get('button').text()).toBe('Try again');
+    });
 
     it('refuses a host write when the activation lacks write authority', async () => {
         prepareMock.mockResolvedValue({

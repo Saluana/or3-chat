@@ -85,8 +85,8 @@
 }
 
 [data-theme="blank"] .page-link-accent-chats .page-link-icon-container {
-  background: color-mix(in srgb, #2a8fd6 14%, var(--md-surface));
-  color: #2a8fd6;
+  background: color-mix(in srgb, var(--blank-brand-accent) 14%, var(--md-surface));
+  color: var(--blank-brand-accent);
 }
 
 [data-theme="blank"] #nav-top-section .iconify {

@@ -690,7 +690,49 @@ describe('overlapping activations', () => {
         start.onCrash({ fatal: true, reason: 'worker-crashed' });
         await flush();
         expect(getPortableActivation('sample.plugin')?.status).toBe('stopped');
+        expect(getPortableActivation('sample.plugin')?.blockCode).toBe('worker-crashed');
         expect(revocationRequests).toEqual(['act_test_1']);
+    });
+
+    it('reconnects after the normal activation time limit without a manual restart', async () => {
+        vi.useFakeTimers();
+        startPortableWorkerMock.mockResolvedValue(startedRuntime('timed'));
+        setPortableClientSource({ descriptor: descriptor(), workspaceId: 'ws-time-limit', runtimeEntry: undefined });
+        await ensurePortableClientActivation('sample.plugin');
+        const start = startPortableWorkerMock.mock.calls[0]?.[0] as {
+            onCrash: (report: { fatal: boolean; reason: string }) => void;
+        };
+
+        start.onCrash({ fatal: true, reason: 'budget-exceeded:activation-ms' });
+        expect(getPortableActivation('sample.plugin')).toMatchObject({
+            status: 'stopped',
+            blockCode: 'activation-time-limit',
+            crashed: false,
+        });
+        expect(schedulePortableClientRecovery('sample.plugin')).toBe(true);
+        await vi.advanceTimersByTimeAsync(300);
+        expect(startPortableWorkerMock).toHaveBeenCalledTimes(2);
+        expect(getPortableActivation('sample.plugin')?.status).toBe('active');
+    });
+
+    it('ends automatic recovery with a retryable stop when startup throws', async () => {
+        vi.useFakeTimers();
+        startPortableWorkerMock.mockResolvedValueOnce(startedRuntime('timed'));
+        startPortableWorkerMock.mockRejectedValueOnce(new Error('Worker startup failed'));
+        setPortableClientSource({ descriptor: descriptor(), workspaceId: 'ws-recovery-failure', runtimeEntry: undefined });
+        await ensurePortableClientActivation('sample.plugin');
+        const start = startPortableWorkerMock.mock.calls[0]?.[0] as {
+            onCrash: (report: { fatal: boolean; reason: string }) => void;
+        };
+
+        start.onCrash({ fatal: true, reason: 'budget-exceeded:activation-ms' });
+        expect(schedulePortableClientRecovery('sample.plugin')).toBe(true);
+        await vi.advanceTimersByTimeAsync(300);
+        expect(getPortableActivation('sample.plugin')).toMatchObject({
+            status: 'stopped',
+            blockCode: 'recovery-failed',
+        });
+        expect(schedulePortableClientRecovery('sample.plugin')).toBe(false);
     });
 
     it('cancels a pending start instead of letting it publish after a stop', async () => {
@@ -953,6 +995,7 @@ describe('centralized recovery', () => {
             'activation-expired',
             'activation-revoked',
             'activation-stale',
+            'activation-time-limit',
         ]) {
             expect(isRecoverablePortableStop(code)).toBe(true);
         }

@@ -725,16 +725,30 @@ function blockActionLabel(block: { action: string }): string | null {
 </script>
 
 <template>
-    <UAlert v-if="installed.error.value" title="Installed state needs refreshing" :description="installed.error.value">
-        <template #actions><UButton @click="installed.load()">Refresh installed plugins</UButton></template>
-    </UAlert>
-    <UAlert v-if="install.otherWorkspaceOperation.value" title="Installation belongs to another workspace"
-        :description="'Workspace ' + install.otherWorkspaceOperation.value.workspaceId + ' owns this operation. Switch to that workspace to resume or cancel it.'">
-        <template #actions>
-            <UButton @click="navigation.openPage('workspaces', 'manage')">Choose workspace</UButton>
-        </template>
-    </UAlert>
     <div class="dashboard-page-frame" data-testid="marketplace-discover">
+        <section
+            v-if="installed.error.value && !catalog.error.value"
+            class="flex flex-col gap-4 rounded-xl border border-(--ui-border) bg-(--ui-bg-elevated)/40 p-4 sm:p-5"
+            role="alert"
+            data-testid="marketplace-installed-error"
+        >
+            <div class="flex items-start gap-3">
+                <UIcon name="i-lucide-circle-alert" class="mt-0.5 shrink-0 text-(--ui-error)" />
+                <div class="min-w-0">
+                    <h3 class="font-medium">Couldn't check installed plugins</h3>
+                    <p class="mt-1 text-sm text-(--ui-text-muted)">{{ installed.error.value }}</p>
+                </div>
+            </div>
+            <div class="pl-7">
+                <UButton size="sm" :loading="installed.loading.value" @click="installed.load()">Try again</UButton>
+            </div>
+        </section>
+        <UAlert v-if="install.otherWorkspaceOperation.value" title="Installation belongs to another workspace"
+            :description="'Workspace ' + install.otherWorkspaceOperation.value.workspaceId + ' owns this operation. Switch to that workspace to resume or cancel it.'">
+            <template #actions>
+                <UButton @click="navigation.openPage('workspaces', 'manage')">Choose workspace</UButton>
+            </template>
+        </UAlert>
         <div class="flex flex-wrap items-center gap-3">
             <UInput
                 ref="searchField"
@@ -757,6 +771,7 @@ function blockActionLabel(block: { action: string }): string | null {
                 @click="clearSearch"
             />
             <UButton
+                v-if="!catalog.error.value"
                 color="neutral"
                 variant="soft"
                 icon="i-lucide-refresh-cw"
@@ -768,20 +783,30 @@ function blockActionLabel(block: { action: string }): string | null {
             </UButton>
         </div>
 
+        <section
+            v-if="catalog.error.value"
+            class="flex flex-col gap-4 rounded-xl border border-(--ui-border) bg-(--ui-bg-elevated)/40 p-4 sm:p-5"
+            role="alert"
+            data-testid="marketplace-catalog-error"
+        >
+            <div class="flex items-start gap-3">
+                <UIcon name="i-lucide-circle-alert" class="mt-0.5 shrink-0 text-(--ui-error)" />
+                <div class="min-w-0">
+                    <h3 class="font-medium">Couldn't load the marketplace</h3>
+                    <p class="mt-1 text-sm text-(--ui-text-muted)">{{ catalog.error.value }}</p>
+                </div>
+            </div>
+            <div class="pl-7">
+                <UButton size="sm" :loading="catalog.loading.value || installed.loading.value" @click="applySearchNow">Try again</UButton>
+            </div>
+        </section>
         <UAlert
-            v-if="!catalog.configured.value"
+            v-else-if="!catalog.configured.value"
             color="info"
             variant="subtle"
             title="This instance has no marketplace registry configured"
             description="An owner can set OR3_MARKETPLACE_REGISTRY_ORIGIN and the trusted release keys, then enable registry installation."
             data-testid="marketplace-unconfigured"
-        />
-        <UAlert
-            v-else-if="catalog.error.value"
-            color="error"
-            variant="subtle"
-            title="The marketplace could not be reached"
-            :description="catalog.error.value"
         />
         <UAlert
             v-else-if="catalog.notice.value"
@@ -890,7 +915,7 @@ function blockActionLabel(block: { action: string }): string | null {
                         Configure
                     </UButton>
                     <UButton
-                        v-if="selectedInstalledEntry"
+                        v-if="installed.canManageWorkspacePlugins.value && selectedInstalledEntry"
                         color="neutral"
                         variant="soft"
                         :loading="installedActionBusy === selectedInstalledEntry?.pluginId"
@@ -901,7 +926,7 @@ function blockActionLabel(block: { action: string }): string | null {
                         {{ installed.enabled.value.includes(selectedInstalledEntry?.pluginId ?? '') ? 'Disable' : 'Enable' }}
                     </UButton>
                     <UButton
-                        v-if="selectedInstalledEntry?.pointer?.previous"
+                        v-if="installed.canManageSitePlugins.value && selectedInstalledEntry?.pointer?.previous"
                         color="neutral"
                         variant="ghost"
                         icon="i-lucide-undo-2"
@@ -913,7 +938,7 @@ function blockActionLabel(block: { action: string }): string | null {
                         Roll back
                     </UButton>
                     <UButton
-                        v-if="selectedInstalledEntry"
+                        v-if="installed.canManageSitePlugins.value && selectedInstalledEntry"
                         color="error"
                         variant="ghost"
                         icon="i-lucide-trash-2"
@@ -1156,7 +1181,7 @@ function blockActionLabel(block: { action: string }): string | null {
         >
             Loading plugins…
         </div>
-        <div v-else-if="catalog.cards.value.length === 0 && catalog.configured.value" class="text-sm text-(--ui-text-muted)">
+        <div v-else-if="catalog.cards.value.length === 0 && catalog.configured.value && !catalog.error.value && !catalog.notice.value" class="text-sm text-(--ui-text-muted)">
             No published plugins matched.
         </div>
         <ul

@@ -74,6 +74,7 @@ describe('worker-runtime (8.4-8.6)', () => {
         for (let i = 0; i < 3; i += 1) {
             const inbox: RpcEnvelope[] = [];
             const fake = createFakeWorkerFactory(inbox);
+            const onCrash = vi.fn();
             const runtime = new WorkerIsolationRuntime({
                 pluginId: 'iso.worker',
                 workspaceId: 'ws-1',
@@ -81,6 +82,7 @@ describe('worker-runtime (8.4-8.6)', () => {
                 moduleUrl: 'https://plugins.local/worker.mjs',
                 grants: grants(),
                 createWorker: fake.factory,
+                onCrash,
                 services: {
                     storage: {
                         get: () => ({ value: i }),
@@ -96,6 +98,7 @@ describe('worker-runtime (8.4-8.6)', () => {
             expect(runtime.active).toBe(false);
             expect(runtime.pendingRpcCount).toBe(0);
             expect(fake.terminated()).toBe(true);
+            expect(onCrash).not.toHaveBeenCalled();
         }
     });
 
@@ -198,6 +201,7 @@ describe('worker-runtime (8.4-8.6)', () => {
             reason: 'boom',
             fatal: true,
         });
+        expect(runtime.crashReports).toHaveLength(1);
         expect(runtime.active).toBe(false);
         expect(fake.terminated()).toBe(true);
     });
@@ -336,6 +340,7 @@ describe('worker-runtime (8.4-8.6)', () => {
 
     it('stops a quiet sandbox when the activation wall-clock budget is spent', async () => {
         const fake = createFakeWorkerFactory([]);
+        const crashes: string[] = [];
         const runtime = new WorkerIsolationRuntime({
             pluginId: 'iso.worker',
             workspaceId: 'ws-1',
@@ -345,12 +350,14 @@ describe('worker-runtime (8.4-8.6)', () => {
             createWorker: fake.factory,
             services: {},
             budgets: { maxActivationMs: 30 },
+            onCrash: (report) => crashes.push(report.reason),
         });
         await runtime.start();
         await vi.waitFor(() => {
             expect(runtime.active).toBe(false);
         });
         expect(runtime.budgetTerminationReason).toContain('activation-ms');
+        expect(crashes).toEqual(['budget-exceeded:activation-ms']);
         expect(fake.terminated()).toBe(true);
     });
 

@@ -308,12 +308,25 @@ async function apiGet<T>(url: string): Promise<T> {
 
 <template>
     <div class="dashboard-page-frame">
-        <div v-if="installed.error.value" class="text-sm text-(--ui-text-muted)" data-testid="marketplace-installed-error">
-            {{ installed.error.value }}
-            <UButton :loading="installed.loading.value" @click="installed.load(sessionWorkspaceId)">Refresh installed plugins</UButton>
-        </div>
+        <section
+            v-if="installed.error.value"
+            class="flex flex-col gap-4 rounded-xl border border-(--ui-border) bg-(--ui-bg-elevated)/40 p-4 sm:p-5"
+            role="alert"
+            data-testid="marketplace-installed-error"
+        >
+            <div class="flex items-start gap-3">
+                <UIcon name="i-lucide-circle-alert" class="mt-0.5 shrink-0 text-(--ui-error)" />
+                <div class="min-w-0">
+                    <h3 class="font-medium">Couldn't load installed plugins</h3>
+                    <p class="mt-1 text-sm text-(--ui-text-muted)">{{ installed.error.value }}</p>
+                </div>
+            </div>
+            <div class="pl-7">
+                <UButton size="sm" :loading="installed.loading.value" @click="installed.load(sessionWorkspaceId)">Try again</UButton>
+            </div>
+        </section>
 
-        <div class="flex justify-end">
+        <div v-if="installed.canManageSitePlugins.value" class="flex justify-end">
             <UButton
                 size="sm"
                 color="neutral"
@@ -326,7 +339,7 @@ async function apiGet<T>(url: string): Promise<T> {
             </UButton>
         </div>
 
-        <section class="flex flex-col gap-4" data-testid="marketplace-installed">
+        <section v-if="!installed.error.value || installed.packages.value.length > 0" class="flex flex-col gap-4" data-testid="marketplace-installed">
             <h3 class="text-base font-medium">Installed</h3>
             <div v-if="installed.loading.value" class="text-sm text-(--ui-text-muted)">Loading…</div>
             <div v-else-if="!installed.error.value && installed.packages.value.length === 0" class="text-sm text-(--ui-text-muted)">
@@ -385,6 +398,7 @@ async function apiGet<T>(url: string): Promise<T> {
                             Open
                         </UButton>
                         <UButton
+                            v-if="installed.canManageWorkspacePlugins.value"
                             size="sm"
                             color="neutral"
                             variant="soft"
@@ -395,6 +409,7 @@ async function apiGet<T>(url: string): Promise<T> {
                             Configure
                         </UButton>
                         <UButton
+                            v-if="installed.canManageWorkspacePlugins.value"
                             size="sm"
                             color="neutral"
                             variant="soft"
@@ -405,6 +420,7 @@ async function apiGet<T>(url: string): Promise<T> {
                             {{ isEnabled(entry.pluginId) ? 'Disable' : 'Enable' }}
                         </UButton>
                         <UButton
+                            v-if="installed.canManageSitePlugins.value"
                             size="sm"
                             color="error"
                             variant="ghost"
@@ -416,7 +432,7 @@ async function apiGet<T>(url: string): Promise<T> {
                             Uninstall
                         </UButton>
                         <UButton
-                            v-if="canRollback(entry)"
+                            v-if="installed.canManageSitePlugins.value && canRollback(entry)"
                             size="sm"
                             color="neutral"
                             variant="ghost"

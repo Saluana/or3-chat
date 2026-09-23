@@ -4,6 +4,12 @@ const { reconcileMock } = vi.hoisted(() => ({ reconcileMock: vi.fn() }));
 const { portableActivationMock } = vi.hoisted(() => ({
     portableActivationMock: { current: null as null | Record<string, unknown> },
 }));
+const { marketplaceSession } = vi.hoisted(() => ({
+    marketplaceSession: { current: null as null | Record<string, unknown> },
+}));
+vi.mock('~/composables/auth/useSessionContext', () => ({
+    getCachedSessionContext: () => marketplaceSession.current,
+}));
 
 // The signal itself is guarded by `import.meta.client`, which is not set in the
 // test runtime; the contract under test is that every successful mutation asks
@@ -69,6 +75,7 @@ function statusView(overrides: Record<string, unknown> = {}): Record<string, unk
 const pageResponse = {
     plugins: [],
     role: 'owner',
+    canManageSitePlugins: true,
     workspaceId: 'ws-1',
     enabledPlugins: [],
     packagePlugins: [],
@@ -83,9 +90,77 @@ beforeEach(() => {
     fetchMock.mockResolvedValue(pageResponse);
     reconcileMock.mockReset();
     localStorage.clear();
+    marketplaceSession.current = null;
 });
 
 describe('marketplace mutations reconcile the plugin runtime', () => {
+    it.each([
+        [{ statusCode: 401, message: '[GET] /api/plugins/marketplace/catalog: 401 Unauthorized' }, 'Sign in again'],
+        [{ statusCode: 403, message: '[GET] /api/plugins/marketplace/catalog: 403 Forbidden' }, 'Switch accounts or workspaces'],
+        [new TypeError('Failed to fetch'), 'Your account access was not checked'],
+    ])('explains catalog request failures without exposing the API error', async (failure, expected) => {
+        fetchMock.mockRejectedValue(failure);
+        const catalog = useMarketplaceCatalog();
+        await catalog.load();
+        expect(catalog.error.value).toContain(expected);
+        expect(catalog.error.value).not.toContain('/api/plugins/marketplace/catalog');
+    });
+
+    it('keeps a registry failure notice free of server exception text', async () => {
+        fetchMock.mockResolvedValue({ configured: true, catalog: null, notice: 'connect ECONNREFUSED registry.internal:443' });
+        const catalog = useMarketplaceCatalog();
+        await catalog.load();
+        expect(catalog.notice.value).toContain('temporarily unavailable');
+        expect(catalog.notice.value).not.toContain('registry.internal');
+    });
+
+    it('shows workspace installed plugins to a member without requesting admin data', async () => {
+        marketplaceSession.current = { authenticated: true, role: 'viewer', deploymentAdmin: false, workspace: { id: 'ws-1' } };
+        const digest = `sha256-${'a'.repeat(64)}`;
+        fetchMock.mockImplementation((url: string) => {
+            if (url !== '/api/plugins/runtime-manifest') throw new Error(`Unexpected request: ${url}`);
+            return Promise.resolve({
+                workspaceId: 'ws-1',
+                enabledPluginIds: ['or3sal.tasks'],
+                installedPluginIds: ['or3sal.tasks'],
+                runtime: {
+                    'or3sal.tasks': {
+                        lifecycleCoverage: 'managed-v2',
+                        descriptorStatus: 'ready',
+                        loadAllowed: true,
+                        descriptor: { manifestVersion: 2, version: '0.2.0', artifact: { kind: 'package-v2', packageDigest: digest } },
+                    },
+                },
+            });
+        });
+        const installed = useMarketplaceInstalled();
+        expect(await installed.load('ws-1')).toBe(true);
+        expect(installed.error.value).toBeNull();
+        expect(installed.packages.value[0]?.display).toMatchObject({ version: '0.2.0', selectedDigest: digest, canOpen: true });
+        expect(installed.canManageWorkspacePlugins.value).toBe(false);
+        await expect(installed.setEnabled('or3sal.tasks', false)).rejects.toThrow('administrator');
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses the workspace view when an old admin grant is refused', async () => {
+        marketplaceSession.current = { authenticated: true, role: 'owner', deploymentAdmin: true, workspace: { id: 'ws-1' } };
+        fetchMock.mockImplementation((url: string) => {
+            if (url === '/api/admin/plugins-page') return Promise.reject({ statusCode: 401 });
+            if (url === '/api/plugins/runtime-manifest') return Promise.resolve({
+                workspaceId: 'ws-1',
+                enabledPluginIds: ['or3sal.tasks'],
+                installedPluginIds: ['or3sal.tasks'],
+                runtime: { 'or3sal.tasks': { lifecycleCoverage: 'managed-v2', descriptorStatus: 'blocked', blockCode: 'package-disabled', loadAllowed: false } },
+            });
+            throw new Error(`Unexpected request: ${url}`);
+        });
+        const installed = useMarketplaceInstalled();
+        expect(await installed.load('ws-1')).toBe(true);
+        expect(installed.error.value).toBeNull();
+        expect(installed.packages.value.map((entry) => entry.pluginId)).toEqual(['or3sal.tasks']);
+        expect(installed.canManageWorkspacePlugins.value).toBe(false);
+    });
+
     it('signals after enablement, removal and rollback', async () => {
         const installed = useMarketplaceInstalled();
         await installed.load();
