@@ -20,10 +20,18 @@
             </button>
             <div class="min-w-0">
                 <h2 class="chat-settings-title">
-                    {{ activeGroup ? getCategoryLabel(activeGroup.category) : 'Chat settings' }}
+                    {{
+                        activeGroup
+                            ? getCategoryLabel(activeGroup.category)
+                            : 'Chat settings'
+                    }}
                 </h2>
                 <p class="chat-settings-subtitle">
-                    {{ activeGroup ? `${activeGroup.tools.length} tools` : 'Customize how your chats work.' }}
+                    {{
+                        activeGroup
+                            ? `${activeGroup.tools.length} tools`
+                            : 'Customize how your chats work.'
+                    }}
                 </p>
             </div>
             <UButton
@@ -280,7 +288,7 @@
                 </UButton>
             </nav>
         </div>
-        <div v-if="activeGroup" class="chat-settings-body chat-settings-tool-page">
+        <div v-if="activeGroup" class="chat-settings-body">
             <div class="chat-settings-tool-list">
                 <div
                     v-for="tool in activeGroup.tools"
@@ -448,13 +456,18 @@ const groupedToolCategories = computed(() => {
 
 const activeCategory = ref<string | null>(null);
 const activeGroup = computed(() =>
-    groupedToolCategories.value.find((group) => group.category === activeCategory.value) ?? null
+    groupedToolCategories.value.find(
+        (group) => group.category === activeCategory.value
+    ) ?? null
 );
 const backButton = ref<HTMLButtonElement | null>(null);
 let categoryTrigger: HTMLButtonElement | null = null;
 
 watch(groupedToolCategories, (groups) => {
-    if (activeCategory.value && !groups.some((group) => group.category === activeCategory.value)) {
+    if (
+        activeCategory.value &&
+        !groups.some((group) => group.category === activeCategory.value)
+    ) {
         activeCategory.value = null;
     }
 });
