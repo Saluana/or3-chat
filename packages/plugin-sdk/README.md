@@ -5,6 +5,31 @@ authoring CLI. Plugin packages import only this package (or its documented
 subpaths), never OR3 app aliases such as `~/`, `~~/`, `#imports`, or Nuxt
 auto-imports.
 
+## Start building
+
+With Bun 1.3.6 or newer, an OR3 Chat source checkout whose dependencies are
+installed, and the sibling `or3-provider-basic-auth` source checkout, run this
+from the host checkout:
+
+```sh
+bun run dev:plugin --create /absolute/path/to/my-plugin --id or3.my-plugin
+```
+
+The command packs the SDK locally, creates and installs the portable starter,
+and opens a separate local host in OR3 Chat. Use the printed password for the
+first sign-in and review the starter's permissions in Chat. The plugin opens in
+a workspace tab automatically. Then run `bun run dev` in the plugin directory
+for later sessions. Saving source rebuilds and updates that tab automatically.
+The local host association in `.or3-dev/` is ignored
+by Git and candidate snapshots. For a separately scaffolded package, link its
+host once with `bun run dev --host /absolute/path/to/or3-chat`.
+
+This development loop keeps persisted settings and storage but restarts the
+worker's in-memory state on replacement. Syntax errors keep the last running
+package until a corrected build passes. See [local development](../../public/_documentation/plugins/local-development.md)
+for permission review and the manual candidate path. An explicit clean
+`candidate --verify` and `candidate --qualify` remain required before release.
+
 ## Install
 
 `@or3/plugin-sdk` is **not yet published to npm**, and the existing release
@@ -146,6 +171,9 @@ no private path aliases:
   with the `or3-portable-client-v1` profile (isolated-client worker, generated
   `or3.package-policy.json` + `or3.setup.json`, settings schema, client entry and
   a passing test). `minimal-v2` scaffolds the trusted-host V2 shape instead.
+- `dev` starts the associated OR3 host for a portable package; `--host` links
+  or relinks an installed source checkout. The portable starter's `bun run dev`
+  script calls this command.
 - `validate` runs the portable profile rules and the shared import/auto-import
   rules. It reuses the same rule constants and validator as the OR3 reviewer.
 - `test` runs the package's own tests: `bun run test` when `package.json` has a

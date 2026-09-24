@@ -22,6 +22,25 @@ export interface ClientEntryBundler {
     }>;
 }
 
+function formatBundleDiagnostics(error: unknown): string {
+    const record = error && typeof error === 'object' ? error as {
+        message?: string;
+        errors?: unknown[];
+    } : null;
+    const details = record?.errors?.map((item) => {
+        const diagnostic = item && typeof item === 'object' ? item as {
+            message?: string;
+            position?: { file?: string; line?: number; column?: number; lineText?: string };
+        } : null;
+        const position = diagnostic?.position;
+        const location = position?.file
+            ? `${position.file}:${position.line ?? 0}:${position.column ?? 0}`
+            : '';
+        return [location, diagnostic?.message ?? '', position?.lineText ?? ''].filter(Boolean).join(' ');
+    }).filter(Boolean);
+    return details?.length ? details.join('\n') : record?.message ?? String(error);
+}
+
 /**
  * Bundle the declared client entry so the packaged module is self-contained.
  *
@@ -74,10 +93,12 @@ export async function bundleClientEntry(
         minify: true,
         sourcemap: 'none',
         external: [],
+    }).catch((error: unknown) => {
+        throw new Error(`Bundling ${entry} failed:\n${formatBundleDiagnostics(error)}`);
     });
     if (!result.success || result.outputs.length !== 1) {
         throw new Error(
-            `Bundling ${entry} failed: ${result.outputs.length} outputs, success=${result.success}`
+            `Bundling ${entry} failed: ${formatBundleDiagnostics({ errors: result.logs })}`
         );
     }
     const code = await result.outputs[0]!.text();

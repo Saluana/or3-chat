@@ -8,6 +8,7 @@ import {
     verifyCandidateDirectory,
 } from '../candidate';
 import { createV2Package } from './create';
+import { resolveDevHost, runDevHost } from './dev';
 import { inspectV2Package } from './inspect';
 import { packV2Package } from './pack';
 import { printJson } from './shared';
@@ -19,6 +20,7 @@ function usage(): string {
 
 Commands:
   create --id <plugin-id> --dir <path> --sdk-source <local-tarball-or-directory> [--name <display-name>] [--template <name>]
+  dev [package-root] [--host <or3-checkout>] [--port <port>]
   validate <package-root>
   test <package-root> [-- <test-args...>]
   build <package-root>
@@ -53,6 +55,11 @@ export async function runPluginCli(argv: readonly string[]): Promise<number> {
     }
 
     switch (command) {
+        case 'dev': {
+            const root = rest[0] && !rest[0].startsWith('--') ? rest[0] : '.';
+            const host = resolveDevHost(root, rest.includes('--host') ? requireArg(rest, '--host') : undefined);
+            return runDevHost(root, host, rest.includes('--port') ? requireArg(rest, '--port') : undefined);
+        }
         case 'create': {
             const created = createV2Package({
                 pluginId: requireArg(rest, '--id'),

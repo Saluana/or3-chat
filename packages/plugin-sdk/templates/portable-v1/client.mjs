@@ -43,11 +43,9 @@ export default createPortablePlugin(
                     ? stored.value
                     : 'Hello from OR3';
 
-            const saved = await context.settings.set('lastActivation', new Date().toISOString());
             context.logger.info('portable plugin ready', {
                 generation: context.generation,
                 greeting,
-                settingsWritable: saved.ok,
             });
 
             context.contributions.register({
@@ -63,11 +61,7 @@ export default createPortablePlugin(
                     title: 'Example Plugin',
                     nodes: [
                         ui.text(`Greeting: ${greeting}`),
-                        ui.text(
-                            saved.ok
-                                ? 'Settings are writable for this workspace.'
-                                : 'Settings are read-only: this workspace has not approved settings.write.'
-                        ),
+                        ui.text('Edit client.mjs and save to update this view.'),
                     ],
                 })
             );

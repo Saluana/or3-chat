@@ -77,6 +77,14 @@ export function createV2Package(options: CreateCommandOptions): {
         '@or3/plugin-sdk': `file:${sdkSource}`,
     };
     writeStableJson(resolve(root, 'package.json'), packageJson);
+    const ignorePath = resolve(root, '.gitignore');
+    const ignore = existsSync(ignorePath) ? readFileSync(ignorePath, 'utf8') : '';
+    const ignored = new Set(ignore.split(/\r?\n/));
+    const additions = ['node_modules/', 'dist/', '.or3-pack/', '.or3-dev/']
+        .filter((entry) => !ignored.has(entry));
+    if (additions.length) {
+        writeFileSync(ignorePath, `${ignore}${ignore && !ignore.endsWith('\n') ? '\n' : ''}${additions.join('\n')}\n`);
+    }
 
     // Rewrite the sample identity everywhere it appears in the starter,
     // including the hidden `.authoring/` generator so regeneration keeps the

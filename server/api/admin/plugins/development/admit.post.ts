@@ -31,7 +31,7 @@ import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createError, defineEventHandler, readMultipartFormData } from 'h3';
+import { createError, defineEventHandler, readMultipartFormData, setHeader } from 'h3';
 import { parseCandidateReceipt, buildProvenanceSha256, candidateReceiptSha256, hashSnapshotEntries } from '@or3/plugin-sdk/candidate';
 import { readFileZipEntries, readPackageZip } from '@or3/plugin-sdk/package-archive';
 import { requireAdminApiContext } from '../../../../admin/api';
@@ -90,10 +90,11 @@ export default defineEventHandler(async (event) => {
     }
 
     const allowed = await checkRateLimit(`plugin-development:admit:${getClientIp(event)}`, {
-        max: 30,
-        window: 3600,
+        max: process.env.OR3_PLUGIN_WATCH_ROOT ? 120 : 30,
+        window: process.env.OR3_PLUGIN_WATCH_ROOT ? 60 : 3600,
     });
     if (!allowed) {
+        setHeader(event, 'Retry-After', 60);
         throw createError({ statusCode: 429, statusMessage: 'Too many development admission requests.' });
     }
 

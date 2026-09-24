@@ -135,12 +135,12 @@ export default defineNuxtPlugin(() => {
     let currentRevision = '';
     let syncToken = 0;
 
-    const stop = async (pluginId: string): Promise<void> => {
+    const stop = async (pluginId: string, preserveDrafts = false): Promise<void> => {
         surfaceDisposers.get(pluginId)?.();
         surfaceDisposers.delete(pluginId);
         registeredPages.delete(pluginId);
         unregisterDashboardPlugin(`${DASHBOARD_PLUGIN_PREFIX}${pluginId}`);
-        removePortableClientSource(pluginId);
+        removePortableClientSource(pluginId, preserveDrafts);
         clearPortableSurfaceRegistrations(pluginId);
         await deactivatePortableClient(pluginId);
     };
@@ -196,7 +196,7 @@ export default defineNuxtPlugin(() => {
             ) {
                 continue;
             }
-            await stop(source.descriptor.id);
+            await stop(source.descriptor.id, Boolean(next && source.workspaceId === workspaceId));
         }
 
         for (const [pluginId, descriptor] of wanted) {

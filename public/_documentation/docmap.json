@@ -35,7 +35,7 @@
                     "name": "plugin-quickstart.md",
                     "path": "/start/plugin-quickstart",
                     "category": "Tutorial",
-                    "summary": "Source-level Nuxt and installable V1 plugin patterns for dashboard, chat and sidebar extensions. New installable plugin authors should follow the linked V2 development guide."
+                    "summary": "Start an installable V2 plugin with bun run dev:plugin --create, then use bun run dev in its directory for live edits. Source-level Nuxt and V1 package patterns remain documented separately."
                 },
                 {
                     "name": "snake-game-tutorial.md",
@@ -1343,7 +1343,7 @@
                     "name": "plugin-development-v2.md",
                     "path": "/plugins/plugin-development-v2",
                     "category": "Tutorial",
-                    "summary": "End-to-end portable Plugin Runtime V2 journey: install the unpublished SDK from a tarball, scaffold and qualify a frozen candidate, test it in a dedicated local instance, submit the same files to staging, then follow trusted review and publication."
+                    "summary": "Create a portable V2 plugin with one host command, sign in locally, and see source saves update the real worker preview. Then freeze, verify and qualify an explicit clean candidate for staging review and publication."
                 },
                 {
                     "name": "plugin-sdk.md",
@@ -1355,7 +1355,7 @@
                     "name": "plugin-sdk-cli.md",
                     "path": "/plugins/plugin-sdk-cli",
                     "category": "Reference",
-                    "summary": "@or3/plugin-sdk is not yet on npm: install it from a packed tarball. Bun is required for the CLI. The standalone or3-plugin CLI creates, validates, tests, builds, packs, inspects and freezes an immutable candidate without an OR3 checkout. Manual Marketplace submission uses package.zip, source.zip and receipt.json; optional CI may qualify the same frozen files, while final upload and MFA submission use an interactive developer session."
+                    "summary": "Use bun run dev:plugin --create from an OR3 Chat checkout, then bun run dev in the new portable plugin for live development. The unpublished SDK is packed locally; its standalone CLI also validates, builds and freezes explicit immutable candidates for review."
                 },
                 {
                     "name": "portable-profile.md",
@@ -1421,7 +1421,7 @@
                     "name": "local-development.md",
                     "path": "/plugins/local-development",
                     "category": "Guide",
-                    "summary": "Test an unpublished SDK candidate as a real plugin without publishing: immutable package/source/receipt outputs, the dedicated loopback development instance (bun run dev:plugin) with separate data, owner admission through existing validation/canary/promotion with local provenance, real worker and sidebar/pane/tool integration, scoped developer verification receipts, candidate replacement without data loss, and trust boundaries."
+                    "summary": "Create a portable plugin and live-edit it in an isolated loopback host with one local sign-in. Saves build, canary and update the real worker view; errors preserve the last package and new permissions get review. Explicit frozen candidates remain the release handoff."
                 }
             ]
         }

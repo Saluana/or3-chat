@@ -43,6 +43,7 @@
         "test:e2e:command-palette": "bunx playwright test tests/e2e/command-palette.spec.ts",
         "test:e2e:storage": "PW_PORT=3109 bunx playwright test tests/e2e/storage-layer.spec.ts --workers=1 --reporter=line",
         "test:e2e:admin-auth": "bun run scripts/test/run-admin-auth-e2e.ts",
+        "test:e2e:plugin-development": "bun run scripts/test/run-plugin-development-e2e.ts",
         "test:e2e:journeys": "OR3_PRODUCTION_JOURNEY_TEST_HARNESS=true PW_PORT=3111 bunx playwright test tests/e2e/production-chat-journey.spec.ts tests/e2e/production-document-journey.spec.ts --reporter=line",
         "test:e2e:visual": "OR3_AGENT_VISUAL_TEST_HARNESS=true PW_PORT=3112 bunx playwright test tests/e2e/external-agent-visual.spec.ts --reporter=line",
         "test:e2e:theme-tokens": "env SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false PW_PORT=3114 bunx playwright test tests/e2e/theme-token-migrations.spec.ts --workers=1 --reporter=line",

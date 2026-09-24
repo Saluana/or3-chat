@@ -34,7 +34,7 @@ OR3 Chat is a Bun/Nuxt/Vue application with Vitest and Playwright coverage. `scr
 
 **Acceptance Criteria:**
 - R1.AC1: WHEN `bun run dev:plugin --create ../my-plugin` runs from a prepared host checkout THEN it SHALL create a portable starter, install its SDK dependency, add a `dev` script, remember the local host, and launch development without asking for SDK paths or environment values.
-- R1.AC2: WHEN `bun run dev` runs in that starter THEN it SHALL start the same development profile and open its development page; `or3-plugin dev [root] --host <checkout>` SHALL associate an existing portable package with a host for subsequent runs.
+- R1.AC2: WHEN `bun run dev` runs in that starter THEN it SHALL start the same development profile and open Chat with the plugin tab selected; `or3-plugin dev [root] --host <checkout>` SHALL associate an existing portable package with a host for subsequent runs.
 - R1.AC3: IF the target directory is nonempty, the host is missing/incompatible, the package is unsupported, or dependency installation fails THEN startup SHALL explain the failing step and a concrete recovery action without overwriting source or continuing with a partially prepared package.
 - R1.AC4: WHEN existing manual `bun run dev:plugin` or SDK candidate commands run THEN their documented behavior SHALL remain available.
 
@@ -64,9 +64,9 @@ OR3 Chat is a Bun/Nuxt/Vue application with Vitest and Playwright coverage. `scr
 **User Story:** As an author, I want to see what is running and what failed, so that I can fix an edit without losing my place.
 
 **Acceptance Criteria:**
-- R4.AC1: WHEN the development page opens THEN it SHALL show the real host-rendered plugin surface and a compact status: starting, building, checking, running, needs attention, or disconnected; “running” SHALL identify the digest actually activated, not merely built or promoted.
+- R4.AC1: WHEN the development host opens Chat THEN it SHALL automatically open the real plugin in a Chat workspace tab and announce development status accessibly: starting, building, checking, running, needs attention, or disconnected. Permission requests and failures SHALL appear in a compact dismissible panel; normal running SHALL not obscure the workspace. “Running” SHALL identify the digest actually activated, not merely built or promoted.
 - R4.AC2: IF generation, build, validation, admission, or canary fails before promotion THEN the last selected package SHALL remain selected, the error and available source location SHALL be shown, and another save SHALL retry without restarting the command.
-- R4.AC3: IF activation fails after promotion THEN the page SHALL report the runtime failure and offer existing recovery controls; it SHALL not claim to have rolled back plugin data or silently perform a rollback.
+- R4.AC3: IF activation fails after promotion THEN Chat SHALL report the runtime failure and offer existing recovery controls; it SHALL not claim to have rolled back plugin data or silently perform a rollback.
 - R4.AC4: WHEN a worker is replaced THEN its old contributions, outstanding callbacks, and activation handles SHALL be disposed; persistent plugin data, unrelated plugin activations, the surrounding host page, and supported workspace-scoped field drafts SHALL remain intact.
 
 ### R5: Permissions and setup only when necessary
@@ -74,7 +74,7 @@ OR3 Chat is a Bun/Nuxt/Vue application with Vitest and Playwright coverage. `scr
 **User Story:** As an author, I want ordinary edits to apply automatically while still seeing consequential access changes.
 
 **Acceptance Criteria:**
-- R5.AC1: WHEN initial admission or an edit needs a fresh authority review THEN the development page SHALL display the host-derived review and bind approval to the displayed package and authority digests; automatic progress SHALL pause until that review is resolved.
+- R5.AC1: WHEN initial admission or an edit needs a fresh authority review THEN Chat SHALL display the host-derived review and bind approval to the displayed package and authority digests; automatic progress SHALL pause until that review is resolved.
 - R5.AC2: WHEN an edit retains approval under the existing effective-authority policy THEN it SHALL proceed without another permission prompt; the watcher SHALL not invent its own grant-equivalence rule.
 - R5.AC3: IF required setup, dependencies, host compatibility, or state compatibility block promotion THEN the page SHALL expose the existing resolution flow or a precise blocker and resume the latest candidate after resolution; it SHALL not reset data, auto-migrate state, or perform the plugin's first destructive/paid action.
 

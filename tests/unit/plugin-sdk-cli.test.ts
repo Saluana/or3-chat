@@ -10,6 +10,7 @@ import {
 import { buildV2Package } from '../../packages/plugin-sdk/src/cli/build';
 import { checkV2PackageConformance } from '../../packages/plugin-sdk/src/cli/conformance';
 import { createV2Package } from '../../packages/plugin-sdk/src/cli/create';
+import { resolveDevHost } from '../../packages/plugin-sdk/src/cli/dev';
 import { runPluginCli } from '../../packages/plugin-sdk/src/cli/index';
 import { inspectV2Package } from '../../packages/plugin-sdk/src/cli/inspect';
 import { packV2Package } from '../../packages/plugin-sdk/src/cli/pack';
@@ -65,6 +66,25 @@ describe('@or3/plugin-sdk standalone CLI', () => {
         expect(manifest.id).toBe('or3.demo-portable');
         expect(manifest.trust).toBe('isolated-client');
         expect(manifest.features.required).toContain('or3-portable-client-v1');
+        const scripts = JSON.parse(readFileSync(resolve(directory, 'package.json'), 'utf8')) as { scripts: Record<string, string> };
+        expect(scripts.scripts.dev).toBe('or3-plugin dev .');
+        const ignored = readFileSync(resolve(directory, '.gitignore'), 'utf8');
+        for (const path of ['node_modules/', 'dist/', '.or3-pack/', '.or3-dev/']) {
+            expect(ignored).toContain(path);
+        }
+    });
+
+    it('links an existing host locally and rejects missing or incompatible hosts', () => {
+        const directory = createPortable('or3-sdk-cli-dev-');
+        expect(() => resolveDevHost(directory)).toThrow('No OR3 host is linked');
+        expect(resolveDevHost(directory, repoRoot)).toBe(repoRoot);
+        expect(resolveDevHost(directory)).toBe(repoRoot);
+        const link = readFileSync(resolve(directory, '.or3-dev', 'host.json'), 'utf8');
+        expect(link).toContain(repoRoot);
+        const other = tempDir('or3-sdk-cli-nothost-');
+        writeFileSync(resolve(other, 'package.json'), '{"name":"other","scripts":{}}');
+        expect(() => resolveDevHost(directory, other)).toThrow('does not support plugin development');
+        expect(resolveDevHost(directory)).toBe(repoRoot);
     });
 
     it('ships a portable-v1 authoring generator that matches the committed descriptors', () => {
@@ -176,6 +196,21 @@ describe('@or3/plugin-sdk standalone CLI', () => {
                 packDirectory: resolve(output, 'pack-none'),
             })
         ).rejects.toThrow(/Bun/);
+    });
+
+    it('reports the source location when Bun rejects a syntax error', async () => {
+        const directory = createPortable('or3-sdk-cli-syntax-');
+        await expect(buildV2Package(directory, {
+            buildDirectory: resolve(tempDir('or3-sdk-cli-syntax-out-'), 'dist'),
+            bundler: {
+                async build() {
+                    throw { errors: [{ message: 'Unexpected ;', position: {
+                        file: resolve(directory, 'client.mjs'), line: 2, column: 16,
+                        lineText: 'const broken = ;',
+                    } }] };
+                },
+            },
+        })).rejects.toThrow(/client\.mjs:2:16 Unexpected ; const broken = ;/);
     });
 
     it('repacking to the same archive destination is byte-identical and never nests the archive', async () => {

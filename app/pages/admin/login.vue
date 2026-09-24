@@ -8,9 +8,9 @@
                     <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[var(--md-primary)] mb-4">
                         <UIcon :name="shieldIcon" class="w-8 h-8 text-[var(--md-on-primary)]" />
                     </div>
-                    <h1 class="text-2xl font-semibold text-[var(--md-on-surface)]">Admin Login</h1>
+                    <h1 class="text-2xl font-semibold text-[var(--md-on-surface)]">{{ pluginDevLogin ? 'Plugin development sign-in' : 'Admin Login' }}</h1>
                     <p class="text-sm text-[var(--md-on-surface-variant)] mt-1">
-                        Sign in to access the admin dashboard
+                        {{ pluginDevLogin ? 'Sign in to develop your plugin in Chat' : 'Sign in to access the admin dashboard' }}
                     </p>
                 </div>
 
@@ -18,7 +18,7 @@
                 <div class="min-w-0 p-4! sm:p-8!">
                     <form ref="loginForm" @submit.prevent="handleLogin" class="flex flex-col gap-5!">
                         <!-- Username Field -->
-                        <div class="flex flex-col gap-2!">
+                        <div v-if="!pluginDevLogin" class="flex flex-col gap-2!">
                             <label for="admin-username" class="block text-sm font-medium text-[var(--md-on-surface)]">
                                 Username
                             </label>
@@ -40,7 +40,7 @@
                         <!-- Password Field -->
                         <div class="flex flex-col gap-2!">
                             <label for="admin-password" class="block text-sm font-medium text-[var(--md-on-surface)]">
-                                Password
+                                {{ pluginDevLogin ? 'Local sign-in password' : 'Password' }}
                             </label>
                             <UInput
                                 v-model="password"
@@ -82,6 +82,7 @@
                         >
                             <UAlert
                                 v-if="error"
+                                role="alert"
                                 color="error"
                                 variant="soft"
                                 :title="error"
@@ -119,6 +120,7 @@ function resolveAdminLanding(kind: AdminSessionKind): string {
 }
 
 const router = useRouter();
+const pluginDevLogin = computed(() => useRuntimeConfig().public.pluginDevelopment === true);
 const toast = useToast();
 const { getMessage } = useApiError();
 
@@ -130,7 +132,7 @@ const loginIcon = useIcon('ui.login');
 const warningIcon = useIcon('ui.warning');
 const arrowLeftIcon = useIcon('ui.arrow.left');
 
-const username = ref('');
+const username = ref(pluginDevLogin.value ? 'plugin-dev' : '');
 const password = ref('');
 const loginForm = ref<HTMLFormElement | null>(null);
 const isLoading = ref(false);
@@ -149,8 +151,12 @@ onMounted(async () => {
         // Workspace admins intentionally stay on this page so they can enter
         // the separate super-admin credentials for deployment-wide tasks.
         // This mirrors the server admin gate's elevation behavior.
-        if (session.authenticated && session.kind === 'super_admin') {
-            await router.replace(resolveAdminLanding(session.kind));
+        const appSession = pluginDevLogin.value
+            ? await $fetch<{ session?: { workspace?: { id?: string } } | null }>('/api/auth/session', { credentials: 'include' }).catch(() => null)
+            : null;
+        if (session.authenticated && session.kind === 'super_admin' &&
+            (!pluginDevLogin.value || appSession?.session?.workspace?.id)) {
+            await router.replace(pluginDevLogin.value ? '/chat' : resolveAdminLanding(session.kind));
         }
     } catch {
         // No active admin session; stay on the login page.
@@ -172,6 +178,12 @@ async function handleLogin() {
     error.value = null;
 
     try {
+        if (pluginDevLogin.value) {
+            await $fetch('/api/basic-auth/sign-in', {
+                method: 'POST', credentials: 'include',
+                body: { email: 'plugin-dev@example.test', password: password.value },
+            });
+        }
         await $fetch('/api/admin/auth/login', {
             method: 'POST',
             body: {
@@ -180,6 +192,10 @@ async function handleLogin() {
             },
         });
 
+        if (pluginDevLogin.value) {
+            window.location.assign('/chat');
+            return;
+        }
         toast.add({
             title: 'Login successful',
             description: 'Redirecting to admin dashboard...',

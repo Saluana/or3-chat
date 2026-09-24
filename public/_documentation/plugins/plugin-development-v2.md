@@ -6,35 +6,36 @@ template: despite its profile name, it creates a Manifest V2, isolated-client
 package. The [source-level and V1 quickstart](/start/plugin-quickstart) covers a
 different authoring path.
 
-You need Bun 1.3.6 or newer, an OR3 Chat source checkout to pack the SDK and run
-the dedicated development instance, and a marketplace account to submit. The
-SDK is not yet on npm, so keep the local tarball available to the scaffolded
-project. Choose a plugin ID under the namespace of the developer profile you
-will use for submission; `ada-tools.example` below is a placeholder.
+You need Bun 1.3.6 or newer, an OR3 Chat source checkout with dependencies
+installed, its sibling `or3-provider-basic-auth` source checkout, and a
+marketplace account to submit. The SDK is not yet on npm;
+the host packs and installs it locally for the starter. Choose a plugin ID
+under the namespace of the developer profile you will use for submission;
+`ada-tools.example` below is a placeholder.
 
-## 1. Install the SDK and scaffold
+## 1. Create and run the plugin
 
-In a checkout with dependencies installed, pack the SDK into an external
-workspace. Replace the paths and ID before running these commands:
+Replace the path and ID before running this command from the host checkout:
 
 ```sh
-cd <path-to-or3-chat>/packages/plugin-sdk
-mkdir -p /absolute/path/to/plugin-workspace
-bun pm pack --destination /absolute/path/to/plugin-workspace
-cd /absolute/path/to/plugin-workspace
-printf '{"private":true,"type":"module"}\n' > package.json
-bun add ./or3-plugin-sdk-2.0.0.tgz
-./node_modules/.bin/or3-plugin create --id ada-tools.example --dir ./example --sdk-source ./or3-plugin-sdk-2.0.0.tgz
-cd example
-bun install
+cd <path-to-or3-chat>
+bun run dev:plugin --create /absolute/path/to/example --id ada-tools.example
 ```
 
-Edit the starter's `.authoring/profile.config.mjs` for your plugin, then run
-`bun run profile:generate` to update its manifest, package policy and setup
-descriptor together. Keep the generated files and `bun.lock` in source
-control. See the [portable profile](./portable-profile) for the supported
-capabilities and [SDK CLI reference](./plugin-sdk-cli) for the template and
-command details.
+The command creates and installs the portable starter, then opens its isolated
+local host. Open the printed URL if necessary, sign in once with the printed
+password, and review the requested permissions. Edit `client.mjs` and save:
+the page builds, checks and runs that edit in the real plugin worker without a
+reload or file upload. Build errors keep the previous package running. New
+permissions require review. Saved settings and storage survive replacement;
+in-memory worker state restarts. Stop the host with Ctrl+C when finished. In
+later sessions, start it from the plugin directory with `bun run dev`.
+
+Edit `.authoring/profile.config.mjs` for your plugin; watched development runs
+`profile:generate` for you. Keep generated descriptors and `bun.lock` in source
+control. See the [portable profile](./portable-profile) for supported
+capabilities, [local development](./local-development) for recovery, and the
+[SDK CLI reference](./plugin-sdk-cli) for manual scaffolding.
 
 ## 2. Check the package and freeze a candidate
 
@@ -42,20 +43,19 @@ Run these from `example/` after editing the plugin:
 
 ```sh
 bun run profile:check
-../node_modules/.bin/or3-plugin validate .
-../node_modules/.bin/or3-plugin test .
-../node_modules/.bin/or3-plugin build .
-../node_modules/.bin/or3-plugin pack . --archive ../example.or3pkg
-../node_modules/.bin/or3-plugin inspect ../example.or3pkg
+./node_modules/.bin/or3-plugin validate .
+./node_modules/.bin/or3-plugin test .
+./node_modules/.bin/or3-plugin build .
+./node_modules/.bin/or3-plugin pack . --archive ../example.or3pkg
+./node_modules/.bin/or3-plugin inspect ../example.or3pkg
 ```
 
 Fix any findings and repeat the checks. A publishable candidate needs a clean
-Git commit. For a new scaffold, ignore installed dependencies and build output,
-then commit the source and lockfile (or make an equivalent clean commit in your
-existing repository):
+Git commit. The starter already ignores installed dependencies, build output
+and its local host association. Commit the source and lockfile (or make an
+equivalent clean commit in your existing repository):
 
 ```sh
-printf 'node_modules/\ndist/\n.or3-pack/\n' > .gitignore
 git init
 git add .
 git commit -m "Prepare V2 plugin candidate"
@@ -64,9 +64,9 @@ git commit -m "Prepare V2 plugin candidate"
 Then freeze the candidate in a new output directory:
 
 ```sh
-../node_modules/.bin/or3-plugin candidate . --out ../candidates/example-1
-../node_modules/.bin/or3-plugin candidate --verify ../candidates/example-1
-../node_modules/.bin/or3-plugin candidate --qualify . --candidate ../candidates/example-1
+./node_modules/.bin/or3-plugin candidate . --out ../candidates/example-1
+./node_modules/.bin/or3-plugin candidate --verify ../candidates/example-1
+./node_modules/.bin/or3-plugin candidate --qualify . --candidate ../candidates/example-1
 ```
 
 The candidate command builds and freezes `package.zip`, `source.zip` and
@@ -79,13 +79,14 @@ after any source change, create a **new** candidate directory. The earlier
 
 ## 3. Exercise those files in OR3 Chat
 
-From the OR3 Chat checkout, start the dedicated local instance:
+To test the **exact frozen submission files**, start the manual development
+instance from the OR3 Chat checkout:
 
 ```sh
 bun run dev:plugin
 ```
 
-Open its loopback URL (`127.0.0.1:3101`) and sign in as the owner. In
+Open its printed loopback URL and sign in as the owner. In
 **Admin → Plugins → Development candidate**, select the candidate's
 `package.zip`, `source.zip` and `receipt.json`. Review requested grants, admit
 the candidate, run the canary, and promote it. Open the plugin in Chat and
@@ -95,6 +96,9 @@ This instance uses separate local data; the verification receipt is evidence
 of your test, not marketplace approval. See [Local Development
 Candidates](./local-development) for admission requirements and replacement
 behavior.
+
+The watched candidate used while editing is disposable. Only the explicit
+clean, verified and qualified candidate from step 2 is submitted.
 
 ## 4. Submit the same candidate to staging
 

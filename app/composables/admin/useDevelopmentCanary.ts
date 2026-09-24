@@ -13,7 +13,8 @@ export function useDevelopmentCanary() {
     const busyPluginId = ref<string | null>(null);
     const notes = ref<Record<string, string>>({});
 
-    const runBrowserCheck = async (pluginId: string): Promise<boolean> => {        busyPluginId.value = pluginId;
+    const runBrowserCheck = async (pluginId: string, workspaceId?: string, quiet = false): Promise<boolean> => {
+        busyPluginId.value = pluginId;
         notes.value = { ...notes.value, [pluginId]: 'Running the hidden browser activation…' };
         try {
             const { reportCandidateClientCanary } = await import(
@@ -25,7 +26,7 @@ export function useDevelopmentCanary() {
                     init: Record<string, unknown>
                 ) => Promise<unknown>)(
                     `/api/admin/plugins/packages/${encodeURIComponent(pluginId)}/canary`,
-                    { method: 'POST', credentials: 'include', headers: { ...ADMIN_HEADERS }, body: {} }
+                    { method: 'POST', credentials: 'include', headers: { ...ADMIN_HEADERS }, body: workspaceId ? { workspaceId } : {} }
                 )) as {
                     ok?: boolean;
                     status?: string;
@@ -33,18 +34,18 @@ export function useDevelopmentCanary() {
                 };
                 if (result.ok) {
                     notes.value = { ...notes.value, [pluginId]: 'Canary passed in this browser.' };
-                    toast.add({ title: 'Browser check passed', description: 'Promote the candidate when ready.', color: 'success' });
+                    if (!quiet) toast.add({ title: 'Browser check passed', description: 'Promote the candidate when ready.', color: 'success' });
                     return true;
                 }
                 if (result.clientCanary?.status !== 'awaiting-client') {
                     notes.value = { ...notes.value, [pluginId]: `Canary did not pass: ${result.status ?? 'blocked'}.` };
-                    toast.add({ title: 'Browser check did not pass', description: notes.value[pluginId], color: 'error' });
+                    if (!quiet) toast.add({ title: 'Browser check did not pass', description: notes.value[pluginId], color: 'error' });
                     return false;
                 }
                 const outcome = await reportCandidateClientCanary(result.clientCanary.ticket);
                 if (outcome.status !== 'passed') {
                     notes.value = { ...notes.value, [pluginId]: `Browser activation ${outcome.status}: ${outcome.code ?? 'blocked'}.` };
-                    toast.add({ title: 'Browser check did not pass', description: notes.value[pluginId], color: 'error' });
+                    if (!quiet) toast.add({ title: 'Browser check did not pass', description: notes.value[pluginId], color: 'error' });
                     return false;
                 }
                 notes.value = { ...notes.value, [pluginId]: 'Browser activation passed. Re-checking…' };
@@ -54,7 +55,7 @@ export function useDevelopmentCanary() {
         } catch (error) {
             const message = error instanceof Error ? error.message : 'The browser check failed.';
             notes.value = { ...notes.value, [pluginId]: message };
-            toast.add({ title: 'Browser check failed', description: message, color: 'error' });
+            if (!quiet) toast.add({ title: 'Browser check failed', description: message, color: 'error' });
             return false;
         } finally {
             busyPluginId.value = null;

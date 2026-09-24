@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { prepareLocalProviders, resolveDevProviderModule } from '../../shared/dev/local-providers';
 import {
     ensureNativeSqliteDependencies,
@@ -181,6 +181,32 @@ describe('local provider dev selection', () => {
         writeFileSync(f.entry, 'stale build');
         expect(await prepareLocalProviders(f.project, {}, async () => { throw new Error('build failed'); })).toEqual({});
         expect(f.warning).toHaveBeenCalledWith(expect.stringContaining('build failed'));
+    });
+
+    it('requires the scoped Basic Auth build for watched plugin development', async () => {
+        const f = fixture();
+        const authRoot = resolve(f.project, '../or3-provider-basic-auth');
+        mkdirSync(join(authRoot, 'dist'), { recursive: true });
+        writeFileSync(join(authRoot, 'package.json'), JSON.stringify({
+            name: 'or3-provider-basic-auth',
+            exports: { './nuxt': { import: './dist/module.mjs' } },
+        }));
+        writeFileSync(join(f.project, 'package.json'), JSON.stringify({ dependencies: {
+            'or3-provider-basic-auth': '0.0.9', 'or3-provider-sqlite': '0.0.10',
+        } }));
+        const build = vi.fn(async () => {
+            writeFileSync(join(authRoot, 'dist/module.mjs'), 'export default {}');
+        });
+        const env = { OR3_PLUGIN_WATCH_ROOT: '/plugin', OR3_LOCAL_PROVIDERS: 'true' };
+        expect(await prepareLocalProviders(f.project, env, build)).toEqual({
+            'or3-provider-basic-auth/nuxt': join(authRoot, 'dist/module.mjs'),
+        });
+        expect(build).toHaveBeenCalledExactlyOnceWith(authRoot, 'or3-provider-basic-auth');
+        await expect(prepareLocalProviders(f.project, env, async () => { throw new Error('build failed'); }))
+            .rejects.toThrow('Plugin development needs the local or3-provider-basic-auth source checkout');
+        expect(() => resolveDevProviderModule('or3-provider-basic-auth/nuxt', {
+            NODE_ENV: 'development', ...env, OR3_DEV_PROVIDER_MODULES: '{}',
+        })).toThrow('requires the prepared local Basic Auth provider');
     });
 
     it('rejects a successful command without built output', async () => {

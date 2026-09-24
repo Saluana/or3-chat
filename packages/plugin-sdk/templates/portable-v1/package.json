@@ -13,6 +13,7 @@
     "node": ">=24"
   },
   "scripts": {
+    "dev": "or3-plugin dev .",
     "test": "bun test",
     "profile:generate": "bun .authoring/generate.mjs",
     "profile:check": "bun .authoring/generate.mjs --check"

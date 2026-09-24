@@ -1,7 +1,7 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'path';
+import { basename, resolve } from 'path';
 import * as ts from 'typescript';
 import { or3CloudConfig } from './config.or3cloud';
 import { or3Config } from './config.or3';
@@ -127,7 +127,7 @@ function isProviderAvailable(providerId: string): boolean {
 }
 
 function loadGeneratedProviderModules(): string[] {
-    if (!shouldLoadCloudProviderModules) {
+    if (!shouldLoadCloudProviderModules || process.env.OR3_PLUGIN_WATCH_ROOT) {
         return [];
     }
 
@@ -496,6 +496,9 @@ const webhooksConfig = {
 };
 
 export default defineNuxtConfig({
+    ...(process.env.OR3_PLUGIN_WATCH_ROOT && process.env.OR3_PLUGIN_DEV_PROFILE
+        ? { buildDir: resolve(__dirname, '.nuxt-plugin-dev', basename(process.env.OR3_PLUGIN_DEV_PROFILE)) }
+        : {}),
     app: {
         head: {
             link: [
@@ -676,6 +679,7 @@ export default defineNuxtConfig({
         },
         public: {
             appVersion: process.env.npm_package_version || '0.1.0',
+            pluginDevelopment: process.env.NODE_ENV !== 'production' && Boolean(process.env.OR3_PLUGIN_WATCH_ROOT),
             /**
              * Mirrors the server-side probe flag so the qualification harness can
              * exercise the real startup API from a page. Off in every other profile.
@@ -1258,6 +1262,13 @@ export default defineNuxtConfig({
         server: {
             fs: {
                 allow: [resolve(__dirname, '..')],
+                // Profile databases and credentials must never be served through
+                // Vite's /@fs route, even when they sit inside its allow tree.
+                deny: [
+                    '.env', '.env.*', '*.{crt,pem,key,p12,pfx,cer,der}',
+                    '.npmrc', '.yarnrc.yml', '**/.git/**',
+                    '**/.or3-plugin-dev/**',
+                ],
             },
             watch: {
                 ignored: isWizardUiProcess

@@ -1,13 +1,50 @@
-# Local Development Candidates
+# Develop a plugin locally
 
 For the complete scaffold-to-publication path, start with [Build and publish
 a V2 plugin](./plugin-development-v2).
 
-Test an unpublished plugin candidate as a real plugin inside OR3 Chat without
-publishing every iteration. Candidates are immutable SDK outputs; the
-development instance admits them through the same validation, grant review,
-canary and promotion machinery as signed releases, with explicitly labeled
-local provenance instead of a marketplace signature.
+From an OR3 Chat source checkout with dependencies installed, its sibling
+`or3-provider-basic-auth` source checkout, and Bun 1.3.6 or newer on PATH,
+create a portable plugin anywhere on your machine:
+
+```sh
+cd <path-to-or3-chat>
+bun run dev:plugin --create /absolute/path/to/my-plugin --id or3.my-plugin
+```
+
+The command packs the local SDK, creates the starter, installs its dependencies,
+and starts a dedicated host. Open the printed loopback URL if your browser did
+not open automatically. Sign in once with the local password printed by the
+command and review the starter's requested permissions. No checkout `.env`,
+remote service credentials, or repeated file uploads are needed. The local
+development host skips the ordinary first-run OpenRouter prompt; a model key is
+only needed if you choose to test chat features that use one.
+
+After that, work from the plugin directory:
+
+```sh
+cd /absolute/path/to/my-plugin
+bun run dev
+```
+
+Save `client.mjs` or another package source file. The host builds a candidate,
+runs its normal admission and browser canary, and opens the plugin in the real
+Chat workspace. Each save updates that plugin pane without a page reload. A
+build error shows the source location and keeps the last running package. Fix
+the file and save again. Review new permissions when your edit expands
+authority. Test the plugin's sidebar, pane, tool and storage behavior in Chat.
+Persistent plugin settings and storage
+survive replacement; in-memory worker state starts over on each activation.
+
+The local `.or3-dev/host.json` remembers the host checkout and is ignored by
+Git and candidate snapshots. If you created a plugin separately, link it once
+with `bun run dev --host /absolute/path/to/or3-chat`. Run `bun install` in the
+plugin directory after changing dependencies. This watched path supports
+portable isolated-client V2 plugins.
+
+The development instance admits immutable SDK candidates through the same
+validation, grant review, canary and promotion machinery as signed releases,
+with labeled local provenance instead of a marketplace signature.
 
 ## The candidate
 
@@ -32,7 +69,8 @@ Unpublished candidates run in a dedicated, loopback-only development instance
 with separate application data and extension storage — never as a
 workspace-local override in a shared instance, and never in production.
 
-Start it with:
+For a manual candidate workflow, start an instance without `--create` or
+`--plugin`:
 
 ```sh
 bun run dev:plugin
@@ -42,20 +80,20 @@ This creates `.or3-plugin-dev/` (extensions, SQLite sync database,
 basic-auth database, filesystem blob storage), sets `OR3_PLUGIN_DEVELOPMENT=1` and
 `OR3_PLUGIN_DEV_PROFILE`, pins the effective backing services to the local
 profile (`basic-auth`/`sqlite`/`fs`), enables the V2 module loader that runs admitted
-packages, and serves SSR on `127.0.0.1:3101`. Package
+packages, and serves SSR on loopback at `127.0.0.1:3101`. Watched startup picks
+a free loopback port if 3101 is occupied; use the printed URL. Package
 selection stays instance-wide inside that instance; the ordinary app's
 registry, production package pointers and user data are outside it.
 
 Admission requires all of these independently: the flag, a development build
 (production builds reject admission even with the flag set), the dedicated
 profile with all data roots inside it, local backing providers (a remote
-auth, sync or storage provider — including the defaults inherited from the
-surrounding environment — makes the instance ineligible rather than silently
-sharing production identity, data or blobs), a direct loopback connection
+auth, sync or storage provider makes the instance ineligible; watched startup
+clears inherited checkout configuration and pins its own local profile), a direct loopback connection
 (forwarded headers are never trusted), an authenticated owner, and a
 same-origin mutation context.
 
-## The workflow
+## Manual candidate workflow
 
 In the development instance, open Admin > Plugins > Development candidate:
 
@@ -78,6 +116,18 @@ Replacing a candidate of the same version admits the new digest, preserves
 the instance's plugin data, cleans up the old activation, and requires fresh
 authority review where grants changed. There is no automatic data-safe
 rollback, and storage is never cleared by admission or replacement.
+
+Watched candidates are disposable local test outputs. To hand off a version for
+review, create and verify an explicit frozen candidate from a clean commit:
+
+```sh
+or3-plugin candidate . --out ../candidates/my-plugin-1
+or3-plugin candidate --verify ../candidates/my-plugin-1
+or3-plugin candidate --qualify . --candidate ../candidates/my-plugin-1
+```
+
+Qualification requires matching clean source and dependencies. The watched
+build is never silently submitted or treated as release evidence.
 
 When the candidate is ready for review, attach its frozen `receipt.json` (and
 optionally the verification receipt) to a marketplace draft submission: the

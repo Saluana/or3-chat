@@ -152,7 +152,9 @@ export function resolvePluginDevelopmentEligibility(
         }
         const sqliteDb = process.env.OR3_SQLITE_DB_PATH;
         const basicAuthDb = process.env.OR3_BASIC_AUTH_DB_PATH;
-        if (!insideProfile(profileRoot, sqliteDb) || !insideProfile(profileRoot, basicAuthDb)) {
+        const adminDataDir = process.env.OR3_ADMIN_DATA_DIR;
+        if (!insideProfile(profileRoot, sqliteDb) || !insideProfile(profileRoot, basicAuthDb) ||
+            (process.env.OR3_PLUGIN_WATCH_ROOT && !insideProfile(profileRoot, adminDataDir))) {
             reasons.push('data-root-outside-profile');
         }
         // Backing services are part of isolation: a remote auth, sync or
@@ -200,7 +202,7 @@ export function developmentIneligibilityHelp(code: DevelopmentEligibilityCode): 
         case 'extension-root-outside-profile':
             return 'OR3_EXTENSIONS_ROOT must resolve inside the dedicated profile root, not the shared extensions directory.';
         case 'data-root-outside-profile':
-            return 'OR3_SQLITE_DB_PATH and OR3_BASIC_AUTH_DB_PATH must resolve inside the dedicated profile root.';
+            return 'SQLite, Basic Auth, and (for watched projects) administrator data must resolve inside the dedicated profile root.';
         case 'remote-auth-provider':
             return 'The auth provider must be basic-auth: a shared identity provider would own development accounts.';
         case 'remote-sync-provider':

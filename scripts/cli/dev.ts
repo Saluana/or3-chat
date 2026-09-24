@@ -18,7 +18,7 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
     detectPackageManager,
@@ -288,7 +288,9 @@ export function nuxtDevEnvironment(
         return env;
     }
 
-    const localStorageFile = resolve(projectRoot, '.nuxt', 'node-localstorage');
+    const localStorageFile = env.OR3_PLUGIN_WATCH_ROOT && env.OR3_PLUGIN_DEV_PROFILE
+        ? resolve(projectRoot, '.nuxt-plugin-dev', basename(env.OR3_PLUGIN_DEV_PROFILE), 'node-localstorage')
+        : resolve(projectRoot, '.nuxt', 'node-localstorage');
     return {
         ...env,
         NODE_OPTIONS: [nodeOptions, `--localstorage-file=${localStorageFile}`]

@@ -8,6 +8,25 @@ plus a standalone `or3-plugin` CLI. External authors can scaffold, build, test,
 validate, pack and inspect a plugin package without an OR3 checkout and without
 any private path alias.
 
+For the quickest local editing loop, use an OR3 Chat source checkout with its
+dependencies installed, the sibling `or3-provider-basic-auth` source checkout,
+and Bun 1.3.6 or newer:
+
+```sh
+cd <path-to-or3-chat>
+bun run dev:plugin --create /absolute/path/to/my-plugin --id or3.my-plugin
+cd /absolute/path/to/my-plugin
+bun run dev
+```
+
+The first command packs the unpublished SDK locally, creates and installs a
+portable starter, and opens an isolated host. Sign in with its printed local
+password and review requested permissions once. Subsequent saves build,
+canary, promote and update the real plugin view without repeated uploads. A
+separately scaffolded package can link a host once with
+`bun run dev --host /absolute/path/to/or3-chat`. The link lives in ignored
+`.or3-dev/`; installed SDK code alone cannot start a host that is absent.
+
 > **Publication status:** `@or3/plugin-sdk` is **not yet on npm**, and plan task
 > 2.7 (SDK publication) is intentionally open. The existing release workflows
 > contain **no SDK publication job**, so publishing requires adding that release
@@ -63,6 +82,8 @@ inspection, but runtime imports resolve to `dist/`:
   without fetching the unpublished package from npm. It copies a starter template. `portable-v1` (default) is conformant with
   the `or3-portable-client-v1` profile; `minimal-v2` scaffolds the trusted-host
   V2 shape.
+- `dev` delegates to the linked host checkout for a portable plugin. The
+  starter's `bun run dev` script calls it; `--host` links or relinks a checkout.
 - `validate` runs the shared V2 decision engine — SDK/API range checks, the
   portable profile validator and the runtime import and Nuxt-auto-import rules —
   against the exact artifact, then canonically verifies the package tree. A

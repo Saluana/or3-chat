@@ -1082,9 +1082,9 @@ export function setPortableClientSource(source: PortableClientSource): void {
     clientSources.set(source.descriptor.id, source);
 }
 
-export function removePortableClientSource(pluginId: string): void {
+export function removePortableClientSource(pluginId: string, preserveDrafts = false): void {
     clientSources.delete(pluginId);
-    clientDrafts.delete(pluginId);
+    if (!preserveDrafts) clientDrafts.delete(pluginId);
     cancelPortableClientRecovery(pluginId);
 }
 

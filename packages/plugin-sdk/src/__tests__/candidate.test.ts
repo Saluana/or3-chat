@@ -81,6 +81,18 @@ describe('createV2Candidate', () => {
         expect(created.receipt.source.dirty).toBe(false);
     });
 
+    it('keeps the local host association out of frozen source bytes', async () => {
+        const root = track(makePackage());
+        mkdirSync(join(root, '.or3-dev'));
+        writeFileSync(join(root, '.or3-dev', 'host.json'), '{"host":"/private/machine"}');
+        const created = await createV2Candidate(root, {
+            outputDirectory: track(makeOut()), probeSourceControl: CLEAN_PROBE,
+        });
+        const { readFileZipEntries } = await import('../cli/archive');
+        const entries = await readFileZipEntries(readFileSync(join(created.candidateDirectory, 'source.zip')));
+        expect(entries.map((entry) => entry.path)).not.toContain('.or3-dev/host.json');
+    });
+
     it('records dirty development snapshots instead of hiding them', async () => {
         const root = track(makePackage());
         const created = await createV2Candidate(root, {

@@ -72,7 +72,7 @@ Ensure profile environment selection happens before `scripts/cli/dev.ts`/Nuxt do
 
 One process owns a profile. Reuse repository lock/process patterns where possible; refuse a live owner, recover an abandoned lock only after verifying ownership is gone, and never terminate someone else's host. Reuse the existing port-conflict reporting, recording the *actual* chosen port in the launcher record before opening the page. Isolate Nuxt generated build output and HMR port as necessary to avoid conflicts with an ordinary host already running on the same checkout; verify this with two live processes.
 
-The local password is generated and printed with the development URL. Extend the existing `app/pages/admin/login.vue` with a development-only presentation that submits that password to the existing Basic Auth and administrator login flows, using the profile's fixed local account names, and then resolves the actual workspace session. The preview remains protected by `admin-auth`; preserve a validated same-origin return target through login, defaulting this launch to `/admin/plugin-development`. A development-only public boolean can select this presentation but must carry no credentials and confer no authorization. This creates ordinary authenticated sessions; there is no login bypass, credential-bearing URL, or local-storage token. Preserve existing rate limits and error handling on login. Profile session expiry returns to this form.
+The local password is generated and printed with the development URL. Extend the existing `app/pages/admin/login.vue` with a development-only presentation that submits that password to the existing Basic Auth and administrator login flows, using the profile's fixed local account names, and then resolves the actual workspace session. The launcher opens `/chat` after sign-in; development status and authority review appear beside the real plugin workspace tab. Preserve a validated same-origin return target through login. A development-only public boolean can select this presentation but must carry no credentials and confer no authorization. This creates ordinary authenticated sessions; there is no login bypass, credential-bearing URL, or local-storage token. Preserve existing rate limits and error handling on login. Profile session expiry returns to this form.
 
 Use the existing runtime launcher for Nuxt and a Bun subprocess for SDK operations: the host script currently runs under `tsx`, while SDK bundling requires Bun. On exit, stop only owned watchers/build processes/host children. Keep application data.
 
@@ -124,13 +124,18 @@ Add two dev-gated read surfaces under `server/api/admin/plugins/development/`:
 
 Both require administrator context and `resolvePluginDevelopmentEligibility`. Validate run identity, generation, filename, byte ceilings, canonical paths, and symlink containment. Refuse cross-origin reads; do not enable CORS. Expired outputs return a structured stale-generation response, never a different generation's bytes.
 
+After a selected package becomes active, a separate dev-only, authenticated
+cleanup mutation checks the watched plugin and current digest, then calls the
+existing pointer-aware package GC. A cleanup failure leaves the selected
+version running, pauses later admissions, and offers an explicit retry.
+
 The browser downloads the three artifacts and feeds them to the existing multipart `development/admit` endpoint. The small loopback round trip is preferable to adding another admission implementation or a server endpoint that imports an arbitrary local path. Keep the existing canonical verification and approval binding exactly where they are.
 
 Replace the admission route's development-only 30/hour limit with a bounded editing-appropriate limit, initially 120/minute, after the existing eligibility/auth checks. Preserve artifact limits and serialized work. Return usable retry metadata and have the controller wait instead of repeatedly failing. Also audit canary/promote/global middleware limits so the full sequence can pass the 60-edit check.
 
-### C5. Development page/controller
+### C5. Chat development controller
 
-Add the sibling page `app/pages/admin/plugin-development.vue` at `/admin/plugin-development` with a compact Nuxt UI status strip, existing permission/setup UI where reusable, and a real `PortableClientView`. A sibling avoids requiring a nested `<NuxtPage>` in the current `admin/plugins.vue`. Retain a link to open the plugin in ordinary Chat for sidebar/pane/tool integration testing. Do not create a fake host or custom plugin renderer.
+Mount `PluginDevelopmentController` beside the real Chat `PageShell` only in the watched development instance. It announces status accessibly and shows a small dismissible panel only for permission review or failures, then opens the selected plugin's existing workspace pane automatically. The ordinary portable-client registration supplies its sidebar, pane, tool and storage integrations; do not create a separate preview renderer.
 
 The browser polls `watch` every 500 ms while the page is connected; use a completed-request timer, not overlapping intervals. Slow requests and rate limits back off. A failed poll does not destroy the running preview. This uses authenticated same-origin fetch and avoids introducing WebSockets, SSE, or credential exchange.
 
@@ -146,7 +151,7 @@ For each newest ready generation:
 6. Recheck generation/run/workspace and invoke existing promotion with the exact candidate digest. A stale/conflicting candidate causes rereading, not blind retry. One controller processes operations serially; newer edits replace pending work rather than interleaving admission sequences.
 7. Call `requestWorkspacePluginReconcile`, wait for real activation/contribution readiness using existing marketplace/runtime observation helpers, and mark that digest running.
 
-On authentication expiry, pause. On loss of a response, read selection/canary state before resuming. On host restart, detect the new run identity and discard old tickets and in-flight decisions. Closing the preview page stops browser-driven admission while builds may continue; reopening processes the latest ready generation.
+On authentication expiry, pause. On loss of a response, read selection/canary state before resuming. On host restart, detect the new run identity and discard old tickets and in-flight decisions. Closing the Chat page stops browser-driven admission while builds may continue; reopening processes the latest ready generation.
 
 ### C6. Existing package/runtime integration
 

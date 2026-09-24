@@ -442,6 +442,7 @@ const SOURCE_SNAPSHOT_IGNORE_NAMES = new Set([
     '.turbo',
     '.output',
     '.or3-pack',
+    '.or3-dev',
     '.DS_Store',
 ]);
 

@@ -1,8 +1,18 @@
 # Source and V1 Plugin Quick Start
 
-For a new installable plugin, start with [Build and publish a V2
-plugin](/plugins/plugin-development-v2). It covers SDK scaffolding, local
-testing, staging submission, review and publication.
+For a new installable plugin, use the live V2 starter from an OR3 Chat source
+checkout with Bun and the sibling `or3-provider-basic-auth` source checkout:
+
+```sh
+bun run dev:plugin --create /absolute/path/to/my-plugin --id or3.my-plugin
+```
+
+Sign in with the printed local password and review the starter permissions in
+Chat. The plugin opens as a workspace tab; edit and save its source to update
+that tab. In later sessions,
+run `bun run dev` inside the plugin directory. [Build and publish a V2
+plugin](/plugins/plugin-development-v2) covers the full edit, explicit
+candidate qualification, review and publication path.
 
 This guide covers source-level Nuxt plugins and installable V1 workspace
 packages. Both use the same reactive registries, but their module exports are

@@ -293,6 +293,7 @@ const openRouterAvailability = computed(() =>
 
 const showWelcomeCard = computed(
     () =>
+        runtimeConfig.public.pluginDevelopment !== true &&
         keyStateReady.value &&
         (runtimeConfig.public?.ssrAuthEnabled !== true ||
             authSessionState.value?.session?.authenticated === true) &&

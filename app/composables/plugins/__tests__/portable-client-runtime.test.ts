@@ -1291,10 +1291,39 @@ describe('contribution readiness and replacement safeguards', () => {
             value: { theme: 'dark' },
         });
     });
+
+    it('leaves another plugin active while replacing this one', async () => {
+        const first = startedRuntime('first');
+        const other = startedRuntime('other');
+        const replacement = startedRuntime('replacement');
+        startPortableWorkerMock.mockResolvedValueOnce(first).mockResolvedValueOnce(other).mockResolvedValueOnce(replacement);
+        await activatePortableClient({ descriptor: descriptor(), workspaceId: 'ws-1' });
+        await activatePortableClient({ descriptor: { ...descriptor(), id: 'other.plugin' }, workspaceId: 'ws-1' });
+        await activatePortableClient({ descriptor: {
+            ...descriptor(),
+            artifact: { ...descriptor().artifact, packageDigest: `sha256-${'d'.repeat(64)}` as Sha256 },
+        }, workspaceId: 'ws-1' });
+        expect(first.dispose).toHaveBeenCalledOnce();
+        expect(other.dispose).not.toHaveBeenCalled();
+        expect(getPortableActivation('other.plugin')?.status).toBe('active');
+        await deactivatePortableClient('other.plugin');
+    });
 });
 
 
 describe('portable draft lifecycle', () => {
+    it('keeps a dirty field draft when the same workspace replaces a package', () => {
+        setPortableClientSource({ descriptor: descriptor(), workspaceId: 'ws-1', runtimeEntry: undefined });
+        const draft = getPortableClientDraft('sample.plugin', 'ws-1', 'pane');
+        draft.values.notes = 'unfinished';
+        draft.dirty.add('notes');
+        removePortableClientSource('sample.plugin', true);
+        setPortableClientSource({ descriptor: descriptor(), workspaceId: 'ws-1', runtimeEntry: undefined });
+        expect(getPortableClientDraft('sample.plugin', 'ws-1', 'pane')).toBe(draft);
+        expect(draft.values.notes).toBe('unfinished');
+        expect(draft.dirty.has('notes')).toBe(true);
+    });
+
     it('retains drafts across mounts and removes them with their source or workspace', () => {
         setPortableClientSource({ descriptor: descriptor(), workspaceId: 'ws-1', runtimeEntry: undefined });
         const draft = getPortableClientDraft('sample.plugin', 'ws-1', 'pane');
