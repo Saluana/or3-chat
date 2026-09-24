@@ -725,7 +725,7 @@ describe('useChat background detach race', () => {
         expect(latestTracker?.subscribers.size ?? 0).toBe(1);
     });
 
-    it('allows background streaming when tools are enabled and passes tool runtime hints', async () => {
+    it('keeps server tools in background streaming', async () => {
         enabledToolDefsRef.value = [
             {
                 type: 'function',
@@ -735,15 +735,6 @@ describe('useChat background detach race', () => {
                     parameters: { type: 'object', properties: {} },
                 },
                 runtime: 'server',
-            },
-            {
-                type: 'function',
-                function: {
-                    name: 'client_tool',
-                    description: 'client tool',
-                    parameters: { type: 'object', properties: {} },
-                },
-                runtime: 'client',
             },
         ];
 
@@ -772,11 +763,57 @@ describe('useChat background detach race', () => {
             ]?.[0];
         expect(lastCall?.tools).toBeDefined();
         expect(Array.isArray(lastCall?.tools)).toBe(true);
-        expect(lastCall?.tools).toHaveLength(2);
+        expect(lastCall?.tools).toHaveLength(1);
         expect(lastCall?.toolRuntime).toEqual({
             server_tool: 'server',
-            client_tool: 'client',
         });
+    });
+
+    it('admits client and server tools into the same background turn', async () => {
+        enabledToolDefsRef.value = [
+            {
+                type: 'function',
+                function: {
+                    name: 'server_tool',
+                    description: 'server tool',
+                    parameters: { type: 'object', properties: {} },
+                },
+                runtime: 'server',
+            },
+            {
+                type: 'function',
+                function: {
+                    name: 'client_tool',
+                    description: 'client tool',
+                    parameters: { type: 'object', properties: {} },
+                },
+                runtime: 'client',
+            },
+        ];
+        vi.resetModules();
+        const { useChat } = await import('~/composables/chat/useAi');
+        const chat = useChat([], 'thread-1');
+        const sendPromise = chat.sendMessage('use a client tool', {
+            files: [],
+            model: 'test-model',
+            file_hashes: [],
+            online: false,
+            context_hashes: [],
+        } as any);
+        await waitForCall(startBackgroundStreamMock);
+        resolveBackgroundStart?.({ jobId: 'job-mixed-tools' });
+        await sendPromise;
+
+        expect(runForegroundStreamLoopMock).not.toHaveBeenCalled();
+        expect(startBackgroundStreamMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                tools: enabledToolDefsRef.value,
+                toolRuntime: {
+                    server_tool: 'server',
+                    client_tool: 'client',
+                },
+            })
+        );
     });
 
     it('starts background streaming when the feature is enabled', async () => {

@@ -95,8 +95,9 @@
                         @click="activate(tab.id)"
                     >
                         <span class="workspace-tab-switcher-icon-wrap">
-                            <UIcon
-                                :name="iconFor(tab)"
+                            <AppIcon
+                                :image="props.imageByTabId?.get(tab.id)"
+                                :icon="iconFor(tab)"
                                 class="workspace-tab-switcher-icon"
                             />
                         </span>
@@ -177,6 +178,7 @@ import {
 } from '~/core/workspace-tabs/display';
 import { useIcon } from '~/composables/useIcon';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import AppIcon from '~/components/ui/AppIcon.vue';
 
 const props = withDefaults(
     defineProps<{
@@ -184,11 +186,13 @@ const props = withDefaults(
         activeTabId: string;
         statusByTabId?: ReadonlyMap<string, WorkspaceTabStatus>;
         iconByTabId?: ReadonlyMap<string, string | undefined>;
+        imageByTabId?: ReadonlyMap<string, string | undefined>;
         canReopenClosed?: boolean;
     }>(),
     {
         statusByTabId: undefined,
         iconByTabId: undefined,
+        imageByTabId: undefined,
         canReopenClosed: false,
     }
 );

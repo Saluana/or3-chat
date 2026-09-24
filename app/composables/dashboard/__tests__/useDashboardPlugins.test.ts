@@ -17,11 +17,13 @@ describe('useDashboardPlugins access gating', () => {
         registerDashboardPlugin({
             id: 'legacy.plugin',
             icon: 'pixelarticons:app-window',
+            image: '/icons/legacy.webp',
             label: 'Legacy Plugin',
         });
 
         const plugins = useDashboardPlugins().value;
         expect(plugins.map((entry) => entry.id)).toEqual(['legacy.plugin']);
+        expect(plugins[0]?.image).toBe('/icons/legacy.webp');
     });
 
     it('hides denied plugins when policy requires authentication', () => {

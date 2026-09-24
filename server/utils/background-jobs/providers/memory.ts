@@ -187,6 +187,7 @@ function claimJobRecord(
     if (
         job.status !== 'streaming' ||
         !job.execution ||
+        job.execution.clientToolCall !== undefined ||
         (job.historyPhase ?? 'ready') !== 'ready'
     ) return null;
     if (job.leaseOwner && (job.leaseExpiresAt ?? 0) > now) {
@@ -235,11 +236,20 @@ export const memoryJobProvider: BackgroundJobProvider = {
         }
 
         // Enforce max concurrent jobs
-        const activeCount = Array.from(jobs.values()).filter(
-            (j) => j.status === 'streaming'
+        const currentJobs = Array.from(jobs.values());
+        const activeCount = currentJobs.filter(
+            (j) => j.status === 'streaming' && !j.execution?.clientToolCall
         ).length;
-        const activeCountForUser = Array.from(jobs.values()).filter(
-            (j) => j.status === 'streaming' && j.userId === params.userId
+        const activeCountForUser = currentJobs.filter(
+            (j) => j.status === 'streaming' && !j.execution?.clientToolCall && j.userId === params.userId
+        ).length;
+        // Browser handoffs release a worker slot, but parked records still
+        // need a separate bound so abandoned browsers cannot grow the queue.
+        const waitingCount = currentJobs.filter(
+            (j) => j.status === 'streaming' && Boolean(j.execution?.clientToolCall)
+        ).length;
+        const waitingCountForUser = currentJobs.filter(
+            (j) => j.status === 'streaming' && Boolean(j.execution?.clientToolCall) && j.userId === params.userId
         ).length;
 
         if (activeCount >= config.maxConcurrentJobs) {
@@ -251,6 +261,12 @@ export const memoryJobProvider: BackgroundJobProvider = {
             throw new Error(
                 `Max concurrent background jobs per user reached (${config.maxConcurrentJobsPerUser})`
             );
+        }
+        if (
+            waitingCount >= config.maxConcurrentJobs ||
+            waitingCountForUser >= config.maxConcurrentJobsPerUser
+        ) {
+            throw new Error('Maximum pending browser tool handoffs reached');
         }
 
         const id = generateJobId();
@@ -494,6 +510,60 @@ export const memoryJobProvider: BackgroundJobProvider = {
         return true;
     },
 
+    async claimClientToolCall(
+        jobId,
+        userId,
+        callId,
+        claimToken,
+        claimExpiresAt
+    ) {
+        const job = jobs.get(jobId);
+        const pending = job?.execution?.clientToolCall;
+        if (
+            !job ||
+            job.userId !== userId ||
+            job.status !== 'streaming' ||
+            !pending ||
+            pending.callId !== callId ||
+            (pending.claimToken && (pending.claimExpiresAt ?? 0) > Date.now())
+        ) {
+            return null;
+        }
+        pending.claimToken = claimToken;
+        pending.claimExpiresAt = claimExpiresAt;
+        job.lastActivityAt = Date.now();
+        return cloneJob(job);
+    },
+
+    async settleClientToolCall(
+        jobId,
+        userId,
+        callId,
+        claimToken,
+        execution,
+        toolCalls
+    ) {
+        const job = jobs.get(jobId);
+        const pending = job?.execution?.clientToolCall;
+        if (
+            !job ||
+            job.userId !== userId ||
+            job.status !== 'streaming' ||
+            !pending ||
+            pending.callId !== callId ||
+            pending.claimToken !== claimToken ||
+            (pending.claimExpiresAt ?? 0) <= Date.now()
+        ) {
+            return false;
+        }
+        job.execution = execution;
+        job.tool_calls = toolCalls;
+        job.leaseOwner = undefined;
+        job.leaseExpiresAt = undefined;
+        job.lastActivityAt = Date.now();
+        return true;
+    },
+
     async saveTerminalSnapshot(
         jobId: string,
         snapshot: TerminalGenerationSnapshot,
@@ -551,7 +621,9 @@ export const memoryJobProvider: BackgroundJobProvider = {
     },
 
     async getActiveJobCount(): Promise<number> {
-        return Array.from(jobs.values()).filter((j) => j.status === 'streaming').length;
+        return Array.from(jobs.values()).filter(
+            (j) => j.status === 'streaming' && !j.execution?.clientToolCall
+        ).length;
     },
 };
 

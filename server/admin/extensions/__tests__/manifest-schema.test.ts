@@ -55,6 +55,19 @@ function validV2Manifest(overrides: Record<string, unknown> = {}) {
 }
 
 describe('extension manifest version dispatch', () => {
+    it('accepts only safe PNG or WebP icon paths for V2 packages', () => {
+        expect(
+            Or3ExtensionManifestV2Schema.parse(
+                validV2Manifest({ icon: 'assets/app-icon.webp' })
+            ).icon
+        ).toBe('assets/app-icon.webp');
+        for (const icon of ['../icon.png', '/icon.png', 'assets/icon.svg']) {
+            expect(
+                Or3ExtensionManifestV2Schema.safeParse(validV2Manifest({ icon })).success
+            ).toBe(false);
+        }
+    });
+
     it.each([
         ['omitted', v1Manifest],
         ['null', { ...v1Manifest, manifestVersion: null }],

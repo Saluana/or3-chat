@@ -253,6 +253,17 @@ describe('deterministic package archive', () => {
         await expectCode(() => readPackageZip(oversized), 'length-invalid');
     });
 
+    it('rejects a declared oversized icon before inflating its payload', async () => {
+        const manifest = JSON.parse(manifestBytes.toString('utf8')) as Record<string, unknown>;
+        manifest.icon = 'assets/icon.png';
+        const archive = zipSync({
+            'or3.manifest.json': new TextEncoder().encode(JSON.stringify(manifest)),
+            'assets/icon.png': new Uint8Array(15 * 1024 * 1024),
+        });
+        expect(archive.byteLength).toBeLessThan(64 * 1024);
+        await expectCode(() => readPackageZip(archive), 'plugin-icon-invalid');
+    });
+
     it('rejects an archive whose local header disagrees with its central directory', async () => {
         const bytes = zipSync({
             'or3.manifest.json': manifestBytes,

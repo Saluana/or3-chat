@@ -102,6 +102,11 @@ const ExecutablePackagePathSchema = PackagePathSchema.refine(
     'V2 runtime entrypoints must be JavaScript ESM files'
 );
 
+const V2IconPathSchema = PackagePathSchema.refine(
+    (value) => /\.(?:png|webp)$/i.test(value),
+    'Plugin icon must be a PNG or WebP package path'
+);
+
 const V2RuntimeClientSchema = z
     .object({
         entry: ExecutablePackagePathSchema,
@@ -355,6 +360,7 @@ export const Or3ExtensionManifestV2Schema = z
             .optional(),
         id: V2PluginIdSchema,
         version: z.string().refine((value) => valid(value) !== null, 'Invalid semantic version'),
+        icon: V2IconPathSchema.optional(),
         engines: z
             .object({
                 or3: SemverRangeSchema,

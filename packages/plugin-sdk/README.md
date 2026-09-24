@@ -36,6 +36,7 @@ developer-oriented `src/` is included for source inspection.
 | `@or3/plugin-sdk/testing` | `PluginTestHost` fake host |
 | `@or3/plugin-sdk/profile` | `defineOr3PortableProfile()` and the portable profile validator (Node-only) |
 | `@or3/plugin-sdk/package-tree` | Canonical package tree hashing/verification (Node-only) |
+| `@or3/plugin-sdk/plugin-icon` | Bounded PNG/WebP app-icon byte validation (Node-only) |
 | `@or3/plugin-sdk/package-archive` | Deterministic ZIP transport for package trees (Node-only) |
 | `@or3/plugin-sdk/candidate` | Immutable candidate receipts, validation and qualification (Node-only) |
 | `@or3/plugin-sdk/state-compatibility` | State compatibility policy helpers (Node-only) |

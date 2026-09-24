@@ -27,6 +27,10 @@
             "types": "./src/package-tree.ts",
             "import": "./src/package-tree.ts"
         },
+        "./plugin-icon": {
+            "types": "./src/plugin-icon.ts",
+            "import": "./src/plugin-icon.ts"
+        },
         "./profile": {
             "types": "./src/profile.ts",
             "import": "./src/profile.ts"

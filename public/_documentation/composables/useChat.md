@@ -378,6 +378,15 @@ selector shows the current choice, and chats using a saved prompt or Disabled
 show a label beside the composer settings button. Changes affect future
 messages, not messages already sent.
 
+### Tool execution mode
+
+Background turns advertise all enabled tools. Server tools execute inside the
+durable worker; client tools are claimed by the originating browser and their
+results return to the same server-managed turn. Navigating between chats does
+not interrupt the browser executor. If the browser closes, a client call waits
+for reconnect while server-only turns continue independently. Static builds
+execute client/hybrid tools in foreground mode and omit server-only tools.
+
 ### Retry behavior
 
 When you retry a message:

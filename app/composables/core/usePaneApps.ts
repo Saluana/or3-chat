@@ -30,6 +30,9 @@ export interface PaneAppDef {
     /** Optional Iconify icon name. */
     icon?: string;
 
+    /** Optional validated app image URL. */
+    image?: string;
+
     /** Vue component or async component factory. */
     component: Component | (() => Promise<Component>);
 
@@ -79,6 +82,7 @@ const PaneAppDefSchema = z.object({
         .min(1, 'Label is required')
         .max(100, 'Label must be 100 characters or less'),
     icon: z.string().optional(),
+    image: z.string().min(1).optional(),
     component: z.any(), // Cannot strictly validate Vue component shape at runtime
     order: z
         .number()

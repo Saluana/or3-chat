@@ -57,6 +57,8 @@ export interface PluginManifestV2 {
     readonly name: string;
     readonly version: string;
     readonly description?: string;
+    /** Package-relative path to a validated static PNG or WebP app icon. */
+    readonly icon?: string;
     /** Publisher-declared SPDX license identifier or expression. */
     readonly license?: string;
     readonly capabilities?: readonly string[];

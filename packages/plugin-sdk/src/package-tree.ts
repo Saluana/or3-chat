@@ -1,6 +1,12 @@
 import { createHash } from 'node:crypto';
 import { constants, promises as fs } from 'node:fs';
 import { posix, resolve } from 'node:path';
+import {
+    PLUGIN_ICON_MAX_BYTES,
+    PluginIconValidationError,
+    declaredPluginIconPath,
+    validatePluginIconBytes,
+} from './plugin-icon';
 
 type Sha256 = `sha256-${string}`;
 
@@ -30,6 +36,7 @@ export type PackageTreeValidationCode =
     | 'manifest-invalid'
     | 'manifest-integrity-invalid'
     | 'manifest-integrity-mismatch'
+    | 'plugin-icon-invalid'
     | 'digest-mismatch';
 
 export class PackageTreeValidationError extends Error {
@@ -68,6 +75,7 @@ export interface VerifiedPackageTree {
     readonly detachedExpectedDigest: Sha256 | null;
     readonly manifestId: string | null;
     readonly manifestVersion: number | null;
+    readonly iconPath: string | null;
 }
 
 export const DEFAULT_LIMITS: PackageTreeLimits = Object.freeze({
@@ -156,6 +164,7 @@ function canonicalManifestBytes(bytes: Uint8Array): {
     readonly declaredIntegrity: Sha256 | null;
     readonly manifestId: string | null;
     readonly manifestVersion: number | null;
+    readonly iconPath: string | null;
 } {
     let manifest: Record<string, unknown>;
     try {
@@ -194,6 +203,7 @@ function canonicalManifestBytes(bytes: Uint8Array): {
         manifestId: typeof manifest.id === 'string' ? manifest.id : null,
         manifestVersion:
             typeof manifest.manifestVersion === 'number' ? manifest.manifestVersion : null,
+        iconPath: typeof manifest.icon === 'string' ? manifest.icon : null,
     };
 }
 
@@ -261,6 +271,24 @@ export function verifyCanonicalPackageEntries(
         validationError('manifest-missing', `Package tree must contain ${MANIFEST_PATH}`);
     }
     const canonicalManifest = canonicalManifestBytes(manifestEntry.bytes ?? Buffer.alloc(0));
+    if (canonicalManifest.manifestVersion === 2 && canonicalManifest.iconPath) {
+        const iconEntry = normalized.find(({ path }) => path === canonicalManifest.iconPath)?.entry;
+        if (!iconEntry || iconEntry.kind !== 'file' || !iconEntry.bytes) {
+            validationError(
+                'plugin-icon-invalid',
+                `Declared plugin icon is missing: ${canonicalManifest.iconPath}`,
+                canonicalManifest.iconPath
+            );
+        }
+        try {
+            validatePluginIconBytes(iconEntry.bytes, canonicalManifest.iconPath);
+        } catch (error) {
+            if (error instanceof PluginIconValidationError) {
+                validationError('plugin-icon-invalid', error.message, canonicalManifest.iconPath);
+            }
+            throw error;
+        }
+    }
     const manifestDigest = `sha256-${createHash('sha256')
         .update('OR3_PLUGIN_MANIFEST_V1\0')
         .update(canonicalManifest.bytes)
@@ -327,6 +355,7 @@ export function verifyCanonicalPackageEntries(
         detachedExpectedDigest: options.expectedDigest ?? null,
         manifestId: canonicalManifest.manifestId,
         manifestVersion: canonicalManifest.manifestVersion,
+        iconPath: canonicalManifest.iconPath,
     });
 }
 
@@ -352,6 +381,23 @@ export async function verifyPackageTree(
     const rootStat = await fs.lstat(root).catch(() => null);
     if (!rootStat?.isDirectory() || rootStat.isSymbolicLink()) {
         validationError('root-invalid', 'Package root must be a real directory');
+    }
+    let declaredIconPath: string | null = null;
+    const manifestPath = resolve(root, MANIFEST_PATH);
+    let manifestHandle: Awaited<ReturnType<typeof fs.open>> | undefined;
+    try {
+        const before = await fs.lstat(manifestPath);
+        if (before.isFile() && !before.isSymbolicLink() && before.size <= limits.maximumFileBytes) {
+            manifestHandle = await fs.open(
+                manifestPath,
+                constants.O_RDONLY | constants.O_NOFOLLOW
+            );
+            declaredIconPath = declaredPluginIconPath(await manifestHandle.readFile());
+        }
+    } catch {
+        // Canonical traversal below reports the authoritative manifest error.
+    } finally {
+        await manifestHandle?.close();
     }
     const entries: PackageTreeEntryInput[] = [];
     let observedBytes = 0;
@@ -384,6 +430,16 @@ export async function verifyPackageTree(
                 }
                 if (opened.size > limits.maximumFileBytes) {
                     validationError('length-invalid', `Package file exceeds its byte limit: ${relativePath}`, relativePath);
+                }
+                if (
+                    relativePath === declaredIconPath &&
+                    opened.size > PLUGIN_ICON_MAX_BYTES
+                ) {
+                    validationError(
+                        'plugin-icon-invalid',
+                        `Plugin icon exceeds the ${PLUGIN_ICON_MAX_BYTES} byte limit`,
+                        relativePath
+                    );
                 }
                 observedBytes += opened.size;
                 if (observedBytes > limits.maximumPackageBytes) {

@@ -285,6 +285,7 @@ describe('GET /api/plugins/runtime-manifest', () => {
                     kind: 'plugin',
                     id: 'package-alpha',
                     name: 'Package Alpha',
+                    icon: 'assets/app-icon.webp',
                     version: '1.0.0',
                     capabilities: [],
                     manifestVersion: 2,
@@ -322,6 +323,10 @@ describe('GET /api/plugins/runtime-manifest', () => {
             descriptor: {
                 manifestVersion: 2,
                 source: 'package',
+                icon: {
+                    path: 'assets/app-icon.webp',
+                    mediaType: 'image/webp',
+                },
                 artifact: {
                     kind: 'package-v2',
                     packageDigest: `sha256-${'a'.repeat(64)}`,

@@ -41,10 +41,6 @@ export const sidebarOverrides = {
     },
 
     /* --- Sidenav content --- */
-    'button#ui.glass-button': {
-        activeClass: 'bg-[var(--md-primary)]/20',
-        class: 'font-[IBM_Plex_Sans] text-[12px] font-normal border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] bg-[var(--md-surface)]/30 text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] backdrop-blur',
-    },
     'div#sidebar.project-group-container': {
         class: 'font-[IBM_Plex_Sans] text-[12px] font-normal border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] bg-[var(--md-surface)]/30 text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] backdrop-blur theme-shadow',
     },

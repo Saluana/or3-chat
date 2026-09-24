@@ -85,6 +85,11 @@ export interface PackageV2PluginDescriptor extends PluginDescriptorBase {
     /** Display name from the reviewed manifest, for host UI labels. */
     readonly name: string;
     readonly description?: string;
+    /** Validated package-relative app icon and immutable asset URL metadata. */
+    readonly icon?: {
+        readonly path: string;
+        readonly mediaType: 'image/png' | 'image/webp';
+    };
     /** Signed authority digest covered by the workspace review, when known. */
     readonly authoritySha256?: Sha256 | null;
     /**

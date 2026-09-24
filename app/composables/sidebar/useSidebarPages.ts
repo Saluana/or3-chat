@@ -51,6 +51,8 @@ export interface SidebarPageDef {
     label: string;
     /** Iconify icon name */
     icon: string;
+    /** Optional validated app image URL. The Iconify icon remains the fallback. */
+    image?: string;
     /** Optional ordering (lower = earlier in sorted lists). Defaults to 200 */
     order?: number;
     /** Vue component or async component factory */
@@ -168,6 +170,7 @@ const SidebarPageDefSchema = z.object({
         .min(1, 'Label is required')
         .max(100, 'Label must be 100 characters or less'),
     icon: z.string().min(1, 'Icon is required'),
+    image: z.string().min(1).optional(),
     order: z
         .number()
         .int()

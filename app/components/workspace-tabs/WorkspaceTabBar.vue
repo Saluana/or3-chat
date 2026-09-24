@@ -51,7 +51,11 @@
                     @auxclick="onAuxClick($event, tab.id)"
                     @contextmenu.prevent="openContextMenu($event, tab.id)"
                 >
-                    <UIcon :name="resourceIcon(tab)" class="workspace-tab-icon" />
+                    <AppIcon
+                        :image="props.imageByTabId?.get(tab.id)"
+                        :icon="resourceIcon(tab)"
+                        class="workspace-tab-icon"
+                    />
                     <span class="workspace-tab-title">{{ workspaceTabTitle(tab) }}</span>
                     <span
                         v-if="statusFor(tab.id) !== 'idle'"
@@ -133,6 +137,7 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import WorkspaceNewTabControl, {
     type WorkspaceNewTabCreateKind,
 } from './WorkspaceNewTabControl.vue';
+import AppIcon from '~/components/ui/AppIcon.vue';
 
 const props = withDefaults(
     defineProps<{
@@ -141,6 +146,7 @@ const props = withDefaults(
         visibleTabIds: ReadonlySet<string>;
         statusByTabId?: ReadonlyMap<string, WorkspaceTabStatus>;
         iconByTabId?: ReadonlyMap<string, string | undefined>;
+        imageByTabId?: ReadonlyMap<string, string | undefined>;
         mobile?: boolean;
         canOpenSplit?: boolean;
         canReopenClosed?: boolean;
@@ -153,6 +159,7 @@ const props = withDefaults(
         mobile: false,
         statusByTabId: undefined,
         iconByTabId: undefined,
+        imageByTabId: undefined,
         canOpenSplit: true,
         canReopenClosed: false,
         copyableTabIds: () => new Set<string>(),

@@ -251,10 +251,9 @@
                                             class="more-tile-icon"
                                             aria-hidden="true"
                                         >
-                                            <UIcon
-                                                :name="
-                                                    page.icon || iconPageDefault
-                                                "
+                                            <AppIcon
+                                                :image="page.image"
+                                                :icon="page.icon || iconPageDefault"
                                             />
                                         </span>
                                         <span class="more-tile-copy">
@@ -491,6 +490,7 @@ import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
+import AppIcon from '~/components/ui/AppIcon.vue';
 import { useOr3Config } from '~/composables/useOr3Config';
 import {
     projectProfileItems,
@@ -1240,7 +1240,8 @@ const createItemProps = computed(() => {
 }
 
 .more-tile-icon :deep(.iconify),
-.more-tile-icon :deep(svg) {
+.more-tile-icon :deep(svg),
+.more-tile-icon :deep(.app-icon) {
     width: 1.15rem;
     height: 1.15rem;
 }

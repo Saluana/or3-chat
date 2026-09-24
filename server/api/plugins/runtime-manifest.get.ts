@@ -386,6 +386,16 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
                 ...(manifest.description === undefined
                     ? {}
                     : { description: manifest.description }),
+                ...(manifest.icon === undefined
+                    ? {}
+                    : {
+                          icon: {
+                              path: manifest.icon,
+                              mediaType: manifest.icon.toLowerCase().endsWith('.png')
+                                  ? ('image/png' as const)
+                                  : ('image/webp' as const),
+                          },
+                      }),
                 authoritySha256: eligibility.grants.authoritySha256 ? parseSha256(eligibility.grants.authoritySha256) : null,
                 policyRevision: createPluginPolicyRevision(access.effectivePolicy),
                 grantsRevision: eligibility.grantsRevision,

@@ -47,6 +47,7 @@ export function groupHitsByResource(
                 ? buildEscapedSnippet(snippetSource, term)
                 : undefined,
             icon: resource.icon,
+            image: resource.image,
             updatedAt: resource.updatedAt,
             score: hit.score,
             primaryAction: resource.primaryAction,
@@ -79,6 +80,7 @@ export function resourceToResult(
         subtitle: resource.subtitle,
         snippet: options?.snippet,
         icon: resource.icon,
+        image: resource.image,
         updatedAt: resource.updatedAt,
         score: options?.score,
         primaryAction: resource.primaryAction,

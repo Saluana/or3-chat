@@ -28,6 +28,7 @@ import { useRuntimeConfig } from '#imports';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import type { PluginRuntimeManifestResponse } from '~~/shared/plugins/runtime-manifest';
 import type { PackageV2PluginDescriptor } from '~~/shared/plugins/runtime-descriptor';
+import { buildPluginPackageAssetUrl } from '~~/shared/plugins/module-v2-loader';
 import {
     clearPortableSurfaceRegistrations,
     deactivatePortableClient,
@@ -51,6 +52,15 @@ import { registerSidebarPage } from "~/composables/sidebar/registerSidebarPage";
 import { portablePaneId } from "~/composables/plugins/portable-pane";
 
 const DASHBOARD_PLUGIN_PREFIX = 'portable:';
+
+export function packageIconUrl(descriptor: PackageV2PluginDescriptor): string | undefined {
+    if (!descriptor.icon) return undefined;
+    return buildPluginPackageAssetUrl({
+        pluginId: descriptor.id,
+        packageDigest: descriptor.artifact.packageDigest,
+        entryPath: descriptor.icon.path,
+    });
+}
 
 export function isPortableClientDescriptor(
     entry: unknown
@@ -90,12 +100,15 @@ const PORTABLE_CLIENT_VIEW: Component = (() => {
     return defineAsyncComponent(() => loader() as never);
 })();
 
-function createSurfacePage(
+export function createSurfacePage(
     descriptor: PackageV2PluginDescriptor
 ): DashboardPluginPage {
+    const image = packageIconUrl(descriptor);
     return {
         id: 'surface',
         title: descriptor.name,
+        icon: 'i-lucide-app-window',
+        ...(image ? { image } : {}),
         ...(descriptor.description === undefined ? {} : { description: descriptor.description }),
         component: {
             name: `PortableClientSurface:${descriptor.id}`,
@@ -195,14 +208,17 @@ export default defineNuxtPlugin(() => {
             });
             if (registeredPages.has(pluginId)) continue;
             registeredPages.add(pluginId);
+            const image = packageIconUrl(descriptor);
             const pane = usePaneApps().registerPaneApp({
                 id: portablePaneId(pluginId), label: descriptor.name,
                 icon: "i-lucide-app-window", pluginId,
+                ...(image ? { image } : {}),
                 component: { render: () => h("div", {class:"h-full min-h-0 overflow-hidden"}, [h(PORTABLE_CLIENT_VIEW, {pluginId,surface:"pane"})]) },
             });
             const sidebar = registerSidebarPage({
                 id: portablePaneId(pluginId), label: descriptor.name,
                 icon: "i-lucide-app-window", pluginId,
+                ...(image ? { image } : {}),
                 component: { render: () => h("div", {class:"px-3 py-5"}, [h(PORTABLE_CLIENT_VIEW, {pluginId,surface:"sidebar"})]) },
                 usesDefaultHeader: false,
             });
@@ -242,6 +258,7 @@ export default defineNuxtPlugin(() => {
             registerDashboardPlugin({
                 id: `${DASHBOARD_PLUGIN_PREFIX}${pluginId}`,
                 icon: 'i-lucide-puzzle',
+                ...(image ? { image } : {}),
                 label: descriptor.name,
                 ...(descriptor.description === undefined
                     ? {}

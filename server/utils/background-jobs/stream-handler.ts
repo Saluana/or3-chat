@@ -311,6 +311,19 @@ export async function startBackgroundStream(
         error.name = 'BackgroundHistoryUnsupportedError';
         throw error;
     }
+    const requestedRuntimes = params.body._toolRuntime;
+    if (
+        requestedRuntimes &&
+        typeof requestedRuntimes === 'object' &&
+        Object.values(requestedRuntimes).includes('client') &&
+        (!provider.claimClientToolCall || !provider.settleClientToolCall || !provider.updateJobExecution)
+    ) {
+        const error = new Error(
+            `Background job provider "${provider.name}" does not support browser tool handoff`
+        );
+        error.name = 'BackgroundClientToolUnsupportedError';
+        throw error;
+    }
     const encryptionKey = getBackgroundJobEncryptionKey();
     const parsedHistory = parseChatGenerationAdmissionEnvelope(params.body._history);
     const sanitizeHistoryRecord = (
@@ -680,6 +693,7 @@ export async function consumeBackgroundStream(params: {
         if (flushError) {
             throw flushError;
         }
+        await flushProviderProgress(true);
         normalizedState = finishNormalizedIteration(
             normalizedState,
             MAX_TOOL_ITERATIONS
@@ -935,9 +949,17 @@ export async function consumeBackgroundStreamWithTools(params: {
     let fullContent = contentBase;
     let fullReasoning = reasoningBase;
     let chunks = 0;
-    let normalizedState = createNormalizedStreamState({
-        outputLimitBytes: MAX_CANONICAL_MESSAGE_OUTPUT_BYTES,
-    });
+    let normalizedState = params.context.execution?.normalizedToolState
+        ? {
+              ...params.context.execution.normalizedToolState,
+              cumulativeText: '',
+              iterationText: '',
+              reasoningText: '',
+              terminal: 'active' as const,
+          }
+        : createNormalizedStreamState({
+              outputLimitBytes: MAX_CANONICAL_MESSAGE_OUTPUT_BYTES,
+          });
     const notificationEmitter = getNotificationEmitter(params.provider.name);
     const shouldNotify = params.shouldNotify ?? (() => true);
     const tools = snapshotToolDefinitions(
@@ -961,6 +983,7 @@ export async function consumeBackgroundStreamWithTools(params: {
         error?: string;
         argument_fingerprint?: string;
         transcript?: CanonicalToolResult;
+        runtime?: 'client' | 'server' | 'hybrid';
     }>();
     const toolLedger = new Map<string, ToolLedgerEntry>();
     let pendingProviderContent = '';
@@ -1043,6 +1066,235 @@ export async function consumeBackgroundStreamWithTools(params: {
     const orMessages = Array.isArray(params.body.messages)
         ? params.body.messages.slice()
         : [];
+
+    const persistToolCheckpoint = async (
+        pendingToolCalls: ToolCall[] | undefined,
+        clientToolCall?: BackgroundJobExecution['clientToolCall']
+    ) => {
+        if (
+            !params.context.execution ||
+            !params.context.leaseOwner ||
+            !params.provider.updateJobExecution
+        ) return;
+        // The checkpoint must never claim a tool is done before its visible
+        // state and streamed text are durable in the job record.
+        await flushProviderProgress(true);
+        const nextToolChoice = isForcedFunctionToolChoice(activeToolChoice)
+            ? 'auto'
+            : activeToolChoice;
+        const checkpoint: BackgroundJobExecution = {
+            ...params.context.execution,
+            body: {
+                ...params.context.body,
+                messages: orMessages,
+                tool_choice: nextToolChoice,
+            },
+            contentBase: fullContent,
+            reasoningBase: fullReasoning,
+            normalizedToolState: normalizedState,
+            checkpointedToolCallIds: Array.from(toolStates.values())
+                .filter(
+                    (call) =>
+                        call.id &&
+                        call.status !== 'pending' &&
+                        call.status !== 'loading'
+                )
+                .map((call) => call.id!),
+            pendingToolCalls:
+                pendingToolCalls && pendingToolCalls.length > 0
+                    ? pendingToolCalls
+                    : undefined,
+            clientToolCall,
+        };
+        const saved = await params.provider.updateJobExecution(
+            params.jobId,
+            checkpoint,
+            params.context.leaseOwner
+        );
+        if (!saved) throw createBackgroundJobLeaseLostError();
+        params.context.execution = checkpoint;
+        params.context.body = checkpoint.body;
+        activeToolChoice = nextToolChoice;
+    };
+
+    const processToolQueue = async (calls: ToolCall[]): Promise<boolean> => {
+        for (let index = 0; index < calls.length; index += 1) {
+            const toolCall = calls[index]!;
+            await assertJobNotAborted({
+                provider: params.provider,
+                jobId: params.jobId,
+                abortSignal: params.abortSignal,
+            });
+            const runtimeHint = toolRuntime[toolCall.function.name];
+            const admittedDefinition = admittedByName.get(toolCall.function.name);
+            const decision = decideToolCall(toolLedger.get(toolCall.id), {
+                id: toolCall.id,
+                name: toolCall.function.name,
+                arguments: toolCall.function.arguments,
+            });
+
+            if (
+                runtimeHint === 'client' &&
+                admittedDefinition &&
+                decision.action === 'execute'
+            ) {
+                toolStates.set(toolCall.id, {
+                    id: toolCall.id,
+                    name: toolCall.function.name,
+                    status: 'pending',
+                    runtime: 'client',
+                    args: toolCall.function.arguments,
+                    argument_fingerprint: decision.fingerprint,
+                });
+                await emitToolState(true);
+                await persistToolCheckpoint(calls.slice(index), {
+                    callId: toolCall.id,
+                    name: toolCall.function.name,
+                    arguments: toolCall.function.arguments,
+                    argumentFingerprint: decision.fingerprint,
+                    definition: admittedDefinition,
+                });
+                return true;
+            }
+
+            let toolResultText = '';
+            let status: 'complete' | 'error' | 'skipped' = 'complete';
+            let errorMessage: string | undefined;
+            if (decision.action === 'replay') {
+                toolResultText = decision.result;
+            } else if (decision.action === 'conflict') {
+                status = 'error';
+                errorMessage = `Tool call ID "${toolCall.id}" was reused with different arguments.`;
+                toolResultText = errorMessage;
+            } else if (decision.action === 'running') {
+                status = 'error';
+                errorMessage = `Tool call "${toolCall.id}" may already have executed; refusing replay.`;
+                toolResultText = errorMessage;
+            } else if (decision.action === 'failed') {
+                status = 'error';
+                errorMessage = decision.error;
+                toolResultText = errorMessage;
+            } else if (!admittedDefinition) {
+                status = 'skipped';
+                errorMessage = `Tool "${toolCall.function.name}" was not advertised for this request.`;
+                toolResultText = errorMessage;
+            } else if (runtimeHint === 'client') {
+                status = 'error';
+                errorMessage = `Tool "${toolCall.function.name}" could not be delegated to the browser.`;
+                toolResultText = errorMessage;
+            } else {
+                toolLedger.set(toolCall.id, {
+                    callId: toolCall.id,
+                    name: toolCall.function.name,
+                    argumentFingerprint: decision.fingerprint,
+                    state: 'running',
+                });
+                toolStates.set(toolCall.id, {
+                    id: toolCall.id,
+                    name: toolCall.function.name,
+                    status: 'loading',
+                    runtime: runtimeHint === 'hybrid' ? 'hybrid' : 'server',
+                    args: toolCall.function.arguments,
+                    argument_fingerprint: decision.fingerprint,
+                });
+                await emitToolState(true);
+                const execution = await executeServerTool(
+                    toolCall.function.name,
+                    toolCall.function.arguments,
+                    {
+                        subject: params.context.userId,
+                        workspaceId: params.context.workspaceId,
+                        threadId: params.context.threadId,
+                        messageId: params.context.messageId,
+                        callId: toolCall.id,
+                        requestId: params.jobId,
+                        abortSignal:
+                            params.abortSignal ?? new AbortController().signal,
+                    },
+                    { definition: admittedDefinition }
+                );
+                if (execution.error) {
+                    status = execution.runtime === 'client' ? 'skipped' : 'error';
+                    errorMessage = execution.error;
+                    toolResultText = `Error executing tool "${toolCall.function.name}": ${execution.error}`;
+                } else {
+                    toolResultText = execution.result || '';
+                }
+            }
+
+            const projectedResult = projectToolResult(toolResultText);
+            logBackgroundEvent('info', 'background.tools.call.completed', {
+                jobId: params.jobId,
+                toolCallId: toolCall.id,
+                toolName: toolCall.function.name,
+                status,
+                argumentMetadata: sensitiveValueMetadata(
+                    toolCall.function.arguments
+                ),
+                resultMetadata:
+                    status === 'complete'
+                        ? sensitiveValueMetadata(toolResultText)
+                        : undefined,
+                errorMetadata: errorMessage
+                    ? sensitiveValueMetadata(errorMessage)
+                    : undefined,
+            });
+            toolLedger.set(toolCall.id, {
+                callId: toolCall.id,
+                name: toolCall.function.name,
+                argumentFingerprint: decision.fingerprint,
+                state: status === 'complete' ? 'completed' : 'failed',
+                result: status === 'complete' ? projectedResult.durable : undefined,
+                error: status === 'complete' ? undefined : errorMessage,
+            });
+            toolStates.set(toolCall.id, {
+                id: toolCall.id,
+                name: toolCall.function.name,
+                status,
+                runtime:
+                    runtimeHint === 'client' || runtimeHint === 'hybrid'
+                        ? runtimeHint
+                        : 'server',
+                args: toolCall.function.arguments,
+                result: status === 'complete' ? projectedResult.durable : undefined,
+                error: status !== 'complete' ? errorMessage : undefined,
+                argument_fingerprint: decision.fingerprint,
+                transcript: canonicalToolResult({
+                    turnId: params.context.messageId,
+                    parentAssistantId: params.context.messageId,
+                    callId: toolCall.id,
+                    toolName: toolCall.function.name,
+                    fingerprint: decision.fingerprint,
+                    status: status === 'complete' ? 'complete' : 'error',
+                    result: projectedResult.durable,
+                    error: status === 'complete' ? undefined : errorMessage,
+                }),
+            });
+            normalizedState = settleNormalizedTool(
+                normalizedState,
+                toolCall.id,
+                status === 'complete'
+                    ? { status: 'complete', result: projectedResult.durable }
+                    : {
+                          status: status === 'skipped' ? 'skipped' : 'error',
+                          error: errorMessage,
+                      }
+            );
+            await emitToolState();
+            orMessages.push({
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                name: toolCall.function.name,
+                content: [{ type: 'text', text: projectedResult.model }],
+            });
+        }
+        normalizedState = finishNormalizedIteration(
+            normalizedState,
+            MAX_TOOL_ITERATIONS
+        ).state;
+        await persistToolCheckpoint(undefined, undefined);
+        return false;
+    };
     logBackgroundEvent('info', 'background.tools.started', {
         jobId: params.jobId,
         userId: params.context.userId,
@@ -1055,7 +1307,22 @@ export async function consumeBackgroundStreamWithTools(params: {
 
     try {
         const openRouterUrl = resolveOpenRouterChatCompletionsUrl();
+        const resumedQueue = params.context.execution?.pendingToolCalls;
+        if (resumedQueue?.length) {
+            const parked = await processToolQueue(resumedQueue as ToolCall[]);
+            if (parked) return;
+            normalizedState = finishNormalizedIteration(
+                normalizedState,
+                MAX_TOOL_ITERATIONS
+            ).state;
+        }
         while (true) {
+            // A browser result can resume with no remaining queue. Check the
+            // prior tool iteration before opening another paid model request.
+            normalizedState = finishNormalizedIteration(
+                normalizedState,
+                MAX_TOOL_ITERATIONS
+            ).state;
             normalizedState = beginNormalizedIteration(normalizedState);
             const loopIteration = normalizedState.iteration;
             logBackgroundEvent('info', 'background.tools.iteration.started', {
@@ -1197,144 +1464,6 @@ export async function consumeBackgroundStreamWithTools(params: {
                 break;
             }
 
-            const toolResultsForNextLoop: Array<{
-                call: ToolCall;
-                result: string;
-            }> = [];
-
-            for (const toolCall of pendingToolCalls) {
-                await assertJobNotAborted({
-                    provider: params.provider,
-                    jobId: params.jobId,
-                    abortSignal: params.abortSignal,
-                });
-                const runtimeHint = toolRuntime[toolCall.function.name];
-                const admittedDefinition = admittedByName.get(toolCall.function.name);
-                const decision = decideToolCall(toolLedger.get(toolCall.id), {
-                    id: toolCall.id,
-                    name: toolCall.function.name,
-                    arguments: toolCall.function.arguments,
-                });
-                let toolResultText = '';
-                let status: 'complete' | 'error' | 'skipped' = 'complete';
-                let errorMessage: string | undefined;
-
-                if (decision.action === 'replay') {
-                    toolResultText = decision.result;
-                } else if (decision.action === 'conflict') {
-                    status = 'error';
-                    errorMessage = `Tool call ID "${toolCall.id}" was reused with different arguments.`;
-                    toolResultText = errorMessage;
-                } else if (decision.action === 'running') {
-                    status = 'error';
-                    errorMessage = `Tool call "${toolCall.id}" may already have executed; refusing replay.`;
-                    toolResultText = errorMessage;
-                } else if (decision.action === 'failed') {
-                    status = 'error';
-                    errorMessage = decision.error;
-                    toolResultText = errorMessage;
-                } else if (!admittedDefinition) {
-                    status = 'skipped';
-                    errorMessage = `Tool "${toolCall.function.name}" was not advertised for this request.`;
-                    toolResultText = errorMessage;
-                } else if (runtimeHint === 'client') {
-                    status = 'skipped';
-                    errorMessage = `Tool \"${toolCall.function.name}\" is client-only.`;
-                    toolResultText = errorMessage;
-                } else {
-                    toolLedger.set(toolCall.id, {
-                        callId: toolCall.id,
-                        name: toolCall.function.name,
-                        argumentFingerprint: decision.fingerprint,
-                        state: 'running',
-                    });
-                    toolStates.set(toolCall.id, {
-                        id: toolCall.id,
-                        name: toolCall.function.name,
-                        status: 'loading',
-                        args: toolCall.function.arguments,
-                        argument_fingerprint: decision.fingerprint,
-                    });
-                    await emitToolState(true);
-                    const execution = await executeServerTool(
-                        toolCall.function.name,
-                        toolCall.function.arguments,
-                        {
-                            subject: params.context.userId,
-                            workspaceId: params.context.workspaceId,
-                            threadId: params.context.threadId,
-                            messageId: params.context.messageId,
-                            callId: toolCall.id,
-                            requestId: params.jobId,
-                            abortSignal: params.abortSignal ?? new AbortController().signal,
-                        },
-                        { definition: admittedDefinition }
-                    );
-                    if (execution.error) {
-                        status = execution.runtime === 'client' ? 'skipped' : 'error';
-                        errorMessage = execution.error;
-                        toolResultText = `Error executing tool \"${toolCall.function.name}\": ${execution.error}`;
-                    } else {
-                        toolResultText = execution.result || '';
-                    }
-                }
-                const projectedResult = projectToolResult(toolResultText);
-                toolLedger.set(toolCall.id, {
-                    callId: toolCall.id,
-                    name: toolCall.function.name,
-                    argumentFingerprint: decision.fingerprint,
-                    state: status === 'complete' ? 'completed' : 'failed',
-                    result: status === 'complete' ? projectedResult.durable : undefined,
-                    error: status === 'complete' ? undefined : errorMessage,
-                });
-
-                logBackgroundEvent('info', 'background.tools.call.completed', {
-                    jobId: params.jobId,
-                    iteration: loopIteration,
-                    toolCallId: toolCall.id,
-                    toolName: toolCall.function.name,
-                    status,
-                    argumentMetadata: sensitiveValueMetadata(toolCall.function.arguments),
-                    resultMetadata:
-                        status === 'complete'
-                            ? sensitiveValueMetadata(toolResultText)
-                            : undefined,
-                    errorMetadata: errorMessage
-                        ? sensitiveValueMetadata(errorMessage)
-                        : undefined,
-                });
-
-                toolStates.set(toolCall.id, {
-                    id: toolCall.id,
-                    name: toolCall.function.name,
-                    status,
-                    args: toolCall.function.arguments,
-                    result: status === 'complete' ? projectedResult.durable : undefined,
-                    error: status !== 'complete' ? errorMessage : undefined,
-                    argument_fingerprint: decision.fingerprint,
-                    transcript: canonicalToolResult({
-                        turnId: params.context.messageId,
-                        parentAssistantId: params.context.messageId,
-                        callId: toolCall.id,
-                        toolName: toolCall.function.name,
-                        fingerprint: decision.fingerprint,
-                        status: status === 'complete' ? 'complete' : 'error',
-                        result: projectedResult.durable,
-                        error: status === 'complete' ? undefined : errorMessage,
-                    }),
-                });
-                normalizedState = settleNormalizedTool(
-                    normalizedState,
-                    toolCall.id,
-                    status === 'complete'
-                        ? { status: 'complete', result: projectedResult.durable }
-                        : { status: status === 'skipped' ? 'skipped' : 'error', error: errorMessage }
-                );
-                await emitToolState();
-
-                toolResultsForNextLoop.push({ call: toolCall, result: projectedResult.model });
-            }
-
             orMessages.push({
                 role: 'assistant',
                 content: [{ type: 'text', text: loopContent || '' }],
@@ -1347,59 +1476,9 @@ export async function consumeBackgroundStreamWithTools(params: {
                     },
                 })),
             });
-
-            for (const payload of toolResultsForNextLoop) {
-                orMessages.push({
-                    role: 'tool',
-                    tool_call_id: payload.call.id,
-                    name: payload.call.function.name,
-                    content: [{ type: 'text', text: payload.result }],
-                });
-            }
-
+            const parked = await processToolQueue(pendingToolCalls);
+            if (parked) return;
             await flushProviderProgress(true);
-
-            // The next model iteration can be safely recreated from this
-            // point without re-running any completed server tool. Persist the
-            // checkpoint before issuing that next upstream request.
-            if (
-                params.context.execution &&
-                params.context.leaseOwner &&
-                params.provider.updateJobExecution
-            ) {
-                const nextToolChoice = isForcedFunctionToolChoice(activeToolChoice)
-                    ? 'auto'
-                    : activeToolChoice;
-                const checkpoint: BackgroundJobExecution = {
-                    ...params.context.execution,
-                    body: {
-                        ...params.context.body,
-                        messages: orMessages,
-                        tool_choice: nextToolChoice,
-                    },
-                    contentBase: fullContent,
-                    reasoningBase: fullReasoning,
-                    checkpointedToolCallIds: Array.from(toolStates.values())
-                        .filter(
-                            (call) =>
-                                call.id &&
-                                call.status !== 'pending' &&
-                                call.status !== 'loading'
-                        )
-                        .map((call) => call.id!),
-                };
-                const saved = await params.provider.updateJobExecution(
-                    params.jobId,
-                    checkpoint,
-                    params.context.leaseOwner
-                );
-                if (!saved) {
-                    throw createBackgroundJobLeaseLostError();
-                }
-                params.context.execution = checkpoint;
-                params.context.body = checkpoint.body;
-                activeToolChoice = nextToolChoice;
-            }
 
             normalizedState = finishNormalizedIteration(
                 normalizedState,
@@ -1674,6 +1753,7 @@ export async function executeBackgroundJob(
         _backgroundAdmissionId,
         _backgroundMode,
         _toolRuntime,
+        _clientDeviceId,
         _streamedFieldMode,
         _history,
         ...cleanBody

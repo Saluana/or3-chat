@@ -7,6 +7,7 @@ export interface WorkspaceTabMetadata {
     title: string;
     fullTitle: string;
     icon?: string;
+    image?: string;
 }
 
 function fallbackTitle(tab: WorkspaceTab): string {
@@ -80,6 +81,10 @@ export function useWorkspaceTabMetadata() {
                 icon:
                     tab.resource.kind === 'app'
                         ? getPaneApp(tab.resource.appId)?.icon
+                        : undefined,
+                image:
+                    tab.resource.kind === 'app'
+                        ? getPaneApp(tab.resource.appId)?.image
                         : undefined,
             });
         }

@@ -138,7 +138,6 @@
                                 "
                                 :id="`btn-page-${page.id}`"
                                 class="flex item-center justify-center"
-                                :icon="page.icon || iconPageDefault"
                                 :aria-pressed="activePageId === page.id"
                                 :aria-label="page.label"
                                 @click="() => handlePageSelect(page.id)"
@@ -146,7 +145,13 @@
                                 @keydown.space.prevent="
                                     () => handlePageSelect(page.id)
                                 "
-                            />
+                            >
+                                <AppIcon
+                                    :image="page.image"
+                                    :icon="page.icon || iconPageDefault"
+                                    class="h-5 w-5"
+                                />
+                            </UButton>
                         </UTooltip>
                     </div>
                 </div>
@@ -216,6 +221,7 @@ import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import SideBottomNav from './SideBottomNav.vue';
+import AppIcon from '~/components/ui/AppIcon.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useOr3Config } from '~/composables/useOr3Config';

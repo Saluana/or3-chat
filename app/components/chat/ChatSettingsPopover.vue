@@ -1,5 +1,6 @@
 <template>
     <div
+        ref="popoverElement"
         :class="[
             'chat-settings-popover flex w-[360px] max-w-[calc(100vw-1.5rem)] flex-col',
             containerProps?.class || '',
@@ -45,7 +46,11 @@
             </UButton>
         </header>
 
-        <div v-show="!activeGroup" class="chat-settings-body">
+        <div
+            v-show="!activeGroup"
+            class="chat-settings-body"
+            :class="{ 'chat-settings-view-enter is-back': hasNavigated && !activeGroup }"
+        >
             <!-- Current model: shown when the composer is too narrow for its
                  own picker. Opens the favorites dropdown directly. -->
             <USelectMenu
@@ -288,7 +293,30 @@
                 </UButton>
             </nav>
         </div>
-        <div v-if="activeGroup" class="chat-settings-body">
+        <div v-if="activeGroup" class="chat-settings-body chat-settings-view-enter">
+            <div class="chat-settings-bulk-row">
+                <div class="chat-settings-row-copy">
+                    <label for="chat-tools-all" class="chat-settings-row-title">
+                        All tools
+                    </label>
+                    <span
+                        id="chat-tools-enabled-count"
+                        class="chat-settings-row-description"
+                    >
+                        {{ enabledGroupToolCount }} of {{ activeGroup.tools.length }} enabled
+                    </span>
+                </div>
+                <USwitch
+                    id="chat-tools-all"
+                    class="chat-settings-control"
+                    color="primary"
+                    size="sm"
+                    :model-value="allGroupToolsEnabled"
+                    aria-describedby="chat-tools-enabled-count"
+                    :disabled="loading || streaming"
+                    @update:model-value="setGroupToolsEnabled"
+                />
+            </div>
             <div class="chat-settings-tool-list">
                 <div
                     v-for="tool in activeGroup.tools"
@@ -455,13 +483,33 @@ const groupedToolCategories = computed(() => {
 });
 
 const activeCategory = ref<string | null>(null);
+const hasNavigated = ref(false);
+const popoverElement = ref<HTMLElement | null>(null);
 const activeGroup = computed(() =>
     groupedToolCategories.value.find(
         (group) => group.category === activeCategory.value
     ) ?? null
 );
+const enabledGroupToolCount = computed(
+    () => activeGroup.value?.tools.filter((tool) => tool.enabledValue).length ?? 0
+);
+const allGroupToolsEnabled = computed(
+    () => !!activeGroup.value?.tools.length &&
+        enabledGroupToolCount.value === activeGroup.value.tools.length
+);
+
+function setGroupToolsEnabled(enabled: boolean) {
+    if (props.loading || props.streaming) return;
+    for (const tool of activeGroup.value?.tools ?? []) {
+        if (tool.enabledValue !== enabled) {
+            toolRegistry.setEnabled(tool.name, enabled);
+        }
+    }
+}
+
 const backButton = ref<HTMLButtonElement | null>(null);
 let categoryTrigger: HTMLButtonElement | null = null;
+let resizeAnimation: Animation | null = null;
 
 watch(groupedToolCategories, (groups) => {
     if (
@@ -472,16 +520,36 @@ watch(groupedToolCategories, (groups) => {
     }
 });
 
+async function navigateToCategory(category: string | null) {
+    const element = popoverElement.value;
+    const previousHeight = element?.getBoundingClientRect().height ?? 0;
+    resizeAnimation?.cancel();
+    activeCategory.value = category;
+    hasNavigated.value = true;
+    await nextTick();
+
+    if (
+        !element ||
+        typeof element.animate !== 'function' ||
+        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    ) return;
+
+    const nextHeight = element.getBoundingClientRect().height;
+    if (Math.abs(nextHeight - previousHeight) < 1) return;
+    resizeAnimation = element.animate(
+        [{ height: `${previousHeight}px` }, { height: `${nextHeight}px` }],
+        { duration: 190, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
+    );
+}
+
 async function openToolCategory(category: string, event: MouseEvent) {
     categoryTrigger = event.currentTarget as HTMLButtonElement;
-    activeCategory.value = category;
-    await nextTick();
+    await navigateToCategory(category);
     backButton.value?.focus();
 }
 
 async function backToSettings() {
-    activeCategory.value = null;
-    await nextTick();
+    await navigateToCategory(null);
     categoryTrigger?.focus();
 }
 
@@ -906,6 +974,25 @@ const modelCatalogButtonProps = computed(() => {
     padding: 0.75rem;
 }
 
+.chat-settings-view-enter {
+    animation: chat-settings-view-enter 170ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.chat-settings-view-enter.is-back {
+    --chat-settings-view-offset: -8px;
+}
+
+@keyframes chat-settings-view-enter {
+    from {
+        opacity: 0;
+        transform: translateX(var(--chat-settings-view-offset, 8px));
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
 .chat-settings-tools {
     overflow: hidden;
     border: var(--chat-settings-divider-width) solid
@@ -1131,6 +1218,20 @@ const modelCatalogButtonProps = computed(() => {
     flex: none;
 }
 
+.chat-settings-bulk-row {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 3.25rem;
+    padding: 0.625rem 0.75rem;
+    background: var(--md-surface-container-lowest);
+    border: var(--chat-settings-divider-width) solid
+        color-mix(in srgb, var(--md-border-color) 45%, transparent);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
+}
+
 .chat-settings-tool-row + .chat-settings-tool-row {
     border-top: var(--chat-settings-divider-width) solid
         color-mix(in srgb, var(--md-border-color) 25%, transparent);
@@ -1183,6 +1284,10 @@ const modelCatalogButtonProps = computed(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .chat-settings-view-enter {
+        animation: none;
+    }
+
     .chat-settings-tool-category {
         transition-duration: 1ms;
     }

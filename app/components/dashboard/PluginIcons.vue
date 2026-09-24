@@ -14,18 +14,12 @@
             ]"
             :style="iconBoxStyle"
         >
-            <img
-                v-if="image"
-                :src="image"
-                class="dashboard-button-image w-full h-full object-cover"
-                :alt="label"
-                draggable="false"
-            />
-            <UIcon
-                v-else-if="icon"
-                :name="icon"
+            <AppIcon
+                v-if="image || icon"
+                :image="image"
+                :icon="icon"
                 :class="[
-                    'dashboard-button-icon transition-transform duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)]',
+                    'dashboard-button-icon h-full w-full transition-transform duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)]',
                 ]"
                 :style="iconStyle"
             />
@@ -47,6 +41,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import AppIcon from '~/components/ui/AppIcon.vue';
 
 const props = defineProps<{
     icon?: string;
@@ -75,7 +70,7 @@ const iconBoxStyle = computed(() => ({
     width: `${size.value}px`,
     height: `${size.value}px`,
     borderRadius: cornerRadius.value,
-    padding: `${iconPadding.value}px`,
+    padding: props.image ? '0' : `${iconPadding.value}px`,
 }));
 const iconStyle = computed(() => ({
     width: `100%`,

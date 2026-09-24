@@ -288,6 +288,7 @@ describe('createPaletteCoordinator', () => {
         const handle = registerDashboardPlugin({
             id: 'palette-live-dashboard',
             icon: 'i-lucide-test-tube',
+            image: '/plugin-icon.webp',
             label: 'Live dashboard',
         });
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -295,8 +296,8 @@ describe('createPaletteCoordinator', () => {
         expect(
             coordinator
                 .getSnapshot()
-                .results.some((item) => item.key === 'dashboard:palette-live-dashboard')
-        ).toBe(true);
+                .results.find((item) => item.key === 'dashboard:palette-live-dashboard')
+        ).toMatchObject({ image: '/plugin-icon.webp', icon: 'i-lucide-test-tube' });
 
         handle.dispose();
         await new Promise((resolve) => setTimeout(resolve, 0));

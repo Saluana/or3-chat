@@ -35,7 +35,7 @@
                     "name": "plugin-quickstart.md",
                     "path": "/start/plugin-quickstart",
                     "category": "Tutorial",
-                    "summary": "This guide shows you how to extend the dashboard, chat messages, and sidebar through either source-level Nuxt plugins or installable V1 workspace packages. Both use the same reactive registries, but their module exports are different. Includes active-pane editor layouts, transient edit previews, terrain presentation controls, bundled seam correction and anchored height previews, scoped tool shortcuts, Nuxt UI tooltips, pitch-corrected modifier-drag panning and host theme integration."
+                    "summary": "Extend the dashboard, chat messages, and sidebar through source-level plugins or installable packages, including validated bundled PNG/WebP app icons with Iconify fallbacks."
                 },
                 {
                     "name": "snake-game-tutorial.md",
@@ -143,7 +143,7 @@
                     "name": "useChat.md",
                     "path": "/composables/useChat",
                     "category": "Chat",
-                    "summary": "Manages AI chat messages, streaming, and retries. Chat settings selects a saved system prompt, the current default, or Disabled per chat; the choice applies to future messages."
+                    "summary": "Manages AI chat messages, streaming, retries, and mixed-runtime tools. Background turns execute server tools in the worker and delegate browser tools through a durable claim/result bridge. Chat settings selects a saved system prompt, the current default, or Disabled per chat; the choice applies to future messages."
                 },
                 {
                     "name": "useChatAttachmentDisplay.md",
@@ -215,7 +215,7 @@
                     "name": "useDashboardPlugins.md",
                     "path": "/composables/useDashboardPlugins",
                     "category": "Dashboard",
-                    "summary": "Dashboard extension hub that lets first- and third-party features register launcher tiles, lazy-loaded pages, and capability flags for the retro dashboard. It centralises plugin discovery, page resolution, and in-app navigation state."
+                    "summary": "Dashboard extension hub for launcher tiles, optional app images with Iconify fallbacks, lazy-loaded pages, capability flags, discovery, and navigation state."
                 },
                 {
                     "name": "useDefaultPrompt.md",
@@ -527,7 +527,7 @@
                     "name": "useSidebarPages.md",
                     "path": "/composables/useSidebarPages",
                     "category": "Sidebar",
-                    "summary": "Registry and discovery system for sidebar pages. Manages page registration, provides listing functionality, and handles HMR cleanup for dynamic page management. Think of useSidebarPages as the sidebar's page directory — it tracks all available pages, handle..."
+                    "summary": "Registry and discovery system for sidebar pages, including optional app images with Iconify fallbacks, validation, ordering, and HMR cleanup."
                 },
                 {
                     "name": "useSidebarProjectActionButtonProps.md",
@@ -1031,7 +1031,7 @@
                     "name": "plugins.md",
                     "path": "/types/plugins",
                     "category": "Plugins",
-                    "summary": "Reference for the TypeScript types that plugins use to talk to the OR3 host. Covers the client-side pane plugin API, the access gate policy used by every plugin contribution, and the ambient declaration files in types/ that wire plugin-facing modules into t..."
+                    "summary": "Reference for plugin-facing TypeScript types, including the pane plugin API, access gate policy, theme declarations, and the bundled plugin catalog declaration in shared/plugins/."
                 }
             ]
         },
@@ -1133,7 +1133,7 @@
                     "name": "background-execution.md",
                     "path": "/cloud/background-execution",
                     "category": "Architecture",
-                    "summary": "OR3 supports SSR background jobs for chat streaming, tool execution, and workflows so work can continue when the user detaches or navigates away. This document covers the implementation currently wired in:"
+                    "summary": "OR3 supports SSR background jobs for chat streaming, mixed server/browser tool execution, and workflows so work can continue when the user detaches or navigates away."
                 },
                 {
                     "name": "capability-matrix.md",
@@ -1331,7 +1331,7 @@
                     "name": "manifest-v2.md",
                     "path": "/plugins/manifest-v2",
                     "category": "Reference",
-                    "summary": "V2 packages ship or3.manifest.json with manifestVersion: 2. The owner-only standard extension install endpoint dispatches a V2 ZIP to the immutable candidate store. After a canary and explicit promotion, an enabled"
+                    "summary": "V2 package manifest, runtime, authority, and immutable asset contract, including bounded static PNG/WebP app icons validated during packing and host admission."
                 },
                 {
                     "name": "official-products.md",

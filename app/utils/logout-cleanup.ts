@@ -102,6 +102,10 @@ export async function logoutCleanup(
         if (!options.preserveExternalAgentCredentials) {
             keys.push('or3.external-agents.credentials.v1');
         }
+        for (let index = 0; index < localStorage.length; index += 1) {
+            const key = localStorage.key(index);
+            if (key?.startsWith('or3:bg-client-tool:')) keys.push(key);
+        }
         keys.forEach((key) => localStorage.removeItem(key));
     }
     if (typeof sessionStorage !== 'undefined') {

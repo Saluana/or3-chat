@@ -31,6 +31,20 @@ export default defineNuxtPlugin(() => {
 
 When shipping a plugin as an installable package/zip for `extensions/plugins/<id>`, include `or3.manifest.json` at package root.
 
+Manifest V2 packages can also bundle an app icon used by the dashboard,
+sidebar, workspace tabs, and command palette:
+
+```json
+{
+    "manifestVersion": 2,
+    "icon": "assets/app-icon.webp"
+}
+```
+
+Use a static PNG or WebP up to 128 KiB and 256 × 256 pixels. The SDK packer and
+host both validate the bytes. Keep an Iconify icon in source-level registrations
+as the fallback when an image fails to load.
+
 Example:
 
 ```json
@@ -125,6 +139,7 @@ export default defineNuxtPlugin(() => {
 
 -   `id`: Unique identifier (convention: `namespace:name`)
 -   `icon`: Iconify icon name (browse at [iconify.design](https://iconify.design))
+-   `image`: Optional imported/bundled image URL; `icon` remains the fallback
 -   `label`: Short text shown below the icon
 -   `description`: Optional tooltip/description text
 -   `order`: Display order (lower = earlier, default: 200)

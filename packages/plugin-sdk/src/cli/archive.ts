@@ -12,6 +12,10 @@ import {
     type PackageTreeLimits,
     type VerifiedPackageTree,
 } from '../package-tree';
+import {
+    PLUGIN_ICON_MAX_BYTES,
+    declaredPluginIconPath,
+} from '../plugin-icon';
 
 /**
  * Deterministic ZIP transport for V2 plugin packages.
@@ -622,11 +626,23 @@ function decodeZip(bytes: Uint8Array, limits: PackageTreeLimits): PackageTreeEnt
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const { entries: parsed, centralDirectoryOffset } = parseCentralDirectory(bytes, limits);
     assertLocalRecordsConsistent(bytes, view, parsed, centralDirectoryOffset);
+    const manifestEntry = parsed.find((entry) => entry.path === 'or3.manifest.json');
+    const manifestBytes = manifestEntry
+        ? readEntryData(bytes, view, manifestEntry, limits, limits.maximumPackageBytes)
+        : new Uint8Array(0);
+    const iconPath = declaredPluginIconPath(manifestBytes);
     let totalBytes = 0;
     const entries: PackageTreeEntryInput[] = [];
     for (const entry of parsed) {
         if (entry.path.includes('\0') || entry.path.startsWith('/') || /^[a-z]:[\\/]/i.test(entry.path)) {
             throw new PackageTreeValidationError('path-traversal', `Unsafe package path: ${entry.path}`, entry.path);
+        }
+        if (entry.path === iconPath && entry.uncompressedSize > PLUGIN_ICON_MAX_BYTES) {
+            throw new PackageTreeValidationError(
+                'plugin-icon-invalid',
+                `Plugin icon exceeds the ${PLUGIN_ICON_MAX_BYTES} byte limit`,
+                entry.path
+            );
         }
         const data = readEntryData(bytes, view, entry, limits, limits.maximumPackageBytes - totalBytes);
         totalBytes += data.byteLength;

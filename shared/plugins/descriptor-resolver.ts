@@ -70,6 +70,13 @@ const PackageDescriptorSchema = z
         trust: z.enum(['trusted-host', 'isolated-client', 'isolated-server']),
         name: z.string().min(1),
         description: z.string().min(1).optional(),
+        icon: z
+            .object({
+                path: z.string().min(1),
+                mediaType: z.enum(['image/png', 'image/webp']),
+            })
+            .strict()
+            .optional(),
         authoritySha256: Sha256Schema.nullable().optional(),
         workspaceId: z.string().min(1),
         policyRevision: z.string().min(1),

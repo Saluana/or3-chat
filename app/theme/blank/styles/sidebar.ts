@@ -42,10 +42,6 @@ export const sidebarOverrides = {
     },
 
     // Sidebar item buttons: ChatGPT style - clean, minimal, rounded
-    'button#ui.glass-button': {
-        activeClass: 'bg-[var(--md-surface-active)]',
-        class: 'text-[14px] font-normal border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-transparent text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
-    },
     'div#sidebar.project-group-container': {
         class: 'text-[14px] font-normal border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-transparent text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
     },

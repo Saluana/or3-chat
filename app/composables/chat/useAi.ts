@@ -68,6 +68,7 @@ import {
     abortBackgroundAdmission,
     pollJobStatus,
     isBackgroundStreamingEnabled,
+    isBackgroundClientToolBridgeAvailable,
     type BackgroundJobStatus,
     type OpenRouterReasoningConfig,
 } from '../../utils/chat/openrouterStream';
@@ -879,6 +880,7 @@ export function useChat(
             return {
                 id: call.id,
                 name: call.name,
+                runtime: call.runtime,
                 status: mappedStatus,
                 args: call.args,
                 result: call.result,
@@ -2194,6 +2196,9 @@ export function useChat(
                 workspaceId: requestScope.workspaceId,
                 threadId: requestThreadId,
             });
+            const foregroundToolDefs = enabledToolDefs.filter(
+                (tool) => tool.runtime !== 'server'
+            );
 
             // Track tool calls across all loop iterations (persists state)
             const activeToolCalls = new Map<string, ToolCallInfo>();
@@ -2357,8 +2362,16 @@ export function useChat(
                 };
             }
 
+            const hasBrowserTools = enabledToolDefs.some(
+                (tool) => tool.runtime === 'client'
+            );
+            const browserToolBridgeAvailable =
+                !hasBrowserTools ||
+                !backgroundStreamingAllowed.value ||
+                await isBackgroundClientToolBridgeAvailable();
             const allowBackgroundStreaming =
                 backgroundStreamingAllowed.value &&
+                browserToolBridgeAvailable &&
                 modalities.length === 1 &&
                 modalities[0] === 'text';
             logBgStream('send-message-stream-mode-decision', {
@@ -2682,7 +2695,10 @@ export function useChat(
                 orMessages,
                 modalities,
                 reasoning,
-                tools: enabledToolDefs.length > 0 ? enabledToolDefs : undefined,
+                tools:
+                    foregroundToolDefs.length > 0
+                        ? foregroundToolDefs
+                        : undefined,
                 abortSignal: requestScope.abortController.signal,
                 assistantId: assistantDbMsg.id,
                 parentTurnId: userDbMsg.id,

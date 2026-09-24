@@ -7,8 +7,8 @@ import { describe, expect, it } from 'vitest';
  *
  * A revoked, expired or unreachable link must not stop already acquired plugins
  * from running, and it must not be able to (accidentally) become a runtime gate
- * later. This walks the runtime and installation code and fails if any of it
- * depends on the library link service or client state.
+ * later. Acquisition may consult the link to download an entitled release;
+ * runtime and execution gates must stay independent after installation.
  */
 // Vitest runs from the repository root in every lane.
 const REPOSITORY_ROOT = process.cwd();
@@ -31,6 +31,8 @@ function sourceFiles(directory: string): string[] {
         const path = join(absolute, entry);
         if (statSync(path).isDirectory()) {
             if (entry === '__tests__') continue;
+            // Paid release acquisition legitimately resolves the user's Library link.
+            if (directory === 'server/utils/plugins' && entry === 'acquisition') continue;
             for (const nested of readdirSync(path)) {
                 const nestedPath = join(path, nested);
                 if (statSync(nestedPath).isFile() && nestedPath.endsWith('.ts')) files.push(nestedPath);
@@ -43,7 +45,7 @@ function sourceFiles(directory: string): string[] {
 }
 
 describe('plugin runtime independence from the Library link', () => {
-    it('no runtime, gate or installation module imports the link service or its client', () => {
+    it('no runtime or execution gate imports the link service or its client', () => {
         const offenders: string[] = [];
         for (const directory of RUNTIME_DIRECTORIES) {
             for (const file of sourceFiles(directory)) {

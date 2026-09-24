@@ -32,6 +32,7 @@
                         :key="item.id"
                         class="dashboard-plugin-icon-item"
                         :icon="item.icon"
+                        :image="item.image"
                         :label="item.label"
                         :size="pluginIconSize"
                         :radius="3"
@@ -96,9 +97,10 @@
                         @click="handleLandingPageClick(p.id)"
                     >
                         <div class="flex items-center gap-2">
-                            <UIcon
-                                v-if="p.icon"
-                                :name="p.icon"
+                            <AppIcon
+                                v-if="p.image || p.icon"
+                                :image="p.image"
+                                :icon="p.icon"
                                 class="w-5 h-5 opacity-80 group-hover:opacity-100"
                             />
                             <span class="font-medium text-sm">{{
@@ -154,6 +156,7 @@
 <script setup lang="ts">
 import { computed, provide } from 'vue';
 import PluginIcons from './PluginIcons.vue';
+import AppIcon from '~/components/ui/AppIcon.vue';
 import { useDashboardNavigation } from '~/composables/dashboard/useDashboardPlugins';
 import { createCoreDashboardItems } from '~/core/dashboard/core-items';
 import { useRuntimeConfig } from '#imports';

@@ -1,6 +1,7 @@
-import { existsSync, readdirSync } from 'node:fs';
-import { dirname, relative, resolve, sep } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { basename, dirname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { checkV2PackageConformance } from './check-v2-package-conformance';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -18,7 +19,38 @@ function posixPath(path: string): string {
     return path.split(sep).join('/');
 }
 
+function checkV1ExampleInventory(): void {
+    const examplesDir = resolve(repoRoot, 'app/plugins/examples');
+    const fixturePath = resolve(repoRoot, 'tests/plugin-runtime/v1-examples/examples.compile.ts');
+    const expected = readdirSync(examplesDir)
+        .filter((name) => name.endsWith('.client.ts'))
+        .sort();
+    const fixture = ts.createSourceFile(
+        fixturePath,
+        readFileSync(fixturePath, 'utf8'),
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TS
+    );
+    const actual = fixture.statements
+        .filter(ts.isImportDeclaration)
+        .map((statement) => statement.moduleSpecifier)
+        .filter(ts.isStringLiteral)
+        .map((specifier) => resolve(dirname(fixturePath), `${specifier.text}.ts`))
+        .filter((path) => dirname(path) === examplesDir)
+        .map((path) => basename(path))
+        .sort();
+
+    if (actual.length !== expected.length || actual.some((name, index) => name !== expected[index])) {
+        throw new Error(
+            `[example-fixtures] V1 fixture imports differ from example plugins\n` +
+            `Expected: ${expected.join(', ')}\nActual: ${actual.join(', ')}`
+        );
+    }
+}
+
 function checkV1Examples(): void {
+    if (!projectArg) checkV1ExampleInventory();
     const result = Bun.spawnSync(command, {
         cwd: repoRoot,
         stdout: 'pipe',

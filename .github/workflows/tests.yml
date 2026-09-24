@@ -180,7 +180,6 @@ jobs:
               - 'shared/plugins/**'
               - 'scripts/plugin-runtime/**'
               - 'scripts/__tests__/plugin-runtime-compatibility-snapshots.test.ts'
-              - 'scripts/__tests__/plugin-runtime-example-fixtures.test.ts'
               - 'tests/plugin-runtime/**'
               - 'planning/complete/plugin-runtime-v2/**'
               - 'nuxt.config.ts'

@@ -45,6 +45,7 @@
                 :visible-tab-ids="workspaceTabs.visibleTabIds.value"
                 :status-by-tab-id="workspaceTabs.statusByTabId.value"
                 :icon-by-tab-id="workspaceTabIcons"
+                :image-by-tab-id="workspaceTabImages"
                 :can-open-split="canAddPane"
                 :can-reopen-closed="workspaceTabs.state.value.recentlyClosed.length > 0"
                 :copyable-tab-ids="workspaceCopyableTabIds"
@@ -787,6 +788,15 @@ const workspaceTabIcons = computed(
             [...workspaceTabMetadata.metadata].map(([tabId, metadata]) => [
                 tabId,
                 metadata.icon,
+            ])
+        )
+);
+const workspaceTabImages = computed(
+    () =>
+        new Map(
+            [...workspaceTabMetadata.metadata].map(([tabId, metadata]) => [
+                tabId,
+                metadata.image,
             ])
         )
 );

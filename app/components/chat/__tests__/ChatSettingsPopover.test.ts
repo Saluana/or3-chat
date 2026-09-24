@@ -1,12 +1,15 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
-import { ref } from 'vue';
+import { ref, shallowRef } from 'vue';
 import ChatSettingsPopover from '../ChatSettingsPopover.vue';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import type { OpenRouterModel } from '~/core/auth/models-service';
 import type { RegisteredTool } from '~/utils/chat/tool-registry';
 
-const mockTools = vi.hoisted(() => ({ tools: [] as RegisteredTool[] }));
+const mockTools = vi.hoisted(() => ({
+    tools: [] as RegisteredTool[],
+    setEnabled: vi.fn(),
+}));
 const mockPrompts = vi.hoisted(() => ({
     items: [] as Array<{ id: string; title: string; favorite: boolean }>,
     threadSelection: null as string | null,
@@ -45,8 +48,8 @@ vi.mock('~/composables/useThemeResolver', () => ({
 
 vi.mock('~/utils/chat/tools-public', () => ({
     useToolRegistry: () => ({
-        listTools: ref(mockTools.tools),
-        setEnabled: vi.fn(),
+        listTools: shallowRef(mockTools.tools),
+        setEnabled: mockTools.setEnabled,
     }),
 }));
 
@@ -61,6 +64,16 @@ const menuStub = {
             </div>
             <slot name="empty" />
         </div>
+    `,
+};
+
+const switchStub = {
+    props: ['modelValue', 'disabled'],
+    emits: ['update:modelValue'],
+    template: `
+        <button type="button" role="switch" :aria-checked="modelValue"
+            :disabled="disabled" v-bind="$attrs"
+            @click="$emit('update:modelValue', !modelValue)" />
     `,
 };
 
@@ -93,7 +106,7 @@ function mountPopover(props: Record<string, unknown> = {}) {
                         '<button v-bind="$attrs" @click="$emit(\'click\')"><slot/></button>',
                 },
                 UIcon: { template: '<span class="uicon-stub" />' },
-                USwitch: true,
+                USwitch: switchStub,
                 USelectMenu: menuStub,
             },
         },
@@ -104,6 +117,12 @@ describe('ChatSettingsPopover options layout', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockTools.tools.splice(0);
+        mockTools.setEnabled.mockImplementation((name: string, enabled: boolean) => {
+            const tool = mockTools.tools.find(
+                (tool) => tool.definition.function.name === name
+            );
+            if (tool) tool.enabled.value = enabled;
+        });
         mockPrompts.items = [];
         mockPrompts.threadSelection = null;
         mockPrompts.paneSelection = null;
@@ -129,6 +148,17 @@ describe('ChatSettingsPopover options layout', () => {
         }
 
         const wrapper = mountPopover();
+        const popover = wrapper.find('.chat-settings-popover').element as HTMLElement;
+        const animate = vi.fn(() => ({ cancel: vi.fn() } as unknown as Animation));
+        vi.spyOn(popover, 'getBoundingClientRect').mockImplementation(
+            () => ({
+                height:
+                    wrapper.find('.chat-settings-title').text() === 'Chat settings'
+                        ? 400
+                        : 700,
+            }) as DOMRect
+        );
+        Object.defineProperty(popover, 'animate', { configurable: true, value: animate });
         const category = wrapper.find('.chat-settings-tool-category');
         expect(category.text()).toContain('Task list tools');
         expect(category.text()).toContain('11');
@@ -136,14 +166,81 @@ describe('ChatSettingsPopover options layout', () => {
         expect(wrapper.findAll('.chat-settings-tool-row')).toHaveLength(0);
 
         await category.trigger('click');
+        expect(animate).toHaveBeenNthCalledWith(
+            1,
+            [{ height: '400px' }, { height: '700px' }],
+            { duration: 190, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
+        );
         expect(wrapper.find('.chat-settings-title').text()).toBe('Task list tools');
         expect(wrapper.findAll('.chat-settings-tool-row')).toHaveLength(11);
         expect(wrapper.text()).toContain('search lists');
         expect(wrapper.find('.chat-settings-body').attributes('style')).toContain('display: none');
 
         await wrapper.find('[aria-label="Back to chat settings"]').trigger('click');
+        expect(animate).toHaveBeenNthCalledWith(
+            2,
+            [{ height: '700px' }, { height: '400px' }],
+            { duration: 190, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
+        );
         expect(wrapper.find('.chat-settings-title').text()).toBe('Chat settings');
         expect(wrapper.findAll('.chat-settings-tool-row')).toHaveLength(0);
+    });
+
+    it('toggles only the active category and reflects partial selection', async () => {
+        for (const name of ['search', 'create', 'delete']) {
+            mockTools.tools.push({
+                definition: {
+                    type: 'function',
+                    function: {
+                        name,
+                        description: name,
+                        parameters: { type: 'object' },
+                    },
+                    ui: { category: 'OR3 Tasks', label: name },
+                },
+                enabled: ref(false),
+            } as RegisteredTool);
+        }
+        mockTools.tools.push({
+            definition: {
+                type: 'function',
+                function: {
+                    name: 'other',
+                    description: 'Other tool',
+                    parameters: { type: 'object' },
+                },
+                ui: { category: 'Other' },
+            },
+            enabled: ref(false),
+        } as RegisteredTool);
+
+        const wrapper = mountPopover();
+        await wrapper.find('.chat-settings-tool-category').trigger('click');
+        const allSwitch = wrapper.find('#chat-tools-all');
+        expect(allSwitch.attributes('aria-checked')).toBe('false');
+        expect(wrapper.find('#chat-tools-enabled-count').text()).toBe('0 of 3 enabled');
+
+        await allSwitch.trigger('click');
+        expect(mockTools.setEnabled.mock.calls).toEqual([
+            ['search', true], ['create', true], ['delete', true],
+        ]);
+        expect(allSwitch.attributes('aria-checked')).toBe('true');
+        expect(wrapper.find('#chat-tools-enabled-count').text()).toBe('3 of 3 enabled');
+
+        await wrapper.find('#chat-tool-search').trigger('click');
+        expect(allSwitch.attributes('aria-checked')).toBe('false');
+        expect(wrapper.find('#chat-tools-enabled-count').text()).toBe('2 of 3 enabled');
+
+        mockTools.setEnabled.mockClear();
+        await allSwitch.trigger('click');
+        expect(mockTools.setEnabled.mock.calls).toEqual([['search', true]]);
+
+        mockTools.setEnabled.mockClear();
+        await allSwitch.trigger('click');
+        expect(mockTools.setEnabled.mock.calls).toEqual([
+            ['search', false], ['create', false], ['delete', false],
+        ]);
+        expect(allSwitch.attributes('aria-checked')).toBe('false');
     });
 
     it('renders Options/More headings with dropdown rows', () => {
