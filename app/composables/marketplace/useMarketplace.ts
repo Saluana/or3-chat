@@ -485,6 +485,8 @@ export interface MarketplaceUpdateCheckPlugin {
         readonly authority?: EffectiveAuthority;
         readonly publishedAt: string;
         readonly profile?: string;
+        readonly approvalRequired: boolean;
+        readonly addedAccess: readonly { readonly kind: string; readonly detail: string }[];
     };
 }
 
@@ -1056,6 +1058,7 @@ export function useMarketplaceConsent() {
         readonly expectedPackageDigest: string | null;
         /** Signed authority hash shown to the reviewer. */
         readonly expectedAuthoritySha256: string;
+        readonly deploymentWide?: boolean;
     }): Promise<boolean> => {
         saving.value = true;
         error.value = null;
@@ -1065,6 +1068,7 @@ export function useMarketplaceConsent() {
                     approvedGrants: [...input.approvedGrants],
                     expectedPackageDigest: input.expectedPackageDigest,
                     expectedAuthoritySha256: input.expectedAuthoritySha256,
+                    ...(input.deploymentWide ? { deploymentWide: true } : {}),
                     ...(input.version === undefined ? {} : { version: input.version }),
                 },
             });

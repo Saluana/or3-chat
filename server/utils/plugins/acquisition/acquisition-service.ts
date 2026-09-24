@@ -14,8 +14,8 @@
  *   and lifecycle services. It never installs bytes itself and never writes a
  *   pointer except through them.
  * - Instance-wide updates require every enabled workspace to pass the same
- *   preflight; a blocking workspace keeps the update `blocked` until an owner
- *   disables it, and no grant is ever widened on a workspace's behalf.
+ *   preflight; a blocking workspace keeps the update `blocked` until its
+ *   approval, setup or state problem is resolved.
  * - A first install whose package declares setup pauses at `paused` /
  *   `setup-required` after the candidate is recorded, instead of reporting an
  *   activation the plugin cannot yet deliver.
@@ -518,7 +518,7 @@ export class PluginAcquisitionService {
     /**
      * Instance-wide update preflight: every enabled workspace must be able to
      * read the same selected version. A blocking workspace is reported and the
-     * update stays blocked until an owner explicitly disables it. Consent is
+     * update stays blocked until its owner resolves the issue. Consent is
      * evaluated against the candidate's complete authority, so an update that
      * widens hosts, scopes or writes blocks even when grants are unchanged.
      */
@@ -1309,7 +1309,7 @@ export class PluginAcquisitionService {
             return await this.#fail(
                 record,
                 'workspace-preflight-blocked',
-                `An owner must disable these workspaces before the update can continue: ${detail}`,
+                `Update blocked in these workspaces: ${detail}`,
                 true,
                 'blocked'
             );
@@ -1447,7 +1447,7 @@ export class PluginAcquisitionService {
             return await this.#fail(
                 record,
                 'workspace-preflight-blocked',
-                `An owner must disable these workspaces before the update can continue: ${detail}`,
+                `Update blocked in these workspaces: ${detail}`,
                 true,
                 'blocked',
                 {},

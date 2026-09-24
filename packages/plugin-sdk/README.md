@@ -172,6 +172,13 @@ no private path aliases:
   records those exact bytes in the receipt; release qualification compares
   them rather than trusting a version string.
 
+Marketplace submission works without CI: upload the verified candidate's
+`package.zip` and `source.zip` in Developers > Submissions, then attach
+`receipt.json` to the draft. CI may build and qualify the same immutable
+candidate as an artifact; ordinary pushes do not publish it. The Marketplace
+currently requires an interactive developer session for upload and recent MFA
+to submit it for independent review.
+
 ## Portable profile
 
 `defineOr3PortableProfile()` from `@or3/plugin-sdk/profile` is the single

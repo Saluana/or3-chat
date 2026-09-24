@@ -5,7 +5,7 @@
  * Updates are recorded candidates on the same package lifecycle the installer
  * uses: each one is health-checked (including the hidden browser canary for
  * contained client packages) and only then promoted by exact digest. A newer
- * authority revision needs fresh workspace consent before the check can pass.
+ * expanded authority needs one deployment-wide approval before the check can pass.
  */
 import { computed, onMounted, ref } from 'vue';
 import { useToast } from '#imports';
@@ -115,6 +115,12 @@ function updateTargetKey(entry: MarketplaceUpdateCheckPlugin): string {
     return target ? marketplaceTargetKey(target) : '';
 }
 
+function accessChangeLabel(kind: string): string {
+    if (kind === 'trust-changed') return 'Trust mode changed';
+    if (kind === 'connection-changed') return 'Connection changed';
+    return `New ${kind.replace(/-added$/, '').replaceAll('-', ' ')}`;
+}
+
 async function refreshUpdates(): Promise<void> {
     approvedUpdates.value = {};
     await updateCheck.check();
@@ -165,8 +171,8 @@ async function reviewUpdate(entry: MarketplaceUpdateCheckPlugin): Promise<void> 
         return;
     }
     const grants = target.requestedGrants;
-    const authorityReviewRequired = grants.length > 0 || target.authority !== undefined;
-    if (grants.length > 0 && !target.authority) {
+    const authorityReviewRequired = entry.release?.approvalRequired === true;
+    if (authorityReviewRequired && !target.authority) {
         updateNote.value = {
             ...updateNote.value,
             [entry.pluginId]: {
@@ -185,7 +191,7 @@ async function reviewUpdate(entry: MarketplaceUpdateCheckPlugin): Promise<void> 
         updateNote.value = {
             ...updateNote.value,
             [entry.pluginId]: {
-                message: 'Review and approve the requested permissions before staging this update.',
+                message: 'Review and approve the requested access for enabled workspaces before staging this update.',
                 retryable: false,
             },
         };
@@ -203,6 +209,7 @@ async function reviewUpdate(entry: MarketplaceUpdateCheckPlugin): Promise<void> 
             expectedPackageDigest: target.packageTreeSha256,
             expectedAuthoritySha256: target.authoritySha256,
             version: target.version,
+            deploymentWide: true,
         });
         if (!recorded) {
             toast.add({
@@ -555,6 +562,16 @@ async function activate(entry: {
                     Requested authority:
                     {{ entry.release?.requestedGrants.join(', ') || 'none' }}
                 </p>
+                <div v-if="entry.release?.approvalRequired" class="text-xs">
+                    <p class="font-medium">Access requiring deployment approval</p>
+                    <ul v-if="entry.release.addedAccess.length" class="list-disc pl-5">
+                        <li v-for="change in entry.release.addedAccess" :key="`${change.kind}:${change.detail}`">
+                            {{ accessChangeLabel(change.kind) }}: {{ change.detail }}
+                        </li>
+                    </ul>
+                    <p v-else>At least one enabled workspace has not approved this signed authority.</p>
+                </div>
+                <p v-else class="text-xs text-(--ui-text-muted)">No new access approval is needed for enabled workspaces.</p>
                 <details v-if="entry.release?.authority" class="rounded-lg border border-(--ui-border) p-3 text-xs">
                     <summary class="cursor-pointer font-medium">Review complete authority</summary>
                     <div class="mt-2 flex flex-col gap-2">
@@ -582,7 +599,7 @@ async function activate(entry: {
                     The complete signed authority descriptor is unavailable; this update cannot be approved safely.
                 </p>
                 <label
-                    v-if="entry.release?.requestedGrants.length || entry.release?.authority"
+                    v-if="entry.release?.approvalRequired"
                     class="flex items-center gap-2 text-xs text-(--ui-text-muted)"
                 >
                     <input
@@ -592,7 +609,7 @@ async function activate(entry: {
                         :false-value="''"
                         data-testid="marketplace-update-grant-approve"
                     />
-                    I approve these permissions for this workspace.
+                    I approve this release's access for every enabled workspace.
                 </label>
                 <div class="flex flex-wrap gap-2">
                     <UButton

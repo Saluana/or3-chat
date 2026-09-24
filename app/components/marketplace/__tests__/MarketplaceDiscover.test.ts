@@ -297,6 +297,17 @@ describe('MarketplaceDiscover', () => {
         expect(help.message).not.toContain('secret-token');
     });
 
+    it('names the workspace and action that blocked a shared update', () => {
+        const view = acquisitionOperation({ failure: {
+            code: 'workspace-preflight-blocked',
+            stage: 'candidate-recorded',
+            retryable: true,
+            message: 'Update blocked in these workspaces: ws-2 (grant-review-stale), ws-3 (setup-required)',
+        } });
+        expect(acquisitionFailureHelp(view).message).toContain('ws-2 needs permission approval');
+        expect(acquisitionFailureHelp(view).message).toContain('ws-3 needs plugin setup');
+    });
+
     it.each([
         [401, 'Sign in again'], [403, 'administrator access'], [429, 'Wait a moment'], [500, 'server logs'],
     ])('explains HTTP %s failures before an operation exists', (statusCode, guidance) => {

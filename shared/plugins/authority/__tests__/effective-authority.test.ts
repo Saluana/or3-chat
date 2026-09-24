@@ -262,12 +262,16 @@ describe('effective authority (4.6)', () => {
         );
     });
 
-    it('reports engine changes, which participate in the hash', () => {
-        const comparison = compareAuthority(authority(), authority({ engines: ['or3>=2.0.0'] }));
-        expect(comparison.identical).toBe(false);
-        expect(comparison.expansions).toEqual(
-            expect.arrayContaining([expect.objectContaining({ kind: 'engine-added' })])
+    it('signs engine changes without requiring fresh access consent', async () => {
+        const next = authority({ engines: ['or3>=2.0.0'] });
+        expect(await computeAuthorityHash(authority())).not.toBe(
+            await computeAuthorityHash(next)
         );
+        expect(compareAuthority(authority(), next)).toMatchObject({
+            identical: true,
+            expanded: false,
+            requiresFreshConsent: false,
+        });
     });
 
     it('reports identical authority for an unchanged update', () => {

@@ -149,7 +149,7 @@
                                 <AppIcon
                                     :image="page.image"
                                     :icon="page.icon || iconPageDefault"
-                                    class="h-5 w-5"
+                                    :class="page.image ? 'h-7 w-7' : 'h-5 w-5'"
                                 />
                             </UButton>
                         </UTooltip>

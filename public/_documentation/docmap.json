@@ -35,7 +35,7 @@
                     "name": "plugin-quickstart.md",
                     "path": "/start/plugin-quickstart",
                     "category": "Tutorial",
-                    "summary": "Extend the dashboard, chat messages, and sidebar through source-level plugins or installable packages, including validated bundled PNG/WebP app icons with Iconify fallbacks."
+                    "summary": "Source-level Nuxt and installable V1 plugin patterns for dashboard, chat and sidebar extensions. New installable plugin authors should follow the linked V2 development guide."
                 },
                 {
                     "name": "snake-game-tutorial.md",
@@ -1340,6 +1340,12 @@
                     "summary": "Three first-party plugins — Model Compare, Prompt Workbench and Document Utilities — ship as ordinary portable packages: the same SDK, profile, review lane and setup flow as community plugins. Model calls go through the host's governed ai.models/ai.complete capabilities (operator allowlist and prices, plugin-attributed spend, no credential in the plugin), writes happen only through host-rendered actions the user clicks, and the declared first action resolves on the selected document or the package's own sample file."
                 },
                 {
+                    "name": "plugin-development-v2.md",
+                    "path": "/plugins/plugin-development-v2",
+                    "category": "Tutorial",
+                    "summary": "End-to-end portable Plugin Runtime V2 journey: install the unpublished SDK from a tarball, scaffold and qualify a frozen candidate, test it in a dedicated local instance, submit the same files to staging, then follow trusted review and publication."
+                },
+                {
                     "name": "plugin-sdk.md",
                     "path": "/plugins/plugin-sdk",
                     "category": "Reference",
@@ -1349,7 +1355,7 @@
                     "name": "plugin-sdk-cli.md",
                     "path": "/plugins/plugin-sdk-cli",
                     "category": "Reference",
-                    "summary": "@or3/plugin-sdk is not yet on npm: install it from a packed tarball. Bun is required for the CLI; interrupted test runners fail explicitly. Create takes --sdk-source, install the generated dependencies, then build before pack consumes dist. It provides prebuilt ESM + types under dist/ and a standalone or3-plugin CLI (create, validate, test, build, pack, inspect) that works without an OR3 checkout or private path aliases, plus the portable-v1 starter with a hidden .authoring/ generator. Publishing requires adding an SDK job to the release workflows."
+                    "summary": "@or3/plugin-sdk is not yet on npm: install it from a packed tarball. Bun is required for the CLI. The standalone or3-plugin CLI creates, validates, tests, builds, packs, inspects and freezes an immutable candidate without an OR3 checkout. Manual Marketplace submission uses package.zip, source.zip and receipt.json; optional CI may qualify the same frozen files, while final upload and MFA submission use an interactive developer session."
                 },
                 {
                     "name": "portable-profile.md",
@@ -1391,13 +1397,13 @@
                     "name": "trusted-acquisition.md",
                     "path": "/plugins/trusted-acquisition",
                     "category": "Reference",
-                    "summary": "Reviewed acquisition installs a package published and signed by a configured marketplace registry. It refuses arbitrary package URLs, verifies signed metadata, archive and canonical tree digests before any pointer changes, enforces the signed checkpoint's monotonic security revision (rollback, equivocation and replay are refused), requires every enabled workspace to preflight an instance-wide update, and is resumable under one operation id. Includes staging registry and public-key preparation for source development, plus the portable or3sal.tasks package and its legacy compatibility limits. Runner leases retain live ownership and cancellation preserves committed stage evidence; interrupted work is explicitly resumable."
+                    "summary": "Reviewed acquisition installs a package published and signed by a configured marketplace registry. It refuses arbitrary package URLs, verifies signed metadata, archive and canonical tree digests before any pointer changes, enforces the signed checkpoint's monotonic security revision (rollback, equivocation and replay are refused), and preflights every enabled workspace for an instance-wide update. Existing access approvals carry forward; expanded access takes one deployment-wide administrator approval, and blocked candidates leave the current version selected. Runner leases retain live ownership and cancellation preserves committed stage evidence; interrupted work is explicitly resumable."
                 },
                 {
                     "name": "marketplace.md",
                     "path": "/plugins/marketplace",
                     "category": "Guide",
-                    "summary": "Native discovery, signed authority consent, resumable acquisition, terminal failure history, cancellation feedback, empty-view restart recovery, and update checks with semantic ordering, instance version pins, compatibility and linked Library coverage. Installed versus actually running with exact digests, 30-second activation confirmation, bounded diagnostic reports with release and runtime identities, recovery limits, and the local development candidate path. Includes portable Open behavior and dashboard Configure navigation with a back affordance, runtime loader prerequisites, legacy Tasks integration limits, actionable failure guidance, workspace-bound resumed browser canaries, the Admin > Plugins marketplace shortcut, separate Chat/admin sign-in requirements, and publisher listing help. Includes developer submission upload and draft retry recovery, interrupted-operation recovery, transient startup retry, workspace-bound restoration, stale refresh state, and digest-bound instance-wide uninstall confirmation."
+                    "summary": "Native discovery, signed authority consent, resumable acquisition, terminal failure history, cancellation feedback, empty-view restart recovery, and update checks with semantic ordering, instance version pins, compatibility and linked Library coverage. A single selected code version serves enabled workspaces; unchanged access updates avoid repeated approval, while expanded access takes one deployment-wide administrator approval. Blocked updates name the workspace and preserve the selected version. Installed versus actually running uses exact digests and browser activation confirmation. Includes portable Open behavior, runtime loader prerequisites, local candidate development, developer submission upload and retry recovery, and digest-bound instance-wide uninstall confirmation."
                 },
                 {
                     "name": "library.md",

@@ -1,5 +1,8 @@
 # Local Development Candidates
 
+For the complete scaffold-to-publication path, start with [Build and publish
+a V2 plugin](./plugin-development-v2).
+
 Test an unpublished plugin candidate as a real plugin inside OR3 Chat without
 publishing every iteration. Candidates are immutable SDK outputs; the
 development instance admits them through the same validation, grant review,

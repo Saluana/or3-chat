@@ -292,6 +292,8 @@ function destinationChanges(
  * Compare two authority snapshots for one plugin.
  * Any new host, method, path, scope, hook, feature, dependency or trust change
  * counts as an expansion and requires fresh consent even if no grant string moved.
+ * Engine ranges are signed compatibility metadata, checked by the host rather
+ * than by workspace access consent.
  */
 export function compareAuthority(
     previous: EffectiveAuthority,
@@ -314,7 +316,6 @@ export function compareAuthority(
         ['write-added', previous.writes, next.writes],
         ['setup-hook-added', previous.setupHooks, next.setupHooks],
         ['feature-added', previous.features, next.features],
-        ['engine-added', previous.engines, next.engines],
         ['dependency-added', previous.dependencies, next.dependencies],
     ] as const) {
         const diff = diffSets(kind, before, after);

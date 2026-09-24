@@ -23,12 +23,14 @@ import {
     pluginPackageServices,
 } from '../../../../../admin/plugins/package-operation-support';
 import {
+    getEnabledPlugins,
     setPluginGrantReview,
     type PluginGrantCandidate,
 } from '../../../../../admin/plugins/workspace-plugin-store';
 import {
     acquisitionServiceFor,
     registryClientFor,
+    listAllWorkspaceIds,
 } from '../../../../../utils/plugins/acquisition/route-support';
 import { acquisitionConfig } from '../../../../../utils/plugins/acquisition/config';
 import { RegistryStateStore } from '../../../../../utils/plugins/acquisition/registry-state';
@@ -45,6 +47,7 @@ const BodySchema = z
         expectedAuthoritySha256: DigestSchema,
         version: z.string().min(1).max(64).optional(),
         workspaceId: z.string().min(1).optional(),
+        deploymentWide: z.boolean().optional(),
     })
     .strict();
 
@@ -58,6 +61,9 @@ export default defineEventHandler(async (event) => {
     const body = BodySchema.safeParse(await readBody(event));
     if (!pluginId || !body.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid request' });
+    }
+    if (body.data.deploymentWide && body.data.workspaceId) {
+        throw createError({ statusCode: 400, statusMessage: 'Choose either deployment-wide or one workspace.' });
     }
     const workspaceId = resolveAdminWorkspaceTarget(context, body.data.workspaceId);
     const services = pluginPackageServices(getWorkspaceSettingsStore(event));
@@ -178,17 +184,35 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const review = await setPluginGrantReview(services.settings, workspaceId, pluginId, {
-        candidate,
-        approvedGrants: approved,
-        reviewedBy: requesterIdentity(context),
-    });
-    await event.context.adminHooks?.doAction('admin.plugin:action:grants-reviewed', {
-        id: pluginId,
-        workspaceId,
-        approvedGrants: [...review.approvedGrants],
-        packageDigest: review.packageDigest,
-        authoritySha256: review.authoritySha256,
-    });
-    return { ok: true, workspaceId, review };
+    const workspaceIds = body.data.deploymentWide
+        ? new Set([workspaceId, ...await listAllWorkspaceIds(event)])
+        : new Set([workspaceId]);
+    let reviewed = 0;
+    let review: Awaited<ReturnType<typeof setPluginGrantReview>> | null = null;
+    for (const targetId of workspaceIds) {
+        if (targetId !== workspaceId &&
+            !(await getEnabledPlugins(services.settings, targetId)).includes(pluginId)) continue;
+        try {
+            review = await setPluginGrantReview(services.settings, targetId, pluginId, {
+                candidate,
+                approvedGrants: approved,
+                reviewedBy: requesterIdentity(context),
+            });
+        } catch {
+            throw createError({
+                statusCode: 503,
+                statusMessage: `Approval could not be saved for workspace ${targetId}. ${reviewed} workspace approval(s) were saved; retry this release to finish.`,
+                data: { code: 'workspace-grant-write-failed', workspaceId: targetId, reviewedWorkspaces: reviewed },
+            });
+        }
+        reviewed += 1;
+        await event.context.adminHooks?.doAction('admin.plugin:action:grants-reviewed', {
+            id: pluginId,
+            workspaceId: targetId,
+            approvedGrants: [...review.approvedGrants],
+            packageDigest: review.packageDigest,
+            authoritySha256: review.authoritySha256,
+        });
+    }
+    return { ok: true, workspaceId, reviewedWorkspaces: reviewed, review };
 });

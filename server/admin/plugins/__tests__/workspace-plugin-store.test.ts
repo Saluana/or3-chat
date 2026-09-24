@@ -296,6 +296,52 @@ describe('workspace plugin store', () => {
         });
     });
 
+    it('keeps the selected package approved while a different candidate is staged', async () => {
+        const { store } = createStore();
+        const selected = candidate();
+        await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+            candidate: selected,
+            approvedGrants: [...selected.requestedGrants],
+            reviewedAt: 1,
+        });
+        const staged = candidate({
+            releaseId: 'rel_2',
+            packageDigest: DIGEST_B,
+            authoritySha256: DIGEST_B,
+            authority: authorityDescriptor({
+                destinations: [
+                    { host: 'new.example.com', methods: ['GET'], pathPrefixes: ['/'] },
+                ],
+            }),
+        });
+        await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+            candidate: staged,
+            approvedGrants: [...staged.requestedGrants],
+            reviewedAt: 2,
+        });
+
+        await expect(getPluginGrantReview(store, 'ws-1', 'plugin.a', staged))
+            .resolves.toMatchObject({ status: 'current', packageDigest: DIGEST_B });
+        await expect(getPluginGrantReview(store, 'ws-1', 'plugin.a', selected))
+            .resolves.toMatchObject({ status: 'current', packageDigest: DIGEST_A });
+    });
+
+    it('carries access approval across a signed engine-only update', async () => {
+        const { store } = createStore();
+        await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+            candidate: candidate(),
+            approvedGrants: ['documents.read', 'tools.register.client'],
+        });
+        const next = candidate({
+            releaseId: 'rel_2',
+            packageDigest: DIGEST_B,
+            authoritySha256: DIGEST_B,
+            authority: authorityDescriptor({ engines: ['or3:>=2.0.0'] }),
+        });
+        await expect(getPluginGrantReview(store, 'ws-1', 'plugin.a', next))
+            .resolves.toMatchObject({ status: 'current' });
+    });
+
     it('requires review for zero-grant authority and catches a destination expansion', async () => {
         const { store } = createStore();
         const initial = candidate({

@@ -1,8 +1,12 @@
-# Plugin Quick Start Guide
+# Source and V1 Plugin Quick Start
 
-This guide shows you how to extend the dashboard, chat messages, and sidebar
-through either source-level Nuxt plugins or installable V1 workspace packages.
-Both use the same reactive registries, but their module exports are different.
+For a new installable plugin, start with [Build and publish a V2
+plugin](/plugins/plugin-development-v2). It covers SDK scaffolding, local
+testing, staging submission, review and publication.
+
+This guide covers source-level Nuxt plugins and installable V1 workspace
+packages. Both use the same reactive registries, but their module exports are
+different.
 
 > **Plugin Runtime V2:** Digest-addressed SDK packages (`@or3/plugin-sdk`,
 > Manifest V2) are documented under [Runtime V2 overview](/plugins/runtime-v2-overview).

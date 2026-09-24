@@ -198,7 +198,7 @@ function dependencyEntries(
 /**
  * The complete authority a release declares, derived from its validated
  * descriptors and manifest. Consent records bind to this, so an update that
- * adds a host, method, path, scope, write, hook, feature, engine or dependency
+ * adds a host, method, path, scope, write, hook, feature or dependency
  * is an expansion even when every grant string stays the same.
  */
 export function toEffectiveAuthority(input: {

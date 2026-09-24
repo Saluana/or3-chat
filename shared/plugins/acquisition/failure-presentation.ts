@@ -1,5 +1,24 @@
 import type { AcquisitionStatusView } from './contracts';
 
+function workspacePreflightMessage(message: string | undefined): string | null {
+    if (!message?.startsWith('Update blocked in these workspaces: ')) return null;
+    const details = message.slice('Update blocked in these workspaces: '.length);
+    const blocks = details.split(', ').slice(0, 10).map((item) => {
+        const match = /^([a-zA-Z0-9_-]{1,128}) \((grant-review-stale|grant-review-unreviewed|setup-required|setup-blocked|setup-unavailable|state-migration-required|state-version-unreadable|rollback-migration-required)\)$/.exec(item);
+        if (!match) return null;
+        const [, id, code] = match;
+        const action = code?.startsWith('grant-review')
+            ? 'needs permission approval'
+            : code?.startsWith('setup')
+                ? 'needs plugin setup'
+                : 'needs a state compatibility fix';
+        return `${id} ${action}`;
+    });
+    return blocks.length > 0 && blocks.every(Boolean)
+        ? `${blocks.join('; ')}. The current version remains selected.`
+        : null;
+}
+
 /** Requests can fail before an operation exists (expired session, denied access). */
 export function acquisitionRequestError(error: unknown): string {
     const response = error as { statusCode?: number; status?: number } | null;
@@ -48,7 +67,7 @@ export function acquisitionFailureHelp(view: AcquisitionStatusView) {
         case 'operation-conflict':
             return { title: 'The installation state changed', message: 'Check Installed for another completed installation or update before retrying.' };
         case 'workspace-preflight-blocked':
-            return { title: 'Another workspace needs attention', message: 'An administrator must review the affected workspaces before this shared update can proceed.' };
+            return { title: 'A workspace blocked this update', message: workspacePreflightMessage(view.failure?.message) ?? 'An administrator must resolve the affected workspace before this shared update can proceed. The current version remains selected.' };
         case 'health-check-failed':
             return { title: 'The plugin could not start safely', message: 'Share the diagnostic report with the publisher. Check Installed for the currently active version.' };
         default:

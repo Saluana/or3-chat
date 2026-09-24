@@ -1,5 +1,8 @@
 # Plugin SDK CLI and Packaging
 
+For the full developer path, see [Build and publish a V2
+plugin](./plugin-development-v2).
+
 `@or3/plugin-sdk` provides prebuilt ESM and type declarations under `dist/`,
 plus a standalone `or3-plugin` CLI. External authors can scaffold, build, test,
 validate, pack and inspect a plugin package without an OR3 checkout and without
@@ -106,6 +109,18 @@ The `or3-plugin` CLI bundles no third-party runtime code and imports only Node
 built-ins plus this package's own modules. See [Local Development
 Candidates](./local-development) for testing a candidate inside real OR3 Chat
 without publishing it.
+
+## Marketplace submission
+
+Run `or3-plugin candidate <package-root> --out <candidate-dir>` and
+`or3-plugin candidate --verify <candidate-dir>` locally. Upload that directory's
+`package.zip` and `source.zip` on the Marketplace Developers > Submissions page,
+then attach `receipt.json` to the draft. CI is optional: a workflow may produce
+and verify the same three frozen files as artifacts, but ordinary pushes must
+not publish a plugin. Marketplace submission, independent review, and signing
+remain separate steps. The Marketplace currently requires an interactive
+developer session for upload and recent MFA for final submission; it has no
+publisher token for unattended CI submission.
 
 ## Portable starter
 

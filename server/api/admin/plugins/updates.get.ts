@@ -22,7 +22,7 @@ import type { LibraryEntitlementsView } from '../../../admin/library/link-servic
 import { readUpdatePin } from '../../../utils/plugins/marketplace/update-pins';
 import { requireAdminApiContext } from '../../../admin/api';
 import { getWorkspaceSettingsStore } from '../../../admin/stores/registry';
-import { pluginPackageServices } from '../../../admin/plugins/package-operation-support';
+import { packageGrantCandidate, pluginPackageServices } from '../../../admin/plugins/package-operation-support';
 import { PluginPackageRouteCatalog } from '../../../admin/plugins/package-route-catalog';
 import {
     marketplaceRegistryConfigured,
@@ -31,7 +31,9 @@ import {
 import { acquisitionConfig } from '../../../utils/plugins/acquisition/config';
 import { registryClientFor } from '../../../utils/plugins/acquisition/route-support';
 import { RegistryStateStore } from '../../../utils/plugins/acquisition/registry-state';
-import type { EffectiveAuthority } from '~~/shared/plugins/authority/effective-authority';
+import { listAllWorkspaceIds } from '../../../utils/plugins/acquisition/route-support';
+import { getEnabledPlugins, getPluginGrantReview } from '../../../admin/plugins/workspace-plugin-store';
+import { compareAuthority, type EffectiveAuthority, type AuthorityChange } from '~~/shared/plugins/authority/effective-authority';
 
 interface UpdateCheckPlugin {
     readonly pluginId: string;
@@ -49,11 +51,14 @@ interface UpdateCheckPlugin {
         readonly authority?: EffectiveAuthority;
         readonly publishedAt: string;
         readonly profile: string;
+        /** One site administrator approval covers every enabled workspace. */
+        readonly approvalRequired: boolean;
+        readonly addedAccess: readonly AuthorityChange[];
     };
 }
 
 export default defineEventHandler(async (event) => {
-    const context = await requireAdminApiContext(event, { ownerOnly: true });
+    const context = await requireAdminApiContext(event, { ownerOnly: true, superAdminOnly: true });
     const services = pluginPackageServices(getWorkspaceSettingsStore(event));
     const selected = await new PluginPackageRouteCatalog(
         services.packages,
@@ -64,6 +69,8 @@ export default defineEventHandler(async (event) => {
         .map((catalog) => ({
             pluginId: catalog.pluginId,
             version: catalog.manifest.version,
+            packagePath: catalog.packagePath,
+            packageDigest: catalog.packageDigest,
         }));
 
     const configured = marketplaceRegistryConfigured();
@@ -84,6 +91,8 @@ export default defineEventHandler(async (event) => {
     const config = acquisitionConfig();
     const state = new RegistryStateStore();
     const registryState = await state.read();
+    const workspaceIds = new Set(await listAllWorkspaceIds(event));
+    if (context.session?.workspace?.id) workspaceIds.add(context.session.workspace.id);
 
     let entitlements: LibraryEntitlementsView | undefined;
     for (const entry of installed) {
@@ -151,6 +160,31 @@ export default defineEventHandler(async (event) => {
                 plugins.push({ pluginId: entry.pluginId, installedVersion: entry.version, latestVersion, status: 'blocked', reason });
                 continue;
             }
+            const candidate = {
+                requestedGrants: document.requestedGrants,
+                releaseId: document.releaseId,
+                packageDigest: document.packageTreeSha256,
+                authoritySha256: document.authoritySha256,
+                authority: document.authority ?? null,
+            };
+            let approvalRequired = false;
+            for (const workspaceId of workspaceIds) {
+                if (workspaceId !== context.session?.workspace?.id &&
+                    !(await getEnabledPlugins(services.settings, workspaceId)).includes(entry.pluginId)) continue;
+                const review = await getPluginGrantReview(services.settings, workspaceId, entry.pluginId, candidate);
+                if (review.status !== 'current' ||
+                    !document.requestedGrants.every(grant => review.approvedGrants.includes(grant))) {
+                    approvalRequired = true;
+                    break;
+                }
+            }
+            const currentAuthority = await packageGrantCandidate({
+                packagePath: entry.packagePath,
+                packageDigest: entry.packageDigest,
+            }).then(result => result.authority).catch(() => null);
+            const addedAccess = currentAuthority && document.authority
+                ? compareAuthority(currentAuthority, document.authority).expansions
+                : [];
             plugins.push({
                 pluginId: entry.pluginId,
                 installedVersion: entry.version,
@@ -165,6 +199,8 @@ export default defineEventHandler(async (event) => {
                     requestedGrants: document.requestedGrants,
                     publishedAt: document.publishedAt,
                     profile: document.profile,
+                    approvalRequired,
+                    addedAccess,
                     ...(document.authority === undefined ? {} : { authority: document.authority }),
                 },
             });

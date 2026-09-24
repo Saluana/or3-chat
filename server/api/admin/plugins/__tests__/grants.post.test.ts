@@ -13,6 +13,7 @@ const setReviewMock = vi.fn();
 const resolveReleaseMock = vi.fn();
 const listOperationsMock = vi.fn();
 const candidateMock = vi.fn();
+const enabledMock = vi.fn();
 let body: Record<string, unknown> = {};
 
 const DIGEST_A = `sha256-${'a'.repeat(64)}`;
@@ -69,6 +70,7 @@ vi.mock('../../../../admin/plugins/package-operation-support', () => ({
 
 vi.mock('../../../../admin/plugins/workspace-plugin-store', () => ({
     setPluginGrantReview: (...args: unknown[]) => setReviewMock(...args),
+    getEnabledPlugins: (...args: unknown[]) => enabledMock(...args),
 }));
 
 vi.mock('../../../../utils/plugins/acquisition/config', () => ({
@@ -84,6 +86,7 @@ vi.mock('../../../../utils/plugins/acquisition/registry-state', () => ({
 }));
 
 vi.mock('../../../../utils/plugins/acquisition/route-support', () => ({
+    listAllWorkspaceIds: async () => ['ws-1', 'ws-2', 'ws-3'],
     registryClientFor: () => ({
         resolveRelease: (...args: unknown[]) => resolveReleaseMock(...args),
     }),
@@ -105,6 +108,8 @@ async function callRoute(): Promise<Record<string, unknown>> {
 
 describe('grant consent route', () => {
     beforeEach(() => {
+        enabledMock.mockReset().mockImplementation(async (_settings: unknown, workspaceId: string) =>
+            workspaceId === 'ws-2' ? ['or3.sample-utility'] : []);
         readManifestMock.mockReset();
         readPointerMock.mockReset().mockResolvedValue({
             candidate: { packageDigest: DIGEST_A },
@@ -161,6 +166,24 @@ describe('grant consent route', () => {
                 reviewedBy: 'super_admin:admin',
             })
         );
+    });
+
+    it('records one explicit deployment approval for enabled workspaces', async () => {
+        body = { ...body, deploymentWide: true };
+        const result = await callRoute();
+        expect(result.reviewedWorkspaces).toBe(2);
+        expect(setReviewMock.mock.calls.map(call => call[1])).toEqual(['ws-1', 'ws-2']);
+    });
+
+    it('names a partial deployment approval so the same release can be retried', async () => {
+        body = { ...body, deploymentWide: true };
+        setReviewMock.mockResolvedValueOnce({
+            approvedGrants: ['settings.read'], packageDigest: DIGEST_A, authoritySha256: AUTHORITY_A,
+        }).mockRejectedValueOnce(new Error('store unavailable'));
+        await expect(callRoute()).rejects.toMatchObject({
+            statusCode: 503,
+            data: { code: 'workspace-grant-write-failed', workspaceId: 'ws-2', reviewedWorkspaces: 1 },
+        });
     });
 
     it('refuses grants the release does not request', async () => {
