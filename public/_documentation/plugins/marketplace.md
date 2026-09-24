@@ -1,5 +1,14 @@
 # Native Marketplace
 
+Developers publish through the central marketplace's **Developers → Submissions**
+page. Select the built `.or3pkg` or `.zip` package and its matching source
+`.tar.gz` or `.zip` archive, then create a draft. Ordinary ZIP directory
+entries are accepted. If the page loses the create response after the draft
+was saved, it refreshes **Your revisions** and opens the new draft; a retry
+with the same finalized uploads returns that draft instead of creating a new
+revision. Complete the draft's category and support/privacy links before
+submitting it for review.
+
 Dashboard > Marketplace is the user-facing place to find, install and manage plugins from the configured marketplace registry. It is a dashboard app like the Workspace manager: it reuses the existing navigation, theme and components, has no iframe and has no central-site sign-in.
 
 Discovery works on any instance. Installing requires an OR3 Cloud profile with a configured registry — a static or local build shows that installation is unsupported instead of hiding the surface.
