@@ -3,7 +3,8 @@
 Developers publish through the central marketplace's **Developers → Submissions**
 page. Select the built `.or3pkg` or `.zip` package and its matching source
 `.tar.gz` or `.zip` archive, then create a draft. Ordinary ZIP directory
-entries are accepted. If the page loses the create response after the draft
+entries are accepted; selecting the same archive for both fields is rejected
+with a specific error. If the page loses the create response after the draft
 was saved, it refreshes **Your revisions** and opens the new draft; a retry
 with the same finalized uploads returns that draft instead of creating a new
 revision. Complete the draft's category and support/privacy links before
