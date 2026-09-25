@@ -2206,10 +2206,12 @@ export function useChat(
             });
 
             const toolRegistry = useToolRegistry();
-            const enabledToolDefs = toolRegistry.getEnabledDefinitions({
+            const modelSupportsTools = !budgetModelMeta?.supported_parameters
+                || budgetModelMeta.supported_parameters.includes('tools');
+            const enabledToolDefs = modelSupportsTools ? toolRegistry.getEnabledDefinitions({
                 workspaceId: requestScope.workspaceId,
                 threadId: requestThreadId,
-            });
+            }) : [];
             const foregroundToolDefs = enabledToolDefs.filter(
                 (tool) => tool.runtime !== 'server'
             );

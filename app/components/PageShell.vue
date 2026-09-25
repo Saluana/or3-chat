@@ -729,6 +729,7 @@ const workspaceScopeId = ref<string | null>(
     process.client ? getActiveWorkspaceId() : null
 );
 let activeWorkspaceTabsScope = '';
+const workspaceTabsTransitioning = ref(false);
 const disposeWorkspaceScopeSubscription = process.client
     ? subscribeActiveWorkspaceDb(({ newWorkspaceId }) => {
           workspaceScopeId.value = newWorkspaceId;
@@ -748,10 +749,12 @@ function requestWorkspaceTabsScope(
     const scope = `${workspaceId ?? 'local'}\0${profileId}`;
     if (scope === activeWorkspaceTabsScope) return;
     activeWorkspaceTabsScope = scope;
+    workspaceTabsTransitioning.value = true;
     void workspaceTabs
         .switchScope(workspaceId, profileId)
         .then((switched) => {
             if (!switched || scope !== activeWorkspaceTabsScope) return;
+            workspaceTabsTransitioning.value = false;
             hasSyncedInitial.value = true;
             updateUrl(true);
         })
@@ -1951,7 +1954,9 @@ onMounted(() => {
     });
     disposeWorkspaceTabPaletteProvider?.();
     disposeWorkspaceTabPaletteProvider = setWorkspaceTabPaletteProvider(
-        () => workspaceTabs.tabs.value
+        () => workspaceTabsReady.value && !workspaceTabsTransitioning.value
+            ? workspaceTabs.tabs.value
+            : []
     );
     disposePaletteHostContext?.();
     disposePaletteHostContext = setPaletteHostContext(

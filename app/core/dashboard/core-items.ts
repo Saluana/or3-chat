@@ -13,6 +13,7 @@ export function createCoreDashboardItems(ssrAuthEnabled: boolean): DashboardPlug
             id: 'core:settings',
             icon: useIcon('dashboard.settings').value,
             label: 'Settings',
+            description: 'Configure your workspace',
             order: 1,
             access,
             pages: [
@@ -46,6 +47,7 @@ export function createCoreDashboardItems(ssrAuthEnabled: boolean): DashboardPlug
             id: 'core:images',
             icon: useIcon('dashboard.images').value,
             label: 'Images',
+            description: 'Saved and generated images',
             order: 10,
             access,
             pages: [

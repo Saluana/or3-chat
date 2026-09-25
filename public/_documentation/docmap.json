@@ -233,7 +233,7 @@
                     "name": "useDocumentAiAgent.md",
                     "path": "/composables/useDocumentAiAgent",
                     "category": "Documents",
-                    "summary": "The Document AI agent turns a prompt into a bounded, reviewable TipTap edit proposal. Its composer supports saved and plugin-contributed / prompt commands, file attachments, and @ references to another document or chat."
+                    "summary": "The Document AI agent turns a prompt into a bounded, reviewable TipTap edit proposal. Its live editor session also exposes the same native tools to chat."
                 },
                 {
                     "name": "useDocumentAiSettings.md",
@@ -263,7 +263,7 @@
                     "name": "useDocumentEditorSessions.md",
                     "path": "/composables/useDocumentEditorSessions",
                     "category": "Core",
-                    "summary": "Registry of active document editor sessions. Editors register themselves per document and workspace, and other code can find them, wait for them, or ask them to capture content."
+                    "summary": "Registry of active document editor sessions. Callers can find an exact tab session, capture live content, or use its chat context and document tool bridge."
                 },
                 {
                     "name": "useDocumentEditorToolbar.md",
@@ -920,6 +920,12 @@
                     "summary": "UI-level permission checks for actions exposed to plugins. Guards verify that the active plugin holds the required capability before an operation runs, and show a permission-denied toast when it does not."
                 },
                 {
+                    "name": "document-chat-tools.md",
+                    "path": "/utils/document-chat-tools",
+                    "category": "Tools",
+                    "summary": "Chat can search documents, read bounded open-tab context, and use the document agent's native tools to stage reviewable edits in a visible editor."
+                },
+                {
                     "name": "errors.md",
                     "path": "/utils/errors",
                     "category": "Error Handling",
@@ -1044,6 +1050,12 @@
                     "path": "/themes/api-reference",
                     "category": "Reference",
                     "summary": "Reference for the current OR3 theme system API, types, and tooling."
+                },
+                {
+                    "name": "app-modal.md",
+                    "path": "/themes/app-modal",
+                    "category": "Reference",
+                    "summary": "Shared dialog shell with three sizes, consistent headers and footers, theme-owned surface tokens, and compact Dashboard launcher cards."
                 },
                 {
                     "name": "architecture.md",

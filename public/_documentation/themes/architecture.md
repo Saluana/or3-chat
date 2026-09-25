@@ -187,6 +187,10 @@ Matches are merged by specificity. Non-Nuxt UI components map `variant`/`size`/
 
 ## 5) Component integration
 
+Sidebar entity dialogs and Dashboard use the shared [AppModal](./app-modal.md)
+shell. It owns dialog geometry while consuming the active theme's surface,
+shape, elevation, and focus tokens.
+
 ### v-theme
 
 `app/plugins/91.auto-theme.client.ts` provides the directive. It:

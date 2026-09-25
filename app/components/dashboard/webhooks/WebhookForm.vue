@@ -1,14 +1,15 @@
 <template>
-    <UModal
+    <AppModal
         v-model:open="isOpen"
+        size="md"
         :title="modalTitle"
         :description="admin ? 'Register an admin or custom server-side webhook.' : 'Register a webhook for curated workspace events.'"
         :ui="{
             overlay: 'z-[60]',
-            content: 'z-[70] sm:min-w-[520px] sm:max-w-[600px]',
+            content: 'z-[70]',
         }"
     >
-        <template #body>
+        <template #default>
             <div class="space-y-5">
                 <!-- Error banner -->
                 <UAlert
@@ -53,6 +54,7 @@
                     </label>
                     <UInput
                         v-model="url"
+                        variant="modal"
                         placeholder="https://example.com/webhooks/or3"
                     />
                     <p
@@ -70,6 +72,7 @@
                     </label>
                     <UInput
                         v-model="label"
+                        variant="modal"
                         placeholder="My webhook"
                         :maxlength="100"
                     />
@@ -190,16 +193,18 @@
         </template>
 
         <template #footer>
-            <div class="flex w-full items-center justify-between gap-3">
+            <div class="flex items-center justify-end gap-2.5">
                 <UButton
-                    variant="outline"
+                    variant="ghost"
                     color="neutral"
+                    size="modal"
                     @click="closeModal"
                 >
                     {{ revealedSecret && !props.webhook ? 'Done' : 'Cancel' }}
                 </UButton>
                 <UButton
                     color="primary"
+                    size="modal"
                     :loading="saving"
                     @click="submit"
                 >
@@ -207,10 +212,11 @@
                 </UButton>
             </div>
         </template>
-    </UModal>
+    </AppModal>
 </template>
 
 <script setup lang="ts">
+import AppModal from '~/components/ui/AppModal.vue';
 import {
     ADMIN_WEBHOOK_EVENT_DESCRIPTIONS,
     ADMIN_WEBHOOK_EVENT_TYPES,

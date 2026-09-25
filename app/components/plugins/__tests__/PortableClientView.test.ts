@@ -136,7 +136,7 @@ const stubs = {
         props: ['open', 'title', 'description'],
         emits: ['update:open'],
         template:
-            '<div v-if="open" role="dialog" aria-modal="true"><h2 v-if="title">{{ title }}</h2><p v-if="description">{{ description }}</p><slot name="body" /></div>',
+            '<div v-if="open" role="dialog" aria-modal="true"><h2 v-if="title">{{ title }}</h2><p v-if="description">{{ description }}</p><slot name="body" /><slot name="footer" /></div>',
     },
     UBadge: { template: '<span><slot /></span>' },
     UAlert: { props: ['title', 'description'], template: '<div role="alert">{{ title }}</div>' },

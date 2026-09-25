@@ -2316,11 +2316,10 @@ html[data-theme='retro'] .agent-connections-dialog {
 }
 
 html[data-theme='retro'] .agent-connections-dialog-header {
-	background: var(--agent-conn-header) !important;
-	border-bottom: var(--agent-conn-border) !important;
-	color: var(--md-on-primary, #fff) !important;
-	padding: 0.7rem 0.85rem !important;
-	gap: 0.55rem !important;
+	background: var(--md-surface) !important;
+	border-bottom: 0 !important;
+	color: var(--md-on-surface) !important;
+	padding: 1.5rem 1.5rem 0 !important;
 }
 
 html[data-theme='retro'] .agent-connections-dialog-header :is(h2, h3, span) {
@@ -2344,10 +2343,10 @@ html[data-theme='retro'] .agent-connections-dialog-header .text-xs {
 
 html[data-theme='retro'] .agent-connections-dialog .agent-conn-close {
 	box-sizing: border-box !important;
-	width: 1.85rem !important;
-	height: 1.85rem !important;
-	min-width: 1.85rem !important;
-	min-height: 1.85rem !important;
+	width: 2.25rem !important;
+	height: 2.25rem !important;
+	min-width: 2.25rem !important;
+	min-height: 2.25rem !important;
 	padding: 0 !important;
 	border: var(--agent-conn-border) !important;
 	border-radius: var(--agent-conn-radius) !important;
@@ -2791,9 +2790,9 @@ html[data-theme='retro'].dark .agent-connections-dialog,
 
 html[data-theme='retro'].dark .agent-connections-dialog-header,
 .dark html[data-theme='retro'] .agent-connections-dialog-header {
-	background: var(--agent-conn-header) !important;
-	border-bottom: 1px solid #1a3a55 !important;
-	color: #e8eef4 !important;
+	background: var(--agent-conn-page) !important;
+	border-bottom: 0 !important;
+	color: var(--agent-conn-ink) !important;
 }
 
 html[data-theme='retro'].dark

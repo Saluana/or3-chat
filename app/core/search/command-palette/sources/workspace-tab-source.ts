@@ -7,6 +7,11 @@ import {
 
 let getOpenTabs: () => readonly WorkspaceTab[] = () => [];
 
+/** Current tab manifest shared with tools that need resource discovery. */
+export function getOpenWorkspaceTabs(): readonly WorkspaceTab[] {
+    return getOpenTabs();
+}
+
 /** PageShell supplies the current local session without making it global API. */
 export function setWorkspaceTabPaletteProvider(
     provider: () => readonly WorkspaceTab[]
@@ -43,7 +48,7 @@ export function createWorkspaceTabPaletteSource(): PaletteSearchSource {
         category: CORE_PALETTE_CATEGORIES.find((entry) => entry.id === 'tab')!,
         order: 15,
         async load() {
-            return getOpenTabs().map(
+            return getOpenWorkspaceTabs().map(
                 (tab): PaletteResource => ({
                     key: `workspace-tab:${tab.id}`,
                     sourceId: 'workspace-tab',

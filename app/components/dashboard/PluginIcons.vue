@@ -1,82 +1,44 @@
-<template>
-    <div
-        class="dashboard-plugin-icon flex flex-col items-center select-none"
-        :style="wrapperStyle"
-    >
-        <!-- Icon Shell -->
-        <button
-            type="button"
-            :aria-label="label"
-            v-bind="iconButtonProps"
-            :class="[
-                'dashboard-plugin-icon-button group relative flex items-center justify-center overflow-hidden cursor-pointer focus:outline-none focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]',
-                (iconButtonProps as any)?.class || '',
-            ]"
-            :style="iconBoxStyle"
-        >
-            <AppIcon
-                v-if="image || icon"
-                :image="image"
-                :icon="icon"
-                :class="[
-                    'dashboard-button-icon h-full w-full transition-transform duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)]',
-                ]"
-                :style="iconStyle"
-            />
-            <div
-                v-else
-                class="w-full h-full bg-gray-500/40"
-                :style="{ borderRadius: cornerRadius }"
-            ></div>
-        </button>
-        <!-- Label -->
-        <div
-            class="dashboard-plugin-icon-label mt-1.5 text-[10px] sm:text-[11px] font-medium text-center text-[color:var(--md-on-surface-variant,var(--md-on-surface))] max-w-[90px] truncate tracking-wide"
-            :title="label"
-        >
-            {{ label }}
-        </div>
-    </div>
-</template>
 <script setup lang="ts">
-import { computed } from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import AppIcon from '~/components/ui/AppIcon.vue';
 
-const props = defineProps<{
+defineProps<{
     icon?: string;
     image?: string;
     label: string;
-    size?: number; // square icon box size (default 64)
-    radius?: number; // corner radius override
+    description?: string;
 }>();
 
-const size = computed(() => props.size ?? 64);
-const cornerRadius = computed(() => `${props.radius ?? 14}px`);
-const iconPadding = computed(() => Math.round(size.value * 0.18));
-
-// Theme overrides for the plugin icon button
-const iconButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'dashboard',
-        identifier: 'dashboard.plugin-icon',
-        isNuxtUI: false,
-    });
-    return overrides.value;
+const iconButtonProps = useThemeOverrides({
+    component: 'button',
+    context: 'dashboard',
+    identifier: 'dashboard.plugin-icon',
+    isNuxtUI: false,
 });
-
-const iconBoxStyle = computed(() => ({
-    width: `${size.value}px`,
-    height: `${size.value}px`,
-    borderRadius: cornerRadius.value,
-    padding: props.image ? '0' : `${iconPadding.value}px`,
-}));
-const iconStyle = computed(() => ({
-    width: `100%`,
-    height: `100%`,
-}));
-const wrapperStyle = computed(() => ({
-    width: `${size.value + 12}px`, // small breathing room for label truncation alignment
-}));
 </script>
+
+<template>
+    <button
+        v-bind="iconButtonProps"
+        type="button"
+        :aria-label="label"
+        class="dashboard-plugin-icon dashboard-plugin-icon-button group flex min-w-0 flex-col items-center gap-3 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface-variant)] p-5 text-center text-[var(--md-on-surface)] cursor-pointer hover:bg-[var(--md-surface-hover)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]"
+    >
+        <AppIcon
+            :image="image"
+            :icon="icon"
+            class="dashboard-button-icon size-9 shrink-0"
+        />
+        <span class="flex min-w-0 flex-col gap-1">
+            <span class="dashboard-plugin-icon-label text-sm font-semibold break-words">
+                {{ label }}
+            </span>
+            <span
+                v-if="description"
+                class="text-xs leading-5 text-[var(--md-on-surface-variant)] line-clamp-3"
+            >
+                {{ description }}
+            </span>
+        </span>
+    </button>
+</template>

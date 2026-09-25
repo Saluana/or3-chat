@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppModal from '~/components/ui/AppModal.vue';
 /**
  * Host surface for one contained portable plugin.
  *
@@ -763,30 +764,30 @@ async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
                 </p>
             </div>
 
-            <UModal
+            <AppModal
                 v-model:open="confirmOpen"
                 :title="`${HOST_ACTION_LABELS[HOST_ACTIONS.replaceDocument]}?`"
                 description="This overwrites the selected document's current content with the plugin result."
                 :dismissible="!busy"
                 :content="{ onOpenAutoFocus: focusCancelAction }"
             >
-                <template #body>
-                    <div class="flex gap-2" data-testid="portable-host-confirm">
-                        <UButton size="sm" color="error" :loading="busy" @click="confirmPending">
-                            Replace
-                        </UButton>
+                <template #footer>
+                    <div class="flex gap-2.5" data-testid="portable-host-confirm">
                         <UButton
                             ref="cancelConfirmButton"
-                            size="sm"
+                            size="modal"
                             variant="ghost"
                             :disabled="busy"
                             @click="pendingConfirm = null"
                         >
                             Cancel
                         </UButton>
+                        <UButton size="modal" color="error" :loading="busy" @click="confirmPending">
+                            Replace
+                        </UButton>
                     </div>
                 </template>
-            </UModal>
+            </AppModal>
 
             <div
                 v-if="renderNodes.length > 0"

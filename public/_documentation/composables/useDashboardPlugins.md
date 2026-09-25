@@ -72,6 +72,10 @@ the host resolves its authorized digest-addressed URL.
 
 `access` is optional. If omitted, behavior remains unchanged.
 
+The dashboard launcher displays each item's optional `description` beneath its
+label in a fully clickable card. Its medium AppModal shell fits the registered
+cards; opening a page switches to a larger, bounded scrolling area.
+
 ---
 
 ## How to use it

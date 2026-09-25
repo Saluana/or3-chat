@@ -1,14 +1,15 @@
 <template>
-    <UModal
+    <AppModal
         v-model:open="isOpen"
+        size="md"
         :title="admin ? 'Admin Webhook Logs' : 'Webhook Delivery Logs'"
         :description="'Recent deliveries from the last 72 hours'"
         :ui="{
             overlay: 'z-[60]',
-            content: 'z-[70] sm:min-w-[560px] sm:max-w-[680px]',
+            content: 'z-[70]',
         }"
     >
-        <template #body>
+        <template #default>
             <div class="space-y-4">
                 <div class="flex items-center justify-between gap-3">
                     <div class="text-xs text-[var(--md-on-surface)] opacity-60">
@@ -122,10 +123,11 @@
                 </div>
             </div>
         </template>
-    </UModal>
+    </AppModal>
 </template>
 
 <script setup lang="ts">
+import AppModal from '~/components/ui/AppModal.vue';
 import type { ManagedWebhookLog } from './types';
 
 const props = defineProps<{

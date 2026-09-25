@@ -56,7 +56,7 @@ export const DOCUMENT_AI_AGENT_TOOLS: ToolDefinition[] = [
         },
         ui: {
             label: 'Document outline',
-            descriptionHint: 'List sections and block ranges before reading.',
+            descriptionHint: 'See the sections of a document and where they appear.',
             category: 'Document',
             defaultEnabled: true,
             icon: 'i-lucide-list-tree',
@@ -74,8 +74,8 @@ export const DOCUMENT_AI_AGENT_TOOLS: ToolDefinition[] = [
             },
         },
         ui: {
-            label: 'List chunks',
-            descriptionHint: 'Split the doc into sized chunks for reading.',
+            label: 'Browse document parts',
+            descriptionHint: 'Find manageable parts of a long document for the AI to read.',
             category: 'Document',
             defaultEnabled: true,
             icon: 'i-lucide-layers',
@@ -97,8 +97,8 @@ export const DOCUMENT_AI_AGENT_TOOLS: ToolDefinition[] = [
             },
         },
         ui: {
-            label: 'Read blocks',
-            descriptionHint: 'Load TipTap JSON for a block range.',
+            label: 'Read part of a document',
+            descriptionHint: 'Let the AI read a specific part of a document, including its formatting.',
             category: 'Document',
             defaultEnabled: true,
             icon: 'i-lucide-book-open',
@@ -120,7 +120,7 @@ export const DOCUMENT_AI_AGENT_TOOLS: ToolDefinition[] = [
         },
         ui: {
             label: 'Search document',
-            descriptionHint: 'Find phrases and matching blocks.',
+            descriptionHint: 'Find words or phrases within a document.',
             category: 'Document',
             defaultEnabled: true,
             icon: 'i-lucide-search',
@@ -171,8 +171,8 @@ export const DOCUMENT_AI_AGENT_TOOLS: ToolDefinition[] = [
             },
         },
         ui: {
-            label: 'Propose edits',
-            descriptionHint: 'Stage TipTap changes for review. Required to edit.',
+            label: 'Suggest edits',
+            descriptionHint: 'Prepare document changes for you to review before applying them.',
             category: 'Document',
             defaultEnabled: true,
             icon: 'i-lucide-pencil',
@@ -190,8 +190,8 @@ export const DOCUMENT_AI_AGENT_TOOLS: ToolDefinition[] = [
             },
         },
         ui: {
-            label: 'Proposal status',
-            descriptionHint: 'Check what edits are already staged.',
+            label: 'Check suggested edits',
+            descriptionHint: 'See which suggested edits are waiting for your review.',
             category: 'Document',
             defaultEnabled: true,
             icon: 'i-lucide-clipboard-list',
