@@ -63,6 +63,8 @@ All are authenticated, workspace-scoped and `no-store`; install actions are owne
 
 The browser never talks to the registry: the local server is the configured trusted client, so a self-hosted instance does not need a generic URL proxy and the registry never sees a session cookie.
 
+An administrator approving a buyer's Library install request supplies its `installRequestId` with the exact plugin, version and target workspace. The server rechecks that the request has not expired, the buyer still belongs to the live workspace, and the buyer's original Library link still names the same marketplace account. The resulting operation records only request/account/link identifiers. Once the administrator starts the operation within the seven-day window, that recorded operation may be retried, including after a cancellation or request expiry, only while the buyer still belongs to its original live workspace. Retry uses the same buyer binding and revalidates the original live link before any covered artifact fetch; disconnecting or changing the link prevents further covered downloads. Ordinary administrator installs continue to use the acting administrator's own Library link.
+
 A release whose signed profile requires a contained client runtime is browser-scoped. The preflight request reports the engine the page detected, the host judges it against the same structured qualified-engine list the runtime enforces, and an unsupported or unknown engine gets no install action: discovery stays read-only with a copyable plugin link to open in a qualified browser. Chromium is the only qualified engine today; the runtime re-checks the engine before it fetches any bytes, so the CTA is a journey gate rather than the boundary.
 
 ## Preflight block codes

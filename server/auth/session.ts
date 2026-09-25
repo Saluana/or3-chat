@@ -179,7 +179,7 @@ function getSessionProvisioningFailureMode(
  * Behavior:
  * - Automatically caches the result in the event context.
  * - Handles workspace auto-provisioning via the sync backend.
- * - Falls back to unauthenticated state on failures unless configured otherwise.
+ * - Distinguishes absent identity from a temporarily unavailable provider.
  *
  * @param event - The Nitro request event.
  * @returns A promise resolving to the final `SessionContext`.
@@ -244,13 +244,20 @@ export async function resolveSessionContext(
             error: error instanceof Error ? error.message : String(error),
             stage: 'provider.getSession',
         });
-        // Fail fast in dev for immediate feedback
-        if (import.meta.dev) {
+        // A provider outage must not look like logout. Deny protected work while
+        // giving clients a retryable failure; only a verified absent session is 401.
+        if (import.meta.dev) throw error;
+        if (
+            typeof error === 'object' && error !== null &&
+            'statusCode' in error &&
+            (error.statusCode === 401 || error.statusCode === 403)
+        ) {
             throw error;
         }
-        const nullSession: SessionContext = { authenticated: false };
-        event.context[cacheKey] = nullSession;
-        return nullSession;
+        throw createError({
+            statusCode: 503,
+            statusMessage: 'Identity provider temporarily unavailable',
+        });
     }
 
     if (!providerSession) {

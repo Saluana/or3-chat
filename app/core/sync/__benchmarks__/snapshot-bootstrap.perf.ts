@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { Or3DB } from '~/db/client';
-import { applySnapshotChain } from '../snapshot-applier';
+import { SnapshotStager } from '../snapshot-applier';
 import {
     assertBudgets,
     maxBudget,
@@ -52,8 +52,7 @@ function messageItem(index: number): SnapshotItem {
     };
 }
 
-function makePages(rowCount: number, pageSize: number): SnapshotResponse[] {
-    const pages: SnapshotResponse[] = [];
+function* makePages(rowCount: number, pageSize: number): Generator<SnapshotResponse> {
     const snapshotId = `snapshot-${rowCount}`;
     for (let start = 0; start < rowCount; start += pageSize) {
         const end = Math.min(rowCount, start + pageSize);
@@ -61,15 +60,14 @@ function makePages(rowCount: number, pageSize: number): SnapshotResponse[] {
         for (let index = start; index < end; index += 1) {
             items.push(messageItem(index));
         }
-        pages.push({
+        yield {
             workspaceId: scope.workspaceId,
             snapshotId,
             highWatermark: rowCount + 100,
             items,
             nextPageToken: end < rowCount ? `page-${end}` : null,
-        });
+        };
     }
-    return pages;
 }
 
 async function main(): Promise<void> {
@@ -81,22 +79,33 @@ async function main(): Promise<void> {
         process.env.OR3_BENCH_SNAPSHOT_PAGE_SIZE,
         300
     );
-    const pagesStarted = performance.now();
-    const pages = makePages(rowCount, pageSize);
-    const fixtureMs = performance.now() - pagesStarted;
+    let pageCount = 0;
     const db = new Or3DB(`snapshot-benchmark-${crypto.randomUUID()}`);
 
     try {
         await db.open();
         const applyStarted = performance.now();
-        const watermark = await applySnapshotChain(
-            db,
-            pages,
-            scope,
-            'benchmark-device',
-            () => true,
-            ['messages']
-        );
+        const stager = new SnapshotStager(db, scope, ['messages']);
+        await stager.start();
+        let stagingMs = 0;
+        let installMs = 0;
+        let cleanupMs = 0;
+        let watermark: number;
+        try {
+            const stagingStarted = performance.now();
+            for (const page of makePages(rowCount, pageSize)) {
+                pageCount++;
+                await stager.appendPage(page);
+            }
+            stagingMs = performance.now() - stagingStarted;
+            const installStarted = performance.now();
+            watermark = await stager.apply('benchmark-device', () => true, ['messages']);
+            installMs = performance.now() - installStarted;
+        } finally {
+            const cleanupStarted = performance.now();
+            await stager.dispose();
+            cleanupMs = performance.now() - cleanupStarted;
+        }
         const applyMs = performance.now() - applyStarted;
         const storedRows = await db.messages.count();
         const state = await db.sync_state.get(
@@ -131,8 +140,10 @@ async function main(): Promise<void> {
             benchmark: 'sync-snapshot-bootstrap',
             rows: rowCount,
             pageSize,
-            pages: pages.length,
-            fixtureMs: Number(fixtureMs.toFixed(2)),
+            pages: pageCount,
+            stagingMs: Number(stagingMs.toFixed(2)),
+            installMs: Number(installMs.toFixed(2)),
+            cleanupMs: Number(cleanupMs.toFixed(2)),
             applyMs: Number(applyMs.toFixed(2)),
             rowsPerSecond: Number(rowsPerSecond.toFixed(2)),
             watermark,

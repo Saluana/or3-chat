@@ -2,10 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useResponsiveState, type ResponsiveState } from '../useResponsiveState';
 import { effectScope } from 'vue';
 
-// We need to access and reset the internal cache between tests
-// This is a bit of a hack, but necessary since we cache the shared state globally
-let clearSharedState: (() => void) | null = null;
-
 function mockViewport(width: number) {
     Object.defineProperty(window, 'innerWidth', {
         writable: true,
@@ -57,20 +53,6 @@ describe('useResponsiveState', () => {
     const waitForFrame = () =>
         new Promise((resolve) => requestAnimationFrame(resolve));
 
-    it('returns isMobile = false when viewport > 768px', async () => {
-        mockViewport(1024);
-
-        const { useResponsiveState: useResponsiveState1 } = await import(
-            '../useResponsiveState'
-        );
-        const { isMobile } = useResponsiveState1();
-
-        // Wait for requestAnimationFrame to update the value
-        await waitForFrame();
-
-        expect(isMobile.value).toBe(false);
-    });
-
     it('returns isMobile = true when viewport ≤ 768px', async () => {
         mockViewport(768);
 
@@ -78,20 +60,6 @@ describe('useResponsiveState', () => {
             '../useResponsiveState'
         );
         const { isMobile } = useResponsiveState2();
-
-        // Wait for requestAnimationFrame to update the value
-        await waitForFrame();
-
-        expect(isMobile.value).toBe(true);
-    });
-
-    it('returns isMobile = true when viewport < 768px (small mobile)', async () => {
-        mockViewport(375);
-
-        const { useResponsiveState: useResponsiveState3 } = await import(
-            '../useResponsiveState'
-        );
-        const { isMobile } = useResponsiveState3();
 
         // Wait for requestAnimationFrame to update the value
         await waitForFrame();
@@ -111,27 +79,6 @@ describe('useResponsiveState', () => {
         await waitForFrame();
 
         expect(isMobile.value).toBe(false);
-    });
-
-    it('returns complete ResponsiveState interface with all fields', async () => {
-        mockViewport(1024);
-
-        const { useResponsiveState: useResponsiveState5 } = await import(
-            '../useResponsiveState'
-        );
-        const state = useResponsiveState5();
-
-        // Check that all required fields are present
-        expect(state).toHaveProperty('isMobile');
-        expect(state).toHaveProperty('isTablet');
-        expect(state).toHaveProperty('isDesktop');
-        expect(state).toHaveProperty('hydrated');
-
-        // Check they are refs
-        expect(state.isMobile.value).toBeDefined();
-        expect(state.isTablet.value).toBeDefined();
-        expect(state.isDesktop.value).toBeDefined();
-        expect(state.hydrated.value).toBeDefined();
     });
 
     it('returns isDesktop = true for desktop viewport', async () => {

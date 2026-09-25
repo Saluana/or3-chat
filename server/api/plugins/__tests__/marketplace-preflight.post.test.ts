@@ -22,7 +22,10 @@ vi.mock('../../../admin/extensions/extension-manager', () => ({
     ],
 }));
 vi.mock('../../../admin/plugins/package-operation-support', () => ({
-    pluginPackageServices: () => ({ packages: {}, pointers: {} }),
+    pluginPackageServices: () => ({
+        packages: {},
+        pointers: { readStartupSelection: async () => null },
+    }),
 }));
 vi.mock('../../../admin/plugins/package-route-catalog', () => ({
     PluginPackageRouteCatalog: class {

@@ -36,7 +36,22 @@ SSR_AUTH_ENABLED=true
 AUTH_PROVIDER=clerk
 NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_...
 NUXT_CLERK_SECRET_KEY=sk_...
+OR3_ALLOWED_ORIGINS=https://chat.example.com
 ```
+
+Set `OR3_ALLOWED_ORIGINS` to the exact browser origin(s) served by this OR3
+deployment, including scheme and port. Managed Cloud writes this value during
+installation. A custom production deployment must set it or a valid
+`OR3_PUBLIC_DOMAIN`; Clerk authentication fails closed with 503 if neither
+defines an authorized party. Do not use another application's origin merely
+because it shares the Clerk instance. Local development can use an explicit
+origin such as `http://127.0.0.1:3000`.
+
+Each request still verifies its Clerk session token. Verified primary-email
+profile data is cached for up to 30 seconds per server process to keep sync
+polling from fetching the full Clerk profile every time. Primary-email changes
+can therefore take up to 30 seconds to be reflected; revoking the session token
+is checked on the next request.
 
 If you only want auth (no cloud sync/storage):
 

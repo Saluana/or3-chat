@@ -5,6 +5,7 @@
  * independently validate any backend storage identifier against the canonical
  * workspace/hash-derived identifier and treat an absent object as success.
  */
+import { requireCloudMutation } from '../../utils/security/cloud-mutation';
 import { createError, defineEventHandler, readBody } from 'h3';
 import { z } from 'zod';
 import { requireCan } from '../../auth/can';
@@ -23,6 +24,8 @@ export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event) || !isStorageEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });
     }
+
+    requireCloudMutation(event);
 
     const body = BodySchema.safeParse(await readBody(event));
     if (!body.success) {

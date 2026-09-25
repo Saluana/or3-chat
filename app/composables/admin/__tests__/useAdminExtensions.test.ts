@@ -15,21 +15,9 @@ describe('useAdminExtensions', () => {
             expect(ADMIN_HEADERS).toEqual({ 'x-or3-admin-intent': 'admin' });
         });
 
-        it('has correct type structure', () => {
-            // Type check - the const assertion ensures type safety
-            const header: { 'x-or3-admin-intent': 'admin' } = ADMIN_HEADERS;
-            expect(header['x-or3-admin-intent']).toBe('admin');
-        });
     });
 
     describe('useFileInput', () => {
-        it('returns fileInput ref and trigger function', () => {
-            const { fileInput, triggerFileInput } = useFileInput();
-
-            expect(fileInput.value).toBeNull();
-            expect(typeof triggerFileInput).toBe('function');
-        });
-
         it('triggers click on file input when called', () => {
             const { fileInput, triggerFileInput } = useFileInput();
             const mockClick = vi.fn();

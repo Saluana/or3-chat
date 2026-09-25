@@ -194,8 +194,10 @@ export const SUPER_ADMIN_KIND = 'super_admin';
  * consumes `dashboard`/`plugin` from the query, opens Marketplace and selects
  * the plugin. A link no code reads is not a deep link.
  */
-export function marketplacePluginDeepLink(origin: string, pluginId: string): string {
+export function marketplacePluginDeepLink(origin: string, pluginId: string, version?: string, installRequestId?: string): string {
     const params = new URLSearchParams({ dashboard: 'marketplace', plugin: pluginId });
+    if (version) params.set('version', version);
+    if (installRequestId) params.set('installRequest', installRequestId);
     return `${origin}/?${params.toString()}`;
 }
 
@@ -217,18 +219,28 @@ function unwrapAcquisitionOperation(response: AcquisitionResponse | null): Acqui
 export function useMarketplaceAccount() {
     const kind = ref<string | null>(null);
     const checked = ref(false);
+    let generation = 0;
+
+    const invalidate = (): void => {
+        generation += 1;
+        kind.value = null;
+        checked.value = false;
+    };
 
     const load = async (): Promise<void> => {
         if (checked.value) return;
+        const request = ++generation;
         try {
             const session = await apiGet<AdminSessionView>('/api/admin/auth/session');
+            if (request !== generation) return;
             kind.value = session.authenticated === false ? null : (session.kind ?? null);
         } catch {
+            if (request !== generation) return;
             // A member without admin authority is refused by the route, which is
             // exactly the "ask an administrator" case.
             kind.value = null;
         } finally {
-            checked.value = true;
+            if (request === generation) checked.value = true;
         }
     };
 
@@ -236,6 +248,7 @@ export function useMarketplaceAccount() {
         kind,
         checked,
         load,
+        invalidate,
         canInstall: computed(() => kind.value === SUPER_ADMIN_KIND),
     };
 }
@@ -718,6 +731,7 @@ export function useMarketplaceInstall() {
         readonly pluginId: string;
         readonly version?: string;
         readonly workspaceId?: string;
+        readonly installRequestId?: string;
     }): Promise<AcquisitionStatusView | null> => {
         if (running.value) return null;
         const generation = ++operationGeneration;
@@ -732,6 +746,7 @@ export function useMarketplaceInstall() {
                         pluginId: input.pluginId,
                         ...(input.version === undefined ? {} : { version: input.version }),
                         ...(input.workspaceId === undefined ? {} : { workspaceId: input.workspaceId }),
+                        ...(input.installRequestId === undefined ? {} : { installRequestId: input.installRequestId }),
                     },
                 }
             );

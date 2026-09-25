@@ -17,6 +17,10 @@ vi.mock('h3', async (importOriginal) => ({
 }));
 
 const resolveSessionContextMock = vi.fn();
+const requireCloudMutationMock = vi.fn();
+vi.mock('../../../../utils/security/cloud-mutation', () => ({
+    requireCloudMutation: requireCloudMutationMock,
+}));
 vi.mock('../../../../auth/session', () => ({
     resolveSessionContext: resolveSessionContextMock as never,
 }));
@@ -76,6 +80,21 @@ function event(): H3Event {
 const UNLINKED: LibraryLinkStatusView = { configured: true, state: 'unlinked' };
 
 describe('library link routes', () => {
+    it('guards both link mutations before resolving a cookie session', async () => {
+        requireCloudMutationMock.mockImplementationOnce(() => {
+            throw Object.assign(new Error('Forbidden origin'), { statusCode: 403 });
+        });
+        resolveSessionContextMock.mockClear();
+        await expect(startRoute(event() as never)).rejects.toMatchObject({ statusCode: 403 });
+        expect(resolveSessionContextMock).not.toHaveBeenCalled();
+
+        requireCloudMutationMock.mockImplementationOnce(() => {
+            throw Object.assign(new Error('Forbidden origin'), { statusCode: 403 });
+        });
+        await expect(disconnectRoute(event() as never)).rejects.toMatchObject({ statusCode: 403 });
+        expect(resolveSessionContextMock).not.toHaveBeenCalled();
+    });
+
     it('requires an authenticated local user', async () => {
         resolveSessionContextMock.mockResolvedValue(null);
         await expect(statusRoute(event() as never)).rejects.toMatchObject({ statusCode: 401 });

@@ -895,6 +895,22 @@ describe('instance-wide preflight and conditional promotion (5.5, 5.6)', () => {
 });
 
 describe('covered releases acquire through the acting user Library link', () => {
+    it('refuses a delegated request when the resolved signed release does not match the buyer-approved identity', async () => {
+        const fixture = await releaseFixture({ version: '1.0.0' });
+        const harness = makeHarness({ fixture, coverageRequired: true });
+        const started = await harness.service.start({
+            pluginId: 'alpha', version: '1.0.0', workspaceId: 'ws-1',
+            requesterUserId: 'super_admin:root', instanceId: 'instance-1',
+            libraryGrant: {
+                requestId: `lir_${'a'.repeat(32)}`, buyerUserId: 'buyer-local',
+                linkId: 'link-1', accountId: 'buyer-central', releaseId: 'rel_other',
+                archiveSha256: fixture.signed.archiveSha256,
+            },
+        });
+        expect(started).toMatchObject({ ok: false, failure: { code: 'release-not-found' } });
+        expect(await harness.store.list('alpha')).toEqual([]);
+    });
+
     it('downloads from the linked route when the public artifact path refuses', async () => {
         const fixture = await releaseFixture({ version: '1.0.0' });
         const requests: string[] = [];

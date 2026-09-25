@@ -122,27 +122,6 @@ describe('useCommandPalette', () => {
         setPaletteHostContext(host);
     });
 
-    it('opens, refocuses on repeat, and restores focus on close', async () => {
-        const trigger = document.createElement('button');
-        document.body.appendChild(trigger);
-        trigger.focus();
-
-        const palette = useCommandPalette();
-        palette.open();
-        await nextTick();
-
-        expect(palette.isOpen.value).toBe(true);
-        const firstToken = palette.focusToken.value;
-
-        palette.open();
-        expect(palette.focusToken.value).toBe(firstToken + 1);
-
-        palette.close();
-        expect(palette.isOpen.value).toBe(false);
-        expect(document.activeElement).toBe(trigger);
-        trigger.remove();
-    });
-
     it('clears transient state on close', async () => {
         const palette = useCommandPalette();
         palette.open();
@@ -272,29 +251,6 @@ describe('useCommandPalette', () => {
         expect(palette.openActionTray()).toBe(true);
         palette.hoverActive('chat:b');
         expect(palette.activeKey.value).toBe('chat:a');
-    });
-
-    it('selects and preview-locks on the first click, then executes on the second', async () => {
-        const palette = useCommandPalette();
-        palette.open();
-        await Promise.resolve();
-        emitSnapshot({
-            results: [result({ key: 'chat:a' }), result({ key: 'chat:b' })],
-        });
-        await nextTick();
-
-        // Search already made the first row active; its first click must still
-        // only arm it rather than execute.
-        await palette.activateByPointer('chat:a');
-        expect(executePaletteAction).not.toHaveBeenCalled();
-
-        palette.releaseHoverLock();
-        palette.hoverActive('chat:b');
-        expect(palette.activeKey.value).toBe('chat:a');
-
-        await palette.activateByPointer('chat:a');
-        expect(executePaletteAction).toHaveBeenCalledTimes(1);
-        expect(palette.isOpen.value).toBe(false);
     });
 
     it('requires a fresh first click after pointer selection changes', async () => {

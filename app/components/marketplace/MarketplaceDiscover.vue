@@ -82,6 +82,7 @@ const navigation = useDashboardNavigation();
 const closeDashboard = inject<() => void>('or3:dashboard:close', () => {});
 
 const selectedPluginId = ref<string | null>(null);
+const installRequestId = ref<string | null>(null);
 const adminRequestCopied = ref(false);
 /** Confirmation the exact installed package runs in this browser/workspace. */
 const confirmationBusy = ref(false);
@@ -124,6 +125,7 @@ function closeDetail(): void {
     selectionGeneration++;
     confirmationBusy.value = false;
     selectedPluginId.value = null;
+    installRequestId.value = null;
     confirmationTarget.value = null;
     pendingUninstall.value = null;
     install.reset();
@@ -154,7 +156,11 @@ onMounted(async () => {
     // the marketplace runs inside the shell's modal, not on a route of its own.
     const requested = new URLSearchParams(window.location.search).get('plugin');
     if (requested && /^[a-z0-9][a-z0-9._-]{0,127}$/.test(requested)) {
-        await openDetail(requested);
+        const version = new URLSearchParams(window.location.search).get('version');
+        const requestId = new URLSearchParams(window.location.search).get('installRequest');
+        await openDetail(requested,
+            version && /^[a-zA-Z0-9][a-zA-Z0-9._+-]{0,127}$/.test(version) ? version : undefined,
+            requestId && /^lir_[a-f0-9]{32}$/.test(requestId) ? requestId : undefined);
     }
 });
 
@@ -168,11 +174,12 @@ onMounted(async () => {
  * superseded detail or preflight stops the flow instead of feeding the new
  * selection with the old target's evidence.
  */
-async function openDetail(pluginId: string): Promise<void> {
+async function openDetail(pluginId: string, requestedVersion?: string, requestId?: string): Promise<void> {
     selectionGeneration++;
     const workspaceId = activeWorkspaceId.value;
     pendingUninstall.value = null;
     selectedPluginId.value = pluginId;
+    installRequestId.value = requestId ?? null;
     confirmationTarget.value = null;
     approvedTargetKey.value = null;
     install.reset();
@@ -181,7 +188,7 @@ async function openDetail(pluginId: string): Promise<void> {
 
     const loaded = await detail.load(pluginId);
     if (loaded.superseded || selectedPluginId.value !== pluginId) return;
-    const version = resolveLatestVersion(loaded.entry);
+    const version = requestedVersion ?? resolveLatestVersion(loaded.entry);
     const answer = await preflight.run(pluginId, version, browserEngine.value ?? undefined);
     if (!answer || selectedPluginId.value !== pluginId || activeWorkspaceId.value !== workspaceId) return;
     // A durable operation outlives this page: pick it up so the operator can
@@ -563,6 +570,7 @@ async function runInstall(): Promise<void> {
     const result = await install.start({
         ...(activeWorkspaceId.value ? { workspaceId: activeWorkspaceId.value } : {}),
         pluginId: target.pluginId, version: target.version,
+        ...(installRequestId.value ? { installRequestId: installRequestId.value } : {}),
     });
     if (generation !== selectionGeneration) return;
     if (!result) {
@@ -893,6 +901,15 @@ function blockActionLabel(block: { action: string }): string | null {
                     </template>
                 </p>
                 <div class="flex flex-wrap gap-2">
+                    <UButton
+                        color="neutral"
+                        variant="soft"
+                        icon="i-lucide-refresh-cw"
+                        data-testid="marketplace-installed-updates"
+                        @click="navigation.openPage('marketplace', 'updates')"
+                    >
+                        Check for updates
+                    </UButton>
                     <UButton
                         v-if="selectedInstalledEntry?.display?.canOpen"
                         color="primary"

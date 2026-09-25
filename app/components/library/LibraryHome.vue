@@ -7,9 +7,11 @@
  * narrow authority the linked server holds, and disconnect. Each local user has
  * their own binding; nothing here is shared with another user on this host.
  */
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useToast } from '#imports';
 import { useLibraryLink } from '~/composables/library/useLibraryLink';
+import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { marketplacePluginDeepLink, useMarketplaceAccount } from '~/composables/marketplace/useMarketplace';
 
 interface PurchasedRelease {
     readonly releaseId: string;
@@ -24,15 +26,46 @@ interface EntitlementsView {
     readonly configured: boolean;
     readonly linked: boolean;
     readonly plus?: { readonly status: 'active' | 'none' | 'ended'; readonly until: string | null };
+    readonly accountId?: string;
     readonly acquired?: readonly PurchasedRelease[];
+    readonly pluginCoverage?: readonly {
+        readonly pluginId: string;
+        readonly until: string;
+        readonly status: 'valid' | 'refunded' | 'withdrawn';
+    }[];
 }
 
 const toast = useToast();
 const library = useLibraryLink();
+const session = useSessionContext();
+const installer = useMarketplaceAccount();
 const linkCopied = ref(false);
 const purchasesLoading = ref(false);
 const purchases = ref<EntitlementsView | null>(null);
 const purchasesFailure = ref<string | null>(null);
+const requestedReleaseIds = ref<ReadonlySet<string>>(new Set());
+const requestBusy = ref<string | null>(null);
+let requestInstallGeneration = 0;
+interface AdminInstallRequest {
+    readonly id: string;
+    readonly buyerUserId: string;
+    readonly workspaceId: string;
+    readonly accountId: string;
+    readonly pluginId: string;
+    readonly version: string;
+    readonly releaseId: string;
+    readonly operationId: string | null;
+    readonly operationStatus: string | null;
+}
+const adminRequests = ref<readonly AdminInstallRequest[]>([]);
+const adminRequestsLoading = ref(false);
+const adminRequestsFailure = ref<string | null>(null);
+let adminRequestsGeneration = 0;
+const sessionWorkspaceId = computed(() => session.data.value?.session?.workspace?.id ?? null);
+let purchasesGeneration = 0;
+const purchaseIdentity = computed(() => library.state.value === 'linked' && library.userId.value && library.link.value
+    ? JSON.stringify([library.userId.value, library.link.value.id, library.link.value.accountId ?? '', library.link.value.origin])
+    : null);
 
 /**
  * The purchases list is a read-only proxy through this server's own credential
@@ -40,22 +73,92 @@ const purchasesFailure = ref<string | null>(null);
  * triggers a marketplace request.
  */
 async function loadPurchases(): Promise<void> {
-    if (library.state.value !== 'linked') return;
+    const identity = purchaseIdentity.value;
+    const accountId = library.link.value?.accountId;
+    const request = ++purchasesGeneration;
+    purchases.value = null;
+    purchasesFailure.value = null;
+    requestInstallGeneration++;
+    requestBusy.value = null;
+    requestedReleaseIds.value = new Set();
+    if (!identity) {
+        purchasesLoading.value = false;
+        return;
+    }
     purchasesLoading.value = true;
     try {
-        purchases.value = await $fetch<EntitlementsView>('/api/plugins/library/entitlements');
-        purchasesFailure.value = null;
+        const result = await $fetch<EntitlementsView>('/api/plugins/library/entitlements');
+        if (request !== purchasesGeneration) return;
+        if (!result.linked || (accountId && result.accountId !== accountId)) {
+            purchasesFailure.value = 'The Library link changed. Refresh the account link and try again.';
+            return;
+        }
+        purchases.value = result;
     } catch {
+        if (request !== purchasesGeneration) return;
         purchasesFailure.value = 'Your purchases could not be loaded right now.';
     } finally {
-        purchasesLoading.value = false;
+        if (request === purchasesGeneration) purchasesLoading.value = false;
     }
 }
 
-onMounted(async () => {
-    await library.load();
-    await loadPurchases();
+watch(purchaseIdentity, () => { void loadPurchases(); }, { flush: 'sync' });
+watch(library.userId, (next, previous) => {
+    if (next === previous) return;
+    installer.invalidate();
+    adminRequestsGeneration++;
+    adminRequests.value = [];
+    if (next) void installer.load();
+}, { flush: 'sync' });
+watch(installer.canInstall, (canInstall) => {
+    adminRequestsGeneration++;
+    adminRequests.value = [];
+    if (canInstall) void loadAdminRequests();
+}, { flush: 'sync' });
+
+onMounted(() => {
+    void Promise.all([library.load(), installer.load()]);
 });
+
+function pluginLink(pluginId: string, version?: string, requestId?: string): string {
+    return marketplacePluginDeepLink(window.location.origin, pluginId, version, requestId);
+}
+
+async function requestInstall(release: PurchasedRelease): Promise<void> {
+    const identity = purchaseIdentity.value;
+    if (!identity || requestBusy.value) return;
+    const request = ++requestInstallGeneration;
+    requestBusy.value = release.releaseId;
+    try {
+        const result = await $fetch<{ request: { id: string } }>('/api/plugins/library/install-requests', {
+            method: 'POST',
+            headers: { 'x-or3-cloud-intent': 'mutation', 'Content-Type': 'application/json' },
+            body: { releaseId: release.releaseId, pluginId: release.pluginId, version: release.version },
+        });
+        if (request !== requestInstallGeneration || identity !== purchaseIdentity.value) return;
+        requestedReleaseIds.value = new Set([...requestedReleaseIds.value, release.releaseId]);
+        toast.add({ title: 'Install request sent', description: `An administrator can review request ${result.request.id} in this server’s Library.`, color: 'success' });
+    } catch {
+        if (request === requestInstallGeneration && identity === purchaseIdentity.value) toast.add({ title: 'Could not request installation', description: 'Try again or ask an administrator to check this server’s Library.', color: 'warning' });
+    } finally {
+        if (request === requestInstallGeneration) requestBusy.value = null;
+    }
+}
+
+async function loadAdminRequests(): Promise<void> {
+    if (!installer.canInstall.value) return;
+    const request = ++adminRequestsGeneration;
+    adminRequestsLoading.value = true;
+    adminRequestsFailure.value = null;
+    try {
+        const result = await $fetch<{ requests: readonly AdminInstallRequest[] }>('/api/admin/plugins/library-install-requests');
+        if (request === adminRequestsGeneration && installer.canInstall.value) adminRequests.value = result.requests;
+    } catch {
+        if (request === adminRequestsGeneration && installer.canInstall.value) adminRequestsFailure.value = 'Install requests could not be loaded.';
+    } finally {
+        if (request === adminRequestsGeneration) adminRequestsLoading.value = false;
+    }
+}
 
 function formatDateTime(value: string): string {
     return new Date(value).toLocaleString(undefined, {
@@ -318,10 +421,11 @@ const terminalReason = computed(() => {
                 </p>
                 <p
                     v-else-if="purchasesFailure"
-                    class="mt-4 text-sm text-amber-700"
+                    class="mt-4 flex flex-wrap items-center gap-3 text-sm text-amber-700"
                     aria-live="polite"
                 >
-                    {{ purchasesFailure }}
+                    <span>{{ purchasesFailure }}</span>
+                    <UButton color="neutral" variant="outline" size="sm" @click="loadPurchases()">Try again</UButton>
                 </p>
                 <template v-else-if="purchases?.linked">
                     <p
@@ -331,6 +435,23 @@ const terminalReason = computed(() => {
                         Plus is active for this account until
                         {{ formatDateTime(purchases.plus.until) }}.
                     </p>
+
+                    <div v-if="purchases.pluginCoverage?.length" class="mt-5">
+                        <h3 class="text-sm font-medium text-slate-900">Plugin update coverage</h3>
+                        <p class="mt-1 text-xs text-slate-500">Review a newer release in Marketplace. Installation still checks compatibility, permissions, and release safety.</p>
+                        <ul class="mt-2 divide-y divide-slate-100 border-y border-slate-100">
+                            <li v-for="coverage in purchases.pluginCoverage" :key="`${coverage.pluginId}:${coverage.until}:${coverage.status}`" class="flex flex-wrap items-center justify-between gap-2 py-3">
+                                <div>
+                                    <p class="font-mono text-sm text-slate-900">{{ coverage.pluginId }}</p>
+                                    <p class="text-xs text-slate-500">
+                                        {{ coverage.status === 'valid' ? 'Coverage through' : coverage.status === 'refunded' ? 'Coverage refunded' : 'Coverage withdrawn' }}
+                                        {{ formatDateTime(coverage.until) }}
+                                    </p>
+                                </div>
+                                <UButton v-if="installer.canInstall.value" :to="pluginLink(coverage.pluginId)" size="sm" color="neutral" variant="outline">Review releases</UButton>
+                            </li>
+                        </ul>
+                    </div>
 
                     <ul
                         v-if="purchases.acquired?.length"
@@ -348,18 +469,21 @@ const terminalReason = computed(() => {
                                     {{ formatDateTime(release.acquiredAt) }}
                                 </p>
                             </div>
-                            <p class="text-xs text-slate-500">
-                                {{
-                                    release.coverageKind === 'plus'
-                                        ? 'Plus coverage'
-                                        : 'Update pass'
-                                }}
-                                until {{ formatDateTime(release.coverageUntil) }}
-                            </p>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <p class="text-xs text-slate-500">
+                                    {{ release.coverageKind === 'plus' ? 'Plus coverage' : 'Update pass' }}
+                                    until {{ formatDateTime(release.coverageUntil) }}
+                                </p>
+                                <UButton v-if="installer.canInstall.value" :to="pluginLink(release.pluginId, release.version)" size="sm" color="neutral" variant="outline">Install or restore</UButton>
+                                <UButton v-else-if="installer.checked.value" size="sm" color="neutral" variant="outline" :loading="requestBusy === release.releaseId" :disabled="requestedReleaseIds.has(release.releaseId)" @click="requestInstall(release)">{{ requestedReleaseIds.has(release.releaseId) ? 'Request sent' : 'Request installation' }}</UButton>
+                            </div>
                         </li>
                     </ul>
-                    <p v-else class="mt-4 text-sm text-slate-600">
+                    <p v-else-if="!purchases.pluginCoverage?.length" class="mt-4 text-sm text-slate-600">
                         No marketplace purchases appear for this account yet.
+                    </p>
+                    <p v-if="installer.checked.value && !installer.canInstall.value && (purchases.acquired?.length || purchases.pluginCoverage?.length)" class="mt-3 text-xs text-slate-500">
+                        Installing plugins needs an administrator of this instance. Request an acquired release above; an administrator can review it in this server’s Library.
                     </p>
                 </template>
                 <p v-else class="mt-4 text-sm text-slate-600">
@@ -368,6 +492,28 @@ const terminalReason = computed(() => {
                 </p>
             </div>
         </div>
+
+        <section v-if="installer.canInstall.value" class="mt-6 rounded-xl border border-slate-200 p-6" aria-labelledby="library-install-requests-heading">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <h2 id="library-install-requests-heading" class="text-base font-semibold text-slate-900">Install requests</h2>
+                <UButton size="sm" color="neutral" variant="outline" :loading="adminRequestsLoading" @click="loadAdminRequests()">Refresh requests</UButton>
+            </div>
+            <p class="mt-1 text-sm text-slate-600">A buyer asked you to review an exact acquired release. Marketplace still checks trust, compatibility, permissions, and quarantine before installation.</p>
+            <p v-if="adminRequestsFailure" class="mt-3 text-sm text-amber-700" aria-live="polite">{{ adminRequestsFailure }}</p>
+            <p v-else-if="adminRequestsLoading && !adminRequests.length" class="mt-3 text-sm text-slate-500">Loading requests…</p>
+            <p v-else-if="!adminRequests.length" class="mt-3 text-sm text-slate-500">No open requests.</p>
+            <ul v-else class="mt-3 divide-y divide-slate-100 border-y border-slate-100">
+                <li v-for="request in adminRequests" :key="request.id" class="flex flex-wrap items-center justify-between gap-3 py-3">
+                    <div>
+                        <p class="font-mono text-sm text-slate-900">{{ request.pluginId }} · {{ request.version }}</p>
+                        <p class="text-xs text-slate-500">Buyer {{ request.buyerUserId }} · workspace {{ request.workspaceId }} · account …{{ request.accountId.slice(-8) }}</p>
+                        <p v-if="request.operationId" class="text-xs text-slate-500">Operation {{ request.operationId }} · {{ request.operationStatus }}</p>
+                        <p v-else-if="sessionWorkspaceId !== request.workspaceId" class="text-xs text-amber-700">Switch to workspace {{ request.workspaceId }} to review this request.</p>
+                    </div>
+                    <UButton v-if="sessionWorkspaceId === request.workspaceId && request.operationStatus !== 'completed'" :to="pluginLink(request.pluginId, request.version, request.id)" size="sm" color="neutral" variant="outline">{{ request.operationId ? 'Continue review' : 'Review and install' }}</UButton>
+                </li>
+            </ul>
+        </section>
 
         <p
             v-if="library.failure.value"

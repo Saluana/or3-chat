@@ -15,9 +15,10 @@ import { createError, defineEventHandler, getRouterParam } from 'h3';
 import { requireAdminApiContext } from '../../../../../admin/api';
 import { describeAcquisitionStatus } from '~~/shared/plugins/acquisition/contracts';
 import { acquisitionServiceFor } from '../../../../../utils/plugins/acquisition/route-support';
+import { PluginAcquisitionOperationStore } from '../../../../../utils/plugins/acquisition/operation-store';
+import { getWorkspaceAccessStore } from '../../../../../admin/stores/registry';
 import {
     acquisitionErrorStatus,
-    requesterIdentity,
 } from '../../../../../utils/plugins/acquisition/route-identity';
 
 export default defineEventHandler(async (event) => {
@@ -30,12 +31,30 @@ export default defineEventHandler(async (event) => {
     if (!operationId) {
         throw createError({ statusCode: 400, statusMessage: 'Missing operation id' });
     }
-    // A retry re-evaluates setup readiness, so the host plan is built for the
-    // acting admin's view of the target workspace.
+    // A delegated retry remains in the buyer-approved workspace. The recorded
+    // requester and buyer link survive request expiry; covered bytes still need
+    // the buyer's original live link when the pipeline fetches them.
+    const recorded = await new PluginAcquisitionOperationStore().read(operationId);
+    if (!recorded) throw createError({ statusCode: 404, statusMessage: 'No such acquisition operation' });
+    if (recorded.libraryGrant && context.session?.workspace?.id !== recorded.workspaceId) {
+        throw createError({ statusCode: 409, statusMessage: 'Switch to the requested workspace before retrying this acquisition.' });
+    }
+    if (recorded.libraryGrant) {
+        const access = getWorkspaceAccessStore(event);
+        const [targetWorkspace, members] = await Promise.all([
+            access.getWorkspace({ workspaceId: recorded.workspaceId }),
+            access.listMembers({ workspaceId: recorded.workspaceId }),
+        ]);
+        if (!targetWorkspace || targetWorkspace.deleted ||
+            !members.some((member) => member.userId === recorded.libraryGrant?.buyerUserId)) {
+            throw createError({ statusCode: 409, statusMessage: 'The buyer no longer belongs to the requested workspace.' });
+        }
+    }
     const service = await acquisitionServiceFor(
         event,
-        requesterIdentity(context),
-        context.session?.user?.id ?? ''
+        recorded.requesterUserId,
+        recorded.libraryGrant?.buyerUserId ?? context.session?.user?.id ?? '',
+        recorded.libraryGrant
     );
     try {
         const operation = await service.retry(operationId);

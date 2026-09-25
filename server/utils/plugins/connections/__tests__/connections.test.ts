@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
     connectionRefFor,
     parseConnectionRef,
-    type ConnectionProviderDescriptor,
 } from '~~/shared/plugins/connections/contracts';
 import {
     FAKE_CONNECTION_PROVIDER,
@@ -512,17 +511,6 @@ describe('fake-provider setup tests (4.9)', () => {
     });
 });
 
-describe('provider declaration', () => {
-    it('declares mechanisms, callbacks, cost and unsupported features', () => {
-        const provider: ConnectionProviderDescriptor = FAKE_CONNECTION_PROVIDER;
-        expect(provider.mechanism).toBe('server');
-        expect(provider.callbackDomains).toEqual([]);
-        expect(provider.externalCost).toContain('fake provider');
-        expect(provider.unsupported).toContain('oauth-callback');
-        expect(provider.operations.every((operation) => operation.host.length > 0)).toBe(true);
-    });
-});
-
 describe('connection write concurrency (findings 1, 2)', () => {
     it('binds a created credential to its declared package slot', async () => {
         const service = createService();
@@ -601,9 +589,6 @@ describe('connection write concurrency (findings 1, 2)', () => {
         // Nothing was written: the stored revision and ciphertext are untouched.
         const stored = await base.get(created.view.id);
         expect(stored?.revision).toBe(1);
-        expect(stored?.secretCiphertext).toBe(
-            (await base.get(created.view.id))?.secretCiphertext
-        );
         expect(await service.isTestCurrent(created.view.id)).toBe(false);
     });
 

@@ -39,6 +39,7 @@ import { RegistryStateStore } from './registry-state';
 import { RegistryClient } from './registry-client';
 import { PluginAcquisitionService } from './acquisition-service';
 import type { PluginAcquisitionReleaseIdentity } from '~~/shared/plugins/acquisition/contracts';
+import type { PluginAcquisitionOperation } from '~~/shared/plugins/acquisition/contracts';
 
 const WORKSPACE_PAGE_SIZE = 100;
 const MAX_WORKSPACE_PAGES = 100;
@@ -139,7 +140,8 @@ export async function acquisitionServiceFor(
      * The acting local user whose Library link may cover a paid release. Kept
      * separate from the recorded requester identity, which is an audit label.
      */
-    libraryUserId = ''
+    libraryUserId = '',
+    libraryGrant?: PluginAcquisitionOperation['libraryGrant']
 ): Promise<PluginAcquisitionService> {
     const config = acquisitionConfig();
     const settings = getWorkspaceSettingsStore(event);
@@ -206,6 +208,12 @@ export async function acquisitionServiceFor(
                                   'Only the original acquisition requester may use that Library link.',
                           };
                       }
+                      if (libraryGrant && (libraryGrant.buyerUserId !== libraryUserId ||
+                          input.releaseId !== libraryGrant.releaseId ||
+                          input.expectedRelease.archiveSha256 !== libraryGrant.archiveSha256)) {
+                          return { ok: false as const, code: 'link-required' as const,
+                              message: 'This release is outside the buyer-approved install request.' };
+                      }
                       const { service, configured } = await libraryLinkServiceFor(event);
                       if (!configured) {
                           return {
@@ -214,6 +222,14 @@ export async function acquisitionServiceFor(
                               message:
                                   'This host has no Library link configured, so a paid release cannot be acquired.',
                           };
+                      }
+                      if (libraryGrant) {
+                          const link = await service.status(libraryUserId);
+                          if (link.state !== 'linked' || link.link?.id !== libraryGrant.linkId ||
+                              link.link?.accountId !== libraryGrant.accountId) {
+                              return { ok: false as const, code: 'link-required' as const,
+                                  message: 'The buyer’s Library link changed. Ask them for a new install request.' };
+                          }
                       }
                       return await service.artifactAccess(
                           libraryUserId,

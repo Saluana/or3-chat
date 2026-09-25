@@ -111,6 +111,7 @@ export interface CreateOperationInput {
     readonly version: string;
     readonly workspaceId: string;
     readonly requesterUserId: string;
+    readonly libraryGrant?: PluginAcquisitionOperation['libraryGrant'];
     readonly instanceId: string;
     readonly release: PluginAcquisitionReleaseIdentity;
     /**
@@ -146,6 +147,15 @@ export function parseAcquisitionOperation(value: unknown): PluginAcquisitionOper
     if (typeof value.stage !== 'string' || typeof value.status !== 'string') return null;
     if (typeof value.createdAt !== 'number' || typeof value.updatedAt !== 'number') return null;
     if (!isRecord(value.release)) return null;
+    if (value.libraryGrant !== undefined) {
+        if (!isRecord(value.libraryGrant) ||
+            typeof value.libraryGrant.requestId !== 'string' || !/^lir_[a-f0-9]{32}$/.test(value.libraryGrant.requestId) ||
+            typeof value.libraryGrant.buyerUserId !== 'string' || !value.libraryGrant.buyerUserId ||
+            typeof value.libraryGrant.linkId !== 'string' || !value.libraryGrant.linkId ||
+            typeof value.libraryGrant.accountId !== 'string' || !value.libraryGrant.accountId ||
+            typeof value.libraryGrant.releaseId !== 'string' || !value.libraryGrant.releaseId ||
+            typeof value.libraryGrant.archiveSha256 !== 'string' || !/^sha256-[a-f0-9]{64}$/.test(value.libraryGrant.archiveSha256)) return null;
+    }
     return value as unknown as PluginAcquisitionOperation;
 }
 
@@ -434,6 +444,7 @@ export class PluginAcquisitionOperationStore {
             version: input.version,
             workspaceId: input.workspaceId,
             requesterUserId: input.requesterUserId,
+            ...(input.libraryGrant ? { libraryGrant: input.libraryGrant } : {}),
             instanceId: input.instanceId,
             release: input.release,
             stage,

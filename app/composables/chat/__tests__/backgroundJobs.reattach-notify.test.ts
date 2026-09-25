@@ -191,6 +191,7 @@ describe('backgroundJobs reattach + notifications', () => {
     });
 
     it('executes a claimed client tool while the chat UI is detached', async () => {
+        sessionValue = { user: { id: 'user-1' } };
         let streamParams: { onStatus: (status: any) => void } | null = null;
         subscribeBackgroundJobStreamMock.mockImplementation((params) => {
             streamParams = params;

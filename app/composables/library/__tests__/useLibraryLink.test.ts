@@ -237,12 +237,16 @@ describe('useLibraryLink', () => {
         await library.connect();
         expect(fetchMock).toHaveBeenLastCalledWith('/api/plugins/library/link', {
             method: 'POST',
+            headers: { 'x-or3-cloud-intent': 'mutation', 'Content-Type': 'application/json' },
+            body: {},
         });
 
         fetchMock.mockResolvedValue(status({ state: 'revoked', centralRevokePending: true }));
         await library.disconnect();
         expect(fetchMock).toHaveBeenLastCalledWith('/api/plugins/library/link/disconnect', {
             method: 'POST',
+            headers: { 'x-or3-cloud-intent': 'mutation', 'Content-Type': 'application/json' },
+            body: {},
         });
         expect(library.state.value).toBe('revoked');
         expect(library.status.value?.centralRevokePending).toBe(true);

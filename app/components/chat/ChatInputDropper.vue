@@ -482,6 +482,9 @@ onMounted(async () => {
                 placeholder: 'Write something …',
             }),
             StarterKit.configure({
+                // The composer sends plain text. Keep pasted URLs editable
+                // instead of turning them into links that navigate on click.
+                link: false,
                 bold: false,
                 italic: false,
                 strike: false,

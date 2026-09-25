@@ -183,7 +183,11 @@ async function apiGet<T>(url: string): Promise<T> {
 async function apiPost<T>(url: string, body?: unknown): Promise<T> {
     return (await (
         $fetch as unknown as (input: string, init: Record<string, unknown>) => Promise<unknown>
-    )(url, { method: 'POST', ...(body === undefined ? {} : { body }) })) as T;
+    )(url, {
+        method: 'POST',
+        headers: { 'x-or3-cloud-intent': 'mutation', 'Content-Type': 'application/json' },
+        body: body ?? {},
+    })) as T;
 }
 
 export function useLibraryLink() {
@@ -308,6 +312,7 @@ export function useLibraryLink() {
     });
 
     return {
+        userId,
         status,
         state,
         configured,

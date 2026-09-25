@@ -122,9 +122,9 @@ Don’t:
 
 ## Testing guidance
 
--   Unit tests: `can()` matrix, hook invariants, HLC/order_key, outbox coalescing, clock increments.
--   Integration tests: session resolution, push/pull cycles, conflict resolution, blob uploads/downloads.
--   E2E: multi-device sync, offline recovery, auth gating.
+-   Never write unit tests after you write code.
+-   Highly prefer E2E tests as the sole testing mechanism. Use them to verify complex features work. At the end of E2E tests, produce a verifiable and repeatable artifact.
+-   If you must test a system in isolation, first write down all the ways it could fail, then write the code.
 
 ### Test lanes and future agent policy
 
@@ -142,21 +142,6 @@ Don’t:
 -   Stable releases require explicit intent and the candidate/tag ceremony; they are not a routine update step.
 -   [`docs/cloud-updates.md`](docs/cloud-updates.md) is the canonical update guide. Do not restate or invent update procedures.
 -   Agents must not invent release commands, publish packages or images outside the documented workflows, bump versions, or alter live or production data merely to update application code.
-
-### Using test driven development (TDD) is encouraged.
-
-Test-Driven Development (TDD)
-Test First: Define expected behavior through failing tests before writing implementation code. This clarifies requirements and edge cases upfront.
-
-Fast Feedback: Keep unit tests lightweight and focused on single responsibilities to ensure the suite runs instantly, encouraging frequent execution.
-
-Reliability Over Coverage: Prioritize testing complex logic, state transitions, and critical paths over trivial getters/setters.
-
-Refactor with Confidence: Use the passing test suite as a safety net to optimize and clean up code without introducing regressions.
-
-Mock Externalities: Isolate business logic from side effects (databases, APIs) to ensure tests are deterministic and stable.
-
----
 
 ## Tooling and research
 

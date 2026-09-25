@@ -18,6 +18,10 @@ export interface SameOriginMutationOptions {
     intentHeader: string;
     intentValue: string;
     requireJson?: boolean;
+    /** Only explicitly configured credentialed browser origins may cross origins. */
+    allowConfiguredOrigins?: boolean;
+    /** For separately authenticated API clients which cannot send Origin. */
+    allowOriginlessBearer?: boolean;
 }
 
 function isMutationMethod(method?: string): boolean {
@@ -77,8 +81,16 @@ export function requireSameOriginMutation(
     }
 
     const originHeader = getRequestHeader(event, 'origin');
+    const refererHeader = getRequestHeader(event, 'referer');
+    if (!originHeader && !refererHeader && options.allowOriginlessBearer) {
+        const authorization = getRequestHeader(event, 'authorization');
+        const cookies = getRequestHeader(event, 'cookie');
+        if (!cookies && /^Bearer\s+\S+$/i.test(authorization ?? '')) {
+            return;
+        }
+    }
     const requestSource = parseHttpRequestSource(
-        originHeader || getRequestHeader(event, 'referer'),
+        originHeader || refererHeader,
         Boolean(originHeader)
     );
     if (!requestSource) {
@@ -110,7 +122,13 @@ export function requireSameOriginMutation(
         });
     }
 
-    if (requestOrigin !== requestSource.origin) {
+    const configuredOrigins = options.allowConfiguredOrigins
+        ? useRuntimeConfig(event).security.allowedOrigins
+        : [];
+    if (
+        requestOrigin !== requestSource.origin &&
+        !configuredOrigins.includes(requestSource.origin)
+    ) {
         throw createError({
             statusCode: 403,
             statusMessage: 'Forbidden: Origin mismatch',

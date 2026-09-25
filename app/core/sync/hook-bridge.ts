@@ -44,6 +44,37 @@ const KV_SYNC_BLOCKLIST = [
     'workspace.manager.cache',  // Device-local UI cache
 ] as const;
 
+/** Shared capture/replacement policy; plugins can extend device-local keys. */
+export function getLocalOnlyKvNames(): Set<string> {
+    try {
+        const engine = useHooks()._engine;
+        if (!engine) return new Set(KV_SYNC_BLOCKLIST);
+        const filtered: unknown = engine.applyFiltersSync(
+            'sync.kv:blocklist',
+            [...KV_SYNC_BLOCKLIST]
+        );
+        if (
+            !Array.isArray(filtered) ||
+            filtered.some((name: unknown) => typeof name !== 'string')
+        ) {
+            throw new Error('sync.kv:blocklist must return an array of key names');
+        }
+        // A plugin may add local-only keys but cannot remove the built-in
+        // secret and device-local exclusions.
+        return new Set([...KV_SYNC_BLOCKLIST, ...(filtered as string[])]);
+    } catch (error) {
+        if (
+            !(error instanceof Error) ||
+            !error.message.includes('Hook engine not initialized')
+        ) {
+            throw error;
+        }
+        // Snapshot helpers also run in isolated migration/test contexts before
+        // the client hook plugin exists; the built-in secret policy still applies.
+        return new Set(KV_SYNC_BLOCKLIST);
+    }
+}
+
 /**
  * Deep clone an object for safe modification
  */
@@ -300,12 +331,7 @@ export class HookBridge {
             const kvName = (safePayload.name as string | undefined) ?? pk.replace('kv:', '');
 
             // Allow plugins to extend the blocklist (untyped hook, use raw engine)
-            const blocklist = useHooks()._engine.applyFiltersSync(
-                'sync.kv:blocklist',
-                [...KV_SYNC_BLOCKLIST]
-            ) as string[];
-
-            if (blocklist.includes(kvName)) {
+            if (getLocalOnlyKvNames().has(kvName)) {
                 return; // Skip this key, don't capture for sync
             }
         }

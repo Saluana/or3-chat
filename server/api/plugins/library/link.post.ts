@@ -15,6 +15,7 @@ import { requireCan, requireSession } from '../../../auth/can';
 import { resolveSessionContext } from '../../../auth/session';
 import { libraryLinkServiceFor } from '../../../admin/library/route-support';
 import { checkRateLimit } from '../../../utils/rate-limit';
+import { requireCloudMutation } from '../../../utils/security/cloud-mutation';
 import {
     getProxyRequestHost,
     getProxyRequestProtocol,
@@ -23,6 +24,7 @@ import {
 import { useRuntimeConfig } from '#imports';
 
 export default defineEventHandler(async (event) => {
+    requireCloudMutation(event);
     const session = await resolveSessionContext(event);
     requireSession(session);
     const userId = session.user?.id;

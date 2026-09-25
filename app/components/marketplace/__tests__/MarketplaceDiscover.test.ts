@@ -635,6 +635,52 @@ describe('MarketplaceDiscover', () => {
         ).toBe(true);
     });
 
+    it('preflights the exact acquired version from a Library restore link', async () => {
+        window.history.replaceState({}, '', '/?dashboard=marketplace&plugin=or3.sample-utility&version=0.9.0');
+        const wrapper = mount(MarketplaceDiscover, { global: { stubs } });
+        await flush();
+        await flush();
+
+        const preflightCall = fetchMock.mock.calls.find((call) =>
+            String(call[0]).startsWith('/api/plugins/marketplace/preflight')
+        );
+        expect(preflightCall?.[1]).toMatchObject({ body: { pluginId: 'or3.sample-utility', version: '0.9.0' } });
+        wrapper.unmount();
+    });
+
+    it('sends the buyer request only for its deep-linked detail and clears it on another selection', async () => {
+        const requestId = `lir_${'a'.repeat(32)}`;
+        window.history.replaceState({}, '', `/?dashboard=marketplace&plugin=or3.sample-utility&version=1.0.0&installRequest=${requestId}`);
+        fetchMock.mockImplementation((url: string, init?: MockInit) => {
+            if (url.startsWith('/api/plugins/marketplace/preflight')) {
+                return Promise.resolve(preflightResponse({ status: 'installable', blocks: [], registry: { configured: true, installEnabled: true, origin: 'https://r', keys: 1 } }));
+            }
+            if (url === '/api/admin/plugins/acquisitions' && init?.method === 'POST') {
+                return Promise.resolve({ ok: true, operation: acquisitionOperation({ status: 'failed', retryable: false, needsSetup: false }) });
+            }
+            if (url.endsWith('/status')) {
+                return Promise.resolve({ ok: true, operation: acquisitionOperation({ status: 'failed', retryable: false, needsSetup: false }) });
+            }
+            return Promise.resolve(responseFor(url));
+        });
+        const wrapper = mount(MarketplaceDiscover, { global: { stubs } });
+        await flush();
+        await flush();
+        await wrapper.get('[data-testid="marketplace-install"]').trigger('click');
+        await flush();
+        const firstStart = fetchMock.mock.calls.find((call) => call[0] === '/api/admin/plugins/acquisitions' && (call[1] as MockInit | undefined)?.method === 'POST');
+        expect(firstStart?.[1]).toMatchObject({ body: { installRequestId: requestId } });
+
+        fetchMock.mockClear();
+        await wrapper.get('[data-testid="marketplace-card"]').trigger('click');
+        await flush();
+        await wrapper.get('[data-testid="marketplace-install"]').trigger('click');
+        await flush();
+        const secondStart = fetchMock.mock.calls.find((call) => call[0] === '/api/admin/plugins/acquisitions' && (call[1] as MockInit | undefined)?.method === 'POST');
+        expect(secondStart?.[1]).not.toMatchObject({ body: { installRequestId: requestId } });
+        wrapper.unmount();
+    });
+
     it('restores a durable operation and offers Continue for a setup pause', async () => {
         fetchMock.mockImplementation((url: string) => {
             if (String(url).startsWith('/api/admin/plugins/acquisitions?')) {

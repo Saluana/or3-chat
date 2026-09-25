@@ -176,6 +176,7 @@ vi.mock('~/utils/chat/openrouterStream', () => ({
     startBackgroundStream: startBackgroundStreamMock,
     abortBackgroundJob: vi.fn(),
     isBackgroundStreamingEnabled: () => true,
+    isBackgroundClientToolBridgeAvailable: async () => true,
 }));
 
 vi.mock('~/utils/chat/tool-registry', () => ({

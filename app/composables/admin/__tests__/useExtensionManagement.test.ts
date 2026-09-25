@@ -26,16 +26,6 @@ describe('useExtensionManagement', () => {
         });
     });
 
-    it('returns file input refs and functions', () => {
-        const isOwner = ref(true);
-        const { fileInput, triggerFileInput, install, uninstall } = useExtensionManagement(isOwner);
-
-        expect(fileInput).toBe(mockFileInput);
-        expect(triggerFileInput).toBe(mockTriggerFileInput);
-        expect(typeof install).toBe('function');
-        expect(typeof uninstall).toBe('function');
-    });
-
     it('does not install when not owner', async () => {
         const isOwner = ref(false);
         const { install } = useExtensionManagement(isOwner);

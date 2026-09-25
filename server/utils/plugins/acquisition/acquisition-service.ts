@@ -109,6 +109,7 @@ export interface StartAcquisitionInput {
     readonly version?: string;
     readonly workspaceId: string;
     readonly requesterUserId: string;
+    readonly libraryGrant?: PluginAcquisitionOperation['libraryGrant'];
     readonly instanceId: string;
 }
 
@@ -289,6 +290,10 @@ export class PluginAcquisitionService {
         }
 
         const document = resolved.value.document;
+        if (input.libraryGrant && (document.releaseId !== input.libraryGrant.releaseId ||
+            document.archiveSha256 !== input.libraryGrant.archiveSha256)) {
+            return { ok: false, failure: restFailure('resolved', 'release-not-found', 'The requested release changed. Ask the buyer for a new install request.', false) };
+        }
         let record: PluginAcquisitionOperation;
         try {
             record = await this.#deps.store.create({
@@ -296,6 +301,7 @@ export class PluginAcquisitionService {
                 version: document.version,
                 workspaceId: input.workspaceId,
                 requesterUserId: input.requesterUserId,
+                ...(input.libraryGrant ? { libraryGrant: input.libraryGrant } : {}),
                 instanceId: input.instanceId,
                 stage: 'resolved',
                 acceptedAdvisorySequence: resolved.value.advisorySequence,

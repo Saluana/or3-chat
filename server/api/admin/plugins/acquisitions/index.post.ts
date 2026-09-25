@@ -28,6 +28,10 @@ import { checkRateLimit } from '../../../../utils/rate-limit';
 import { describeAcquisitionStatus } from '~~/shared/plugins/acquisition/contracts';
 import { acquisitionInstanceId } from '../../../../utils/plugins/acquisition/config';
 import { acquisitionServiceFor } from '../../../../utils/plugins/acquisition/route-support';
+import { PluginAcquisitionOperationStore } from '../../../../utils/plugins/acquisition/operation-store';
+import { LibraryInstallRequestStore } from '../../../../admin/library/install-requests';
+import { libraryLinkServiceFor } from '../../../../admin/library/route-support';
+import { getWorkspaceAccessStore } from '../../../../admin/stores/registry';
 import {
     acquisitionErrorStatus,
     requesterIdentity,
@@ -41,6 +45,7 @@ const BodySchema = z.object({
         .regex(/^[a-z0-9][a-z0-9._-]*$/),
     version: z.string().min(1).max(64).optional(),
     workspaceId: z.string().min(1).optional(),
+    installRequestId: z.string().regex(/^lir_[a-f0-9]{32}$/).optional(),
 });
 
 export default defineEventHandler(async (event) => {
@@ -55,6 +60,33 @@ export default defineEventHandler(async (event) => {
     }
     const workspaceId = resolveAdminWorkspaceTarget(context, body.data.workspaceId);
     const requester = requesterIdentity(context);
+    const request = body.data.installRequestId
+        ? await new LibraryInstallRequestStore().read(body.data.installRequestId)
+        : null;
+    if (body.data.installRequestId) {
+        if (!request || request.expiresAt <= Date.now() || request.pluginId !== body.data.pluginId ||
+            request.version !== body.data.version || request.workspaceId !== workspaceId ||
+            context.session?.workspace?.id !== request.workspaceId) {
+            throw createError({ statusCode: 409, statusMessage: 'The buyer request is expired or does not match this release and workspace.' });
+        }
+        const access = getWorkspaceAccessStore(event);
+        const [targetWorkspace, members] = await Promise.all([
+            access.getWorkspace({ workspaceId: request.workspaceId }),
+            access.listMembers({ workspaceId: request.workspaceId }),
+        ]);
+        if (!targetWorkspace || targetWorkspace.deleted || !members.some((member) => member.userId === request.buyerUserId)) {
+            throw createError({ statusCode: 409, statusMessage: 'The buyer no longer belongs to the requested workspace.' });
+        }
+        const link = await (await libraryLinkServiceFor(event)).service.status(request.buyerUserId);
+        if (link.state !== 'linked' || link.link?.id !== request.linkId || link.link?.accountId !== request.accountId) {
+            throw createError({ statusCode: 409, statusMessage: 'The buyer’s Library link changed. Ask for a new install request.' });
+        }
+        const existing = (await new PluginAcquisitionOperationStore().list(request.pluginId))
+            .find((operation) => operation.libraryGrant?.requestId === request.id);
+        if (existing) {
+            return { ok: true, workspaceId: existing.workspaceId, operation: describeAcquisitionStatus(existing) };
+        }
+    }
 
     // Bounded actor policy for registry acquisitions; the raw-upload limits are
     // a separate path and are unchanged.
@@ -69,12 +101,22 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const service = await acquisitionServiceFor(event, requester, context.session?.user?.id ?? '');
+    const libraryGrant = request ? {
+        requestId: request.id,
+        buyerUserId: request.buyerUserId,
+        linkId: request.linkId,
+        accountId: request.accountId,
+        releaseId: request.releaseId,
+        archiveSha256: request.archiveSha256,
+    } : undefined;
+    const service = await acquisitionServiceFor(event, requester,
+        request?.buyerUserId ?? context.session?.user?.id ?? '', libraryGrant);
     const started = await service.start({
         pluginId: body.data.pluginId,
         ...(body.data.version === undefined ? {} : { version: body.data.version }),
         workspaceId,
         requesterUserId: requester,
+        ...(libraryGrant ? { libraryGrant } : {}),
         instanceId: acquisitionInstanceId(),
     });
     if (!started.ok) {

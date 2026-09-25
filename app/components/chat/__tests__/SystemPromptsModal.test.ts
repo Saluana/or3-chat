@@ -97,6 +97,8 @@ vi.mock('~/composables/useIcon', () => ({
 }));
 
 const stubs = {
+    DialogTitle: { template: '<h2><slot /></h2>' },
+    DialogDescription: { template: '<p><slot /></p>' },
     UModal: {
         props: ['open'],
         template:
@@ -109,7 +111,7 @@ const stubs = {
             '<button v-bind="$attrs" @click="$emit(\'click\', $event)"><slot /></button>',
     },
     UInput: {
-        props: ['modelValue'],
+        props: ['modelValue', 'size'],
         emits: ['update:modelValue'],
         template:
             '<input :value="modelValue" v-bind="$attrs" @input="$emit(\'update:modelValue\', $event.target.value)" />',
@@ -119,6 +121,9 @@ const stubs = {
     },
     UPopover: {
         template: '<div><slot /><slot name="content" /></div>',
+    },
+    UDropdownMenu: {
+        template: '<div><slot /></div>',
     },
     UIcon: {
         template: '<i />',

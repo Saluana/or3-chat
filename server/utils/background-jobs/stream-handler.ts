@@ -693,7 +693,6 @@ export async function consumeBackgroundStream(params: {
         if (flushError) {
             throw flushError;
         }
-        await flushProviderProgress(true);
         normalizedState = finishNormalizedIteration(
             normalizedState,
             MAX_TOOL_ITERATIONS

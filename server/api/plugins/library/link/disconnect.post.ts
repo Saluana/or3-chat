@@ -9,8 +9,10 @@ import { createError, defineEventHandler, setResponseHeader } from 'h3';
 import { requireCan, requireSession } from '../../../../auth/can';
 import { resolveSessionContext } from '../../../../auth/session';
 import { libraryLinkServiceFor } from '../../../../admin/library/route-support';
+import { requireCloudMutation } from '../../../../utils/security/cloud-mutation';
 
 export default defineEventHandler(async (event) => {
+    requireCloudMutation(event);
     const session = await resolveSessionContext(event);
     requireSession(session);
     const userId = session.user?.id;

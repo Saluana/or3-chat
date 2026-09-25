@@ -42,11 +42,31 @@ vi.mock('../../../../../utils/plugins/acquisition/route-support', () => ({
 }));
 
 const recoverRunnerMock = vi.fn();
+const operationListMock = vi.fn();
+const operationReadMock = vi.fn();
 vi.mock('../../../../../utils/plugins/acquisition/operation-store', () => ({
     PluginAcquisitionOperationError: class extends Error {},
     PluginAcquisitionOperationStore: class {
         recoverRemoteRunner(...args: unknown[]) { return recoverRunnerMock(...args); }
+        list(...args: unknown[]) { return operationListMock(...args); }
+        read(...args: unknown[]) { return operationReadMock(...args); }
     },
+}));
+
+const installRequestReadMock = vi.fn();
+vi.mock('../../../../../admin/library/install-requests', () => ({
+    LibraryInstallRequestStore: class { read(...args: unknown[]) { return installRequestReadMock(...args); } },
+}));
+const libraryStatusMock = vi.fn();
+const workspaceAccessMock = {
+    getWorkspace: vi.fn(),
+    listMembers: vi.fn(),
+};
+vi.mock('../../../../../admin/stores/registry', () => ({
+    getWorkspaceAccessStore: () => workspaceAccessMock,
+}));
+vi.mock('../../../../../admin/library/route-support', () => ({
+    libraryLinkServiceFor: () => Promise.resolve({ service: { status: libraryStatusMock } }),
 }));
 
 const startMock = vi.fn();
@@ -99,6 +119,12 @@ describe('acquisition routes', () => {
         startMock.mockReset();
         statusMock.mockReset();
         recoverRunnerMock.mockReset();
+        operationListMock.mockReset().mockResolvedValue([]);
+        operationReadMock.mockReset();
+        installRequestReadMock.mockReset();
+        libraryStatusMock.mockReset();
+        workspaceAccessMock.getWorkspace.mockReset().mockResolvedValue({ id: 'ws-1', deleted: false });
+        workspaceAccessMock.listMembers.mockReset().mockResolvedValue([{ userId: 'buyer-local' }]);
     });
 
     it('rejects an invalid start body before touching the pipeline', async () => {
@@ -170,6 +196,89 @@ describe('acquisition routes', () => {
 
         await expectStatus(handler(makeEvent()), 429);
         expect(startMock).not.toHaveBeenCalled();
+    });
+
+    it('binds a delegated start to buyer link, exact release and current workspace', async () => {
+        const requestId = `lir_${'a'.repeat(32)}`;
+        const request = {
+            id: requestId, buyerUserId: 'buyer-local', workspaceId: 'ws-1',
+            linkId: 'link-1', accountId: 'buyer-central', releaseId: 'rel_fixture_1',
+            pluginId: 'alpha', version: '1.0.0', archiveSha256: `sha256-${'a'.repeat(64)}`,
+            expiresAt: Date.now() + 10_000,
+        };
+        requireAdminApiContextMock.mockResolvedValue({
+            principal: { kind: 'super_admin', username: 'root' },
+            session: { user: { id: 'admin-local' }, workspace: { id: 'ws-1' } },
+        });
+        readBodyMock.mockResolvedValue({ pluginId: 'alpha', version: '1.0.0', workspaceId: 'ws-1', installRequestId: requestId });
+        installRequestReadMock.mockResolvedValue(request);
+        libraryStatusMock.mockResolvedValue({ state: 'linked', link: { id: 'link-1', accountId: 'buyer-central' } });
+        startMock.mockResolvedValue({ ok: true, operation: operationView() });
+        const handler = (await import('../index.post')).default;
+
+        await handler(makeEvent());
+        expect(acquisitionServiceForMock).toHaveBeenCalledWith(expect.anything(), 'super_admin:root', 'buyer-local', expect.objectContaining({ requestId }));
+        expect(startMock).toHaveBeenCalledWith(expect.objectContaining({
+            pluginId: 'alpha', version: '1.0.0', workspaceId: 'ws-1',
+            libraryGrant: expect.objectContaining({ requestId, buyerUserId: 'buyer-local', releaseId: 'rel_fixture_1' }),
+        }));
+
+        requireAdminApiContextMock.mockResolvedValue({
+            principal: { kind: 'super_admin', username: 'root' },
+            session: { user: { id: 'admin-local' }, workspace: { id: 'ws-other' } },
+        });
+        await expectStatus(handler(makeEvent()), 409);
+        expect(startMock).toHaveBeenCalledTimes(1);
+
+        requireAdminApiContextMock.mockResolvedValue({
+            principal: { kind: 'super_admin', username: 'root' },
+            session: { user: { id: 'admin-local' }, workspace: { id: 'ws-1' } },
+        });
+        workspaceAccessMock.listMembers.mockResolvedValue([]);
+        await expectStatus(handler(makeEvent()), 409);
+        expect(startMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects delegated starts after the buyer changes the Library link', async () => {
+        const requestId = `lir_${'a'.repeat(32)}`;
+        requireAdminApiContextMock.mockResolvedValue({
+            principal: { kind: 'super_admin', username: 'root' },
+            session: { user: { id: 'admin-local' }, workspace: { id: 'ws-1' } },
+        });
+        readBodyMock.mockResolvedValue({ pluginId: 'alpha', version: '1.0.0', workspaceId: 'ws-1', installRequestId: requestId });
+        installRequestReadMock.mockResolvedValue({ id: requestId, buyerUserId: 'buyer-local', workspaceId: 'ws-1', linkId: 'link-1', accountId: 'buyer-central', pluginId: 'alpha', version: '1.0.0', expiresAt: Date.now() + 10_000 });
+        libraryStatusMock.mockResolvedValue({ state: 'linked', link: { id: 'link-2', accountId: 'buyer-central' } });
+        const handler = (await import('../index.post')).default;
+        await expectStatus(handler(makeEvent()), 409);
+        expect(startMock).not.toHaveBeenCalled();
+    });
+
+    it('retries a recorded delegated operation only in its buyer-approved workspace', async () => {
+        const requestId = `lir_${'a'.repeat(32)}`;
+        getRouterParamMock.mockReturnValue('acq_abcdefgh');
+        operationReadMock.mockResolvedValue({ ...operationView(), requesterUserId: 'super_admin:root',
+            libraryGrant: { requestId, buyerUserId: 'buyer-local', linkId: 'link-1', accountId: 'buyer-central', releaseId: 'rel_fixture_1', archiveSha256: `sha256-${'a'.repeat(64)}` } });
+        requireAdminApiContextMock.mockResolvedValue({
+            principal: { kind: 'super_admin', username: 'root' },
+            session: { user: { id: 'admin-local' }, workspace: { id: 'ws-other' } },
+        });
+        const handler = (await import('../[operationId]/retry.post')).default;
+        await expectStatus(handler(makeEvent()), 409);
+        expect(acquisitionServiceForMock).not.toHaveBeenCalled();
+
+        requireAdminApiContextMock.mockResolvedValue({
+            principal: { kind: 'super_admin', username: 'root' },
+            session: { user: { id: 'admin-local' }, workspace: { id: 'ws-1' } },
+        });
+        workspaceAccessMock.listMembers.mockResolvedValueOnce([]);
+        await expectStatus(handler(makeEvent()), 409);
+        expect(acquisitionServiceForMock).not.toHaveBeenCalled();
+
+        const retryMock = vi.fn().mockResolvedValue(operationView());
+        acquisitionServiceForMock.mockResolvedValue({ retry: retryMock });
+        await handler(makeEvent());
+        expect(acquisitionServiceForMock).toHaveBeenCalledWith(expect.anything(), 'super_admin:root', 'buyer-local', expect.objectContaining({ requestId }));
+        expect(retryMock).toHaveBeenCalledWith('acq_abcdefgh');
     });
 
     it('returns 404 for an unknown operation instead of an empty status', async () => {

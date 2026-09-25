@@ -2013,7 +2013,7 @@ onMounted(() => {
 });
 
 watch(
-    () => [route.query.dashboard, route.query.page],
+    () => [route.query.dashboard, route.query.page, route.query.plugin, route.query.version, route.query.installRequest],
     () => {
         void consumeDashboardDeepLink();
     }

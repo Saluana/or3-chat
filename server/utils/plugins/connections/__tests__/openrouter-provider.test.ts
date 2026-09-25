@@ -7,11 +7,7 @@ import {
     OPENROUTER_CONNECTION_PROVIDER,
     OPENROUTER_SETUP_TEST_URL,
 } from '../providers/openrouter';
-import { registerConnectionProvider } from '../providers/registry';
-import {
-    createFakeProviderTransport,
-    FAKE_CONNECTION_PROVIDER,
-} from '~~/shared/plugins/connections/fake-provider';
+import { createFakeProviderTransport } from '~~/shared/plugins/connections/fake-provider';
 import { isTestableOperation } from '../setup-test';
 
 /**
@@ -166,8 +162,4 @@ describe('OpenRouter connection provider qualification (4.12)', () => {
         expect(leaky).toMatchObject({ ok: false, code: 'policy-denied' });
     });
 
-    it('registers the provider so the dispatcher can resolve it', () => {
-        registerConnectionProvider(FAKE_CONNECTION_PROVIDER);
-        expect(true).toBe(true);
-    });
 });

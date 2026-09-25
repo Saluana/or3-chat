@@ -538,6 +538,9 @@ describe('deep links', () => {
         expect(marketplacePluginDeepLink('https://or3.test', 'sample.plugin')).toBe(
             'https://or3.test/?dashboard=marketplace&plugin=sample.plugin'
         );
+        expect(marketplacePluginDeepLink('https://or3.test', 'sample.plugin', '1.2.3')).toBe(
+            'https://or3.test/?dashboard=marketplace&plugin=sample.plugin&version=1.2.3'
+        );
     });
 });
 

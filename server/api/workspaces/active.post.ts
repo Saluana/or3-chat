@@ -4,6 +4,7 @@
  * Purpose:
  * Sets the active workspace for the current user.
  */
+import { requireCloudMutation } from '../../utils/security/cloud-mutation';
 import { defineEventHandler, readBody, createError } from 'h3';
 import {
     requireWorkspaceSession,
@@ -18,6 +19,7 @@ import { useRuntimeConfig } from '#imports';
 type SetActiveBody = { id?: string };
 
 export default defineEventHandler(async (event) => {
+    requireCloudMutation(event);
     const session = await requireWorkspaceSession(event);
     const store = resolveWorkspaceStore(event);
 

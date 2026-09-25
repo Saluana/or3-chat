@@ -540,6 +540,30 @@ describe('consumeBackgroundStreamWithTools', () => {
         dispose();
     });
 
+    it('completes a plain-text background stream after flushing its final content', async () => {
+        const statusRef = { status: 'streaming' as const };
+        const { provider, updateJob, completeJob, failJob } = createProvider(statusRef);
+
+        await consumeBackgroundStream({
+            jobId: 'job-1',
+            stream: makeSseStream([{
+                choices: [{ delta: { content: 'complete answer' } }],
+            }]),
+            provider,
+            context: {
+                body: {}, apiKey: 'key', userId: 'user-1',
+                workspaceId: 'ws-1', threadId: 'thread-1',
+                messageId: 'msg-1', referer: 'http://localhost:3000',
+            },
+        });
+
+        expect(updateJob).toHaveBeenCalledWith('job-1', expect.objectContaining({
+            contentChunk: 'complete answer',
+        }));
+        expect(completeJob).toHaveBeenCalledWith('job-1', 'complete answer');
+        expect(failJob).not.toHaveBeenCalled();
+    });
+
     it('never invokes a registered server tool that was not advertised', async () => {
         const privileged = vi.fn(() => 'secret');
         const privilegedDef: ToolDefinition = {

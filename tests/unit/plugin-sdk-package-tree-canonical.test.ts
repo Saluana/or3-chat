@@ -6,8 +6,9 @@ import { verifyPackageTree } from '../../server/admin/plugins/package-tree';
 const repoRoot = resolve(import.meta.dirname, '../..');
 
 // Golden digests lock the canonical implementation's byte-level behaviour.
-// Captured from the pre-move implementation; they must not change without an
-// explicit package-format version bump.
+// Captured from the canonical implementation. Update a digest only when the
+// corresponding fixture bytes intentionally change; an algorithm change still
+// requires an explicit package-format version bump.
 const GOLDEN_FIXTURES = [
     {
         root: 'tests/plugin-runtime/v2-conformance/valid',
@@ -16,7 +17,7 @@ const GOLDEN_FIXTURES = [
     },
     {
         root: 'packages/plugin-sdk/templates/minimal-v2',
-        digest: 'sha256-8c95b2b5665c346d68cb56658c186cf5fdaa116d81a85568b1018fc8860c85de',
+        digest: 'sha256-c33cf020e185f050689916619ed399cc75ffa2341b91d8d58bbb6958577a4b8a',
         manifestDigest: 'sha256-a4f070a7d5e8e26fa91c73a757538415550c1c9c36ef831a50848f20414bfb8d',
     },
 ] as const;

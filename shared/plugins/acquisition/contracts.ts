@@ -158,6 +158,15 @@ export interface PluginAcquisitionOperation {
     /** Acting workspace for the request; the pointer change is instance-wide. */
     readonly workspaceId: string;
     readonly requesterUserId: string;
+    /** A buyer-approved exact-release request; identity only, never a credential. */
+    readonly libraryGrant?: {
+        readonly requestId: string;
+        readonly buyerUserId: string;
+        readonly linkId: string;
+        readonly accountId: string;
+        readonly releaseId: string;
+        readonly archiveSha256: string;
+    };
     /** Target instance, so an operation cannot be replayed against another host. */
     readonly instanceId: string;
     readonly release: PluginAcquisitionReleaseIdentity;

@@ -423,6 +423,8 @@ describe('portable successful result conformance', () => {
     });
 });
 
+// Ten thousand serial fake-host RPCs can exceed the default budget when this
+// file runs alongside the rest of the suite; keep the production-sized case.
 it('enforces the production retained-name cap in both hosts', async () => {
     const names = Array.from({ length: 10_000 }, (_, index) => `old${index}`);
     await kvState.db!.kv.bulkPut(names.map((key) => ({
@@ -436,7 +438,7 @@ it('enforces the production retained-name cap in both hosts', async () => {
     expect(await fake.client.call('storage.set', { key: 'overflow', value: 1 })).toMatchObject({ ok: false, code: 'quota-exceeded' });
     expect(await services.storage.set({ key: names[0], value: 1 })).toEqual({ ok: true });
     expect(await fake.client.call('storage.set', { key: names[0], value: 1 })).toMatchObject({ ok: true });
-});
+}, 30_000);
 
 
 describe('portable production transport conformance', () => {

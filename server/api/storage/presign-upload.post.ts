@@ -10,6 +10,7 @@
  * - Enforces rate limits (`storage:upload`).
  * - Dispatches to registered StorageGatewayAdapter.
  */
+import { requireCloudMutation } from '../../utils/security/cloud-mutation';
 import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
 import { useRuntimeConfig } from '#imports';
@@ -87,6 +88,8 @@ export default defineEventHandler(async (event) => {
 
     // Prevent caching of sensitive storage presign URLs
     setNoCacheHeaders(event);
+
+    requireCloudMutation(event);
 
     const body = BodySchema.safeParse(await readBody(event));
     if (!body.success) {
