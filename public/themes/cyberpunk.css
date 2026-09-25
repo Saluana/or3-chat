@@ -1,3 +1,103 @@
+[data-theme="cyberpunk"] #nav-collapsed-container,
+[data-theme="cyberpunk"] #sidebar-content-collapsed {
+  width: 64px !important;
+  min-width: 64px !important;
+  max-width: 64px !important;
+  align-items: center;
+  box-sizing: border-box;
+  background-color: color-mix(in srgb, var(--md-surface) 86%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--md-primary) 14%, transparent);
+  backdrop-filter: none;
+}
+
+[data-theme="cyberpunk"] #top-header[data-sidebar-state="collapsed"] {
+  width: 64px;
+  box-sizing: border-box;
+  border-bottom: none;
+}
+
+[data-theme="cyberpunk"] #nav-top-section,
+[data-theme="cyberpunk"] #nav-footer-section {
+  width: 100%;
+  align-items: center;
+  padding-left: 0;
+  padding-right: 0;
+  scrollbar-width: none;
+}
+
+[data-theme="cyberpunk"] #nav-top-section .new-chat-wrapper {
+  padding-right: 0;
+}
+
+[data-theme="cyberpunk"] #nav-top-section .iconify,
+[data-theme="cyberpunk"] #nav-top-section .app-icon:has(> .iconify) {
+  width: 24px;
+  height: 24px;
+  font-size: 24px;
+}
+
+[data-theme="cyberpunk"] #nav-pages-section {
+  position: relative;
+  align-items: center;
+  border-top: none;
+  margin-top: 12px;
+  padding-top: 16px;
+}
+
+[data-theme="cyberpunk"] #nav-pages-section::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 8px;
+  right: 8px;
+  height: 1px;
+  background: color-mix(in srgb, var(--md-primary) 22%, transparent);
+}
+
+[data-theme="cyberpunk"] #nav-pages-section button[aria-pressed="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  background: var(--md-primary);
+}
+
+[data-theme="cyberpunk"] .bottomnav-root {
+  width: 64px !important;
+  gap: 8px;
+  padding-top: 12px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+}
+
+[data-theme="cyberpunk"] .bottomnav-root .iconify {
+  width: 20px;
+  height: 20px;
+  font-size: 20px;
+}
+
+[data-theme="cyberpunk"] .bottomnav-root .sidebar-rail-caption,
+[data-theme="cyberpunk"] .bottomnav-root .sb-bottom-border,
+[data-theme="cyberpunk"] .bottomnav-root .sidebar-connection-status-bar {
+  display: none;
+}
+
+[data-theme="cyberpunk"] .bottomnav-root [data-connection-state] {
+  position: relative;
+}
+
+[data-theme="cyberpunk"] .bottomnav-root [data-connection-state="connected"] .sidebar-connection-status-bar {
+  display: block;
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  width: 5px;
+  height: 5px;
+  border-radius: 1px;
+  box-shadow: 0 0 0 2px var(--md-surface);
+}
+
 [data-theme="cyberpunk"] .chat-container:not(:last-child) {
   border-right: var(--md-border-width) solid var(--md-border-color);
 }

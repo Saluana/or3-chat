@@ -810,14 +810,6 @@ html[data-theme='blank']
         letter-spacing: 0.04em;
     }
 
-    html[data-theme="blank"] .sidebar-mode-badge {
-        font-size: 9px !important;
-        line-height: 1.1;
-        letter-spacing: 0.04em;
-        border-color: var(--md-border-color) !important;
-        color: var(--md-on-surface-variant) !important;
-    }
-
     /* Keep OpenRouter connect status monochrome (no success/error chrome). */
     html[data-theme="blank"] .sidebar-connection-status-bar {
         background: var(--md-on-surface-variant) !important;

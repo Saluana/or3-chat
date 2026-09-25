@@ -15,12 +15,14 @@ import {
 import { useLocalStorage } from '@vueuse/core';
 import Dexie from 'dexie';
 import { getDb } from '~/db/client';
+import { compareMessageOrder } from '~/db/messages';
 import { useHooks } from '~/core/hooks/useHooks';
 import {
     getGlobalMultiPaneApi,
     setGlobalMultiPaneApi,
 } from '~/utils/multiPaneApi';
 import { deriveMessageContent } from '~/utils/chat/messages';
+import { isSupersededMessage } from '~/utils/chat/transcript';
 import { usePaneApps } from './usePaneApps';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 
@@ -39,6 +41,7 @@ export type MultiPaneMessage = {
     data?: Record<string, unknown> | null;
     reasoning_text?: string | null;
     index?: number | null;
+    order_key?: string | null;
     created_at?: number | null;
 };
 
@@ -123,6 +126,7 @@ interface DbMessageRow {
     stream_id?: string | null;
     data?: { content?: string; reasoning_text?: string | null } | null;
     index?: number | null;
+    order_key?: string | null;
     created_at?: number | null;
     deleted?: boolean;
 }
@@ -154,7 +158,7 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
             .filter((m) => !m.deleted)
             .toArray();
         
-        const result: MultiPaneMessage[] = [];
+        const validRows: DbMessageRow[] = [];
         let skippedCount = 0;
         
         for (const msg of msgs) {
@@ -170,12 +174,20 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
                 continue;
             }
             
-            // Skip deleted messages (double check after filter)
-            if (msg.deleted) {
-                continue;
-            }
-            
-            const row = msg as DbMessageRow;
+            // Superseded retry turns remain in Dexie for sync/audit, but
+            // must not reappear when a pane reloads its conversation.
+            if (msg.deleted || isSupersededMessage(msg)) continue;
+            validRows.push(msg);
+        }
+
+        validRows.sort((left, right) =>
+            compareMessageOrder(
+                { id: left.id, index: left.index ?? 0, order_key: left.order_key ?? '' },
+                { id: right.id, index: right.index ?? 0, order_key: right.order_key ?? '' }
+            )
+        );
+        const result: MultiPaneMessage[] = [];
+        for (const row of validRows) {
             const data = row.data;
             const content = deriveMessageContent({
                 content: row.content,
@@ -191,6 +203,7 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
                 data: data ?? undefined,
                 reasoning_text: data?.reasoning_text || null,
                 index: typeof row.index === 'number' ? row.index : null,
+                order_key: row.order_key ?? null,
                 created_at:
                     typeof row.created_at === 'number' ? row.created_at : null,
             } as MultiPaneMessage);

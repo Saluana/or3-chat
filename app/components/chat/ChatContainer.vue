@@ -44,6 +44,7 @@
                             :is="resolveCoreChatComponent($theme.activeComponents.value['chat-message'], 'chat-message')"
                             :message="item"
                             :thread-id="props.threadId"
+                            :retry-disabled="retryPending || loading"
                             @retry="onRetry"
                             @continue="onContinue"
                             @branch="onBranch"
@@ -109,6 +110,16 @@
                         @click="scrollToBottom"
                         class="pointer-events-auto"
                     />
+                </div>
+                <div
+                    v-if="retryPending && !loading"
+                    role="status"
+                    aria-live="polite"
+                    class="absolute bottom-full left-0 right-0 mb-12 flex justify-center pointer-events-none"
+                >
+                    <span class="rounded-full bg-(--md-surface) px-3 py-1 text-sm shadow-sm">
+                        Preparing retry…
+                    </span>
                 </div>
                 <component
                     :is="resolveCoreChatComponent($theme.activeComponents.value['chat-input'], 'chat-input')"
@@ -424,6 +435,7 @@ const messages = computed<UiChatMessage[]>(
 const workflowStates = reactive(new Map<string, UiWorkflowState>());
 
 const loading = computed(() => chat.value?.loading?.value || false);
+const retryPending = ref(false);
 const backgroundJobId = computed(() =>
     unwrapRef(chat.value?.backgroundJobId ?? null)
 );
@@ -452,7 +464,7 @@ watch(
     { immediate: true }
 );
 const inputLoading = computed(
-    () => loading.value || backgroundStreaming.value
+    () => retryPending.value || loading.value || backgroundStreaming.value
 );
 
 // Tail streaming now provided directly by useChat composable
@@ -912,7 +924,7 @@ function waitForDurableSendAcceptance(
 }
 
 function onSend(payload: ChatInputSendPayload) {
-    if (loading.value) return;
+    if (loading.value || retryPending.value) return;
     model.value = payload.model || model.value;
     const attachments = payload.attachments?.length
         ? payload.attachments
@@ -992,12 +1004,36 @@ function onSend(payload: ChatInputSendPayload) {
         .catch(() => {});
 }
 
-function onRetry(messageId: string) {
-    if (!chat.value || chat.value?.loading?.value) return;
-    // Provide current model so retry uses same selection
-    chat.value.retryMessage(messageId, model.value);
-    // Retry changes message state, force measure
-    nextTick(() => scroller.value?.refreshMeasurements?.());
+async function onRetry(messageId: string) {
+    const activeChat = chat.value;
+    if (!activeChat || activeChat.loading.value || retryPending.value) return;
+    retryPending.value = true;
+    try {
+        // A retry is appended after the remaining conversation. Move the
+        // viewport there immediately instead of leaving it at the old turn.
+        await nextTick();
+        scroller.value?.scrollToBottom?.({ smooth: false });
+        const result = await activeChat.retryMessage(messageId, model.value);
+        if (!result || result.status === 'rejected') {
+            toast.add({
+                title: 'Retry did not start',
+                description: 'Your conversation is unchanged. Please try again.',
+                color: 'warning',
+                duration: 3500,
+            });
+        }
+    } catch (error) {
+        toast.add({
+            title: 'Retry failed',
+            description: error instanceof Error ? error.message : 'Please try again.',
+            color: 'error',
+            duration: 3500,
+        });
+    } finally {
+        retryPending.value = false;
+        await nextTick();
+        scroller.value?.refreshMeasurements?.();
+    }
 }
 
 function onContinue(messageId: string) {

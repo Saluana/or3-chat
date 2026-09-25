@@ -1985,6 +1985,20 @@ export function useChat(
             requestId,
             userMessageId: userDbMsg.id,
         };
+        if (sendMessagesParams.onUserPersisted) {
+            try {
+                await sendMessagesParams.onUserPersisted(userDbMsg.id);
+            } catch (error) {
+                reportError(
+                    err('ERR_INTERNAL', 'Failed to finalize retried turn', {
+                        severity: 'error',
+                        tags: { domain: 'chat', stage: 'retry-persisted' },
+                    }),
+                    { toast: true }
+                );
+                if (import.meta.dev) console.warn('[useChat] retry persistence callback failed', error);
+            }
+        }
         const rawUser: ChatMessage = {
             role: 'user',
             content: parts,
@@ -3110,7 +3124,7 @@ export function useChat(
 
     /**
      * Purpose:
-     * Retries a prior user message by removing its assistant response and resending.
+     * Retries a prior turn by moving its user/assistant pair to the bottom.
      *
      * Behavior:
      * - Rebuilds message context from local state

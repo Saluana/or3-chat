@@ -391,12 +391,15 @@ execute client/hybrid tools in foreground mode and omit server-only tools.
 
 When you retry a message:
 
-1. Finds the selected user turn and its assistant response.
-2. Builds provider context only through the preceding turn boundary, retaining
-   complete assistant/tool-call/tool-result groups.
-3. Re-sends the original text and attachments as a new branch.
-4. Leaves the original and later turns untouched if admission is rejected or
-   the replacement fails.
+1. Finds the selected user turn and its assistant/tool-result rows, whether
+   Retry was clicked on the user or assistant message.
+2. Hides only that turn and keeps every other turn in the same order and in
+   provider context.
+3. Appends the original user text and attachments as a new turn at the bottom.
+4. Marks the old turn superseded as soon as the new user row is persisted, so
+   cloud sync and reloads show the same conversation. The old rows remain in
+   storage for sync and audit.
+5. Restores the original turn if the resend is rejected before persistence.
 
 ### Canonical transcript
 

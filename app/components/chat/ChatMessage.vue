@@ -337,6 +337,7 @@
                         <UButton
                             v-bind="retryButtonProps"
                             aria-label="Retry message"
+                            :disabled="props.retryDisabled"
                             @click="onRetry"
                         ></UButton>
                     </UTooltip>
@@ -436,6 +437,7 @@ const props = withDefaults(
         message: MessageWithUiState;
         threadId?: string;
         interactive?: boolean;
+        retryDisabled?: boolean;
     }>(),
     { interactive: true },
 );
@@ -952,6 +954,7 @@ function copyMessage() {
 }
 
 function onRetry() {
+    if (props.retryDisabled) return;
     const id = props.message.id;
     if (!id) return;
     emit('retry', id);
