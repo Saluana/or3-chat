@@ -45,7 +45,7 @@ export function assertSnapshotEqual(label: string, expected: string, actual: str
     while (differingLine < maxLines && expectedLines[differingLine] === actualLines[differingLine]) {
         differingLine += 1;
     }
-    console.log(`[OR3_SNAPSHOT_B64:${label}]${Buffer.from(actual, 'utf8').toString('base64')}[/OR3_SNAPSHOT_B64]`);
+    fail(`${label} snapshot mismatch at line ${differingLine + 1}; run \`bun run plugin-runtime:snapshots\` only after reviewing the V1 compatibility impact`);
 }
 
 function loadConfig(): LedgerConfig {

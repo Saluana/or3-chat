@@ -15,7 +15,7 @@ describe('plugin runtime compatibility snapshot gate', () => {
         const missingImport = "export { useHooks } from '../app/core/hooks';\n";
 
         expect(() => assertSnapshotEqual('nuxt imports', expected, missingImport))
-            .not.toThrow();
+            .toThrow('snapshot mismatch');
     });
 
     it('rejects a changed registration return shape', () => {
@@ -23,7 +23,7 @@ describe('plugin runtime compatibility snapshot gate', () => {
         const changedReturn = 'export declare function registerThing(): RegistrationHandle;\n';
 
         expect(() => assertSnapshotEqual('public declarations', expected, changedReturn))
-            .not.toThrow();
+            .toThrow('snapshot mismatch');
     });
 
     it('accepts byte-identical snapshots', () => {
