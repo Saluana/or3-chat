@@ -923,7 +923,7 @@
                     "name": "document-chat-tools.md",
                     "path": "/utils/document-chat-tools",
                     "category": "Tools",
-                    "summary": "Chat can search documents, read bounded open-tab context, and use the document agent's native tools to stage reviewable edits in a visible editor."
+                    "summary": "Chat can create and duplicate documents, search them, read bounded open-tab context, and use the document agent's native tools to stage reviewable edits in a visible editor."
                 },
                 {
                     "name": "errors.md",

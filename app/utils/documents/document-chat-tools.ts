@@ -1,5 +1,5 @@
-import { getActiveWorkspaceId, getDb } from '~/db/client';
-import { getDocument } from '~/db/documents';
+import { getActiveWorkspaceId, getDb, getWorkspaceGeneration, type Or3DB } from '~/db/client';
+import { createDocumentInDb, getDocument, getDocumentInDb, type CreateDocumentInput } from '~/db/documents';
 import { useCommandPalette } from '~/composables/search/useCommandPalette';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import type { ToolDefinition, ToolExecutionContext } from '~/utils/chat/types';
@@ -12,6 +12,7 @@ import { getThread } from '~/db/threads';
 
 const MAX_CONTEXT_CHARS = 18_000;
 const MAX_SEARCH_RESULTS = 10;
+const MAX_DOCUMENT_CONTENT_CHARS = 50_000;
 
 function assertChatWorkspace(context: ToolExecutionContext): void {
     if (
@@ -36,6 +37,120 @@ function truncate(text: string): string {
     return text.length > MAX_CONTEXT_CHARS
         ? `${text.slice(0, MAX_CONTEXT_CHARS)}\n…[truncated]`
         : text;
+}
+
+function assertWriteOrigin(context: ToolExecutionContext, db: Or3DB, generation: number): void {
+    assertChatWorkspace(context);
+    if (getDb() !== db || getWorkspaceGeneration() !== generation) {
+        throw new Error('The workspace changed before the document could be saved.');
+    }
+}
+
+const createDocumentDefinition: ToolDefinition = {
+    type: 'function',
+    function: {
+        name: 'create_document',
+        description: 'Create a new document in the current workspace. Supply a title and optional body text. The new document is saved but not opened automatically.',
+        parameters: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+                title: { type: 'string', minLength: 1, maxLength: 200 },
+                content: { type: 'string', maxLength: MAX_DOCUMENT_CONTENT_CHARS, description: 'Optional document body. Simple Markdown formatting is supported.' },
+            },
+        },
+    },
+    ui: {
+        label: 'Create document',
+        descriptionHint: 'Make a new document from a title and optional text.',
+        category: 'Document',
+        icon: 'i-lucide-file-plus-2',
+        defaultEnabled: true,
+    },
+    runtime: 'client',
+};
+
+const duplicateDocumentDefinition: ToolDefinition = {
+    type: 'function',
+    function: {
+        name: 'duplicate_document',
+        description: 'Make a separate copy of an existing document in the current workspace, preserving its content and formatting. Use a documentId from search_documents or get_open_pane_context. If the source is open in multiple editor panes, supply tabId. The copy is saved but not opened automatically.',
+        parameters: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['documentId'],
+            properties: {
+                documentId: { type: 'string', minLength: 1, maxLength: 200 },
+                tabId: { type: 'string', minLength: 1, maxLength: 200 },
+                title: { type: 'string', minLength: 1, maxLength: 200, description: 'Optional title for the copy.' },
+            },
+        },
+    },
+    ui: {
+        label: 'Duplicate document',
+        descriptionHint: 'Make a separate copy of a document.',
+        category: 'Document',
+        icon: 'i-lucide-files',
+        defaultEnabled: true,
+    },
+    runtime: 'client',
+};
+
+async function createChatDocument(
+    title: string | undefined,
+    content: string | undefined,
+    context: ToolExecutionContext,
+): Promise<string> {
+    assertChatWorkspace(context);
+    const db = getDb();
+    const generation = getWorkspaceGeneration();
+    let documentContent: CreateDocumentInput['content'];
+    if (content?.trim()) {
+        const { markdownToTipTapDoc } = await import('~/utils/chat/markdownToTipTapDoc');
+        documentContent = markdownToTipTapDoc(content) as CreateDocumentInput['content'];
+    }
+    assertWriteOrigin(context, db, generation);
+    const created = await createDocumentInDb(db, { title, content: documentContent });
+    return JSON.stringify({ documentId: created.id, title: created.title });
+}
+
+async function duplicateChatDocument(
+    documentId: string,
+    tabId: string | undefined,
+    title: string | undefined,
+    context: ToolExecutionContext,
+): Promise<string> {
+    assertChatWorkspace(context);
+    const db = getDb();
+    const generation = getWorkspaceGeneration();
+    const documentTabs = getOpenWorkspaceTabs().filter((tab) =>
+        tab.resource.kind === 'document'
+        && tab.resource.documentId === documentId,
+    );
+    if (tabId && !documentTabs.some((tab) => tab.id === tabId)) {
+        throw new Error('That document tab is no longer open. List tabs again.');
+    }
+    const activeTabs = documentTabs.filter((tab) =>
+        getActiveDocumentEditorSession(documentId, tab.id),
+    );
+    if (!tabId && activeTabs.length > 1) {
+        throw new Error('This document is open in multiple editor panes. Specify tabId.');
+    }
+    const activeTab = tabId
+        ? activeTabs.find((tab) => tab.id === tabId)
+        : activeTabs[0];
+    if (activeTab) {
+        await getActiveDocumentEditorSession(documentId, activeTab.id)?.ensureLocalDurability();
+    }
+    assertWriteOrigin(context, db, generation);
+    const source = await getDocumentInDb(db, documentId);
+    if (!source || source.deleted) throw new Error('The source document is no longer available.');
+    assertWriteOrigin(context, db, generation);
+    const copy = await createDocumentInDb(db, {
+        title: title?.trim() || `${source.title} (copy)`,
+        content: source.content,
+    });
+    return JSON.stringify({ documentId: copy.id, title: copy.title, sourceDocumentId: source.id });
 }
 
 const searchDocumentsDefinition: ToolDefinition = {
@@ -208,10 +323,23 @@ async function openPaneContext(tabId: string | undefined, context: ToolExecution
     });
 }
 
-/** Register the document agent's native tools with chat, using the live editor for execution. */
+/** Register document discovery, creation, duplication, and editor tools with chat. */
 export function registerDocumentChatTools(): () => void {
     const registry = useToolRegistry();
     const handles = [
+        registry.registerTool(createDocumentDefinition, ({ title, content }, context) =>
+            createChatDocument(
+                typeof title === 'string' ? title : undefined,
+                typeof content === 'string' ? content : undefined,
+                context,
+            ), { runtime: 'client', available }),
+        registry.registerTool(duplicateDocumentDefinition, ({ documentId, tabId, title }, context) =>
+            duplicateChatDocument(
+                String(documentId),
+                typeof tabId === 'string' ? tabId : undefined,
+                typeof title === 'string' ? title : undefined,
+                context,
+            ), { runtime: 'client', available }),
         registry.registerTool(searchDocumentsDefinition, ({ query }, context) =>
             searchDocuments(String(query), context), { runtime: 'client', available }),
         registry.registerTool(openPaneContextDefinition, ({ tabId }, context) =>

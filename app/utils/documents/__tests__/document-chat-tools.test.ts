@@ -1,20 +1,106 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import 'fake-indexeddb/auto';
+import Dexie from 'dexie';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { registerDocumentEditorSession } from '~/composables/documents/useDocumentEditorSessions';
 import { setWorkspaceTabPaletteProvider } from '~/core/search/command-palette/sources/workspace-tab-source';
+import { evictWorkspaceDb, getDb, setActiveWorkspaceDb } from '~/db/client';
+import { getDocumentInDb } from '~/db/documents';
+import { createHookEngine } from '~/core/hooks/hooks';
+import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
+import { setHookEngine } from '~/core/hooks/useHooks';
 import { registerDocumentChatTools } from '../document-chat-tools';
 
-vi.mock('~/db/client', () => ({
-    getActiveWorkspaceId: () => 'workspace-a',
-    getDb: () => ({ posts: {}, threads: {}, messages: {} }),
-}));
-
 const disposers: Array<() => void> = [];
-afterEach(() => {
+beforeEach(async () => {
+    setHookEngine(createTypedHookEngine(createHookEngine()));
+    await setActiveWorkspaceDb('workspace-a').open();
+});
+afterEach(async () => {
     while (disposers.length) disposers.pop()?.();
+    const name = getDb().name;
+    setActiveWorkspaceDb(null);
+    evictWorkspaceDb('workspace-a');
+    await Dexie.delete(name);
+    setHookEngine(null);
 });
 
 describe('chat document tools', () => {
+    it('creates a document with content and duplicates its saved content', async () => {
+        disposers.push(registerDocumentChatTools());
+        const registry = useToolRegistry();
+        const context = {
+            subject: null,
+            workspaceId: 'workspace-a',
+            threadId: 'thread-a',
+            messageId: null,
+            callId: 'call-a',
+            requestId: 'request-a',
+            abortSignal: new AbortController().signal,
+        };
+        const createTool = registry.getTool('create_document')!;
+        const created = await registry.executeTool(
+            'create_document',
+            JSON.stringify({ title: 'Release plan', content: '# Milestones\n\nShip it.' }),
+            context,
+            { definition: createTool.definition },
+        );
+        expect(created.error).toBeUndefined();
+        const originalId = JSON.parse(created.result!).documentId as string;
+        const original = await getDocumentInDb(getDb(), originalId);
+        expect(original).toMatchObject({ title: 'Release plan', deleted: false });
+        expect(JSON.stringify(original?.content)).toContain('Milestones');
+
+        const duplicateTool = registry.getTool('duplicate_document')!;
+        const duplicated = await registry.executeTool(
+            'duplicate_document',
+            JSON.stringify({ documentId: originalId }),
+            context,
+            { definition: duplicateTool.definition },
+        );
+        expect(duplicated.error).toBeUndefined();
+        const copyId = JSON.parse(duplicated.result!).documentId as string;
+        expect(copyId).not.toBe(originalId);
+        const copy = await getDocumentInDb(getDb(), copyId);
+        expect(copy).toMatchObject({ title: 'Release plan (copy)', deleted: false });
+        expect(copy?.content).toEqual(original?.content);
+    });
+
+    it('refuses to duplicate a deleted source or write after the workspace changes', async () => {
+        disposers.push(registerDocumentChatTools());
+        const registry = useToolRegistry();
+        const context = {
+            subject: null,
+            workspaceId: 'workspace-a',
+            threadId: 'thread-a',
+            messageId: null,
+            callId: 'call-a',
+            requestId: 'request-a',
+            abortSignal: new AbortController().signal,
+        };
+        const createTool = registry.getTool('create_document')!;
+        const duplicateTool = registry.getTool('duplicate_document')!;
+        const created = await registry.executeTool(
+            'create_document', JSON.stringify({ title: 'Original' }), context,
+            { definition: createTool.definition },
+        );
+        const originalId = JSON.parse(created.result!).documentId as string;
+        await getDb().posts.update(originalId, { deleted: true });
+        const rejected = await registry.executeTool(
+            'duplicate_document', JSON.stringify({ documentId: originalId }), context,
+            { definition: duplicateTool.definition },
+        );
+        expect(rejected.error).toMatch(/no longer available/i);
+        expect(await getDb().posts.count()).toBe(1);
+
+        const wrongWorkspace = await registry.executeTool(
+            'create_document', JSON.stringify({ title: 'Wrong workspace' }),
+            { ...context, workspaceId: 'workspace-b' },
+            { definition: createTool.definition },
+        );
+        expect(wrongWorkspace.error).toMatch(/unavailable|workspace/i);
+        expect(await getDb().posts.count()).toBe(1);
+    });
     it('targets the open document session and refuses a different workspace', async () => {
         const executeChatTool = vi.fn(() => '{"readableBlockCount":2}');
         disposers.push(setWorkspaceTabPaletteProvider(() => [
