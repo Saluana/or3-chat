@@ -6,7 +6,6 @@
     "engines": {
         "node": ">=24"
     },
-    "sideEffects": false,
     "bin": {
         "or3-plugin": "./bin/or3-plugin.mjs"
     },
