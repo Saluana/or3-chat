@@ -41,9 +41,10 @@
                         :data-stream-id="item.stream_id"
                     >
                         <component
-                            :is="$theme.activeComponents.value['chat-message']"
+                            :is="resolveCoreChatComponent($theme.activeComponents.value['chat-message'], 'chat-message')"
                             :message="item"
                             :thread-id="props.threadId"
+                            :retry-disabled="retryPending || loading"
                             @retry="onRetry"
                             @continue="onContinue"
                             @branch="onBranch"
@@ -55,6 +56,18 @@
                     </div>
                 </template>
             </Or3Scroll>
+            <template #fallback>
+                <div
+                    class="chat-message-list flex-1 min-h-0 px-4 pt-8"
+                    :style="scrollParentStyle"
+                    aria-hidden="true"
+                >
+                    <div v-if="threadId" class="mx-auto max-w-[780px] space-y-6 animate-pulse">
+                        <div class="ml-auto h-12 w-2/3 bg-[var(--md-surface-variant)]" />
+                        <div class="h-24 w-5/6 bg-[var(--md-surface-variant)]" />
+                    </div>
+                </div>
+            </template>
         </ClientOnly>
 
         <!-- First-run welcome: true modal layer above mobile input (z-40) -->
@@ -98,8 +111,18 @@
                         class="pointer-events-auto"
                     />
                 </div>
+                <div
+                    v-if="retryPending && !loading"
+                    role="status"
+                    aria-live="polite"
+                    class="absolute bottom-full left-0 right-0 mb-12 flex justify-center pointer-events-none"
+                >
+                    <span class="rounded-full bg-(--md-surface) px-3 py-1 text-sm shadow-sm">
+                        Preparing retry…
+                    </span>
+                </div>
                 <component
-                    :is="$theme.activeComponents.value['chat-input']"
+                    :is="resolveCoreChatComponent($theme.activeComponents.value['chat-input'], 'chat-input')"
                     :loading="inputLoading"
                     :streaming="streamingActive"
                     :container-width="containerWidth"
@@ -130,6 +153,7 @@ import {
     isRef,
     type Ref,
     type CSSProperties,
+    type Component,
     onBeforeUnmount,
     onMounted,
     nextTick,
@@ -149,6 +173,9 @@ import type {
     SendResult,
 } from '~/utils/chat/types';
 import { Or3Scroll } from 'or3-scroll';
+import ChatInputDropper from '~/components/chat/ChatInputDropper.vue';
+import ChatMessage from '~/components/chat/ChatMessage.vue';
+import { CORE_APP_COMPONENT_DEFAULTS } from '~/theme/_shared/theme-components-registry';
 import 'or3-scroll/style.css';
 import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
@@ -183,7 +210,15 @@ import type {
 
 // Debug utilities removed per request.
 
-const model = ref('openai/gpt-oss-120b');
+function resolveCoreChatComponent(
+    active: Component | undefined,
+    key: 'chat-input' | 'chat-message'
+): Component {
+    if (active && active !== CORE_APP_COMPONENT_DEFAULTS[key]) return active;
+    return key === 'chat-input' ? ChatInputDropper : ChatMessage;
+}
+
+const model = ref('~openai/gpt-luna-latest');
 const pendingPromptId = ref<string | null>(null);
 // Resize (Req 3.4): useElementSize -> reactive width
 const containerRoot: Ref<HTMLElement | null> = ref(null);
@@ -269,6 +304,7 @@ const openRouterAvailability = computed(() =>
 
 const showWelcomeCard = computed(
     () =>
+        runtimeConfig.public.pluginDevelopment !== true &&
         keyStateReady.value &&
         (runtimeConfig.public?.ssrAuthEnabled !== true ||
             authSessionState.value?.session?.authenticated === true) &&
@@ -399,6 +435,7 @@ const messages = computed<UiChatMessage[]>(
 const workflowStates = reactive(new Map<string, UiWorkflowState>());
 
 const loading = computed(() => chat.value?.loading?.value || false);
+const retryPending = ref(false);
 const backgroundJobId = computed(() =>
     unwrapRef(chat.value?.backgroundJobId ?? null)
 );
@@ -427,7 +464,7 @@ watch(
     { immediate: true }
 );
 const inputLoading = computed(
-    () => loading.value || backgroundStreaming.value
+    () => retryPending.value || loading.value || backgroundStreaming.value
 );
 
 // Tail streaming now provided directly by useChat composable
@@ -887,7 +924,7 @@ function waitForDurableSendAcceptance(
 }
 
 function onSend(payload: ChatInputSendPayload) {
-    if (loading.value) return;
+    if (loading.value || retryPending.value) return;
     model.value = payload.model || model.value;
     const attachments = payload.attachments?.length
         ? payload.attachments
@@ -967,12 +1004,36 @@ function onSend(payload: ChatInputSendPayload) {
         .catch(() => {});
 }
 
-function onRetry(messageId: string) {
-    if (!chat.value || chat.value?.loading?.value) return;
-    // Provide current model so retry uses same selection
-    chat.value.retryMessage(messageId, model.value);
-    // Retry changes message state, force measure
-    nextTick(() => scroller.value?.refreshMeasurements?.());
+async function onRetry(messageId: string) {
+    const activeChat = chat.value;
+    if (!activeChat || activeChat.loading.value || retryPending.value) return;
+    retryPending.value = true;
+    try {
+        // A retry is appended after the remaining conversation. Move the
+        // viewport there immediately instead of leaving it at the old turn.
+        await nextTick();
+        scroller.value?.scrollToBottom?.({ smooth: false });
+        const result = await activeChat.retryMessage(messageId, model.value);
+        if (!result || result.status === 'rejected') {
+            toast.add({
+                title: 'Retry did not start',
+                description: 'Your conversation is unchanged. Please try again.',
+                color: 'warning',
+                duration: 3500,
+            });
+        }
+    } catch (error) {
+        toast.add({
+            title: 'Retry failed',
+            description: error instanceof Error ? error.message : 'Please try again.',
+            color: 'error',
+            duration: 3500,
+        });
+    } finally {
+        retryPending.value = false;
+        await nextTick();
+        scroller.value?.refreshMeasurements?.();
+    }
 }
 
 function onContinue(messageId: string) {

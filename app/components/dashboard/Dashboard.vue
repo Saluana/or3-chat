@@ -1,19 +1,19 @@
 <template>
-    <UModal
+    <AppModal
         id="dashboard-modal-shell"
-        v-bind="dashboardModalProps"
+        v-bind="dashboardModalOverrides"
+        :size="state.view === 'dashboard' ? 'md' : 'lg'"
         v-model:open="open"
-        :modal="false"
+        :modal="true"
         title="Dashboard"
-        :dismissible="false"
+        :dismissible="true"
         description="Browse all apps, plugins, and settings."
     >
-        <template #body>
-            <!-- iOS style springboard grid: fixed icon cell width per breakpoint, centered, nice vertical rhythm -->
+        <template #default>
             <div
                 v-if="state.view === 'dashboard'"
                 id="dashboard-grid-view"
-                class="p-4 flex justify-start w-full"
+                class="w-full"
             >
                 <div
                     v-if="shouldDeferDashboardGrid"
@@ -32,9 +32,9 @@
                         :key="item.id"
                         class="dashboard-plugin-icon-item"
                         :icon="item.icon"
+                        :image="item.image"
                         :label="item.label"
-                        :size="pluginIconSize"
-                        :radius="3"
+                        :description="item.description"
                         @click="handlePluginClick(item.id)"
                     />
                 </div>
@@ -42,7 +42,7 @@
             <div
                 v-if="state.view === 'page'"
                 id="dashboard-page-view"
-                class="h-full flex flex-col min-h-0 min-w-0 max-w-full"
+                class="h-[min(640px,calc(100dvh-12rem))] flex flex-col min-h-0 min-w-0 max-w-full"
             >
                 <div
                     id="dashboard-page-header"
@@ -96,9 +96,10 @@
                         @click="handleLandingPageClick(p.id)"
                     >
                         <div class="flex items-center gap-2">
-                            <UIcon
-                                v-if="p.icon"
-                                :name="p.icon"
+                            <AppIcon
+                                v-if="p.image || p.icon"
+                                :image="p.image"
+                                :icon="p.icon"
                                 class="w-5 h-5 opacity-80 group-hover:opacity-100"
                             />
                             <span class="font-medium text-sm">{{
@@ -149,25 +150,20 @@
                 </div>
             </div>
         </template>
-    </UModal>
+    </AppModal>
 </template>
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, provide } from 'vue';
 import PluginIcons from './PluginIcons.vue';
-import {
-    useDashboardNavigation,
-    registerDashboardPluginPage,
-    type DashboardPlugin,
-} from '~/composables/dashboard/useDashboardPlugins';
+import AppModal from '~/components/ui/AppModal.vue';
+import AppIcon from '~/components/ui/AppIcon.vue';
+import { useDashboardNavigation } from '~/composables/dashboard/useDashboardPlugins';
+import { createCoreDashboardItems } from '~/core/dashboard/core-items';
 import { useRuntimeConfig } from '#imports';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
-import { isMobile } from '~/state/global';
-import {
-    listWorkspaceProfiles,
-    projectProfileItems,
-} from '~/core/workspace-profiles';
+import { projectProfileItems } from '~/core/workspace-profiles';
 
 const props = defineProps<{
     showModal: boolean;
@@ -175,11 +171,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{ (e: 'update:showModal', value: boolean): void }>();
 
-// Bridge prop showModal to UModal's v-model:open (which emits update:open) by mapping update to parent event
+// Bridge the shared modal's open state to the existing dashboard API.
 const open = computed({
     get: () => props.showModal,
     set: (value: boolean) => emit('update:showModal', value),
 });
+
+provide('or3:dashboard:close', () => { open.value = false; });
 
 const runtimeConfig = useRuntimeConfig();
 const ssrAuthEnabled = runtimeConfig.public.ssrAuthEnabled === true;
@@ -191,69 +189,8 @@ const shouldDeferDashboardGrid = computed(
         sessionContext?.data.value === null
 );
 
-const coreAccess = ssrAuthEnabled ? { authRequired: true } : undefined;
-
 // Core (built-in) items; can be overridden by external plugin with same id
-const coreItems: DashboardPlugin[] = [
-    {
-        id: 'core:settings',
-        icon: useIcon('dashboard.settings').value,
-        label: 'Settings',
-        order: 1,
-        access: coreAccess,
-        pages: [
-            {
-                id: 'theme-settings',
-                title: 'Theme Settings',
-                description: 'Configure application theme and appearance.',
-                icon: useIcon('ui.view').value,
-                component: () => import('./ThemePage.vue'),
-            },
-            {
-                id: 'ai-settings',
-                title: 'AI Settings',
-                description: 'Configure AI-related preferences and options.',
-                icon: useIcon('dashboard.plugins').value,
-                component: () => import('./AiPage.vue'),
-            },
-            {
-                id: 'workspace-profile-settings',
-                title: 'Workspace Profile',
-                description:
-                    'Choose how navigation, dashboard tools, commands, and initial panes are arranged.',
-                icon: 'i-lucide-panels-top-left',
-                component: () => import('./WorkspaceProfileSettings.vue'),
-                isAvailable: () => listWorkspaceProfiles().length > 1,
-            },
-        ],
-    },
-    {
-        id: 'core:images',
-        icon: useIcon('dashboard.images').value,
-        label: 'Images',
-        order: 10,
-        access: coreAccess,
-        pages: [
-            {
-                id: 'images-library',
-                title: 'Images',
-                description: 'Browse saved and generated images.',
-                icon: useIcon('dashboard.images').value,
-                component: () => import('~/pages/images/index.vue'),
-            },
-        ],
-    },
-];
-
-// Register any inline pages defined on core items with the shared dashboard page registry
-// so that onPluginClick() finds them (core items themselves are not registered as plugins).
-for (const item of coreItems) {
-    if (Array.isArray((item as any).pages)) {
-        for (const p of (item as any).pages) {
-            registerDashboardPluginPage(item.id, p as any);
-        }
-    }
-}
+const coreItems = createCoreDashboardItems(ssrAuthEnabled);
 
 const {
     state,
@@ -289,43 +226,6 @@ const dashboardModalOverrides = useThemeOverrides({
     isNuxtUI: true,
 });
 
-const dashboardModalProps = computed(() => {
-    const baseClass =
-        'w-[calc(100dvw-0.75rem)] h-[calc(100dvh-0.75rem)] sm:w-[96dvw] sm:max-w-[1180px] sm:h-[94dvh] sm:max-h-[900px] overflow-hidden max-w-[100dvw]';
-    const baseUi = {
-        content: 'z-[10] max-w-[100dvw]',
-        footer: 'justify-end border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))]',
-        body: 'overflow-hidden h-full flex-1 min-w-0 !p-0',
-    } as Record<string, unknown>;
-
-    const overrideValue =
-        (dashboardModalOverrides.value as Record<string, unknown>) || {};
-    const overrideClass =
-        typeof overrideValue.class === 'string'
-            ? (overrideValue.class as string)
-            : '';
-    const overrideUi =
-        (overrideValue.ui as Record<string, unknown> | undefined) || {};
-    const mergedUi = { ...baseUi, ...overrideUi };
-    const rest = Object.fromEntries(
-        Object.entries(overrideValue).filter(
-            ([key]) => key !== 'class' && key !== 'ui'
-        )
-    ) as Record<string, unknown>;
-
-    const result: Record<string, unknown> = {
-        ...rest,
-        ui: mergedUi,
-    };
-
-    const mergedClass = [baseClass, overrideClass].filter(Boolean).join(' ');
-    if (mergedClass) {
-        result.class = mergedClass;
-    }
-
-    return result;
-});
-
 const backButtonProps = computed(() => {
     const overrides = useThemeOverrides({
         component: 'button',
@@ -349,12 +249,6 @@ const landingPageButtonProps = computed(() => {
         isNuxtUI: false,
     });
     return overrides.value;
-});
-
-// SSR-safe: default to desktop size during server render to avoid hydration mismatch
-const pluginIconSize = computed(() => {
-    if (import.meta.server) return 74;
-    return isMobile.value ? 52 : 74;
 });
 </script>
 
@@ -383,31 +277,21 @@ const pluginIconSize = computed(() => {
 
 #dashboard-plugin-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, 100px);
-    gap: 20px 16px;
-    justify-content: start;
-    max-width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    width: 100%;
 }
 
-.dashboard-plugin-icon-item {
-    width: 100px;
-    display: flex;
-    justify-content: center;
-}
-
-@media (min-width: 820px) {
+@media (max-width: 540px) {
     #dashboard-plugin-grid {
-        grid-template-columns: repeat(auto-fill, 120px);
-        gap: 40px 32px;
-    }
-    .dashboard-plugin-icon-item {
-        width: 120px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
     }
 }
 
-@media (min-width: 1200px) {
+@media (max-width: 360px) {
     #dashboard-plugin-grid {
-        gap: 48px 40px;
+        grid-template-columns: minmax(0, 1fr);
     }
 }
 </style>

@@ -43,8 +43,11 @@ Eligibility on the client requires all of the following:
 Eligible chat turns start as server-side background jobs whenever background
 streaming is enabled. There is no separate start-mode setting.
 
-Tools do not block background mode; when tools are present, the server executes
-them in the background tool loop described below.
+Server tools run in the background tool loop. For browser-only tools, the client
+checks `/api/jobs/client-tool/capability` before admission. If the selected job
+provider lacks the durable claim/settle bridge, that turn uses the foreground
+tool loop. The server also rejects an unsupported browser-tool admission before
+creating a job or contacting the model.
 
 ## Chat Background Streaming Flow
 
@@ -187,7 +190,14 @@ When tools are included in the background request, the server switches to `consu
   - `error`
   - `skipped`
   - `pending`
-- Client-only tools are skipped with a clear error message.
+- Client-only calls park the durable job and are delivered over the existing
+  job stream. One browser tab claims the call, executes the exact admitted
+  definition through the client registry, and posts a bounded result before
+  the server resumes the same tool loop.
+- Detached trackers remain active across chat navigation. On startup, recent
+  pending rows are restored so browser calls can resume after reload. A local
+  execution journal retries completed delivery and reports an unknown outcome
+  instead of repeating an interrupted mutation.
 - Tool outputs are appended as tool messages for follow-on turns.
 - Safety cap: max 10 tool loop iterations per job.
 

@@ -68,6 +68,7 @@ import {
     abortBackgroundAdmission,
     pollJobStatus,
     isBackgroundStreamingEnabled,
+    isBackgroundClientToolBridgeAvailable,
     type BackgroundJobStatus,
     type OpenRouterReasoningConfig,
 } from '../../utils/chat/openrouterStream';
@@ -87,9 +88,9 @@ import { state } from '~/state/global';
 // Import paths aligned with tests' vi.mock targets
 import { useUserApiKey } from '#imports';
 import { useActivePrompt } from '#imports';
-import { getDefaultPromptId } from '#imports';
 import { useHooks } from '#imports';
 import { consumeChatSendHandled } from '~/utils/chat/send-interception';
+import { DEFAULT_PROMPT_SELECTION } from '~/utils/chat/prompt-utils';
 import { resolveNotificationUserId } from '~/core/notifications/notification-user';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
@@ -128,7 +129,7 @@ import {
     userTranscriptData,
 } from '~/utils/chat/transcript';
 
-const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
+const DEFAULT_AI_MODEL = '~openai/gpt-luna-latest';
 
 const THINKING_SUFFIX = ':thinking';
 
@@ -879,6 +880,7 @@ export function useChat(
             return {
                 id: call.id,
                 name: call.name,
+                runtime: call.runtime,
                 status: mappedStatus,
                 args: call.args,
                 result: call.result,
@@ -1749,15 +1751,8 @@ export function useChat(
             return { status: 'rejected', requestId, reason: 'client_limit' };
 
         if (!requestScope.threadId) {
-            let effectivePromptId: string | null =
-                pendingPromptIdRef.value || null;
-            if (!effectivePromptId) {
-                try {
-                    effectivePromptId = await getDefaultPromptId();
-                } catch {
-                    /* intentionally empty */
-                }
-            }
+            const effectivePromptId =
+                pendingPromptIdRef.value || DEFAULT_PROMPT_SELECTION;
             try {
                 const { settings } = useAiSettings();
                 const settingsValue = settings.value as
@@ -1990,6 +1985,20 @@ export function useChat(
             requestId,
             userMessageId: userDbMsg.id,
         };
+        if (sendMessagesParams.onUserPersisted) {
+            try {
+                await sendMessagesParams.onUserPersisted(userDbMsg.id);
+            } catch (error) {
+                reportError(
+                    err('ERR_INTERNAL', 'Failed to finalize retried turn', {
+                        severity: 'error',
+                        tags: { domain: 'chat', stage: 'retry-persisted' },
+                    }),
+                    { toast: true }
+                );
+                if (import.meta.dev) console.warn('[useChat] retry persistence callback failed', error);
+            }
+        }
         const rawUser: ChatMessage = {
             role: 'user',
             content: parts,
@@ -2197,10 +2206,15 @@ export function useChat(
             });
 
             const toolRegistry = useToolRegistry();
-            const enabledToolDefs = toolRegistry.getEnabledDefinitions({
+            const modelSupportsTools = !budgetModelMeta?.supported_parameters
+                || budgetModelMeta.supported_parameters.includes('tools');
+            const enabledToolDefs = modelSupportsTools ? toolRegistry.getEnabledDefinitions({
                 workspaceId: requestScope.workspaceId,
                 threadId: requestThreadId,
-            });
+            }) : [];
+            const foregroundToolDefs = enabledToolDefs.filter(
+                (tool) => tool.runtime !== 'server'
+            );
 
             // Track tool calls across all loop iterations (persists state)
             const activeToolCalls = new Map<string, ToolCallInfo>();
@@ -2364,8 +2378,16 @@ export function useChat(
                 };
             }
 
+            const hasBrowserTools = enabledToolDefs.some(
+                (tool) => tool.runtime === 'client'
+            );
+            const browserToolBridgeAvailable =
+                !hasBrowserTools ||
+                !backgroundStreamingAllowed.value ||
+                await isBackgroundClientToolBridgeAvailable();
             const allowBackgroundStreaming =
                 backgroundStreamingAllowed.value &&
+                browserToolBridgeAvailable &&
                 modalities.length === 1 &&
                 modalities[0] === 'text';
             logBgStream('send-message-stream-mode-decision', {
@@ -2689,7 +2711,10 @@ export function useChat(
                 orMessages,
                 modalities,
                 reasoning,
-                tools: enabledToolDefs.length > 0 ? enabledToolDefs : undefined,
+                tools:
+                    foregroundToolDefs.length > 0
+                        ? foregroundToolDefs
+                        : undefined,
                 abortSignal: requestScope.abortController.signal,
                 assistantId: assistantDbMsg.id,
                 parentTurnId: userDbMsg.id,
@@ -3101,7 +3126,7 @@ export function useChat(
 
     /**
      * Purpose:
-     * Retries a prior user message by removing its assistant response and resending.
+     * Retries a prior turn by moving its user/assistant pair to the bottom.
      *
      * Behavior:
      * - Rebuilds message context from local state

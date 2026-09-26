@@ -1,0 +1,16 @@
+# Third-Party Notices
+
+`@or3/plugin-sdk` bundles no third-party runtime code.
+
+- Every published entry point under `dist/` imports only Node.js built-in
+  modules (`node:*`) and other files from this package.
+- The deterministic ZIP transport and the conformance rule constants are
+  first-party implementations.
+- The `or3-plugin` CLI is bundled from this package's own `src/cli/**` and
+  likewise imports only Node.js built-ins and relative package modules.
+- `typescript` is a build-time `devDependency`. It is used only to emit `.d.ts`
+  declarations and is not present in `dist/`, the shipped `src/`, or the
+  `or3-plugin` CLI bundle.
+
+If you add a runtime dependency, replace this notice with the dependency's
+license text and keep the package's `LICENSE` (GPL-3.0) in sync.

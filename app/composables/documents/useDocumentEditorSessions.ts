@@ -26,6 +26,10 @@ export interface ActiveDocumentEditorSession {
         state: DocumentEditorViewState,
         options?: { focus?: boolean }
     ) => Promise<void>;
+    /** Live, frozen context for a chat request; may include unsaved editor text. */
+    getChatContext?: (requestId: string) => string;
+    /** Execute one of the document agent's native tools in this editor. */
+    executeChatTool?: (name: string, argsJson: string, requestId: string) => string;
 }
 
 interface LegacyDocumentEditorSession {
@@ -187,4 +191,19 @@ export async function ensureDocumentEditorLocalDurability(
 
 export function hasActiveDocumentEditor(documentId: string): boolean {
     return Boolean(activeSessions.get(documentId)?.size);
+}
+
+export function getActiveDocumentEditorSession(
+    documentId: string,
+    tabId?: string,
+): ActiveDocumentEditorSession | undefined {
+    const mounted = [...activeSessionsByWorkspaceKey.values()].find((session) =>
+        session.documentId === documentId && (!tabId || session.tabId === tabId)
+    );
+    if (mounted || tabId) return mounted;
+    const sessions = activeSessions.get(documentId);
+    if (!sessions) return undefined;
+    return [...sessions].find((session): session is ActiveDocumentEditorSession =>
+        isActiveDocumentEditorSession(session)
+    );
 }

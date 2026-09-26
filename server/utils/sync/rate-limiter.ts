@@ -76,6 +76,11 @@ export const WORKFLOW_RATE_LIMITS: Record<string, RateLimitConfig> = {
     'workflow:hitl': { windowMs: 60_000, maxRequests: 120 },
 };
 
+export const CHAT_TOOL_RATE_LIMITS: Record<string, RateLimitConfig> = {
+    'chat-tool:claim': { windowMs: 60_000, maxRequests: 240 },
+    'chat-tool:result': { windowMs: 60_000, maxRequests: 240 },
+};
+
 /**
  * Purpose:
  * Combined lookup table for all known rate limit operations.
@@ -85,6 +90,7 @@ export const ALL_RATE_LIMITS = {
     ...STORAGE_RATE_LIMITS,
     ...AUTH_RATE_LIMITS,
     ...WORKFLOW_RATE_LIMITS,
+    ...CHAT_TOOL_RATE_LIMITS,
 };
 
 function getRateLimitConfig(operation: string): RateLimitConfig | null {

@@ -22,8 +22,9 @@
                         :aria-label="`Open tabs, current: ${activeTitle}`"
                         @click="switcherOpen = true"
                     >
-                        <UIcon
-                            :name="activeIcon"
+                        <AppIcon
+                            :image="activeImage"
+                            :icon="activeIcon"
                             class="workspace-chrome-active-icon"
                         />
                         <span class="workspace-chrome-active-label">{{
@@ -49,6 +50,7 @@
                 :active-tab-id="activeTabId"
                 :status-by-tab-id="statusByTabId"
                 :icon-by-tab-id="iconByTabId"
+                :image-by-tab-id="imageByTabId"
                 :can-reopen-closed="canReopenClosed"
                 @activate="(tabId) => emit('activate', tabId, 'pointer')"
                 @close="emit('close', $event)"
@@ -64,6 +66,7 @@
                 :visible-tab-ids="visibleTabIds"
                 :status-by-tab-id="statusByTabId"
                 :icon-by-tab-id="iconByTabId"
+                :image-by-tab-id="imageByTabId"
                 :can-open-split="canOpenSplit"
                 :can-reopen-closed="canReopenClosed"
                 :copyable-tab-ids="copyableTabIds"
@@ -100,6 +103,7 @@ import WorkspaceTabSwitcher from './WorkspaceTabSwitcher.vue';
 import WorkspaceNewTabControl, {
     type WorkspaceNewTabCreateKind,
 } from './WorkspaceNewTabControl.vue';
+import AppIcon from '~/components/ui/AppIcon.vue';
 
 const props = withDefaults(
     defineProps<{
@@ -108,6 +112,7 @@ const props = withDefaults(
         visibleTabIds: ReadonlySet<string>;
         statusByTabId?: ReadonlyMap<string, WorkspaceTabStatus>;
         iconByTabId?: ReadonlyMap<string, string | undefined>;
+        imageByTabId?: ReadonlyMap<string, string | undefined>;
         mobile: boolean;
         canOpenSplit?: boolean;
         canReopenClosed?: boolean;
@@ -119,6 +124,7 @@ const props = withDefaults(
     {
         statusByTabId: undefined,
         iconByTabId: undefined,
+        imageByTabId: undefined,
         canOpenSplit: true,
         canReopenClosed: false,
         copyableTabIds: () => new Set<string>(),
@@ -165,6 +171,9 @@ const activeIcon = computed(() => {
         workspaceTabFallbackIcon(activeTab.value)
     );
 });
+const activeImage = computed(() =>
+    activeTab.value ? props.imageByTabId?.get(activeTab.value.id) : undefined
+);
 
 function openTabSwitcher() {
     switcherOpen.value = true;

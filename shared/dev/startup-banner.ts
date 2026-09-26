@@ -18,6 +18,8 @@ export type StartupBannerInput = {
     syncProvider?: string;
     storageEnabled?: boolean;
     storageProvider?: string;
+    /** Sibling source checkouts aliased into this dev run, if any. */
+    localPackages?: readonly string[];
 };
 
 export function formatStartupBanner(input: StartupBannerInput): string {
@@ -60,6 +62,11 @@ export function formatStartupBanner(input: StartupBannerInput): string {
             lines.push('  │  Want accounts, sync & storage?');
             lines.push(`  │  Run: ${WIZARD_INIT_COMMAND}`);
         }
+    }
+
+    if (input.localPackages?.length) {
+        lines.push('  │');
+        lines.push(`  │  Local sources: ${input.localPackages.join(', ')}`);
     }
 
     lines.push('  └──────────────────────────────────────────');

@@ -6,7 +6,7 @@
     "moduleManifest": "planning/complete/plugin-runtime-v2/compatibility-ledger.modules.json",
     "moduleManifestSha256": "ab76192f1a49fd1bc625829d81d2925b56ccf930a86deb9296dea6548dd4bf4d",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
-    "nuxtImportsDeclarationSha256": "56a827527ca2c2299b57562e712c27164eb7ccfa6bc4323c22e576bf2c09108f",
+    "nuxtImportsDeclarationSha256": "927a4a318f16d25e7c936a1a5453cf48078aaf208f99b821b5abe572d6e2a99d",
     "behaviorProfiles": "planning/complete/plugin-runtime-v2/compatibility-profiles.json",
     "behaviorProfilesSha256": "6e35c5b9392b785e5bb541580865f80f0d5f0888851c2ff68c5a3ecd75097cc1"
   },
@@ -2797,7 +2797,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "59b6bba5a39da5bc03e114cf4787c9ddc30c200ef334a5f96b118f39195821b5",
+      "apiSha256": "6dbe24bf1430f68624fc434e7e374aff6b2a6a096697588ded7742f66019f0b6",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2896,7 +2896,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 71,
+              "line": 78,
               "syntaxKind": "VariableDeclaration",
               "text": "AI_SETTINGS_STORAGE_KEY = LEGACY_STORAGE_KEY"
             }
@@ -2910,9 +2910,9 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 60,
+              "line": 66,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface AiSettingsV1 {\n    version: 1;\n    masterSystemPrompt: string;\n    defaultModelMode: 'lastSelected' | 'fixed';\n    fixedModelId: string | null;\n}"
+              "text": "export interface AiSettingsV1 {\n    version: 1;\n    masterSystemPrompt: string;\n    defaultModelMode: 'lastSelected' | 'fixed';\n    fixedModelId: string | null;\n    defaultModelVariant: OpenRouterModelVariant;\n}"
             }
           ]
         },
@@ -3210,9 +3210,9 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 73,
+              "line": 80,
               "syntaxKind": "VariableDeclaration",
-              "text": "DEFAULT_AI_SETTINGS: AiSettingsV1 = {\n    version: 1,\n    masterSystemPrompt: '',\n    defaultModelMode: 'lastSelected',\n    fixedModelId: null,\n}"
+              "text": "DEFAULT_AI_SETTINGS: AiSettingsV1 = {\n    version: 1,\n    masterSystemPrompt: '',\n    defaultModelMode: 'lastSelected',\n    fixedModelId: null,\n    defaultModelVariant: DEFAULT_MODEL_VARIANT,\n}"
             }
           ]
         },
@@ -3982,7 +3982,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 69,
+              "line": 76,
               "syntaxKind": "VariableDeclaration",
               "text": "LEGACY_STORAGE_KEY = 'or3.ai.settings.v1'"
             }
@@ -5458,7 +5458,7 @@
               "resolvedReturnType": "AiSettingsV1",
               "declaration": {
                 "source": "app/composables/chat/useAiSettings.ts",
-                "line": 97,
+                "line": 105,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function sanitizeAiSettings(\n    input: unknown,\n    defaults: AiSettingsV1 = DEFAULT_AI_SETTINGS\n): AiSettingsV1;"
               }
@@ -5467,7 +5467,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 97,
+              "line": 105,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function sanitizeAiSettings(\n    input: unknown,\n    defaults: AiSettingsV1 = DEFAULT_AI_SETTINGS\n): AiSettingsV1;"
             }
@@ -6302,7 +6302,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAiSettings.ts",
-                "line": 205,
+                "line": 217,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAiSettings();"
               }
@@ -6311,7 +6311,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 205,
+              "line": 217,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAiSettings();"
             }
@@ -6354,7 +6354,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAi.ts",
-                "line": 189,
+                "line": 193,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
               }
@@ -6363,7 +6363,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAi.ts",
-              "line": 189,
+              "line": 193,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
             }
@@ -7487,7 +7487,7 @@
     },
     {
       "source": "app/composables/plugins/workspace-runtime.ts",
-      "apiSha256": "328ebea41aca60f00b4fd8b8e0089e28ef82e4c27504994822778b6102bdb3c7",
+      "apiSha256": "c9f3603e9178180537eeebeb336458e167a5a4cb8dd0eca7061087474ce4fc7d",
       "runtime": "client",
       "publicPaths": [
         "~/composables/plugins/workspace-runtime"
@@ -7509,7 +7509,7 @@
               "resolvedReturnType": "ManagedWorkspacePluginRuntime",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 96,
+                "line": 100,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createManagedWorkspacePluginRuntime(options?: {\n    pluginId?: string;\n}): ManagedWorkspacePluginRuntime;"
               }
@@ -7518,7 +7518,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 96,
+              "line": 100,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createManagedWorkspacePluginRuntime(options?: {\n    pluginId?: string;\n}): ManagedWorkspacePluginRuntime;"
             }
@@ -7535,7 +7535,7 @@
               "resolvedReturnType": "{ api: Or3WorkspacePluginApi; dispose: () => void; }",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 198,
+                "line": 212,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createWorkspacePluginApi(pluginId?: string): {\n    api: Or3WorkspacePluginApi;\n    dispose: () => void;\n};"
               }
@@ -7544,7 +7544,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 198,
+              "line": 212,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createWorkspacePluginApi(pluginId?: string): {\n    api: Or3WorkspacePluginApi;\n    dispose: () => void;\n};"
             }
@@ -7561,7 +7561,7 @@
               "resolvedReturnType": "{ id: string; source: WorkspacePluginSource; }[]",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 261,
+                "line": 275,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listWorkspacePluginInstances(): Array<{ id: string; source: WorkspacePluginSource }>;"
               }
@@ -7570,7 +7570,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 261,
+              "line": 275,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listWorkspacePluginInstances(): Array<{ id: string; source: WorkspacePluginSource }>;"
             }
@@ -7584,7 +7584,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 90,
+              "line": 94,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ManagedWorkspacePluginRuntime {\n    api: Or3WorkspacePluginApi;\n    dispose: (reason?: unknown) => Promise<LegacyCleanupReport>;\n}"
             }
@@ -7598,7 +7598,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 49,
+              "line": 53,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface Or3WorkspacePlugin {\n    id: string;\n    register(api: Or3WorkspacePluginApi): void | Promise<void>;\n}"
             }
@@ -7612,9 +7612,9 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 33,
+              "line": 36,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface Or3WorkspacePluginApi {\n    registerDashboardPlugin: (plugin: DashboardPlugin) => RegistrationHandle;\n    registerSidebarPage: (def: SidebarPageDef) => () => void;\n    registerPaneApp: (def: PaneAppDef) => RegistrationHandle;\n    registerMessageAction: (action: ChatMessageAction) => RegistrationHandle;\n    registerTool: (def: ExtendedToolDefinition, handler: ToolHandler) => RegistrationHandle;\n    registerCommandPalettePostSource: (\n        definition: PalettePostSourceDefinition\n    ) => RegistrationHandle;\n    registerCommandPaletteCommand: (\n        definition: PaletteCommandDefinition,\n        handler: PaletteCommandHandler\n    ) => RegistrationHandle;\n    onCleanup: (fn: () => void | Promise<void>) => void;\n}"
+              "text": "export interface Or3WorkspacePluginApi {\n    registerDashboardPlugin: (plugin: DashboardPlugin) => RegistrationHandle;\n    registerSidebarPage: (def: SidebarPageDef) => () => void;\n    registerPaneApp: (def: PaneAppDef) => RegistrationHandle;\n    registerMessageAction: (action: ChatMessageAction) => RegistrationHandle;\n    registerTool: (def: ExtendedToolDefinition, handler: ToolHandler) => RegistrationHandle;\n    registerCommandPalettePostSource: (\n        definition: PalettePostSourceDefinition\n    ) => RegistrationHandle;\n    registerCommandPaletteCommand: (\n        definition: PaletteCommandDefinition,\n        handler: PaletteCommandHandler\n    ) => RegistrationHandle;\n    registerActivitySource: (source: PluginActivitySource) => RegistrationHandle;\n    onCleanup: (fn: () => void | Promise<void>) => void;\n}"
             }
           ]
         },
@@ -7629,7 +7629,7 @@
               "resolvedReturnType": "{ accepted: boolean; replacedSource?: WorkspacePluginSource; }",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 213,
+                "line": 227,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerWorkspacePluginInstance(\n    id: string,\n    source: WorkspacePluginSource,\n    dispose: () => void | Promise<void>\n): { accepted: boolean; replacedSource?: WorkspacePluginSource };"
               }
@@ -7638,7 +7638,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 213,
+              "line": 227,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerWorkspacePluginInstance(\n    id: string,\n    source: WorkspacePluginSource,\n    dispose: () => void | Promise<void>\n): { accepted: boolean; replacedSource?: WorkspacePluginSource };"
             }
@@ -7655,7 +7655,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 245,
+                "line": 259,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterWorkspacePluginInstance(id: string): void;"
               }
@@ -7664,7 +7664,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 245,
+              "line": 259,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterWorkspacePluginInstance(id: string): void;"
             }
@@ -7678,7 +7678,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 26,
+              "line": 29,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type WorkspacePluginSource = 'builtin' | 'extension';"
             }
@@ -11479,7 +11479,7 @@
     },
     {
       "source": "app/utils/chat/tools-public.ts",
-      "apiSha256": "27b19cdfc4d08f230c8b11a1fb61d0e38d80be610e3c4d3a7ec77c60cab9a209",
+      "apiSha256": "67ab236d9b57ee6446a8de5d5501bd52373561e58fa657fbceecc7af43fca5d6",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tools-public"
@@ -11552,7 +11552,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 103,
+              "line": 110,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolCall {\n    id: string;\n    type: 'function';\n    function: {\n        name: string;\n        arguments: string; // JSON string, parsed by consumer\n    };\n}"
             }
@@ -11566,7 +11566,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 141,
+              "line": 148,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolDefinition {\n    type: 'function';\n    function: {\n        name: string;\n        description: string;\n        parameters: import('~~/shared/chat/tool-schema').JsonSchemaObject;\n    };\n    ui?: {\n        label?: string;\n        icon?: string;\n        descriptionHint?: string;\n        defaultEnabled?: boolean;\n        category?: string;\n    };\n    runtime?: ToolRuntime;\n}"
             }
@@ -11580,7 +11580,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 115,
+              "line": 122,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolExecutionContext {\n    subject: string | null;\n    workspaceId: string | null;\n    threadId: string | null;\n    messageId: string | null;\n    callId: string;\n    requestId: string;\n    abortSignal: AbortSignal;\n}"
             }
@@ -11608,7 +11608,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 112,
+              "line": 119,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolRuntime = 'hybrid' | 'client' | 'server';"
             }

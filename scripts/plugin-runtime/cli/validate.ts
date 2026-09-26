@@ -1,9 +1,10 @@
+import { rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
     checkV2PackageConformance,
     type V2ConformanceResult,
 } from '../check-v2-package-conformance';
-import { assertPackageRoot, repoRootFromCli } from './shared';
+import { assertPackageRoot, materializePackTree, repoRootFromCli } from './shared';
 
 export interface ValidateCommandResult {
     readonly root: string;
@@ -11,14 +12,24 @@ export interface ValidateCommandResult {
     readonly exitCode: number;
 }
 
-export function validateV2Package(
+export async function validateV2Package(
     packageRoot: string,
     options: { readonly repoRoot?: string } = {}
-): ValidateCommandResult {
+): Promise<ValidateCommandResult> {
     const root = assertPackageRoot(packageRoot);
-    const result = checkV2PackageConformance(root, {
-        repoRoot: options.repoRoot ?? repoRootFromCli(),
-    });
+    const packRoot = resolve(root, '.or3-pack-validate');
+    let result: V2ConformanceResult;
+    try {
+        // Review the package this source would produce, not the raw directory
+        // (which contains tests, build outputs and symlinked dev dependencies).
+        materializePackTree(root, packRoot);
+        result = await checkV2PackageConformance(packRoot, {
+            repoRoot: options.repoRoot ?? repoRootFromCli(),
+            mode: 'source',
+        });
+    } finally {
+        rmSync(packRoot, { recursive: true, force: true });
+    }
     return {
         root,
         result,

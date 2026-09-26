@@ -4,7 +4,7 @@ Date: 2025-10-02
 Owner: Core maintainers
 Scope: Full repo (Nuxt app under `app/`, DB layer, plugins, tests, docs)
 
-This document lists concrete duplicate patterns and likely-unused/deprecated code across the codebase, with exact file pointers and actionable steps to consolidate or remove. Each item includes a proposed fix and references. Implement changes in small PRs per section with quick unit tests where feasible.
+Historical audit: the line references and proposed fixes below describe the 2025-10-02 snapshot and are not a current implementation guide. The checklist records which items can be verified in the current tree. Recheck any unchecked item against current code before starting work.
 
 ---
 
@@ -201,15 +201,15 @@ Proposed fix:
 
 ## D. Action checklist (PR‑sized tasks)
 
--   [ ] A.1 Create `app/utils/projects/normalizeProjectData.ts` and replace all call sites listed above. Add unit tests.
--   [ ] A.2 Extract `useProjectsCrud.ts` and migrate header/content components. Add tests to cover create/rename/delete happy paths (mock DB).
--   [ ] A.3 Extract `syncProjectEntryTitle` and use in thread/doc rename flows (`SideNavContent.vue`).
--   [ ] A.4 Add `tests/utils/scroll.ts` and deduplicate test helpers; update three test files.
--   [ ] A.5 Unify project tree types (import from composable/types file).
--   [ ] A.6 Add `_registry.ts` factory and refactor action registries to use it. Add a small unit test.
--   [ ] B.1 Remove `useErrorToasts()` after verifying no usages.
--   [ ] B.2 Remove `nowSecNumber()` and replace usages with `nowSec`.
--   [ ] B.3 Exclude example plugins and `_test.vue` from production build in `nuxt.config.ts` (or move to `dev_examples/`). Update README.
+-   [x] A.1 Project normalization is centralized in `app/utils/projects/normalizeProjectData.ts` and used by the sidebar.
+-   [x] A.2 Project CRUD is centralized in `app/composables/projects/useProjectsCrud.ts` and used by sidebar components.
+-   [x] A.3 `syncProjectEntryTitle` is part of `useProjectsCrud` and is called by the sidebar rename flow.
+-   [ ] A.4 The unused `tests/utils/scroll.ts` helper was removed; deduplicating the three named suites remains open.
+-   [x] A.5 Project tree types use `ProjectEntry` from the shared normalization utility.
+-   [x] A.6 Action registries use `app/composables/_registry.ts`, with registry ownership tests.
+-   [x] B.1 `useErrorToasts()` is absent from source; its API entry was removed from `docs/error-handling.md`.
+-   [x] B.2 `nowSecNumber()` is absent from source.
+-   [x] B.3 `nuxt.config.ts` excludes example plugins and test pages from production scanning.
 -   [ ] C. Sweep for `Math.floor(Date.now()/1000)` and replace with `nowSec()`.
 
 ---

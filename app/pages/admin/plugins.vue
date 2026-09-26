@@ -14,10 +14,25 @@
                 </UBadge>
             </div>
             <p class="text-sm opacity-70">
-                Activate plugins for the selected workspace. Installation and
-                diagnostics are available under advanced controls.
+                Manage plugins for the selected workspace. Find reviewed releases
+                in the Marketplace; runtime diagnostics are available below.
             </p>
         </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)] p-4">
+            <div>
+                <h3 class="text-base font-medium">Marketplace</h3>
+                <p class="text-sm opacity-70">
+                    Browse and install reviewed plugins in Chat’s Dashboard.
+                    Sign in with your Chat account; the admin login is separate.
+                </p>
+            </div>
+            <UButton to="/chat?dashboard=marketplace" icon="i-lucide-store">
+                Browse Marketplace
+            </UButton>
+        </div>
+
+        <PluginDevelopmentAdmission />
 
         <div
             v-if="rebuildRequired && rebuildAvailable"
@@ -242,6 +257,9 @@
                             <div v-if="packagePlugin.pointer?.candidate" class="text-xs font-mono opacity-70">
                                 candidate: {{ packagePlugin.pointer.candidate.packageDigest }}
                             </div>
+                            <div v-if="packagePlugin.localAdmission" class="mt-1">
+                                <UBadge color="warning" variant="subtle">Development candidate</UBadge>
+                            </div>
                             <div v-if="packagePlugin.startup.issueCodes.length" class="mt-1 text-xs text-[var(--md-sys-color-error,#b91c1c)]">
                                 {{ packagePlugin.startup.issueCodes.join(', ') }}
                             </div>
@@ -258,6 +276,27 @@
                             @click="runV2Canary(packagePlugin.pluginId)"
                         >
                             Run canary
+                        </UButton>
+                        <UButton
+                            v-if="packagePlugin.localAdmission"
+                            size="xs"
+                            color="neutral"
+                            :loading="developmentCanary.busyPluginId.value === packagePlugin.pluginId"
+                            @click="developmentCanary.runBrowserCheck(packagePlugin.pluginId).then(() => refreshPage())"
+                        >
+                            Run browser check
+                        </UButton>
+                        <p v-if="developmentCanary.notes.value[packagePlugin.pluginId]" class="w-full text-xs opacity-70">
+                            {{ developmentCanary.notes.value[packagePlugin.pluginId] }}
+                        </p>
+                        <UButton
+                            v-if="packagePlugin.localAdmission && packagePlugin.pointer?.candidate"
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            @click="developmentCanary.exportCanaryReceipt(packagePlugin.pluginId, packagePlugin.pointer.candidate.packageDigest)"
+                        >
+                            Export verification receipt
                         </UButton>
                         <UButton
                             size="xs"
@@ -304,11 +343,11 @@
                 Advanced runtime diagnostics
             </summary>
             <div class="border-t border-[var(--md-outline-variant)] p-4">
-                <PluginRuntimeInspector />
+                <AdminPluginRuntimeInspector />
             </div>
         </details>
 
-        <ConfirmDialog
+        <AdminConfirmDialog
             v-model="showInstallTrustConfirm"
             title="Install plugin from source?"
             message="This plugin zip is application code. It will execute with OR3 server privileges once activated and is not sandboxed."
@@ -335,6 +374,8 @@ import {
 } from '~/utils/admin/plugin-access-policy';
 import { useAdminWorkspaceGate } from '~/composables/admin/useAdminWorkspaceGate';
 import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
+import PluginDevelopmentAdmission from '~/components/admin/PluginDevelopmentAdmission.vue';
+import { useDevelopmentCanary } from '~/composables/admin/useDevelopmentCanary';
 import { useRuntimeConfig } from '#imports';
 
 definePageMeta({
@@ -356,6 +397,11 @@ type ManagedV2Package = {
         selectedDigest: string | null;
         issueCodes: string[];
     };
+    localAdmission?: {
+        provenance: 'local-development';
+        receiptSha256: string;
+        admittedAt: string;
+    } | null;
 };
 
 const { selectedWorkspaceId, showWorkspaceSelector, onWorkspaceSelected } =
@@ -476,6 +522,7 @@ const plugins = computed(
     () => pageData.value?.plugins ?? []
 );
 const v2Packages = computed(() => pageData.value?.packagePlugins ?? []);
+const developmentCanary = useDevelopmentCanary();
 
 const enabledSet = ref<Set<string>>(new Set());
 const settingsByPlugin = reactive<Record<string, string>>({});

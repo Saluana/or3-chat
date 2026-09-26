@@ -10,6 +10,7 @@ State manager that powers OR3’s multi-pane chat/document workspace. It keeps t
 
 -   Creates, focuses, and closes panes with automatic fallback when the last pane would disappear
 -   Loads chat message history for each pane (with Dexie-backed fallback)
+-   Orders loaded messages by index and order key, excluding retry-superseded rows
 -   Tracks the active pane index, preventing focus bugs
 -   Emits hook events for pane open/close/switch so extensions stay in sync
 -   Supports a configurable pane cap, custom message loaders, and document flush callbacks

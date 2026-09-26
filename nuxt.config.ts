@@ -1,7 +1,7 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'path';
+import { basename, resolve } from 'path';
 import * as ts from 'typescript';
 import { or3CloudConfig } from './config.or3cloud';
 import { or3Config } from './config.or3';
@@ -14,6 +14,8 @@ import { providerIdToModuleId } from './shared/cloud/provider-compatibility';
 import { stripBrokenOpenRouterSourcemapsPlugin } from './plugins/vite-strip-broken-openrouter-sourcemaps';
 import { resolveConnectCloudflareReadiness } from './shared/cloud/wizard/cloudflare-attestation';
 import { DEFAULT_WEBHOOKS_BLOCK_PRIVATE_IPS } from './shared/config/constants';
+import { resolveDevProviderModule } from './shared/dev/local-providers';
+import { resolveLocalPackageAliases } from './shared/dev/local-packages';
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
@@ -61,45 +63,57 @@ const sqliteNativeTraceIncludes =
           ? []
           : [resolve(__dirname, 'node_modules/better-sqlite3/lib/index.js')];
 
-const useLocalPackages = process.env.OR3_USE_LOCAL_PACKAGES === 'true';
-const localPackageCandidates = [
-    {
-        find: /^or3-scroll$/,
-        replacement: resolve(__dirname, '../or3-vsc/src/lib/index.ts'),
-    },
-    {
-        find: /^or3-workflow-vue\/style\.css$/,
-        replacement: resolve(
-            __dirname,
-            '../or3-workflows/packages/workflow-vue/src/styles/variables.css',
-        ),
-    },
-    {
-        find: /^or3-workflow-vue$/,
-        replacement: resolve(
-            __dirname,
-            '../or3-workflows/packages/workflow-vue/src/index.ts',
-        ),
-    },
-    {
-        find: /^or3-workflow-core$/,
-        replacement: resolve(
-            __dirname,
-            '../or3-workflows/packages/workflow-core/src/index.ts',
-        ),
-    },
-];
-const localPackageAliases = useLocalPackages
-    ? localPackageCandidates.filter(({ replacement }) =>
-          existsSync(replacement)
-      )
-    : [];
-const localWorkflowCoreSource = resolve(
-    __dirname,
-    '../or3-workflows/packages/workflow-core/src/index.ts',
+// Sibling source checkouts are used for every `nuxt dev` run and fall back to
+// the installed registry package per alias, so one missing or renamed checkout
+// never breaks the app.
+const localPackages = resolveLocalPackageAliases(__dirname);
+const localPackageAliases = [...localPackages.aliases];
+const localWorkflowCoreSource = localPackageAliases.find(
+    ({ find }) => find instanceof RegExp && find.source === '^or3-workflow-core$',
+)?.replacement;
+
+// The SDK checkout exposes TypeScript source through its `exports`. Vite can
+// transpile that source, but Nitro's Rollup pipeline cannot parse TypeScript
+// inside `node_modules`, so point both at the workspace source (the same live
+// source Vitest aliases) whenever this is the OR3 source checkout. Generated
+// projects and deployment images without the workspace fall back to the
+// installed `@or3/plugin-sdk` package.
+const pluginSdkSourceRoot = resolve(__dirname, 'packages/plugin-sdk/src');
+const hasPluginSdkSource = existsSync(resolve(pluginSdkSourceRoot, 'index.ts'));
+const pluginSdkSourceAliases: Record<string, string> = hasPluginSdkSource
+    ? {
+          // The root entry too: a plugin loaded from a sibling checkout must
+          // resolve the *same* SDK instance this app runs, or its `ui` helpers
+          // come from a second copy with a different shape.
+          '@or3/plugin-sdk': resolve(pluginSdkSourceRoot, 'index.ts'),
+          '@or3/plugin-sdk/package-tree': resolve(
+              pluginSdkSourceRoot,
+              'package-tree.ts',
+          ),
+          '@or3/plugin-sdk/state-compatibility': resolve(
+              pluginSdkSourceRoot,
+              'state-compatibility.ts',
+          ),
+          '@or3/plugin-sdk/package-archive': resolve(
+              pluginSdkSourceRoot,
+              'cli/archive.ts',
+          ),
+          '@or3/plugin-sdk/candidate': resolve(
+              pluginSdkSourceRoot,
+              'candidate.ts',
+          ),
+          // Server-side setup descriptors are parsed with the shared SDK
+          // parser, so the package profile source must resolve to the
+          // transformable source in a checkout build.
+          '@or3/plugin-sdk/profile': resolve(
+              pluginSdkSourceRoot,
+              'profile.ts',
+          ),
+      }
+    : {};
+const pluginSdkViteAliases = Object.entries(pluginSdkSourceAliases).map(
+    ([find, replacement]) => ({ find, replacement }),
 );
-const hasLocalWorkflowCoreSource =
-    useLocalPackages && existsSync(localWorkflowCoreSource);
 
 function isPackageInstalled(pkgName: string): boolean {
     return existsSync(resolve(__dirname, 'node_modules', pkgName));
@@ -113,7 +127,7 @@ function isProviderAvailable(providerId: string): boolean {
 }
 
 function loadGeneratedProviderModules(): string[] {
-    if (!shouldLoadCloudProviderModules) {
+    if (!shouldLoadCloudProviderModules || process.env.OR3_PLUGIN_WATCH_ROOT) {
         return [];
     }
 
@@ -247,19 +261,13 @@ for (const moduleId of or3ProviderModules) {
     generatedProviderModules.push(moduleId);
 }
 
-function resolveLocalProviderModule(moduleId: string): string {
-    if (moduleId !== 'or3-provider-sqlite/nuxt') return moduleId;
-    const localModule = resolve(__dirname, '../or3-provider-sqlite/src/module.ts');
-    return existsSync(localModule) ? localModule : moduleId;
-}
-
 const activeProviderModules = Array.from(
     new Set([
         ...generatedProviderModules,
         ...providerModulesFromConfig,
         ...pluginModulesFromConfig,
     ])
-).map(resolveLocalProviderModule);
+).map((moduleId) => resolveDevProviderModule(moduleId));
 
 const authProviderAvailable =
     isStaticCloudDisabledBuild ||
@@ -395,6 +403,50 @@ const adminConfig = {
         or3CloudConfig.admin?.pluginZipInstallEnabled !== false,
     pluginRouteDispatcherEnabled:
         or3CloudConfig.admin?.pluginRouteDispatcherEnabled !== false,
+    /**
+     * Serves the host-owned containment probe assets used by real-browser
+     * qualification (task 4.13). Off by default and never required at runtime.
+     */
+    containmentProbeEnabled: process.env.OR3_CONTAINMENT_PROBE_ENABLED === 'true',
+    /**
+     * Approved models a plugin may use, and their trusted prices (USD per 1M
+     * tokens). Both are operator configuration; an unpriced model is refused
+     * rather than recorded as free, and an empty allowlist means plugins have no
+     * approved models at all. Parsed strictly at the boundary
+     * (`shared/plugins/ai/model-catalog.ts`).
+     */
+    pluginAllowedModels: (process.env.OR3_PLUGIN_ALLOWED_MODELS ?? '')
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean),
+    pluginModelPrices: (() => {
+        const raw = (process.env.OR3_PLUGIN_MODEL_PRICES ?? '').trim();
+        if (!raw) return {};
+        try {
+            const parsed: unknown = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+        } catch {
+            return {};
+        }
+    })(),
+    /**
+     * AES-256-GCM key for plugin connection secrets. Held outside the database
+     * (env/secret store); empty means connections are unavailable, never stored
+     * in plaintext.
+     *
+     * Deliberately never read from the build environment: a prebuilt image must
+     * take it from the runtime override `NUXT_ADMIN_PLUGIN_CONNECTION_SECRET`
+     * (translated from `OR3_PLUGIN_CONNECTION_SECRET` by the container entrypoint)
+     * so the key is not baked into an image layer.
+     */
+    pluginConnectionSecret: '',
+    /**
+     * AES-256-GCM key for the personal Library link credential
+     * (`OR3_LIBRARY_LINK_SECRET`). Held outside the database and never read from
+     * the build environment; empty means linking is unavailable rather than
+     * storing a polling secret or token in plaintext.
+     */
+    libraryLinkSecret: '',
     rebuildCommand: or3CloudConfig.admin?.rebuildCommand || 'bun run build',
     extensionMaxZipBytes: or3CloudConfig.admin?.extensionMaxZipBytes
         ? String(or3CloudConfig.admin.extensionMaxZipBytes)
@@ -444,6 +496,9 @@ const webhooksConfig = {
 };
 
 export default defineNuxtConfig({
+    ...(process.env.OR3_PLUGIN_WATCH_ROOT && process.env.OR3_PLUGIN_DEV_PROFILE
+        ? { buildDir: resolve(__dirname, '.nuxt-plugin-dev', basename(process.env.OR3_PLUGIN_DEV_PROFILE)) }
+        : {}),
     app: {
         head: {
             link: [
@@ -475,6 +530,9 @@ export default defineNuxtConfig({
     // Disable SSR for test pages to avoid hydration mismatches
     routeRules: {
         '/_tests/**': { ssr: false },
+        // Renderer harness for the portable Tasks plugin. The page itself
+        // refuses to render outside development, so this never ships.
+        '/__tasks-preview': { ssr: false },
         ...(isScrollTestHarnessEnabled
             ? { '/__or3-scroll-test': { ssr: false } }
             : {}),
@@ -621,6 +679,13 @@ export default defineNuxtConfig({
         },
         public: {
             appVersion: process.env.npm_package_version || '0.1.0',
+            pluginDevelopment: process.env.NODE_ENV !== 'production' && Boolean(process.env.OR3_PLUGIN_WATCH_ROOT),
+            /**
+             * Mirrors the server-side probe flag so the qualification harness can
+             * exercise the real startup API from a page. Off in every other profile.
+             */
+            containmentProbeEnabled:
+                process.env.OR3_CONTAINMENT_PROBE_ENABLED === 'true',
             // Declaring these keys makes NUXT_PUBLIC_OPENROUTER_* available to
             // the client instead of silently falling back to the current URL.
             openRouterRedirectUri:
@@ -841,9 +906,12 @@ export default defineNuxtConfig({
     nitro: {
         // Keep server-side workflow execution on the same sibling source tree
         // that Vite uses for the editor during local multi-repo development.
-        alias: hasLocalWorkflowCoreSource
-            ? { 'or3-workflow-core': localWorkflowCoreSource }
-            : {},
+        alias: {
+            ...(localWorkflowCoreSource
+                ? { 'or3-workflow-core': localWorkflowCoreSource }
+                : {}),
+            ...pluginSdkSourceAliases,
+        },
         // Emit precompressed variants for the self-hosted Node server while
         // keeping the original assets for hosts that do their own compression.
         compressPublicAssets: true,
@@ -1148,7 +1216,7 @@ export default defineNuxtConfig({
             // Use sibling source checkouts during multi-repo development, but
             // fall back to installed registry packages in generated projects
             // and deployment images where those checkouts do not exist.
-            alias: localPackageAliases,
+            alias: [...pluginSdkViteAliases, ...localPackageAliases],
         },
         optimizeDeps: {
             // These packages are reached through lazy theme/editor/search
@@ -1194,6 +1262,13 @@ export default defineNuxtConfig({
         server: {
             fs: {
                 allow: [resolve(__dirname, '..')],
+                // Profile databases and credentials must never be served through
+                // Vite's /@fs route, even when they sit inside its allow tree.
+                deny: [
+                    '.env', '.env.*', '*.{crt,pem,key,p12,pfx,cer,der}',
+                    '.npmrc', '.yarnrc.yml', '**/.git/**',
+                    '**/.or3-plugin-dev/**',
+                ],
             },
             watch: {
                 ignored: isWizardUiProcess
@@ -1320,6 +1395,7 @@ export default defineNuxtConfig({
                     syncProvider: or3CloudConfig.sync.provider,
                     storageEnabled: effectiveStorageEnabled,
                     storageProvider: or3CloudConfig.storage.provider,
+                    localPackages: localPackages.selected,
                 });
             }, 1200);
         },

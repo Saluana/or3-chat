@@ -1,0 +1,245 @@
+/**
+ * @module server/utils/plugins/acquisition/route-support
+ *
+ * Purpose:
+ * Build the acquisition service for an admin request. Routes stay thin; the
+ * wiring (stores, registry client, workspace enumeration) lives here so every
+ * acquisition route observes the same policy and the same durable state.
+ *
+ * Behavior:
+ * - The registry client is constructed with the host's persisted advisory
+ *   sequence, so a replayed catalog cannot clear a revocation.
+ * - The instance-wide workspace list is paged to completion (bounded), because a
+ *   preflight that silently skipped workspaces would be worse than a refusal.
+ *
+ * Constraints:
+ * - Server-only. Configuration is read from the process environment.
+ *
+ * Non-Goals:
+ * - Authorization (the routes call the admin guard) and pipeline policy (the
+ *   service owns it).
+ */
+
+import type { H3Event } from 'h3';
+import { getWorkspaceAccessStore, getWorkspaceSettingsStore } from '../../../admin/stores/registry';
+import { listInstalledExtensions } from '../../../admin/extensions/extension-manager';
+import { libraryLinkServiceFor } from '../../../admin/library/route-support';
+import { OR3_PLUGIN_V2_HOST_CAPABILITIES } from '../../../admin/plugins/v2-host-capabilities';
+import { resolveConnectionService } from '../connections/resolve';
+import { loadSetupState } from '../setup/state';
+import {
+    pluginPackageServices,
+} from '../../../admin/plugins/package-operation-support';
+import { CLIENT_CANARY_PENDING_CODE } from '../../../admin/plugins/candidate-client-canary';
+import { PluginPackageRouteCatalog } from '../../../admin/plugins/package-route-catalog';
+import type { AcquisitionConfig } from './config';
+import { acquisitionConfig } from './config';
+import { PluginAcquisitionOperationStore } from './operation-store';
+import { RegistryStateStore } from './registry-state';
+import { RegistryClient } from './registry-client';
+import { PluginAcquisitionService } from './acquisition-service';
+import type { PluginAcquisitionReleaseIdentity } from '~~/shared/plugins/acquisition/contracts';
+import type { PluginAcquisitionOperation } from '~~/shared/plugins/acquisition/contracts';
+
+const WORKSPACE_PAGE_SIZE = 100;
+const MAX_WORKSPACE_PAGES = 100;
+
+export function registryClientFor(
+    config: AcquisitionConfig,
+    acceptedAdvisorySequence: number,
+    /**
+     * The registry stores the release-scoped quarantine ledger, so a decision
+     * recorded by one resolve is visible to every later resolve on this host.
+     */
+    quarantineLedger?: RegistryStateStore,
+    acceptedAdvisoryCheckpoint?: Awaited<ReturnType<RegistryStateStore['read']>>['acceptedAdvisoryCheckpoint'],
+    /**
+     * Highest security-state revision already accepted. Optional so an existing
+     * caller that only carries the persisted checkpoint still enforces the
+     * revision floor through that checkpoint.
+     */
+    acceptedSecurityRevision?: number
+): RegistryClient {
+    return new RegistryClient({
+        registryOrigin: config.registryOrigin,
+        supportedProfiles: config.supportedProfiles,
+        trustRoot: {
+            supportedProfiles: config.supportedProfiles,
+            releaseKeys: config.releaseKeys,
+            hostOr3Version: config.hostOr3Version,
+            hostPluginApiVersion: config.hostPluginApiVersion,
+            acceptedAdvisorySequence,
+        },
+        maxArtifactBytes: config.maxArtifactBytes,
+        reserveBytes: config.reserveBytes,
+        acceptedAdvisorySequence,
+        acceptedSecurityRevision,
+        acceptedAdvisoryCheckpoint,
+        ...(quarantineLedger
+            ? {
+                  quarantinedReleases: async () =>
+                      (await quarantineLedger.read()).quarantinedReleases,
+                  recordQuarantines: async (entries) => {
+                      await quarantineLedger.recordQuarantines(entries);
+                  },
+              }
+            : {}),
+    });
+}
+
+/** Every live workspace id on this instance, paged to completion. */
+export async function listAllWorkspaceIds(event: H3Event): Promise<readonly string[]> {
+    const access = getWorkspaceAccessStore(event);
+    const ids: string[] = [];
+    for (let page = 1; page <= MAX_WORKSPACE_PAGES; page += 1) {
+        const result = await access.listWorkspaces({
+            page,
+            perPage: WORKSPACE_PAGE_SIZE,
+            includeDeleted: false,
+        });
+        for (const item of result.items) {
+            if (!item.deleted) ids.push(item.id);
+        }
+        if (result.items.length < WORKSPACE_PAGE_SIZE) return ids;
+    }
+    throw new Error('Workspace enumeration exceeded the supported page limit');
+}
+
+/**
+ * Setup readiness for the candidate package, using the same host plan (settings
+ * and stored connections) the setup page renders. Returns `null` when the package
+ * declares no setup at all.
+ */
+async function setupPlanFor(event: H3Event, setupOwnerUserId: string) {
+    return async (
+        pluginId: string,
+        workspaceId: string,
+        packageRoot: string,
+        operationId?: string
+    ) => {
+        void packageRoot;
+        const { service, durable } = resolveConnectionService();
+        const state = await loadSetupState({
+            event,
+            pluginId,
+            workspaceId,
+            ownerUserId: setupOwnerUserId,
+            hasSelectedContext: false,
+            service,
+            durableConnections: durable,
+            ...(operationId === undefined ? {} : { setupOperationId: operationId }),
+        });
+        return state.plan;
+    };
+}
+
+export async function acquisitionServiceFor(
+    event: H3Event,
+    requesterUserId = '',
+    /**
+     * The acting local user whose Library link may cover a paid release. Kept
+     * separate from the recorded requester identity, which is an audit label.
+     */
+    libraryUserId = '',
+    libraryGrant?: PluginAcquisitionOperation['libraryGrant'],
+    /** Local Chat user who owns setup connections; distinct from the audit requester and Library buyer. */
+    setupOwnerUserId = ''
+): Promise<PluginAcquisitionService> {
+    const config = acquisitionConfig();
+    const settings = getWorkspaceSettingsStore(event);
+    const services = pluginPackageServices(settings);
+    const registryState = new RegistryStateStore();
+    const state = await registryState.read();
+    return new PluginAcquisitionService({
+        config,
+        store: new PluginAcquisitionOperationStore(),
+        registry: registryClientFor(
+            config,
+            state.acceptedAdvisorySequence,
+            registryState,
+            state.acceptedAdvisoryCheckpoint,
+            state.acceptedSecurityRevision
+        ),
+        services,
+        routeCatalog: new PluginPackageRouteCatalog(services.packages, services.pointers),
+        hostCapabilities: OR3_PLUGIN_V2_HOST_CAPABILITIES,
+        setupPlan: await setupPlanFor(event, setupOwnerUserId || requesterUserId),
+        // A client profile is only satisfied by evidence a real browser
+        // recorded for this candidate; a server process cannot produce it.
+        clientCanary: async (input) => {
+            const evidence = await services.clientCanary.readEvidence(
+                input.pluginId,
+                input.packageDigest,
+                input.workspaceId
+            );
+            if (!evidence) return { status: 'blocked', code: CLIENT_CANARY_PENDING_CODE };
+            if (evidence.status === 'blocked') {
+                return { status: 'blocked', code: evidence.code ?? 'client-canary-blocked' };
+            }
+            return { status: 'passed' };
+        },
+        listWorkspaceIds: () => listAllWorkspaceIds(event),
+        listInstalledExtensionIds: async () =>
+            (await listInstalledExtensions())
+                .filter((extension) => extension.kind === 'plugin')
+                .map((extension) => extension.id),
+        registryState,
+        // Only a request that carries a local user id can use a Library link,
+        // and only that user's own link: credentials stay server-side.
+        ...(libraryUserId.length > 0
+            ? {
+                  resolveCoveredArtifact: async (input: {
+                      readonly requesterUserId: string;
+                      readonly releaseId: string;
+                      readonly expectedRelease: Pick<
+                          PluginAcquisitionReleaseIdentity,
+                          | 'releaseId'
+                          | 'pluginId'
+                          | 'version'
+                          | 'archiveSha256'
+                          | 'packageTreeSha256'
+                          | 'manifestSha256'
+                          | 'authoritySha256'
+                      >;
+                  }) => {
+                      if (input.requesterUserId !== requesterUserId) {
+                          return {
+                              ok: false as const,
+                              code: 'link-required' as const,
+                              message:
+                                  'Only the original acquisition requester may use that Library link.',
+                          };
+                      }
+                      if (libraryGrant && (libraryGrant.buyerUserId !== libraryUserId ||
+                          input.releaseId !== libraryGrant.releaseId ||
+                          input.expectedRelease.archiveSha256 !== libraryGrant.archiveSha256)) {
+                          return { ok: false as const, code: 'link-required' as const,
+                              message: 'This release is outside the buyer-approved install request.' };
+                      }
+                      const { service, configured } = await libraryLinkServiceFor(event);
+                      if (!configured) {
+                          return {
+                              ok: false as const,
+                              code: 'library-unconfigured' as const,
+                              message:
+                                  'This host has no Library link configured, so a paid release cannot be acquired.',
+                          };
+                      }
+                      if (libraryGrant) {
+                          const link = await service.status(libraryUserId);
+                          if (link.state !== 'linked' || link.link?.id !== libraryGrant.linkId ||
+                              link.link?.accountId !== libraryGrant.accountId) {
+                              return { ok: false as const, code: 'link-required' as const,
+                                  message: 'The buyer’s Library link changed. Ask them for a new install request.' };
+                          }
+                      }
+                      return await service.artifactAccess(
+                          libraryUserId,
+                          input.releaseId,
+                          input.expectedRelease
+                      );
+                  },
+              }
+            : {}),
+    });
+}

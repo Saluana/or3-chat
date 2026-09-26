@@ -77,3 +77,7 @@ referenceContext: string;
 - Missing or deleted context must be removed or selected again.
 - If the prompt, editable content, references, and response allowance exceed the selected model context window, the request is rejected before streaming.
 - Disabled mention sources do not appear in search results.
+
+## Chat bridge
+
+The live editor session also exposes `getChatContext(requestId)` and `executeChatTool(name, argsJson, requestId)`. Chat uses these to read a frozen editor snapshot and run the same six native tools against a visible document. Each request keeps its own frozen refs; a changed document invalidates that request. `propose_edits` enters the normal review UI and still requires the user's accept action. See [Document tools in chat](/documentation/utils/document-chat-tools).

@@ -48,13 +48,12 @@
         </div>
         <p v-if="error" class="history-error" role="alert">{{ error }}</p>
 
-        <UModal
+        <AppModal
             v-model:open="previewOpen"
             :title="previewTitle"
             :description="previewDescription"
-            :ui="{ content: 'sm:max-w-lg' }"
         >
-            <template #body>
+            <template #default>
                 <div v-if="selected" class="preview-body">
                     <p v-for="(line, index) in selectedPreviewLines" :key="index">{{ line }}</p>
                     <p v-if="!selectedPreviewLines.length" class="preview-empty">This checkpoint has no readable text preview.</p>
@@ -62,15 +61,16 @@
             </template>
             <template #footer>
                 <div class="preview-actions">
-                    <UButton color="neutral" variant="soft" label="Cancel" @click="closePreview" />
-                    <UButton color="primary" label="Restore this version" :disabled="busy || !selected" @click="restoreSelected" />
+                    <UButton color="neutral" variant="ghost" size="modal" label="Cancel" @click="closePreview" />
+                    <UButton color="primary" size="modal" label="Restore this version" :disabled="busy || !selected" @click="restoreSelected" />
                 </div>
             </template>
-        </UModal>
+        </AppModal>
     </div>
 </template>
 
 <script setup lang="ts">
+import AppModal from '~/components/ui/AppModal.vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import type { JSONContent } from '@tiptap/core';
 import { useIcon } from '~/composables/useIcon';
@@ -247,6 +247,6 @@ onMounted(load);
 }
 .preview-body p { margin: 0 0 .45rem; font-size: .76rem; line-height: 1.45; }
 .preview-empty { color: var(--md-on-surface-variant); }
-.preview-actions { display: flex; justify-content: flex-end; gap: .55rem; width: 100%; }
+.preview-actions { display: flex; justify-content: flex-end; gap: .625rem; width: 100%; }
 .history-error { color: var(--md-error); font-size: .78rem; }
 </style>

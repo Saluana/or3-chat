@@ -42,6 +42,54 @@ export default defineConfig({
         // files are loaded from linked provider packages with their own node_modules.
         dedupe: ['vue', 'nuxt', 'zod'],
         alias: {
+            // Resolve `@or3/plugin-sdk` subpaths to the live workspace source so
+            // the host re-export shims and direct SDK imports share one module
+            // instance under Vitest (the `file:` dependency in node_modules is a
+            // copy and would otherwise create a duplicate class identity).
+            '@or3/plugin-sdk/package-tree': path.resolve(
+                __dirname,
+                'packages/plugin-sdk/src/package-tree.ts'
+            ),
+            '@or3/plugin-sdk/package-archive': path.resolve(
+                __dirname,
+                'packages/plugin-sdk/src/cli/archive.ts'
+            ),
+            '@or3/plugin-sdk/candidate': path.resolve(
+                __dirname,
+                'packages/plugin-sdk/src/candidate.ts'
+            ),
+            '@or3/plugin-sdk/state-compatibility': path.resolve(
+                __dirname,
+                'packages/plugin-sdk/src/state-compatibility.ts'
+            ),
+            '@or3/plugin-sdk/profile': path.resolve(
+                __dirname,
+                'packages/plugin-sdk/src/profile.ts'
+            ),
+            '@or3/plugin-sdk/testing': path.resolve(
+                __dirname,
+                'packages/plugin-sdk/src/testing.ts'
+            ),
+            '@or3/plugin-sdk/manifest': path.resolve(
+                __dirname,
+                'packages/plugin-sdk/src/manifest.ts'
+            ),
+            '@or3/plugin-sdk/ui': path.resolve(
+                __dirname,
+                'packages/plugin-sdk/src/ui.ts'
+            ),
+            '@or3/plugin-sdk/portable': path.resolve(
+                __dirname,
+                'packages/plugin-sdk/src/portable.ts'
+            ),
+            '@or3/plugin-sdk/portable-runtime': path.resolve(
+                __dirname,
+                'packages/plugin-sdk/src/portable-runtime.ts'
+            ),
+            '@or3/plugin-sdk/host': path.resolve(
+                __dirname,
+                'packages/plugin-sdk/src/host.ts'
+            ),
             '#imports': path.resolve(__dirname, 'tests/stubs/nuxt-imports.ts'),
             '#build/or3/bundled-plugin-catalog': path.resolve(
                 __dirname,
@@ -69,6 +117,7 @@ export default defineConfig({
                     include: [
                         'server/**/__tests__/**/*.test.ts',
                         'shared/**/__tests__/**/*.test.ts',
+                        'packages/plugin-sdk/src/__tests__/**/*.test.ts',
                     ],
                     exclude: [
                         'shared/plugins/isolation/__tests__/**/*.test.ts',

@@ -141,6 +141,7 @@ interface SidebarPageDef {
     id: string;                           // Unique page identifier
     label: string;                        // Display label for UI
     icon: string;                         // Required icon name
+    image?: string;                       // Optional host/import-resolved app image URL
     order?: number;                       // Sort order (default: 200)
     component: Component | (() => Promise<any>); // Vue component or async loader
     keepAlive?: boolean;                  // Opt-in caching for the component

@@ -285,6 +285,7 @@ describe('GET /api/plugins/runtime-manifest', () => {
                     kind: 'plugin',
                     id: 'package-alpha',
                     name: 'Package Alpha',
+                    icon: 'assets/app-icon.webp',
                     version: '1.0.0',
                     capabilities: [],
                     manifestVersion: 2,
@@ -322,6 +323,10 @@ describe('GET /api/plugins/runtime-manifest', () => {
             descriptor: {
                 manifestVersion: 2,
                 source: 'package',
+                icon: {
+                    path: 'assets/app-icon.webp',
+                    mediaType: 'image/webp',
+                },
                 artifact: {
                     kind: 'package-v2',
                     packageDigest: `sha256-${'a'.repeat(64)}`,
@@ -549,6 +554,39 @@ describe('GET /api/plugins/runtime-manifest', () => {
         expect(result.runtime['corrupt-package']).toMatchObject({
             descriptorStatus: 'blocked',
             blockCode: 'package-pointer-unavailable',
+        });
+    });
+
+    it('never serves a legacy directory for an inactive V2-owned identity', async () => {
+        listSelectedPackagesMock.mockResolvedValue([
+            { status: 'inactive', pluginId: 'alpha' },
+        ]);
+        listInstalledExtensionsMock.mockResolvedValue([
+            {
+                kind: 'plugin',
+                id: 'alpha',
+                name: 'Alpha Legacy',
+                version: '9.9.9',
+                capabilities: [],
+                path: '/tmp/alpha-legacy',
+                runtime: { client: { entry: 'plugin.client.ts' } },
+            },
+        ]);
+        getEnabledPluginsMock.mockResolvedValue(['alpha']);
+
+        const handler = (await import('../runtime-manifest.get')).default as (
+            event: H3Event
+        ) => Promise<any>;
+        const result = await handler(makeEvent());
+
+        // The id is installed but V2-owned and selects nothing: it must be
+        // reported unavailable, never loaded from the same-id legacy directory.
+        expect(result.installedPluginIds).toContain('alpha');
+        expect(result.enabledPluginIds).toEqual([]);
+        expect(result.runtime.alpha).toMatchObject({
+            loadAllowed: false,
+            descriptorStatus: 'blocked',
+            blockCode: 'package-inactive',
         });
     });
 

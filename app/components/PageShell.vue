@@ -45,6 +45,7 @@
                 :visible-tab-ids="workspaceTabs.visibleTabIds.value"
                 :status-by-tab-id="workspaceTabs.statusByTabId.value"
                 :icon-by-tab-id="workspaceTabIcons"
+                :image-by-tab-id="workspaceTabImages"
                 :can-open-split="canAddPane"
                 :can-reopen-closed="workspaceTabs.state.value.recentlyClosed.length > 0"
                 :copyable-tab-ids="workspaceCopyableTabIds"
@@ -371,11 +372,12 @@
         </div>
         <component
             :is="dashboardModalComponent"
-            v-if="dashboardEnabled"
+            v-if="dashboardEnabled && dashboardModalActivated"
             v-model:showModal="showDashboardModal"
         />
         <ClientOnly>
             <component
+                v-if="systemPromptsModalActivated"
                 :is="systemPromptsModalComponent"
                 v-model:showModal="systemPromptsModalOpen"
                 :mode="systemPromptsModalRequest?.mode"
@@ -392,6 +394,7 @@
 // Generic PageShell merging chat + docs functionality.
 // Props allow initializing with a thread OR a document and choosing default mode.
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
+import ChatContainer from '~/components/chat/ChatContainer.vue';
 import { useMultiPane, type PaneState } from '~/composables/core/useMultiPane';
 import { useWorkspaceTabHost } from '~/composables/core/useWorkspaceTabHost';
 import { useWorkspaceTabs } from '~/composables/core/useWorkspaceTabs';
@@ -459,7 +462,18 @@ import {
     type SidebarLayoutApi,
 } from '~/utils/sidebarLayoutApi';
 import { setWorkspaceResourceNavigationApi } from '~/utils/workspaceResourceNavigation';
-import { useDashboardNavigation } from '~/composables/dashboard/useDashboardPlugins';
+import {
+    dashboardDeepLinkPageId,
+    parseDashboardDeepLink,
+} from '~/utils/dashboardDeepLink';
+import {
+    listDashboardPluginPages,
+    useDashboardNavigation,
+} from '~/composables/dashboard/useDashboardPlugins';
+import {
+    createCoreDashboardItems,
+    registerCoreDashboardPages,
+} from '~/core/dashboard/core-items';
 import {
     setPaletteHostContext,
     useCommandPalette,
@@ -504,6 +518,10 @@ const runtimeConfig = useRuntimeConfig();
 const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
 const sideNavExpandedRef = ref<any | null>(null);
 const showDashboardModal = ref(false);
+const dashboardModalActivated = ref(false);
+watch(showDashboardModal, (open) => {
+    if (open) dashboardModalActivated.value = true;
+});
 const hasSyncedInitial = ref(false);
 const or3Config = useOr3Config();
 const showNotificationBell = computed(
@@ -711,6 +729,7 @@ const workspaceScopeId = ref<string | null>(
     process.client ? getActiveWorkspaceId() : null
 );
 let activeWorkspaceTabsScope = '';
+const workspaceTabsTransitioning = ref(false);
 const disposeWorkspaceScopeSubscription = process.client
     ? subscribeActiveWorkspaceDb(({ newWorkspaceId }) => {
           workspaceScopeId.value = newWorkspaceId;
@@ -730,10 +749,12 @@ function requestWorkspaceTabsScope(
     const scope = `${workspaceId ?? 'local'}\0${profileId}`;
     if (scope === activeWorkspaceTabsScope) return;
     activeWorkspaceTabsScope = scope;
+    workspaceTabsTransitioning.value = true;
     void workspaceTabs
         .switchScope(workspaceId, profileId)
         .then((switched) => {
             if (!switched || scope !== activeWorkspaceTabsScope) return;
+            workspaceTabsTransitioning.value = false;
             hasSyncedInitial.value = true;
             updateUrl(true);
         })
@@ -770,6 +791,15 @@ const workspaceTabIcons = computed(
             [...workspaceTabMetadata.metadata].map(([tabId, metadata]) => [
                 tabId,
                 metadata.icon,
+            ])
+        )
+);
+const workspaceTabImages = computed(
+    () =>
+        new Map(
+            [...workspaceTabMetadata.metadata].map(([tabId, metadata]) => [
+                tabId,
+                metadata.image,
             ])
         )
 );
@@ -894,10 +924,10 @@ function resolvePaneComponent(pane: PaneState): Component {
         if (import.meta.dev) {
             console.debug('[PageShell] resolve component: chat');
         }
-        return (
-            themePlugin?.activeComponents.value['chat-page'] ??
-            CORE_APP_COMPONENT_DEFAULTS['chat-page']
-        );
+        const active = themePlugin?.activeComponents.value['chat-page'];
+        return !active || active === CORE_APP_COMPONENT_DEFAULTS['chat-page']
+            ? ChatContainer
+            : active;
     }
 
     // Built-in: doc (lazy loaded)
@@ -1727,13 +1757,14 @@ function onNewChat() {
 
 async function openWorkspaceResource(
     resource: WorkspaceResource,
-    destination: 'new-tab' | 'new-pane'
+    destination: 'new-tab' | 'new-pane',
+    options: { reuseExisting?: boolean } = {}
 ): Promise<boolean> {
     if (destination === 'new-tab') {
         if (!workspaceTabsEnabled.value) return false;
         return !!(await workspaceTabs.openResource(resource, {
             target: 'active',
-            allowDuplicate: true,
+            allowDuplicate: !options.reuseExisting,
             reuseActiveBlank: false,
         }));
     }
@@ -1824,7 +1855,12 @@ const themeToggleIcon = computed(() =>
 // --------------- Command palette ---------------
 // PageShell is the single host: it owns the navigation context the palette
 // actions dispatch through, and registers the core sources once per session.
-const dashboardNavigation = useDashboardNavigation();
+// Deep links and palette actions need core pages before the modal first opens.
+const coreDashboardItems = dashboardEnabled.value
+    ? createCoreDashboardItems(runtimeConfig.public.ssrAuthEnabled === true)
+    : [];
+registerCoreDashboardPages(coreDashboardItems);
+const dashboardNavigation = useDashboardNavigation({ baseItems: coreDashboardItems });
 const {
     open: openCommandPalette,
     close: closeCommandPalette,
@@ -1836,6 +1872,10 @@ const {
     open: openSystemPromptsModal,
     notifySelected: notifySystemPromptSelected,
 } = useSystemPromptsModal();
+const systemPromptsModalActivated = ref(systemPromptsModalOpen.value);
+watch(systemPromptsModalOpen, (open) => {
+    if (open) systemPromptsModalActivated.value = true;
+});
 let disposePaletteHostContext: (() => void) | null = null;
 let disposeWorkspaceTabPaletteProvider: (() => void) | null = null;
 let disposeWorkspaceResourceNavigation: (() => void) | null = null;
@@ -1872,6 +1912,23 @@ function setDashboardOpen(open: boolean) {
     showDashboardModal.value = open;
 }
 
+/**
+ * Supported deep link for dashboard apps: `?dashboard=<pluginId>&page=<pageId>`
+ * (the page defaults to the app's first). The marketplace request link uses it,
+ * and any other app can: this is the one place the modal is opened from a URL.
+ */
+async function consumeDashboardDeepLink(): Promise<void> {
+    if (!dashboardEnabled.value) return;
+    const link = parseDashboardDeepLink(route.query);
+    if (!link) return;
+    const pageId = dashboardDeepLinkPageId(
+        link,
+        listDashboardPluginPages(link.pluginId).map((page) => page.id)
+    );
+    if (!pageId) return;
+    await openDashboardPage(link.pluginId, pageId);
+}
+
 async function openDashboardPage(pluginId: string, pageId: string) {
     setDashboardOpen(true);
     await nextTick();
@@ -1897,7 +1954,9 @@ onMounted(() => {
     });
     disposeWorkspaceTabPaletteProvider?.();
     disposeWorkspaceTabPaletteProvider = setWorkspaceTabPaletteProvider(
-        () => workspaceTabs.tabs.value
+        () => workspaceTabsReady.value && !workspaceTabsTransitioning.value
+            ? workspaceTabs.tabs.value
+            : []
     );
     disposePaletteHostContext?.();
     disposePaletteHostContext = setPaletteHostContext(
@@ -1952,7 +2011,18 @@ onMounted(() => {
                 openSystemPromptsFromPalette({ mode: 'new' }),
         },
     });
+
+    // A deep link opens its dashboard app once the shell is ready; a later
+    // navigation to another link is handled by the watcher below.
+    void consumeDashboardDeepLink();
 });
+
+watch(
+    () => [route.query.dashboard, route.query.page, route.query.plugin, route.query.version, route.query.installRequest],
+    () => {
+        void consumeDashboardDeepLink();
+    }
+);
 
 onUnmounted(() => {
     closeCommandPalette();

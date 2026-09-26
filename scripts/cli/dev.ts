@@ -18,7 +18,7 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
     detectPackageManager,
@@ -28,6 +28,7 @@ import {
     type PackageManagerCommand,
 } from '../../shared/cloud/wizard/package-manager';
 import { isPortAvailable } from '../../shared/cloud/wizard/dev-server';
+import { prepareLocalProviders } from '../../shared/dev/local-providers';
 
 export const DEFAULT_PORT = 3000;
 
@@ -287,7 +288,9 @@ export function nuxtDevEnvironment(
         return env;
     }
 
-    const localStorageFile = resolve(projectRoot, '.nuxt', 'node-localstorage');
+    const localStorageFile = env.OR3_PLUGIN_WATCH_ROOT && env.OR3_PLUGIN_DEV_PROFILE
+        ? resolve(projectRoot, '.nuxt-plugin-dev', basename(env.OR3_PLUGIN_DEV_PROFILE), 'node-localstorage')
+        : resolve(projectRoot, '.nuxt', 'node-localstorage');
     return {
         ...env,
         NODE_OPTIONS: [nodeOptions, `--localstorage-file=${localStorageFile}`]
@@ -296,7 +299,8 @@ export function nuxtDevEnvironment(
     };
 }
 
-function runNuxtDev(argv: string[]): Promise<number> {
+async function runNuxtDev(argv: string[]): Promise<number> {
+    const localProviders = await prepareLocalProviders(process.cwd());
     const command = execPackageCommand(detectPackageManager(), [
         'nuxt',
         'dev',
@@ -305,7 +309,10 @@ function runNuxtDev(argv: string[]): Promise<number> {
     return new Promise((resolvePromise, rejectPromise) => {
         const child = crossSpawn(command.command, command.args, {
             stdio: 'inherit',
-            env: nuxtDevEnvironment(),
+            env: {
+                ...nuxtDevEnvironment(),
+                OR3_DEV_PROVIDER_MODULES: JSON.stringify(localProviders),
+            },
         });
         child.on('error', rejectPromise);
         child.on('exit', (code) => resolvePromise(code ?? 0));

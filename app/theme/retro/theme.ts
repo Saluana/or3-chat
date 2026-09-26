@@ -23,6 +23,11 @@ export default defineTheme({
         'Classic retro aesthetic with pixel-perfect styling and nostalgic vibes',
     isDefault: false,
     stylesheets: ['~/theme/retro/styles.css'],
+    icons: {
+        'sidebar.new_chat': 'pixelarticons:chat',
+        'sidebar.new_folder': 'pixelarticons:folder',
+        'sidebar.new_note': 'pixelarticons:note',
+    },
     borderWidthSubtle: '1px',
     borderWidth: '2px',
     borderWidthStrong: '2px',

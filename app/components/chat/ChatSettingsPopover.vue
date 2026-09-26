@@ -1,5 +1,6 @@
 <template>
     <div
+        ref="popoverElement"
         :class="[
             'chat-settings-popover flex w-[360px] max-w-[calc(100vw-1.5rem)] flex-col',
             containerProps?.class || '',
@@ -8,10 +9,30 @@
         :data-theme-matches="containerProps?.['data-theme-matches']"
     >
         <header class="chat-settings-header">
+            <button
+                v-if="activeGroup"
+                ref="backButton"
+                type="button"
+                class="chat-settings-back"
+                aria-label="Back to chat settings"
+                @click="backToSettings"
+            >
+                <UIcon :name="iconChevronLeft" class="size-4" />
+            </button>
             <div class="min-w-0">
-                <h2 class="chat-settings-title">Chat settings</h2>
+                <h2 class="chat-settings-title">
+                    {{
+                        activeGroup
+                            ? getCategoryLabel(activeGroup.category)
+                            : 'Chat settings'
+                    }}
+                </h2>
                 <p class="chat-settings-subtitle">
-                    Customize how your chats work.
+                    {{
+                        activeGroup
+                            ? `${activeGroup.tools.length} tools`
+                            : 'Customize how your chats work.'
+                    }}
                 </p>
             </div>
             <UButton
@@ -25,7 +46,11 @@
             </UButton>
         </header>
 
-        <div class="chat-settings-body">
+        <div
+            v-show="!activeGroup"
+            class="chat-settings-body"
+            :class="{ 'chat-settings-view-enter is-back': hasNavigated && !activeGroup }"
+        >
             <!-- Current model: shown when the composer is too narrow for its
                  own picker. Opens the favorites dropdown directly. -->
             <USelectMenu
@@ -75,6 +100,41 @@
                     </UButton>
                 </template>
             </USelectMenu>
+
+            <USelectMenu
+                :model-value="promptSelection"
+                :items="promptItems"
+                value-key="value"
+                :search-input="promptSearchInput"
+                :disabled="loading || streaming || promptSaving || promptLoading"
+                aria-label="System prompt for this chat"
+                class="chat-settings-model-trigger ring-0!"
+                :ui="selectMenuUi"
+                @update:model-value="selectPrompt"
+            >
+                <template #default="{ open }">
+                    <span class="chat-settings-icon" aria-hidden="true">
+                        <UIcon :name="iconSystemPrompt" class="size-4" />
+                    </span>
+                    <span class="chat-settings-row-copy min-w-0">
+                        <span class="chat-settings-row-title truncate">
+                            {{ selectedPromptLabel }}
+                        </span>
+                        <span class="chat-settings-row-description truncate">
+                            System prompt for this chat
+                        </span>
+                    </span>
+                    <UIcon
+                        :name="iconChevronDown"
+                        class="chat-settings-option-chevron size-4 shrink-0"
+                        :class="{ 'is-open': open }"
+                        aria-hidden="true"
+                    />
+                </template>
+            </USelectMenu>
+            <p v-if="promptError" class="m-0 px-3 text-xs text-error" role="alert">
+                {{ promptError }}
+            </p>
 
             <p class="chat-settings-heading" aria-hidden="true">Options</p>
 
@@ -145,151 +205,42 @@
                 </div>
             </div>
 
-            <!-- Tool Toggles Section -->
+            <!-- Tool categories open a dedicated view with one scroll area. -->
             <section
                 v-if="registeredTools.length > 0"
                 class="chat-settings-tools"
                 aria-labelledby="chat-settings-tools-label"
             >
                 <div class="chat-settings-section-heading">
-                    <span
-                        id="chat-settings-tools-label"
-                        class="chat-settings-section-label"
-                    >
-                        Tools
-                    </span>
-                    <span class="chat-settings-section-count">
-                        {{ registeredTools.length }}
-                    </span>
+                    <span id="chat-settings-tools-label" class="chat-settings-section-label">Tools</span>
+                    <span class="chat-settings-section-count">{{ registeredTools.length }}</span>
                 </div>
-                <div class="max-h-[min(42vh,320px)] overflow-y-auto">
-                    <div
-                        v-for="group in groupedToolCategories"
-                        :key="group.category"
-                        class="chat-settings-tool-group"
+                <div
+                    v-for="group in groupedToolCategories"
+                    :key="group.category"
+                    class="chat-settings-tool-group"
+                >
+                    <button
+                        type="button"
+                        class="chat-settings-tool-category"
+                        @click="openToolCategory(group.category, $event)"
                     >
-                        <button
-                            type="button"
-                            class="chat-settings-tool-category"
-                            :aria-expanded="
-                                !isCategoryCollapsed(group.category)
-                            "
-                            :aria-controls="`tool-category-${group.category}`"
-                            @click="toggleCategory(group.category)"
-                        >
-                            <span class="min-w-0">
-                                <span class="chat-settings-row-title truncate">
-                                    {{ getCategoryLabel(group.category) }}
-                                </span>
-                                <span
-                                    v-if="
-                                        getCategorySubtitle(group.category)
-                                    "
-                                    class="chat-settings-row-description truncate"
-                                >
-                                    {{
-                                        getCategorySubtitle(group.category)
-                                    }}
-                                </span>
+                        <span class="min-w-0">
+                            <span class="chat-settings-row-title truncate">
+                                {{ getCategoryLabel(group.category) }}
                             </span>
                             <span
-                                class="flex shrink-0 items-center gap-2 self-center"
+                                v-if="getCategorySubtitle(group.category)"
+                                class="chat-settings-row-description truncate"
                             >
-                                <span class="chat-settings-section-count">
-                                    {{ group.tools.length }}
-                                </span>
-                                <UIcon
-                                    :name="
-                                        isCategoryCollapsed(group.category)
-                                            ? iconChevronRight
-                                            : iconChevronDown
-                                    "
-                                    class="size-4 shrink-0"
-                                />
+                                {{ getCategorySubtitle(group.category) }}
                             </span>
-                        </button>
-
-                        <div
-                            v-show="!isCategoryCollapsed(group.category)"
-                            :id="`tool-category-${group.category}`"
-                            class="chat-settings-tool-list"
-                        >
-                            <div
-                                v-for="tool in group.tools"
-                                :key="tool.name"
-                                class="chat-settings-popover-tool chat-settings-tool-row"
-                            >
-                                <span
-                                    class="chat-settings-icon"
-                                    aria-hidden="true"
-                                >
-                                    <UIcon
-                                        :name="
-                                            tool.definition.ui?.icon ||
-                                            iconToolWrench
-                                        "
-                                        class="size-4"
-                                    />
-                                </span>
-                                <label
-                                    :for="`chat-tool-${tool.name}`"
-                                    class="chat-settings-row-copy"
-                                >
-                                    <span class="chat-settings-row-title">
-                                        {{
-                                            tool.definition.ui?.label ||
-                                            tool.definition.function.name
-                                        }}
-                                    </span>
-                                    <span
-                                        v-if="
-                                            tool.definition.ui
-                                                ?.descriptionHint ||
-                                            tool.definition.function
-                                                .description
-                                        "
-                                        :id="`tool-desc-${tool.name}`"
-                                        class="chat-settings-popover-tool-description chat-settings-row-description"
-                                    >
-                                        {{
-                                            tool.definition.ui
-                                                ?.descriptionHint ||
-                                            tool.definition.function
-                                                .description
-                                        }}
-                                    </span>
-                                </label>
-                                <USwitch
-                                    :id="`chat-tool-${tool.name}`"
-                                    v-bind="
-                                        getToolSwitchProps(tool.name)
-                                    "
-                                    class="chat-settings-control"
-                                    :model-value="tool.enabledValue"
-                                    :aria-label="`Enable ${
-                                        tool.definition.ui?.label ||
-                                        tool.definition.function.name
-                                    }`"
-                                    :aria-describedby="
-                                        tool.definition.ui
-                                            ?.descriptionHint ||
-                                        tool.definition.function.description
-                                            ? `tool-desc-${tool.name}`
-                                            : undefined
-                                    "
-                                    :disabled="loading || streaming"
-                                    @update:model-value="
-                                        (val: boolean) => {
-                                            toolRegistry.setEnabled(
-                                                tool.name,
-                                                val
-                                            );
-                                        }
-                                    "
-                                />
-                            </div>
-                        </div>
-                    </div>
+                        </span>
+                        <span class="flex shrink-0 items-center gap-2 self-center">
+                            <span class="chat-settings-section-count">{{ group.tools.length }}</span>
+                            <UIcon :name="iconChevronRight" class="size-4 shrink-0" />
+                        </span>
+                    </button>
                 </div>
             </section>
 
@@ -306,7 +257,7 @@
                     </span>
                     <span class="chat-settings-row-copy">
                         <span class="chat-settings-row-title">
-                            System prompts
+                            Manage system prompts
                         </span>
                         <span class="chat-settings-row-description">
                             Customize behavior and tone.
@@ -342,11 +293,112 @@
                 </UButton>
             </nav>
         </div>
+        <div v-if="activeGroup" class="chat-settings-body chat-settings-view-enter">
+            <div class="chat-settings-bulk-row">
+                <div class="chat-settings-row-copy">
+                    <label for="chat-tools-all" class="chat-settings-row-title">
+                        All tools
+                    </label>
+                    <span
+                        id="chat-tools-enabled-count"
+                        class="chat-settings-row-description"
+                    >
+                        {{ enabledGroupToolCount }} of {{ activeGroup.tools.length }} enabled
+                    </span>
+                </div>
+                <USwitch
+                    id="chat-tools-all"
+                    class="chat-settings-control"
+                    color="primary"
+                    size="sm"
+                    :model-value="allGroupToolsEnabled"
+                    aria-describedby="chat-tools-enabled-count"
+                    :disabled="loading || streaming"
+                    @update:model-value="setGroupToolsEnabled"
+                />
+            </div>
+            <div class="chat-settings-tool-list">
+                <div
+                    v-for="tool in activeGroup.tools"
+                    :key="tool.name"
+                    class="chat-settings-popover-tool chat-settings-tool-row"
+                >
+                    <span
+                        class="chat-settings-icon"
+                        aria-hidden="true"
+                    >
+                        <UIcon
+                            :name="
+                                tool.definition.ui?.icon ||
+                                iconToolWrench
+                            "
+                            class="size-4"
+                        />
+                    </span>
+                    <label
+                        :for="`chat-tool-${tool.name}`"
+                        class="chat-settings-row-copy"
+                    >
+                        <span class="chat-settings-row-title">
+                            {{
+                                tool.definition.ui?.label ||
+                                tool.definition.function.name
+                            }}
+                        </span>
+                        <span
+                            v-if="
+                                tool.definition.ui
+                                    ?.descriptionHint ||
+                                tool.definition.function
+                                    .description
+                            "
+                            :id="`tool-desc-${tool.name}`"
+                            class="chat-settings-popover-tool-description chat-settings-row-description"
+                        >
+                            {{
+                                tool.definition.ui
+                                    ?.descriptionHint ||
+                                tool.definition.function
+                                    .description
+                            }}
+                        </span>
+                    </label>
+                    <USwitch
+                        :id="`chat-tool-${tool.name}`"
+                        v-bind="
+                            getToolSwitchProps(tool.name)
+                        "
+                        class="chat-settings-control"
+                        :model-value="tool.enabledValue"
+                        :aria-label="`Enable ${
+                            tool.definition.ui?.label ||
+                            tool.definition.function.name
+                        }`"
+                        :aria-describedby="
+                            tool.definition.ui
+                                ?.descriptionHint ||
+                            tool.definition.function.description
+                                ? `tool-desc-${tool.name}`
+                                : undefined
+                        "
+                        :disabled="loading || streaming"
+                        @update:model-value="
+                            (val: boolean) => {
+                                toolRegistry.setEnabled(
+                                    tool.name,
+                                    val
+                                );
+                            }
+                        "
+                    />
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { useIcon } from '~/composables/useIcon';
 import { useToolRegistry } from '~/utils/chat/tools-public';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
@@ -355,6 +407,17 @@ import { MODEL_VARIANT_OPTIONS } from '~~/shared/openrouter/model-variants';
 import { getProviderSlug } from '~/utils/modelCatalog';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useModelVariantItems } from '~/composables/chat/useModelVariantItems';
+import { listPrompts, type PromptRecord } from '~/db/prompts';
+import { getThreadSystemPrompt, updateThreadSystemPrompt } from '~/db/threads';
+import { useDefaultPrompt } from '~/composables/chat/useDefaultPrompt';
+import {
+    getPanePendingPrompt,
+    setPanePendingPrompt,
+} from '~/composables/core/usePanePrompt';
+import {
+    DEFAULT_PROMPT_SELECTION,
+    DISABLED_PROMPT_SELECTION,
+} from '~/utils/chat/prompt-utils';
 import { isMobile } from '~/state/global';
 import ModelCatalogProviderLogo from '~/components/modal/model-catalog/ModelCatalogProviderLogo.vue';
 import {
@@ -375,12 +438,17 @@ const props = defineProps<{
     reasoningEfforts?: string[];
     /** Model's default effort, so the picker matches the request. */
     reasoningDefaultEffort?: string;
+    threadId?: string;
+    paneId?: string;
+    promptSelectionRevision?: number;
 }>();
 
 const emit = defineEmits<{
     (e: 'close'): void;
     (e: 'open-system-prompts'): void;
     (e: 'open-model-catalog'): void;
+    (e: 'pending-prompt-selected', id: string): void;
+    (e: 'prompt-selected', id: string): void;
 }>();
 
 // Tool Registry
@@ -414,62 +482,84 @@ const groupedToolCategories = computed(() => {
     }));
 });
 
-const collapsedCategories = ref(new Set<string>());
-const categoryInitDone = ref(false);
-const previousCategories = ref(new Set<string>());
-
-watch(
-    groupedToolCategories,
-    (groups) => {
-        const valid = new Set(groups.map((group) => group.category));
-
-        // First render: collapse all categories by default.
-        if (!categoryInitDone.value) {
-            collapsedCategories.value = new Set(valid);
-            previousCategories.value = new Set(valid);
-            categoryInitDone.value = true;
-            return;
-        }
-
-        // Keep previous collapse state for existing categories.
-        const next = new Set<string>();
-        for (const category of collapsedCategories.value) {
-            if (valid.has(category)) {
-                next.add(category);
-            }
-        }
-
-        // New categories appear collapsed by default.
-        for (const category of valid) {
-            if (!previousCategories.value.has(category)) {
-                next.add(category);
-            }
-        }
-
-        collapsedCategories.value = next;
-        previousCategories.value = new Set(valid);
-    },
-    { immediate: true }
+const activeCategory = ref<string | null>(null);
+const hasNavigated = ref(false);
+const popoverElement = ref<HTMLElement | null>(null);
+const activeGroup = computed(() =>
+    groupedToolCategories.value.find(
+        (group) => group.category === activeCategory.value
+    ) ?? null
+);
+const enabledGroupToolCount = computed(
+    () => activeGroup.value?.tools.filter((tool) => tool.enabledValue).length ?? 0
+);
+const allGroupToolsEnabled = computed(
+    () => !!activeGroup.value?.tools.length &&
+        enabledGroupToolCount.value === activeGroup.value.tools.length
 );
 
-function isCategoryCollapsed(category: string) {
-    return collapsedCategories.value.has(category);
+function setGroupToolsEnabled(enabled: boolean) {
+    if (props.loading || props.streaming) return;
+    for (const tool of activeGroup.value?.tools ?? []) {
+        if (tool.enabledValue !== enabled) {
+            toolRegistry.setEnabled(tool.name, enabled);
+        }
+    }
 }
 
-function toggleCategory(category: string) {
-    const next = new Set(collapsedCategories.value);
-    if (next.has(category)) next.delete(category);
-    else next.add(category);
-    collapsedCategories.value = next;
+const backButton = ref<HTMLButtonElement | null>(null);
+let categoryTrigger: HTMLButtonElement | null = null;
+let resizeAnimation: Animation | null = null;
+
+watch(groupedToolCategories, (groups) => {
+    if (
+        activeCategory.value &&
+        !groups.some((group) => group.category === activeCategory.value)
+    ) {
+        activeCategory.value = null;
+    }
+});
+
+async function navigateToCategory(category: string | null) {
+    const element = popoverElement.value;
+    const previousHeight = element?.getBoundingClientRect().height ?? 0;
+    resizeAnimation?.cancel();
+    activeCategory.value = category;
+    hasNavigated.value = true;
+    await nextTick();
+
+    if (
+        !element ||
+        typeof element.animate !== 'function' ||
+        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    ) return;
+
+    const nextHeight = element.getBoundingClientRect().height;
+    if (Math.abs(nextHeight - previousHeight) < 1) return;
+    resizeAnimation = element.animate(
+        [{ height: `${previousHeight}px` }, { height: `${nextHeight}px` }],
+        { duration: 190, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
+    );
+}
+
+async function openToolCategory(category: string, event: MouseEvent) {
+    categoryTrigger = event.currentTarget as HTMLButtonElement;
+    await navigateToCategory(category);
+    backButton.value?.focus();
+}
+
+async function backToSettings() {
+    await navigateToCategory(null);
+    categoryTrigger?.focus();
 }
 
 function getCategoryLabel(category: string) {
-    if (category === 'Tasks') return 'Task list tools';
+    if (category === 'Tasks' || category === 'OR3 Tasks') return 'Task list tools';
     return `${category} tools`;
 }
 
 function getCategorySubtitle(category: string) {
-    if (category === 'Tasks') {
+    if (category === 'Tasks' || category === 'OR3 Tasks') {
         return 'Create, update, delete, and organize task lists/items';
     }
     return '';
@@ -494,6 +584,7 @@ const iconVariantSettings = useIcon('chat.model.settings');
 const searchIcon = useIcon('ui.search');
 const iconToolWrench = useIcon('chat.tool.wrench');
 const iconClose = useIcon('ui.close');
+const iconChevronLeft = useIcon('ui.chevron.left');
 const iconChevronRight = useIcon('ui.chevron.right');
 const iconChevronDown = useIcon('ui.chevron.down');
 const iconSystemPrompt = useIcon('chat.system_prompt');
@@ -556,6 +647,102 @@ const modelItems = computed(() =>
 const selectedProviderSlug = computed(() =>
     providerSlugFor(selectedModel.value ?? '')
 );
+
+const { defaultPromptId } = useDefaultPrompt();
+const prompts = ref<PromptRecord[]>([]);
+const promptSelection = ref(DEFAULT_PROMPT_SELECTION);
+const promptLoading = ref(true);
+const promptSaving = ref(false);
+const promptError = ref('');
+let promptLoadGeneration = 0;
+
+const promptItems = computed(() => [
+    {
+        label: 'Default',
+        value: DEFAULT_PROMPT_SELECTION,
+        description: 'Use your default system prompt.',
+    },
+    {
+        label: 'Disabled',
+        value: DISABLED_PROMPT_SELECTION,
+        description: 'Send no system prompt for this chat.',
+    },
+    ...prompts.value.map((prompt) => ({
+        label: prompt.title,
+        value: prompt.id,
+        description: prompt.favorite ? 'Favorite system prompt' : 'Saved system prompt',
+    })),
+]);
+
+const selectedPromptLabel = computed(() => {
+    if (promptSelection.value === DISABLED_PROMPT_SELECTION) return 'Disabled';
+    if (promptSelection.value === DEFAULT_PROMPT_SELECTION) {
+        const name = prompts.value.find(
+            (prompt) => prompt.id === defaultPromptId.value
+        )?.title;
+        return name ? `Default · ${name}` : 'Default';
+    }
+    return prompts.value.find((prompt) => prompt.id === promptSelection.value)
+        ?.title ?? 'Unavailable prompt';
+});
+
+const promptSearchInput = computed(() => ({
+    icon: searchIcon.value,
+    autofocus: !isMobile.value,
+}));
+
+watch(
+    () => [props.threadId, props.paneId, props.promptSelectionRevision],
+    async () => {
+        const generation = ++promptLoadGeneration;
+        promptLoading.value = true;
+        promptError.value = '';
+        try {
+            const [savedPrompts, selection] = await Promise.all([
+                listPrompts(),
+                props.threadId
+                    ? getThreadSystemPrompt(props.threadId)
+                    : Promise.resolve(
+                          props.paneId
+                              ? getPanePendingPrompt(props.paneId)
+                              : null
+                      ),
+            ]);
+            if (generation !== promptLoadGeneration) return;
+            prompts.value = savedPrompts;
+            promptSelection.value = selection || DEFAULT_PROMPT_SELECTION;
+        } catch {
+            if (generation === promptLoadGeneration)
+                promptError.value = 'Could not load system prompts.';
+        } finally {
+            if (generation === promptLoadGeneration) promptLoading.value = false;
+        }
+    },
+    { immediate: true }
+);
+
+async function selectPrompt(value: string) {
+    if (promptSaving.value || value === promptSelection.value) return;
+    if (!promptItems.value.some((item) => item.value === value)) return;
+    promptSaving.value = true;
+    promptError.value = '';
+    try {
+        if (props.threadId) {
+            await updateThreadSystemPrompt(props.threadId, value);
+        } else if (props.paneId) {
+            setPanePendingPrompt(props.paneId, value);
+            emit('pending-prompt-selected', value);
+        } else {
+            throw new Error('No chat is available for this selection.');
+        }
+        promptSelection.value = value;
+        emit('prompt-selected', value);
+    } catch {
+        promptError.value = 'Could not change the system prompt.';
+    } finally {
+        promptSaving.value = false;
+    }
+}
 
 // Favorite picker: searchable when there are many favorites, matching the
 // composer's model picker (no mobile autofocus so the keyboard stays shut).
@@ -717,6 +904,10 @@ const modelCatalogButtonProps = computed(() => {
 .chat-settings-popover {
     --chat-settings-divider-width: var(--md-border-width-subtle, var(--md-border-width));
 
+    max-height: min(
+        calc(100dvh - 2rem),
+        calc(var(--reka-popover-content-available-height, 100dvh) - 0.5rem)
+    );
     overflow: hidden;
     color: var(--md-on-surface);
     background: var(--md-surface);
@@ -725,6 +916,7 @@ const modelCatalogButtonProps = computed(() => {
 
 .chat-settings-header {
     display: flex;
+    flex-shrink: 0;
     align-items: flex-start;
     justify-content: space-between;
     gap: 1rem;
@@ -752,11 +944,53 @@ const modelCatalogButtonProps = computed(() => {
     margin: -0.25rem -0.25rem 0 0;
 }
 
+.chat-settings-back {
+    display: inline-flex;
+    width: 2rem;
+    height: 2rem;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    margin: -0.25rem 0 0 -0.25rem;
+    color: var(--md-on-surface);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
+}
+
+.chat-settings-back:hover {
+    background: var(--md-surface-hover);
+}
+
+.chat-settings-back:focus-visible {
+    outline: var(--app-focus-ring-width, 2px) solid
+        var(--md-focus-ring, var(--md-primary));
+}
+
 .chat-settings-body {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    min-height: 0;
+    overflow-y: auto;
     padding: 0.75rem;
+}
+
+.chat-settings-view-enter {
+    animation: chat-settings-view-enter 170ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.chat-settings-view-enter.is-back {
+    --chat-settings-view-offset: -8px;
+}
+
+@keyframes chat-settings-view-enter {
+    from {
+        opacity: 0;
+        transform: translateX(var(--chat-settings-view-offset, 8px));
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
 }
 
 .chat-settings-tools {
@@ -981,9 +1215,21 @@ const modelCatalogButtonProps = computed(() => {
 }
 
 .chat-settings-tool-list {
+    flex: none;
+}
+
+.chat-settings-bulk-row {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 3.25rem;
+    padding: 0.625rem 0.75rem;
     background: var(--md-surface-container-lowest);
-    border-top: var(--chat-settings-divider-width) solid
-        color-mix(in srgb, var(--md-border-color) 30%, transparent);
+    border: var(--chat-settings-divider-width) solid
+        color-mix(in srgb, var(--md-border-color) 45%, transparent);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
 }
 
 .chat-settings-tool-row + .chat-settings-tool-row {
@@ -1038,6 +1284,10 @@ const modelCatalogButtonProps = computed(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .chat-settings-view-enter {
+        animation: none;
+    }
+
     .chat-settings-tool-category {
         transition-duration: 1ms;
     }

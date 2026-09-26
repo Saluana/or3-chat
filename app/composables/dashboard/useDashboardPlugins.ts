@@ -48,6 +48,8 @@ export interface DashboardPlugin {
     id: string;
     /** Icon name (Iconify) shown in the grid */
     icon: string;
+    /** Optional validated app image URL. The Iconify icon remains the fallback. */
+    image?: string;
     /** Short label shown under the icon */
     label: string;
     /** Optional longer description (tooltip or detail panel later) */
@@ -83,6 +85,8 @@ export interface DashboardPluginPage {
     title: string;
     /** Optional icon for page navigation lists. */
     icon?: string;
+    /** Optional validated app image URL. */
+    image?: string;
     /** Ordering (lower first). Defaults to 200. */
     order?: number;
     /** Optional description used in landing list. */

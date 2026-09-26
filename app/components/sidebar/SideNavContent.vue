@@ -27,6 +27,11 @@
                     emit('add-document-to-project-root', $event)
                 "
             />
+            <template #fallback>
+                <div class="h-12 px-2 py-2" aria-hidden="true">
+                    <div class="h-8 w-full bg-[var(--md-surface-variant)] animate-pulse" />
+                </div>
+            </template>
         </ClientOnly>
 
         <!-- Dynamic page content with suspense and keepalive -->
@@ -63,6 +68,13 @@
                     </template>
                 </Suspense>
             </div>
+            <template #fallback>
+                <div id="nav-scroll-area" class="flex-1 min-h-0 p-3 space-y-3" aria-hidden="true">
+                    <div class="h-9 w-full bg-[var(--md-surface-variant)] animate-pulse" />
+                    <div class="h-9 w-4/5 bg-[var(--md-surface-variant)] animate-pulse" />
+                    <div class="h-9 w-full bg-[var(--md-surface-variant)] animate-pulse" />
+                </div>
+            </template>
         </ClientOnly>
 
         <div

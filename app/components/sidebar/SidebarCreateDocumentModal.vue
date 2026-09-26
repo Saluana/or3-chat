@@ -1,11 +1,11 @@
 <template>
-    <UModal
+    <AppModal
         v-bind="modalProps"
         :open="open"
         :title="title"
         @update:open="emit('update:open', $event)"
     >
-        <template #body>
+        <template #default>
             <div class="space-y-4">
                 <UForm :state="{ title: value }" @submit.prevent="emit('submit')">
                     <UFormField
@@ -15,13 +15,13 @@
                         :error="error"
                     >
                         <UInput
+                            variant="modal"
                             :model-value="value"
                             required
                             :placeholder="placeholder"
                             :icon="icon"
                             class="w-full"
                             @update:model-value="emit('update:value', String($event ?? ''))"
-                            @keyup.enter="emit('submit')"
                         />
                     </UFormField>
                 </UForm>
@@ -30,14 +30,14 @@
         <template #footer>
             <UButton
                 variant="ghost"
-                class="theme-btn"
+                size="modal"
                 @click="emit('close')"
             >
                 Cancel
             </UButton>
             <UButton
                 color="primary"
-                class="theme-btn"
+                size="modal"
                 :disabled="loading || !value.trim()"
                 @click="emit('submit')"
             >
@@ -48,10 +48,11 @@
                 </span>
             </UButton>
         </template>
-    </UModal>
+    </AppModal>
 </template>
 
 <script setup lang="ts">
+import AppModal from '~/components/ui/AppModal.vue';
 defineProps<{
     modalProps: Record<string, unknown>;
     open: boolean;

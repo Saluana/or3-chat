@@ -1,0 +1,23 @@
+{
+  "recordedAt": "2026-09-17T16:44:25.449Z",
+  "profile": "or3-portable-client-v1",
+  "config": "playwright.containment.config.ts",
+  "results": [
+    {
+      "project": "chromium",
+      "status": "passed"
+    },
+    {
+      "project": "firefox",
+      "status": "passed"
+    },
+    {
+      "project": "webkit",
+      "status": "passed"
+    },
+    {
+      "project": "mobile-safari",
+      "status": "passed"
+    }
+  ]
+}

@@ -52,6 +52,7 @@ export default defineAppConfig({
                 },
                 // Override size variant so padding wins over defaults
                 size: {
+                    modal: { base: 'h-10! min-h-10! px-4! py-0! text-sm! justify-center rounded-[var(--md-border-radius-small,var(--md-border-radius))]' },
                     xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
                     sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
                     md: { base: 'h-[40px] px-[16px]! text-[17px]' },
@@ -73,6 +74,9 @@ export default defineAppConfig({
                 base: 'mt-0 rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
             },
             variants: {
+                variant: {
+                    modal: 'bg-[var(--md-surface-variant)]! border-[color:var(--md-border-color)]! hover:border-[color:var(--md-outline)]! focus:border-[color:var(--md-primary)]! focus-visible:ring-[length:var(--app-focus-ring-width,2px)]! focus-visible:ring-[color:var(--md-focus-ring,var(--md-primary))]! h-10 min-h-10',
+                },
                 // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
                 leading: { true: 'ps-10!' },
                 trailing: { true: 'pe-10!' },
@@ -114,6 +118,7 @@ export default defineAppConfig({
         formField: {
             slots: {
                 base: 'flex flex-col ',
+                container: 'mt-1.5!',
                 label: 'text-sm font-medium -mb-1 px-1',
                 help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
             },
@@ -158,6 +163,11 @@ export default defineAppConfig({
         textarea: {
             slots: {
                 base: 'mt-0 rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
+            },
+            variants: {
+                variant: {
+                    modal: 'bg-[var(--md-surface-variant)]! border-[color:var(--md-border-color)]! hover:border-[color:var(--md-outline)]! focus:border-[color:var(--md-primary)]! focus-visible:ring-[length:var(--app-focus-ring-width,2px)]! focus-visible:ring-[color:var(--md-focus-ring,var(--md-primary))]!',
+                },
             },
         },
         selectMenu: {

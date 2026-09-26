@@ -66,6 +66,11 @@ vi.mock('../../../admin/plugins/package-runtime-eligibility', () => ({
         evaluateSelectedPackageRuntimeEligibilityMock as any,
 }));
 
+const resolvePluginPackageMock = vi.fn();
+vi.mock('../../../utils/plugins/setup/discovery', () => ({
+    resolvePluginPackage: (...args: unknown[]) => resolvePluginPackageMock(...args),
+}));
+
 const getEnabledPluginsMock = vi.fn();
 vi.mock('../../../admin/plugins/workspace-plugin-store', () => ({
     getEnabledPlugins: getEnabledPluginsMock as any,
@@ -113,6 +118,18 @@ describe('plugin route dispatcher', () => {
         });
         listSelectedPackagesMock.mockReset().mockResolvedValue([]);
         evaluateSelectedPackageRuntimeEligibilityMock.mockReset().mockResolvedValue([]);
+        resolvePluginPackageMock.mockReset().mockResolvedValue({
+            pluginId: 'plugin.a',
+            path: pluginDir,
+            source: 'extension',
+            digest: null,
+            manifestDigest: null,
+            selectedSlot: null,
+            pointerRevision: null,
+            status: 'legacy',
+            stateCompatibility: null,
+            issues: [],
+        });
         getEnabledPluginsMock.mockReset().mockResolvedValue([]);
         resolvePackageHandlerMock.mockReset();
         requirePluginAccessMock.mockReset().mockResolvedValue({
@@ -253,6 +270,86 @@ describe('plugin route dispatcher', () => {
         ) => Promise<any>;
 
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 404 });
+    });
+
+    it('never dispatches legacy code for an inactive V2-owned identity', async () => {
+        resolvePluginPackageMock.mockResolvedValue({
+            pluginId: 'plugin.a',
+            path: null,
+            source: 'package',
+            digest: null,
+            manifestDigest: null,
+            selectedSlot: null,
+            pointerRevision: 1,
+            status: 'inactive',
+            stateCompatibility: null,
+            issues: [],
+        });
+        listInstalledExtensionsMock.mockResolvedValue([
+            {
+                kind: 'plugin',
+                id: 'plugin.a',
+                name: 'Plugin A',
+                version: '1.0.0',
+                capabilities: [],
+                path: pluginDir,
+                runtime: {
+                    server: {
+                        routes: [
+                            { method: 'GET', path: 'health', handler: 'server/health.get.mjs' },
+                        ],
+                    },
+                },
+            },
+        ]);
+
+        const handler = (await import('../[pluginId]/[...path]')).default as (
+            event: H3Event
+        ) => Promise<any>;
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 404 });
+        expect(listInstalledExtensionsMock).not.toHaveBeenCalled();
+    });
+
+    it('never dispatches legacy code when the V2 loader is disabled', async () => {
+        useRuntimeConfigMock.mockReturnValue({
+            admin: {
+                pluginRouteDispatcherEnabled: true,
+                pluginModuleLoaderV2Enabled: false,
+                disableNonCorePlugins: false,
+            },
+        } as any);
+        readSelectedPackageMock.mockResolvedValue({
+            status: 'ready',
+            pluginId: 'plugin.a',
+            packageDigest: `sha256-${'a'.repeat(64)}`,
+            manifest: { access: null },
+            routes: [{ method: 'GET', path: 'health', handler: 'server/health.mjs' }],
+        });
+        listInstalledExtensionsMock.mockResolvedValue([
+            {
+                kind: 'plugin',
+                id: 'plugin.a',
+                name: 'Plugin A',
+                version: '1.0.0',
+                capabilities: [],
+                path: pluginDir,
+                runtime: {
+                    server: {
+                        routes: [
+                            { method: 'GET', path: 'health', handler: 'server/health.get.mjs' },
+                        ],
+                    },
+                },
+            },
+        ]);
+
+        const handler = (await import('../[pluginId]/[...path]')).default as (
+            event: H3Event
+        ) => Promise<any>;
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 404 });
+        expect(resolvePackageHandlerMock).not.toHaveBeenCalled();
     });
 
     it('never falls back to the V1 dispatcher for a legacy V2 archive', async () => {

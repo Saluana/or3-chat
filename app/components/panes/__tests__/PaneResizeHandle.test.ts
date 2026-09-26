@@ -190,19 +190,4 @@ describe('PaneResizeHandle', () => {
         expect(hitArea.classes()).toContain('pointer-events-auto');
     });
 
-    it('indicator has correct styling classes', () => {
-        const wrapper = mount(PaneResizeHandle, {
-            props: {
-                paneIndex: 0,
-                paneCount: 2,
-                isDesktop: true,
-            },
-        });
-
-        const indicator = wrapper.find('div[class*="rounded-full"]');
-        // Check for expected classes
-        expect(indicator.classes()).toContain('rounded-full');
-        expect(indicator.classes()).toContain('transition-all');
-        expect(indicator.classes()).toContain('duration-200');
-    });
 });

@@ -19,6 +19,7 @@ describe('usePaneApps', () => {
             id: 'todo',
             label: 'Todo App',
             icon: 'check',
+            image: '/icons/todo.png',
             component: { name: 'TodoPane', template: '<div>todo</div>' },
         };
 
@@ -28,6 +29,7 @@ describe('usePaneApps', () => {
         expect(app).toBeDefined();
         expect(app?.id).toBe('todo');
         expect(app?.label).toBe('Todo App');
+        expect(app?.image).toBe('/icons/todo.png');
     });
 
     it('throws error for invalid id (uppercase)', () => {

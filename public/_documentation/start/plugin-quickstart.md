@@ -1,8 +1,22 @@
-# Plugin Quick Start Guide
+# Source and V1 Plugin Quick Start
 
-This guide shows you how to extend the dashboard, chat messages, and sidebar
-through either source-level Nuxt plugins or installable V1 workspace packages.
-Both use the same reactive registries, but their module exports are different.
+For a new installable plugin, use the live V2 starter from an OR3 Chat source
+checkout with Bun and the sibling `or3-provider-basic-auth` source checkout:
+
+```sh
+bun run dev:plugin --create /absolute/path/to/my-plugin --id or3.my-plugin
+```
+
+Sign in with the printed local password and review the starter permissions in
+Chat. The plugin opens as a workspace tab; edit and save its source to update
+that tab. In later sessions,
+run `bun run dev` inside the plugin directory. [Build and publish a V2
+plugin](/plugins/plugin-development-v2) covers the full edit, explicit
+candidate qualification, review and publication path.
+
+This guide covers source-level Nuxt plugins and installable V1 workspace
+packages. Both use the same reactive registries, but their module exports are
+different.
 
 > **Plugin Runtime V2:** Digest-addressed SDK packages (`@or3/plugin-sdk`,
 > Manifest V2) are documented under [Runtime V2 overview](/plugins/runtime-v2-overview).
@@ -30,6 +44,20 @@ export default defineNuxtPlugin(() => {
 ## Installable Workspace Plugin Package Contract
 
 When shipping a plugin as an installable package/zip for `extensions/plugins/<id>`, include `or3.manifest.json` at package root.
+
+Manifest V2 packages can also bundle an app icon used by the dashboard,
+sidebar, workspace tabs, and command palette:
+
+```json
+{
+    "manifestVersion": 2,
+    "icon": "assets/app-icon.webp"
+}
+```
+
+Use a static PNG or WebP up to 128 KiB and 256 × 256 pixels. The SDK packer and
+host both validate the bytes. Keep an Iconify icon in source-level registrations
+as the fallback when an image fails to load.
 
 Example:
 
@@ -125,6 +153,7 @@ export default defineNuxtPlugin(() => {
 
 -   `id`: Unique identifier (convention: `namespace:name`)
 -   `icon`: Iconify icon name (browse at [iconify.design](https://iconify.design))
+-   `image`: Optional imported/bundled image URL; `icon` remains the fallback
 -   `label`: Short text shown below the icon
 -   `description`: Optional tooltip/description text
 -   `order`: Display order (lower = earlier, default: 200)

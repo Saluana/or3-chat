@@ -8,6 +8,7 @@
  * - Removes ops older than the retention window.
  * - Ensures consistency (doesn't remove ops needed by active clients, ideally, though this is heuristic based).
  */
+import { requireCloudMutation } from '../../utils/security/cloud-mutation';
 import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
 import { SyncScopeSchema } from '~~/shared/sync/schemas';
@@ -47,6 +48,8 @@ export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event) || !isSyncEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });
     }
+
+    requireCloudMutation(event);
 
     const body: unknown = await readBody(event);
     const parsed = GcRequestSchema.safeParse(body);

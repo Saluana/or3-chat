@@ -32,6 +32,8 @@ function grants(
         approvedGrants: [...approved],
         revision: 'g1',
         status: 'current',
+        authoritySha256: null,
+        packageDigest: null,
     };
 }
 

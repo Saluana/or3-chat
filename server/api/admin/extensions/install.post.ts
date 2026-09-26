@@ -44,6 +44,7 @@ import { ExtensionKindSchema } from '../../../admin/extensions/types';
 import { resolveAdminWorkspaceTarget } from '../../../admin/workspace-target';
 import { getWorkspaceSettingsStore } from '../../../admin/stores/registry';
 import { getPluginGrantReview } from '../../../admin/plugins/workspace-plugin-store';
+import { packageGrantCandidate } from '../../../admin/plugins/package-operation-support';
 import { PluginSettingsMigrationService } from '../../../admin/plugins/settings-migration';
 import { ImmutablePluginPackageStore } from '../../../admin/plugins/package-store';
 import { PluginPackagePointerStore } from '../../../admin/plugins/package-pointer-store';
@@ -265,7 +266,10 @@ export default defineEventHandler(async (event) => {
                         settings,
                         workspaceId,
                         staged.manifest.id,
-                        staged.manifest.requestedGrants
+                        await packageGrantCandidate({
+                            packagePath: staged.sourceRoot,
+                            packageDigest: null,
+                        })
                     ),
                     storedStateVersion: await migration.getStateVersion(
                         workspaceId,

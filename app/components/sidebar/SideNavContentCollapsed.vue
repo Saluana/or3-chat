@@ -1,9 +1,9 @@
 <template>
     <div
         id="nav-collapsed-container"
-        class="flex min-w-[63.8px] max-w-[63.8px] flex-col justify-between h-[calc(100dvh-49.818px)] relative bg-[color:var(--md-surface)]/5 dark:bg-transparent backdrop-blur-xs"
+        class="flex min-w-[63.8px] max-w-[63.8px] flex-col h-full min-h-0 relative bg-[color:var(--md-surface)]/5 dark:bg-transparent backdrop-blur-xs"
     >
-        <div id="nav-top-section" class="px-1 pt-2 flex flex-col space-y-2">
+        <div id="nav-top-section" class="px-1 py-2 flex min-h-0 flex-col space-y-2 overflow-y-auto overscroll-contain [&>*]:shrink-0">
             <div
                 class="new-chat-wrapper flex items-center justify-center w-full pr-0.5"
             >
@@ -18,7 +18,7 @@
                         v-bind="newChatButtonProps"
                         id="btn-new-chat"
                         aria-label="New chat"
-                        class="flex item-center justify-center"
+                        class="flex items-center justify-center"
                         @click="emit('new-chat')"
                     ></UButton>
                 </UTooltip>
@@ -35,7 +35,7 @@
                     v-bind="searchButtonProps"
                     id="btn-search"
                     aria-label="Open command palette"
-                    class="flex item-center justify-center"
+                    class="flex items-center justify-center"
                     @click="emit('focus-search')"
                 >
                     <span class="sr-only">Open command palette</span>
@@ -54,7 +54,7 @@
                     v-bind="newDocButtonProps"
                     id="btn-new-doc"
                     aria-label="Create document"
-                    class="flex item-center justify-center"
+                    class="flex items-center justify-center"
                     @click="emit('new-document')"
                 >
                     <span class="sr-only">Create document</span>
@@ -72,7 +72,7 @@
                     v-bind="newProjectButtonProps"
                     id="btn-new-project"
                     aria-label="Create project"
-                    class="flex item-center justify-center"
+                    class="flex items-center justify-center"
                     @click="emit('new-project')"
                 >
                     <span class="sr-only">Create project</span>
@@ -100,7 +100,7 @@
                                     : pageButtonProps
                             "
                             id="btn-home"
-                            class="flex item-center justify-center"
+                            class="flex items-center justify-center"
                             :icon="iconPageHome"
                             :aria-pressed="activePageId === DEFAULT_PAGE_ID"
                             aria-label="Home"
@@ -137,8 +137,7 @@
                                         : pageButtonProps
                                 "
                                 :id="`btn-page-${page.id}`"
-                                class="flex item-center justify-center"
-                                :icon="page.icon || iconPageDefault"
+                                class="flex items-center justify-center"
                                 :aria-pressed="activePageId === page.id"
                                 :aria-label="page.label"
                                 @click="() => handlePageSelect(page.id)"
@@ -146,63 +145,67 @@
                                 @keydown.space.prevent="
                                     () => handlePageSelect(page.id)
                                 "
-                            />
+                            >
+                                <AppIcon
+                                    :image="page.image"
+                                    :icon="page.icon || iconPageDefault"
+                                    :class="page.image ? 'h-7 w-7' : 'h-5 w-5'"
+                                />
+                            </UButton>
                         </UTooltip>
                     </div>
                 </div>
             </ClientOnly>
         </div>
-        <div
-            id="nav-middle-section"
-            class="px-1 pt-2 flex flex-col space-y-2 mb-2"
-        ></div>
-        <div
-            id="nav-footer-section"
-            v-if="sidebarFooterActions.length"
-            class="px-1 pb-2 flex flex-col space-y-2"
-        >
-            <UTooltip
-                v-for="entry in sidebarFooterActions"
-                :key="`sidebar-collapsed-footer-${entry.action.id}`"
-                :delay-duration="0"
-                :text="entry.action.tooltip || entry.action.label"
-                class="footer-action-item"
+        <div class="mt-auto shrink-0">
+            <div
+                id="nav-footer-section"
+                v-if="sidebarFooterActions.length"
+                class="px-1 pb-2 flex flex-col space-y-2"
             >
-                <UButton
-                    :id="`btn-footer-${entry.action.id}`"
-                    size="md"
-                    variant="ghost"
-                    :color="(entry.action.color || 'neutral') as any"
-                    :square="!entry.action.label"
-                    :disabled="entry.disabled"
-                    class="theme-btn pointer-events-auto flex items-center justify-center gap-1"
-                    :ui="{ base: 'theme-btn' }"
-                    :aria-label="
-                        entry.action.tooltip ||
-                        entry.action.label ||
-                        entry.action.id
-                    "
-                    @click="() => handleSidebarFooterAction(entry)"
+                <UTooltip
+                    v-for="entry in sidebarFooterActions"
+                    :key="`sidebar-collapsed-footer-${entry.action.id}`"
+                    :delay-duration="0"
+                    :text="entry.action.tooltip || entry.action.label"
+                    class="footer-action-item"
                 >
-                    <UIcon
-                        :name="entry.action.icon"
-                        class="footer-icon w-5 h-5"
-                    />
-                    <span
-                        v-if="entry.action.label"
-                        class="footer-label text-xs font-medium"
+                    <UButton
+                        :id="`btn-footer-${entry.action.id}`"
+                        size="md"
+                        variant="ghost"
+                        :color="(entry.action.color || 'neutral') as any"
+                        square
+                        :disabled="entry.disabled"
+                        class="theme-btn pointer-events-auto flex items-center justify-center gap-1"
+                        :ui="{ base: 'theme-btn' }"
+                        :aria-label="
+                            entry.action.tooltip ||
+                            entry.action.label ||
+                            entry.action.id
+                        "
+                        @click="() => handleSidebarFooterAction(entry)"
                     >
-                        {{ entry.action.label }}
-                    </span>
-                </UButton>
-            </UTooltip>
+                        <UIcon
+                            :name="entry.action.icon"
+                            class="footer-icon w-5 h-5"
+                        />
+                        <span
+                            v-if="entry.action.label"
+                            class="footer-label sr-only"
+                        >
+                            {{ entry.action.label }}
+                        </span>
+                    </UButton>
+                </UTooltip>
+            </div>
+            <ClientOnly>
+                <SideBottomNav
+                    id="bottom-nav"
+                    @toggle-dashboard="emit('toggle-dashboard')"
+                />
+            </ClientOnly>
         </div>
-        <ClientOnly>
-            <SideBottomNav
-                id="bottom-nav"
-                @toggle-dashboard="emit('toggle-dashboard')"
-            />
-        </ClientOnly>
     </div>
 </template>
 <script setup lang="ts">
@@ -216,6 +219,7 @@ import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import SideBottomNav from './SideBottomNav.vue';
+import AppIcon from '~/components/ui/AppIcon.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useOr3Config } from '~/composables/useOr3Config';

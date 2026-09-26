@@ -109,6 +109,7 @@ export interface PaletteResource {
     keywords?: readonly string[];
     updatedAt?: number;
     icon?: string;
+    image?: string;
     primaryAction: PaletteAction;
     secondaryActions?: readonly PaletteAction[];
     metadata?: Readonly<Record<string, string | number | boolean | null>>;
@@ -126,6 +127,7 @@ export interface PaletteResult {
     subtitle?: string;
     snippet?: string;
     icon?: string;
+    image?: string;
     updatedAt?: number;
     score?: number;
     primaryAction: PaletteAction;

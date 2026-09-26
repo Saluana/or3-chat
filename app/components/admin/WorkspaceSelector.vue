@@ -1,15 +1,10 @@
 <template>
-    <UModal
+    <AppModal
         v-model:open="isOpen"
-        prevent-close
-        :close="{
-            size: 'sm',
-            class: 'theme-btn'
-        }"
         title="Select a Workspace"
         description="Choose the workspace whose plugins you want to manage"
     >
-        <template #body>
+        <template #default>
             <div class="space-y-3">
                 <div v-if="pending" class="space-y-3">
                     <div
@@ -85,10 +80,11 @@
                 </template>
             </div>
         </template>
-    </UModal>
+    </AppModal>
 </template>
 
 <script setup lang="ts">
+import AppModal from '~/components/ui/AppModal.vue';
 interface Workspace {
     id: string;
     name: string;

@@ -202,7 +202,7 @@ export const ActivitySourceIdentitySchema = z.object({
         .string()
         .trim()
         .min(1)
-        .max(100)
+        .max(200)
         .regex(/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/),
     label: z.string().trim().min(1).max(100),
     actions: z.array(ActivityRunActionSchema).optional(),

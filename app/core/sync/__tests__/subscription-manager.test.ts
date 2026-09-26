@@ -9,6 +9,7 @@ import type {
 } from '~~/shared/sync/types';
 import { FULL_HISTORY_PULL_RETENTION } from '~~/shared/sync/types';
 import { SubscriptionManager } from '../subscription-manager';
+import { Or3DB } from '~/db/client';
 import { createMemoryTable, createMockDb, createPendingOpsTable } from './sync-test-utils';
 import * as cursorManagerModule from '~/core/sync/cursor-manager';
 import { markRecentOpId } from '../recent-op-cache';
@@ -31,6 +32,7 @@ vi.mock('~/core/sync/hook-bridge', () => ({
     getHookBridge: () => ({
         markSyncTransaction: hookBridgeState.markSyncTransaction,
     }),
+    getLocalOnlyKvNames: () => new Set(['openrouter_api_key', 'MODELS_CATALOG', 'workspace.manager.cache']),
 }));
 
 vi.mock('~/core/sync/cursor-manager', () => {
@@ -1027,16 +1029,17 @@ describe('SubscriptionManager', () => {
             updateCursor: vi.fn(async () => undefined),
             dispose: vi.fn(async () => undefined),
         };
-        const db = createMockDb({
-            messages: createMemoryTable('id'),
-            tombstones: createMemoryTable('id'),
-            pending_ops: createPendingOpsTable([]),
-            sync_state: createMemoryTable('id'),
-        });
-        const manager = new SubscriptionManager(db as any, provider, { workspaceId: 'ws-1' });
-        await manager.start();
-        expect(snapshot).toHaveBeenCalled();
-        await manager.stop();
+        const db = new Or3DB(`subscription-snapshot-${crypto.randomUUID()}`);
+        await db.open();
+        const manager = new SubscriptionManager(db, provider, { workspaceId: 'ws-1' });
+        try {
+            await manager.start();
+            expect(snapshot).toHaveBeenCalled();
+            expect(provider.subscribe).toHaveBeenCalled();
+        } finally {
+            await manager.stop();
+            await db.delete();
+        }
     });
 
     it('reapplies in_flight and retry_wait ops after snapshot replacement', async () => {

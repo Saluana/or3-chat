@@ -94,7 +94,7 @@
                     <div class="settings-intro">
                         <div>
                             <strong id="document-ai-settings-title">Document AI settings</strong>
-                            <span>Context is automatic: selection when present, otherwise the cursor block plus the surrounding document.</span>
+                            <span>If you select text, the AI focuses on it. Otherwise, it starts near your cursor and can read the surrounding document.</span>
                             <span class="settings-context-summary">{{ contextSummary }}</span>
                         </div>
                         <UButton :icon="icons.close" color="neutral" variant="ghost" size="xs" square aria-label="Close Document AI settings" @click="customizeOpen = false" />
@@ -145,8 +145,8 @@
 
                         <section class="setting-card">
                             <div class="setting-card-copy">
-                                <strong>Max iterations</strong>
-                                <span>How many tool-loop turns the agent may take ({{ MIN_DOCUMENT_AI_MAX_ITERATIONS }}–{{ MAX_DOCUMENT_AI_MAX_ITERATIONS }}).</span>
+                                <strong>Max steps</strong>
+                                <span>How many steps the AI can take for one request ({{ MIN_DOCUMENT_AI_MAX_ITERATIONS }}–{{ MAX_DOCUMENT_AI_MAX_ITERATIONS }}).</span>
                             </div>
                             <UInput
                                 type="number"
@@ -154,15 +154,15 @@
                                 :min="MIN_DOCUMENT_AI_MAX_ITERATIONS"
                                 :max="MAX_DOCUMENT_AI_MAX_ITERATIONS"
                                 class="w-full"
-                                aria-label="Document AI max iterations"
+                                aria-label="Document AI maximum steps"
                                 @change="setMaxIterations"
                             />
                         </section>
 
                         <section class="setting-card">
                             <div class="setting-card-copy">
-                                <strong>Chunk size</strong>
-                                <span>Target words per read_blocks chunk (default 5000).</span>
+                                <strong>Words per read</strong>
+                                <span>About how much of the document the AI reads at once (default 5,000 words).</span>
                             </div>
                             <UInput
                                 type="number"
@@ -171,7 +171,7 @@
                                 :max="MAX_DOCUMENT_AI_CHUNK_WORDS"
                                 step="500"
                                 class="w-full"
-                                aria-label="Document AI chunk word limit"
+                                aria-label="Document AI words per read"
                                 @change="setChunkWordLimit"
                             />
                         </section>
@@ -181,7 +181,7 @@
                         <div class="settings-heading">
                             <div>
                                 <strong>Tools</strong>
-                                <span>Choose which tools the document agent may use. Chat tools come from the same registry as chat.</span>
+                                <span>Choose what the document AI can do. You can also enable tools you use in chat.</span>
                             </div>
                         </div>
 
@@ -453,7 +453,7 @@ const toolToggleGroups = computed(() => {
         {
             key: 'chat',
             label: 'Chat tools',
-            hint: 'Same registry as chat. Enable ones this agent may call.',
+            hint: 'Use the tools already available in chat.',
             empty: 'No chat tools registered yet.',
             tools: chatTools,
         },
@@ -509,7 +509,7 @@ const tokenLabel = computed(() => {
 const contextSummary = computed(() => {
     const target = props.selectionAvailable
         ? `Selected text${props.selectedText.trim() ? `: “${props.selectedText.trim().replace(/\s+/gu, ' ').slice(0, 90)}${props.selectedText.trim().length > 90 ? '…' : ''}”` : ''}`
-        : 'Cursor block';
+        : 'Text near cursor';
     return `${target} · surrounding document available · ${tokenLabel.value}`;
 });
 const pendingHunks = computed(() =>

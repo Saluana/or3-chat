@@ -4,6 +4,7 @@
  * Purpose:
  * Creates a new workspace for the current user.
  */
+import { requireCloudMutation } from '../../utils/security/cloud-mutation';
 import { defineEventHandler, readBody, createError } from 'h3';
 import { requireWorkspaceSession, resolveWorkspaceStore } from './_helpers';
 import { provisionWorkspaceDefaults } from '../../workspaces/provisioning';
@@ -14,6 +15,7 @@ type CreateWorkspaceBody = {
 };
 
 export default defineEventHandler(async (event) => {
+    requireCloudMutation(event);
     const session = await requireWorkspaceSession(event);
     const store = resolveWorkspaceStore(event);
 

@@ -122,6 +122,20 @@ function forwardResize(payload: ResizePayload) {
     position: relative;
     overflow: visible;
     margin: 0 !important;
+    border: var(--md-border-width) solid var(--md-outline);
+    box-shadow: var(--app-elevation-medium);
+}
+
+:deep(.blank2-chat-dropper.chat-input-main:hover:not(:focus-within)) {
+    border-color: color-mix(in srgb, var(--md-outline) 90%, var(--md-on-surface));
+    box-shadow: var(--app-elevation-medium);
+}
+
+:deep(.blank2-chat-dropper.chat-input-main:focus-within) {
+    border-color: var(--md-outline);
+    box-shadow:
+        0 0 0 4px color-mix(in srgb, var(--md-outline) 60%, transparent),
+        var(--app-elevation-medium);
 }
 
 /* ── Inner spacing ── */
@@ -207,7 +221,7 @@ function forwardResize(payload: ResizePayload) {
 }
 
 :deep(.blank2-chat-dropper .ProseMirror p.is-editor-empty:first-child::before) {
-    color: color-mix(in srgb, var(--md-on-surface) 38%, transparent);
+    color: color-mix(in srgb, var(--md-on-surface-variant) 78%, transparent);
     opacity: 1;
     font-weight: 400;
     font: inherit;

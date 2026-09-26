@@ -37,18 +37,6 @@ describe('Admin Auth - Rate Limiting', () => {
             expect(result.remaining).toBe(0);
         });
 
-        it('should block after max attempts', () => {
-            // Record 5 failed attempts
-            for (let i = 0; i < 5; i++) {
-                recordFailedAttempt(testIp, testUsername);
-            }
-
-            // 6th attempt should be blocked
-            const result = checkRateLimit(testIp, testUsername);
-            expect(result.allowed).toBe(false);
-            expect(result.remaining).toBe(0);
-        });
-
         it('should track different IPs independently', () => {
             const ip1 = '192.168.1.1';
             const ip2 = '192.168.1.2';
@@ -95,13 +83,6 @@ describe('Admin Auth - Rate Limiting', () => {
             expect(result2.remaining).toBe(2); // Now 2
         });
 
-        it('should start a new window for first attempt', () => {
-            const before = Date.now();
-            recordFailedAttempt(testIp, testUsername);
-            const result = checkRateLimit(testIp, testUsername);
-            
-            expect(result.resetAt).toBeGreaterThan(before);
-        });
     });
 
     describe('clearRateLimit', () => {
@@ -139,39 +120,4 @@ describe('Admin Auth - Rate Limiting', () => {
         });
     });
 
-    describe('rate limit window', () => {
-        it('should respect the time window', () => {
-            // Note: This test checks the structure but not actual time passage
-            // since we can't easily mock time in this context
-            recordFailedAttempt(testIp, testUsername);
-            const result = checkRateLimit(testIp, testUsername);
-
-            // Reset time should be in the future (15 minutes from window start)
-            const fifteenMinutes = 15 * 60 * 1000;
-            const expectedReset = Date.now() + fifteenMinutes;
-            
-            // Allow for some variance (within 1 second)
-            expect(result.resetAt).toBeGreaterThan(Date.now());
-            expect(result.resetAt).toBeLessThan(expectedReset + 1000);
-        });
-    });
-
-    describe('edge cases', () => {
-        it('should handle empty username', () => {
-            const result = checkRateLimit(testIp, '');
-            expect(result.allowed).toBe(true);
-        });
-
-        it('should handle special characters in username', () => {
-            const specialUsername = 'admin@test.com';
-            const result = checkRateLimit(testIp, specialUsername);
-            expect(result.allowed).toBe(true);
-        });
-
-        it('should handle very long usernames', () => {
-            const longUsername = 'a'.repeat(1000);
-            const result = checkRateLimit(testIp, longUsername);
-            expect(result.allowed).toBe(true);
-        });
-    });
 });

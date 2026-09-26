@@ -94,4 +94,4 @@ section; leaving it blank uses the provider's model limit.
 
 ## Local package development
 
-When `OR3_USE_LOCAL_PACKAGES=true` and a sibling `or3-workflows` checkout exists, `nuxt.config.ts` aliases `or3-workflow-core`, `or3-workflow-vue`, and the workflow stylesheet to package source. Nuxt therefore hot-reloads workflow component and style changes without publishing or rebuilding the registry package. Installed package versions remain the fallback for generated projects and deployments without the sibling checkout.
+During `bun run dev`, a sibling `or3-workflows` checkout is aliased automatically: `nuxt.config.ts` points `or3-workflow-core`, `or3-workflow-vue`, and the workflow stylesheet at package source, so Nuxt hot-reloads workflow component and style changes without publishing or rebuilding the registry package. The alias is skipped — per import — when the sibling checkout is absent, renamed, or missing the aliased source file, and installed package versions remain the fallback for generated projects and deployments. Set `OR3_USE_LOCAL_PACKAGES=false` to force installed packages, or `=true` to alias sibling source outside dev.

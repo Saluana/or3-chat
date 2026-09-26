@@ -8,6 +8,15 @@ export const RPC_ENVELOPE_VERSION = 1 as const;
 /** Hard cap on serialized envelope size (bytes of UTF-8 JSON). */
 export const RPC_MAX_MESSAGE_BYTES = 256 * 1024;
 
+/**
+ * Wire-shape bounds. Structured-clone messages arrive as ordinary objects, so
+ * the byte ceiling must be measured from the value itself rather than from an
+ * optional serialized string.
+ */
+export const RPC_MAX_WIRE_DEPTH = 32;
+/** Total values (objects, arrays, primitives) allowed in one message. */
+export const RPC_MAX_WIRE_NODES = 20_000;
+
 /** Correlation / message IDs must be opaque, non-empty, bounded tokens. */
 const RPC_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/;
 
@@ -32,7 +41,46 @@ export type RpcErrorCode =
     | 'runtime-crash'
     | 'policy-denied'
     | 'budget-exceeded'
-    | 'internal';
+    | 'unavailable'
+    | 'internal'
+    | 'invalid-input'
+    | 'conflict'
+    | 'locked'
+    | 'stale-context'
+    | 'quota-exceeded';
+
+/**
+ * Single authoritative wire error vocabulary. Handlers raise these codes via
+ * a thrown `rpcCode`; the broker, envelope validators and SDK mapping all
+ * defer to this set so a supported error survives the full round trip
+ * instead of degrading to `internal` at one layer.
+ */
+const WIRE_RPC_ERROR_CODES: ReadonlySet<string> = new Set<string>([
+    'invalid-envelope',
+    'unknown-version',
+    'malformed-id',
+    'oversized',
+    'unknown-method',
+    'grant-denied',
+    'deadline-exceeded',
+    'cancelled',
+    'replay',
+    'backpressure',
+    'runtime-crash',
+    'policy-denied',
+    'budget-exceeded',
+    'unavailable',
+    'internal',
+    'invalid-input',
+    'conflict',
+    'locked',
+    'stale-context',
+    'quota-exceeded',
+]);
+
+export function isRpcErrorCode(value: unknown): value is RpcErrorCode {
+    return typeof value === 'string' && WIRE_RPC_ERROR_CODES.has(value);
+}
 
 export interface RpcRequestEnvelope {
     readonly v: typeof RPC_ENVELOPE_VERSION;
@@ -43,6 +91,14 @@ export interface RpcRequestEnvelope {
     readonly deadlineMs?: number;
     /** Plugin-supplied identity is never authoritative; host ignores this field. */
     readonly pluginId?: string;
+    /**
+     * Host-issued session identity, echoed by the sandbox on every request.
+     * A sandbox cannot mint these values; the host rejects anything it did not
+     * issue (see `session-authority`). Optional so existing hosts keep working.
+     */
+    readonly sessionId?: string;
+    readonly sourceId?: string;
+    readonly generation?: number;
 }
 
 export interface RpcResponseEnvelope {
@@ -108,8 +164,187 @@ function isValidRpcId(value: unknown): value is string {
     return typeof value === 'string' && RPC_ID_PATTERN.test(value);
 }
 
+const encoder = new TextEncoder();
+
 function utf8ByteLength(text: string): number {
-    return new TextEncoder().encode(text).byteLength;
+    return encoder.encode(text).byteLength;
+}
+
+export type WireMeasurement =
+    | { readonly ok: true; readonly bytes: number; readonly nodes: number }
+    | {
+          readonly ok: false;
+          readonly code: 'oversized' | 'invalid-envelope' | 'too-deep' | 'too-many-nodes';
+          readonly message: string;
+      };
+
+/**
+ * Bounded wire representation.
+ *
+ * Measures the JSON wire size of an already-decoded value while rejecting
+ * unsupported values, excessive nesting and node floods. It never stringifies
+ * an unbounded structure: a value that cannot be represented within the limits
+ * is refused before any memory is allocated for it.
+ *
+ * Allowed values are exactly what the JSON wire format carries: null, boolean,
+ * finite number, string, plain object and array. Everything else (functions,
+ * symbols, bigints, class instances, typed arrays, Map/Set/Date, DOM nodes,
+ * circular references) is refused, because a message that cannot round-trip
+ * through JSON must not enter the RPC path.
+ */
+export function measureWireValue(
+    value: unknown,
+    options: {
+        readonly maxBytes?: number;
+        readonly maxDepth?: number;
+        readonly maxNodes?: number;
+    } = {}
+): WireMeasurement {
+    const maxBytes = options.maxBytes ?? RPC_MAX_MESSAGE_BYTES;
+    const maxDepth = options.maxDepth ?? RPC_MAX_WIRE_DEPTH;
+    const maxNodes = options.maxNodes ?? RPC_MAX_WIRE_NODES;
+    let bytes = 0;
+    let nodes = 0;
+    const ancestors = new Set<object>();
+
+    const overflow = (): WireMeasurement => ({
+        ok: false,
+        code: 'oversized',
+        message: `RPC message exceeds ${maxBytes} bytes`,
+    });
+
+    const walk = (
+        node: unknown,
+        depth: number,
+        inArray: boolean
+    ): WireMeasurement | null => {
+        nodes += 1;
+        if (nodes > maxNodes) {
+            return {
+                ok: false,
+                code: 'too-many-nodes',
+                message: `RPC message exceeds ${maxNodes} values`,
+            };
+        }
+        if (depth > maxDepth) {
+            return {
+                ok: false,
+                code: 'too-deep',
+                message: `RPC message nests deeper than ${maxDepth} levels`,
+            };
+        }
+
+        if (node === null) {
+            bytes += 4;
+            return bytes > maxBytes ? overflow() : null;
+        }
+        switch (typeof node) {
+            case 'boolean':
+                bytes += node ? 4 : 5;
+                return bytes > maxBytes ? overflow() : null;
+            case 'number': {
+                if (!Number.isFinite(node)) {
+                    return {
+                        ok: false,
+                        code: 'invalid-envelope',
+                        message: 'RPC wire values must use finite numbers',
+                    };
+                }
+                bytes += String(node).length;
+                return bytes > maxBytes ? overflow() : null;
+            }
+            case 'string': {
+                bytes += 2 + escapedStringBytes(node);
+                return bytes > maxBytes ? overflow() : null;
+            }
+            case 'undefined':
+                // JSON drops `undefined` object properties and emits `null` for
+                // array entries; charge the array form so the measure is never low.
+                if (inArray) bytes += 4;
+                return bytes > maxBytes ? overflow() : null;
+            case 'function':
+            case 'symbol':
+            case 'bigint':
+                return {
+                    ok: false,
+                    code: 'invalid-envelope',
+                    message: `RPC wire values cannot contain ${typeof node}`,
+                };
+            default:
+                break;
+        }
+
+        const record = node as object;
+        if (ancestors.has(record)) {
+            return {
+                ok: false,
+                code: 'invalid-envelope',
+                message: 'RPC wire values cannot contain circular references',
+            };
+        }
+        ancestors.add(record);
+        try {
+            if (Array.isArray(record)) {
+                bytes += 2 + Math.max(0, record.length - 1);
+                if (bytes > maxBytes) return overflow();
+                for (const item of record) {
+                    const failure = walk(item, depth + 1, true);
+                    if (failure) return failure;
+                }
+                return null;
+            }
+            const prototype = Object.getPrototypeOf(record) as object | null;
+            if (prototype !== Object.prototype && prototype !== null) {
+                return {
+                    ok: false,
+                    code: 'invalid-envelope',
+                    message: 'RPC wire values must be plain objects',
+                };
+            }
+            bytes += 2;
+            if (bytes > maxBytes) return overflow();
+            for (const [key, item] of Object.entries(record)) {
+                bytes += 2 + escapedStringBytes(key) + 1;
+                if (bytes > maxBytes) return overflow();
+                const failure = walk(item, depth + 1, false);
+                if (failure) return failure;
+            }
+            return null;
+        } finally {
+            ancestors.delete(record);
+        }
+    };
+
+    const failure = walk(value, 1, false);
+    if (failure) return failure;
+    return { ok: true, bytes, nodes };
+}
+
+/**
+ * Conservative JSON string byte count: escapes and control characters are
+ * counted as their longest encoding, so the measured value can only overstate
+ * the real wire size.
+ */
+function escapedStringBytes(text: string): number {
+    let total = 0;
+    for (const character of text) {
+        const code = character.codePointAt(0) ?? 0;
+        if (character === '"' || character === '\\') {
+            total += 2;
+            continue;
+        }
+        if (code < 0x20) {
+            total += 6;
+            continue;
+        }
+        if (code >= 0xd800 && code <= 0xdfff) {
+            // Lone surrogate: JSON.stringify escapes it as \uXXXX.
+            total += 6;
+            continue;
+        }
+        total += utf8ByteLength(character);
+    }
+    return total;
 }
 
 function fail(
@@ -121,33 +356,37 @@ function fail(
 
 /**
  * Parse and validate a JSON-decoded RPC envelope.
- * Rejects unknown versions, malformed IDs, invalid shapes, and oversized payloads.
+ * Rejects unknown versions, malformed IDs, invalid shapes, unsupported values,
+ * excessive nesting and messages that exceed the byte ceiling.
+ *
+ * The size check is derived from the value itself, never from a caller-supplied
+ * serialized representation: a structured-clone object must be charged for the
+ * bytes it actually occupies on the wire.
  */
 export function parseRpcEnvelope(
     raw: unknown,
-    options: { readonly maxBytes?: number; readonly serialized?: string } = {}
+    options: { readonly maxBytes?: number } = {}
 ): RpcParseResult {
     const maxBytes = options.maxBytes ?? RPC_MAX_MESSAGE_BYTES;
-    if (options.serialized !== undefined) {
-        if (utf8ByteLength(options.serialized) > maxBytes) {
-            return fail('oversized', `RPC message exceeds ${maxBytes} bytes`);
-        }
-    } else if (typeof raw === 'string') {
-        if (utf8ByteLength(raw) > maxBytes) {
-            return fail('oversized', `RPC message exceeds ${maxBytes} bytes`);
-        }
-    }
 
     let value: unknown = raw;
     if (typeof raw === 'string') {
+        if (utf8ByteLength(raw) > maxBytes) {
+            return fail('oversized', `RPC message exceeds ${maxBytes} bytes`);
+        }
         try {
             value = JSON.parse(raw) as unknown;
         } catch {
             return fail('invalid-envelope', 'RPC message is not valid JSON');
         }
-        if (utf8ByteLength(JSON.stringify(value)) > maxBytes) {
-            return fail('oversized', `RPC message exceeds ${maxBytes} bytes`);
-        }
+    }
+
+    const measured = measureWireValue(value, { maxBytes });
+    if (!measured.ok) {
+        return fail(
+            measured.code === 'invalid-envelope' ? 'invalid-envelope' : 'oversized',
+            measured.message
+        );
     }
 
     if (!isPlainObject(value)) {
@@ -185,6 +424,23 @@ export function parseRpcEnvelope(
             if (value.pluginId !== undefined && typeof value.pluginId !== 'string') {
                 return fail('invalid-envelope', 'request.pluginId must be a string when present');
             }
+            if (value.sessionId !== undefined && !isValidRpcId(value.sessionId)) {
+                return fail('invalid-envelope', 'request.sessionId must be an opaque token when present');
+            }
+            if (value.sourceId !== undefined && !isValidRpcId(value.sourceId)) {
+                return fail('invalid-envelope', 'request.sourceId must be an opaque token when present');
+            }
+            if (
+                value.generation !== undefined &&
+                (typeof value.generation !== 'number' ||
+                    !Number.isInteger(value.generation) ||
+                    value.generation < 0)
+            ) {
+                return fail(
+                    'invalid-envelope',
+                    'request.generation must be a non-negative integer when present'
+                );
+            }
             const envelope: RpcRequestEnvelope = {
                 v: RPC_ENVELOPE_VERSION,
                 kind: 'request',
@@ -196,6 +452,15 @@ export function parseRpcEnvelope(
                     : {}),
                 ...(typeof value.pluginId === 'string'
                     ? { pluginId: value.pluginId }
+                    : {}),
+                ...(typeof value.sessionId === 'string'
+                    ? { sessionId: value.sessionId }
+                    : {}),
+                ...(typeof value.sourceId === 'string'
+                    ? { sourceId: value.sourceId }
+                    : {}),
+                ...(typeof value.generation === 'number'
+                    ? { generation: value.generation }
                     : {}),
             };
             return { ok: true, envelope };
@@ -288,6 +553,23 @@ export function createRpcRequest(
         v: RPC_ENVELOPE_VERSION,
         kind: 'request',
         ...input,
+    };
+}
+
+/** Attach host-issued session identity to an outbound sandbox request. */
+export function withHostSession(
+    request: RpcRequestEnvelope,
+    session: {
+        readonly sessionId: string;
+        readonly sourceId: string;
+        readonly generation: number;
+    }
+): RpcRequestEnvelope {
+    return {
+        ...request,
+        sessionId: session.sessionId,
+        sourceId: session.sourceId,
+        generation: session.generation,
     };
 }
 

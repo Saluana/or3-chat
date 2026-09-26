@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Prompt Workbench Settings",
+  "description": "The prompt template the workbench opens with. Presets are stored separately and versioned.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "defaultTemplate": {
+      "type": "string",
+      "title": "Default template",
+      "description": "Opened when the plugin starts; variables are written as {{name}}.",
+      "maxLength": 8000,
+      "default": ""
+    }
+  }
+}

@@ -22,12 +22,16 @@ export type PluginRuntimeManifestBlockCode =
     | 'module-loader-disabled'
     | 'module-loader-static-host'
     | 'module-loader-outside-canary'
+    | 'package-inactive'
     | 'package-pointer-unavailable'
     | 'package-manifest-invalid'
     | 'package-policy-denied'
+    | 'package-disabled'
     | 'package-grants-unreviewed'
     | 'package-dependency-blocked'
     | 'package-trust-unsupported'
+    | 'client-entry-unavailable'
+    | 'client-entry-unresolvable'
     | 'trusted-host-ui-abi-unproven';
 
 export type PluginRuntimeManifestEntry = PluginRuntimeManifestEntryBase &

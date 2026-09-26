@@ -16,6 +16,7 @@ import {
     type RpcEnvelope,
 } from './rpc-envelope';
 import { RpcSession } from './rpc-session';
+import type { HostSessionAuthority } from './session-authority';
 
 export type IframeCrashReport = {
     readonly pluginId: string;
@@ -185,6 +186,12 @@ export interface IframeRuntimeOptions {
     readonly defaultDeadlineMs?: number;
     readonly onCrash?: (report: IframeCrashReport) => void;
     readonly now?: () => number;
+    /**
+     * Host session authority. When supplied, an inbound message must echo the
+     * host-issued session/source/generation; `origin=null` is accepted only with
+     * a matching host session, never by origin comparison alone.
+     */
+    readonly sessionAuthority?: HostSessionAuthority;
     /** Window message listener (injectable for tests). */
     readonly addWindowMessageListener?: (
         listener: (event: { data: unknown; origin: string; source: unknown }) => void
@@ -261,6 +268,8 @@ export class IframeIsolationRuntime {
         | undefined;
     readonly #broker: HostRpcBroker;
     readonly #hostSession: RpcSession;
+    readonly #sessionAuthority: HostSessionAuthority | undefined;
+    #lastIframeOrigin: string | null = null;
     #iframe: IsolatedIframePort | null = null;
     #removeWindowListener: (() => void) | null = null;
     #disposed = false;
@@ -278,6 +287,7 @@ export class IframeIsolationRuntime {
         this.#now = options.now ?? (() => Date.now());
         this.#addWindowMessageListener = options.addWindowMessageListener;
 
+        this.#sessionAuthority = options.sessionAuthority;
         this.#broker = new HostRpcBroker({
             pluginId: options.pluginId,
             workspaceId: options.workspaceId,
@@ -285,6 +295,18 @@ export class IframeIsolationRuntime {
             grants: options.grants,
             maxInFlight: options.maxInFlight,
             now: options.now,
+            requireHostSession: options.sessionAuthority !== undefined,
+            ...(options.sessionAuthority
+                ? {
+                      verifyInbound: (request) =>
+                          options.sessionAuthority!.verifyInbound({
+                              sessionId: request.sessionId,
+                              sourceId: request.sourceId,
+                              generation: request.generation,
+                              origin: this.#lastIframeOrigin,
+                          }),
+                  }
+                : {}),
             methods: buildUiMethodSpecs(options.services),
             send: (envelope) => {
                 this.#postToIframe(envelope);
@@ -297,6 +319,8 @@ export class IframeIsolationRuntime {
             },
             maxInFlight: options.maxInFlight,
             defaultDeadlineMs: options.defaultDeadlineMs,
+            // Host→plugin ids are prefixed so a cancel cannot target the wrong side.
+            idPrefix: `hp-${options.pluginId}`,
             now: options.now,
         });
     }
@@ -357,6 +381,7 @@ export class IframeIsolationRuntime {
             );
         }
 
+        this.#lastIframeOrigin = this.#origin;
         this.#postToIframe(
             createRpcEvent({
                 id: `boot-${this.#pluginId}`,
@@ -366,6 +391,9 @@ export class IframeIsolationRuntime {
                     origin: this.#origin,
                     csp: this.#csp,
                     sandbox: this.#sandbox,
+                    ...(this.#sessionAuthority
+                        ? { session: this.#sessionAuthority.echoFields }
+                        : {}),
                 },
             })
         );
@@ -396,6 +424,7 @@ export class IframeIsolationRuntime {
         this.#removeWindowListener = null;
         this.#iframe.remove();
         this.#iframe = null;
+        this.#sessionAuthority?.invalidate(reason);
         this.#broker.dispose();
         this.#hostSession.dispose(reason);
         if (reason !== 'host teardown' && reason !== 'host dispose') {
@@ -430,7 +459,8 @@ export class IframeIsolationRuntime {
         source: unknown;
     }): Promise<void> {
         if (this.#disposed || !this.#iframe) return;
-        if (event.origin !== this.#origin) {
+        this.#lastIframeOrigin = event.origin;
+        if (event.origin !== this.#origin && event.origin !== 'null') {
             this.#reportCrash(
                 `Rejected message from unexpected origin: ${event.origin}`,
                 false
@@ -455,6 +485,17 @@ export class IframeIsolationRuntime {
             return;
         }
         if (parsed.envelope.kind === 'request') {
+            await this.#broker.dispatch(parsed.envelope);
+            return;
+        }
+        if (parsed.envelope.kind === 'cancel') {
+            // Cancellation belongs to whoever owns the id: a host→plugin call is
+            // cancelled through the host session, a plugin→host call through the
+            // broker. Routing everything to one side would abort the wrong work.
+            if (this.#hostSession.hasPending(parsed.envelope.id)) {
+                this.#hostSession.handleEnvelope(parsed.envelope);
+                return;
+            }
             await this.#broker.dispatch(parsed.envelope);
             return;
         }

@@ -7,6 +7,9 @@ export type PluginErrorCode =
     | 'network-error'
     | 'timeout'
     | 'aborted'
+    | 'unsupported'
+    | 'locked'
+    | 'stale-context'
     | 'host-unavailable'
     | 'internal';
 

@@ -58,6 +58,42 @@ describe('admin store provider registry', () => {
         }
     });
 
+    it('wraps providers with a legacy namespace in the migration policy', async () => {
+        const registry = await import('../registry');
+        const legacy = new Map([
+            ['ws-1:plugins.enabled', '["attacker"]'],
+            ['ws-1:plugin:alpha:setup-values', '{"theme":"retro"}'],
+        ]);
+        const privateValues = new Map<string, string>();
+        registry.registerAdminStoreProvider({
+            id: 'contract-provider',
+            createWorkspaceAccessStore: () => access,
+            createAdminUserStore: () => admins,
+            createWorkspaceSettingsStore: () => ({
+                async get(workspaceId, key) {
+                    return privateValues.get(`${workspaceId}:${key}`) ?? null;
+                },
+                async set(workspaceId, key, value) {
+                    privateValues.set(`${workspaceId}:${key}`, value);
+                },
+                async getLegacy(workspaceId, key) {
+                    return legacy.get(`${workspaceId}:${key}`) ?? null;
+                },
+            }),
+        });
+
+        const store = registry.getWorkspaceSettingsStore(event);
+        expect(store).not.toBe(settings);
+        await expect(store.get('ws-1', 'plugins.enabled')).resolves.toBeNull();
+        await expect(store.get('ws-1', 'plugin:alpha:setup-values')).resolves.toBe(
+            '{"theme":"retro"}'
+        );
+        expect(privateValues.has('ws-1:plugins.enabled')).toBe(false);
+        expect(privateValues.get('ws-1:plugin:alpha:setup-values')).toBe(
+            '{"theme":"retro"}'
+        );
+    });
+
     it('invalidates cached capabilities when HMR replaces a provider', async () => {
         const registry = await import('../registry');
         const capabilities = (supportsWorkspaceManagement: boolean) => ({

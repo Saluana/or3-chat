@@ -367,19 +367,39 @@ See the Tool Registry documentation for registering and managing tools.
 If you don't provide a `threadId`, the first `sendMessage` creates one automatically:
 
 -   Title: first 6 words of your message
--   System prompt: uses pending prompt or default
+-   System prompt: uses the pending selection or inherits the current default
 -   Timestamp: set to now
+
+Chat settings shows a system prompt selector beneath the model selector. It
+offers **Default**, **Disabled**, and saved prompts. Default follows the current
+default system prompt; Disabled sends no system prompt for that chat, including
+the master prompt. A saved prompt is attached to the chat until changed. The
+selector shows the current choice, and chats using a saved prompt or Disabled
+show a label beside the composer settings button. Changes affect future
+messages, not messages already sent.
+
+### Tool execution mode
+
+Background turns advertise all enabled tools. Server tools execute inside the
+durable worker; client tools are claimed by the originating browser and their
+results return to the same server-managed turn. Navigating between chats does
+not interrupt the browser executor. If the browser closes, a client call waits
+for reconnect while server-only turns continue independently. Static builds
+execute client/hybrid tools in foreground mode and omit server-only tools.
 
 ### Retry behavior
 
 When you retry a message:
 
-1. Finds the selected user turn and its assistant response.
-2. Builds provider context only through the preceding turn boundary, retaining
-   complete assistant/tool-call/tool-result groups.
-3. Re-sends the original text and attachments as a new branch.
-4. Leaves the original and later turns untouched if admission is rejected or
-   the replacement fails.
+1. Finds the selected user turn and its assistant/tool-result rows, whether
+   Retry was clicked on the user or assistant message.
+2. Hides only that turn and keeps every other turn in the same order and in
+   provider context.
+3. Appends the original user text and attachments as a new turn at the bottom.
+4. Marks the old turn superseded as soon as the new user row is persisted, so
+   cloud sync and reloads show the same conversation. The old rows remain in
+   storage for sync and audit.
+5. Restores the original turn if the resend is rejected before persistence.
 
 ### Canonical transcript
 
@@ -449,7 +469,7 @@ If you don't specify a model, it uses:
 
 1. Last selected model (from localStorage)
 2. Fixed model (from settings)
-3. Fallback: `openai/gpt-oss-120b`
+3. Fallback: `~openai/gpt-luna-latest`
 
 ### Online mode
 

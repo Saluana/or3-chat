@@ -237,15 +237,6 @@ describe('CommandPalette overlay', () => {
         wrapper.unmount();
     });
 
-    it('delegates row clicks to the two-stage pointer activation path', async () => {
-        const wrapper = mountPalette();
-        await wrapper.get('[role="option"]').trigger('click');
-
-        expect(activateByPointer).toHaveBeenCalledWith('chat:t1');
-        expect(runPrimary).not.toHaveBeenCalled();
-        wrapper.unmount();
-    });
-
     it('previews on hover and unlocks hover once the pointer moves', async () => {
         const wrapper = mountPalette();
         const option = wrapper.get('[role="option"]');

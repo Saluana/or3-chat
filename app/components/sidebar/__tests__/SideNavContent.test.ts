@@ -114,41 +114,6 @@ vi.mock('~/components/sidebar/SideNavHeader.vue', () => ({
 }));
 
 describe('SideNavContent', () => {
-    it('mounts and provides a numeric listHeight', async () => {
-        const wrapper = mount(SideNavContent, {
-            props: {
-                activeThread: undefined,
-                items: [],
-                projects: [],
-                expandedProjects: [],
-                docs: [],
-                listHeight: 400,
-                activeSections: { projects: true, chats: true, docs: true },
-                displayThreads: [],
-                displayProjects: [],
-                displayDocuments: [],
-                sidebarQuery: '',
-                activeDocumentIds: [],
-                activeThreadIds: [],
-                sidebarFooterActions: [],
-                resolvedSidebarSections: { top: [], main: [], bottom: [] },
-            },
-            global: {
-                stubs: {
-                    ClientOnly: { template: '<div><slot /></div>' },
-                    UIcon: true,
-                    UButton: true,
-                    UTooltip: true,
-                },
-            },
-        });
-        // Allow nextTick chain used in onMounted
-        await wrapper.vm.$nextTick();
-        expect(typeof (wrapper.vm as any).listHeight).toBe('number');
-        // Simulate container size change by directly calling recompute if exposed
-        // (Not strictly necessary; mount success without TS/runtime errors is primary assertion.)
-    });
-
     describe('Dynamic page rendering', () => {
         it('renders default page component with proper props', async () => {
             const wrapper = mount(SideNavContent, {

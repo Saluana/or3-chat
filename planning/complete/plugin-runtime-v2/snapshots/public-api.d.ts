@@ -1521,6 +1521,7 @@ import type { ExtendedToolDefinition, ToolHandler } from '~/utils/chat/tool-regi
 import type { RegistrationHandle } from '~~/shared/plugins/registration-handle';
 import { type LegacyCleanupReport } from '~~/shared/plugins/legacy-plugin-scope';
 import type { PaletteCommandDefinition, PaletteCommandHandler, PalettePostSourceDefinition } from '~/core/search/command-palette/types';
+import type { PluginActivitySource } from '@or3/plugin-sdk';
 export type WorkspacePluginSource = 'builtin' | 'extension';
 export interface Or3WorkspacePluginApi {
     registerDashboardPlugin: (plugin: DashboardPlugin) => RegistrationHandle;
@@ -1530,6 +1531,7 @@ export interface Or3WorkspacePluginApi {
     registerTool: (def: ExtendedToolDefinition, handler: ToolHandler) => RegistrationHandle;
     registerCommandPalettePostSource: (definition: PalettePostSourceDefinition) => RegistrationHandle;
     registerCommandPaletteCommand: (definition: PaletteCommandDefinition, handler: PaletteCommandHandler) => RegistrationHandle;
+    registerActivitySource: (source: PluginActivitySource) => RegistrationHandle;
     onCleanup: (fn: () => void | Promise<void>) => void;
 }
 export interface Or3WorkspacePlugin {
@@ -2407,6 +2409,7 @@ export declare function useSidebarDocuments(): Ref<{
         value?: string | null | undefined;
     } | null | undefined;
     file_hashes?: string | null | undefined;
+    document_reference_key?: [string, string] | undefined;
 }[], {
     id: string;
     title: string;
@@ -2426,6 +2429,7 @@ export declare function useSidebarDocuments(): Ref<{
         value?: string | null | undefined;
     } | null | undefined;
     file_hashes?: string | null | undefined;
+    document_reference_key?: [string, string] | undefined;
 }[]>;
 /**
  * `useSidebarQuery`

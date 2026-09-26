@@ -17,7 +17,7 @@
                     "name": "development-setup.md",
                     "path": "/start/development-setup",
                     "category": "Tutorial",
-                    "summary": "One command gets a source checkout running locally. No API key or .env file is required for the local-first app."
+                    "summary": "One command gets a source checkout running locally. No API key or .env file is required for the local-first app. Local workflow sources are validated as a group; production ignores inherited local-source overrides."
                 },
                 {
                     "name": "mini-app-tutorial.md",
@@ -35,7 +35,7 @@
                     "name": "plugin-quickstart.md",
                     "path": "/start/plugin-quickstart",
                     "category": "Tutorial",
-                    "summary": "This guide shows you how to extend the dashboard, chat messages, and sidebar through either source-level Nuxt plugins or installable V1 workspace packages. Both use the same reactive registries, but their module exports are different. Includes active-pane editor layouts, transient edit previews, terrain presentation controls, bundled seam correction and anchored height previews, scoped tool shortcuts, Nuxt UI tooltips, pitch-corrected modifier-drag panning and host theme integration."
+                    "summary": "Start an installable V2 plugin with bun run dev:plugin --create, then use bun run dev in its directory for live edits. Source-level Nuxt and V1 package patterns remain documented separately."
                 },
                 {
                     "name": "snake-game-tutorial.md",
@@ -143,7 +143,7 @@
                     "name": "useChat.md",
                     "path": "/composables/useChat",
                     "category": "Chat",
-                    "summary": "The main composable for managing AI chat conversations in OR3. Handles sending messages, streaming responses, retrying failed messages, and managing conversation state. Think of useChat as your chat conversation manager — it keeps track of all messages, tal..."
+                    "summary": "Manages AI chat messages, streaming, retries, and mixed-runtime tools. Background turns execute server tools in the worker and delegate browser tools through a durable claim/result bridge. Chat settings selects a saved system prompt, the current default, or Disabled per chat; the choice applies to future messages."
                 },
                 {
                     "name": "useChatAttachmentDisplay.md",
@@ -215,7 +215,7 @@
                     "name": "useDashboardPlugins.md",
                     "path": "/composables/useDashboardPlugins",
                     "category": "Dashboard",
-                    "summary": "Dashboard extension hub that lets first- and third-party features register launcher tiles, lazy-loaded pages, and capability flags for the retro dashboard. It centralises plugin discovery, page resolution, and in-app navigation state."
+                    "summary": "Dashboard extension hub for launcher tiles, optional app images with Iconify fallbacks, lazy-loaded pages, capability flags, discovery, and navigation state."
                 },
                 {
                     "name": "useDefaultPrompt.md",
@@ -233,7 +233,7 @@
                     "name": "useDocumentAiAgent.md",
                     "path": "/composables/useDocumentAiAgent",
                     "category": "Documents",
-                    "summary": "The Document AI agent turns a prompt into a bounded, reviewable TipTap edit proposal. Its composer supports saved and plugin-contributed / prompt commands, file attachments, and @ references to another document or chat."
+                    "summary": "The Document AI agent turns a prompt into a bounded, reviewable TipTap edit proposal. Its live editor session also exposes the same native tools to chat."
                 },
                 {
                     "name": "useDocumentAiSettings.md",
@@ -263,7 +263,7 @@
                     "name": "useDocumentEditorSessions.md",
                     "path": "/composables/useDocumentEditorSessions",
                     "category": "Core",
-                    "summary": "Registry of active document editor sessions. Editors register themselves per document and workspace, and other code can find them, wait for them, or ask them to capture content."
+                    "summary": "Registry of active document editor sessions. Callers can find an exact tab session, capture live content, or use its chat context and document tool bridge."
                 },
                 {
                     "name": "useDocumentEditorToolbar.md",
@@ -527,7 +527,7 @@
                     "name": "useSidebarPages.md",
                     "path": "/composables/useSidebarPages",
                     "category": "Sidebar",
-                    "summary": "Registry and discovery system for sidebar pages. Manages page registration, provides listing functionality, and handles HMR cleanup for dynamic page management. Think of useSidebarPages as the sidebar's page directory — it tracks all available pages, handle..."
+                    "summary": "Registry and discovery system for sidebar pages, including optional app images with Iconify fallbacks, validation, ordering, and HMR cleanup."
                 },
                 {
                     "name": "useSidebarProjectActionButtonProps.md",
@@ -920,6 +920,12 @@
                     "summary": "UI-level permission checks for actions exposed to plugins. Guards verify that the active plugin holds the required capability before an operation runs, and show a permission-denied toast when it does not."
                 },
                 {
+                    "name": "document-chat-tools.md",
+                    "path": "/utils/document-chat-tools",
+                    "category": "Tools",
+                    "summary": "Chat can create and duplicate documents, search them, read bounded open-tab context, and use the document agent's native tools to stage reviewable edits in a visible editor."
+                },
+                {
                     "name": "errors.md",
                     "path": "/utils/errors",
                     "category": "Error Handling",
@@ -1031,7 +1037,7 @@
                     "name": "plugins.md",
                     "path": "/types/plugins",
                     "category": "Plugins",
-                    "summary": "Reference for the TypeScript types that plugins use to talk to the OR3 host. Covers the client-side pane plugin API, the access gate policy used by every plugin contribution, and the ambient declaration files in types/ that wire plugin-facing modules into t..."
+                    "summary": "Reference for plugin-facing TypeScript types, including the pane plugin API, access gate policy, theme declarations, and the bundled plugin catalog declaration in shared/plugins/."
                 }
             ]
         },
@@ -1044,6 +1050,12 @@
                     "path": "/themes/api-reference",
                     "category": "Reference",
                     "summary": "Reference for the current OR3 theme system API, types, and tooling."
+                },
+                {
+                    "name": "app-modal.md",
+                    "path": "/themes/app-modal",
+                    "category": "Reference",
+                    "summary": "Shared dialog shell with three sizes, consistent headers and footers, theme-owned surface tokens, and compact Dashboard launcher cards."
                 },
                 {
                     "name": "architecture.md",
@@ -1133,7 +1145,7 @@
                     "name": "background-execution.md",
                     "path": "/cloud/background-execution",
                     "category": "Architecture",
-                    "summary": "OR3 supports SSR background jobs for chat streaming, tool execution, and workflows so work can continue when the user detaches or navigates away. This document covers the implementation currently wired in:"
+                    "summary": "OR3 supports SSR background jobs for chat streaming, mixed server/browser tool execution, and workflows so work can continue when the user detaches or navigates away."
                 },
                 {
                     "name": "capability-matrix.md",
@@ -1229,7 +1241,7 @@
                     "name": "provider-convex.md",
                     "path": "/cloud/provider-convex",
                     "category": "Guide",
-                    "summary": "Dedicated install and wiring guide for the Convex sync/storage/backend provider package, including the typed generic-file compatibility boundary."
+                    "summary": "Dedicated install and wiring guide for the Convex sync/storage/backend provider package, including the typed generic-file compatibility boundary and private host-settings storage with legacy migration."
                 },
                 {
                     "name": "provider-fs.md",
@@ -1253,7 +1265,7 @@
                     "name": "providers.md",
                     "path": "/cloud/providers",
                     "category": "Guide",
-                    "summary": "This guide covers how OR3 discovers provider packages, how to install them, and how the Clerk to Convex token bridge works. For normal local or VPS operation, use the managed @or3/cloud operator. For editable source or custom providers, use the"
+                    "summary": "Provider discovery, installation, automatic sibling builds in dev, explicit fallback warnings, OR3_LOCAL_PROVIDERS opt-out, and the Clerk to Convex token bridge. For normal local or VPS operation, use the managed @or3/cloud operator. For editable source or custom providers, use the"
                 },
                 {
                     "name": "release-checklist.md",
@@ -1331,13 +1343,55 @@
                     "name": "manifest-v2.md",
                     "path": "/plugins/manifest-v2",
                     "category": "Reference",
-                    "summary": "V2 packages ship or3.manifest.json with manifestVersion: 2. The owner-only standard extension install endpoint dispatches a V2 ZIP to the immutable candidate store. After a canary and explicit promotion, an enabled"
+                    "summary": "V2 package manifest, runtime, authority, and immutable asset contract, including bounded static PNG/WebP app icons validated during packing and host admission."
+                },
+                {
+                    "name": "official-products.md",
+                    "path": "/plugins/official-products",
+                    "category": "Guide",
+                    "summary": "Three first-party plugins — Model Compare, Prompt Workbench and Document Utilities — ship as ordinary portable packages: the same SDK, profile, review lane and setup flow as community plugins. Model calls go through the host's governed ai.models/ai.complete capabilities (operator allowlist and prices, plugin-attributed spend, no credential in the plugin), writes happen only through host-rendered actions the user clicks, and the declared first action resolves on the selected document or the package's own sample file."
+                },
+                {
+                    "name": "plugin-development-v2.md",
+                    "path": "/plugins/plugin-development-v2",
+                    "category": "Tutorial",
+                    "summary": "Create a portable V2 plugin with one host command, sign in locally, and see source saves update the real worker preview. Then freeze, verify and qualify an explicit clean candidate for staging review and publication."
                 },
                 {
                     "name": "plugin-sdk.md",
                     "path": "/plugins/plugin-sdk",
                     "category": "Reference",
-                    "summary": "Stable Plugin Runtime V2 authoring surface. Import only this package (or documented subpaths: /manifest, /host, /testing). The package is currently an authoring and compatibility-test surface. OR3's"
+                    "summary": "Stable Plugin Runtime V2 authoring surface with a host-created, typed capability context (AI, UI, panes, commands, chat, workspace, storage, settings, secrets, files, HTTP, network, activity and events). Storage supports snapshot-safe revisions, CAS, deletion-aware pagination, local live-value quotas and a 10,000-name history cap; real-Dexie conformance covers the portable test host. Unqualified namespaces remain explicit unsupported results until production adapters pass review. The package is not yet published to npm; install it from a packed tarball."
+                },
+                {
+                    "name": "plugin-sdk-cli.md",
+                    "path": "/plugins/plugin-sdk-cli",
+                    "category": "Reference",
+                    "summary": "Use bun run dev:plugin --create from an OR3 Chat checkout, then bun run dev in the new portable plugin for live development. The unpublished SDK is packed locally; its standalone CLI also validates, builds and freezes explicit immutable candidates for review."
+                },
+                {
+                    "name": "portable-profile.md",
+                    "path": "/plugins/portable-profile",
+                    "category": "Reference",
+                    "summary": "Portable authoring descriptors and isolated browser-only packages, plus the or3-portable-workspace-v1 sidebar, workspace tab, theme-aware 860px content layout, independently scrolling inspector and mobile slide-out, bounded live field actions and permission-gated chat tools grouped by reviewed plugin name in a dedicated chat settings subview."
+                },
+                {
+                    "name": "connections.md",
+                    "path": "/plugins/connections",
+                    "category": "Reference",
+                    "summary": "Connect a plugin to an external service without giving it your credential: AES-256-GCM storage with the key outside the database, opaque orc_ references, owner-scoped listing and resolution, an operation allowlist intersected with the release's own approved operations and destinations, exact-origin and segment-bounded path checks, host-minted approvals for external/commercial/destructive operations, credential injection after every check, no redirect forwarding, bounded response reads with allowlisted headers and recursive secret refusal, same-origin mutation guards, setup tests restricted to read-only idempotent operations and bound to the connection revision, and the one supported provider (OpenRouter) whose paid completion is routed through the governed AI capability."
+                },
+                {
+                    "name": "portable-containment-and-setup.md",
+                    "path": "/plugins/portable-containment-and-setup",
+                    "category": "Reference",
+                    "summary": "What the portable client sandbox can and cannot reach (parent DOM, cookies, web storage, IndexedDB, fetch/WebSocket/imports/nested workers, navigation) proved by an uncontained control worker against reachable targets, the measured wire bounds and UTF-8-bounded AI spend reservations, mandatory host-minted session binding stamped by the frame shim with generation invalidation, the granted-capability registry and authenticated server capability bridge, the host-rendered UI primitives with workspace-scoped draft retention and activation-bound replies, grant revocation of in-flight calls, and markdown sanitizer with validated ui.render/ui.contribute events, effective-authority hashing with release-bound consent, action approvals that only the host UI can mint so AI cannot authorize purchases or destructive writes, and how host-generated setup reaches a first useful action."
+                },
+                {
+                    "name": "selected-document-utility.md",
+                    "path": "/plugins/selected-document-utility",
+                    "category": "Tutorial",
+                    "summary": "A complete free selected-document utility example: one host-mediated summarize command, a committed first-action fixture, a generated authoring profile, and a pinned Bun test container with a documented sample workspace."
                 },
                 {
                     "name": "runtime-v2-overview.md",
@@ -1348,14 +1402,38 @@
                 {
                     "name": "trust-and-safe-mode.md",
                     "path": "/plugins/trust-and-safe-mode",
-                    "category": "Operations",
-                    "summary": "# Trust Model and Safe Mode"
+                    "category": "Reference",
+                    "summary": "Package pointer rollback runs on the server promotion service and is gated by state preflight. A successful code rollback does not claim incompatible migrated state was restored. Disable, uninstall, GC, and data deletion remain separate."
+                },
+                {
+                    "name": "trusted-acquisition.md",
+                    "path": "/plugins/trusted-acquisition",
+                    "category": "Reference",
+                    "summary": "Reviewed acquisition installs a package published and signed by a configured marketplace registry. It refuses arbitrary package URLs, verifies signed metadata, archive and canonical tree digests before any pointer changes, enforces the signed checkpoint's monotonic security revision (rollback, equivocation and replay are refused), and preflights every enabled workspace for an instance-wide update. Existing access approvals carry forward; expanded access takes one deployment-wide administrator approval, and blocked candidates leave the current version selected. Runner leases retain live ownership and cancellation preserves committed stage evidence; interrupted work is explicitly resumable."
+                },
+                {
+                    "name": "marketplace.md",
+                    "path": "/plugins/marketplace",
+                    "category": "Guide",
+                    "summary": "Native paged discovery, signed authority consent, resumable acquisition, and update checks with instance version pins and linked Library coverage. A single selected code version serves enabled workspaces; expanded access takes deployment-wide approval and each affected workspace can complete candidate setup. Blocked updates preserve the selected version. Installed management honors a separate system-admin session. Running status uses exact digests and browser activation confirmation. Includes portable Open behavior, local candidate development, submission recovery, and digest-bound uninstall confirmation."
+                },
+                {
+                    "name": "library.md",
+                    "path": "/plugins/library",
+                    "category": "Guide",
+                    "summary": "Dashboard > Library connects one local user to a marketplace account through bounded pairing. The local server keeps the polling secret and encrypted, user-bound credential; the browser receives only a comparison code and verification link. The 90-day link grants library:read and downloads:acquire, and disconnect stops local use immediately. Linked users see acquired versions and update coverage. Administrators can open exact-version verified installs; ordinary buyers can create credential-free, workspace-bound install requests for administrator review. Account switches clear stale purchases, and installed software keeps running after link loss."
                 },
                 {
                     "name": "v1-support-and-migration.md",
                     "path": "/plugins/v1-support-and-migration",
                     "category": "Guide",
                     "summary": "# V1 Support Policy and V2 Migration"
+                },
+                {
+                    "name": "local-development.md",
+                    "path": "/plugins/local-development",
+                    "category": "Guide",
+                    "summary": "Create a portable plugin and live-edit it in an isolated loopback host with one local sign-in. Saves build, canary and update the real worker view; errors preserve the last package and new permissions get review. Explicit frozen candidates remain the release handoff."
                 }
             ]
         }

@@ -1,0 +1,4 @@
+Remote work expanded quickly, and the tools followed. What began as a way to
+share files became a way to share decisions. The teams that adapted fastest did
+not adopt every new tool; they chose a few, documented why, and revisited those
+choices each quarter.

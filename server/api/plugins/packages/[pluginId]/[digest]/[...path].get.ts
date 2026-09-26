@@ -63,8 +63,9 @@ export default defineEventHandler(async (event) => {
     );
     const selectedPackage = await catalog.readSelected(pluginId);
     if (selectedPackage.status !== 'ready' || !selectedPackage.manifest.runtime.client) {
-        // No V2 client ABI is currently approved. Keep the digest route closed
-        // for server-only packages rather than exposing arbitrary package files.
+        // This route serves the contained client entry tree. A server-only
+        // package has no client assets, and an inactive package has nothing
+        // selected, so neither is served here.
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });
     }
 
@@ -95,6 +96,7 @@ export default defineEventHandler(async (event) => {
                     event,
                     workspaceId,
                     settingsStore,
+                    enabledPluginIds: enabled,
                     selectedPackages: (await catalog.listSelected()).filter(
                         (entry): entry is Extract<typeof entry, { status: 'ready' }> =>
                             entry.status === 'ready'

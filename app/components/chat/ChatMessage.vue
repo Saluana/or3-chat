@@ -169,9 +169,8 @@
                         props.message.reasoning_text
                     "
                 >
-                    <LazyChatReasoningAccordion
+                    <ReasoningAccordion
                         class="reasoning-accordion"
-                        hydrate-on-visible
                         :content="props.message.reasoning_text"
                         :streaming="isStreamingReasoning as boolean"
                         :pending="props.message.pending === true"
@@ -338,6 +337,7 @@
                         <UButton
                             v-bind="retryButtonProps"
                             aria-label="Retry message"
+                            :disabled="props.retryDisabled"
                             @click="onRetry"
                         ></UButton>
                     </UTooltip>
@@ -417,6 +417,7 @@ import type {
 } from '~/utils/chat/uiMessages';
 import type { ChatMessageAction } from '~/composables/chat/useMessageActions';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
+import ReasoningAccordion from './ReasoningAccordion.vue';
 import { useRafFn, useClipboard } from '@vueuse/core';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
@@ -436,6 +437,7 @@ const props = withDefaults(
         message: MessageWithUiState;
         threadId?: string;
         interactive?: boolean;
+        retryDisabled?: boolean;
     }>(),
     { interactive: true },
 );
@@ -952,6 +954,7 @@ function copyMessage() {
 }
 
 function onRetry() {
+    if (props.retryDisabled) return;
     const id = props.message.id;
     if (!id) return;
     emit('retry', id);

@@ -3,12 +3,12 @@
  *
  * Purpose:
  * Implements message retry functionality for the AI chat system. Handles the
- * deletion and re-submission of user-assistant message pairs while preserving
+ * replacement and re-submission of user-assistant message pairs while preserving
  * message context (attachments, reasoning, file hashes).
  *
  * Responsibilities:
  * - Locate the user message associated with a retry target
- * - Delete existing user/assistant message pairs from IndexedDB
+ * - Supersede only the selected turn after the retry is durably accepted
  * - Synchronize in-memory message arrays with database state
  * - Re-send user message with optional model override
  * - Emit lifecycle hooks for plugin observation
@@ -25,14 +25,14 @@
  *
  * Invariants:
  * - User message must exist and belong to current thread
- * - Database transactions are atomic (rw on messages table)
- * - In-memory arrays are synchronized before deletion
+ * - Later turns remain in context and in the conversation
+ * - In-memory arrays are restored if the resend is rejected
  */
 
 import type { Ref } from 'vue';
 import type { ChatMessage, ContentPart, SendMessageParams, SendResult } from '~/utils/chat/types';
 import { hasDurableSendAcceptance } from '~/utils/chat/types';
-import { SUPERSEDED_BY_KEY } from '~/utils/chat/transcript';
+import { SUPERSEDED_BY_KEY, isSupersededMessage } from '~/utils/chat/transcript';
 import { updateMessageRecord } from './persistence';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { getDb } from '~/db/client';
@@ -131,17 +131,17 @@ const extractUserText = (originalText: unknown): string => {
  * `ai.chat.retry:action:*` (action)
  *
  * Purpose:
- * Retries a message by deleting the existing user-assistant pair and re-sending
- * the user message. Preserves file attachments and supports model override.
+ * Retries a message by moving its user-assistant turn to the bottom. The old
+ * turn is superseded only after the replacement user row is durable.
  *
  * Behavior:
  * 1. Validates loading state and thread context
  * 2. Locates target message and associated user message
  * 3. Synchronizes in-memory state with IndexedDB if needed
  * 4. Emits `ai.chat.retry:action:before` hook
- * 5. Atomically deletes user and assistant messages
- * 6. Updates in-memory message arrays
- * 7. Re-sends user message via sendMessage callback
+ * 5. Optimistically hides only the selected turn
+ * 6. Re-sends the user message with all other turns as context
+ * 7. Supersedes the old turn after the new user row is durable
  * 8. Emits `ai.chat.retry:action:after` hook with new message IDs
  *
  * Hook Payloads:
@@ -180,7 +180,7 @@ const extractUserText = (originalText: unknown): string => {
  * Non-Goals:
  * - Does not validate model override against available models
  * - Does not persist retry history for analytics
- * - Does not handle partial failures (atomic deletion only)
+ * - Does not hard-delete rows; synced histories retain superseded records
  *
  * @example
  * ```ts
@@ -210,15 +210,17 @@ export async function retryMessageImpl(
     if (ctx.loading.value || !ctx.threadIdRef.value) return undefined;
 
     try {
-        const target = await getDb().messages.get(messageId);
-        if (!target || target.thread_id !== ctx.threadIdRef.value) return undefined;
+        const db = getDb();
+        const threadId = ctx.threadIdRef.value;
+        const target = await db.messages.get(messageId);
+        if (!target || target.thread_id !== threadId) return undefined;
 
         const dbMessages =
-            ((await messagesByThread(ctx.threadIdRef.value)) as
+            ((await messagesByThread(threadId, db)) as
                 | StoredMessage[]
                 | undefined) || [];
         const ordered = dbMessages
-            .filter((message) => !message.deleted)
+            .filter((message) => !message.deleted && !isSupersededMessage(message))
             .sort(compareMessageOrder);
 
         // Pair turns by persisted turn relationship first; fall back to
@@ -227,6 +229,7 @@ export async function retryMessageImpl(
         // which `ordered` already reflects.
         const positionById = new Map(ordered.map((message, position) => [message.id, position]));
         const targetPos = positionById.get(target.id) ?? -1;
+        if (targetPos < 0) return undefined;
 
         let userMsg = target.role === 'user' ? target : undefined;
         if (!userMsg && target.role === 'assistant') {
@@ -247,7 +250,7 @@ export async function retryMessageImpl(
                             (positionById.get(message.id) ?? -1) < targetPos
                     );
         }
-        if (!userMsg) return undefined;
+        if (!userMsg || ctx.threadIdRef.value !== threadId) return undefined;
 
         const userPos = positionById.get(userMsg.id) ?? -1;
         const userTurnId = turnIdOf(userMsg as StoredMessage);
@@ -265,27 +268,26 @@ export async function retryMessageImpl(
                 (nextUserPosition === undefined || pos < nextUserPosition)
             );
         };
+        const selectedTurn = ordered.filter((message) => {
+            if (message.id === userMsg.id) return true;
+            if (message.role === 'user' || message.role === 'system') return false;
+            const parentTurnId = parentTurnIdOf(message as StoredMessage);
+            return parentTurnId ? parentTurnId === userTurnId : inTurn(message as StoredMessage);
+        });
+        const selectedIds = new Set(selectedTurn.map((message) => message.id));
         const assistant =
-            ordered.find(
-                (message) =>
-                    message.role === 'assistant' &&
-                    inTurn(message as StoredMessage) &&
-                    parentTurnIdOf(message as StoredMessage) === userTurnId
-            ) ??
-            ordered.find(
-                (message) =>
-                    message.role === 'assistant' &&
-                    inTurn(message as StoredMessage)
-            );
+            target.role === 'assistant'
+                ? target
+                : selectedTurn.find((message) => message.role === 'assistant');
 
         await ctx.hooks.doAction('ai.chat.retry:action:before', {
-            threadId: ctx.threadIdRef.value,
+            threadId,
             originalUserId: userMsg.id,
             originalAssistantId: assistant?.id,
             triggeredBy: target.role as 'user' | 'assistant',
         });
 
-        // Store original text and hashes before deletion.
+        // Store original text and hashes before hiding the selected turn.
         // extractUserText handles both string content and ContentPart[] arrays,
         // so pass the raw content source rather than a collapsed string fallback.
         const userContent = (userMsg as StoredMessage).content;
@@ -338,103 +340,58 @@ export async function retryMessageImpl(
             };
         };
 
-        // Build a branch prefix ending immediately before the selected user turn.
-        // This retains complete earlier tool rows while excluding the selected
-        // response and every later turn from provider context. Positions in the
-        // canonically ordered array define the boundary, not numeric indexes.
-        const retryHistory = ordered
-            .filter((message) => (positionById.get(message.id) ?? -1) < userPos)
-            .map(toChatMessage);
+        const toUiMessages = (rows: StoredMessage[]) =>
+            rows
+                .filter((message) => message.role !== 'tool')
+                .map((message) => ensureUiMessage(toChatMessage(message)));
+        const originalHistory = ordered.map(toChatMessage);
+        const originalUi = toUiMessages(ordered);
+        const retainedRows = ordered.filter((message) => !selectedIds.has(message.id));
+        // The retry is a new turn at the end. Keep every unrelated turn in
+        // both the visible conversation and the provider's model context.
+        const retryHistory = retainedRows.map(toChatMessage);
+        ctx.rawMessages.value = retryHistory;
+        ctx.messages.value = toUiMessages(retainedRows);
+        const previousTail = ctx.tailAssistant.value;
+        if (previousTail && selectedIds.has(previousTail.id)) {
+            ctx.tailAssistant.value = null;
+        }
 
-        ctx.rawMessages.value = ordered.map(toChatMessage);
+        const restoreOriginalTurn = () => {
+            if (ctx.threadIdRef.value !== threadId) return;
+            ctx.rawMessages.value = originalHistory;
+            ctx.messages.value = originalUi;
+            if (previousTail && selectedIds.has(previousTail.id)) {
+                ctx.tailAssistant.value = previousTail;
+            }
+        };
 
-        const uiMessages = dbMessages.filter((m) => m.role !== 'tool');
-        ctx.messages.value = uiMessages.map((m) => {
-            const normalized = normalizeStreamingMessage({
-                content: m.content,
-                reasoning_text: m.reasoning_text,
-                data: m.data,
-            });
-            return ensureUiMessage({
-                role: m.role as 'user' | 'assistant' | 'system' | 'tool',
-                content: normalized.text,
-                id: m.id,
-                stream_id: m.stream_id ?? undefined,
-                file_hashes: m.file_hashes ?? undefined,
-                reasoning_text: normalized.reasoningText,
-                error: m.error ?? null,
-                data: m.data
-                    ? {
-                          ...m.data,
-                          tool_calls: m.data.tool_calls ?? undefined,
-                      }
-                    : m.data,
-                index:
-                    typeof m.index === 'number'
-                        ? m.index
-                        : typeof m.index === 'string'
-                        ? Number(m.index) || null
-                        : null,
-                created_at: typeof m.created_at === 'number' ? m.created_at : null,
-            });
-        });
-
-        const textToSend = extractUserText(originalTextRaw);
-
-        const result = await ctx.sendMessage(textToSend, {
-            model: modelOverride || ctx.defaultModelId,
-            file_hashes: hashes,
-            files: [],
-            online: false,
-            historyOverride: retryHistory,
-        });
-
-        // Durable branch boundary: the resend replaces the selected turn and
-        // every later turn. Mark those rows superseded so later sends and
-        // reloads reconstruct only the selected branch; the rows themselves
-        // are preserved. The transient historyOverride only shaped this send.
-        let supersededIds: string[] = [];
-        if (
-            hasDurableSendAcceptance(result) &&
-            'userMessageId' in result &&
-            result.userMessageId
-        ) {
-            const newAssistantId =
-                'assistantMessageId' in result
-                    ? result.assistantMessageId
-                    : undefined;
-            const newIds = new Set(
-                [result.userMessageId, newAssistantId].filter(
-                    (id): id is string => typeof id === 'string'
-                )
-            );
-            const replaced = ordered.filter(
-                (message) =>
-                    (positionById.get(message.id) ?? -1) >= userPos &&
-                    !newIds.has(message.id)
-            );
-            const db = getDb();
-            for (const row of replaced) {
+        const supersededIds: string[] = [];
+        const marked = new Set<string>();
+        const markSelectedTurn = async (newUserId: string) => {
+            for (const row of selectedTurn) {
+                if (marked.has(row.id)) continue;
                 try {
                     await updateMessageRecord(
                         db,
                         row.id,
                         {
                             data: {
-                                [SUPERSEDED_BY_KEY]: result.userMessageId,
+                                [SUPERSEDED_BY_KEY]: newUserId,
                                 generation_state: 'superseded',
                             },
                         },
                         row as StoredMessage
                     );
+                    marked.add(row.id);
                     supersededIds.push(row.id);
                 } catch (markError) {
                     reportError(
                         markError instanceof Error
                             ? markError
                             : err('ERR_INTERNAL', '[retryMessage] supersede failed', {
-                                    tags: { domain: 'chat', op: 'retryMessage' },
-                                }),
+                                  tags: { domain: 'chat', op: 'retryMessage' },
+                              }),
                         {
                             code: 'ERR_INTERNAL',
                             tags: { domain: 'chat', op: 'retryMessage' },
@@ -442,35 +399,61 @@ export async function retryMessageImpl(
                     );
                 }
             }
-            if (supersededIds.length > 0) {
-                const superseded = new Set(supersededIds);
-                ctx.rawMessages.value = ctx.rawMessages.value.filter(
-                    (message) => !message.id || !superseded.has(message.id)
-                );
-                ctx.messages.value = ctx.messages.value.filter(
-                    (message) => !superseded.has(message.id)
-                );
-                if (
-                    ctx.tailAssistant.value &&
-                    superseded.has(ctx.tailAssistant.value.id)
-                ) {
-                    ctx.tailAssistant.value = null;
-                }
-            }
+        };
+
+        const textToSend = extractUserText(originalTextRaw);
+
+        let result: SendResult;
+        try {
+            result = await ctx.sendMessage(textToSend, {
+                model: modelOverride || ctx.defaultModelId,
+                file_hashes: hashes,
+                files: [],
+                online: false,
+                historyOverride: retryHistory,
+                onUserPersisted: markSelectedTurn,
+            });
+        } catch (sendError) {
+            restoreOriginalTurn();
+            throw sendError;
+        }
+
+        if (hasDurableSendAcceptance(result) && 'userMessageId' in result && result.userMessageId) {
+            // Also cover send implementations that return a durable ID without
+            // invoking the early callback, and retry any failed row patches.
+            await markSelectedTurn(result.userMessageId);
+        } else {
+            restoreOriginalTurn();
         }
 
         if ('userMessageId' in result && result.userMessageId) {
-            await ctx.hooks.doAction('ai.chat.retry:action:after', {
-                threadId: ctx.threadIdRef.value,
-                originalUserId: userMsg.id,
-                originalAssistantId: assistant?.id,
-                newUserId: result.userMessageId,
-                newAssistantId:
-                    'assistantMessageId' in result
-                        ? result.assistantMessageId
-                        : undefined,
-                supersededIds,
-            });
+            try {
+                await ctx.hooks.doAction('ai.chat.retry:action:after', {
+                    threadId,
+                    originalUserId: userMsg.id,
+                    originalAssistantId: assistant?.id,
+                    newUserId: result.userMessageId,
+                    newAssistantId:
+                        'assistantMessageId' in result
+                            ? result.assistantMessageId
+                            : undefined,
+                    supersededIds,
+                });
+            } catch (hookError) {
+                // A plugin failure cannot undo an accepted retry. Return the
+                // durable result so the UI never reports a false no-op.
+                reportError(
+                    hookError instanceof Error
+                        ? hookError
+                        : err('ERR_INTERNAL', '[retryMessage] after hook failed', {
+                              tags: { domain: 'chat', op: 'retryMessage' },
+                          }),
+                    {
+                        code: 'ERR_INTERNAL',
+                        tags: { domain: 'chat', op: 'retryMessage' },
+                    }
+                );
+            }
         }
         return result;
     } catch (e) {

@@ -13,6 +13,7 @@ import {
     getDefaultReasoningEffort,
     getSupportedReasoningEfforts,
     modelSupportsReasoning,
+    OPENROUTER_REASONING_EFFORTS,
     type OpenRouterReasoningEffort,
 } from '~~/shared/openrouter/reasoning';
 import type { OpenRouterModel } from '~~/shared/openrouter/types';
@@ -21,7 +22,7 @@ import {
     type OpenRouterModelVariant,
 } from '~~/shared/openrouter/model-variants';
 
-const DEFAULT_MODEL = 'openai/gpt-oss-120b';
+const DEFAULT_MODEL = '~openai/gpt-luna-latest';
 const LAST_MODEL_KEY = 'last_selected_model';
 
 function stripThinkingSuffix(modelId: string): string {
@@ -51,7 +52,7 @@ export function useChatModelSelection(options: {
     const { settings } = useAiSettings();
     const selectedModel = ref(DEFAULT_MODEL);
     const modelVariant = ref<OpenRouterModelVariant>(DEFAULT_MODEL_VARIANT);
-    const thinkingEnabled = ref(false);
+    const thinkingEnabled = ref(true);
     const reasoningEffort = ref<string>();
     const persistedModel = useLocalStorage(LAST_MODEL_KEY, DEFAULT_MODEL);
     const suppressNextPersist = ref(false);
@@ -118,9 +119,6 @@ export function useChatModelSelection(options: {
     }
 
     watch(options.threadId, applyNewChatDefault);
-    watch(modelSupportsThinking, (supported) => {
-        if (!supported) thinkingEnabled.value = false;
-    });
     watch(
         [selectedModelMeta, modelReasoningEfforts],
         ([model, efforts]) => {
@@ -136,7 +134,15 @@ export function useChatModelSelection(options: {
             ) {
                 return;
             }
-            reasoningEffort.value = getDefaultReasoningEffort(model);
+            const orderedEfforts = [...efforts].sort(
+                (a, b) =>
+                    OPENROUTER_REASONING_EFFORTS.indexOf(a) -
+                    OPENROUTER_REASONING_EFFORTS.indexOf(b)
+            );
+            reasoningEffort.value = efforts.includes('medium')
+                ? 'medium'
+                : orderedEfforts[Math.floor((orderedEfforts.length - 1) / 2)] ??
+                  getDefaultReasoningEffort(model);
         },
         { immediate: true }
     );

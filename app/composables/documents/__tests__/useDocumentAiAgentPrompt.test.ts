@@ -67,7 +67,7 @@ describe('Document AI model contract', () => {
         });
 
         expect(resolveDocumentAiToolStreamOptions({
-            id: 'openai/gpt-oss-120b',
+            id: '~openai/gpt-luna-latest',
             supported_parameters: ['tools'],
         })).toEqual({
             toolChoice: 'auto',

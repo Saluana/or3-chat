@@ -1,3 +1,4 @@
+import { parseSha256 } from '~~/shared/plugins/digest';
 import { createHash } from 'node:crypto';
 import { defineEventHandler } from 'h3';
 import { useRuntimeConfig } from '#imports';
@@ -17,6 +18,7 @@ import { resolveBundledPluginArtifact } from '../../../shared/plugins/bundled-pl
 import { mergePluginGatePolicy } from '../../../shared/plugins/access-policy';
 import type {
     BundledV1PluginDescriptor,
+    PackageV2ClientEntry,
     PackageV2PluginDescriptor,
     PluginDescriptorIdentity,
 } from '../../../shared/plugins/runtime-descriptor';
@@ -32,6 +34,10 @@ import { createModuleV2RuntimePolicy } from '../../../shared/plugins/module-v2-r
 import type { Or3ExtensionManifestV2 } from '../../admin/extensions/types';
 import { evaluateSelectedPackageRuntimeEligibility } from '../../admin/plugins/package-runtime-eligibility';
 import { OR3_PLUGIN_V2_HOST_CAPABILITIES } from '../../admin/plugins/v2-host-capabilities';
+import {
+    PluginPackageClientEntryError,
+    readPackageClientEntry,
+} from '../../admin/plugins/package-client-entry';
 
 export type { PluginRuntimeManifestResponse } from '../../../shared/plugins/runtime-manifest';
 
@@ -117,8 +123,17 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
         packageCatalog.listSelected(),
     ]);
 
+    // A recorded V2 pointer owns the plugin identity even when it currently
+    // selects nothing (candidate-only or cleared). Such an id must not be
+    // served by the legacy V1 loader with the same id.
+    const v2OwnedPluginIds = new Set(
+        selectedPackageCatalogs.map((catalog) => catalog.pluginId)
+    );
     const installedPlugins = installedExtensions
-        .filter((entry) => entry.kind === 'plugin')
+        .filter(
+            (entry) =>
+                entry.kind === 'plugin' && !v2OwnedPluginIds.has(entry.id)
+        )
         .sort((a, b) => a.id.localeCompare(b.id));
     const bundledV1Plugins = installedPlugins.filter((plugin) => !isLegacyV2Plugin(plugin));
     const legacyV2Plugins = installedPlugins.filter(isLegacyV2Plugin);
@@ -130,11 +145,16 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
         (catalog): catalog is Extract<typeof catalog, { status: 'blocked' }> =>
             catalog.status === 'blocked'
     );
+    const inactivePackageCatalogs = selectedPackageCatalogs.filter(
+        (catalog): catalog is Extract<typeof catalog, { status: 'inactive' }> =>
+            catalog.status === 'inactive'
+    );
     const installedPluginIds = Array.from(
         new Set([
             ...installedPlugins.map((plugin) => plugin.id),
             ...selectedPackages.map((catalog) => catalog.pluginId),
             ...blockedPackageCatalogs.map((catalog) => catalog.pluginId),
+            ...inactivePackageCatalogs.map((catalog) => catalog.pluginId),
         ])
     ).sort((a, b) => a.localeCompare(b));
     const installedSet = new Set(installedPluginIds);
@@ -273,6 +293,19 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
             blockCode: catalog.blockCode,
         };
     }
+    // A candidate-only or cleared pointer is V2-owned but selects nothing to
+    // run. Report it as unavailable rather than letting a legacy directory with
+    // the same id supply a different release.
+    for (const catalog of inactivePackageCatalogs) {
+        runtime[catalog.pluginId] = {
+            hasServerRoutes: false,
+            loadAllowed: false,
+            loadDeniedReason: 'package-inactive',
+            lifecycleCoverage: 'managed-v2',
+            descriptorStatus: 'blocked',
+            blockCode: 'package-inactive',
+        };
+    }
 
     const selectedPackageById = new Map(
         selectedPackages.map((catalog) => [catalog.pluginId, catalog] as const)
@@ -283,6 +316,7 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
         settingsStore,
         selectedPackages,
         packageRuntimeDecision,
+        enabledPluginIds: configuredEnabled,
     });
     const resolvedPackages = await Promise.all(
         packageEligibility.map(async (eligibility) => {
@@ -313,6 +347,33 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
                 };
             }
 
+            // A client package is only executable once the host has hashed the
+            // exact entry bytes it will serve. A missing or unreadable entry is a
+            // block, never a silently absent descriptor.
+            let clientEntryIdentity: PackageV2ClientEntry | undefined;
+            if (manifest.runtime.client) {
+                try {
+                    clientEntryIdentity = await readPackageClientEntry({
+                        pluginId: catalog.pluginId,
+                        packageDigest: catalog.packageDigest,
+                        manifest,
+                    });
+                } catch (error) {
+                    return {
+                        id: catalog.pluginId,
+                        loadAllowed: false,
+                        entry: {
+                            ...base,
+                            descriptorStatus: 'blocked' as const,
+                            blockCode:
+                                error instanceof PluginPackageClientEntryError
+                                    ? ('client-entry-unresolvable' as const)
+                                    : ('client-entry-unavailable' as const),
+                        },
+                    };
+                }
+            }
+
             const identity: PluginDescriptorIdentity = {
                 id: catalog.pluginId,
                 version: manifest.version,
@@ -321,8 +382,24 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
                 source: 'package',
                 trust: manifest.trust,
                 workspaceId,
+                name: manifest.name,
+                ...(manifest.description === undefined
+                    ? {}
+                    : { description: manifest.description }),
+                ...(manifest.icon === undefined
+                    ? {}
+                    : {
+                          icon: {
+                              path: manifest.icon,
+                              mediaType: manifest.icon.toLowerCase().endsWith('.png')
+                                  ? ('image/png' as const)
+                                  : ('image/webp' as const),
+                          },
+                      }),
+                authoritySha256: eligibility.grants.authoritySha256 ? parseSha256(eligibility.grants.authoritySha256) : null,
                 policyRevision: createPluginPolicyRevision(access.effectivePolicy),
                 grantsRevision: eligibility.grantsRevision,
+                effectiveGrants: [...eligibility.grants.approvedGrants],
                 // A descriptor only includes dependencies that passed the same
                 // workspace/request readiness gate as the package itself.
                 resolvedDependencyKeys: eligibility.resolvedDependencyIds.map(
@@ -331,6 +408,7 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
                 artifact: {
                     kind: 'package-v2',
                     packageDigest: catalog.packageDigest,
+                    ...(clientEntryIdentity ? { client: clientEntryIdentity } : {}),
                     serverRoutes: manifest.runtime.server?.routes.map((route) => ({
                         method: route.method,
                         path: route.path,

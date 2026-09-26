@@ -16,6 +16,35 @@ Required concepts:
 - `trust` (`trusted-host` | `isolated-client` | `isolated-server`)
 - `settings.version`, `stateCompatibility` (`version`, `reads`, `rollback`)
 
+## App icon
+
+A V2 plugin may declare a bundled app icon with a package-relative path:
+
+```json
+{
+    "icon": "assets/app-icon.webp"
+}
+```
+
+Icons must be static PNG or WebP files no larger than 128 KiB or 256 × 256
+pixels. Packing and host admission inspect the real bytes and reject missing,
+malformed, animated, oversized, symlinked, or unsafe paths. The host serves an
+accepted icon through the selected package's authorized, digest-addressed asset
+route and uses the normal Iconify plugin icon if the browser cannot load it.
+
+Optimize the image before packing it. The host does not rewrite signed package
+bytes. SVG, data URLs, and remote image URLs are not accepted as manifest icons.
+
+`requestedGrants` is an authority request, not an enable switch. The host
+maintains a qualification registry that ties each grant to concrete mediated
+methods/events and a conformance receipt. The current portable host qualifies
+the existing dashboard, command-palette, settings, storage, model/connection
+and document grants. The SDK also types the next capability families — panes,
+commands, workspace/events, secrets, files, streaming, chat and activity —
+but those entries remain explicitly unqualified until production adapters and
+fixtures exist. A package requesting an unqualified grant is blocked at
+compatibility review.
+
 Parsing dispatches on `manifestVersion ?? 1`. V1 manifests remain valid for legacy workspace packages. V2 validation runs before code import.
 
 Inspect without executing plugin modules:

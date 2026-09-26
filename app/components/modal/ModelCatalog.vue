@@ -1,12 +1,13 @@
 <template>
-    <UModal
-        v-bind="modelCatalogModalProps"
+    <AppModal
+        v-bind="modelCatalogModalOverrides"
         v-model:open="open"
-        :fullscreen="!isWideRow"
+        size="workspace"
+        close-label="Close model catalog"
         title="Model catalog"
         description="Discover and select the best model for your use case"
     >
-        <template #body>
+        <template #default>
             <div class="model-catalog-shell relative flex h-full min-h-0">
                 <!-- Sidebar (desktop) -->
                 <aside
@@ -39,6 +40,7 @@
                                     ref="searchInputRef"
                                     v-model="searchQuery"
                                     v-bind="searchInputProps"
+                                    variant="modal"
                                     class="model-catalog-search-input w-full"
                                     autofocus
                                 >
@@ -384,7 +386,7 @@
                 </Transition>
             </div>
         </template>
-    </UModal>
+    </AppModal>
 </template>
 
 <script setup lang="ts">
@@ -398,7 +400,7 @@ import type { OpenRouterModel } from '~/core/auth/models-service';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
-import { buildThemeOverrideProps } from '~/composables/ui/themeOverrideProps';
+import AppModal from '~/components/ui/AppModal.vue';
 import {
     countByProvider,
     getProviderSlug,
@@ -436,20 +438,6 @@ const modelCatalogModalOverrides = useThemeOverrides({
     context: 'modal',
     identifier: 'modal.model-catalog',
     isNuxtUI: true,
-});
-
-const modelCatalogModalProps = computed(() => {
-    return buildThemeOverrideProps(modelCatalogModalOverrides.value, {
-        baseClass:
-            'max-sm:rounded-none max-sm:border-0 max-sm:shadow-none max-sm:pt-[env(safe-area-inset-top)] sm:border-[length:var(--md-border-width)] sm:border-[color:var(--md-border-color)] w-[100dvw] h-[100dvh] sm:w-[96dvw] sm:h-[92dvh] sm:min-w-[720px]! sm:max-w-[1400px] sm:max-h-[900px] overflow-hidden',
-        baseUi: {
-            header: 'sm:px-5 border-b border-[var(--md-border-color)]',
-            title: 'text-base font-semibold',
-            description: 'text-xs',
-            body: 'p-0! flex-1 min-h-0',
-            footer: 'hidden',
-        },
-    });
 });
 
 const searchInputOverrides = useThemeOverrides({

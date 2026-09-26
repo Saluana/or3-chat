@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ref } from 'vue';
-import type { ChatMessage } from '~/utils/chat/types';
+import type { ChatMessage, SendMessageParams } from '~/utils/chat/types';
 
 const reportErrorSpy = vi.fn();
 const openRouterStreamSpy = vi.fn();
@@ -588,13 +588,13 @@ describe('continue/retry regressions', () => {
 
         expect(dbState.transaction).not.toHaveBeenCalled();
         expect(dbState.messagesDelete).not.toHaveBeenCalled();
-        expect(sendMessageSpy).toHaveBeenCalledWith('retry this', {
+        expect(sendMessageSpy).toHaveBeenCalledWith('retry this', expect.objectContaining({
             model: 'override-model',
             file_hashes: ['h1'],
             files: [],
             online: false,
             historyOverride: [],
-        });
+        }));
         expect(hooksSpy.doAction).toHaveBeenCalledWith(
             'ai.chat.retry:action:before',
             expect.objectContaining({
@@ -656,13 +656,13 @@ describe('continue/retry regressions', () => {
 
         expect(dbState.transaction).not.toHaveBeenCalled();
         expect(dbState.messagesDelete).not.toHaveBeenCalled();
-        expect(sendMessageSpy).toHaveBeenCalledWith('retry solo', {
+        expect(sendMessageSpy).toHaveBeenCalledWith('retry solo', expect.objectContaining({
             model: 'default-model',
             file_hashes: [],
             files: [],
             online: false,
             historyOverride: [],
-        });
+        }));
     });
 
     it('retry extracts text from ContentPart[] user messages', async () => {
@@ -713,13 +713,13 @@ describe('continue/retry regressions', () => {
             'u3'
         );
 
-        expect(sendMessageSpy).toHaveBeenCalledWith('image prompt', {
+        expect(sendMessageSpy).toHaveBeenCalledWith('image prompt', expect.objectContaining({
             model: 'default-model',
             file_hashes: [],
             files: [],
             online: false,
             historyOverride: [],
-        });
+        }));
     });
 
     it('pairs turns by position when rows share a numeric index', async () => {
@@ -803,30 +803,36 @@ describe('continue/retry regressions', () => {
             'a1'
         );
 
-        expect(sendMessageSpy).toHaveBeenCalledWith('first', expect.objectContaining({
-            historyOverride: [],
-        }));
+        expect((sendMessageSpy.mock.calls[0] as unknown as [string, SendMessageParams])[0]).toBe('first');
+        expect((sendMessageSpy.mock.calls[0] as unknown as [string, { historyOverride: ChatMessage[] }])[1].historyOverride.map((message) => message.id)).toEqual(['u2']);
         expect(hooksSpy.doAction).toHaveBeenCalledWith(
             'ai.chat.retry:action:before',
             expect.objectContaining({ originalUserId: 'u1' })
         );
     });
 
-    it('marks the replaced turn and future turns superseded after a durable resend', async () => {
+    it('moves only the selected turn to the bottom and preserves later turns', async () => {
         const rows = [
             { id: 'u0', role: 'user', thread_id: 't1', index: 1, data: { content: 'first' }, deleted: false },
             { id: 'a0', role: 'assistant', thread_id: 't1', index: 2, data: { content: 'answering' }, deleted: false },
             { id: 'u1', role: 'user', thread_id: 't1', index: 3, data: { content: 'retry me' }, deleted: false },
             { id: 'a1', role: 'assistant', thread_id: 't1', index: 4, data: { content: 'old' }, deleted: false },
             { id: 'u2', role: 'user', thread_id: 't1', index: 5, data: { content: 'future' }, deleted: false },
+            { id: 'a2', role: 'assistant', thread_id: 't1', index: 6, data: { content: 'future answer' }, deleted: false },
         ];
         dbState.messagesGet.mockResolvedValue(rows[2]);
         messagesByThreadSpy.mockResolvedValue(rows);
         parseFileHashesSpy.mockReturnValue([]);
-        const sendMessageSpy = vi.fn(async () => ({
-            status: 'complete' as const, requestId: 'retry-7',
-            userMessageId: 'u1-new', assistantMessageId: 'a1-new',
-        }));
+        const sendMessageSpy = vi.fn(async (_text: string, params: SendMessageParams) => {
+            expect(params.historyOverride?.map((message) => message.id)).toEqual(['u0', 'a0', 'u2', 'a2']);
+            expect(rawMessages.value.map((message: { id: string }) => message.id)).toEqual(['u0', 'a0', 'u2', 'a2']);
+            await params.onUserPersisted?.('u1-new');
+            expect(updateMessageRecordSpy.mock.calls.map((call) => call[1]).sort()).toEqual(['a1', 'u1']);
+            return {
+                status: 'complete' as const, requestId: 'retry-7',
+                userMessageId: 'u1-new', assistantMessageId: 'a1-new',
+            };
+        });
         const hooksSpy = { doAction: vi.fn(async () => {}) };
         const rawMessages = ref([]) as any;
         const messages = ref([]) as any;
@@ -843,21 +849,50 @@ describe('continue/retry regressions', () => {
         );
 
         const markedIds = updateMessageRecordSpy.mock.calls.map((call) => call[1] as string).sort();
-        expect(markedIds).toEqual(['a1', 'u1', 'u2']);
+        expect(markedIds).toEqual(['a1', 'u1']);
         for (const call of updateMessageRecordSpy.mock.calls) {
             expect(call[2]).toMatchObject({
                 data: expect.objectContaining({ superseded_by: 'u1-new' }),
             });
         }
-        // In-memory projections drop the replaced branch; the prefix survives.
-        expect(rawMessages.value.map((m: { id: string }) => m.id).sort()).toEqual(['a0', 'u0']);
+        expect(rawMessages.value.map((m: { id: string }) => m.id)).toEqual(['u0', 'a0', 'u2', 'a2']);
         expect(hooksSpy.doAction).toHaveBeenCalledWith(
             'ai.chat.retry:action:after',
-            expect.objectContaining({ supersededIds: ['u1', 'a1', 'u2'] })
+            expect.objectContaining({ supersededIds: ['u1', 'a1'] })
         );
     });
 
-    it('keeps earlier tool rows and excludes the selected and future turns', async () => {
+    it('returns the accepted retry even if a plugin after hook fails', async () => {
+        const rows = [
+            { id: 'u1', role: 'user', thread_id: 't1', index: 1, data: { content: 'retry me' }, deleted: false },
+            { id: 'a1', role: 'assistant', thread_id: 't1', index: 2, data: { content: 'old' }, deleted: false },
+        ];
+        dbState.messagesGet.mockResolvedValue(rows[0]);
+        messagesByThreadSpy.mockResolvedValue(rows);
+        parseFileHashesSpy.mockReturnValue([]);
+        const accepted = { status: 'complete' as const, requestId: 'retry-accepted', userMessageId: 'u2', assistantMessageId: 'a2' };
+        const hooks = {
+            doAction: vi.fn(async (name: string) => {
+                if (name === 'ai.chat.retry:action:after') throw new Error('plugin failed');
+            }),
+        };
+
+        const result = await retryMessageImpl(
+            {
+                loading: ref(false), threadIdRef: ref('t1'), tailAssistant: ref(null),
+                rawMessages: ref([]), messages: ref([]), hooks,
+                sendMessage: vi.fn(async () => accepted), defaultModelId: 'model',
+                suppressNextTailFlush: vi.fn(),
+            },
+            'u1'
+        );
+
+        expect(result).toEqual(accepted);
+        expect(updateMessageRecordSpy.mock.calls.map((call) => call[1]).sort()).toEqual(['a1', 'u1']);
+        expect(reportErrorSpy).toHaveBeenCalledWith(expect.any(Error), expect.anything());
+    });
+
+    it('keeps later tool rows in context and restores the selected pair if resend is rejected', async () => {
         const rows = [
             { id: 'u0', role: 'user', thread_id: 't1', index: 1, data: { content: 'first' }, deleted: false },
             { id: 'a0', role: 'assistant', thread_id: 't1', index: 2, data: { content: 'calling', tool_calls: [{ id: 'c1' }] }, deleted: false },
@@ -865,16 +900,20 @@ describe('continue/retry regressions', () => {
             { id: 'u1', role: 'user', thread_id: 't1', index: 4, data: { content: 'retry me' }, deleted: false },
             { id: 'a1', role: 'assistant', thread_id: 't1', index: 5, data: { content: 'old' }, deleted: false },
             { id: 'u2', role: 'user', thread_id: 't1', index: 6, data: { content: 'future' }, deleted: false },
+            { id: 'a2', role: 'assistant', thread_id: 't1', index: 7, data: { content: 'future answer' }, deleted: false },
+            { id: 'tool2', role: 'tool', thread_id: 't1', index: 8, data: { content: 'future result', tool_call_id: 'c2', tool_name: 'lookup' }, deleted: false },
         ];
         dbState.messagesGet.mockResolvedValue(rows[4]);
         messagesByThreadSpy.mockResolvedValue(rows);
         parseFileHashesSpy.mockReturnValue([]);
         const sendMessageSpy = vi.fn(async () => ({ status: 'rejected' as const, requestId: 'retry-4', reason: 'filtered' as const }));
 
+        const rawMessages = ref([]) as any;
+        const messages = ref([]) as any;
         const result = await retryMessageImpl(
             {
                 loading: ref(false), threadIdRef: ref('t1'), tailAssistant: ref(null),
-                rawMessages: ref([]), messages: ref([]),
+                rawMessages, messages,
                 hooks: { doAction: vi.fn(async () => {}) },
                 sendMessage: sendMessageSpy, defaultModelId: 'model',
                 suppressNextTailFlush: vi.fn(),
@@ -888,8 +927,43 @@ describe('continue/retry regressions', () => {
             { historyOverride?: ChatMessage[] },
         ];
         const history = sendCall[1].historyOverride;
-        expect(history?.map((message: ChatMessage) => message.id)).toEqual(['u0', 'a0', 'tool0']);
+        expect(history?.map((message: ChatMessage) => message.id)).toEqual(['u0', 'a0', 'tool0', 'u2', 'a2', 'tool2']);
         expect(history?.[2]).toMatchObject({ role: 'tool', tool_call_id: 'c1', name: 'lookup' });
+        expect(rawMessages.value.map((message: { id: string }) => message.id)).toEqual(rows.map((row) => row.id));
+        expect(messages.value.map((message: { id: string }) => message.id)).toEqual(rows.filter((row) => row.role !== 'tool').map((row) => row.id));
+        expect(updateMessageRecordSpy).not.toHaveBeenCalled();
         expect(dbState.messagesDelete).not.toHaveBeenCalled();
+    });
+
+    it('excludes previously superseded rows and removes tool results owned by the retried turn', async () => {
+        const rows = [
+            { id: 'u-old', role: 'user', thread_id: 't1', index: 1, data: { content: 'old retry', superseded_by: 'u1' }, deleted: false },
+            { id: 'u1', role: 'user', thread_id: 't1', index: 2, data: { content: 'retry me', turn_id: 'turn-1' }, deleted: false },
+            { id: 'a1', role: 'assistant', thread_id: 't1', index: 3, data: { content: 'calling', parent_turn_id: 'turn-1' }, deleted: false },
+            { id: 'tool1', role: 'tool', thread_id: 't1', index: 4, data: { content: 'result', parent_turn_id: 'turn-1' }, deleted: false },
+            { id: 'u2', role: 'user', thread_id: 't1', index: 5, data: { content: 'keep me' }, deleted: false },
+        ];
+        dbState.messagesGet.mockResolvedValue(rows[1]);
+        messagesByThreadSpy.mockResolvedValue(rows);
+        parseFileHashesSpy.mockReturnValue([]);
+        const sendMessageSpy = vi.fn(async () => ({
+            status: 'complete' as const, requestId: 'retry-8',
+            userMessageId: 'u1-new', assistantMessageId: 'a1-new',
+        }));
+
+        await retryMessageImpl(
+            {
+                loading: ref(false), threadIdRef: ref('t1'), tailAssistant: ref(null),
+                rawMessages: ref([]), messages: ref([]),
+                hooks: { doAction: vi.fn(async () => {}) },
+                sendMessage: sendMessageSpy, defaultModelId: 'model',
+                suppressNextTailFlush: vi.fn(),
+            },
+            'u1'
+        );
+
+        const history = (sendMessageSpy.mock.calls[0] as unknown as [string, { historyOverride: ChatMessage[] }])[1].historyOverride;
+        expect(history.map((message) => message.id)).toEqual(['u2']);
+        expect(updateMessageRecordSpy.mock.calls.map((call) => call[1]).sort()).toEqual(['a1', 'tool1', 'u1']);
     });
 });

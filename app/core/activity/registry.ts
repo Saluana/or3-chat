@@ -137,6 +137,21 @@ function normalizeDetail(
 
 export class ActivityRegistry {
     readonly #sources = new Map<string, OwnedActivitySource>();
+    /**
+     * Live subscription legs per source id. Removing a source (unregister or
+     * registration disposal) stops its legs so retained callbacks cannot keep
+     * delivering stale activity after teardown or id reuse.
+     */
+    readonly #liveLegs = new Map<string, Set<() => void>>();
+    readonly #sourceTimeoutMs: number;
+
+    constructor(options: { readonly sourceTimeoutMs?: number } = {}) {
+        const timeout = options.sourceTimeoutMs ?? 10_000;
+        this.#sourceTimeoutMs =
+            typeof timeout === 'number' && Number.isFinite(timeout) && timeout > 0
+                ? timeout
+                : 10_000;
+    }
 
     register(source: ActivitySource): RegistrationHandle {
         const parsed = ActivitySourceIdentitySchema.safeParse(source);
@@ -162,16 +177,36 @@ export class ActivityRegistry {
             id: source.id,
             owner,
             isCurrent: () => this.#sources.get(source.id)?.owner === owner,
-            remove: () => {
-                if (this.#sources.get(source.id)?.owner === owner) {
-                    this.#sources.delete(source.id);
-                }
-            },
+            remove: () => this.#removeSource(source.id, owner),
         });
     }
 
     unregister(sourceId: string): boolean {
-        return this.#sources.delete(sourceId);
+        return this.#removeSource(sourceId);
+    }
+
+    /**
+     * Remove a source and stop every live subscription leg bound to it.
+     * Late callbacks from a removed registration are dropped by the
+     * owner guard in `subscribe()` even if a source keeps a stale closure.
+     */
+    #removeSource(sourceId: string, owner?: symbol): boolean {
+        const current = this.#sources.get(sourceId);
+        if (!current) return false;
+        if (owner !== undefined && current.owner !== owner) return false;
+        this.#sources.delete(sourceId);
+        const legs = this.#liveLegs.get(sourceId);
+        if (legs) {
+            this.#liveLegs.delete(sourceId);
+            for (const stop of [...legs]) {
+                try {
+                    stop();
+                } catch {
+                    // One broken leg must not block the others.
+                }
+            }
+        }
+        return true;
     }
 
     get(sourceId: string): ActivitySource | undefined {
@@ -184,13 +219,37 @@ export class ActivityRegistry {
             .sort((left, right) => left.id.localeCompare(right.id));
     }
 
+    async #withSourceTimeout<T>(sourceId: string, task: Promise<T>): Promise<T> {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+            return await Promise.race([
+                task,
+                new Promise<never>((_resolve, reject) => {
+                    timer = setTimeout(
+                        () =>
+                            reject(
+                                new Error(
+                                    `Activity source "${sourceId}" timed out after ${this.#sourceTimeoutMs}ms`
+                                )
+                            ),
+                        this.#sourceTimeoutMs
+                    );
+                }),
+            ]);
+        } finally {
+            if (timer !== undefined) clearTimeout(timer);
+        }
+    }
+
     async listRuns(
         input: ActivityListInput = {}
     ): Promise<ActivityListResult> {
         const settled = await Promise.all(
             this.listSources().map(async (source) => {
                 try {
-                    const result = await source.listRuns(input);
+                    // One never-settling source must not stall the aggregate:
+                    // it degrades with a timeout while healthy sources resolve.
+                    const result = await this.#withSourceTimeout(source.id, source.listRuns(input));
                     if (!result.ok) return { error: result.error };
                     const runs: ActivityRunSummary[] = [];
                     for (const candidate of result.value) {
@@ -310,20 +369,47 @@ export class ActivityRegistry {
                 // A diagnostic observer must not break source isolation.
             }
         };
-        const selected = input.sourceIds
+        const selected: OwnedActivitySource[] = input.sourceIds
             ? input.sourceIds
-                  .map((id) => this.get(id))
-                  .filter((source): source is ActivitySource => Boolean(source))
-            : this.listSources();
+                  .map((id) => this.#sources.get(id))
+                  .filter((entry): entry is OwnedActivitySource => Boolean(entry))
+            : [...this.#sources.values()];
 
-        for (const source of selected) {
+        for (const { source, owner } of selected) {
             if (!source.subscribe) continue;
+            let staleReported = false;
+            let legStopped = false;
+            let legDispose: (() => void) | undefined;
+            const stopLeg = () => {
+                legDispose?.();
+            };
             try {
                 const dispose = source.subscribe({
                     runId: input.runId,
                     signal: input.signal,
-                    onError: input.onError,
+                    onError: (error) => {
+                        if (disposed || legStopped || this.#sources.get(source.id)?.owner !== owner) return;
+                        reportError(error);
+                    },
                     onEvent: (candidate) => {
+                        if (disposed) return;
+                        // The registration that owned this leg may be gone
+                        // (unregistered, disposed, or its id reused by a
+                        // replacement). Late callbacks are dropped, never
+                        // delivered as the current source's activity.
+                        if (this.#sources.get(source.id)?.owner !== owner) {
+                            if (!staleReported) {
+                                staleReported = true;
+                                reportError({
+                                    code: 'stale_event',
+                                    message: `Activity source "${source.id}" emitted after its registration ended`,
+                                    sourceId: source.id,
+                                    runId: candidate?.runId,
+                                });
+                            }
+                            return;
+                        }
+                        if (legStopped) return;
                         const parsed = ActivityEventSchema.safeParse(candidate);
                         if (
                             !parsed.success ||
@@ -353,7 +439,22 @@ export class ActivityRegistry {
                         }
                     },
                 });
-                if (typeof dispose === 'function') disposers.push(dispose);
+                if (typeof dispose === 'function') {
+                    legDispose = () => {
+                        if (legStopped) return;
+                        legStopped = true;
+                        this.#liveLegs.get(source.id)?.delete(stopLeg);
+                        dispose();
+                    };
+                    let legs = this.#liveLegs.get(source.id);
+                    if (!legs) {
+                        legs = new Set();
+                        this.#liveLegs.set(source.id, legs);
+                    }
+                    legs.add(stopLeg);
+                    disposers.push(legDispose);
+                    if (this.#sources.get(source.id)?.owner !== owner) legDispose();
+                }
             } catch (cause) {
                 const error = sourceFailure(source.id, cause, input.runId);
                 degradedSources.push(error);

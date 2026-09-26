@@ -1,5 +1,19 @@
 import type { PluginGrant, PluginManifestV2, PluginTrustMode } from './manifest';
-import type { PluginHttpClient, PluginSettingsClient, PluginStorageClient } from './clients';
+import type { PluginSettingsClient, PluginStorageClient } from './clients';
+import type {
+    PluginActivityClient,
+    PluginAiClient,
+    PluginChatClient,
+    PluginCommandsClient,
+    PluginEventsClient,
+    PluginFilesClient,
+    PluginHttpClient,
+    PluginNetworkClient,
+    PluginPanesClient,
+    PluginSecretsClient,
+    PluginUiClient,
+    PluginWorkspaceClient,
+} from './capabilities';
 
 export interface PluginRegistrationHandle {
     readonly dispose: () => void;
@@ -111,7 +125,18 @@ export interface PluginContext {
     readonly contributions: PluginContributions;
     readonly settings: PluginSettingsClient;
     readonly storage: PluginStorageClient;
+    readonly ai: PluginAiClient;
+    readonly ui: PluginUiClient;
+    readonly panes: PluginPanesClient;
+    readonly commands: PluginCommandsClient;
+    readonly chat: PluginChatClient;
+    readonly workspace: PluginWorkspaceClient;
+    readonly events: PluginEventsClient;
+    readonly secrets: PluginSecretsClient;
+    readonly files: PluginFilesClient;
     readonly http: PluginHttpClient;
+    readonly network: PluginNetworkClient;
+    readonly activity: PluginActivityClient;
     onCleanup(callback: () => void | Promise<void>): void;
     onActivate(callback: () => void | Promise<void>): void;
 }

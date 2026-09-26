@@ -9,6 +9,8 @@ function review(
         approvedGrants: ['documents.read'],
         revision: 'sha256-review',
         status: 'current',
+        authoritySha256: null,
+        packageDigest: null,
         ...overrides,
     };
 }

@@ -33,7 +33,6 @@ try {
 | `isAppError(v)` / `asAppError(v, fb?)`                                                           | Type guard / coercion with fallback code & message.                                             |
 | `reportError(input, { code?, message?, tags?, toast?, silent?, retry?, severity?, retryable? })` | Normalize, scrub, dedupe-log, emit hooks, optionally toast & surface retry. Returns `AppError`. |
 | `simpleRetry(fn, attempts=2, delayMs=400)`                                                       | Minimal linear async retry helper.                                                              |
-| `useErrorToasts()`                                                                               | Deprecated noop shim (avoid; kept for legacy components).                                       |
 
 ### Emitted Hooks
 
@@ -83,7 +82,7 @@ Attach small, flat metadata objects (string/number/bool) to power diagnostics & 
 | `domain`   | `chat`, `db`, `files`, `auth` | High-level feature area.            |
 | `threadId` | `t123`                        | Chat thread context.                |
 | `streamId` | `id-abc`                      | Streaming session.                  |
-| `modelId`  | `openai/gpt-oss-120b`         | LLM used.                           |
+| `modelId`  | `~openai/gpt-luna-latest`     | LLM used.                           |
 | `stage`    | `stream`, `abort`, `exchange` | Lifecycle stage.                    |
 | `op`       | `write`                       | DB/file operation action.           |
 | `entity`   | `messages`                    | Table or logical entity.            |
@@ -149,7 +148,7 @@ Legacy hook bridge: if you still listen on `ai.chat.error:action`, it continues 
 2. Use `err()` to construct domain-specific errors instead of ad-hoc objects.
 3. Provide retry closures only where user action makes sense (e.g., network, stream failure, file persist).
 4. Avoid spamming: rely on duplicate suppression; aggregate or debounce if looping.
-5. Remove legacy `useErrorToasts`; rely on Nuxt UI toasts directly through `reportError`.
+5. Use Nuxt UI toasts through `reportError`; the legacy `useErrorToasts` shim has been removed.
 
 ---
 

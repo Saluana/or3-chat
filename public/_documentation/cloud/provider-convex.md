@@ -13,6 +13,8 @@ Dedicated install and wiring guide for the Convex sync/storage/backend provider 
 - Convex-backed rate limiting, background jobs, notification emitter, and webhook store
 - OR3 Connect persistence store (when Connect uses the Convex provider)
 - Deployment admin checker (verifies `admin_users` grants in Convex)
+- Private workspace host settings with atomic compare-and-set (plugin
+  enablement, consent, access policy, setup revisions, AI spend ledger)
 
 ## Install
 
@@ -81,6 +83,55 @@ bunx convex dev --once
 ```
 
 This creates `convex/_generated/` used by the Convex backend path. Keep the scaffolded `convex/tsconfig.json`; it ensures `convex dev --typecheck enable` actually checks the Convex functions.
+
+### Upgrading an existing deployment
+
+Private host settings add a `host_settings` table plus `hostSettings` functions.
+Run the supported update flow before using the updated server adapter:
+
+```bash
+bunx or3-provider-convex init --update
+bunx convex dev --once
+```
+
+`init --update` adds the new `hostSettings.ts`, but it never overwrites
+existing template files — it reports them as conflicts. You must merge all of
+these from the provider templates before deploying:
+
+- `schema.ts` — the `host_settings` table definition.
+- `sync.ts` — the reserved-key guard blocking editor sync writes to
+  `plugins.*`, `admin.guest_access.enabled`, and `plugin:<id>:setup-values*`.
+  Without it, reserved KV writes stay enabled.
+- `admin.ts` — the deployment-admin settings bridge on private storage.
+  Without it, admin settings still use the old client-writable `kv` table.
+- `workspaces.ts` — the `host_settings` cleanup in `deleteWorkspaceData`.
+  Without it, hard-deleting a workspace retains its plugin configuration,
+  consent reviews, and budget records.
+
+The adapter calls the new functions, so deploying the adapter ahead of the
+Convex schema/functions fails closed.
+
+## Private Host Settings
+
+Marketplace enforcement state (`plugins.enabled`, `plugins.grants.*`,
+`plugins.settings.*`, `plugins.stateVersion.*`, `plugins.ai-budget.*`, and
+`admin.guest_access.enabled`) lives in the private `host_settings` table, not
+the client-syncable `kv` table. It is excluded from sync push/pull, snapshots,
+and `change_log`, and Convex sync rejects writes to those reserved key families
+in `kv`.
+
+The Convex `hostSettings` functions are deployment-internal and accept only a
+trusted host-server identity (admin key plus the `or3_server` marker), so a
+workspace editor's own token can never mutate enforcement state. The OR3 host
+route stays the business authorization boundary: normal workspace owners and
+editors use plugins without deployment-admin membership.
+
+Legacy migration is explicit. `getLegacyWorkspaceSetting` exposes old `kv`
+values, and the host policy copies only user setup values and the AI spend
+ledger (byte-for-byte, preserving an active window). Plugin authority, consent
+reviews, access policy, migration state, and guest access are never copied and
+require fresh trusted writes/approval. See
+[plugin-access-gating](./plugin-access-gating) for the consent model.
 
 ## Runtime Registration
 
@@ -218,3 +269,7 @@ If `AUTH_PROVIDER=clerk` and Convex is active, install `or3-provider-clerk` so t
 - [sync-layer](./sync-layer)
 - [storage-layer](./storage-layer)
 - [or3-cloud-config](./or3-cloud-config)
+
+## Provider template development
+
+In the provider repository, `bun run type-check` checks every bundled Convex template against its schema-derived generated declarations, as well as the provider source. Development checks use the sibling `or3-chat` checkout for host contracts. After editing templates or their declarations, run `bun run build:templates` to refresh the distributable pack. The installed project's Convex codegen regenerates its own `_generated` files.

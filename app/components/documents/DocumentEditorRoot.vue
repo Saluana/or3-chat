@@ -241,30 +241,30 @@
 
         <input ref="imageInput" class="sr-only" type="file" accept="image/*" multiple @change="onImageInput" />
 
-        <UModal v-model:open="linkDialogOpen" title="Edit link" description="Add a safe web address to the selected text.">
-            <template #body>
+        <AppModal v-model:open="linkDialogOpen" title="Edit link" description="Add a safe web address to the selected text.">
+            <template #default>
                 <UFormField label="Link URL" :error="linkError">
-                    <UInput v-model="linkHref" type="url" placeholder="https://example.com" autofocus @keydown.enter.prevent="applyLink" />
+                    <UInput v-model="linkHref" variant="modal" type="url" placeholder="https://example.com" class="w-full" autofocus @keydown.enter.prevent="applyLink" />
                 </UFormField>
             </template>
             <template #footer>
                 <div class="link-dialog-actions">
-                    <UButton v-if="editor?.isActive('link')" color="error" variant="ghost" label="Remove link" @click="removeLink" />
+                    <UButton v-if="editor?.isActive('link')" color="error" variant="ghost" size="modal" label="Remove link" @click="removeLink" />
                     <span />
-                    <UButton color="neutral" variant="soft" label="Cancel" @click="linkDialogOpen = false" />
-                    <UButton color="primary" label="Apply" @click="applyLink" />
+                    <UButton color="neutral" variant="ghost" size="modal" label="Cancel" @click="linkDialogOpen = false" />
+                    <UButton color="primary" size="modal" label="Apply" @click="applyLink" />
                 </div>
             </template>
-        </UModal>
+        </AppModal>
 
-        <UModal v-model:open="tableDialogOpen" title="Insert table" description="Choose the starting size. You can add or remove rows and columns later.">
-            <template #body>
+        <AppModal v-model:open="tableDialogOpen" title="Insert table" description="Choose the starting size. You can add or remove rows and columns later.">
+            <template #default>
                 <div class="table-dialog-fields">
                     <UFormField label="Rows">
-                        <UInput v-model.number="tableRows" type="number" inputmode="numeric" :min="1" :max="20" aria-label="Table rows" />
+                        <UInput v-model.number="tableRows" variant="modal" type="number" inputmode="numeric" :min="1" :max="20" aria-label="Table rows" />
                     </UFormField>
                     <UFormField label="Columns">
-                        <UInput v-model.number="tableColumns" type="number" inputmode="numeric" :min="1" :max="20" aria-label="Table columns" />
+                        <UInput v-model.number="tableColumns" variant="modal" type="number" inputmode="numeric" :min="1" :max="20" aria-label="Table columns" />
                     </UFormField>
                     <USwitch v-model="tableHeaderRow" label="Header row" class="table-header-switch" />
                     <p>Tables can start between 1 × 1 and 20 × 20.</p>
@@ -272,15 +272,16 @@
             </template>
             <template #footer>
                 <div class="table-dialog-actions">
-                    <UButton color="neutral" variant="soft" label="Cancel" @click="tableDialogOpen = false" />
-                    <UButton color="primary" label="Insert table" @click="insertTable" />
+                    <UButton color="neutral" variant="ghost" size="modal" label="Cancel" @click="tableDialogOpen = false" />
+                    <UButton color="primary" size="modal" label="Insert table" @click="insertTable" />
                 </div>
             </template>
-        </UModal>
+        </AppModal>
     </div>
 </template>
 
 <script setup lang="ts">
+import AppModal from '~/components/ui/AppModal.vue';
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRef, watch } from 'vue';
 import { onClickOutside } from '@vueuse/core';
 import { Editor, EditorContent, type JSONContent } from '@tiptap/vue-3';
@@ -341,6 +342,7 @@ const props = defineProps<{
     paneId?: string;
     tabId?: string;
 }>();
+const emit = defineEmits<{ ready: [documentId: string] }>();
 const DocumentAiPanel = defineAsyncComponent(() => import('./DocumentAiPanel.vue'));
 const icons = reactive({
     search: useIcon('editor.search'),
@@ -777,6 +779,9 @@ function registerActiveSession(id: string): void {
         captureViewState: () => captureDocumentViewState(id),
         restoreViewState: (saved, options) =>
             restoreDocumentViewState(id, saved, options),
+        getChatContext: (requestId) => ai.getChatContext(requestId),
+        executeChatTool: (name, argsJson, requestId) =>
+            ai.executeChatTool(name, argsJson, requestId),
     });
 }
 
@@ -790,6 +795,7 @@ async function loadActiveDocument(id: string) {
     if (didUnmount || props.documentId !== id) return;
     loadedDocumentId = id;
     registerActiveSession(id);
+    emit('ready', id);
 }
 
 watch(documentId, async (id, previous) => {

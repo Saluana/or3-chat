@@ -361,35 +361,17 @@
       title="Agent connections"
       description="Manage trusted agent services and credentials."
       :ui="{
-        overlay: 'bg-black/35 backdrop-blur-[3px]',
+        overlay: 'bg-[rgb(15_23_42/0.22)]! backdrop-blur-[1.5px]!',
         content:
-          'agent-connections-dialog w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-1rem)] min-w-0 overflow-hidden rounded-[var(--md-border-radius-large,var(--md-border-radius))] border-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] shadow-2xl sm:max-w-[900px]',
+          'agent-connections-dialog w-[calc(100dvw-2rem)] max-w-[880px] max-h-[calc(100dvh-2rem)] min-w-0 overflow-hidden rounded-[var(--md-border-radius-large,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)]',
         header:
-          'agent-connections-dialog-header border-b-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] px-5 py-4 sm:px-6',
+          'agent-connections-dialog-header p-6! pb-0! border-0! bg-transparent!',
+        title: 'text-[20px]! font-semibold! leading-7!',
+        description: 'sr-only!',
         body: 'p-0 sm:p-0',
-        close: 'agent-conn-close top-4 end-4',
+        close: 'agent-conn-close relative! top-auto! end-auto! size-9! min-h-9! min-w-9! p-0! flex items-center justify-center [&_[data-slot=leadingIcon]]:size-5!',
       }"
     >
-      <template #title>
-        <span class="flex min-w-0 items-center gap-2">
-          <span
-            class="agent-conn-icon-tile grid size-8 shrink-0 place-items-center rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
-          >
-            <UIcon :name="iconNetwork" class="size-4" />
-          </span>
-          <span class="truncate text-base font-semibold sm:text-lg">
-            Agent connections
-          </span>
-        </span>
-      </template>
-      <template #description>
-        <span
-          class="hidden pl-10 text-xs text-[var(--md-on-surface-variant)] sm:block"
-        >
-          Connect OR3 to the trusted machines that run your agents.
-        </span>
-      </template>
-
       <template #body>
         <div
           class="grid max-h-[min(76vh,700px)] min-h-0 min-w-0 overflow-x-hidden md:grid-cols-[240px_minmax(0,1fr)]"
@@ -1157,7 +1139,6 @@ const iconLoading = useIcon("ui.loading");
 const iconShieldAlert = useIcon("external-agent.shield.alert");
 const iconShieldCheck = useIcon("external-agent.shield.check");
 const iconWarning = useIcon("ui.warning");
-const iconNetwork = useIcon("external-agent.network");
 const iconPlus = useIcon("ui.plus");
 const iconServer = useIcon("external-agent.server");
 const iconServerOff = useIcon("external-agent.server.off");

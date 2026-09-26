@@ -4,6 +4,9 @@ import { createHookEngine, type HookEngine } from '~/core/hooks/hooks';
 const pollJobStatusMock = vi.fn();
 const subscribeBackgroundJobStreamMock = vi.fn();
 const abortBackgroundJobMock = vi.fn();
+const claimBackgroundClientToolMock = vi.fn();
+const submitBackgroundClientToolResultMock = vi.fn();
+const executeToolMock = vi.fn();
 const upsertMessageMock = vi.fn();
 const notificationCreateMock = vi.fn();
 const BackgroundJobPollErrorMock = vi.hoisted(
@@ -66,7 +69,18 @@ vi.mock('~/utils/chat/openrouterStream', () => ({
     subscribeBackgroundJobStream: (...args: unknown[]) =>
         subscribeBackgroundJobStreamMock(...args),
     abortBackgroundJob: (...args: unknown[]) => abortBackgroundJobMock(...args),
+    claimBackgroundClientTool: (...args: unknown[]) =>
+        claimBackgroundClientToolMock(...args),
+    submitBackgroundClientToolResult: (...args: unknown[]) =>
+        submitBackgroundClientToolResultMock(...args),
     BackgroundJobPollError: BackgroundJobPollErrorMock,
+}));
+
+vi.mock('~/utils/chat/tool-registry', () => ({
+    useToolRegistry: () => ({
+        getTool: () => ({ definition: { runtime: 'client' } }),
+        executeTool: executeToolMock,
+    }),
 }));
 
 vi.mock('~/db', () => ({
@@ -77,6 +91,7 @@ vi.mock('~/db', () => ({
 
 vi.mock('~/db/client', () => ({
     getDb: () => activeDbMock,
+    getActiveWorkspaceId: () => 'workspace-1',
 }));
 
 vi.mock('~/core/notifications/notification-service', () => ({
@@ -100,6 +115,7 @@ describe('backgroundJobs reattach + notifications', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.resetModules();
+        localStorage.clear();
         sessionValue = null;
         (
             globalThis as typeof globalThis & { __OR3_TEST_CLIENT?: boolean }
@@ -121,6 +137,13 @@ describe('backgroundJobs reattach + notifications', () => {
         dbMock.kv.get.mockResolvedValue(undefined);
         upsertMessageMock.mockResolvedValue(undefined);
         notificationCreateMock.mockResolvedValue(null);
+        claimBackgroundClientToolMock.mockResolvedValue(null);
+        submitBackgroundClientToolResultMock.mockResolvedValue(undefined);
+        executeToolMock.mockResolvedValue({
+            result: 'ok',
+            toolName: 'client_tool',
+            timedOut: false,
+        });
 
         const g = globalThis as typeof globalThis & {
             __NUXT_HOOKS__?: HookEngine;
@@ -165,6 +188,80 @@ describe('backgroundJobs reattach + notifications', () => {
 
         stopBackgroundJobTracking(tracker);
         backgroundJobTrackers.clear();
+    });
+
+    it('executes a claimed client tool while the chat UI is detached', async () => {
+        sessionValue = { user: { id: 'user-1' } };
+        let streamParams: { onStatus: (status: any) => void } | null = null;
+        subscribeBackgroundJobStreamMock.mockImplementation((params) => {
+            streamParams = params;
+            return () => {};
+        });
+        claimBackgroundClientToolMock.mockResolvedValue({
+            claimToken: 'claim-1',
+            call: {
+                id: 'call-1',
+                name: 'client_tool',
+                arguments: '{}',
+                definition: {
+                    type: 'function',
+                    function: {
+                        name: 'client_tool',
+                        description: 'Client tool',
+                        parameters: { type: 'object', properties: {} },
+                    },
+                    runtime: 'client',
+                },
+            },
+            context: {
+                workspaceId: 'workspace-1',
+                threadId: 'thread-1',
+                messageId: 'msg-1',
+            },
+        });
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({
+            jobId: 'job-1',
+            userId: 'user-1',
+            threadId: 'thread-1',
+            messageId: 'msg-1',
+            workspaceId: 'workspace-1',
+            useSse: true,
+        });
+
+        streamParams!.onStatus(
+            makeStatus('streaming', {
+                tool_calls: [
+                    {
+                        id: 'call-1',
+                        name: 'client_tool',
+                        status: 'pending',
+                        runtime: 'client',
+                        args: '{}',
+                    },
+                ],
+            })
+        );
+        await vi.waitFor(() => {
+            expect(submitBackgroundClientToolResultMock).toHaveBeenCalledWith({
+                jobId: 'job-1',
+                callId: 'call-1',
+                claimToken: 'claim-1',
+                result: 'ok',
+                error: undefined,
+            });
+        });
+        expect(executeToolMock).toHaveBeenCalledWith(
+            'client_tool',
+            '{}',
+            expect.objectContaining({ workspaceId: 'workspace-1' }),
+            expect.objectContaining({
+                definition: expect.objectContaining({ runtime: 'client' }),
+            })
+        );
+
+        mod.stopBackgroundJobTracking(tracker);
+        mod.backgroundJobTrackers.clear();
     });
 
     it('replaces a pre-restart partial response when the durable attempt changes', async () => {

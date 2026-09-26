@@ -14,6 +14,7 @@
  * - Uses SSR Auth Gateway pattern.
  * - Backend agnostic (delegates via registry).
  */
+import { requireCloudMutation } from '../../utils/security/cloud-mutation';
 import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
 import { resolveSessionContext } from '../../auth/session';
@@ -68,6 +69,8 @@ export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event) || !isStorageEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });
     }
+
+    requireCloudMutation(event);
 
     const body = BodySchema.safeParse(await readBody(event));
     if (!body.success) {

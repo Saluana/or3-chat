@@ -7,6 +7,19 @@ const SidebarPopoverButtonConfig = {
     },
 };
 
+// Keep pixel icons on their 24px grid, with one consistent, unboxed hit area.
+const SidebarRailButtonConfig = {
+    variant: 'ghost',
+    square: true,
+    class: 'h-[40px] w-[40px] shrink-0 flex items-center justify-center p-0! border-0! rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-transparent! text-[var(--md-on-surface)]! hover:bg-[var(--md-primary)]/8! active:bg-[var(--md-primary)]/14! shadow-none! ring-0! backdrop-blur-none! transform-none! max-md:min-h-[44px]! max-md:min-w-[44px]!',
+    ui: { leadingIcon: 'size-6' },
+};
+
+const SidebarRailUtilityButtonConfig = {
+    ...SidebarRailButtonConfig,
+    class: `${SidebarRailButtonConfig.class} text-[var(--md-on-surface-variant)]! hover:text-[var(--md-on-surface)]!`,
+};
+
 export const sidebarOverrides = {
     /* --- core --- */
     'button#sidebar.unified-item.trigger': {
@@ -44,20 +57,13 @@ export const sidebarOverrides = {
     /* --- Sidenav content --- */
 
     // Sidebar item buttons
-    'button#ui.glass-button': {
-        activeClass: 'bg-blue-500',
-        class: 'font-[IBM_Plex_Sans] text-[12px] font-light border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface)]/30 text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] backdrop-blur',
-    },
     'div#sidebar.project-group-container': {
         class: 'font-[IBM_Plex_Sans] text-[12px] font-light border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface)]/30 text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] backdrop-blur theme-shadow',
     },
-    'button#sidebar.new-chat': {
-        variant: 'solid',
-        color: 'primary',
-        ui: {
-            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))]',
-        },
-    },
+    'button#sidebar.new-chat': SidebarRailButtonConfig,
+    'button#sidebar.collapsed-search': SidebarRailButtonConfig,
+    'button#sidebar.new-document': SidebarRailButtonConfig,
+    'button#sidebar.new-project': SidebarRailButtonConfig,
 
     //Sidebar popover buttons for threads, documents, projects
     'button#sidebar.thread-rename': SidebarPopoverButtonConfig,
@@ -72,48 +78,12 @@ export const sidebarOverrides = {
     'button#sidebar.project-delete': SidebarPopoverButtonConfig,
     'button#sidebar.project-extra-action': SidebarPopoverButtonConfig,
 
-    'button#sidebar.toggle': {
-        class: 'border-0! shadow-none! [--tw-shadow:none]! ring-0! bg-transparent!',
-    },
+    'button#sidebar.toggle': SidebarRailUtilityButtonConfig,
     /* --- Sidebar bottom nav buttons --- */
-    'button#sidebar.bottom-nav.info': {
-        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface)] hover:bg-[var(--md-info-hover)]! active:bg-[var(--md-info-active)]!',
-        variant: 'soft',
-    },
-    'button#sidebar.bottom-nav.connect': {
-        variant: 'outline',
-        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[color:var(--md-on-surface)]! transition-colors duration-150',
-    },
-    // SSR Auth button (Clerk sign-in/account) - PRIMARY CTA
-    // Base styles only - hover/active defined per-state to avoid conflicts
-    // NOTE: No variant/color specified - using raw classes only to avoid Nuxt UI blue tint
-    'button#sidebar.bottom-nav.auth': {
-        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface)] transition-colors duration-150',
-    },
-    // OpenRouter auth button states (static build mode)
-    'button#sidebar.bottom-nav.auth:connected': {
-        class: 'bg-[var(--md-success)]/10! hover:border-[color:var(--md-error)]! hover:bg-[var(--md-error)]/30! active:bg-[var(--md-error)]/40! text-[color:var(--md-on-surface)]',
-    },
-    'button#sidebar.bottom-nav.auth:disconnected': {
-        class: 'hover:bg-[var(--md-success)]/15! active:bg-[var(--md-success)]/25!',
-    },
-    // SSR auth mode (Clerk) - subtle primary styling
-    'button#sidebar.bottom-nav.auth:ssr': {
-        class: 'bg-[var(--md-primary)]/8! border-[color:var(--md-primary)]/30! text-[var(--md-primary)]! hover:bg-[var(--md-primary)]/15! hover:border-[color:var(--md-primary)]/50! active:bg-[var(--md-primary)]/25!',
-    },
-
-    'button#sidebar.bottom-nav.connect:connected': {
-        class: 'bg-[var(--md-success)]/20 hover:border-[color:var(--md-error)]! hover:bg-[var(--md-error)]/30! active:bg-[var(--md-error)]/40! text-[color:var(--md-on-surface)]',
-    },
-    'button#sidebar.bottom-nav.connect:disconnected': {
-        class: 'hover:bg-[var(--md-success)]/15! active:bg-[var(--md-success)]/25',
-    },
-
-    // Dashboard button - SECONDARY action (neutral styling)
-    'button#sidebar.bottom-nav.dashboard': {
-        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface)]/70 hover:bg-[var(--md-surface-hover)]! hover:text-[var(--md-on-surface)]! active:bg-[var(--md-surface-active)]!',
-        variant: 'soft',
-    },
+    'button#sidebar.bottom-nav.info': SidebarRailUtilityButtonConfig,
+    'button#sidebar.bottom-nav.connect': SidebarRailUtilityButtonConfig,
+    'button#sidebar.bottom-nav.auth': SidebarRailUtilityButtonConfig,
+    'button#sidebar.bottom-nav.dashboard': SidebarRailUtilityButtonConfig,
 
     'button#sidebar.bottom-nav.activity': SidebarPopoverButtonConfig,
 
@@ -135,23 +105,21 @@ export const sidebarOverrides = {
 
     /* --- Collapsed sidebar buttons --- */
     'button#sidebar.collapsed-page': {
+        ...SidebarRailButtonConfig,
         ui: {
-            base: 'h-[48px] w-[48px] bg-transparent hover:bg-[var(--md-primary)]/5 hover:ring-1 hover:ring-[var(--md-surface-active)] active:bg-[var(--md-surface-active)] text-[var(--md-on-surface)]',
-            leadingIcon: 'w-6 h-6',
+            base: 'relative',
+            leadingIcon: 'size-6',
         },
     },
     'button#sidebar.collapsed-page:active': {
-        ui: {
-            base: 'h-[48px] w-[48px] bg-[var(--md-primary)]/10 ring-1 ring-[var(--md-primary-border)]/30 hover:ring-1 hover:ring-[var(--md-primary-border)]/50 hover:bg-[var(--md-surface-active)] shadow-[3px_3px_0_color-mix(in_srgb,var(--md-primary)_10%,transparent)]! text-[var(--md-on-surface)]',
-            leadingIcon: 'w-6 h-6',
-        },
+        class: 'bg-[var(--md-primary)]/10! text-[var(--md-primary)]!',
     },
     'div#sidebar.header': {
         class: 'header-pattern flex items-center min-h-12 max-h-12 py-2',
     },
     'div#sidebar.header:collapsed': {
-        class: 'px-0 justify-center w-[63px]! border-r-[1px]',
-        style: { width: '62px' },
+        class: 'px-0 justify-center w-[64px]!',
+        style: { width: '64px' },
     },
     'div#sidebar.header:expanded': {
         class: 'px-3 justify-between w-full',
@@ -164,6 +132,9 @@ export const sidebarCssSelectors = {
         style: {
             borderRight: 'var(--md-border-width) solid var(--md-border-color)',
         },
+    },
+    '#sidebar-container-outer:has(#top-header[data-sidebar-state="collapsed"])': {
+        style: { borderRight: 'none' },
     },
     '.sidenav-header-separator': {
         style: {
@@ -187,16 +158,39 @@ export const sidebarCssSelectors = {
     },
     '#top-header[data-sidebar-state="collapsed"]': {
         style: {
-            width: '62px !important',
+            width: '64px !important',
             paddingLeft: '0',
             paddingRight: '0',
+            boxSizing: 'border-box',
         },
     },
-    '#bottom-nav': {
+    '.bottomnav-root': {
         style: {
             backgroundColor: 'transparent',
-            width: '62px !important',
-            paddingLeft: '0px !important',
+            width: '64px !important',
+            gap: '8px',
+            paddingTop: '12px',
+            paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',
+        },
+    },
+    '.bottomnav-root .iconify': {
+        style: { width: '24px', height: '24px', fontSize: '24px' },
+    },
+    '.bottomnav-root .sidebar-rail-caption, .bottomnav-root .sb-bottom-border, .bottomnav-root .sidebar-connection-status-bar': {
+        style: { display: 'none' },
+    },
+    '.bottomnav-root [data-connection-state]': {
+        style: { position: 'relative' },
+    },
+    '.bottomnav-root [data-connection-state="connected"] .sidebar-connection-status-bar': {
+        style: {
+            display: 'block',
+            position: 'absolute',
+            right: '7px',
+            bottom: '7px',
+            width: '4px',
+            height: '4px',
+            boxShadow: '0 0 0 2px var(--md-surface)',
         },
     },
     '.sidebar-section-heading': {
@@ -208,24 +202,64 @@ export const sidebarCssSelectors = {
             color: 'var(--md-on-surface)/70%',
         },
     },
-    '#nav-top-section .iconify': {
-        style: {
-            fontSize: '25px !important',
-        },
+    '#nav-top-section .iconify, #nav-top-section .app-icon:has(> .iconify)': {
+        style: { width: '24px', height: '24px', fontSize: '24px' },
     },
-    '#nav-collapsed-container': {
+    '#nav-collapsed-container, #sidebar-content-collapsed': {
         style: {
+            width: '64px !important',
             minWidth: '64px !important',
             maxWidth: '64px !important',
-            borderRight: 'var(--md-border-width) solid var(--md-border-color)',
+            alignItems: 'center',
+            boxSizing: 'border-box',
+            backgroundColor: 'color-mix(in srgb, var(--md-surface) 90%, transparent)',
+            borderRight: '1px solid color-mix(in srgb, var(--md-border-color) 18%, transparent)',
+            backdropFilter: 'none',
         },
     },
-    '#nav-top-section, #nav-footer-section, #nav-pages-section, #nav-middle-section':
-        {
-            style: {
-                backgroundColor: 'transparent',
-            },
+    '#nav-top-section, #nav-footer-section': {
+        style: {
+            width: '100%',
+            alignItems: 'center',
+            paddingLeft: '0',
+            paddingRight: '0',
+            scrollbarWidth: 'none',
         },
+    },
+    '#nav-top-section .new-chat-wrapper': {
+        style: { paddingRight: '0' },
+    },
+    '#nav-pages-section': {
+        style: {
+            position: 'relative',
+            alignItems: 'center',
+            borderTop: 'none',
+            marginTop: '12px',
+            paddingTop: '16px',
+        },
+    },
+    '#nav-pages-section::before': {
+        style: {
+            content: '""',
+            position: 'absolute',
+            top: '0',
+            left: '8px',
+            right: '8px',
+            height: '1px',
+            background: 'color-mix(in srgb, var(--md-border-color) 18%, transparent)',
+        },
+    },
+    '#nav-pages-section button[aria-pressed="true"]::before': {
+        style: {
+            content: '""',
+            position: 'absolute',
+            left: '-4px',
+            top: 'calc(50% - 2px)',
+            width: '4px',
+            height: '4px',
+            background: 'var(--md-primary)',
+        },
+    },
     /* Mobile bottom nav bar — hard top edge + retro FAB */
     '#mobile-bottom-nav': {
         style: {

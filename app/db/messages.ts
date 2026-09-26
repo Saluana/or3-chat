@@ -90,6 +90,17 @@ function hasFileHashesArray(obj: unknown): obj is { file_hashes: string[] } {
  * - Does not update thread metadata.
  */
 export async function createMessage(input: MessageCreate): Promise<Message> {
+    return createMessageInDb(getDb(), input);
+}
+
+/**
+ * Create a message in an explicitly captured workspace database.
+ *
+ * Long-running request flows must use this variant so a workspace switch cannot
+ * split related records (a thread in one workspace, its first message in
+ * another).
+ */
+export async function createMessageInDb(db: Or3DB, input: MessageCreate): Promise<Message> {
     const hooks = useHooks();
     const filtered: unknown = await hooks.applyFilters(
         'db.messages.create:filter:input',
@@ -111,7 +122,6 @@ export async function createMessage(input: MessageCreate): Promise<Message> {
         entity: toMessageEntity(value),
         tableName: 'messages',
     });
-    const db = getDb();
     await db.transaction('rw', getWriteTxTableNames(db, 'messages'), async () => {
         await dbTry(
             () => db.messages.put(value),

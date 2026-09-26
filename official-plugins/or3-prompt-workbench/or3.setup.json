@@ -1,0 +1,24 @@
+{
+  "connections": [],
+  "fields": [
+    {
+      "key": "defaultTemplate",
+      "kind": "text",
+      "label": "Default template ({{name}} variables)",
+      "order": 1,
+      "required": false
+    }
+  ],
+  "firstAction": {
+    "label": "Summarize the selection with a reusable template",
+    "operationId": "chat.completions.create",
+    "samplePath": "fixtures/sample-selection.txt",
+    "usesSampleContext": true
+  },
+  "settingsSchemaPath": "settings.schema.json",
+  "setupVersion": 1,
+  "testAction": {
+    "deadlineMs": 10000,
+    "operationId": "models.list"
+  }
+}

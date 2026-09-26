@@ -50,6 +50,11 @@ before starting. If another OR3 or Nuxt server is already running there, it
 explains the conflict and offers the next free port instead of silently
 starting a second broken server.
 
+Available sibling provider repositories are rebuilt and selected automatically
+by the dev wrapper. Build failures or missing siblings fall back to installed
+packages with a warning. Use `OR3_LOCAL_PROVIDERS=false bun run dev` to test
+installed packages only. See [local provider development](../cloud/providers#local-provider-development).
+
 Local-first mode needs no account or `.env` file. It stores data in the
 browser. Connect OpenRouter from the in-app onboarding when you are ready.
 
@@ -101,17 +106,28 @@ changing environment files so Nuxt picks them up.
 
 ### Developing sibling OR3 packages
 
-OR3 Chat normally uses the versioned packages installed in `node_modules` so
-long-running Vite sessions keep a bounded module graph. When working across a
-multi-repository checkout, opt into sibling source packages explicitly:
+`bun run dev` uses adjacent source checkouts automatically: when a sibling
+`or3-vsc` or `or3-workflows` checkout sits next to `or3-chat`, Vite and Nitro
+alias `or3-scroll`, `or3-workflow-core`, `or3-workflow-vue`, and the workflow
+stylesheet to that package source. Provider packages (`or3-provider-*`) are
+built from their sibling checkouts the same way. The dev banner prints which
+local sources were selected.
+
+Workflow core, UI and styles are selected together. Their declared dependency
+and peer ranges and reachable relative source files must resolve before selection;
+an unusable member rejects the whole workflow group with a startup diagnostic.
+The scroll package is checked separately. Rejected groups use installed packages.
+Production builds never alias sibling sources, even when the environment inherits
+`OR3_USE_LOCAL_PACKAGES=true`.
+
+To test installed packages during development:
 
 ```bash
-OR3_USE_LOCAL_PACKAGES=true bun run dev
+OR3_USE_LOCAL_PACKAGES=false bun run dev   # always use installed packages
 ```
 
-This aliases adjacent `or3-vsc` and `or3-workflows` source trees into both the
-client and server builds. Enable it only while editing those packages because
-their larger source graphs make each HMR invalidation more expensive.
+Local source graphs make each HMR invalidation more expensive, so turn them off
+when you are not editing those packages.
 
 ---
 

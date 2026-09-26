@@ -18,6 +18,11 @@ Compatibility guide for common OR3 Cloud provider combinations.
 - Auth, sync, and storage providers can be mixed as long as each selected provider package is installed and configured.
 - Background provider and limits provider are independent knobs.
 - Static builds must keep SSR auth disabled.
+- Marketplace-sensitive workspace settings require private, workspace-scoped
+  storage with atomic compare-and-set. SQLite stores them in
+  `admin_workspace_settings` and Convex in the private `host_settings` table;
+  neither is reachable through client sync. Legacy Convex `kv` authority is
+  never trusted during migration.
 - The executable source of truth is
   `shared/cloud/provider-compatibility.ts`; the provider contract test verifies
   every row resolves to installed packages with the required role.

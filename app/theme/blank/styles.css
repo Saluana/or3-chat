@@ -2,6 +2,7 @@
 
 [data-theme="blank"] {
     --chat-composer-border-radius: 28px;
+    --blank-brand-accent: #2a8fd6;
 
     /* Workspace tabs: quiet chips that match blank's borderless shell. */
     --or3-workspace-chrome-size: 44px;
@@ -177,8 +178,8 @@
 
     /* Chats card: soft brand blue (pairs with docs green, echoes logo #2a8fd6) */
     .page-link-accent-chats .page-link-icon-container {
-        background: color-mix(in srgb, #2a8fd6 14%, var(--md-surface)) !important;
-        color: #2a8fd6 !important;
+        background: color-mix(in srgb, var(--blank-brand-accent) 14%, var(--md-surface)) !important;
+        color: var(--blank-brand-accent) !important;
     }
 
     /* Expanded: soft outer edge against main content */
@@ -809,14 +810,6 @@ html[data-theme='blank']
         letter-spacing: 0.04em;
     }
 
-    html[data-theme="blank"] .sidebar-mode-badge {
-        font-size: 9px !important;
-        line-height: 1.1;
-        letter-spacing: 0.04em;
-        border-color: var(--md-border-color) !important;
-        color: var(--md-on-surface-variant) !important;
-    }
-
     /* Keep OpenRouter connect status monochrome (no success/error chrome). */
     html[data-theme="blank"] .sidebar-connection-status-bar {
         background: var(--md-on-surface-variant) !important;
@@ -1102,17 +1095,17 @@ html[data-theme='blank'] .agent-connections-dialog {
 }
 
 html[data-theme='blank'] .agent-connections-dialog-header {
-	border-bottom: 1px solid var(--agent-conn-divider) !important;
-	padding: 0.8rem 1rem !important;
+	border-bottom: 0 !important;
+	padding: 1.5rem 1.5rem 0 !important;
 	background: var(--agent-conn-page) !important;
 }
 
 html[data-theme='blank'] .agent-connections-dialog .agent-conn-close {
 	box-sizing: border-box !important;
-	width: 1.65rem !important;
-	height: 1.65rem !important;
-	min-width: 1.65rem !important;
-	min-height: 1.65rem !important;
+	width: 2.25rem !important;
+	height: 2.25rem !important;
+	min-width: 2.25rem !important;
+	min-height: 2.25rem !important;
 	padding: 0 !important;
 	border: none !important;
 	border-radius: var(--agent-conn-radius-sm) !important;

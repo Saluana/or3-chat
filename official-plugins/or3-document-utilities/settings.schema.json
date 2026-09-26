@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Document Utilities Settings",
+  "description": "Which transformation the plugin opens with. Nothing else is stored.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "defaultTransform": {
+      "type": "string",
+      "title": "Default transformation",
+      "enum": ["outline", "summary", "key-points", "action-items", "rewrite-clear"],
+      "default": "outline"
+    }
+  }
+}

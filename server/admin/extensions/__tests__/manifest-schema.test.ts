@@ -55,6 +55,19 @@ function validV2Manifest(overrides: Record<string, unknown> = {}) {
 }
 
 describe('extension manifest version dispatch', () => {
+    it('accepts only safe PNG or WebP icon paths for V2 packages', () => {
+        expect(
+            Or3ExtensionManifestV2Schema.parse(
+                validV2Manifest({ icon: 'assets/app-icon.webp' })
+            ).icon
+        ).toBe('assets/app-icon.webp');
+        for (const icon of ['../icon.png', '/icon.png', 'assets/icon.svg']) {
+            expect(
+                Or3ExtensionManifestV2Schema.safeParse(validV2Manifest({ icon })).success
+            ).toBe(false);
+        }
+    });
+
     it.each([
         ['omitted', v1Manifest],
         ['null', { ...v1Manifest, manifestVersion: null }],
@@ -90,6 +103,15 @@ describe('extension manifest version dispatch', () => {
                 undeclaredV2Field: true,
             }).success
         ).toBe(false);
+    });
+
+    it('preserves the publisher license required by reviewed marketplace releases', () => {
+        const manifest = validV2Manifest({ license: 'GPL-3.0-only' });
+        expect(Or3ExtensionManifestV2Schema.parse(manifest)).toEqual(manifest);
+    });
+
+    it.each(['', '   ', 'x'.repeat(129), 'MIT\nInjected'])('rejects malformed license metadata %j', (license) => {
+        expect(Or3ExtensionManifestV2Schema.safeParse(validV2Manifest({ license })).success).toBe(false);
     });
 
     it('accepts the complete V2 package contract', () => {

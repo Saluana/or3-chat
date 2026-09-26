@@ -5,6 +5,10 @@ export interface PluginGrantReviewSnapshot {
     readonly approvedGrants: readonly string[];
     readonly revision: string;
     readonly status: PluginGrantReviewStatus;
+    /** Signed authority digest the approval covers, when one was recorded. */
+    readonly authoritySha256: string | null;
+    /** Candidate digest the approval was reviewed against, when known. */
+    readonly packageDigest: string | null;
 }
 
 export type PluginGrantDecisionReason =

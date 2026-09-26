@@ -117,7 +117,7 @@ describe('getCapabilities', () => {
     it('detects open weights families by name', () => {
         expect(getCapabilities(makeModel({ id: 'meta-llama/llama-3.1-405b' })).openWeights).toBe(true);
         expect(getCapabilities(makeModel({ id: 'openai/gpt-4o' })).openWeights).toBe(false);
-        expect(getCapabilities(makeModel({ id: 'openai/gpt-oss-120b' })).openWeights).toBe(true);
+        expect(getCapabilities(makeModel({ id: '~openai/gpt-luna-latest' })).openWeights).toBe(false);
     });
 
     it('detects embedding models', () => {

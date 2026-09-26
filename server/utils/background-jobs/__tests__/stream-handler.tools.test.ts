@@ -142,6 +142,12 @@ const toolDef: ToolDefinition = {
     runtime: 'hybrid',
 };
 
+const clientToolDef: ToolDefinition = {
+    ...toolDef,
+    function: { ...toolDef.function, name: 'client_echo' },
+    runtime: 'client',
+};
+
 describe('consumeBackgroundStreamWithTools', () => {
     beforeEach(() => {
         registerServerTool(
@@ -236,6 +242,185 @@ describe('consumeBackgroundStreamWithTools', () => {
                 ),
                 status: 'complete',
                 result: 'ok',
+            })
+        );
+    });
+
+    it('parks a client tool call with a restart-safe continuation', async () => {
+        const statusRef = { status: 'streaming' as const };
+        const { provider, updateJob, updateJobExecution, completeJob } =
+            createProvider(statusRef);
+        const execution = {
+            version: 1 as const,
+            body: {
+                model: 'test-model',
+                messages: [],
+                tools: [clientToolDef],
+            },
+            workspaceId: 'ws-1',
+            referer: 'http://localhost:3000',
+            apiKeyCiphertext: 'ciphertext',
+            checkpointedToolCallIds: [],
+        };
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(makeToolCallResponse('client_echo'));
+        vi.stubGlobal('fetch', fetchMock);
+
+        await consumeBackgroundStreamWithTools({
+            jobId: 'job-1',
+            body: execution.body,
+            apiKey: 'key',
+            referer: execution.referer,
+            provider,
+            toolRuntime: { client_echo: 'client' },
+            context: {
+                body: execution.body,
+                apiKey: 'key',
+                userId: 'user-1',
+                workspaceId: 'ws-1',
+                threadId: 'thread-1',
+                messageId: 'msg-1',
+                referer: execution.referer,
+                execution,
+                leaseOwner: 'worker-1',
+            },
+        });
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(completeJob).not.toHaveBeenCalled();
+        expect(updateJobExecution).toHaveBeenCalledWith(
+            'job-1',
+            expect.objectContaining({
+                clientToolCall: expect.objectContaining({
+                    callId: 'call-1',
+                    name: 'client_echo',
+                }),
+                pendingToolCalls: [
+                    expect.objectContaining({ id: 'call-1' }),
+                ],
+                body: expect.objectContaining({
+                    messages: [
+                        expect.objectContaining({ role: 'assistant' }),
+                    ],
+                }),
+            }),
+            'worker-1'
+        );
+        expect(
+            updateJob.mock.calls
+                .flatMap((call) => (call[1] as JobUpdate).tool_calls ?? [])
+                .find(
+                    (call) =>
+                        call.id === 'call-1' && call.runtime === 'client'
+                )
+        ).toMatchObject({ status: 'pending', runtime: 'client' });
+    });
+
+    it('drains the remaining batch before resuming the model', async () => {
+        const statusRef = { status: 'streaming' as const };
+        const serverArgs = '{"value":"after-client"}';
+        const { provider, completeJob } = createProvider(statusRef, [
+            {
+                id: 'client-call',
+                name: 'client_echo',
+                status: 'complete',
+                result: 'client-result',
+                argument_fingerprint: 'client-fingerprint',
+            },
+            {
+                id: 'server-call',
+                name: 'server_echo',
+                status: 'pending',
+                args: serverArgs,
+                argument_fingerprint: toolCallFingerprint(
+                    'server_echo',
+                    serverArgs
+                ),
+            },
+        ]);
+        const execution = {
+            version: 1 as const,
+            body: {
+                model: 'test-model',
+                messages: [
+                    {
+                        role: 'assistant',
+                        tool_calls: [
+                            {
+                                id: 'client-call',
+                                type: 'function',
+                                function: {
+                                    name: 'client_echo',
+                                    arguments: '{}',
+                                },
+                            },
+                            {
+                                id: 'server-call',
+                                type: 'function',
+                                function: {
+                                    name: 'server_echo',
+                                    arguments: serverArgs,
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        role: 'tool',
+                        tool_call_id: 'client-call',
+                        name: 'client_echo',
+                        content: [{ type: 'text', text: 'client-result' }],
+                    },
+                ],
+                tools: [toolDef, clientToolDef],
+            },
+            workspaceId: 'ws-1',
+            referer: 'http://localhost:3000',
+            apiKeyCiphertext: 'ciphertext',
+            pendingToolCalls: [
+                {
+                    id: 'server-call',
+                    type: 'function' as const,
+                    function: { name: 'server_echo', arguments: serverArgs },
+                },
+            ],
+            checkpointedToolCallIds: ['client-call'],
+        };
+        const fetchMock = vi.fn().mockResolvedValueOnce(makeTextResponse('done'));
+        vi.stubGlobal('fetch', fetchMock);
+
+        await consumeBackgroundStreamWithTools({
+            jobId: 'job-1',
+            body: execution.body,
+            apiKey: 'key',
+            referer: execution.referer,
+            provider,
+            toolRuntime: { client_echo: 'client', server_echo: 'server' },
+            context: {
+                body: execution.body,
+                apiKey: 'key',
+                userId: 'user-1',
+                workspaceId: 'ws-1',
+                threadId: 'thread-1',
+                messageId: 'msg-1',
+                referer: execution.referer,
+                execution,
+                leaseOwner: 'worker-2',
+            },
+        });
+
+        expect(completeJob).toHaveBeenCalledWith(
+            'job-1',
+            'done',
+            'worker-2'
+        );
+        const requestBody = JSON.parse(
+            String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)
+        );
+        expect(requestBody.messages).toContainEqual(
+            expect.objectContaining({
+                role: 'tool',
+                tool_call_id: 'server-call',
             })
         );
     });
@@ -353,6 +538,30 @@ describe('consumeBackgroundStreamWithTools', () => {
             expect.objectContaining({ type: 'status', status: 'error' })
         );
         dispose();
+    });
+
+    it('completes a plain-text background stream after flushing its final content', async () => {
+        const statusRef = { status: 'streaming' as const };
+        const { provider, updateJob, completeJob, failJob } = createProvider(statusRef);
+
+        await consumeBackgroundStream({
+            jobId: 'job-1',
+            stream: makeSseStream([{
+                choices: [{ delta: { content: 'complete answer' } }],
+            }]),
+            provider,
+            context: {
+                body: {}, apiKey: 'key', userId: 'user-1',
+                workspaceId: 'ws-1', threadId: 'thread-1',
+                messageId: 'msg-1', referer: 'http://localhost:3000',
+            },
+        });
+
+        expect(updateJob).toHaveBeenCalledWith('job-1', expect.objectContaining({
+            contentChunk: 'complete answer',
+        }));
+        expect(completeJob).toHaveBeenCalledWith('job-1', 'complete answer');
+        expect(failJob).not.toHaveBeenCalled();
     });
 
     it('never invokes a registered server tool that was not advertised', async () => {

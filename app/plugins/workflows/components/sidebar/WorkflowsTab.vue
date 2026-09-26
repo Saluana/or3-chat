@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppModal from '~/components/ui/AppModal.vue';
 import {
     useSidebarMultiPane,
     useSidebarPostsApi,
@@ -511,22 +512,19 @@ async function handleUpdateWorkflowDetails() {
         </div>
 
         <!-- Create Modal -->
-        <UModal
+        <AppModal
             v-if="canEdit"
             v-model:open="showCreateModal"
-            :close="{
-                size: 'sm',
-                class: 'theme-btn',
-            }"
             title="New Workflow"
             description="Name the workflow and explain what it does."
         >
-            <template #body>
-                <div class="space-y-4">
+            <template #default>
+                <div class="space-y-[18px]">
                     <label class="block space-y-1.5">
                         <span class="text-sm font-medium">Name</span>
                         <UInput
                             v-model="createName"
+                            variant="modal"
                             class="w-full"
                             placeholder="Fact checker"
                             autofocus
@@ -537,6 +535,7 @@ async function handleUpdateWorkflowDetails() {
                         <span class="text-sm font-medium">Description</span>
                         <UTextarea
                             v-model="createDescription"
+                            variant="modal"
                             class="w-full"
                             :rows="3"
                             maxlength="240"
@@ -551,31 +550,33 @@ async function handleUpdateWorkflowDetails() {
                 </div>
             </template>
             <template #footer>
-                <div class="w-full flex justify-end gap-2">
+                <div class="flex justify-end gap-2.5">
                     <UButton
                         variant="ghost"
-                        class="theme-btn cancel-wf"
+                        size="modal"
+                        class="cancel-wf"
                         @click="showCreateModal = false"
                     >
                         Cancel
                     </UButton>
                     <UButton
-                        class="theme-btn create-wf"
+                        size="modal"
+                        class="create-wf"
                         @click="handleCreateWorkflow"
                         >Create</UButton
                     >
                 </div>
             </template>
-        </UModal>
+        </AppModal>
 
         <!-- Delete Confirmation Modal -->
-        <UModal
+        <AppModal
             v-if="canEdit"
             v-model:open="showDeleteModal"
             title="Delete Workflow"
             description="This action cannot be undone."
         >
-            <template #body>
+            <template #default>
                 <div class="space-y-3">
                     <div class="flex items-center gap-3 text-(--md-error)">
                         <UIcon name="tabler:alert-triangle" class="text-2xl" />
@@ -590,28 +591,29 @@ async function handleUpdateWorkflowDetails() {
                 </div>
             </template>
             <template #footer>
-                <UButton variant="ghost" @click="showDeleteModal = false">
+                <UButton variant="ghost" size="modal" @click="showDeleteModal = false">
                     Cancel
                 </UButton>
-                <UButton color="error" @click="handleDeleteWorkflow">
+                <UButton color="error" size="modal" @click="handleDeleteWorkflow">
                     Delete
                 </UButton>
             </template>
-        </UModal>
+        </AppModal>
 
         <!-- Workflow details modal -->
-        <UModal
+        <AppModal
             v-if="canEdit"
             v-model:open="showDetailsModal"
             title="Workflow Details"
             description="Help people recognize when to use this workflow."
         >
-            <template #body>
-                <div class="space-y-4">
+            <template #default>
+                <div class="space-y-[18px]">
                     <label class="block space-y-1.5">
                         <span class="text-sm font-medium">Name</span>
                         <UInput
                             v-model="detailsName"
+                            variant="modal"
                             class="w-full"
                             placeholder="Workflow name"
                             autofocus
@@ -622,6 +624,7 @@ async function handleUpdateWorkflowDetails() {
                         <span class="text-sm font-medium">Description</span>
                         <UTextarea
                             v-model="detailsDescription"
+                            variant="modal"
                             class="w-full"
                             :rows="3"
                             maxlength="240"
@@ -631,11 +634,11 @@ async function handleUpdateWorkflowDetails() {
                 </div>
             </template>
             <template #footer>
-                <UButton variant="ghost" @click="showDetailsModal = false">
+                <UButton variant="ghost" size="modal" @click="showDetailsModal = false">
                     Cancel
                 </UButton>
-                <UButton @click="handleUpdateWorkflowDetails">Save</UButton>
+                <UButton size="modal" @click="handleUpdateWorkflowDetails">Save</UButton>
             </template>
-        </UModal>
+        </AppModal>
     </div>
 </template>
