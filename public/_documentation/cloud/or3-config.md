@@ -44,10 +44,10 @@ All features are **enabled by default**. Set env to `'false'` to disable.
 
 | Key | Env Variable | Description |
 |-----|--------------|-------------|
-| `features.workflows.enabled` | `OR3_WORKFLOWS_ENABLED` | Master toggle for workflows |
-| `features.workflows.editor` | `OR3_WORKFLOWS_EDITOR` | Workflow editor UI |
-| `features.workflows.slashCommands` | `OR3_WORKFLOWS_SLASH_COMMANDS` | `/workflow` commands in chat |
-| `features.workflows.execution` | `OR3_WORKFLOWS_EXECUTION` | Workflow execution engine |
+| `features.workflows.enabled` | `OR3_WORKFLOWS_ENABLED` | Workflows plugin enable switch |
+| `features.workflows.editor` | `OR3_WORKFLOWS_EDITOR` | Plugin editor option |
+| `features.workflows.slashCommands` | `OR3_WORKFLOWS_SLASH_COMMANDS` | Plugin `/workflow` command option |
+| `features.workflows.execution` | `OR3_WORKFLOWS_EXECUTION` | Plugin execution option |
 
 #### Documents & Mentions
 

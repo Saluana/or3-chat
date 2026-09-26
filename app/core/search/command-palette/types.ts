@@ -11,7 +11,6 @@ export type PaletteCategoryId =
     | 'document'
     | 'project'
     | 'prompt'
-    | 'workflow'
     | 'image'
     | 'setting'
     | 'dashboard'
@@ -333,13 +332,6 @@ export const CORE_PALETTE_CATEGORIES: readonly PaletteCategory[] = [
         aliases: ['prompt'],
         icon: 'i-lucide-scroll-text',
         order: 45,
-    },
-    {
-        id: 'workflow',
-        label: 'Workflows',
-        aliases: ['workflow'],
-        icon: 'i-lucide-git-branch',
-        order: 50,
     },
     {
         id: 'image',

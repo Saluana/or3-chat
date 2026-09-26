@@ -55,9 +55,10 @@ Both registrations dispose with the plugin cleanup scope.
 
 ## Query aliases
 
-Core aliases include `chat:`, `doc:`, `project:`, `workflow:`, `image:`,
-`setting:`, `dashboard:`, and `command:`. Plugins may add aliases such as
-`todo:` via post-source registration.
+Core aliases include `chat:`, `doc:`, `project:`, `image:`, `setting:`,
+`dashboard:`, and `command:`. Plugins add aliases such as `workflow:` and
+`todo:` through post-source registration. Their aliases and categories disappear
+when the registrations are removed.
 
 ## Examples
 

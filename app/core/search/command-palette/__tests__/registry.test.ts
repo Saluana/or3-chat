@@ -117,6 +117,35 @@ describe('palette registry', () => {
         expect(getPaletteAliasMap().has('todo')).toBe(false);
     });
 
+    it('exposes the workflow category only while its plugin source is registered', () => {
+        expect(getPaletteAliasMap().has('workflow')).toBe(false);
+
+        const handle = registerPluginPostSource({
+            definition: {
+                id: 'workflow-source',
+                label: 'Workflows',
+                postType: 'workflow-entry',
+                categoryId: 'workflow',
+                filterAliases: ['workflow'],
+                icon: 'i-lucide-git-branch',
+                order: 50,
+                openTarget: { kind: 'pane-app', appId: 'or3-workflows' },
+            },
+            pluginId: 'or3-workflows',
+        });
+
+        expect(getPaletteAliasMap().get('workflow')).toBe('workflow');
+        expect(listPaletteCategories()).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ id: 'workflow', label: 'Workflows' }),
+            ])
+        );
+
+        handle.dispose();
+        expect(getPaletteAliasMap().has('workflow')).toBe(false);
+        expect(listPaletteCategories().some((category) => category.id === 'workflow')).toBe(false);
+    });
+
     it('transfers aliases cleanly when a post source is replaced', () => {
         const first = registerPalettePostSourceDefinition(
             {

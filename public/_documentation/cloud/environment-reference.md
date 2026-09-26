@@ -86,10 +86,10 @@ These values are read by `config.or3.ts` and work in static and SSR builds.
 | `OR3_FAVICON_URL` | empty | Favicon URL/path. |
 | `OR3_DEFAULT_THEME` | `blank` | Default theme ID. |
 | `OR3_DISABLED_THEMES` | empty | Comma-separated theme IDs hidden from users. |
-| `OR3_WORKFLOWS_ENABLED` | enabled | Master workflow toggle. |
-| `OR3_WORKFLOWS_EDITOR` | enabled | Workflow editor UI. |
-| `OR3_WORKFLOWS_SLASH_COMMANDS` | enabled | Workflow slash commands. |
-| `OR3_WORKFLOWS_EXECUTION` | enabled | Workflow execution. |
+| `OR3_WORKFLOWS_ENABLED` | enabled | Workflows plugin enable switch. |
+| `OR3_WORKFLOWS_EDITOR` | enabled | Workflows plugin editor option. |
+| `OR3_WORKFLOWS_SLASH_COMMANDS` | enabled | Workflows plugin slash command option. |
+| `OR3_WORKFLOWS_EXECUTION` | enabled | Workflows plugin execution option. |
 | `OR3_DOCUMENTS_ENABLED` | enabled | Document editing. |
 | `OR3_BACKUP_ENABLED` | enabled | Workspace backup UI. |
 | `OR3_MENTIONS_ENABLED` | enabled | Mentions system. |

@@ -12,6 +12,7 @@ import {
     type ModelPerRequestLimits,
 } from 'or3-workflow-core';
 import { useModelStore } from '~/composables/chat/useModelStore';
+import { useOr3Config } from '~/composables/useOr3Config';
 import type { OpenRouterModel } from '~/core/auth/models-service';
 
 function toWorkflowModel(model: OpenRouterModel): WorkflowModel {
@@ -67,6 +68,7 @@ function toWorkflowModel(model: OpenRouterModel): WorkflowModel {
 
 export default defineNuxtPlugin((nuxtApp) => {
     if (!import.meta.client) return;
+    if (!useOr3Config().features.workflows.enabled) return;
 
     const { favoriteModels, getFavoriteModels } = useModelStore();
     const scope = effectScope();
