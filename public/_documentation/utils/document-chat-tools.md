@@ -5,7 +5,7 @@ Chat includes the document editor's six native tools: `get_document_outline`, `l
 Four workspace tools are also available:
 
 - `search_documents` searches the existing command palette document index in the active workspace. It returns document IDs and any open tab IDs without loading and converting every document for each query.
-- `get_open_pane_context` lists open tabs when called without a `tabId`. With a `tabId`, it returns bounded context from that tab. A visible document editor supplies live content, cursor/selection context, and block refs. An inactive document or chat supplies saved, read-only content. An app tab supplies metadata.
+- `get_open_pane_context` lists open tabs when called without a `tabId`, or with a blank one. With a real `tabId`, it returns bounded context from that tab. An unknown id returns the current tab list so the caller can retry with an exact id. A new chat that has never been sent is still an open tab: it has no thread, and reading it reports that it has no messages. A visible document editor supplies live content, cursor/selection context, and block refs. An inactive document or chat supplies saved, read-only content. An app tab supplies metadata.
 - `create_document` saves a new document from an optional title and Markdown body. It returns the new document ID without changing the active pane.
 - `duplicate_document` copies an existing document's content and formatting under a new ID. It saves an open editor first so the copy includes current content; a `tabId` identifies the source editor when needed. A deleted or missing source is refused.
 

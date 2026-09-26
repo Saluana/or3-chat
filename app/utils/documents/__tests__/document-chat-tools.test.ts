@@ -213,4 +213,86 @@ describe('chat document tools', () => {
             content: '{"documentBlocks":[{"ref":"b1"}]}',
         });
     });
+
+    it('lists a blank chat and returns that list when tabId is blank or unknown', async () => {
+        disposers.push(setWorkspaceTabPaletteProvider(() => [
+            {
+                id: 'tab-new',
+                resource: { kind: 'chat', threadId: null },
+                cachedTitle: 'New chat',
+                createdAt: 1,
+                lastActivatedAt: 2,
+                ephemeral: true,
+            },
+            {
+                id: 'tab-doc',
+                resource: { kind: 'document', documentId: 'doc-a' },
+                cachedTitle: 'Draft',
+                createdAt: 1,
+                lastActivatedAt: 3,
+                ephemeral: false,
+            },
+            {
+                id: 'tab-self',
+                resource: { kind: 'chat', threadId: 'thread-a' },
+                cachedTitle: 'This chat',
+                createdAt: 1,
+                lastActivatedAt: 4,
+                ephemeral: false,
+            },
+        ]));
+        disposers.push(registerDocumentChatTools());
+        const registry = useToolRegistry();
+        registry.setEnabled('get_open_pane_context', true);
+        const tool = registry.getTool('get_open_pane_context')!;
+        const context = {
+            subject: null,
+            workspaceId: 'workspace-a',
+            threadId: 'thread-a',
+            messageId: null,
+            callId: 'call-a',
+            requestId: 'request-a',
+            abortSignal: new AbortController().signal,
+        };
+
+        const listed = await registry.executeTool(
+            'get_open_pane_context', '{"tabId":""}', context, { definition: tool.definition },
+        );
+        expect(listed.error).toBeUndefined();
+        const blank = await registry.executeTool(
+            'get_open_pane_context', '{"tabId":" "}', context, { definition: tool.definition },
+        );
+        expect(blank.error).toBeUndefined();
+        expect(JSON.parse(blank.result!)).toEqual(JSON.parse(listed.result!));
+        expect(JSON.parse(listed.result!)).toMatchObject({
+            total: 3,
+            tabs: [
+                { tabId: 'tab-new', kind: 'chat', empty: true },
+                { tabId: 'tab-doc', kind: 'document', documentId: 'doc-a' },
+                { tabId: 'tab-self', kind: 'chat', threadId: 'thread-a', current: true },
+            ],
+        });
+        expect(JSON.parse(listed.result!).tabs[0].threadId).toBeUndefined();
+
+        const missed = await registry.executeTool(
+            'get_open_pane_context', '{"tabId":"list"}', context, { definition: tool.definition },
+        );
+        expect(missed.error).toBeUndefined();
+        expect(JSON.parse(missed.result!)).toMatchObject({
+            matched: false,
+            tabs: [{ tabId: 'tab-new' }, { tabId: 'tab-doc' }, { tabId: 'tab-self' }],
+        });
+
+        const emptyChat = await registry.executeTool(
+            'get_open_pane_context', '{"tabId":"tab-new"}', context, { definition: tool.definition },
+        );
+        expect(emptyChat.error).toBeUndefined();
+        expect(JSON.parse(emptyChat.result!)).toMatchObject({
+            tabId: 'tab-new',
+            kind: 'chat',
+            empty: true,
+            content: 'This chat has no messages yet.',
+        });
+        expect(JSON.parse(emptyChat.result!).threadId).toBeUndefined();
+    });
 });

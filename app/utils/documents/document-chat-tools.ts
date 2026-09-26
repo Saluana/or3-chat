@@ -6,6 +6,7 @@ import type { ToolDefinition, ToolExecutionContext } from '~/utils/chat/types';
 import { DOCUMENT_AI_AGENT_TOOLS } from './document-ai-tools';
 import { getActiveDocumentEditorSession } from '~/composables/documents/useDocumentEditorSessions';
 import { getOpenWorkspaceTabs } from '~/core/search/command-palette/sources/workspace-tab-source';
+import type { WorkspaceTab } from '~/core/workspace-tabs/types';
 import { tiptapToPlainText, normalizeMessageContent } from '~/core/search/command-palette/normalize';
 import { messagesByThread } from '~/db/messages';
 import { getThread } from '~/db/threads';
@@ -181,12 +182,16 @@ const openPaneContextDefinition: ToolDefinition = {
     type: 'function',
     function: {
         name: 'get_open_pane_context',
-        description: 'List the other open workspace tabs when called without tabId. With tabId, read bounded context from that tab. Visible document editors include live unsaved content and exact block refs; inactive documents and chats return read-only saved content. App tabs return metadata.',
+        description: 'Call with no arguments, or a blank tabId, to list open workspace tabs and their exact tabIds. Do not invent a tabId. A new chat with no messages is still open: it has no threadId, and reading it reports that it is empty. Pass a listed tabId to read that tab. An unknown tabId returns the current list instead of failing. Visible document editors include live unsaved content and block refs; inactive documents and chats return read-only saved content. App tabs return metadata.',
         parameters: {
             type: 'object',
             additionalProperties: false,
             properties: {
-                tabId: { type: 'string', minLength: 1, maxLength: 200 },
+                tabId: {
+                    type: 'string',
+                    maxLength: 2_000,
+                    description: 'Omit, or pass a blank string, to list open tabs. Otherwise pass a tabId from that list.',
+                },
             },
         },
     },
@@ -257,32 +262,75 @@ async function searchDocuments(query: string, context: ToolExecutionContext): Pr
     });
 }
 
+const EMPTY_CHAT_CONTEXT = 'This chat has no messages yet.';
+
+function openTabTitle(tab: WorkspaceTab): string {
+    if (tab.cachedTitle) return tab.cachedTitle;
+    const resource = tab.resource;
+    if (resource.kind === 'chat') return resource.threadId ? 'Chat' : 'New chat';
+    if (resource.kind === 'document') return 'Untitled document';
+    return resource.appId;
+}
+
+function summarizeOpenTab(tab: WorkspaceTab, currentThreadId: string | null) {
+    const resource = tab.resource;
+    if (resource.kind === 'document') {
+        return {
+            tabId: tab.id,
+            title: openTabTitle(tab),
+            kind: resource.kind,
+            documentId: resource.documentId,
+            editorOpen: Boolean(getActiveDocumentEditorSession(resource.documentId, tab.id)),
+        };
+    }
+    if (resource.kind === 'chat') {
+        return {
+            tabId: tab.id,
+            title: openTabTitle(tab),
+            kind: resource.kind,
+            ...(resource.threadId
+                ? {
+                    threadId: resource.threadId,
+                    ...(resource.threadId === currentThreadId ? { current: true } : {}),
+                }
+                : { empty: true }),
+        };
+    }
+    return {
+        tabId: tab.id,
+        title: openTabTitle(tab),
+        kind: resource.kind,
+        appId: resource.appId,
+        recordId: resource.recordId,
+    };
+}
+
+function listOpenTabsPayload(tabs: readonly WorkspaceTab[], currentThreadId: string | null) {
+    return {
+        tabs: tabs.slice(0, 50).map((tab) => summarizeOpenTab(tab, currentThreadId)),
+        total: tabs.length,
+    };
+}
+
 async function openPaneContext(tabId: string | undefined, context: ToolExecutionContext): Promise<string> {
     assertChatWorkspace(context);
+    const requested = tabId?.trim();
     const tabs = getOpenWorkspaceTabs();
-    if (!tabId) {
+    if (!requested) {
+        return JSON.stringify(listOpenTabsPayload(tabs, context.threadId));
+    }
+    const tab = tabs.find((entry) => entry.id === requested);
+    if (!tab) {
         return JSON.stringify({
-            tabs: tabs.slice(0, 50).map((tab) => ({
-                tabId: tab.id,
-                title: tab.cachedTitle || 'Untitled',
-                kind: tab.resource.kind,
-                ...(tab.resource.kind === 'document'
-                    ? {
-                        documentId: tab.resource.documentId,
-                        editorOpen: Boolean(getActiveDocumentEditorSession(tab.resource.documentId, tab.id)),
-                    }
-                    : tab.resource.kind === 'chat'
-                        ? { threadId: tab.resource.threadId }
-                        : { appId: tab.resource.appId, recordId: tab.resource.recordId }),
-            })),
-            total: tabs.length,
+            matched: false,
+            message: 'No open tab uses that id. Copy a tabId from tabs and call again to read it. A new chat with no messages has no threadId; it is empty, not closed.',
+            ...listOpenTabsPayload(tabs, context.threadId),
         });
     }
-    const tab = tabs.find((entry) => entry.id === tabId);
-    if (!tab) throw new Error('That tab is no longer open. List tabs again.');
     const resource = tab.resource;
     const originDbName = getDb().name;
     let content: string;
+    let emptyChat = false;
     if (resource.kind === 'document') {
         const session = getActiveDocumentEditorSession(resource.documentId, tab.id);
         if (session?.getChatContext) {
@@ -303,19 +351,42 @@ async function openPaneContext(tabId: string | undefined, context: ToolExecution
         content = (messages ?? []).filter((message) => !message.deleted).slice(-30)
             .map((message) => `${message.role}: ${normalizeMessageContent(message).slice(0, 2_000)}`)
             .join('\n');
+        if (!content.trim()) {
+            content = EMPTY_CHAT_CONTEXT;
+            emptyChat = true;
+        }
+    } else if (resource.kind === 'chat') {
+        content = EMPTY_CHAT_CONTEXT;
+        emptyChat = true;
     } else {
         content = '';
     }
     assertChatWorkspace(context);
     if (getDb().name !== originDbName) throw new Error('The workspace changed while reading this tab.');
-    const current = getOpenWorkspaceTabs().find((entry) => entry.id === tabId);
+    const current = getOpenWorkspaceTabs().find((entry) => entry.id === requested);
     if (!current || JSON.stringify(current.resource) !== JSON.stringify(resource)) {
-        throw new Error('That tab changed while its context was being read. List tabs again.');
+        return JSON.stringify({
+            matched: false,
+            message: 'That tab changed while it was being read. Copy a tabId from tabs and call again.',
+            ...listOpenTabsPayload(getOpenWorkspaceTabs(), context.threadId),
+        });
     }
+    const identity = resource.kind === 'chat'
+        ? {
+            kind: 'chat' as const,
+            ...(resource.threadId
+                ? {
+                    threadId: resource.threadId,
+                    ...(resource.threadId === context.threadId ? { current: true } : {}),
+                }
+                : {}),
+            ...(emptyChat ? { empty: true } : {}),
+        }
+        : resource;
     return JSON.stringify({
-        tabId,
-        title: tab.cachedTitle || 'Untitled',
-        ...resource,
+        tabId: requested,
+        title: openTabTitle(tab),
+        ...identity,
         content: truncate(content),
         readOnly: true,
         editorOpen: resource.kind === 'document'
