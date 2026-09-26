@@ -49,6 +49,8 @@ export interface SidebarPageDef {
     id: string;
     /** Display label shown in UI (e.g., tooltips) */
     label: string;
+    /** Optional description in mobile navigation. */
+    description?: string;
     /** Iconify icon name */
     icon: string;
     /** Optional validated app image URL. The Iconify icon remains the fallback. */
@@ -169,6 +171,7 @@ const SidebarPageDefSchema = z.object({
         .string()
         .min(1, 'Label is required')
         .max(100, 'Label must be 100 characters or less'),
+    description: z.string().max(200).optional(),
     icon: z.string().min(1, 'Icon is required'),
     image: z.string().min(1).optional(),
     order: z

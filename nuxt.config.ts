@@ -83,10 +83,6 @@ const pluginSdkSourceRoot = resolve(__dirname, 'packages/plugin-sdk/src');
 const hasPluginSdkSource = existsSync(resolve(pluginSdkSourceRoot, 'index.ts'));
 const pluginSdkSourceAliases: Record<string, string> = hasPluginSdkSource
     ? {
-          // The root entry too: a plugin loaded from a sibling checkout must
-          // resolve the *same* SDK instance this app runs, or its `ui` helpers
-          // come from a second copy with a different shape.
-          '@or3/plugin-sdk': resolve(pluginSdkSourceRoot, 'index.ts'),
           '@or3/plugin-sdk/host': resolve(pluginSdkSourceRoot, 'host.ts'),
           '@or3/plugin-sdk/package-tree': resolve(
               pluginSdkSourceRoot,
@@ -111,11 +107,15 @@ const pluginSdkSourceAliases: Record<string, string> = hasPluginSdkSource
               pluginSdkSourceRoot,
               'profile.ts',
           ),
+          // The root entry too: a plugin loaded from a sibling checkout must
+          // resolve the *same* SDK instance this app runs, or its `ui` helpers
+          // come from a second copy with a different shape.
+          '@or3/plugin-sdk': resolve(pluginSdkSourceRoot, 'index.ts'),
       }
     : {};
 const pluginSdkViteAliases = Object.entries(pluginSdkSourceAliases).map(
     ([find, replacement]) => ({ find, replacement }),
-);
+).sort((left, right) => right.find.length - left.find.length);
 
 function isPackageInstalled(pkgName: string): boolean {
     return existsSync(resolve(__dirname, 'node_modules', pkgName));

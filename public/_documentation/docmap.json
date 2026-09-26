@@ -965,7 +965,7 @@
                     "name": "server-tool-registry.md",
                     "path": "/utils/server-tool-registry",
                     "category": "Tools",
-                    "summary": "server/utils/chat/tool-registry.ts provides the server-side tool registry used by background chat and background workflow execution. It is intentionally separate from the client Vue registry."
+                    "summary": "Server tool registration and execution for background chat and workflows, with request-scoped execution context, admitted definitions, validation, cancellation and per-tool timeouts."
                 },
                 {
                     "name": "sidebar-layout-api.md",
@@ -983,7 +983,7 @@
                     "name": "tool-runtime.md",
                     "path": "/utils/tool-runtime",
                     "category": "Tools",
-                    "summary": "OR3 tools use a shared runtime flag to control where a tool may execute: ts type ToolRuntime = 'hybrid' 'client' 'server' Defined in app/utils/chat/types.ts."
+                    "summary": "Client, server and hybrid tool placement. Native background chat orchestrates server handlers and delegates browser-only calls through the client-tool bridge; runtime placement does not grant data access."
                 },
                 {
                     "name": "tools-public.md",

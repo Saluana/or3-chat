@@ -415,8 +415,8 @@ export const CONFIG_METADATA: Record<string, ConfigMetadata> = {
 
     // Features
     'OR3_WORKFLOWS_ENABLED': {
-        label: 'Enable Workflows',
-        description: 'Enable workflow automation features',
+        label: 'Enable Workflows plugin',
+        description: 'Enable the installed Workflows plugin',
         group: 'Features',
         order: 1,
         valueType: 'boolean',

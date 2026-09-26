@@ -53,8 +53,7 @@
                 @activate="onWorkspaceTabActivate"
                 @close="onWorkspaceTabClose"
                 :can-create-document="documentsEnabled"
-                :can-create-workflow="canCreateWorkflowTab"
-                :can-create-agent="canCreateAgentTab"
+                :plugin-items="pluginNewTabItems"
                 @new-tab="onWorkspaceNewTab"
                 @create-tab="onWorkspaceCreateTab"
                 @reorder="onWorkspaceTabReorder"
@@ -295,13 +294,14 @@
                           ? 'pt-[46px] h-full'
                           : 'pt-0 h-full',
                     'flex flex-row gap-0 items-stretch w-full pane-container',
+                    { 'pane-container--multiple': panes.length > 1 && !isMobile },
                 ]"
             >
                 <div
                     v-for="(pane, i) in panes"
                     :key="pane.id"
                     v-show="!isMobile || i === activePaneIndex"
-                    class="relative flex flex-col border-l-[var(--md-border-width)] first:border-l-0 outline-none focus-visible:ring-0 overflow-visible"
+                    class="workspace-pane relative flex flex-col border-l-[var(--md-border-width)] first:border-l-0 outline-none focus-visible:ring-0 overflow-visible"
                     :style="{ width: isMobile ? '100%' : getPaneWidth(i) }"
                     :class="[
                         ...(i === activePaneIndex && panes.length > 1
@@ -366,6 +366,7 @@
                         :is-desktop="!isMobile"
                         @resize-start="onPaneResizeStart"
                         @resize-keydown="onPaneResizeKeydown"
+                        @swap="onSwapAdjacentPanes"
                     />
                 </div>
             </div>
@@ -402,12 +403,6 @@ import { useWorkspaceTabMetadata } from '~/composables/core/useWorkspaceTabMetad
 import WorkspaceChrome from '~/components/workspace-tabs/WorkspaceChrome.vue';
 import type { WorkspaceNewTabCreateKind } from '~/components/workspace-tabs/WorkspaceNewTabControl.vue';
 import { usePaneApps } from '~/composables/core/usePaneApps';
-import {
-    EXTERNAL_AGENT_LAUNCHER_REF,
-    EXTERNAL_AGENT_PANE_APP_ID,
-} from '~/core/external-agents/refs';
-import { useExternalAgentRuntime } from '~/core/external-agents/runtime';
-import { useWorkflowsCrud } from '~/plugins/workflows/composables/useWorkflows';
 import {
     getActiveWorkspaceId,
     getDb,
@@ -446,13 +441,13 @@ import {
 import PaneUnknown from '~/components/PaneUnknown.vue';
 import PaneResizeHandle from '~/components/panes/PaneResizeHandle.vue';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
+import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 import { usePageShellTheme } from '~/composables/core/usePageShellTheme';
 import { CORE_APP_COMPONENT_DEFAULTS } from '~/theme/_shared/theme-components-registry';
 import {
     validateDbRecordWithRetry,
     type ValidationStatus,
 } from '~/composables/core/recordValidation';
-import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 import { useIcon } from '~/composables/useIcon';
 import { useOr3Config } from '~/composables/useOr3Config';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
@@ -532,27 +527,14 @@ const dashboardEnabled = computed(() => or3Config.features.dashboard.enabled);
 const workspaceTabsEnabled = computed(
     () => or3Config.features.workspaceTabs.enabled
 );
-const canCreateWorkflowTab = computed(
-    () =>
-        or3Config.features.workflows.enabled &&
-        or3Config.features.workflows.editor
+const { getPaneApp, listPaneApps } = usePaneApps();
+const pluginNewTabItems = computed(() =>
+    listPaneApps.value.flatMap((app) =>
+        app.newTab && (app.newTab.isAvailable?.() ?? true)
+            ? [{ id: app.id, label: app.newTab.label, icon: app.newTab.icon }]
+            : []
+    )
 );
-const externalAgentRuntime = useExternalAgentRuntime();
-const canCreateAgentTab = computed(() => {
-    const snapshot = externalAgentRuntime.snapshot.value;
-    if (!snapshot) return false;
-    if (
-        snapshot.connectionState !== 'online' &&
-        snapshot.connectionState !== 'degraded'
-    ) {
-        return false;
-    }
-    return (
-        externalAgentRuntime.controller
-            ?.availableRunnerOptions()
-            .some((runner) => runner.available) ?? false
-    );
-});
 // Pane and tab IDs are runtime UUIDs. Render the deterministic legacy chrome
 // until hydration finishes, then mount the workspace chrome with client IDs.
 // This avoids server/client attribute mismatches without making IDs global.
@@ -596,6 +578,7 @@ const {
     newWindowTooltip,
     addPane,
     closePane,
+    swapAdjacentPanes,
     setActive,
     focusPrev,
     focusNext,
@@ -912,7 +895,6 @@ whenever(shiftRight, () => {
 });
 
 // ---------------- Pane Component Resolution ----------------
-const { getPaneApp } = usePaneApps();
 
 /**
  * Resolve the component to render for a pane based on its mode.
@@ -1041,6 +1023,11 @@ function onPaneFocused(index: number): void {
     if (tabId) void workspaceTabs.activateTab(tabId, 'pointer');
 }
 
+function onSwapAdjacentPanes(leftIndex: number): void {
+    swapAdjacentPanes(leftIndex);
+    if (workspaceTabsEnabled.value) workspaceTabs.flushPersistence();
+}
+
 function onWorkspaceTabActivate(
     tabId: string,
     reason: 'pointer' | 'keyboard'
@@ -1114,13 +1101,6 @@ function onWorkspaceNewTab(): void {
     void workspaceTabs.newTab();
 }
 
-function getPanePluginPostsApi(): PanePluginApi['posts'] | null {
-    return (
-        (globalThis as { __or3PanePluginApi?: PanePluginApi }).__or3PanePluginApi
-            ?.posts ?? null
-    );
-}
-
 async function onWorkspaceCreateTab(
     kind: WorkspaceNewTabCreateKind
 ): Promise<void> {
@@ -1132,61 +1112,25 @@ async function onWorkspaceCreateTab(
         await onNewDocument();
         return;
     }
-    if (kind === 'workflow') {
-        if (!canCreateWorkflowTab.value) {
-            toast.add({
-                title: 'Workflows disabled',
-                description: 'This deployment has workflow editing turned off.',
-                color: 'warning',
-            });
-            return;
-        }
-        const posts = getPanePluginPostsApi();
-        if (!posts) {
-            toast.add({
-                title: 'Could not create workflow',
-                description: 'The workspace posts API is not ready yet.',
-                color: 'warning',
-            });
-            return;
-        }
-        const { createWorkflow } = useWorkflowsCrud(posts);
-        const result = await createWorkflow('Untitled Workflow');
-        if (!result.ok) {
-            toast.add({
-                title: 'Workflow creation failed',
-                description: result.error,
-                color: 'error',
-            });
-            return;
-        }
+    const app = getPaneApp(kind);
+    if (!app?.newTab || !(app.newTab.isAvailable?.() ?? true)) return;
+    try {
+        const recordId = await app.newTab.createRecordId();
+        if (!recordId || getPaneApp(kind) !== app) return;
         await workspaceTabs.openResource(
             {
                 kind: 'app',
-                appId: 'or3-workflows',
-                recordId: result.id,
+                appId: kind,
+                recordId,
             },
             { allowDuplicate: true }
         );
-        return;
-    }
-    if (kind === 'agent') {
-        if (!canCreateAgentTab.value) {
-            toast.add({
-                title: 'Agent host unavailable',
-                description: 'Connect a trusted external agent host first.',
-                color: 'warning',
-            });
-            return;
-        }
-        await workspaceTabs.openResource(
-            {
-                kind: 'app',
-                appId: EXTERNAL_AGENT_PANE_APP_ID,
-                recordId: EXTERNAL_AGENT_LAUNCHER_REF,
-            },
-            { allowDuplicate: true }
-        );
+    } catch (error) {
+        toast.add({
+            title: `Could not create ${app.label.toLowerCase()}`,
+            description: error instanceof Error ? error.message : 'Unknown error',
+            color: 'error',
+        });
     }
 }
 

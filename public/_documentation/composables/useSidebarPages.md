@@ -108,6 +108,7 @@ if (page) {
 const cleanup = registerSidebarPage({
     id: 'my-page',
     label: 'My Page',
+    description: 'Open my page', // Optional mobile navigation description
     icon: 'my-icon', // Required field
     component: MyPageComponent,
     order: 100,

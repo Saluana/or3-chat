@@ -168,8 +168,17 @@ describe('workspace profile server plugin request bootstrap', () => {
             shouldPreserveHydratedWorkspaceProfile(
                 installedThemeProfile.id,
                 undefined,
-                installedThemeInitialClientProjection
+                installedThemeInitialClientProjection,
+                true
             )
         ).toBe(true);
+        expect(
+            shouldPreserveHydratedWorkspaceProfile(
+                installedThemeProfile.id,
+                undefined,
+                installedThemeInitialClientProjection,
+                false
+            )
+        ).toBe(false);
     });
 });

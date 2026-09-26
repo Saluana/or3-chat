@@ -21,6 +21,7 @@ import {
 import {
   setExternalAgentCloudHostRefresh,
   setExternalAgentController,
+  useExternalAgentRuntime,
 } from "~/core/external-agents/runtime";
 import type {
   ExternalAgentAttachment,
@@ -34,6 +35,8 @@ import type {
 import { externalAgentDriver } from "~/core/external-agents/types";
 import { getActiveWorkspaceId, subscribeActiveWorkspaceDb } from "~/db/client";
 import { getGlobalMultiPaneApi } from "~/utils/multiPaneApi";
+import { registerWorkspaceProfile } from "~/core/workspace-profiles/registry";
+import { CODING_WORKSPACE_PROFILE } from "./external-agents/coding-workspace-profile";
 
 export function adaptInternClient(client: InternClient): ExternalAgentClient {
   const cleanupUnsupportedWarning =
@@ -549,6 +552,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     getWorkspaceScope: () => getActiveWorkspaceId() ?? "local",
   });
   setExternalAgentController(controller);
+  const agentRuntime = useExternalAgentRuntime();
   let disposed = false;
   const isDisposed = () => disposed;
   const cloudHostReconciler = createCloudHostReconciler({
@@ -605,18 +609,32 @@ export default defineNuxtPlugin((nuxtApp) => {
     icon: "lucide:bot",
     order: 82,
     replaceRecordInCurrentTab: true,
+    newTab: {
+      label: "New agent session",
+      icon: "i-lucide-bot",
+      isAvailable: () => {
+        const snapshot = agentRuntime.snapshot.value;
+        return !!snapshot && (snapshot.connectionState === "online" || snapshot.connectionState === "degraded") &&
+          controller.availableRunnerOptions().some((runner) => runner.available);
+      },
+      createRecordId: async () => EXTERNAL_AGENT_LAUNCHER_REF,
+    },
     component: () =>
       import("~/components/external-agents/ExternalAgentSessionPane.vue"),
   });
   const sidebarHandle = useSidebarPages().registerSidebarPage({
     id: EXTERNAL_AGENTS_SIDEBAR_PAGE_ID,
     label: "Agents",
+    description: "Build & manage AI agents",
     icon: "lucide:bot",
     order: 82,
     keepAlive: true,
     usesDefaultHeader: false,
     component: () =>
       import("~/components/external-agents/ExternalAgentsSidebarPage.vue"),
+  });
+  const codingProfileHandle = registerWorkspaceProfile(CODING_WORKSPACE_PROFILE, {
+    source: { kind: "plugin", id: "or3-external-agents" },
   });
   const activityHandle = getActivityRegistry().register(
     createExternalAgentActivitySource({ controller, openSession }),
@@ -690,6 +708,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     commandHandles.forEach((handle) => handle.dispose());
     activityHandle.dispose();
     sidebarHandle();
+    codingProfileHandle.dispose();
     paneHandle.dispose();
     setExternalAgentCloudHostRefresh(undefined);
     setExternalAgentController(undefined);

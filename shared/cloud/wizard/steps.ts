@@ -480,7 +480,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     help: 'Only say yes if you already know you want to turn something off.',
                     defaultValue: false,
                 },
-                { key: 'workflowsEnabled', type: 'boolean', label: 'Workflows (automation pipelines)', visibleWhen: (current) => current.featuresAdvancedEnabled },
+                { key: 'workflowsEnabled', type: 'boolean', label: 'Workflows plugin (automation pipelines)', visibleWhen: (current) => current.featuresAdvancedEnabled },
                 { key: 'documentsEnabled', type: 'boolean', label: 'Documents (rich text editor)', visibleWhen: (current) => current.featuresAdvancedEnabled },
                 { key: 'backupEnabled', type: 'boolean', label: 'Backups (export/import conversations)', visibleWhen: (current) => current.featuresAdvancedEnabled },
                 { key: 'mentionsEnabled', type: 'boolean', label: 'Mentions (@-mention documents and chats)', visibleWhen: (current) => current.featuresAdvancedEnabled },

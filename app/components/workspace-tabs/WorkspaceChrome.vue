@@ -36,8 +36,7 @@
                     <WorkspaceNewTabControl
                         class="workspace-chrome-new-tab"
                         :can-create-document="canCreateDocument"
-                        :can-create-workflow="canCreateWorkflow"
-                        :can-create-agent="canCreateAgent"
+                        :plugin-items="pluginItems"
                         @new-tab="emit('new-tab')"
                         @create="emit('create-tab', $event)"
                     />
@@ -71,8 +70,7 @@
                 :can-reopen-closed="canReopenClosed"
                 :copyable-tab-ids="copyableTabIds"
                 :can-create-document="canCreateDocument"
-                :can-create-workflow="canCreateWorkflow"
-                :can-create-agent="canCreateAgent"
+                :plugin-items="pluginItems"
                 @activate="(tabId, reason) => emit('activate', tabId, reason)"
                 @close="emit('close', $event)"
                 @new-tab="emit('new-tab')"
@@ -102,6 +100,7 @@ import WorkspaceTabBar from './WorkspaceTabBar.vue';
 import WorkspaceTabSwitcher from './WorkspaceTabSwitcher.vue';
 import WorkspaceNewTabControl, {
     type WorkspaceNewTabCreateKind,
+    type WorkspaceNewTabItem,
 } from './WorkspaceNewTabControl.vue';
 import AppIcon from '~/components/ui/AppIcon.vue';
 
@@ -118,8 +117,7 @@ const props = withDefaults(
         canReopenClosed?: boolean;
         copyableTabIds?: ReadonlySet<string>;
         canCreateDocument?: boolean;
-        canCreateWorkflow?: boolean;
-        canCreateAgent?: boolean;
+        pluginItems?: readonly WorkspaceNewTabItem[];
     }>(),
     {
         statusByTabId: undefined,
@@ -129,8 +127,7 @@ const props = withDefaults(
         canReopenClosed: false,
         copyableTabIds: () => new Set<string>(),
         canCreateDocument: false,
-        canCreateWorkflow: false,
-        canCreateAgent: false,
+        pluginItems: () => [],
     }
 );
 

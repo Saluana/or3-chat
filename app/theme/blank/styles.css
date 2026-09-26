@@ -4,6 +4,27 @@
     --chat-composer-border-radius: 28px;
     --blank-brand-accent: #2a8fd6;
 
+    /* The sidebar draws its own soft edge inside the layout. */
+    #sidebar {
+        border-right-width: 0;
+    }
+
+    /* The tab bar and sidebar draw the outer seams; each divider has one owner. */
+    .pane-container--multiple > .workspace-pane {
+        border: 0;
+        border-bottom: 1px solid var(--md-border-color);
+    }
+
+    .pane-container--multiple > .workspace-pane:not(:last-child) {
+        border-right: 1px solid var(--md-border-color);
+    }
+
+    .pane-container--multiple > .workspace-pane.pane-active::before {
+        box-shadow: inset 0 0 10px
+            color-mix(in srgb, var(--md-primary) 10%, transparent);
+        z-index: 10;
+    }
+
     /* Workspace tabs: quiet chips that match blank's borderless shell. */
     --or3-workspace-chrome-size: 44px;
     --or3-workspace-chrome-mobile-size: 48px;

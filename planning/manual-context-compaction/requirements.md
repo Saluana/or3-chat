@@ -6,11 +6,14 @@ Add explicit context management to native OR3 chat: a context meter, blocking ov
 
 ## Context
 
-Inspected on 2026-09-26: OR3 uses Bun, Nuxt 4/Vue 3, Nuxt UI, workspace-scoped Dexie, OpenRouter SSE, Ajv/Zod, Vitest, and Playwright. `public/_documentation/docmap.json` led to the chat, branching, action-registry, tokenizer, sidebar, and tool-runtime documentation. The implementation has a canonical transcript projection, mixed client/server background tools, transactional sync outbox capture, and server gateway provider registries. Normal chat history loads local rows; the separate `buildContext()` helper only stitches one parent. Token enforcement currently trims twice on initial send and also on continuation. The input allowance currently defaults to 8,000 tokens and is capped at 128,000; sync messages are capped at 256 KiB. SQLite and Convex providers are installed versioned dependencies, so provider changes are separate deliverables. Existing unrelated working-tree edits, including a message-renderer registry, must be preserved.
+Inspected on 2026-09-26: OR3 uses Bun, Nuxt 4/Vue 3, Nuxt UI, workspace-scoped Dexie, OpenRouter SSE, Ajv/Zod, Vitest, and Playwright. `public/_documentation/docmap.json` led to the chat, branching, action-registry, tokenizer, sidebar, model-catalog, AI-settings and tool-runtime documentation. OpenRouter metadata is already fetched/cached through `models-service` and `useModelStore`; Dashboard `AiPage.vue` edits preferences through the KV-backed `useAiSettings`. The implementation has canonical transcript projection, mixed client/server background tools, transactional sync capture, and provider registries. Normal chat history loads local rows; `buildContext()` stitches only one parent. Token enforcement currently trims on send and continuation and applies an 8,000-token fallback and 128,000-token cap; this plan explicitly removes those context restrictions. The separate 256 KiB per-message sync limit remains a storage constraint. Provider dependencies are versioned; unrelated working-tree edits must be preserved.
 
 ## Assumptions
 
 - The five supplied decisions remain binding: compaction creates a reference-linked fork without copying historical messages; overflow blocks unless lossy trimming is explicitly confirmed; compaction uses the chat's selected model; lineage is shown as a collapsible flat group; landmark IDs are the primary retrieval route and retrieval defaults to pre-compaction history.
+- Model capacity comes from the existing OpenRouter catalog/cache, with no default OR3 context ceiling or guessed capacity. A model advertising 1,000,000 tokens exposes that full window. Input-usage estimates remain labeled estimates; they do not redefine the model's advertised limit.
+- Dashboard AI settings gains an optional maximum context size, defaulting to unset (“Use model limit”). It follows the existing workspace KV preference scope, applies to newly started native chat/compaction generations, and cannot raise a model's real limit. An in-flight generation retains the preference captured at admission.
+- Reply capacity follows the actual model window and any explicit reply-length setting. Without an explicit reply limit, the request can use remaining context for output up to the model's advertised output maximum; no fixed token reserve or percentage is withheld from input.
 - “Same model” means the resolved model selection captured when the user starts compaction, including the selected routing variant. There is no cheaper summarizer or automatic fallback model. A dynamic router must resolve a concrete model or report that compaction is unavailable for that selection.
 - A reference-linked compacted fork has different **prompt projection** from an ordinary reference fork: parentage enables retrieval, not automatic inclusion of ancestor messages.
 - “Chain” describes each thread's parent path. Existing forks and concurrent compactions can create siblings; they remain a flat family list with explicit parent labels, without pretending that siblings continue one another.
@@ -28,7 +31,7 @@ Inspected on 2026-09-26: OR3 uses Bun, Nuxt 4/Vue 3, Nuxt UI, workspace-scoped D
 - Automatic compaction, in-place pruning, a verbatim recent-message tail, tree visualization, merging sibling branches, and model-switching summarization.
 - Semantic/vector search, a new global search index, generic history-version storage, and resurrecting deleted content.
 - A guarantee of exact token counts for every model, hidden reasoning representation, image, or PDF.
-- Expanding the existing 128,000-token client safety cap or redesigning existing media-inclusion policies.
+- Redesigning existing media-inclusion policies or adding new caches for model metadata. Removing the legacy application context cap is explicitly in scope.
 - Stable releases, dependency publication, live migrations, production data changes, or implementation during this planning task.
 
 ## Requirements
@@ -56,21 +59,22 @@ Inspected on 2026-09-26: OR3 uses Bun, Nuxt 4/Vue 3, Nuxt UI, workspace-scoped D
 
 ### R3: Context meter and budget definition
 
-**User Story:** As a user, I want a visible estimate of the next request's input allowance so that I can compact before reaching it.
+**User Story:** As a user, I want to see my context usage against the selected model's actual capacity so that I can choose when to compact.
 
 **Acceptance Criteria:**
-- R3.AC1: WHEN chat input is available THEN the composer SHALL show estimated input / effective input allowance and a percentage, using amber from 70% and red from 90%; equality with the allowance SHALL be allowed and an estimate above it SHALL be blocked.
+- R3.AC1: WHEN chat input is available THEN the composer SHALL show estimated input / effective context window and a percentage, using amber from 70% and red from 90%; it SHALL separately expose reply capacity and block when input plus an explicitly requested reply cannot fit or no positive reply capacity remains.
 - R3.AC2: WHEN the estimate is prepared THEN it SHALL account for the effective system prompt, summary and landmarks, replayed history, draft, injected context, tool definitions, arguments/results, and protocol overhead; unknown media costs SHALL be visibly identified.
-- R3.AC3: WHEN a matching usage baseline exists THEN the estimate SHALL include its prompt count and only the replayed suffix not already measured, cross-checked against the whole-payload estimate; otherwise it SHALL use a margin-adjusted estimate.
-- R3.AC4: WHEN model, prompt, tools, attachments, thread history, or draft changes THEN the preview SHALL update after a 120 ms debounce; actual send SHALL perform a fresh check after all payload-changing filters.
-- R3.AC5: WHEN catalog metadata is absent or the application safety cap is limiting THEN the UI SHALL disclose the fallback/cap rather than label it as the provider's full context window; output reservation SHALL agree with the request's completion limit.
+- R3.AC3: WHEN a matching usage baseline exists THEN the estimate SHALL include its prompt count and only the replayed suffix not already measured, cross-checked against the whole-payload estimate; otherwise it SHALL show an input-usage estimate with uncertainty, without imposing a blanket percentage haircut on available context.
+- R3.AC4: WHEN model, maximum-context preference, prompt, tools, attachments, thread history, or draft changes THEN the preview SHALL update after a 120 ms debounce; actual send SHALL perform a fresh check after all payload-changing filters.
+- R3.AC5: WHEN model capacity is needed THEN the system SHALL use validated OpenRouter metadata from the existing catalog/cache and refresh it when missing; IF no valid capacity can be obtained THEN it SHALL show a recoverable metadata-unavailable state without inventing an 8k or other fallback capacity.
+- R3.AC6: WHEN the selected model advertises a 1,000,000-token context and no user maximum is set THEN the effective context window SHALL be 1,000,000 tokens, with no 128k cap, fixed reply reserve, percentage reduction or automatic compaction; an explicit reply maximum SHALL be checked against the model's actual limits.
 
 ### R4: Blocking overflow without hidden trimming
 
 **User Story:** As a user, I want an oversized request to stop explicitly so that the model never silently loses older text context.
 
 **Acceptance Criteria:**
-- R4.AC1: IF a final request exceeds its effective input allowance THEN send, retry, continuation, and each foreground/background tool-loop iteration SHALL stop before that provider request and return a structured `context_full` result.
+- R4.AC1: IF a final request cannot fit its input and reply within the effective context window THEN send, retry, continuation, and each foreground/background tool-loop iteration SHALL stop before that provider request and return a structured `context_full` result.
 - R4.AC2: WHEN an initial send is blocked THEN its draft and attachments SHALL remain available, no assistant generation SHALL begin, and no duplicate durable user turn SHALL be produced on retry.
 - R4.AC3: WHEN a later tool-loop request is blocked THEN accepted assistant/tool results SHALL remain durable, completed tools SHALL NOT be rerun automatically, and the generation SHALL end with an actionable context-full state.
 - R4.AC4: WHEN overflow is reported locally or by the provider THEN the composer SHALL show “Context full — compact to continue,” Compact now, and an explicit lossy-trim action; editing the request or selecting a larger supported model SHALL re-evaluate the block.
@@ -194,4 +198,15 @@ Inspected on 2026-09-26: OR3 uses Bun, Nuxt 4/Vue 3, Nuxt UI, workspace-scoped D
 - R15.AC1: WHEN deterministic E2E verification runs THEN captured requests and durable reads SHALL prove summary-only continuation, rolling landmarks, scoped retrieval, atomic failure/cancellation, sidebar navigation and zero provider calls on locally detected overflow.
 - R15.AC2: WHEN background/provider verification runs THEN usage and summary metadata SHALL survive reconnect/sync and retrieval SHALL deny an unauthorized workspace and sibling path using the production authorization boundary.
 - R15.AC3: WHEN verification completes THEN its named Bun harness SHALL save a Playwright report, redacted request bodies, relevant screenshots and machine-readable assertions with the source revision and repeat command; it SHALL require no paid model traffic.
-- R15.AC4: BEFORE release qualification THEN manual evaluation of three consented or synthetic long conversations—tool-heavy coding, discussion, and mixed—SHALL record landmark recall, Work State/Next Move accuracy, absence of transcript-answering, and a two-step rolling merge. Model-quality limitations SHALL be reported separately from deterministic test results.
+- R15.AC4: WHEN feature release qualification is requested THEN manual evaluation of three consented or synthetic long conversations—tool-heavy coding, discussion, and mixed—SHALL record landmark recall, Work State/Next Move accuracy, absence of transcript-answering, and a two-step rolling merge. Model-quality limitations SHALL be reported separately from deterministic test results.
+
+### R16: Optional user maximum context
+
+**User Story:** As a user, I want to optionally limit context from Dashboard AI settings while using the model's full capacity by default.
+
+**Acceptance Criteria:**
+- R16.AC1: WHEN Dashboard AI settings is opened with new or legacy preferences THEN Maximum context tokens SHALL default to “Use model limit,” with no prefilled numeric ceiling.
+- R16.AC2: WHEN the user saves a positive integer maximum THEN the value SHALL persist through the existing `useAiSettings` KV path and apply to new native chat and compaction generations; blank/reset SHALL restore the model limit, and invalid input SHALL show a validation error.
+- R16.AC3: WHEN a user maximum is present THEN the effective context window SHALL be the smaller of that maximum and the selected model's advertised capacity; a saved value above one model's limit SHALL remain saved for other models, and the meter SHALL identify whether the user maximum is active.
+- R16.AC4: WHEN the preference or selected model changes THEN the meter and next generation's admission SHALL recalculate without trimming stored history or triggering compaction; an active generation SHALL retain its admitted preference across tool iterations and background reconnect.
+- R16.AC5: WHEN preferences are reloaded or the workspace changes THEN the maximum SHALL follow the same workspace isolation and reset behavior as existing AI preferences; foreground and server/background admission SHALL apply the same captured value without treating it as authority to exceed provider limits.

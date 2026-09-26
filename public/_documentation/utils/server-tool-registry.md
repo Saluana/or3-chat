@@ -18,7 +18,7 @@ registerServerTool(definition, handler, options?)
 unregisterServerTool(name)
 getServerTool(name)
 listServerTools()
-executeServerTool(toolName, argsJson)
+executeServerTool(toolName, argsJson, context?, admission?)
 ```
 
 ### `registerServerTool`
@@ -39,6 +39,13 @@ registration it owns and returns `false` if that registration was already
 replaced. This keeps HMR and plugin reloads from deleting newer registrations.
 
 ### `executeServerTool`
+
+`context` supplies request-scoped subject, workspace, thread, message, call and
+request IDs plus an abort signal. Handlers receive it as their second argument.
+Calls that omit context receive null subject/workspace/thread fields; handlers
+that read protected data must reject missing authority. `admission`, when
+provided, binds execution to the admitted tool definition. Registry validation
+does not replace the handler's data authorization checks.
 
 Returns:
 
@@ -80,7 +87,8 @@ This keeps SSR boundaries intact and avoids client imports in server code.
 ## Integration Points
 
 - Background chat loop uses `executeServerTool(...)` in
-  `server/utils/background-jobs/stream-handler.ts`.
+  `server/utils/background-jobs/stream-handler.ts` for server/hybrid calls;
+  browser-only calls use the separate client-tool bridge.
 - Background workflow adapter maps `listServerTools()` into workflow-core tool handlers in
   `server/utils/workflows/background-execution.ts`.
 

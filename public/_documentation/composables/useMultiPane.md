@@ -16,6 +16,7 @@ State manager that powers OR3’s multi-pane chat/document workspace. It keeps t
 -   Supports a configurable pane cap, custom message loaders, and document flush callbacks
 -   Supports a reactive `allowMultiplePanes` policy so compact displays can enforce a single-pane workspace
 -   Launches registered custom pane apps while enforcing pane limits
+-   Swaps adjacent panes while preserving each pane's identity and active selection
 
 ---
 
@@ -113,6 +114,7 @@ const multiPane = useMultiPane(options?: UseMultiPaneOptions);
 | `newWindowTooltip`                | `ComputedRef<string>`                                                           | Pre-baked tooltip text for “new pane” buttons.                                               |
 | `addPane()`                       | `() => void`                                                                    | Append a blank pane and focus it.                                                            |
 | `closePane(index)`                | `(index: number) => Promise<void> \| void`                                      | Close a pane; never removes the last one.                                                    |
+| `swapAdjacentPanes(leftIndex)`    | `(leftIndex: number) => void`                                                   | Exchange neighboring panes; the active pane follows its content.                            |
 | `setActive(index)`                | `(index: number) => void`                                                       | Mark a pane as focused, firing switch hooks.                                                 |
 | `focusPrev(current)`              | `(current: number) => void`                                                     | Focus the previous pane if available.                                                        |
 | `focusNext(current)`              | `(current: number) => void`                                                     | Focus the next pane if available.                                                            |

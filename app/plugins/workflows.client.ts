@@ -5,6 +5,7 @@ import { createManagedWorkspacePluginRuntime } from '~/composables/plugins/works
 import WorkflowPane from './workflows/components/WorkflowPane.vue';
 import WorkflowSidebar from './workflows/components/WorkflowSidebar.vue';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
+import { useWorkflowsCrud } from './workflows/composables/useWorkflows';
 
 // Vue Flow styles (required)
 import '@vue-flow/core/dist/style.css';
@@ -34,6 +35,7 @@ export default defineNuxtPlugin(() => {
         pluginId: 'or3-workflows',
     });
     const api = pluginRuntime.api;
+    const toast = useToast();
 
     // Register the pane app with post type for score tracking (if execution enabled)
     const executionEnabled = features.workflows.execution !== false;
@@ -45,6 +47,27 @@ export default defineNuxtPlugin(() => {
                 component: WorkflowPane,
                 icon: 'tabler:binary-tree-2',
                 postType: 'workflow-entry',
+                ...(editorEnabled && {
+                    newTab: {
+                        label: 'New workflow',
+                        icon: 'i-lucide-git-branch',
+                        async createRecordId() {
+                            const posts = (globalThis as {
+                                __or3PanePluginApi?: PanePluginApi;
+                            }).__or3PanePluginApi?.posts;
+                            if (!posts) {
+                                toast.add({ title: 'Could not create workflow', description: 'The workspace posts API is not ready yet.', color: 'warning' });
+                                return null;
+                            }
+                            const result = await useWorkflowsCrud(posts).createWorkflow('Untitled Workflow');
+                            if (!result.ok) {
+                                toast.add({ title: 'Workflow creation failed', description: result.error, color: 'error' });
+                                return null;
+                            }
+                            return result.id;
+                        },
+                    },
+                }),
             });
         } catch (e) {
             console.error('[workflows] Failed to register pane app:', e);
@@ -80,6 +103,7 @@ export default defineNuxtPlugin(() => {
             api.registerSidebarPage({
                 id: 'or3-workflows-page',
                 label: 'Workflows',
+                description: 'Automate tasks & flows',
                 component: WorkflowSidebar,
                 icon: 'tabler:binary-tree-2',
                 order: 400,

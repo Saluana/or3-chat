@@ -513,11 +513,6 @@ provide('or3:auth-ui-layout', 'more-sheet');
 
 const DEFAULT_PAGE_ID = 'sidebar-home';
 
-const PAGE_DESCRIPTIONS: Record<string, string> = {
-    'or3-external-agents': 'Build & manage AI agents',
-    'or3-workflows-page': 'Automate tasks & flows',
-};
-
 const TILE_ACCENTS = ['primary', 'secondary', 'tertiary'] as const;
 
 const iconPageHome = useIcon('sidebar.page.home');
@@ -745,8 +740,8 @@ function tileAccent(index: number) {
     return TILE_ACCENTS[index % TILE_ACCENTS.length] ?? 'primary';
 }
 
-function pageDescription(page: { id: string; label: string }) {
-    return PAGE_DESCRIPTIONS[page.id] ?? `Open ${page.label}`;
+function pageDescription(page: { id: string; label: string; description?: string }) {
+    return page.description ?? `Open ${page.label}`;
 }
 
 /* ---------------- Pages (mobile projection) ---------------- */

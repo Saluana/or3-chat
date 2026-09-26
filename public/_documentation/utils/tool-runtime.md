@@ -25,7 +25,8 @@ This is the backward-compatible default for existing tools.
 
 - `client`
   - Browser-only tool.
-  - Background server execution skips/rejects it with a clear error.
+  - Native background chat delegates admitted calls to the originating browser through the client-tool bridge.
+  - Calling it directly through the server registry is rejected; delegation does not make the handler server-safe.
 
 - `server`
   - Server-only intent.
@@ -41,9 +42,15 @@ Foreground tool calls use the client registry (`app/utils/chat/tool-registry.ts`
 
 ### Background chat
 
-Client starts the job with enabled tool definitions and optional `_toolRuntime` hints.
-Server executes calls through `executeServerTool(...)`.
-Client-only tools are surfaced as `skipped/error` states in `tool_calls` metadata.
+The client starts the job with an admitted tool catalog. The server orchestrates
+the turn, executes server/hybrid handlers through `executeServerTool(...)`, and
+delegates client calls through the durable browser claim/result bridge. Execution
+context captures the originating subject, workspace, thread and cancellation
+signal; a tool's runtime flag does not grant access to either runtime's data.
+
+The browser bridge must be available when a turn containing client tools starts.
+The send path checks this capability before choosing background execution.
+Background workflow execution has its own placement policy, described below.
 
 ### Background workflows
 

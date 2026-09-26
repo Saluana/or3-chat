@@ -180,6 +180,7 @@ export function useWorkspaceProfiles() {
       state.selectedProfileId.value,
       registration,
       resolvedWorkspaceProfile.value,
+      !state.initialized.value,
     )) {
       return;
     }
@@ -204,6 +205,7 @@ export function useWorkspaceProfiles() {
     watch(
       [
         () => state.selectedProfileId.value,
+        () => state.initialized.value,
         () => inventory.value.navigation.map((item) => item.id).join("|"),
         () => inventory.value.dashboard.map((item) => item.id).join("|"),
         () => inventory.value.panes.map((item) => item.id).join("|"),
@@ -236,8 +238,10 @@ export function shouldPreserveHydratedWorkspaceProfile(
   selectedProfileId: string,
   registration: RegisteredWorkspaceProfile | undefined,
   current: ResolvedWorkspaceProfile,
+  hydrationPending: boolean,
 ): boolean {
   return (
+    hydrationPending &&
     !registration &&
     current.id === selectedProfileId &&
     !current.usedFallback

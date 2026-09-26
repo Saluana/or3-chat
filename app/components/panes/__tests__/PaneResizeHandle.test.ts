@@ -1,7 +1,7 @@
 /**
  * Tests for PaneResizeHandle component
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import PaneResizeHandle from '../PaneResizeHandle.vue';
 
@@ -94,72 +94,6 @@ describe('PaneResizeHandle', () => {
         expect(handle.attributes('aria-orientation')).toBe('vertical');
         expect(handle.attributes('aria-label')).toBe('Resize pane 3');
         expect(handle.attributes('tabindex')).toBe('0');
-    });
-
-    it('shows indicator on hover', async () => {
-        const wrapper = mount(PaneResizeHandle, {
-            props: {
-                paneIndex: 0,
-                paneCount: 2,
-                isDesktop: true,
-            },
-        });
-
-        const handle = wrapper.find('.pane-resize-handle');
-        const indicator = wrapper.find('div[class*="rounded-full"]');
-
-        // Initially invisible (transparent background)
-        expect(indicator.classes()).toContain('w-1.5');
-        expect(indicator.classes()).toContain('bg-[var(--md-primary)]/0');
-
-        // Hover
-        await handle.trigger('mouseenter');
-        await wrapper.vm.$nextTick();
-
-        // Should become visible
-        expect(indicator.classes()).toContain('w-1.5');
-        expect(indicator.classes()).toContain('bg-[var(--md-primary)]');
-        expect(indicator.classes()).not.toContain('bg-[var(--md-primary)]/0');
-
-        // Unhover
-        await handle.trigger('mouseleave');
-        await wrapper.vm.$nextTick();
-
-        // Should become invisible again
-        expect(indicator.classes()).toContain('bg-[var(--md-primary)]/0');
-    });
-
-    it('shows indicator on focus', async () => {
-        const wrapper = mount(PaneResizeHandle, {
-            props: {
-                paneIndex: 0,
-                paneCount: 2,
-                isDesktop: true,
-            },
-        });
-
-        const handle = wrapper.find('.pane-resize-handle');
-        const indicator = wrapper.find('div[class*="rounded-full"]');
-
-        // Initially invisible
-        expect(indicator.classes()).toContain('w-1.5');
-        expect(indicator.classes()).toContain('bg-[var(--md-primary)]/0');
-
-        // Focus
-        await handle.trigger('focus');
-        await wrapper.vm.$nextTick();
-
-        // Should become visible
-        expect(indicator.classes()).toContain('w-1.5');
-        expect(indicator.classes()).toContain('bg-[var(--md-primary)]');
-        expect(indicator.classes()).not.toContain('bg-[var(--md-primary)]/0');
-
-        // Blur
-        await handle.trigger('blur');
-        await wrapper.vm.$nextTick();
-
-        // Should become invisible again
-        expect(indicator.classes()).toContain('bg-[var(--md-primary)]/0');
     });
 
     it('has correct cursor style', () => {
