@@ -203,6 +203,8 @@ The request link is a supported deep link: `/?dashboard=marketplace&plugin=<plug
 
 Updates discovers newer releases before staging them, in semantic version order. It checks signed engine compatibility and quarantine state, then the signed-in user's linked Library coverage for paid releases. Acquisition rechecks authority, coverage and setup before promotion.
 
+From an installed plugin's detail, **View updates** opens the Updates page. **Check for updates** runs the check and requires a separate system-administrator session. Missing administrator access and connection failures show a recovery message without exposing the underlying API request.
+
 An administrator can pin discovery to an exact release with `POST /api/admin/plugins/update-pin`, using `{ "pluginId": "or3.model-compare", "version": "1.0.0" }`; send `version: null` to remove it. Pins apply across the instance and persist under the extensions directory. This controls update discovery; an explicitly requested manual acquisition still requires its normal approval.
 
 ## Publisher listing help

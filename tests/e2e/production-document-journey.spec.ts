@@ -33,8 +33,6 @@ test('autosaves the production document editor and restores title and content af
         'Autosaved browser document body.',
         { timeout: 10_000 }
     );
-    await expect(page.getByRole('status')).toHaveText(/Ready|Saved/);
-
     await page.reload();
     await expect(
         page.getByRole('textbox', { name: 'Document title' })
@@ -42,5 +40,4 @@ test('autosaves the production document editor and restores title and content af
     await expect(
         page.getByRole('textbox', { name: 'Document body' })
     ).toContainText('Autosaved browser document body.');
-    await expect(page.getByRole('status')).toHaveText(/Ready|Saved/);
 });

@@ -436,7 +436,15 @@ describe('update checks', () => {
         const updateCheck = useMarketplaceUpdateCheck();
 
         await expect(updateCheck.check()).resolves.toBeNull();
-        expect(updateCheck.error.value).toContain('Registry unreachable');
+        expect(updateCheck.error.value).toContain('Could not connect');
+    });
+
+    it.each([401, 403])('explains administrator access after a %i update refusal', async (statusCode) => {
+        fetchMock.mockRejectedValue(Object.assign(new Error('[GET] /api/admin/plugins/updates: Unauthorized'), { statusCode }));
+        const updateCheck = useMarketplaceUpdateCheck();
+        await expect(updateCheck.check()).resolves.toBeNull();
+        expect(updateCheck.error.value).toContain('Sign in as a system administrator');
+        expect(updateCheck.error.value).not.toContain('/api/');
     });
 });
 

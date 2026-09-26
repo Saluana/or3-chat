@@ -15,6 +15,7 @@
                         :error="error"
                     >
                         <UInput
+                            autofocus
                             variant="modal"
                             :model-value="value"
                             required

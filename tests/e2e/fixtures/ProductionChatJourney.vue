@@ -20,12 +20,8 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import ChatContainer from '~/components/chat/ChatContainer.vue';
 import { persistUserApiKey } from '~/core/auth/useUserApiKey';
-import { messagesByThread } from '~/db/messages';
+import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
 import type { ChatMessage } from '~/utils/chat/types';
-import {
-    projectTranscriptForOpenRouter,
-    storedMessagesToCanonicalTranscript,
-} from '~/utils/chat/transcript';
 
 const THREAD_KEY = 'or3:e2e:production-chat-thread';
 const TEST_API_KEY = 'sk-or-v1-production-journey-test-key';
@@ -189,9 +185,10 @@ onMounted(async () => {
     );
     threadId.value = localStorage.getItem(THREAD_KEY) ?? '';
     if (threadId.value) {
-        const stored = await messagesByThread(threadId.value);
-        messageHistory.value = projectTranscriptForOpenRouter(
-            storedMessagesToCanonicalTranscript(stored)
+        await ensureThreadHistoryLoaded(
+            threadId,
+            ref<string | null>(null),
+            messageHistory
         );
     }
     await persistUserApiKey(TEST_API_KEY);

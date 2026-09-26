@@ -927,7 +927,7 @@ function blockActionLabel(block: { action: string }): string | null {
                         data-testid="marketplace-installed-updates"
                         @click="navigation.openPage('marketplace', 'updates')"
                     >
-                        Check for updates
+                        View updates
                     </UButton>
                     <UButton
                         v-if="selectedInstalledEntry?.display?.canOpen"

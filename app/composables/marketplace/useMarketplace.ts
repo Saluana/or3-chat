@@ -529,10 +529,15 @@ export function useMarketplaceUpdateCheck() {
             );
             return result.value;
         } catch (caught) {
-            error.value =
-                caught instanceof Error
-                    ? caught.message
-                    : 'The update check could not run.';
+            const failure = caught as { statusCode?: number; status?: number } | null;
+            const code = failure?.statusCode ?? failure?.status;
+            if (code === 401 || code === 403) {
+                error.value = 'Sign in as a system administrator to check for updates.';
+            } else if (code === undefined || code === 0) {
+                error.value = 'Could not connect to this OR3 instance. Try again.';
+            } else {
+                error.value = 'Updates could not be checked. Try again in a moment.';
+            }
             return null;
         } finally {
             loading.value = false;

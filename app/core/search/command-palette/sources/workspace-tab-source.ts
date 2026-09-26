@@ -32,7 +32,7 @@ function tabTitle(tab: WorkspaceTab): string {
 function tabSubtitle(tab: WorkspaceTab): string {
     if (tab.resource.kind === 'chat') return 'Chat';
     if (tab.resource.kind === 'document') return 'Document';
-    return `App · ${tab.resource.appId}`;
+    return 'App';
 }
 
 function tabIcon(tab: WorkspaceTab): string {

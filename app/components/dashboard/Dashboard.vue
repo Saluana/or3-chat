@@ -66,7 +66,7 @@
                     >
                         {{ headerPluginLabel }}
                         <span
-                            v-if="activePageTitle"
+                            v-if="activePageTitle && activePageTitle !== headerPluginLabel"
                             class="text-[var(--md-on-surface)]"
                             >/ {{ activePageTitle }}</span
                         >

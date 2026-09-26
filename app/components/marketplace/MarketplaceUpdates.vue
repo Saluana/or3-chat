@@ -536,7 +536,11 @@ async function activate(entry: {
                 Check for updates
             </UButton>
         </div>
-        <p v-if="updateCheck.error.value" class="text-xs text-(--ui-text-error)">
+        <p
+            v-if="updateCheck.error.value"
+            role="alert"
+            class="rounded-lg border border-(--ui-border) p-3 text-sm text-(--ui-text-error)"
+        >
             {{ updateCheck.error.value }}
         </p>
         <ul

@@ -1271,7 +1271,7 @@
                     "name": "release-checklist.md",
                     "path": "/cloud/release-checklist",
                     "category": "Operations",
-                    "summary": "This is the authoritative promotion gate for OR3 Cloud. It separates reproducible code checks from deployment-specific checks that must be performed against the exact production candidate."
+                    "summary": "The authoritative OR3 Cloud promotion gate separates reproducible code checks from exact-artifact staging and scale checks. Marketplace launch also requires published provider fixes, signed installation and recovery, paid Library and administrator-request journeys, and retained acceptance evidence."
                 },
                 {
                     "name": "release-notes-production-readiness.md",

@@ -129,6 +129,36 @@ Only after qualification succeeds may you push `v<version>`. The tag workflow
 cannot rebuild: it promotes the receipt's exact digest and publishes the
 receipt's exact tarball. A missing or mismatched receipt fails closed.
 
+## Marketplace launch acceptance
+
+When the release includes Marketplace discovery, installation or paid Library
+access, retain evidence against the exact Chat artifact and Marketplace Worker
+version together. Marketplace's `docs/launch-checklist.md` owns its environment,
+signer, migration, commerce and storefront gates.
+
+- [ ] Confirm the pinned, published Basic Auth, Clerk (when selected), and SQLite
+      packages contain the required security and sync fixes. Local sibling
+      sources and matching version strings alone do not establish this.
+- [ ] Configure registry origin, trusted release keys, the install gate and V2
+      runtime eligibility. Verify a signed package can be installed, configured,
+      used, disabled and reopened in a qualified browser.
+- [ ] Verify interrupted update/retry, authority expansion consent, rollback and
+      quarantine without losing the current usable installation.
+- [ ] Purchase in Marketplace staging, link a fresh host and install an exact
+      acquired release from Library. Verify uninstall/restore, covered updates
+      and renewal after expiry. Qualify Plus separately.
+- [ ] Verify an ordinary buyer can request installation and an administrator can
+      approve it in the intended workspace. Changed membership, account/link or
+      entitlement must prevent a stale request or retry from fetching a covered
+      artifact.
+- [ ] Retain a browser trace or screenshots, release identities and technical /
+      product acceptance. Local unit tests and synthetic browser harnesses do
+      not replace this deployed journey.
+
+See [Native Marketplace](../plugins/marketplace),
+[Library linking](../plugins/library), and
+[Trusted Registry Acquisition](../plugins/trusted-acquisition).
+
 ## Related
 
 - [deployment-operations](./deployment-operations)

@@ -91,14 +91,16 @@ test.describe('production chat journey', () => {
         await retry.click();
 
         await expect(page.getByText('Recovered after retry.')).toBeVisible();
+        // Accepted retries supersede the selected turn; reload must not
+        // resurrect the failed partial reply or duplicate its user prompt.
         await expect(page.getByText('Partial response before failure.'))
-            .toBeVisible();
+            .toHaveCount(0);
+        await expect(page.getByText('journey:error', { exact: true })).toHaveCount(1);
 
         await page.reload();
-        await expect(page.getByText('journey:error', { exact: true }).first())
-            .toBeVisible();
+        await expect(page.getByText('journey:error', { exact: true })).toHaveCount(1);
         await expect(page.getByText('Recovered after retry.')).toBeVisible();
         await expect(page.getByText('Partial response before failure.'))
-            .toBeVisible();
+            .toHaveCount(0);
     });
 });
