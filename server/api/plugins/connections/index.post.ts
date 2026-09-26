@@ -6,6 +6,7 @@ import {
     requirePluginMutation,
 } from '../../../utils/plugins/connections/api-context';
 import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
+import { getWorkspaceSettingsStore } from '../../../admin/stores/registry';
 import {
     ImmutablePluginPackageStore,
     PluginPackageStoreError,
@@ -136,6 +137,7 @@ export default defineEventHandler(async (event) => {
                         workspaceId: context.workspaceId,
                         candidateDigest: selection.digest,
                         requestedOperationId,
+                        settingsStore: getWorkspaceSettingsStore(event),
                     });
                     if (!binding.ok) {
                         throw createError({

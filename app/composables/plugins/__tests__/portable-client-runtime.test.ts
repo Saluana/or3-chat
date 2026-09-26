@@ -24,6 +24,8 @@ vi.mock('~~/shared/plugins/isolation/portable-bootstrap', () => ({
 const fetchMock = vi.fn();
 vi.stubGlobal('$fetch', fetchMock);
 const revocationRequests: string[] = [];
+let mintedDigest = `sha256-${'a'.repeat(64)}`;
+let mintedGrants: string[] = [];
 
 const kvRows = new Map<string, { name: string; value: string | null; updated_at: number; clock: number; deleted?: boolean }>();
 const getKvByNameMock = vi.fn(async (name: string) => kvRows.get(name));
@@ -170,6 +172,8 @@ beforeEach(async () => {
     setKvByNameMock.mockClear();
     hardDeleteKvByNameMock.mockClear();
     tombstoneKvByNameMock.mockClear();
+    mintedDigest = `sha256-${'a'.repeat(64)}`;
+    mintedGrants = [];
     // The runtime mints a server-side activation handle before it starts any
     // sandbox; the host answers here with a fresh generation each time.
     let activationCounter = 0;
@@ -194,6 +198,8 @@ beforeEach(async () => {
                         activation: {
                             activationId: `act_test_${activationCounter}`,
                             generation: activationCounter,
+                            packageDigest: mintedDigest,
+                            approvedGrants: mintedGrants,
                         },
                     }),
                     { status: 200, headers: { 'content-type': 'application/json' } }
@@ -309,6 +315,17 @@ describe('portable settings services', () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
+    it('recognizes the nested H3 lifecycle code on a settings write', async () => {
+        const onActivationStale = vi.fn();
+        const services = createPortableSettingsServices('sample.plugin', descriptor().artifact.packageDigest, 'act_test_1', { onActivationStale });
+        fetchMock.mockRejectedValueOnce(Object.assign(new Error('Activation was revoked'), {
+            statusCode: 409,
+            data: { data: { code: 'activation-revoked' } },
+        }));
+        await expect(services.settings.set({ key: 'greeting', value: 'Hi' })).rejects.toMatchObject({ rpcCode: 'policy-denied' });
+        expect(onActivationStale).toHaveBeenCalledWith('activation-revoked');
+    });
+
     it('leaves an ordinary settings failure to the plugin', async () => {
         const onActivationStale = vi.fn();
         const services = createPortableSettingsServices(
@@ -332,6 +349,19 @@ describe('portable settings services', () => {
 });
 
 describe('demand-driven activation', () => {
+    it.each([
+        ['package', `sha256-${'f'.repeat(64)}`, []],
+        ['grants', `sha256-${'a'.repeat(64)}`, ['network.http']],
+    ])('refuses a minted handle for different %s authority', async (_reason, digest, grants) => {
+        mintedDigest = digest;
+        mintedGrants = grants;
+        setPortableClientSource({ descriptor: descriptor(), workspaceId: 'ws-1', runtimeEntry: undefined });
+        const activation = await ensurePortableClientActivation('sample.plugin');
+        expect(activation?.status).toBe('blocked');
+        expect(activation?.blockCode).toBe('activation-identity-mismatch');
+        expect(startPortableWorkerMock).not.toHaveBeenCalled();
+        expect(revocationRequests).toEqual(['act_test_1']);
+    });
     it('keeps private-field runtime instances unproxied for actions and teardown', async () => {
         class PrivateRuntime {
             #active = true;
@@ -797,6 +827,7 @@ describe('stale handle lifecycle', () => {
     };
 
     function networkDescriptor(): PackageV2PluginDescriptor {
+        mintedGrants = ['network.http'];
         return { ...descriptor(), effectiveGrants: ['network.http'] };
     }
 
@@ -1146,6 +1177,7 @@ describe('contribution readiness and replacement safeguards', () => {
     });
 
     it('degrades optional tool discovery without failing the activation', async () => {
+        mintedGrants = ['tools.register.client'];
         const withTools = { ...descriptor(), effectiveGrants: ['tools.register.client'] as never[] };
         startPortableWorkerMock.mockResolvedValue(startedRuntime('tools'));
         const activation = await activatePortableClient({
@@ -1205,6 +1237,7 @@ describe('contribution readiness and replacement safeguards', () => {
     });
 
     it('inherits tool discovery settled for the same descriptor across restarts', async () => {
+        mintedGrants = ['tools.register.client'];
         const withTools = { ...descriptor(), effectiveGrants: ['tools.register.client'] as never[] };
         startPortableWorkerMock.mockResolvedValue(startedRuntime('tools-restart'));
         setPortableClientSource({ descriptor: withTools, workspaceId: 'ws-1', runtimeEntry: undefined });
@@ -1226,6 +1259,7 @@ describe('contribution readiness and replacement safeguards', () => {
     });
 
     it('retains a failed tool discovery with its code across restarts', async () => {
+        mintedGrants = ['tools.register.client'];
         const withTools = { ...descriptor(), effectiveGrants: ['tools.register.client'] as never[] };
         startPortableWorkerMock.mockResolvedValue(startedRuntime('tools-failed-restart'));
         setPortableClientSource({ descriptor: withTools, workspaceId: 'ws-1', runtimeEntry: undefined });
@@ -1249,6 +1283,7 @@ describe('contribution readiness and replacement safeguards', () => {
     });
 
     it('does not inherit tool readiness for different bytes', async () => {
+        mintedGrants = ['tools.register.client'];
         const withTools = { ...descriptor(), effectiveGrants: ['tools.register.client'] as never[] };
         startPortableWorkerMock.mockResolvedValue(startedRuntime('tools-bytes'));
         setPortableClientSource({ descriptor: withTools, workspaceId: 'ws-1', runtimeEntry: undefined });

@@ -260,16 +260,14 @@ export async function loadSetupState(input: LoadSetupStateInput): Promise<SetupS
     // Bindings are explicit: a stored connection satisfies only the declared
     // slot it was created for.
     const connectionStates: SetupConnectionState[] = [];
-    const claimed = new Set<string>();
     for (const connection of stored) {
-        if (connection.slotId === undefined || claimed.has(connection.slotId)) continue;
+        if (connection.slotId === undefined) continue;
         const testPassed = await input.service.isTestCurrent(connection.id);
         // Prefer a tested binding when several credentials claim one slot.
         const existing = connectionStates.find(
             (state) => state.slotId === connection.slotId
         );
         if (existing && existing.testPassed && !testPassed) continue;
-        claimed.add(connection.slotId);
         const state: SetupConnectionState = {
             slotId: connection.slotId,
             connectionId: connection.id,

@@ -5,8 +5,9 @@ import {
     type PluginAiCompletionResult,
     type PluginAiProvider,
 } from '../plugin-invocation';
-import { PluginAiGovernor } from '~~/shared/plugins/ai/plugin-usage';
+import { PluginAiGovernor, estimatePromptTokens } from '~~/shared/plugins/ai/plugin-usage';
 import { createOpenRouterPluginProvider } from '../openrouter-client';
+import { encode } from 'gpt-tokenizer';
 
 function fakeProvider(
     result: Partial<PluginAiCompletionResult> = {}
@@ -43,6 +44,21 @@ const PRICES = {
 };
 
 describe('plugin AI invocation (4.11)', () => {
+    it.each([
+        ['CJK', '猫犬鳥魚'.repeat(1000)],
+        ['ASCII data', 'a1!b2?'.repeat(1000)],
+    ])('reserves enough input spend for %s before dispatch', (_label, prompt) => {
+        expect(estimatePromptTokens(prompt)).toBeGreaterThanOrEqual(encode(prompt).length + 8);
+        const governor = new PluginAiGovernor({
+            budgets: { ...DEFAULT_CONTAINMENT_BUDGETS, maxAiSpendUsd: 1 },
+            initialSpendUsd: 0.98,
+            prices: { m: { promptPerMillion: 10, completionPerMillion: 10 } },
+        });
+        expect(governor.admit({ model: 'm', prompt, maxOutputTokens: 1 })).toMatchObject({
+            status: 'refused',
+            code: 'budget-exceeded',
+        });
+    });
     it('attributes usage to the plugin and returns no credential', async () => {
         const provider = fakeProvider();
         const spec = createPluginAiCompleteMethod({ provider, prices: PRICES });

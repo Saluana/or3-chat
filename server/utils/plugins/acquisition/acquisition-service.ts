@@ -109,6 +109,7 @@ export interface StartAcquisitionInput {
     readonly version?: string;
     readonly workspaceId: string;
     readonly requesterUserId: string;
+    readonly setupOwnerUserId?: string;
     readonly libraryGrant?: PluginAcquisitionOperation['libraryGrant'];
     readonly instanceId: string;
 }
@@ -301,6 +302,7 @@ export class PluginAcquisitionService {
                 version: document.version,
                 workspaceId: input.workspaceId,
                 requesterUserId: input.requesterUserId,
+                ...(input.setupOwnerUserId ? { setupOwnerUserId: input.setupOwnerUserId } : {}),
                 ...(input.libraryGrant ? { libraryGrant: input.libraryGrant } : {}),
                 instanceId: input.instanceId,
                 stage: 'resolved',
@@ -564,9 +566,7 @@ export class PluginAcquisitionService {
                             pluginId,
                             candidate.packageDigest as `sha256-${string}`
                         ),
-                        workspaceId === options.includeWorkspaceId
-                            ? options.operationId
-                            : undefined
+                        options.operationId
                     );
                 } catch {
                     setupPlan = null;

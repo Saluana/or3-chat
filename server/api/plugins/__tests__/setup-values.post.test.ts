@@ -210,6 +210,7 @@ describe('setup values candidate binding', () => {
             workspaceId: 'ws-1',
             candidateDigest: DIGEST_B,
             requestedOperationId: null,
+            settingsStore: expect.anything(),
         });
         expect(patchSetupValuesMock).toHaveBeenCalledWith(
             expect.anything(),

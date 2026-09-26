@@ -88,7 +88,14 @@ function isUsablePrice(price: ModelPrice | undefined): price is ModelPrice {
 
 /** Conservative token estimate used for the pre-dispatch reservation. */
 export function estimatePromptTokens(prompt: string): number {
-    return Math.max(1, Math.ceil(prompt.length / 4));
+    let bytes = 0;
+    for (const character of prompt) {
+        const codePoint = character.codePointAt(0)!;
+        bytes += codePoint < 0x80 ? 1 : codePoint < 0x800 ? 2 : codePoint < 0x10000 ? 3 : 4;
+    }
+    // ASCII data can also approach one token per byte. Use the UTF-8 ceiling
+    // for every prompt, plus framing, without loading a model-specific tokenizer.
+    return bytes + 8;
 }
 
 export type PluginAiAdmission =

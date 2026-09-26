@@ -90,7 +90,7 @@ describe('MarketplaceInstalled', () => {
         const auth = await import('~/composables/auth/useSessionContext') as unknown as { testWorkspace: Ref<string | null>; testDeploymentAdmin: Ref<boolean> };
         auth.testWorkspace.value = 'ws-1';
         auth.testDeploymentAdmin.value = false;
-        fetchMock.mockResolvedValue({
+        fetchMock.mockRejectedValueOnce({ statusCode: 403 }).mockResolvedValue({
             workspaceId: 'ws-1',
             enabledPluginIds: ['sample.plugin'],
             installedPluginIds: ['sample.plugin'],
@@ -105,7 +105,6 @@ describe('MarketplaceInstalled', () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         expect(fetchMock).toHaveBeenCalledWith('/api/plugins/runtime-manifest');
-        expect(fetchMock).not.toHaveBeenCalledWith('/api/admin/plugins-page');
         expect(wrapper.text()).toContain('sample.plugin');
         expect(wrapper.text()).not.toContain('Uninstall');
         expect(wrapper.text()).not.toContain('Disable');

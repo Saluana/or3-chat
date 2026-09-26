@@ -50,6 +50,8 @@ import { openPortablePane } from '~/composables/plugins/portable-pane';
 
 const toast = useToast();
 const catalog = useMarketplaceCatalog();
+const catalogPage = ref(1);
+const catalogPageCount = computed(() => Math.max(1, Math.ceil(catalog.total.value / 24)));
 const detail = useMarketplaceDetail();
 const preflight = useMarketplacePreflight();
 const install = useMarketplaceInstall();
@@ -100,7 +102,23 @@ function applySearchNow(): void {
         clearTimeout(searchTimer);
         searchTimer = null;
     }
-    void Promise.all([catalog.load(), installed.load()]);
+    catalogPage.value = 1;
+    void Promise.all([catalog.load({ page: 1 }), installed.load()]);
+}
+
+function refreshCatalogPage(): void {
+    if (searchTimer !== null) {
+        applySearchNow();
+        return;
+    }
+    void Promise.all([catalog.load({ page: catalogPage.value }), installed.load()]);
+}
+
+function changeCatalogPage(delta: number): void {
+    const next = catalogPage.value + delta;
+    if (next < 1 || next > catalogPageCount.value) return;
+    catalogPage.value = next;
+    void catalog.load({ page: next });
 }
 
 /**
@@ -112,7 +130,8 @@ function onSearchInput(): void {
     if (searchTimer !== null) clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
         searchTimer = null;
-        void catalog.load();
+        catalogPage.value = 1;
+        void catalog.load({ page: 1 });
     }, 300);
 }
 
@@ -785,7 +804,7 @@ function blockActionLabel(block: { action: string }): string | null {
                 icon="i-lucide-refresh-cw"
                 :loading="catalog.loading.value"
                 :aria-busy="catalog.loading.value"
-                @click="applySearchNow"
+                @click="refreshCatalogPage"
             >
                 Refresh
             </UButton>
@@ -805,7 +824,7 @@ function blockActionLabel(block: { action: string }): string | null {
                 </div>
             </div>
             <div class="pl-7">
-                <UButton size="sm" :loading="catalog.loading.value || installed.loading.value" @click="applySearchNow">Try again</UButton>
+                <UButton size="sm" :loading="catalog.loading.value || installed.loading.value" @click="refreshCatalogPage">Try again</UButton>
             </div>
         </section>
         <UAlert
@@ -1225,6 +1244,13 @@ function blockActionLabel(block: { action: string }): string | null {
                 </button>
             </li>
         </ul>
+        <nav v-if="catalogPageCount > 1 && !catalog.error.value" class="mt-4 flex items-center justify-between gap-3" aria-label="Marketplace results pages">
+            <UButton size="sm" color="neutral" variant="soft" :disabled="catalogPage === 1 || catalog.loading.value"
+                data-testid="marketplace-previous-page" @click="changeCatalogPage(-1)">Previous</UButton>
+            <span class="text-sm text-(--ui-text-muted)">Page {{ catalogPage }} of {{ catalogPageCount }}</span>
+            <UButton size="sm" color="neutral" variant="soft" :disabled="catalogPage === catalogPageCount || catalog.loading.value"
+                data-testid="marketplace-next-page" @click="changeCatalogPage(1)">Next</UButton>
+        </nav>
     </div>
 
                         <ConfirmDialog v-model="uninstallOpen" title="Remove plugin from this instance?"

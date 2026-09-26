@@ -1268,23 +1268,21 @@ export function useMarketplaceInstalled() {
             };
             let response: InstalledResponse;
             let adminLoaded = false;
-            if (session === null || session.deploymentAdmin === true) {
-                try {
-                    response = await apiGet<InstalledResponse>('/api/admin/plugins-page');
-                    adminLoaded = true;
-                } catch (caught) {
-                    const failure = caught as { statusCode?: number; status?: number } | null;
-                    const code = failure?.statusCode ?? failure?.status;
-                    if (code !== 401 && code !== 403) throw caught;
-                    if (request === generation) clearOnAuthorizationLoss(caught);
-                    response = await readWorkspace();
-                }
-                if (adminLoaded && session !== null && response.packagePlugins?.length === 0) {
-                    const workspace = await readWorkspace();
-                    response = { ...response, packagePlugins: workspace.packagePlugins };
-                }
-            } else {
+            // A separate system-admin cookie can authorize management even when
+            // the ordinary Chat session has no deploymentAdmin flag.
+            try {
+                response = await apiGet<InstalledResponse>('/api/admin/plugins-page');
+                adminLoaded = true;
+            } catch (caught) {
+                const failure = caught as { statusCode?: number; status?: number } | null;
+                const code = failure?.statusCode ?? failure?.status;
+                if (code !== 401 && code !== 403) throw caught;
+                if (request === generation) clearOnAuthorizationLoss(caught);
                 response = await readWorkspace();
+            }
+            if (adminLoaded && session !== null && response.packagePlugins?.length === 0) {
+                const workspace = await readWorkspace();
+                response = { ...response, packagePlugins: workspace.packagePlugins };
             }
             if (request !== generation) return false;
             if (expectedWorkspaceId && response.workspaceId !== expectedWorkspaceId) {

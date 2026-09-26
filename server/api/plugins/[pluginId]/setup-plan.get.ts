@@ -1,6 +1,7 @@
 import { createError, defineEventHandler, getQuery, getRouterParam } from 'h3';
 import { requireCan, requireSession } from '../../../auth/can';
 import { resolveSessionContext } from '../../../auth/session';
+import { getWorkspaceSettingsStore } from '../../../admin/stores/registry';
 import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
 import { resolveConnectionService } from '../../../utils/plugins/connections/resolve';
 import { loadSetupState, type SetupState } from '../../../utils/plugins/setup/state';
@@ -79,6 +80,7 @@ export default defineEventHandler(async (event) => {
                 pluginId,
                 workspaceId,
                 candidateDigest: selection.digest,
+                settingsStore: getWorkspaceSettingsStore(event),
             });
             if (!binding.ok) {
                 throw createError({

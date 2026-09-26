@@ -68,6 +68,8 @@ package and current grant review on every request. Stop, logout, workspace
 switch, update, disable and fatal teardown explicitly revoke the handle, while
 server expiry remains a bounded fallback; a replacement sandbox therefore
 cannot reuse the previous activation's authority.
+If package bytes or approved grants changed while startup was in flight, the
+browser revokes the new handle and refreshes the selected plugin before it can run.
 The authenticated teardown DELETE is idempotent: an unknown handle after a
 server restart, or a handle already expired or revoked, is treated as cleaned
 up. Capability calls with those handles remain refused.
@@ -175,7 +177,11 @@ The runtime ledger for each activation is charged at each boundary: inbound
 messages, outbound results/states, admitted calls (host-clamped deadlines) and
 UI updates. AI spend is also reserved in a durable ledger keyed by the acting
 user, workspace, plugin and named UTC budget window, so a new activation or
-process does not reset committed spend. A UI tree is measured in one bounded pass over *everything the
+process does not reset committed spend. Reservations count all input by its
+UTF-8 byte ceiling and include message framing, so multilingual text and dense
+ASCII data cannot slip past the spending limit before actual provider usage
+arrives. Unused reservations are released when actual usage is settled.
+A UI tree is measured in one bounded pass over *everything the
 renderer can show* — text, markdown, captions, table cells, list labels and
 descriptions, option labels, placeholders and field values — plus its nodes, depth
 and total array entries/object members, so a table full of large cells cannot hide
@@ -340,15 +346,18 @@ Setup is host-generated from the package's own `or3.setup.json` and
   created for, and a slot is refused when the registered provider does not
   implement its declared mechanism, scopes or operations. Credentials stay
   scoped to the acting local user, workspace, plugin and slot; another member
-  never inherits the installer's connection;
+  never inherits the installer's connection. When several credentials bind the
+  same slot, a currently tested connection takes precedence over an untested one;
 * a connection created for a pending candidate is bound to the acquisition
   operation that recorded that exact digest. A candidate whose operation is
-  missing, replaced, ambiguous or belongs to another workspace is refused with
-  `setup-operation-conflict`; a runtime connection request that names a stale
+  missing, replaced or ambiguous is refused with `setup-operation-conflict`.
+  An instance-wide update also permits candidate setup in another workspace
+  already using that plugin, under the same operation and that workspace's own
+  authorization. A runtime connection request that names a stale
   operation is refused the same way, and a stale setup page that names a
   different package digest is refused with `setup-package-conflict`. The
-  connection **test** applies the same binding, so an orphaned or
-  foreign-workspace candidate can never drive a test with your credentials.
+  connection **test** applies the same binding, so an orphaned candidate or an
+  unrelated workspace's operation cannot drive a test with your credentials.
   Both creation and testing hold the per-plugin lifecycle lease across
   selection, binding and the credential write/dispatch, so a promotion,
   rollback or cancellation cannot replace the candidate between the decision

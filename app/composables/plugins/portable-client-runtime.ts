@@ -192,14 +192,14 @@ export function addWindowMessageListener(
 function settingsLifecycleCode(error: unknown): string | null {
     const data = (error as { data?: unknown } | null)?.data;
     if (!data || typeof data !== 'object') return null;
-    const record = data as { code?: unknown; rpcCode?: unknown };
-    const code =
-        typeof record.code === 'string'
-            ? record.code
-            : typeof record.rpcCode === 'string'
-              ? record.rpcCode
-              : null;
-    return code !== null && CAPABILITY_LIFECYCLE_CODES.has(code) ? code : null;
+    const record = data as { code?: unknown; rpcCode?: unknown; data?: unknown };
+    const nested = record.data && typeof record.data === 'object'
+        ? record.data as { code?: unknown; rpcCode?: unknown }
+        : null;
+    for (const code of [record.code, record.rpcCode, nested?.code, nested?.rpcCode]) {
+        if (typeof code === 'string' && CAPABILITY_LIFECYCLE_CODES.has(code)) return code;
+    }
+    return null;
 }
 
 /**
@@ -597,7 +597,7 @@ function readGrants(descriptor: PackageV2PluginDescriptor) {
 async function mintHostActivation(
     pluginId: string
 ): Promise<
-    | { readonly ok: true; readonly activationId: string; readonly generation: number }
+    | { readonly ok: true; readonly activationId: string; readonly generation: number; readonly packageDigest: string; readonly approvedGrants: readonly string[] }
     | { readonly ok: false; readonly message: string; readonly code: string }
 > {
     try {
@@ -625,14 +625,19 @@ async function mintHostActivation(
             return { ok: false, message, code: response.status === 408 || response.status === 429 || response.status >= 500 ? 'activation-unavailable' : 'activation-refused' };
         }
         const payload = (await response.json()) as {
-            activation?: { activationId?: unknown; generation?: unknown };
+            activation?: { activationId?: unknown; generation?: unknown; packageDigest?: unknown; approvedGrants?: unknown };
         };
         const activationId = payload.activation?.activationId;
         const generation = payload.activation?.generation;
-        if (typeof activationId !== 'string' || typeof generation !== 'number') {
+        const packageDigest = payload.activation?.packageDigest;
+        const approvedGrants = payload.activation?.approvedGrants;
+        if (typeof activationId !== 'string' || typeof generation !== 'number' ||
+            typeof packageDigest !== 'string' || !Array.isArray(approvedGrants) ||
+            !approvedGrants.every((grant) => typeof grant === 'string')) {
+            if (typeof activationId === 'string') void revokeHostActivationHandle(activationId);
             return { ok: false, message: 'The host returned no activation handle', code: 'activation-invalid-response' };
         }
-        return { ok: true, activationId, generation };
+        return { ok: true, activationId, generation, packageDigest, approvedGrants };
     } catch (error) {
         return {
             ok: false,
@@ -816,6 +821,16 @@ export async function activatePortableClient(
             minted.message,
             epoch
         );
+    }
+    const expectedGrants = [...descriptor.effectiveGrants].sort();
+    const mintedGrants = [...minted.approvedGrants].sort();
+    if (minted.packageDigest !== descriptor.artifact.packageDigest ||
+        expectedGrants.length !== mintedGrants.length ||
+        expectedGrants.some((grant, index) => grant !== mintedGrants[index])) {
+        void revokeHostActivationHandle(minted.activationId);
+        requestWorkspacePluginReconcile('manifest-revision-change');
+        return recordBlocked(pluginId, descriptor, workspaceId, 'activation-identity-mismatch',
+            'The selected plugin changed while starting. Refreshing its package and permissions.', epoch);
     }
     const generation = minted.generation;
 

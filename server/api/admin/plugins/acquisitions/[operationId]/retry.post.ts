@@ -54,7 +54,8 @@ export default defineEventHandler(async (event) => {
         event,
         recorded.requesterUserId,
         recorded.libraryGrant?.buyerUserId ?? context.session?.user?.id ?? '',
-        recorded.libraryGrant
+        recorded.libraryGrant,
+        recorded.setupOwnerUserId ?? context.session?.user?.id ?? ''
     );
     try {
         const operation = await service.retry(operationId);

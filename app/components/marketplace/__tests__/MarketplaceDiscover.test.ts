@@ -238,6 +238,30 @@ function entryFor(pluginId: string, name: string, summary: string, version: stri
 }
 
 describe('MarketplaceDiscover', () => {
+    it('lets readers reach results after the first catalog page', async () => {
+        fetchMock.mockImplementation((url: string) => {
+            if (url.startsWith('/api/plugins/marketplace/catalog')) {
+                const page = Number(new URL(url, 'https://local.test').searchParams.get('page'));
+                return Promise.resolve({ configured: true, catalog: {
+                    total: 25,
+                    items: Array.from({ length: page === 1 ? 24 : 1 }, (_, index) => ({
+                        pluginId: `or3.result-${page}-${index}`,
+                        name: `Result ${page}-${index}`,
+                        summary: 'A plugin',
+                    })),
+                } });
+            }
+            return Promise.resolve(responseFor(url));
+        });
+        const wrapper = mount(MarketplaceDiscover, { global: { stubs } });
+        await flush();
+        expect(wrapper.findAll('[data-testid="marketplace-card"]')).toHaveLength(24);
+        await wrapper.find('[data-testid="marketplace-next-page"]').trigger('click');
+        await flush();
+        expect(wrapper.findAll('[data-testid="marketplace-card"]')).toHaveLength(1);
+        expect(wrapper.text()).toContain('Result 2-0');
+        wrapper.unmount();
+    });
     it('shows one retryable connection error and no empty-results message when requests have no response', async () => {
         fetchMock.mockImplementation((url: string) =>
             url.startsWith('/api/plugins/marketplace/catalog') ||

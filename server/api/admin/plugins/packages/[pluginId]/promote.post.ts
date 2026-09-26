@@ -44,7 +44,8 @@ export default defineEventHandler(async (event) => {
     // that cannot be checked is refused, not waved through.
     let acquisition: Awaited<ReturnType<typeof acquisitionServiceFor>>;
     try {
-        acquisition = await acquisitionServiceFor(event, requesterIdentity(context));
+        acquisition = await acquisitionServiceFor(event, requesterIdentity(context), '', undefined,
+            context.session?.user?.id ?? '');
     } catch (error) {
         throw createError({
             statusCode: 503,

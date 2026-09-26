@@ -4,12 +4,20 @@ import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ImmutablePluginPackageStore } from '../../../../admin/plugins/package-store';
 import { PluginPackagePointerStore } from '../../../../admin/plugins/package-pointer-store';
-import { resolvePluginPackage } from '../discovery';
+import { bindCandidateOperation, resolvePluginPackage } from '../discovery';
+import type { PluginAcquisitionOperation } from '~~/shared/plugins/acquisition/contracts';
 
 const PLUGIN_ID = 'or3.discovery-test';
 
 const mocks = vi.hoisted(() => ({
     listInstalledExtensions: vi.fn(),
+    listOperations: vi.fn(),
+}));
+
+vi.mock('../../acquisition/operation-store', () => ({
+    PluginAcquisitionOperationStore: class {
+        list(...args: unknown[]) { return mocks.listOperations(...args); }
+    },
 }));
 
 vi.mock('../../../../admin/extensions/extension-manager', () => ({
@@ -70,6 +78,30 @@ function legacyExtension(id: string) {
 
 beforeEach(() => {
     mocks.listInstalledExtensions.mockReset().mockResolvedValue([]);
+    mocks.listOperations.mockReset().mockResolvedValue([]);
+});
+
+describe('candidate setup binding', () => {
+    it('allows the same update operation in an enabled second workspace only', async () => {
+        const digest = `sha256-${'a'.repeat(64)}` as `sha256-${string}`;
+        mocks.listOperations.mockResolvedValue([{
+            pluginId: PLUGIN_ID,
+            workspaceId: 'ws-a',
+            candidateDigest: digest,
+            operationId: 'acq_update',
+            status: 'paused',
+        } satisfies Partial<PluginAcquisitionOperation>]);
+        const settingsStore = {
+            async get(workspaceId: string, key: string) {
+                return key === 'plugins.enabled' && workspaceId === 'ws-b' ? JSON.stringify([PLUGIN_ID]) : null;
+            },
+            async set() {},
+        };
+        await expect(bindCandidateOperation({ pluginId: PLUGIN_ID, workspaceId: 'ws-b', candidateDigest: digest, settingsStore }))
+            .resolves.toEqual({ ok: true, operationId: 'acq_update' });
+        await expect(bindCandidateOperation({ pluginId: PLUGIN_ID, workspaceId: 'ws-c', candidateDigest: digest, settingsStore }))
+            .resolves.toMatchObject({ ok: false, code: 'setup-operation-conflict' });
+    });
 });
 
 describe('plugin package discovery slots', () => {

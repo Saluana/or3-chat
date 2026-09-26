@@ -78,6 +78,10 @@ vi.mock('../../../admin/extensions/paths', () => ({
     EXTENSIONS_BASE_DIR: '/tmp/extensions',
 }));
 
+vi.mock('../../../admin/stores/registry', () => ({
+    getWorkspaceSettingsStore: () => ({}),
+}));
+
 vi.mock('../../../utils/plugins/setup/discovery', () => ({
     resolvePluginPackage: (...args: unknown[]) => resolvePackageMock(...args),
     bindCandidateOperation: (...args: unknown[]) => bindCandidateOperationMock(...args),
@@ -185,6 +189,7 @@ describe('connection creation from the verified package selection', () => {
             workspaceId: 'ws-1',
             candidateDigest: DIGEST_B,
             requestedOperationId: 'acq_1',
+            settingsStore: expect.anything(),
         });
         expect(createConnectionMock).toHaveBeenCalledTimes(1);
     });

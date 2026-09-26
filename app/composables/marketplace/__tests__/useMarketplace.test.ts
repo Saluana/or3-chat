@@ -118,6 +118,7 @@ describe('marketplace mutations reconcile the plugin runtime', () => {
         marketplaceSession.current = { authenticated: true, role: 'viewer', deploymentAdmin: false, workspace: { id: 'ws-1' } };
         const digest = `sha256-${'a'.repeat(64)}`;
         fetchMock.mockImplementation((url: string) => {
+            if (url === '/api/admin/plugins-page') return Promise.reject({ statusCode: 403 });
             if (url !== '/api/plugins/runtime-manifest') throw new Error(`Unexpected request: ${url}`);
             return Promise.resolve({
                 workspaceId: 'ws-1',
@@ -139,7 +140,7 @@ describe('marketplace mutations reconcile the plugin runtime', () => {
         expect(installed.packages.value[0]?.display).toMatchObject({ version: '0.2.0', selectedDigest: digest, canOpen: true });
         expect(installed.canManageWorkspacePlugins.value).toBe(false);
         await expect(installed.setEnabled('or3sal.tasks', false)).rejects.toThrow('administrator');
-        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
     it('uses the workspace view when an old admin grant is refused', async () => {
@@ -159,6 +160,16 @@ describe('marketplace mutations reconcile the plugin runtime', () => {
         expect(installed.error.value).toBeNull();
         expect(installed.packages.value.map((entry) => entry.pluginId)).toEqual(['or3sal.tasks']);
         expect(installed.canManageWorkspacePlugins.value).toBe(false);
+    });
+
+    it('loads management when the separate admin session is valid', async () => {
+        marketplaceSession.current = { authenticated: true, role: 'owner', deploymentAdmin: false, workspace: { id: 'ws-1' } };
+        fetchMock.mockResolvedValue({ ...pageResponse, packagePlugins: [{ pluginId: 'sample.plugin' }] });
+        const installed = useMarketplaceInstalled();
+        expect(await installed.load('ws-1')).toBe(true);
+        expect(fetchMock).toHaveBeenCalledWith('/api/admin/plugins-page');
+        expect(installed.canManageSitePlugins.value).toBe(true);
+        expect(installed.canManageWorkspacePlugins.value).toBe(true);
     });
 
     it('signals after enablement, removal and rollback', async () => {

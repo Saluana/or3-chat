@@ -179,6 +179,7 @@ export default defineEventHandler(async (event) => {
                     workspaceId,
                     candidateDigest: selection.digest,
                     requestedOperationId,
+                    settingsStore: getWorkspaceSettingsStore(event),
                 });
                 if (!binding.ok) {
                     throw createError({

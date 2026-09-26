@@ -33,6 +33,8 @@ import {
     type PluginPackagePointerTarget,
 } from '../../../admin/plugins/package-pointer-store';
 import { PluginAcquisitionOperationStore } from '../acquisition/operation-store';
+import { getEnabledPlugins } from '../../../admin/plugins/workspace-plugin-store';
+import type { WorkspaceSettingsStore } from '../../../admin/stores/types';
 import type { PluginStateCompatibilityPolicy } from '~~/shared/plugins/state-compatibility';
 import type { Sha256 } from '~~/shared/plugins/runtime-descriptor';
 
@@ -292,12 +294,22 @@ export async function bindCandidateOperation(input: {
     readonly workspaceId: string;
     readonly candidateDigest: string;
     readonly requestedOperationId?: string | null;
+    readonly settingsStore?: WorkspaceSettingsStore;
 }): Promise<CandidateOperationBindingResult> {
     const operations = await new PluginAcquisitionOperationStore().list(input.pluginId);
+    // An update is instance-wide: every workspace already using this plugin
+    // must be able to prepare its own candidate settings under the same op.
+    const needsCrossWorkspaceCheck = operations.some((candidate) =>
+        candidate.pluginId === input.pluginId && candidate.workspaceId !== input.workspaceId &&
+        candidate.candidateDigest === input.candidateDigest &&
+        candidate.status !== 'completed' && candidate.status !== 'canceled');
+    const enabledHere = needsCrossWorkspaceCheck && input.settingsStore
+        ? (await getEnabledPlugins(input.settingsStore, input.workspaceId)).includes(input.pluginId)
+        : false;
     const matching = operations.filter(
         (candidate) =>
             candidate.pluginId === input.pluginId &&
-            candidate.workspaceId === input.workspaceId &&
+            (candidate.workspaceId === input.workspaceId || enabledHere) &&
             candidate.candidateDigest === input.candidateDigest &&
             candidate.status !== 'completed' &&
             candidate.status !== 'canceled'

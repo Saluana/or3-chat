@@ -111,6 +111,7 @@ export interface CreateOperationInput {
     readonly version: string;
     readonly workspaceId: string;
     readonly requesterUserId: string;
+    readonly setupOwnerUserId?: string;
     readonly libraryGrant?: PluginAcquisitionOperation['libraryGrant'];
     readonly instanceId: string;
     readonly release: PluginAcquisitionReleaseIdentity;
@@ -156,6 +157,8 @@ export function parseAcquisitionOperation(value: unknown): PluginAcquisitionOper
             typeof value.libraryGrant.releaseId !== 'string' || !value.libraryGrant.releaseId ||
             typeof value.libraryGrant.archiveSha256 !== 'string' || !/^sha256-[a-f0-9]{64}$/.test(value.libraryGrant.archiveSha256)) return null;
     }
+    if (value.setupOwnerUserId !== undefined &&
+        (typeof value.setupOwnerUserId !== 'string' || value.setupOwnerUserId.length > 256)) return null;
     return value as unknown as PluginAcquisitionOperation;
 }
 
@@ -444,6 +447,7 @@ export class PluginAcquisitionOperationStore {
             version: input.version,
             workspaceId: input.workspaceId,
             requesterUserId: input.requesterUserId,
+            ...(input.setupOwnerUserId ? { setupOwnerUserId: input.setupOwnerUserId } : {}),
             ...(input.libraryGrant ? { libraryGrant: input.libraryGrant } : {}),
             instanceId: input.instanceId,
             release: input.release,

@@ -110,12 +110,14 @@ export default defineEventHandler(async (event) => {
         archiveSha256: request.archiveSha256,
     } : undefined;
     const service = await acquisitionServiceFor(event, requester,
-        request?.buyerUserId ?? context.session?.user?.id ?? '', libraryGrant);
+        request?.buyerUserId ?? context.session?.user?.id ?? '', libraryGrant,
+        context.session?.user?.id ?? '');
     const started = await service.start({
         pluginId: body.data.pluginId,
         ...(body.data.version === undefined ? {} : { version: body.data.version }),
         workspaceId,
         requesterUserId: requester,
+        ...(context.session?.user?.id ? { setupOwnerUserId: context.session.user.id } : {}),
         ...(libraryGrant ? { libraryGrant } : {}),
         instanceId: acquisitionInstanceId(),
     });

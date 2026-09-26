@@ -110,7 +110,7 @@ export async function listAllWorkspaceIds(event: H3Event): Promise<readonly stri
  * and stored connections) the setup page renders. Returns `null` when the package
  * declares no setup at all.
  */
-async function setupPlanFor(event: H3Event, requesterUserId: string) {
+async function setupPlanFor(event: H3Event, setupOwnerUserId: string) {
     return async (
         pluginId: string,
         workspaceId: string,
@@ -123,7 +123,7 @@ async function setupPlanFor(event: H3Event, requesterUserId: string) {
             event,
             pluginId,
             workspaceId,
-            ownerUserId: requesterUserId,
+            ownerUserId: setupOwnerUserId,
             hasSelectedContext: false,
             service,
             durableConnections: durable,
@@ -141,7 +141,9 @@ export async function acquisitionServiceFor(
      * separate from the recorded requester identity, which is an audit label.
      */
     libraryUserId = '',
-    libraryGrant?: PluginAcquisitionOperation['libraryGrant']
+    libraryGrant?: PluginAcquisitionOperation['libraryGrant'],
+    /** Local Chat user who owns setup connections; distinct from the audit requester and Library buyer. */
+    setupOwnerUserId = ''
 ): Promise<PluginAcquisitionService> {
     const config = acquisitionConfig();
     const settings = getWorkspaceSettingsStore(event);
@@ -161,7 +163,7 @@ export async function acquisitionServiceFor(
         services,
         routeCatalog: new PluginPackageRouteCatalog(services.packages, services.pointers),
         hostCapabilities: OR3_PLUGIN_V2_HOST_CAPABILITIES,
-        setupPlan: await setupPlanFor(event, requesterUserId),
+        setupPlan: await setupPlanFor(event, setupOwnerUserId || requesterUserId),
         // A client profile is only satisfied by evidence a real browser
         // recorded for this candidate; a server process cannot produce it.
         clientCanary: async (input) => {

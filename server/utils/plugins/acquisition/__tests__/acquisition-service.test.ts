@@ -22,6 +22,7 @@ import {
 import type { WorkspaceSettingsStore } from '../../../../admin/stores/types';
 import { loadPackageDescriptors, toEffectiveAuthority } from '../../setup/load-descriptors';
 import {
+    operationScopedSetupValuesKey,
     readSetupValuesFor,
     setupValuesKey,
 } from '../../setup/settings-store';
@@ -560,12 +561,13 @@ describe('recovery and cancellation (5.3)', () => {
         await setPluginEnabled(settings, 'ws-2', 'alpha', true);
 
         const update = await releaseFixture({ version: '1.1.0', requiredField: true });
-        const attempted = await makeHarness({
+        const updateHarness = makeHarness({
             fixture: update,
             root,
             settings,
             workspaceIds: ['ws-1', 'ws-2'],
-        }).start({ version: '1.1.0' });
+        });
+        const attempted = await updateHarness.start({ version: '1.1.0' });
         expect(attempted.ok).toBe(true);
         if (!attempted.ok) return;
         expect(attempted.operation.status).toBe('blocked');
@@ -576,6 +578,12 @@ describe('recovery and cancellation (5.3)', () => {
                 'alpha'
             ))?.current?.packageDigest
         ).toBe(first.treeDigest);
+
+        await settings.set('ws-2', operationScopedSetupValuesKey('alpha', update.treeDigest, attempted.operation.operationId),
+            JSON.stringify({ schemaVersion: 1, pluginId: 'alpha', packageDigest: update.treeDigest,
+                operationId: attempted.operation.operationId, revision: 1, values: { token: 'ready-in-ws-2' } }));
+        const resumed = await updateHarness.service.retry(attempted.operation.operationId);
+        expect(resumed.status).toBe('completed');
     });
 
     it('recovers the receipt when a crash left the promotion committed but unrecorded', async () => {

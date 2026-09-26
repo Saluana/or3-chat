@@ -217,9 +217,10 @@ describe('acquisition routes', () => {
         const handler = (await import('../index.post')).default;
 
         await handler(makeEvent());
-        expect(acquisitionServiceForMock).toHaveBeenCalledWith(expect.anything(), 'super_admin:root', 'buyer-local', expect.objectContaining({ requestId }));
+        expect(acquisitionServiceForMock).toHaveBeenCalledWith(expect.anything(), 'super_admin:root', 'buyer-local', expect.objectContaining({ requestId }), 'admin-local');
         expect(startMock).toHaveBeenCalledWith(expect.objectContaining({
             pluginId: 'alpha', version: '1.0.0', workspaceId: 'ws-1',
+            setupOwnerUserId: 'admin-local',
             libraryGrant: expect.objectContaining({ requestId, buyerUserId: 'buyer-local', releaseId: 'rel_fixture_1' }),
         }));
 
@@ -256,7 +257,7 @@ describe('acquisition routes', () => {
     it('retries a recorded delegated operation only in its buyer-approved workspace', async () => {
         const requestId = `lir_${'a'.repeat(32)}`;
         getRouterParamMock.mockReturnValue('acq_abcdefgh');
-        operationReadMock.mockResolvedValue({ ...operationView(), requesterUserId: 'super_admin:root',
+        operationReadMock.mockResolvedValue({ ...operationView(), requesterUserId: 'super_admin:root', setupOwnerUserId: 'original-admin',
             libraryGrant: { requestId, buyerUserId: 'buyer-local', linkId: 'link-1', accountId: 'buyer-central', releaseId: 'rel_fixture_1', archiveSha256: `sha256-${'a'.repeat(64)}` } });
         requireAdminApiContextMock.mockResolvedValue({
             principal: { kind: 'super_admin', username: 'root' },
@@ -277,7 +278,7 @@ describe('acquisition routes', () => {
         const retryMock = vi.fn().mockResolvedValue(operationView());
         acquisitionServiceForMock.mockResolvedValue({ retry: retryMock });
         await handler(makeEvent());
-        expect(acquisitionServiceForMock).toHaveBeenCalledWith(expect.anything(), 'super_admin:root', 'buyer-local', expect.objectContaining({ requestId }));
+        expect(acquisitionServiceForMock).toHaveBeenCalledWith(expect.anything(), 'super_admin:root', 'buyer-local', expect.objectContaining({ requestId }), 'original-admin');
         expect(retryMock).toHaveBeenCalledWith('acq_abcdefgh');
     });
 

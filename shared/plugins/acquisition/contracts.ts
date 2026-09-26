@@ -158,6 +158,8 @@ export interface PluginAcquisitionOperation {
     /** Acting workspace for the request; the pointer change is instance-wide. */
     readonly workspaceId: string;
     readonly requesterUserId: string;
+    /** Local Chat user whose workspace connections satisfy candidate setup. */
+    readonly setupOwnerUserId?: string;
     /** A buyer-approved exact-release request; identity only, never a credential. */
     readonly libraryGrant?: {
         readonly requestId: string;
