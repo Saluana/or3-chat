@@ -78,6 +78,8 @@ export interface PluginSidebarDefinition {
     readonly label: string;
     readonly icon?: string;
     readonly order?: number;
+    /** Host Vue component. Omitted registrations render a placeholder. */
+    readonly component?: unknown;
 }
 
 export interface PluginPaneDefinition {
@@ -86,6 +88,8 @@ export interface PluginPaneDefinition {
     readonly icon?: string;
     readonly order?: number;
     readonly dataVersion?: number;
+    /** Host Vue component. Omitted registrations render a placeholder. */
+    readonly component?: unknown;
 }
 
 export interface PluginCardDefinition {

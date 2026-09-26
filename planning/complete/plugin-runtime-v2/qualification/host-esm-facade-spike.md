@@ -22,7 +22,9 @@ of the following independently:
 - the path works under the production CSP without `eval` or `new Function`.
 
 The production build probe writes
-`.output/plugin-runtime/host-esm-facade-report.json`. The current expected report
-is `rebuild-required`; any partial facade remains blocked. This preserves the
-allowed `vue` external for rebuild-time V2 packages without representing it as a
-safe post-build loader capability.
+`.output/plugin-runtime/host-esm-facade-report.json`. File markers and an import
+map do not count as behavior proof. `applyHostEsmFacadeBehaviorProof()` records
+singleton, reactivity, and render results only after `proveHostEsmFacadeBehavior()`
+executes the facade against the host's Vue and SDK. A missing or failed proof
+stays `rebuild-required` and names the `HostEsmFacadeBlockCode`s. Trusted plugins
+then use the bundled Nuxt-module path instead of ModuleV2Loader UI.

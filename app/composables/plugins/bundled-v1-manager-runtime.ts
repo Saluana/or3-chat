@@ -7,11 +7,14 @@ import {
     type ManagedBundledV1Instance,
 } from '~~/shared/plugins/bundled-v1-manager';
 import {
-    createManagedWorkspacePluginRuntime,
     registerWorkspacePluginInstance,
     unregisterWorkspacePluginInstance,
     type Or3WorkspacePlugin,
 } from './workspace-runtime';
+import {
+    createTrustedHostContext,
+    TRUSTED_HOST_GRANTS,
+} from './trusted-host-context';
 
 export const WORKSPACE_PLUGIN_RECONCILE_EVENT = 'or3:workspace-plugin-reconcile';
 
@@ -113,19 +116,24 @@ export function createBundledV1WorkspaceManager(
             if (signal.aborted) throw signal.reason;
             const plugin = parseWorkspacePluginModule(mod, descriptor.id);
             if (!plugin) throw new Error('Invalid plugin module export or plugin id mismatch');
-            const runtime = createManagedWorkspacePluginRuntime({
+            // Bundled V1 plugins are trusted in-process. They always receive the
+            // full grant set; SDK grant checks are not a least-privilege gate here.
+            const trusted = createTrustedHostContext({
                 pluginId: descriptor.id,
+                version: descriptor.version,
+                workspaceId: descriptor.workspaceId,
+                grants: TRUSTED_HOST_GRANTS,
             });
             let registered = false;
             return {
                 async register() {
-                    await plugin.register(runtime.api);
+                    await plugin.register(trusted.workspaceApi);
                     if (signal.aborted) throw signal.reason;
                     const registration = registerWorkspacePluginInstance(
                         descriptor.id,
                         'extension',
                         async () => {
-                            await runtime.dispose();
+                            await trusted.dispose();
                         }
                     );
                     if (!registration.accepted) {
@@ -140,7 +148,7 @@ export function createBundledV1WorkspaceManager(
                         registered = false;
                         unregisterWorkspacePluginInstance(descriptor.id);
                     }
-                    return runtime.dispose(reason);
+                    return trusted.dispose(reason);
                 },
             };
         },

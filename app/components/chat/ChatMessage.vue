@@ -10,9 +10,15 @@
         :data-theme-matches="messageContainerProps?.['data-theme-matches']"
         class="p-2 min-w-[140px] max-w-full rounded-[var(--md-border-radius)] first:mt-3 first:mb-6 not-first:my-6 relative"
     >
+        <component
+            :is="customMessageRenderer"
+            v-if="customMessageRenderer"
+            :message="props.message"
+        />
+
         <!-- Workflow Message Handling -->
         <WorkflowChatMessage
-            v-if="props.message.isWorkflow"
+            v-else-if="props.message.isWorkflow"
             :message="props.message"
         />
 
@@ -428,6 +434,7 @@ import {
 } from '~/composables/chat/useMessageMarkdown';
 import { useMessageEditing } from '~/composables/chat/useMessageEditing';
 import { useMessageActions } from '~/composables/chat/useMessageActions';
+import { resolveMessageRenderer } from '~/composables/chat/message-renderers';
 
 // UI message now exposed as UiChatMessage with .text field
 type UIMessage = UiChatMessage & { pre_html?: string };
@@ -440,6 +447,9 @@ const props = withDefaults(
         retryDisabled?: boolean;
     }>(),
     { interactive: true },
+);
+const customMessageRenderer = computed(
+    () => resolveMessageRenderer(props.message)?.component ?? null
 );
 const emit = defineEmits<{
     (e: 'retry', id: string): void;

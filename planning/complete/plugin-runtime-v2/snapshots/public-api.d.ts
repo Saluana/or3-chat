@@ -254,6 +254,8 @@ export interface PaneAppDef {
     label: string;
     /** Optional Iconify icon name. */
     icon?: string;
+    /** Optional validated app image URL. */
+    image?: string;
     /** Vue component or async component factory. */
     component: Component | (() => Promise<Component>);
     /**
@@ -329,6 +331,8 @@ export interface DashboardPlugin {
     id: string;
     /** Icon name (Iconify) shown in the grid */
     icon: string;
+    /** Optional validated app image URL. The Iconify icon remains the fallback. */
+    image?: string;
     /** Short label shown under the icon */
     label: string;
     /** Optional longer description (tooltip or detail panel later) */
@@ -365,6 +369,8 @@ export interface DashboardPluginPage {
     title: string;
     /** Optional icon for page navigation lists. */
     icon?: string;
+    /** Optional validated app image URL. */
+    image?: string;
     /** Ordering (lower first). Defaults to 200. */
     order?: number;
     /** Optional description used in landing list. */
@@ -1512,6 +1518,70 @@ export * from './projects/useProjectTreeActions';
 export * from './projects/useProjectsCrud';
 export * from './notifications/useNotifications';
 
+// ---- app/composables/plugins/trusted-host-context.ts ----
+import { type PluginGrant, type PluginRegistrationHandle } from '@or3/plugin-sdk';
+import type { PluginContext } from '@or3/plugin-sdk';
+import type { ExtendedToolDefinition, ToolHandler } from '~/utils/chat/tool-registry';
+import { type Or3WorkspacePluginApi } from './workspace-runtime';
+import { createTrustedMediation, type TrustedMediationOptions } from './trusted-mediation';
+import { type TrustedEditorExtensionInput } from './trusted-editor';
+import { type TrustedModelContribution } from './trusted-models';
+import { type MessageRendererDefinition } from '~/composables/chat/message-renderers';
+import type { LegacyCleanupReport } from '~~/shared/plugins/legacy-plugin-scope';
+/**
+ * Grants a trusted plugin may receive. Bundled V1 packages are loaded with
+ * this full set because their `register(api)` path already had ungated
+ * registry access. SDK context methods still check the grant they need.
+ */
+export declare const TRUSTED_HOST_GRANTS: readonly ["ui.dashboard.register", "ui.sidebar.register", "ui.pane.register", "ui.card.register", "ui.action.register", "ui.command-palette.register", "ui.toast", "ui.confirm", "ui.progress", "panes.open", "commands.register", "commands.run.public", "chat.create", "chat.read", "chat.message.write", "chat.message.renderer", "chat.editor.extension", "workspace.read", "workspace.switch", "workspace.connections.read", "workspace.connections.manage", "events.register", "ai.models", "ai.complete", "secrets.read", "secrets.write", "secrets.use", "files.pick", "files.read", "files.write", "network.stream", "activity.register", "documents.read", "documents.write", "tools.register.client", "tools.register.server", "tools.model.register", "posts.read", "posts.write", "hooks.register", "network.http", "storage.read", "storage.write", "settings.read", "settings.write"];
+export interface TrustedPluginToolsClient {
+    register(definition: ExtendedToolDefinition, handler: ToolHandler): PluginRegistrationHandle;
+    registerModel(input: TrustedModelContribution): PluginRegistrationHandle;
+}
+export interface TrustedPluginEditorClient {
+    register(input: TrustedEditorExtensionInput): PluginRegistrationHandle;
+    applyExtensions(existing: readonly object[]): object[];
+    handleBeforeSend(text: string): Promise<boolean>;
+}
+export interface CreateTrustedHostContextInput {
+    readonly pluginId: string;
+    readonly version: string;
+    readonly workspaceId?: string;
+    readonly generation?: number;
+    readonly grants?: readonly PluginGrant[];
+    readonly features?: readonly string[];
+    readonly mediation?: Pick<TrustedMediationOptions, 'fetch' | 'approvedDestinations' | 'secrets' | 'files' | 'posts'>;
+}
+export interface TrustedHostContext {
+    readonly context: PluginContext;
+    /** Client tools. The SDK context has no tools namespace; this is that surface. */
+    readonly tools: TrustedPluginToolsClient;
+    readonly editor: TrustedPluginEditorClient;
+    readonly posts: ReturnType<typeof createTrustedMediation>['posts'];
+    readonly renderers: {
+        register(definition: MessageRendererDefinition): PluginRegistrationHandle;
+    };
+    /**
+     * V1 `{ id, register(api) }` view. Tactics-style and bundled V1 modules
+     * register through this object; it is the same runtime as `context`.
+     */
+    readonly workspaceApi: Or3WorkspacePluginApi;
+    /** Live hook listeners owned by this context. Host leak diagnostic, not a plugin API. */
+    readonly liveListenerCount: number;
+    dispose(reason?: unknown): Promise<LegacyCleanupReport>;
+}
+/**
+ * Host entry for the unified plugin runtime.
+ *
+ * SDK `context.ui`, `context.panes`, `context.commands`, `context.activity`,
+ * and `tools` delegate to the V1 workspace registries. Chat message actions
+ * register through `context.ui.registerAction({ surface: 'message' })` and
+ * contribution kind `chat.action`, because the SDK chat client is
+ * create/open/append rather than a registry. Vue component transfer stays a
+ * host placeholder until the trusted-host ABI proofs land.
+ */
+export declare function createTrustedHostContext(input: CreateTrustedHostContextInput): TrustedHostContext;
+
 // ---- app/composables/plugins/workspace-runtime.ts ----
 import type { DashboardPlugin } from '~/composables/dashboard/useDashboardPlugins';
 import type { SidebarPageDef } from '~/composables/sidebar/useSidebarPages';
@@ -1542,7 +1612,14 @@ export interface ManagedWorkspacePluginRuntime {
     api: Or3WorkspacePluginApi;
     dispose: (reason?: unknown) => Promise<LegacyCleanupReport>;
 }
-/** Internal manager adapter. The public V1 factory below intentionally hides its report. */
+/**
+ * Internal registry adapter for the unified trusted host runtime.
+ *
+ * `createTrustedHostContext` is the host entry. Bundled V1 modules and
+ * tactics-style `register(api)` plugins receive `workspaceApi` from that
+ * context; this factory is not a second authoring surface. The V1 factory
+ * below hides the cleanup report for existing callers.
+ */
 export declare function createManagedWorkspacePluginRuntime(options?: {
     pluginId?: string;
 }): ManagedWorkspacePluginRuntime;
@@ -2350,7 +2427,7 @@ export declare function useSidebarThreads(): Ref<{
     parent_thread_id?: string | null | undefined;
     anchor_message_id?: string | null | undefined;
     anchor_index?: number | null | undefined;
-    branch_mode?: "reference" | "copy" | null | undefined;
+    branch_mode?: "copy" | "reference" | null | undefined;
     hlc?: string | undefined;
     op_id?: string | undefined;
     project_id?: string | null | undefined;
@@ -2369,7 +2446,7 @@ export declare function useSidebarThreads(): Ref<{
     parent_thread_id?: string | null | undefined;
     anchor_message_id?: string | null | undefined;
     anchor_index?: number | null | undefined;
-    branch_mode?: "reference" | "copy" | null | undefined;
+    branch_mode?: "copy" | "reference" | null | undefined;
     hlc?: string | undefined;
     op_id?: string | undefined;
     project_id?: string | null | undefined;
@@ -2712,6 +2789,8 @@ export interface SidebarPageDef {
     label: string;
     /** Iconify icon name */
     icon: string;
+    /** Optional validated app image URL. The Iconify icon remains the fallback. */
+    image?: string;
     /** Optional ordering (lower = earlier in sorted lists). Defaults to 200 */
     order?: number;
     /** Vue component or async component factory */

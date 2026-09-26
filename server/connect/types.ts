@@ -1,5 +1,7 @@
+import type { ConnectRuntime } from '~~/shared/plugins/contracts';
+
+export type { ConnectRuntime };
 export type ConnectDriver = 'intern' | 'runs';
-export type ConnectRuntime = 'intern' | 'openclaw' | 'hermes';
 
 export interface ConnectHostMetadata {
     name: string;

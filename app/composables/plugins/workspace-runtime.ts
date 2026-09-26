@@ -96,7 +96,14 @@ export interface ManagedWorkspacePluginRuntime {
     dispose: (reason?: unknown) => Promise<LegacyCleanupReport>;
 }
 
-/** Internal manager adapter. The public V1 factory below intentionally hides its report. */
+/**
+ * Internal registry adapter for the unified trusted host runtime.
+ *
+ * `createTrustedHostContext` is the host entry. Bundled V1 modules and
+ * tactics-style `register(api)` plugins receive `workspaceApi` from that
+ * context; this factory is not a second authoring surface. The V1 factory
+ * below hides the cleanup report for existing callers.
+ */
 export function createManagedWorkspacePluginRuntime(options?: {
     pluginId?: string;
 }): ManagedWorkspacePluginRuntime {

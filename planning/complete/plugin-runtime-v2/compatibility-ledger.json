@@ -4,17 +4,17 @@
   "generator": "scripts/plugin-runtime/generate-compatibility-ledger.ts",
   "inputs": {
     "moduleManifest": "planning/complete/plugin-runtime-v2/compatibility-ledger.modules.json",
-    "moduleManifestSha256": "ab76192f1a49fd1bc625829d81d2925b56ccf930a86deb9296dea6548dd4bf4d",
+    "moduleManifestSha256": "f732887f9daed262f7fbbaccbe526cf9c4723ae18c3c82340a9ad9f1a10938f5",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
-    "nuxtImportsDeclarationSha256": "927a4a318f16d25e7c936a1a5453cf48078aaf208f99b821b5abe572d6e2a99d",
+    "nuxtImportsDeclarationSha256": "ea693425c0240ae3214015e734ac89d1872dbdb1caf6975d58307a9419e8324f",
     "behaviorProfiles": "planning/complete/plugin-runtime-v2/compatibility-profiles.json",
     "behaviorProfilesSha256": "6e35c5b9392b785e5bb541580865f80f0d5f0888851c2ff68c5a3ecd75097cc1"
   },
   "coverage": {
-    "moduleCount": 38,
-    "exportCount": 582,
-    "callableExportCount": 268,
-    "nuxtAutoImportCount": 302
+    "moduleCount": 39,
+    "exportCount": 589,
+    "callableExportCount": 270,
+    "nuxtAutoImportCount": 308
   },
   "behaviorProfiles": [
     {
@@ -1018,7 +1018,7 @@
     },
     {
       "source": "app/composables/core/usePaneApps.ts",
-      "apiSha256": "760ac8766e480a487ef14cb3848a724b59eb2e3364158a78d6b57fe90eba85be",
+      "apiSha256": "8d4595342047dd42761c2c5c000b86cba0d2270ad2b98e4e6931504266f848f6",
       "runtime": "client",
       "publicPaths": [
         "~/composables/core/usePaneApps"
@@ -1041,7 +1041,7 @@
               "source": "app/composables/core/usePaneApps.ts",
               "line": 23,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface PaneAppDef {\n    /** Unique identifier for the pane app (used as the pane mode when opened). */\n    id: string;\n\n    /** Display label shown in UI (e.g., sidebar). */\n    label: string;\n\n    /** Optional Iconify icon name. */\n    icon?: string;\n\n    /** Vue component or async component factory. */\n    component: Component | (() => Promise<Component>);\n\n    /**\n     * Optional override for the postType stored in the posts table.\n     * If not provided, defaults to the app id.\n     */\n    postType?: string;\n\n    /**\n     * Optional callback to create an initial record when a new pane is opened.\n     * Return { id } to assign as the pane's documentId, or null for no record.\n     */\n    createInitialRecord?: (ctx: {\n        app: PaneAppDef;\n    }) => Promise<{ id: string } | null>;\n\n    /**\n     * Optional ordering (lower = earlier in sorted lists). Defaults to 200.\n     */\n    order?: number;\n    /** Optional owning plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this pane app. */\n    access?: PluginGatePolicy;\n    /** Replace this app's record in the current workspace tab. */\n    replaceRecordInCurrentTab?: boolean;\n}"
+              "text": "export interface PaneAppDef {\n    /** Unique identifier for the pane app (used as the pane mode when opened). */\n    id: string;\n\n    /** Display label shown in UI (e.g., sidebar). */\n    label: string;\n\n    /** Optional Iconify icon name. */\n    icon?: string;\n\n    /** Optional validated app image URL. */\n    image?: string;\n\n    /** Vue component or async component factory. */\n    component: Component | (() => Promise<Component>);\n\n    /**\n     * Optional override for the postType stored in the posts table.\n     * If not provided, defaults to the app id.\n     */\n    postType?: string;\n\n    /**\n     * Optional callback to create an initial record when a new pane is opened.\n     * Return { id } to assign as the pane's documentId, or null for no record.\n     */\n    createInitialRecord?: (ctx: {\n        app: PaneAppDef;\n    }) => Promise<{ id: string } | null>;\n\n    /**\n     * Optional ordering (lower = earlier in sorted lists). Defaults to 200.\n     */\n    order?: number;\n    /** Optional owning plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this pane app. */\n    access?: PluginGatePolicy;\n    /** Replace this app's record in the current workspace tab. */\n    replaceRecordInCurrentTab?: boolean;\n}"
             }
           ]
         },
@@ -1053,7 +1053,7 @@
           "declarations": [
             {
               "source": "app/composables/core/usePaneApps.ts",
-              "line": 63,
+              "line": 66,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type RegisteredPaneApp = PaneAppDef;"
             }
@@ -1070,7 +1070,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/core/usePaneApps.ts",
-                "line": 203,
+                "line": 207,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function usePaneApps();"
               }
@@ -1079,7 +1079,7 @@
           "declarations": [
             {
               "source": "app/composables/core/usePaneApps.ts",
-              "line": 203,
+              "line": 207,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function usePaneApps();"
             }
@@ -1089,7 +1089,7 @@
     },
     {
       "source": "app/composables/dashboard/useDashboardPlugins.ts",
-      "apiSha256": "3209a539f5d3c054d243a6232d53334782e02cd0d954283e237ce069ddb78879",
+      "apiSha256": "52b089b574228f1fbf1af8c77e3a2e948adcb4af4e1843f8df211c20bee9ba59",
       "runtime": "client",
       "publicPaths": [
         "~/composables/dashboard/useDashboardPlugins"
@@ -1169,7 +1169,7 @@
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
               "line": 46,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface DashboardPlugin {\n    /** Unique id across all dashboard plugins */\n    id: string;\n    /** Icon name (Iconify) shown in the grid */\n    icon: string;\n    /** Short label shown under the icon */\n    label: string;\n    /** Optional longer description (tooltip or detail panel later) */\n    description?: string;\n    /** Optional order (lower = earlier). Defaults to 200. */\n    order?: number;\n    /** Optional click handler when user activates the icon. */\n    handler?: (ctx: { id: string }) => void | Promise<void>;\n    /** Optional pages declared inline on registration (normalized into page registry). */\n    pages?: DashboardPluginPage[];\n    /**\n     * Optional capability declarations for permission-based access control.\n     * Standard capabilities:\n     * - 'canReadMessages': Read chat messages/history\n     * - 'canWriteDocs': Create/modify documents\n     * - 'canSend': Send messages or trigger AI operations\n     * - 'canReadFiles': Access file attachments\n     * - 'canWriteFiles': Upload or modify files\n     * - 'canManageThreads': Create/delete/modify threads\n     * - 'canAccessSettings': Read or modify app settings\n     */\n    capabilities?: string[];\n    /** Optional access gate policy for this plugin. */\n    access?: PluginGatePolicy;\n    /** Owning installable plugin id used for workspace policy lookup. */\n    pluginId?: string;\n}"
+              "text": "export interface DashboardPlugin {\n    /** Unique id across all dashboard plugins */\n    id: string;\n    /** Icon name (Iconify) shown in the grid */\n    icon: string;\n    /** Optional validated app image URL. The Iconify icon remains the fallback. */\n    image?: string;\n    /** Short label shown under the icon */\n    label: string;\n    /** Optional longer description (tooltip or detail panel later) */\n    description?: string;\n    /** Optional order (lower = earlier). Defaults to 200. */\n    order?: number;\n    /** Optional click handler when user activates the icon. */\n    handler?: (ctx: { id: string }) => void | Promise<void>;\n    /** Optional pages declared inline on registration (normalized into page registry). */\n    pages?: DashboardPluginPage[];\n    /**\n     * Optional capability declarations for permission-based access control.\n     * Standard capabilities:\n     * - 'canReadMessages': Read chat messages/history\n     * - 'canWriteDocs': Create/modify documents\n     * - 'canSend': Send messages or trigger AI operations\n     * - 'canReadFiles': Access file attachments\n     * - 'canWriteFiles': Upload or modify files\n     * - 'canManageThreads': Create/delete/modify threads\n     * - 'canAccessSettings': Read or modify app settings\n     */\n    capabilities?: string[];\n    /** Optional access gate policy for this plugin. */\n    access?: PluginGatePolicy;\n    /** Owning installable plugin id used for workspace policy lookup. */\n    pluginId?: string;\n}"
             }
           ]
         },
@@ -1181,9 +1181,9 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 79,
+              "line": 81,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface DashboardPluginPage {\n    /** Unique within the plugin. */\n    id: string;\n    /** Display title. */\n    title: string;\n    /** Optional icon for page navigation lists. */\n    icon?: string;\n    /** Ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional description used in landing list. */\n    description?: string;\n    /** Component or async factory returning component (lazy loaded). */\n    component: Component | (() => Promise<{ default?: Component } | Component>);\n    /** Optional access gate policy for this page. */\n    access?: PluginGatePolicy;\n    /** Whether this page is currently available in the active client. */\n    isAvailable?: () => boolean;\n}"
+              "text": "export interface DashboardPluginPage {\n    /** Unique within the plugin. */\n    id: string;\n    /** Display title. */\n    title: string;\n    /** Optional icon for page navigation lists. */\n    icon?: string;\n    /** Optional validated app image URL. */\n    image?: string;\n    /** Ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional description used in landing list. */\n    description?: string;\n    /** Component or async factory returning component (lazy loaded). */\n    component: Component | (() => Promise<{ default?: Component } | Component>);\n    /** Optional access gate policy for this page. */\n    access?: PluginGatePolicy;\n    /** Whether this page is currently available in the active client. */\n    isAvailable?: () => boolean;\n}"
             }
           ]
         },
@@ -1198,7 +1198,7 @@
               "resolvedReturnType": "DashboardPluginPage | undefined",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 709,
+                "line": 713,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getDashboardPluginPage(\n    pluginId: string,\n    pageId: string\n): DashboardPluginPage | undefined;"
               }
@@ -1207,7 +1207,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 709,
+              "line": 713,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getDashboardPluginPage(\n    pluginId: string,\n    pageId: string\n): DashboardPluginPage | undefined;"
             }
@@ -1250,7 +1250,7 @@
               "resolvedReturnType": "DashboardPlugin | undefined",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 307,
+                "line": 311,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getRegisteredDashboardPlugin(\n    pluginId: string\n): DashboardPlugin | undefined;"
               }
@@ -1259,7 +1259,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 307,
+              "line": 311,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getRegisteredDashboardPlugin(\n    pluginId: string\n): DashboardPlugin | undefined;"
             }
@@ -1354,7 +1354,7 @@
               "resolvedReturnType": "DashboardPluginPage[]",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 678,
+                "line": 682,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listDashboardPluginPages(\n    pluginId: string\n): DashboardPluginPage[];"
               }
@@ -1363,7 +1363,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 678,
+              "line": 682,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listDashboardPluginPages(\n    pluginId: string\n): DashboardPluginPage[];"
             }
@@ -1380,7 +1380,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 509,
+                "line": 513,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredDashboardPluginIds(): string[];"
               }
@@ -1389,7 +1389,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 509,
+              "line": 513,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredDashboardPluginIds(): string[];"
             }
@@ -1406,7 +1406,7 @@
               "resolvedReturnType": "RegistrationHandle",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 369,
+                "line": 373,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHandle;"
               }
@@ -1415,7 +1415,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 369,
+              "line": 373,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHandle;"
             }
@@ -1432,7 +1432,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 540,
+                "line": 544,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDashboardPluginPage(\n    pluginId: string,\n    page: DashboardPluginPage\n);"
               }
@@ -1441,7 +1441,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 540,
+              "line": 544,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDashboardPluginPage(\n    pluginId: string,\n    page: DashboardPluginPage\n);"
             }
@@ -1458,7 +1458,7 @@
               "resolvedReturnType": "Promise<Component | undefined>",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 755,
+                "line": 759,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function resolveDashboardPluginPageComponent(\n    pluginId: string,\n    pageId: string\n): Promise<Component | undefined>;"
               }
@@ -1467,7 +1467,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 755,
+              "line": 759,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function resolveDashboardPluginPageComponent(\n    pluginId: string,\n    pageId: string\n): Promise<Component | undefined>;"
             }
@@ -1484,7 +1484,7 @@
               "resolvedReturnType": "() => void",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 153,
+                "line": 157,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function subscribeDashboardRegistry(listener: () => void): () => void;"
               }
@@ -1493,7 +1493,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 153,
+              "line": 157,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function subscribeDashboardRegistry(listener: () => void): () => void;"
             }
@@ -1510,7 +1510,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 448,
+                "line": 452,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDashboardPlugin(id: string);"
               }
@@ -1519,7 +1519,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 448,
+              "line": 452,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDashboardPlugin(id: string);"
             }
@@ -1536,7 +1536,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 580,
+                "line": 584,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDashboardPluginPage(\n    pluginId: string,\n    pageId?: string\n);"
               }
@@ -1545,7 +1545,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 580,
+              "line": 584,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDashboardPluginPage(\n    pluginId: string,\n    pageId?: string\n);"
             }
@@ -1562,7 +1562,7 @@
               "resolvedReturnType": "DashboardNavigationController",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 811,
+                "line": 815,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardNavigation(\n    options: UseDashboardNavigationOptions = {}\n): DashboardNavigationController;"
               }
@@ -1571,7 +1571,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 811,
+              "line": 815,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardNavigation(\n    options: UseDashboardNavigationOptions = {}\n): DashboardNavigationController;"
             }
@@ -1602,7 +1602,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 645,
+                "line": 649,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardPluginPages(pluginId: () => string | undefined);"
               }
@@ -1611,7 +1611,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 645,
+              "line": 649,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardPluginPages(pluginId: () => string | undefined);"
             }
@@ -1628,7 +1628,7 @@
               "resolvedReturnType": "ComputedRef<DashboardPlugin[]>",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 478,
+                "line": 482,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardPlugins(): ComputedRef<DashboardPlugin[]>;"
               }
@@ -1637,7 +1637,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 478,
+              "line": 482,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardPlugins(): ComputedRef<DashboardPlugin[]>;"
             }
@@ -2797,7 +2797,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "6dbe24bf1430f68624fc434e7e374aff6b2a6a096697588ded7742f66019f0b6",
+      "apiSha256": "07f2f2ddf37365bdc623d6c178377a152264542eb029fe012b4b24d00efa3354",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2870,7 +2870,7 @@
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
               "line": 18,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface ActiveDocumentEditorSession {\n    readonly documentId: string;\n    readonly paneId?: string;\n    readonly tabId?: string;\n    captureContent: () => void;\n    ensureLocalDurability: () => Promise<void>;\n    captureViewState: () => DocumentEditorViewState;\n    restoreViewState: (\n        state: DocumentEditorViewState,\n        options?: { focus?: boolean }\n    ) => Promise<void>;\n}"
+              "text": "export interface ActiveDocumentEditorSession {\n    readonly documentId: string;\n    readonly paneId?: string;\n    readonly tabId?: string;\n    captureContent: () => void;\n    ensureLocalDurability: () => Promise<void>;\n    captureViewState: () => DocumentEditorViewState;\n    restoreViewState: (\n        state: DocumentEditorViewState,\n        options?: { focus?: boolean }\n    ) => Promise<void>;\n    /** Live, frozen context for a chat request; may include unsaved editor text. */\n    getChatContext?: (requestId: string) => string;\n    /** Execute one of the document agent's native tools in this editor. */\n    executeChatTool?: (name: string, argsJson: string, requestId: string) => string;\n}"
             }
           ]
         },
@@ -2967,7 +2967,7 @@
               "resolvedReturnType": "Promise<void>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 160,
+                "line": 164,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function captureDocumentEditor(documentId: string): Promise<void>;"
               }
@@ -2976,7 +2976,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 160,
+              "line": 164,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function captureDocumentEditor(documentId: string): Promise<void>;"
             }
@@ -3184,7 +3184,7 @@
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
               "line": 46,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface DashboardPlugin {\n    /** Unique id across all dashboard plugins */\n    id: string;\n    /** Icon name (Iconify) shown in the grid */\n    icon: string;\n    /** Short label shown under the icon */\n    label: string;\n    /** Optional longer description (tooltip or detail panel later) */\n    description?: string;\n    /** Optional order (lower = earlier). Defaults to 200. */\n    order?: number;\n    /** Optional click handler when user activates the icon. */\n    handler?: (ctx: { id: string }) => void | Promise<void>;\n    /** Optional pages declared inline on registration (normalized into page registry). */\n    pages?: DashboardPluginPage[];\n    /**\n     * Optional capability declarations for permission-based access control.\n     * Standard capabilities:\n     * - 'canReadMessages': Read chat messages/history\n     * - 'canWriteDocs': Create/modify documents\n     * - 'canSend': Send messages or trigger AI operations\n     * - 'canReadFiles': Access file attachments\n     * - 'canWriteFiles': Upload or modify files\n     * - 'canManageThreads': Create/delete/modify threads\n     * - 'canAccessSettings': Read or modify app settings\n     */\n    capabilities?: string[];\n    /** Optional access gate policy for this plugin. */\n    access?: PluginGatePolicy;\n    /** Owning installable plugin id used for workspace policy lookup. */\n    pluginId?: string;\n}"
+              "text": "export interface DashboardPlugin {\n    /** Unique id across all dashboard plugins */\n    id: string;\n    /** Icon name (Iconify) shown in the grid */\n    icon: string;\n    /** Optional validated app image URL. The Iconify icon remains the fallback. */\n    image?: string;\n    /** Short label shown under the icon */\n    label: string;\n    /** Optional longer description (tooltip or detail panel later) */\n    description?: string;\n    /** Optional order (lower = earlier). Defaults to 200. */\n    order?: number;\n    /** Optional click handler when user activates the icon. */\n    handler?: (ctx: { id: string }) => void | Promise<void>;\n    /** Optional pages declared inline on registration (normalized into page registry). */\n    pages?: DashboardPluginPage[];\n    /**\n     * Optional capability declarations for permission-based access control.\n     * Standard capabilities:\n     * - 'canReadMessages': Read chat messages/history\n     * - 'canWriteDocs': Create/modify documents\n     * - 'canSend': Send messages or trigger AI operations\n     * - 'canReadFiles': Access file attachments\n     * - 'canWriteFiles': Upload or modify files\n     * - 'canManageThreads': Create/delete/modify threads\n     * - 'canAccessSettings': Read or modify app settings\n     */\n    capabilities?: string[];\n    /** Optional access gate policy for this plugin. */\n    access?: PluginGatePolicy;\n    /** Owning installable plugin id used for workspace policy lookup. */\n    pluginId?: string;\n}"
             }
           ]
         },
@@ -3196,9 +3196,9 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 79,
+              "line": 81,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface DashboardPluginPage {\n    /** Unique within the plugin. */\n    id: string;\n    /** Display title. */\n    title: string;\n    /** Optional icon for page navigation lists. */\n    icon?: string;\n    /** Ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional description used in landing list. */\n    description?: string;\n    /** Component or async factory returning component (lazy loaded). */\n    component: Component | (() => Promise<{ default?: Component } | Component>);\n    /** Optional access gate policy for this page. */\n    access?: PluginGatePolicy;\n    /** Whether this page is currently available in the active client. */\n    isAvailable?: () => boolean;\n}"
+              "text": "export interface DashboardPluginPage {\n    /** Unique within the plugin. */\n    id: string;\n    /** Display title. */\n    title: string;\n    /** Optional icon for page navigation lists. */\n    icon?: string;\n    /** Optional validated app image URL. */\n    image?: string;\n    /** Ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional description used in landing list. */\n    description?: string;\n    /** Component or async factory returning component (lazy loaded). */\n    component: Component | (() => Promise<{ default?: Component } | Component>);\n    /** Optional access gate policy for this page. */\n    access?: PluginGatePolicy;\n    /** Whether this page is currently available in the active client. */\n    isAvailable?: () => boolean;\n}"
             }
           ]
         },
@@ -3336,7 +3336,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 91,
+              "line": 95,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentAiEstimateRequest {\n    prompt: string;\n    scope: DocumentAiScope;\n    references: DocumentAiContextReference[];\n}"
             }
@@ -3350,7 +3350,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 77,
+              "line": 81,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentAiProposal {\n    documentId: string;\n    candidate: JSONContent;\n    diff: DocumentAiDiffSummary;\n    operations: DocumentAiOperation[];\n    hunks: DocumentAiHunk[];\n    snapshot: DocumentAiFrozenSnapshot;\n    requestVersion: number;\n    prompt: string;\n    scope: DocumentAiScope;\n}"
             }
@@ -3406,7 +3406,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 97,
+              "line": 101,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentAiSubmission extends DocumentAiEstimateRequest {\n    attachments: DocumentAiAttachment[];\n}"
             }
@@ -3434,7 +3434,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 39,
+              "line": 43,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentEditorSessionLookup {\n    paneId: string;\n    tabId: string;\n}"
             }
@@ -3591,7 +3591,7 @@
               "resolvedReturnType": "Promise<void>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 176,
+                "line": 180,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function ensureDocumentEditorLocalDurability(\n    documentId: string\n): Promise<void>;"
               }
@@ -3600,7 +3600,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 176,
+              "line": 180,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function ensureDocumentEditorLocalDurability(\n    documentId: string\n): Promise<void>;"
             }
@@ -3633,6 +3633,32 @@
           ]
         },
         {
+          "name": "getActiveDocumentEditorSession",
+          "kind": "value",
+          "nuxtAutoImport": false,
+          "signatures": [
+            {
+              "signature": "(documentId: string, tabId?: string): ActiveDocumentEditorSession | undefined",
+              "declaredReturnType": "ActiveDocumentEditorSession | undefined",
+              "resolvedReturnType": "ActiveDocumentEditorSession | undefined",
+              "declaration": {
+                "source": "app/composables/documents/useDocumentEditorSessions.ts",
+                "line": 196,
+                "syntaxKind": "FunctionDeclaration",
+                "text": "export function getActiveDocumentEditorSession(\n    documentId: string,\n    tabId?: string,\n): ActiveDocumentEditorSession | undefined;"
+              }
+            }
+          ],
+          "declarations": [
+            {
+              "source": "app/composables/documents/useDocumentEditorSessions.ts",
+              "line": 196,
+              "syntaxKind": "FunctionDeclaration",
+              "text": "export function getActiveDocumentEditorSession(\n    documentId: string,\n    tabId?: string,\n): ActiveDocumentEditorSession | undefined;"
+            }
+          ]
+        },
+        {
           "name": "getDashboardPluginPage",
           "kind": "value",
           "nuxtAutoImport": false,
@@ -3643,7 +3669,7 @@
               "resolvedReturnType": "DashboardPluginPage | undefined",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 709,
+                "line": 713,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getDashboardPluginPage(\n    pluginId: string,\n    pageId: string\n): DashboardPluginPage | undefined;"
               }
@@ -3652,7 +3678,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 709,
+              "line": 713,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getDashboardPluginPage(\n    pluginId: string,\n    pageId: string\n): DashboardPluginPage | undefined;"
             }
@@ -3695,7 +3721,7 @@
               "resolvedReturnType": "ActiveDocumentEditorSession | undefined",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 127,
+                "line": 131,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup\n): ActiveDocumentEditorSession | undefined;"
               }
@@ -3704,7 +3730,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 127,
+              "line": 131,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup\n): ActiveDocumentEditorSession | undefined;"
             }
@@ -3747,7 +3773,7 @@
               "resolvedReturnType": "DashboardPlugin | undefined",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 307,
+                "line": 311,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getRegisteredDashboardPlugin(\n    pluginId: string\n): DashboardPlugin | undefined;"
               }
@@ -3756,7 +3782,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 307,
+              "line": 311,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getRegisteredDashboardPlugin(\n    pluginId: string\n): DashboardPlugin | undefined;"
             }
@@ -3773,7 +3799,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 188,
+                "line": 192,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function hasActiveDocumentEditor(documentId: string): boolean;"
               }
@@ -3782,7 +3808,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 188,
+              "line": 192,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function hasActiveDocumentEditor(documentId: string): boolean;"
             }
@@ -3999,7 +4025,7 @@
               "resolvedReturnType": "DashboardPluginPage[]",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 678,
+                "line": 682,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listDashboardPluginPages(\n    pluginId: string\n): DashboardPluginPage[];"
               }
@@ -4008,7 +4034,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 678,
+              "line": 682,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listDashboardPluginPages(\n    pluginId: string\n): DashboardPluginPage[];"
             }
@@ -4129,7 +4155,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 509,
+                "line": 513,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredDashboardPluginIds(): string[];"
               }
@@ -4138,7 +4164,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 509,
+              "line": 513,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredDashboardPluginIds(): string[];"
             }
@@ -4546,9 +4572,9 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 33,
+              "line": 35,
               "syntaxKind": "TypeAliasDeclaration",
-              "text": "export type MultiPaneMessage = {\n    role: 'user' | 'assistant' | 'system' | 'tool';\n    content: string;\n    file_hashes?: string | null;\n    id?: string;\n    stream_id?: string;\n    data?: Record<string, unknown> | null;\n    reasoning_text?: string | null;\n    index?: number | null;\n    created_at?: number | null;\n};"
+              "text": "export type MultiPaneMessage = {\n    role: 'user' | 'assistant' | 'system' | 'tool';\n    content: string;\n    file_hashes?: string | null;\n    id?: string;\n    stream_id?: string;\n    data?: Record<string, unknown> | null;\n    reasoning_text?: string | null;\n    index?: number | null;\n    order_key?: string | null;\n    created_at?: number | null;\n};"
             }
           ]
         },
@@ -4560,7 +4586,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 45,
+              "line": 48,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface PaneState {\n    id: string;\n    mode: PaneMode;\n    threadId: string; // '' indicates unsaved/new chat\n    /** Target thread while an async workspace-tab activation is in flight. */\n    pendingThreadId?: string;\n    documentId?: string;\n    messages: MultiPaneMessage[];\n    validating: boolean;\n}"
             }
@@ -4616,7 +4642,7 @@
               "source": "app/composables/core/usePaneApps.ts",
               "line": 23,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface PaneAppDef {\n    /** Unique identifier for the pane app (used as the pane mode when opened). */\n    id: string;\n\n    /** Display label shown in UI (e.g., sidebar). */\n    label: string;\n\n    /** Optional Iconify icon name. */\n    icon?: string;\n\n    /** Vue component or async component factory. */\n    component: Component | (() => Promise<Component>);\n\n    /**\n     * Optional override for the postType stored in the posts table.\n     * If not provided, defaults to the app id.\n     */\n    postType?: string;\n\n    /**\n     * Optional callback to create an initial record when a new pane is opened.\n     * Return { id } to assign as the pane's documentId, or null for no record.\n     */\n    createInitialRecord?: (ctx: {\n        app: PaneAppDef;\n    }) => Promise<{ id: string } | null>;\n\n    /**\n     * Optional ordering (lower = earlier in sorted lists). Defaults to 200.\n     */\n    order?: number;\n    /** Optional owning plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this pane app. */\n    access?: PluginGatePolicy;\n    /** Replace this app's record in the current workspace tab. */\n    replaceRecordInCurrentTab?: boolean;\n}"
+              "text": "export interface PaneAppDef {\n    /** Unique identifier for the pane app (used as the pane mode when opened). */\n    id: string;\n\n    /** Display label shown in UI (e.g., sidebar). */\n    label: string;\n\n    /** Optional Iconify icon name. */\n    icon?: string;\n\n    /** Optional validated app image URL. */\n    image?: string;\n\n    /** Vue component or async component factory. */\n    component: Component | (() => Promise<Component>);\n\n    /**\n     * Optional override for the postType stored in the posts table.\n     * If not provided, defaults to the app id.\n     */\n    postType?: string;\n\n    /**\n     * Optional callback to create an initial record when a new pane is opened.\n     * Return { id } to assign as the pane's documentId, or null for no record.\n     */\n    createInitialRecord?: (ctx: {\n        app: PaneAppDef;\n    }) => Promise<{ id: string } | null>;\n\n    /**\n     * Optional ordering (lower = earlier in sorted lists). Defaults to 200.\n     */\n    order?: number;\n    /** Optional owning plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this pane app. */\n    access?: PluginGatePolicy;\n    /** Replace this app's record in the current workspace tab. */\n    replaceRecordInCurrentTab?: boolean;\n}"
             }
           ]
         },
@@ -4628,7 +4654,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 30,
+              "line": 32,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type PaneMode = 'chat' | 'doc' | (string & { _brand?: 'pane-mode' });"
             }
@@ -4642,7 +4668,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 45,
+              "line": 48,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface PaneState {\n    id: string;\n    mode: PaneMode;\n    threadId: string; // '' indicates unsaved/new chat\n    /** Target thread while an async workspace-tab activation is in flight. */\n    pendingThreadId?: string;\n    documentId?: string;\n    messages: MultiPaneMessage[];\n    validating: boolean;\n}"
             }
@@ -4835,7 +4861,7 @@
               "resolvedReturnType": "RegistrationHandle",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 369,
+                "line": 373,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHandle;"
               }
@@ -4844,7 +4870,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 369,
+              "line": 373,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHandle;"
             }
@@ -4861,7 +4887,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 540,
+                "line": 544,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDashboardPluginPage(\n    pluginId: string,\n    page: DashboardPluginPage\n);"
               }
@@ -4870,7 +4896,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 540,
+              "line": 544,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDashboardPluginPage(\n    pluginId: string,\n    page: DashboardPluginPage\n);"
             }
@@ -4913,7 +4939,7 @@
               "resolvedReturnType": "() => void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 71,
+                "line": 75,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDocumentEditorSession(\n    session: ActiveDocumentEditorSession\n): () => void;"
               }
@@ -4924,7 +4950,7 @@
               "resolvedReturnType": "() => void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 75,
+                "line": 79,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDocumentEditorSession(\n    documentId: string,\n    session: LegacyDocumentEditorSession\n): () => void;"
               }
@@ -4933,19 +4959,19 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 71,
+              "line": 75,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDocumentEditorSession(\n    session: ActiveDocumentEditorSession\n): () => void;"
             },
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 75,
+              "line": 79,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDocumentEditorSession(\n    documentId: string,\n    session: LegacyDocumentEditorSession\n): () => void;"
             },
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 79,
+              "line": 83,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDocumentEditorSession(\n    documentIdOrSession: string | ActiveDocumentEditorSession,\n    legacySession?: LegacyDocumentEditorSession\n): () => void;"
             }
@@ -5115,7 +5141,7 @@
           "declarations": [
             {
               "source": "app/composables/core/usePaneApps.ts",
-              "line": 63,
+              "line": 66,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type RegisteredPaneApp = PaneAppDef;"
             }
@@ -5340,7 +5366,7 @@
               "resolvedReturnType": "DocumentAiScope",
               "declaration": {
                 "source": "app/composables/documents/useDocumentAiAgent.ts",
-                "line": 108,
+                "line": 112,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function resolveAutomaticDocumentAiScope(editor: Editor): DocumentAiScope;"
               }
@@ -5349,7 +5375,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 108,
+              "line": 112,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function resolveAutomaticDocumentAiScope(editor: Editor): DocumentAiScope;"
             }
@@ -5366,7 +5392,7 @@
               "resolvedReturnType": "Promise<Component | undefined>",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 755,
+                "line": 759,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function resolveDashboardPluginPageComponent(\n    pluginId: string,\n    pageId: string\n): Promise<Component | undefined>;"
               }
@@ -5375,7 +5401,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 755,
+              "line": 759,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function resolveDashboardPluginPageComponent(\n    pluginId: string,\n    pageId: string\n): Promise<Component | undefined>;"
             }
@@ -5392,7 +5418,7 @@
               "resolvedReturnType": "number",
               "declaration": {
                 "source": "app/composables/documents/useDocumentAiAgent.ts",
-                "line": 112,
+                "line": 116,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function resolveDocumentAiCursorBlockIndex(\n    editor: Editor,\n    snapshot: DocumentAiFrozenSnapshot,\n): number;"
               }
@@ -5401,7 +5427,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 112,
+              "line": 116,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function resolveDocumentAiCursorBlockIndex(\n    editor: Editor,\n    snapshot: DocumentAiFrozenSnapshot,\n): number;"
             }
@@ -5524,7 +5550,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentAiAgent.ts",
-                "line": 153,
+                "line": 157,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function seedEditableContext(\n    editor: Editor,\n    snapshot: DocumentAiFrozenSnapshot,\n    scope: DocumentAiScope,\n    chunkWordLimit: number,\n);"
               }
@@ -5533,7 +5559,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 153,
+              "line": 157,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function seedEditableContext(\n    editor: Editor,\n    snapshot: DocumentAiFrozenSnapshot,\n    scope: DocumentAiScope,\n    chunkWordLimit: number,\n);"
             }
@@ -5754,7 +5780,7 @@
               "resolvedReturnType": "() => void",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 153,
+                "line": 157,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function subscribeDashboardRegistry(listener: () => void): () => void;"
               }
@@ -5763,7 +5789,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 153,
+              "line": 157,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function subscribeDashboardRegistry(listener: () => void): () => void;"
             }
@@ -5860,7 +5886,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 448,
+                "line": 452,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDashboardPlugin(id: string);"
               }
@@ -5869,7 +5895,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 448,
+              "line": 452,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDashboardPlugin(id: string);"
             }
@@ -5886,7 +5912,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 580,
+                "line": 584,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDashboardPluginPage(\n    pluginId: string,\n    pageId?: string\n);"
               }
@@ -5895,7 +5921,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 580,
+              "line": 584,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDashboardPluginPage(\n    pluginId: string,\n    pageId?: string\n);"
             }
@@ -6354,7 +6380,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAi.ts",
-                "line": 193,
+                "line": 194,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
               }
@@ -6363,7 +6389,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAi.ts",
-              "line": 193,
+              "line": 194,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
             }
@@ -6406,7 +6432,7 @@
               "resolvedReturnType": "DashboardNavigationController",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 811,
+                "line": 815,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardNavigation(\n    options: UseDashboardNavigationOptions = {}\n): DashboardNavigationController;"
               }
@@ -6415,7 +6441,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 811,
+              "line": 815,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardNavigation(\n    options: UseDashboardNavigationOptions = {}\n): DashboardNavigationController;"
             }
@@ -6446,7 +6472,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 645,
+                "line": 649,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardPluginPages(pluginId: () => string | undefined);"
               }
@@ -6455,7 +6481,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 645,
+              "line": 649,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardPluginPages(pluginId: () => string | undefined);"
             }
@@ -6472,7 +6498,7 @@
               "resolvedReturnType": "ComputedRef<DashboardPlugin[]>",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 478,
+                "line": 482,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardPlugins(): ComputedRef<DashboardPlugin[]>;"
               }
@@ -6481,7 +6507,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 478,
+              "line": 482,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardPlugins(): ComputedRef<DashboardPlugin[]>;"
             }
@@ -6550,7 +6576,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentAiAgent.ts",
-                "line": 285,
+                "line": 289,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDocumentAiAgent(options: {\n    editor: Ref<Editor | null>;\n    documentId: Ref<string>;\n    title: Ref<string>;\n    contentVersion: Ref<number>;\n    persistCurrent: () => Promise<void>;\n});"
               }
@@ -6559,7 +6585,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 285,
+              "line": 289,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDocumentAiAgent(options: {\n    editor: Ref<Editor | null>;\n    documentId: Ref<string>;\n    title: Ref<string>;\n    contentVersion: Ref<number>;\n    persistCurrent: () => Promise<void>;\n});"
             }
@@ -6914,7 +6940,7 @@
               "resolvedReturnType": "UseMultiPaneApi",
               "declaration": {
                 "source": "app/composables/core/useMultiPane.ts",
-                "line": 251,
+                "line": 264,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useMultiPane(\n    options: UseMultiPaneOptions = {}\n): UseMultiPaneApi;"
               }
@@ -6923,7 +6949,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 251,
+              "line": 264,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useMultiPane(\n    options: UseMultiPaneOptions = {}\n): UseMultiPaneApi;"
             }
@@ -6937,7 +6963,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 67,
+              "line": 70,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UseMultiPaneApi {\n    panes: Ref<PaneState[]>;\n    activePaneIndex: Ref<number>;\n    activePaneId: ComputedRef<string | null>;\n    canAddPane: ComputedRef<boolean>;\n    newWindowTooltip: ComputedRef<string>;\n    addPane: () => string | null;\n    closePane: (index: number) => Promise<void> | void;\n    setActive: (index: number) => void;\n    focusPrev: (current: number) => void;\n    focusNext: (current: number) => void;\n    setPaneThread: (index: number, threadId: string) => Promise<void>;\n    loadMessagesFor: (id: string) => Promise<MultiPaneMessage[]>;\n    ensureAtLeastOne: () => void;\n    newPaneForApp: (\n        appId: string,\n        opts?: { initialRecordId?: string }\n    ) => Promise<void>;\n    setPaneApp: (\n        index: number,\n        appId: string,\n        opts?: { recordId?: string }\n    ) => Promise<void>;\n    updatePane: (index: number, updates: Partial<PaneState>) => void;\n    getPaneIndexById: (paneId: string) => number;\n    getPaneById: (paneId: string) => PaneState | undefined;\n    getPaneWidth: (index: number) => string;\n    handleResize: (\n        paneIndex: number,\n        deltaX: number,\n        persist?: boolean\n    ) => void;\n    persistPaneWidths: () => void;\n    recalculateWidthsForContainer: (newContainerWidth: number) => void;\n    paneWidths: Ref<number[]>;\n}"
             }
@@ -6951,7 +6977,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 56,
+              "line": 59,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UseMultiPaneOptions {\n    initialThreadId?: string;\n    maxPanes?: MaybeRefOrGetter<number>; // default 3\n    onFlushDocument?: (id: string) => void | Promise<void>;\n    loadMessagesFor?: (id: string) => Promise<MultiPaneMessage[]>; // override for tests\n    minPaneWidth?: number; // minimum width per pane in pixels (default 280)\n    maxPaneWidth?: number; // maximum width per pane in pixels (default 2000)\n    storageKey?: string; // localStorage key for persisting widths (default 'pane-widths')\n    allowMultiplePanes?: MaybeRefOrGetter<boolean>; // responsive or policy-level pane creation guard\n}"
             }
@@ -6994,7 +7020,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/core/usePaneApps.ts",
-                "line": 203,
+                "line": 207,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function usePaneApps();"
               }
@@ -7003,7 +7029,7 @@
           "declarations": [
             {
               "source": "app/composables/core/usePaneApps.ts",
-              "line": 203,
+              "line": 207,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function usePaneApps();"
             }
@@ -7426,7 +7452,7 @@
               "resolvedReturnType": "Promise<ActiveDocumentEditorSession | undefined>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 134,
+                "line": 138,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function waitForDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup,\n    timeoutMs = 1_500\n): Promise<ActiveDocumentEditorSession | undefined>;"
               }
@@ -7435,7 +7461,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 134,
+              "line": 138,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function waitForDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup,\n    timeoutMs = 1_500\n): Promise<ActiveDocumentEditorSession | undefined>;"
             }
@@ -7486,8 +7512,119 @@
       ]
     },
     {
+      "source": "app/composables/plugins/trusted-host-context.ts",
+      "apiSha256": "1b3c58eb4f16015f33e5b75240cfaba41fa45feb3b88999fa0219b776aecdecf",
+      "runtime": "client",
+      "publicPaths": [
+        "~/composables/plugins/trusted-host-context"
+      ],
+      "nuxtAutoImportModule": "#imports",
+      "docs": [
+        "public/_documentation/start/plugin-quickstart.md"
+      ],
+      "behaviorProfileIds": [],
+      "exports": [
+        {
+          "name": "createTrustedHostContext",
+          "kind": "value",
+          "nuxtAutoImport": true,
+          "signatures": [
+            {
+              "signature": "(input: CreateTrustedHostContextInput): TrustedHostContext",
+              "declaredReturnType": "TrustedHostContext",
+              "resolvedReturnType": "TrustedHostContext",
+              "declaration": {
+                "source": "app/composables/plugins/trusted-host-context.ts",
+                "line": 419,
+                "syntaxKind": "FunctionDeclaration",
+                "text": "export function createTrustedHostContext(\n    input: CreateTrustedHostContextInput\n): TrustedHostContext;"
+              }
+            }
+          ],
+          "declarations": [
+            {
+              "source": "app/composables/plugins/trusted-host-context.ts",
+              "line": 419,
+              "syntaxKind": "FunctionDeclaration",
+              "text": "export function createTrustedHostContext(\n    input: CreateTrustedHostContextInput\n): TrustedHostContext;"
+            }
+          ]
+        },
+        {
+          "name": "CreateTrustedHostContextInput",
+          "kind": "type",
+          "nuxtAutoImport": true,
+          "signatures": [],
+          "declarations": [
+            {
+              "source": "app/composables/plugins/trusted-host-context.ts",
+              "line": 138,
+              "syntaxKind": "InterfaceDeclaration",
+              "text": "export interface CreateTrustedHostContextInput {\n    readonly pluginId: string;\n    readonly version: string;\n    readonly workspaceId?: string;\n    readonly generation?: number;\n    readonly grants?: readonly PluginGrant[];\n    readonly features?: readonly string[];\n    readonly mediation?: Pick<\n        TrustedMediationOptions,\n        'fetch' | 'approvedDestinations' | 'secrets' | 'files' | 'posts'\n    >;\n}"
+            }
+          ]
+        },
+        {
+          "name": "TRUSTED_HOST_GRANTS",
+          "kind": "value",
+          "nuxtAutoImport": true,
+          "signatures": [],
+          "declarations": [
+            {
+              "source": "app/composables/plugins/trusted-host-context.ts",
+              "line": 53,
+              "syntaxKind": "VariableDeclaration",
+              "text": "TRUSTED_HOST_GRANTS = [\n    'ui.dashboard.register',\n    'ui.sidebar.register',\n    'ui.pane.register',\n    'ui.card.register',\n    'ui.action.register',\n    'ui.command-palette.register',\n    'ui.toast',\n    'ui.confirm',\n    'ui.progress',\n    'panes.open',\n    'commands.register',\n    'commands.run.public',\n    'chat.create',\n    'chat.read',\n    'chat.message.write',\n    'chat.message.renderer',\n    'chat.editor.extension',\n    'workspace.read',\n    'workspace.switch',\n    'workspace.connections.read',\n    'workspace.connections.manage',\n    'events.register',\n    'ai.models',\n    'ai.complete',\n    'secrets.read',\n    'secrets.write',\n    'secrets.use',\n    'files.pick',\n    'files.read',\n    'files.write',\n    'network.stream',\n    'activity.register',\n    'documents.read',\n    'documents.write',\n    'tools.register.client',\n    'tools.register.server',\n    'tools.model.register',\n    'posts.read',\n    'posts.write',\n    'hooks.register',\n    'network.http',\n    'storage.read',\n    'storage.write',\n    'settings.read',\n    'settings.write',\n] as const satisfies readonly PluginGrant[]"
+            }
+          ]
+        },
+        {
+          "name": "TrustedHostContext",
+          "kind": "type",
+          "nuxtAutoImport": true,
+          "signatures": [],
+          "declarations": [
+            {
+              "source": "app/composables/plugins/trusted-host-context.ts",
+              "line": 151,
+              "syntaxKind": "InterfaceDeclaration",
+              "text": "export interface TrustedHostContext {\n    readonly context: PluginContext;\n    /** Client tools. The SDK context has no tools namespace; this is that surface. */\n    readonly tools: TrustedPluginToolsClient;\n    readonly editor: TrustedPluginEditorClient;\n    readonly posts: ReturnType<typeof createTrustedMediation>['posts'];\n    readonly renderers: {\n        register(definition: MessageRendererDefinition): PluginRegistrationHandle;\n    };\n    /**\n     * V1 `{ id, register(api) }` view. Tactics-style and bundled V1 modules\n     * register through this object; it is the same runtime as `context`.\n     */\n    readonly workspaceApi: Or3WorkspacePluginApi;\n    /** Live hook listeners owned by this context. Host leak diagnostic, not a plugin API. */\n    readonly liveListenerCount: number;\n    dispose(reason?: unknown): Promise<LegacyCleanupReport>;\n}"
+            }
+          ]
+        },
+        {
+          "name": "TrustedPluginEditorClient",
+          "kind": "type",
+          "nuxtAutoImport": true,
+          "signatures": [],
+          "declarations": [
+            {
+              "source": "app/composables/plugins/trusted-host-context.ts",
+              "line": 132,
+              "syntaxKind": "InterfaceDeclaration",
+              "text": "export interface TrustedPluginEditorClient {\n    register(input: TrustedEditorExtensionInput): PluginRegistrationHandle;\n    applyExtensions(existing: readonly object[]): object[];\n    handleBeforeSend(text: string): Promise<boolean>;\n}"
+            }
+          ]
+        },
+        {
+          "name": "TrustedPluginToolsClient",
+          "kind": "type",
+          "nuxtAutoImport": true,
+          "signatures": [],
+          "declarations": [
+            {
+              "source": "app/composables/plugins/trusted-host-context.ts",
+              "line": 124,
+              "syntaxKind": "InterfaceDeclaration",
+              "text": "export interface TrustedPluginToolsClient {\n    register(\n        definition: ExtendedToolDefinition,\n        handler: ToolHandler\n    ): PluginRegistrationHandle;\n    registerModel(input: TrustedModelContribution): PluginRegistrationHandle;\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "source": "app/composables/plugins/workspace-runtime.ts",
-      "apiSha256": "c9f3603e9178180537eeebeb336458e167a5a4cb8dd0eca7061087474ce4fc7d",
+      "apiSha256": "43cc4ccaa84486f6f9babeaa5928aafe23c704800da59f24281e08f403cdc989",
       "runtime": "client",
       "publicPaths": [
         "~/composables/plugins/workspace-runtime"
@@ -7509,7 +7646,7 @@
               "resolvedReturnType": "ManagedWorkspacePluginRuntime",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 100,
+                "line": 107,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createManagedWorkspacePluginRuntime(options?: {\n    pluginId?: string;\n}): ManagedWorkspacePluginRuntime;"
               }
@@ -7518,7 +7655,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 100,
+              "line": 107,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createManagedWorkspacePluginRuntime(options?: {\n    pluginId?: string;\n}): ManagedWorkspacePluginRuntime;"
             }
@@ -7535,7 +7672,7 @@
               "resolvedReturnType": "{ api: Or3WorkspacePluginApi; dispose: () => void; }",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 212,
+                "line": 221,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createWorkspacePluginApi(pluginId?: string): {\n    api: Or3WorkspacePluginApi;\n    dispose: () => void;\n};"
               }
@@ -7544,7 +7681,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 212,
+              "line": 221,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createWorkspacePluginApi(pluginId?: string): {\n    api: Or3WorkspacePluginApi;\n    dispose: () => void;\n};"
             }
@@ -7561,7 +7698,7 @@
               "resolvedReturnType": "{ id: string; source: WorkspacePluginSource; }[]",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 275,
+                "line": 284,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listWorkspacePluginInstances(): Array<{ id: string; source: WorkspacePluginSource }>;"
               }
@@ -7570,7 +7707,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 275,
+              "line": 284,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listWorkspacePluginInstances(): Array<{ id: string; source: WorkspacePluginSource }>;"
             }
@@ -7629,7 +7766,7 @@
               "resolvedReturnType": "{ accepted: boolean; replacedSource?: WorkspacePluginSource; }",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 227,
+                "line": 236,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerWorkspacePluginInstance(\n    id: string,\n    source: WorkspacePluginSource,\n    dispose: () => void | Promise<void>\n): { accepted: boolean; replacedSource?: WorkspacePluginSource };"
               }
@@ -7638,7 +7775,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 227,
+              "line": 236,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerWorkspacePluginInstance(\n    id: string,\n    source: WorkspacePluginSource,\n    dispose: () => void | Promise<void>\n): { accepted: boolean; replacedSource?: WorkspacePluginSource };"
             }
@@ -7655,7 +7792,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 259,
+                "line": 268,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterWorkspacePluginInstance(id: string): void;"
               }
@@ -7664,7 +7801,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 259,
+              "line": 268,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterWorkspacePluginInstance(id: string): void;"
             }
@@ -8991,7 +9128,7 @@
     },
     {
       "source": "app/composables/sidebar/useSidebarPages.ts",
-      "apiSha256": "93a2ba04350f7b1008a6be0aca9ffa6c7d2bdae8662fd70f4153b9a2834606e7",
+      "apiSha256": "304774659ff349dc9647632264f1ca69726598ec57b62e15353422c462d8dbbc",
       "runtime": "client",
       "publicPaths": [
         "~/composables/sidebar",
@@ -9013,7 +9150,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarPages.ts",
-              "line": 141,
+              "line": 143,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type RegisteredSidebarPage = SidebarPageDef;"
             }
@@ -9027,7 +9164,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarPages.ts",
-              "line": 113,
+              "line": 115,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarActivateContext {\n    /** The page being activated/deactivated */\n    page: SidebarPageDef;\n    /** The previously active page, or null if this is the first activation */\n    previousPage: SidebarPageDef | null;\n    /** Whether the sidebar is currently collapsed */\n    isCollapsed: boolean;\n    /** API for managing panes in the multi-pane system */\n    multiPane: UseMultiPaneApi;\n    /** API for pane plugin operations */\n    panePluginApi: PanePluginApi;\n}"
             }
@@ -9041,7 +9178,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarPages.ts",
-              "line": 91,
+              "line": 93,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarPageContext {\n    /** The page definition for this context */\n    page: SidebarPageDef;\n    /** Function to expose APIs to other parts of the application */\n    expose: (api: Record<string, unknown>) => void;\n}"
             }
@@ -9057,7 +9194,7 @@
               "source": "app/composables/sidebar/useSidebarPages.ts",
               "line": 47,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface SidebarPageDef {\n    /** Unique identifier for the sidebar page */\n    id: string;\n    /** Display label shown in UI (e.g., tooltips) */\n    label: string;\n    /** Iconify icon name */\n    icon: string;\n    /** Optional ordering (lower = earlier in sorted lists). Defaults to 200 */\n    order?: number;\n    /** Vue component or async component factory */\n    component: Component | (() => Promise<Component>);\n    /** Opt-in caching for the component */\n    keepAlive?: boolean;\n    /** Whether this page uses the default header. Defaults to true for home page */\n    usesDefaultHeader?: boolean;\n    /** Optional context provider for the page */\n    provideContext?: (ctx: SidebarPageContext) => void;\n    /** Optional activation guard - return false to prevent activation */\n    canActivate?: (ctx: SidebarActivateContext) => boolean | Promise<boolean>;\n    /** Optional activation hook called when page becomes active */\n    onActivate?: (ctx: SidebarActivateContext) => void | Promise<void>;\n    /** Optional deactivation hook called when page becomes inactive */\n    onDeactivate?: (ctx: SidebarActivateContext) => void | Promise<void>;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this page. */\n    access?: PluginGatePolicy;\n}"
+              "text": "export interface SidebarPageDef {\n    /** Unique identifier for the sidebar page */\n    id: string;\n    /** Display label shown in UI (e.g., tooltips) */\n    label: string;\n    /** Iconify icon name */\n    icon: string;\n    /** Optional validated app image URL. The Iconify icon remains the fallback. */\n    image?: string;\n    /** Optional ordering (lower = earlier in sorted lists). Defaults to 200 */\n    order?: number;\n    /** Vue component or async component factory */\n    component: Component | (() => Promise<Component>);\n    /** Opt-in caching for the component */\n    keepAlive?: boolean;\n    /** Whether this page uses the default header. Defaults to true for home page */\n    usesDefaultHeader?: boolean;\n    /** Optional context provider for the page */\n    provideContext?: (ctx: SidebarPageContext) => void;\n    /** Optional activation guard - return false to prevent activation */\n    canActivate?: (ctx: SidebarActivateContext) => boolean | Promise<boolean>;\n    /** Optional activation hook called when page becomes active */\n    onActivate?: (ctx: SidebarActivateContext) => void | Promise<void>;\n    /** Optional deactivation hook called when page becomes inactive */\n    onDeactivate?: (ctx: SidebarActivateContext) => void | Promise<void>;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this page. */\n    access?: PluginGatePolicy;\n}"
             }
           ]
         },
@@ -9072,7 +9209,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarPages.ts",
-                "line": 305,
+                "line": 308,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarPages();"
               }
@@ -9081,7 +9218,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarPages.ts",
-              "line": 305,
+              "line": 308,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarPages();"
             }
@@ -9689,7 +9826,7 @@
     },
     {
       "source": "app/core/hooks/hook-types.ts",
-      "apiSha256": "5430e137b077d471a652118e12bbe03771e2e74a9b44c371099a23ac3533e8ac",
+      "apiSha256": "468c441b2768d9c4687a2642db27e3afc613f5c5a4a815ddee7feaeebfed6349",
       "runtime": "client",
       "publicPaths": [
         "~/core/hooks/hook-types"
@@ -9708,7 +9845,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 158,
+              "line": 159,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AccessDecision {\n    allowed: boolean;\n    permission: Permission;\n    reason?:\n        | 'unauthenticated'\n        | 'forbidden'\n        | 'unknown-permission'\n        | (string & {});\n    userId?: string;\n    workspaceId?: string;\n    role?: WorkspaceRole;\n    resource?: { kind: string; id?: string };\n}"
             }
@@ -10072,7 +10209,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 297,
+              "line": 298,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DbCreatePayload<T = unknown> {\n    entity: T;\n    tableName: string;\n}"
             }
@@ -10086,7 +10223,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 309,
+              "line": 310,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DbDeletePayload<T = unknown> {\n    entity: T;\n    id: string;\n    tableName: string;\n}"
             }
@@ -10170,7 +10307,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 302,
+              "line": 303,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DbUpdatePayload<T = unknown> {\n    existing: T;\n    updated: T;\n    patch: Partial<T>;\n    tableName: string;\n}"
             }
@@ -10466,7 +10603,7 @@
               "source": "shared/hooks/hook-domain-types.ts",
               "line": 139,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface KvEntry {\n    id: string;\n    name: string;\n    value?: string | null;\n    created_at: number;\n    updated_at: number;\n    clock: number;\n}"
+              "text": "export interface KvEntry {\n    id: string;\n    name: string;\n    value?: string | null;\n    deleted?: boolean;\n    created_at: number;\n    updated_at: number;\n    clock: number;\n}"
             }
           ]
         },
@@ -10534,7 +10671,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 218,
+              "line": 219,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface NotificationAction {\n    id: string;\n    label: string;\n    kind: 'navigate' | 'callback';\n    target?: {\n        threadId?: string;\n        documentId?: string;\n        route?: string;\n    };\n    data?: Record<string, unknown>;\n}"
             }
@@ -10548,7 +10685,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 230,
+              "line": 231,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface NotificationCreatePayload {\n    type: string;\n    title: string;\n    body?: string;\n    threadId?: string;\n    documentId?: string;\n    actions?: NotificationAction[];\n}"
             }
@@ -10562,7 +10699,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 239,
+              "line": 240,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface NotificationEntity {\n    id: string;\n    workspace_id?: string;\n    user_id: string;\n    thread_id?: string;\n    document_id?: string;\n    type: string;\n    title: string;\n    body?: string;\n    actions?: NotificationAction[];\n    read_at?: number;\n    deleted: boolean;\n    deleted_at?: number;\n    created_at: number;\n    updated_at: number;\n    clock: number;\n}"
             }
@@ -10590,7 +10727,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 148,
+              "line": 149,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type Permission =\n    | 'workspace.read'\n    | 'workspace.write'\n    | 'workspace.settings.manage'\n    | 'users.manage'\n    | 'plugins.manage'\n    | 'admin.access';"
             }
@@ -10674,7 +10811,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 172,
+              "line": 173,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SessionContext {\n    authenticated: boolean;\n    provider?: string;\n    providerUserId?: string;\n    user?: { id: string; email?: string; displayName?: string };\n    workspace?: { id: string; name: string };\n    role?: WorkspaceRole;\n    expiresAt?: string;\n    authorizationRevision?: number;\n    deploymentAdmin?: boolean;\n    /** Host-resolved entitlement ids used by immediate client-side plugin gating. */\n    entitlements?: string[];\n}"
             }
@@ -10688,7 +10825,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 274,
+              "line": 275,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileDownloadAfterPayload {\n    hash: string;\n    workspace_id: string;\n    size_bytes: number;\n}"
             }
@@ -10702,7 +10839,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 269,
+              "line": 270,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileDownloadBeforePayload {\n    hash: string;\n    workspace_id: string;\n}"
             }
@@ -10716,7 +10853,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 292,
+              "line": 293,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileGcPayload {\n    deleted_count: number;\n    workspace_id: string;\n}"
             }
@@ -10730,7 +10867,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 263,
+              "line": 264,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileUploadAfterPayload {\n    hash: string;\n    workspace_id: string;\n    storage_id: string;\n}"
             }
@@ -10744,7 +10881,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 257,
+              "line": 258,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileUploadBeforePayload {\n    hash: string;\n    workspace_id: string;\n    size_bytes: number;\n}"
             }
@@ -10758,7 +10895,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 286,
+              "line": 287,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileUploadPolicyPayload {\n    hash: string;\n    mime_type: string;\n    size_bytes: number;\n}"
             }
@@ -10772,7 +10909,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 280,
+              "line": 281,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileUrlOptionsPayload {\n    hash: string;\n    expiry_ms: number;\n    disposition?: string;\n}"
             }
@@ -10800,7 +10937,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 191,
+              "line": 192,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SyncPendingOpPayload {\n    id: string;\n    tableName: string;\n    operation: 'put' | 'delete';\n    pk: string;\n    payload?: unknown;\n    stamp: {\n        deviceId: string;\n        opId: string;\n        hlc: string;\n        clock: number;\n    };\n    createdAt: number;\n    attempts: number;\n    nextAttemptAt?: number;\n    status:\n        | 'pending'\n        | 'in_flight'\n        | 'retry_wait'\n        | 'failed_retryable'\n        | 'failed_permanent'\n        | 'applied'\n        | 'discarded'\n        | 'syncing'\n        | 'failed';\n}"
             }
@@ -10814,7 +10951,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 186,
+              "line": 187,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SyncScopePayload {\n    workspaceId: string;\n    projectId?: string;\n}"
             }
@@ -11052,7 +11189,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 156,
+              "line": 157,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type WorkspaceRole = 'owner' | 'editor' | 'viewer';"
             }
@@ -11479,7 +11616,7 @@
     },
     {
       "source": "app/utils/chat/tools-public.ts",
-      "apiSha256": "67ab236d9b57ee6446a8de5d5501bd52373561e58fa657fbceecc7af43fca5d6",
+      "apiSha256": "36c0a1d842662abaf5ba6e41283273b37bb0c1d40f1d1b38edc5dfd30dbd8357",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tools-public"
@@ -11552,7 +11689,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 110,
+              "line": 108,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolCall {\n    id: string;\n    type: 'function';\n    function: {\n        name: string;\n        arguments: string; // JSON string, parsed by consumer\n    };\n}"
             }
@@ -11566,7 +11703,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 148,
+              "line": 146,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolDefinition {\n    type: 'function';\n    function: {\n        name: string;\n        description: string;\n        parameters: import('~~/shared/chat/tool-schema').JsonSchemaObject;\n    };\n    ui?: {\n        label?: string;\n        icon?: string;\n        descriptionHint?: string;\n        defaultEnabled?: boolean;\n        category?: string;\n    };\n    runtime?: ToolRuntime;\n}"
             }
@@ -11580,7 +11717,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 122,
+              "line": 120,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolExecutionContext {\n    subject: string | null;\n    workspaceId: string | null;\n    threadId: string | null;\n    messageId: string | null;\n    callId: string;\n    requestId: string;\n    abortSignal: AbortSignal;\n}"
             }
@@ -11608,7 +11745,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 119,
+              "line": 117,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolRuntime = 'hybrid' | 'client' | 'server';"
             }

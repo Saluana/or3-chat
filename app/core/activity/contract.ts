@@ -35,12 +35,7 @@ export type ActivityRunStatus = z.infer<typeof ActivityRunStatusSchema>;
 export type ActivityEventType = z.infer<typeof ActivityEventTypeSchema>;
 export type ActivityRunAction = z.infer<typeof ActivityRunActionSchema>;
 
-export type ActivityRunKind =
-    | 'workflow'
-    | 'background-chat'
-    | 'document-ai'
-    | 'external-agent'
-    | (string & {});
+export type { ActivityRunKind } from '~~/shared/plugins/contracts';
 
 export interface ActivityArtifact {
     readonly id: string;

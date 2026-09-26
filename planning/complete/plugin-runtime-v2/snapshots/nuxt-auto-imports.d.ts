@@ -4,6 +4,7 @@
 // ---- .nuxt/imports.d.ts ----
 export { EditorInstance, OpenRouterMessage, AiSendBeforePayload, AiSendAfterPayloadTimings, AiSendAfterPayload, AiStreamDeltaContext, AiStreamReasoningContext, AiStreamCompleteContext, AiStreamErrorContext, AiStreamDeltaPayload, AiStreamReasoningPayload, AiStreamCompletePayload, AiStreamErrorPayload, AiRetryBeforePayload, AiRetryAfterPayload, DocumentAiEditRequestPayload, DocumentAiEditResultPayload, UiPaneMsgBase, UiPaneMsgReceived, UiPaneActivePayload, UiPaneBlurPayload, UiPaneSwitchPayload, UiPaneThreadChangedPayload, UiPaneDocChangedPayload, UiPaneMsgSentPayload, UiPaneMsgReceivedPayload, UiSidebarSelectPayload, UiChatNewPayload, AppInitPayload, FilesAttachPayload, FilesAttachInputPayload, BranchMode, BranchForkOptions, RetryBranchParams, BranchForkBeforePayload, BranchContextAfterPayload, KvUpsertByNameInput, DbEntityName, DbOperation, DbPhase, DbDeleteType, DbActionHookName, DbFilterHookName, CoreActionHookName, ExtensionActionHookName, ActionHookName, CoreFilterHookName, ExtensionFilterHookName, FilterHookName, HookName, CoreHookPayloadMap, HookPayloadMap, InferHookParams, InferHookReturn, InferHookCallback, IsAction, IsFilter, ExtractHookPayload, MatchingHooks, InferDbEntity, InferDbCreateEntity, Tail, SuggestSimilar, ValidateHookName, TypeName, CallbackMismatch, AccessDecision, AttachmentEntity, DbCreatePayload, DbDeletePayload, DbUpdatePayload, DocumentEntity, FileEntity, KvEntry, MessageCreateEntity, MessageEntity, NotificationAction, NotificationCreatePayload, NotificationEntity, Permission, PostCreateEntity, PostEntity, ProjectEntity, PromptEntity, SessionContext, StorageFileDownloadAfterPayload, StorageFileDownloadBeforePayload, StorageFileGcPayload, StorageFileUploadAfterPayload, StorageFileUploadBeforePayload, StorageFileUploadPolicyPayload, StorageFileUrlOptionsPayload, SyncPendingOpPayload, SyncScopePayload, ThreadCreateEntity, ThreadEntity, WorkspaceRole } from '../app/core/hooks/hook-types';
 export { SidebarPageControlsKey, provideSidebarPageControls, SidebarEnvironmentKey, createSidebarMultiPaneApi, provideSidebarEnvironment, useSidebarEnvironment, useSidebarProjects, useSidebarThreads, useSidebarDocuments, useSidebarQuery, useActiveSections, useExpandedProjects, useActiveThreadIds, useActiveDocumentIds, useSidebarMultiPane, useSidebarPostsApi, SidebarPageControls, SidebarMultiPaneApi, SidebarEnvironment } from '../app/composables/sidebar/useSidebarEnvironment';
+export { TRUSTED_HOST_GRANTS, createTrustedHostContext, TrustedPluginToolsClient, TrustedPluginEditorClient, CreateTrustedHostContextInput, TrustedHostContext } from '../app/composables/plugins/trusted-host-context';
 export { createHistoryActionRegistry, HistoryActionRegistryItem } from '../app/composables/history/createHistoryActionRegistry';
 export { createHookEngine, HookFn, HookEngine, HookKind, OnOptions, RegisterOptions } from '../app/core/hooks/hooks';
 export { createManagedWorkspacePluginRuntime, createWorkspacePluginApi, registerWorkspacePluginInstance, unregisterWorkspacePluginInstance, listWorkspacePluginInstances, WorkspacePluginSource, Or3WorkspacePluginApi, Or3WorkspacePlugin, ManagedWorkspacePluginRuntime } from '../app/composables/plugins/workspace-runtime';
@@ -34,6 +35,7 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
 // ---- .nuxt/types/imports.d.ts ----
     readonly SidebarEnvironmentKey: UnwrapRef<typeof import('../../app/composables/sidebar/useSidebarEnvironment')['SidebarEnvironmentKey']>
     readonly SidebarPageControlsKey: UnwrapRef<typeof import('../../app/composables/sidebar/useSidebarEnvironment')['SidebarPageControlsKey']>
+    readonly TRUSTED_HOST_GRANTS: UnwrapRef<typeof import('../../app/composables/plugins/trusted-host-context')['TRUSTED_HOST_GRANTS']>
     readonly createAdminPluginApi: UnwrapRef<typeof import('../../app/composables/admin/useAdminPlugins')['createAdminPluginApi']>
     readonly createHistoryActionRegistry: UnwrapRef<typeof import('../../app/composables/history/createHistoryActionRegistry')['createHistoryActionRegistry']>
     readonly createHookEngine: UnwrapRef<typeof import('../../app/core/hooks/hooks')['createHookEngine']>
@@ -43,6 +45,7 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
     readonly createManagedWorkspacePluginRuntime: UnwrapRef<typeof import('../../app/composables/plugins/workspace-runtime')['createManagedWorkspacePluginRuntime']>
     readonly createRegistry: UnwrapRef<typeof import('../../app/composables/_registry')['createRegistry']>
     readonly createSidebarMultiPaneApi: UnwrapRef<typeof import('../../app/composables/sidebar/useSidebarEnvironment')['createSidebarMultiPaneApi']>
+    readonly createTrustedHostContext: UnwrapRef<typeof import('../../app/composables/plugins/trusted-host-context')['createTrustedHostContext']>
     readonly createTypedHookEngine: UnwrapRef<typeof import('../../app/core/hooks/typed-hooks')['createTypedHookEngine']>
     readonly createWorkspacePluginApi: UnwrapRef<typeof import('../../app/composables/plugins/workspace-runtime')['createWorkspacePluginApi']>
     readonly getDashboardPluginPage: UnwrapRef<typeof import('../../app/composables/dashboard/useDashboardPlugins')['getDashboardPluginPage']>
@@ -158,6 +161,7 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
     readonly useThreadHistoryActions: UnwrapRef<typeof import('../../app/composables/threads/useThreadHistoryActions')['useThreadHistoryActions']>
   const SidebarEnvironmentKey: typeof import('../../app/composables/sidebar/useSidebarEnvironment').SidebarEnvironmentKey
   const SidebarPageControlsKey: typeof import('../../app/composables/sidebar/useSidebarEnvironment').SidebarPageControlsKey
+  const TRUSTED_HOST_GRANTS: typeof import('../../app/composables/plugins/trusted-host-context').TRUSTED_HOST_GRANTS
   const createAdminPluginApi: typeof import('../../app/composables/admin/useAdminPlugins').createAdminPluginApi
   const createHistoryActionRegistry: typeof import('../../app/composables/history/createHistoryActionRegistry').createHistoryActionRegistry
   const createHookEngine: typeof import('../../app/core/hooks/hooks').createHookEngine
@@ -167,6 +171,7 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
   const createManagedWorkspacePluginRuntime: typeof import('../../app/composables/plugins/workspace-runtime').createManagedWorkspacePluginRuntime
   const createRegistry: typeof import('../../app/composables/_registry').createRegistry
   const createSidebarMultiPaneApi: typeof import('../../app/composables/sidebar/useSidebarEnvironment').createSidebarMultiPaneApi
+  const createTrustedHostContext: typeof import('../../app/composables/plugins/trusted-host-context').createTrustedHostContext
   const createTypedHookEngine: typeof import('../../app/core/hooks/typed-hooks').createTypedHookEngine
   const createWorkspacePluginApi: typeof import('../../app/composables/plugins/workspace-runtime').createWorkspacePluginApi
   const getDashboardPluginPage: typeof import('../../app/composables/dashboard/useDashboardPlugins').getDashboardPluginPage
@@ -303,6 +308,7 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
   export type { SidebarPageDef, SidebarPageContext, SidebarActivateContext, RegisteredSidebarPage } from '../../app/composables/sidebar/useSidebarPages'
   export type { SidebarSectionPlacement, SidebarSection, SidebarSectionGroups, SidebarFooterActionContext, ChromeActionColor, SidebarFooterAction, SidebarFooterActionEntry } from '../../app/composables/sidebar/useSidebarSections'
   export type { ThreadHistoryAction } from '../../app/composables/threads/useThreadHistoryActions'
+  export type { TrustedPluginToolsClient, TrustedPluginEditorClient, CreateTrustedHostContextInput, TrustedHostContext } from '../../app/composables/plugins/trusted-host-context'
   export type { TypedHookEngine } from '../../app/core/hooks/typed-hooks'
   export type { WorkspacePluginSource, Or3WorkspacePluginApi, Or3WorkspacePlugin, ManagedWorkspacePluginRuntime } from '../../app/composables/plugins/workspace-runtime'
   import('../../app/composables/_registry')
@@ -317,6 +323,7 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
   import('../../app/composables/editor/useEditorNodes')
   import('../../app/composables/editor/useEditorToolbar')
   import('../../app/composables/history/createHistoryActionRegistry')
+  import('../../app/composables/plugins/trusted-host-context')
   import('../../app/composables/plugins/workspace-runtime')
   import('../../app/composables/projects/useProjectTreeActions')
   import('../../app/composables/sidebar/registerSidebarPage')

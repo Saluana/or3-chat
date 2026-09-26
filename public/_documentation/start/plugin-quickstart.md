@@ -24,6 +24,36 @@ different.
 > generation-safe manager still activates bundled V1 descriptors; digest module
 > loading and isolation remain off by default.
 
+## Unified trusted runtime
+
+Trusted plugins and bundled V1 workspace plugins share one host runtime.
+`createTrustedHostContext` is that entry. Its SDK context registers sidebar
+pages, pane apps, command-palette commands, dashboard cards, message actions,
+activity sources, and client tools on the same registries core uses. A module
+that exports `{ id, register(api) }` — the bundled V1 and tactics-style shape —
+receives `workspaceApi` from that context. `createManagedWorkspacePluginRuntime`
+is the internal registry adapter behind it, not a second authoring surface.
+
+Message actions use `context.ui.registerAction({ surface: 'message' })` or a
+`chat.action` contribution. `context.chat.create`, `open`, and `appendMessage`
+stay unsupported. Isolated portable plugins are unchanged.
+
+Trusted plugin modules import `vue` and `@or3/plugin-sdk` through the host
+import map (`/_plugins/host-vue.mjs` and `/_plugins/host-sdk.mjs`). The Vue
+facade is generated from the installed Vue export list
+(`scripts/plugin-runtime/generate-host-vue-facade.ts`), so compiled components
+receive helpers such as `openBlock`. A client plugin measures that map and
+publishes the kill-gate decision used by `createProductionModuleV2Loader`. If
+any proof fails, the loader reports the block code and does not load a second
+Vue. Until that gate passes, install the plugin the way `or3-plugin-tactics`
+does: a Nuxt module whose client entry calls `register(api)` on the unified
+workspace API. That path uses the same registries and the app's own Vue.
+
+`context.ui.registerSidebar` and `context.ui.registerPane` accept a `component`.
+Without one, the host mounts a placeholder. `workspaceApi.registerSidebarPage`
+and `registerPaneApp` still take the full host definitions. Bundled V1 plugins
+are granted the full trusted set; the SDK grant checks do not narrow that path.
+
 ## Source-level Nuxt Plugin Basics
 
 Plugins committed directly to an OR3 source tree are Nuxt client plugins placed

@@ -37,6 +37,11 @@ export interface PluginV2HostCapabilities {
     readonly pluginApiVersion: string;
     readonly supportedTrustModes: readonly PluginV2TrustMode[];
     readonly supportedGrants: readonly string[];
+    /**
+     * When set for a grant, only those trust modes may request it.
+     * Grants omitted here stay available to every mode in `supportedGrants`.
+     */
+    readonly grantTrustModes?: Readonly<Record<string, readonly PluginV2TrustMode[]>>;
     readonly supportedFeatures: readonly string[];
 }
 
@@ -210,6 +215,16 @@ export function verifyPluginV2Compatibility(
                 subject: `requestedGrants.${grant}`,
                 expected: grant,
                 message: `The host does not support requested grant ${grant}`,
+            });
+            continue;
+        }
+        const trustModes = host.grantTrustModes?.[grant];
+        if (trustModes && !trustModes.includes(manifest.trust)) {
+            block({
+                code: 'unsupported-grant',
+                subject: `requestedGrants.${grant}`,
+                expected: grant,
+                message: `Grant ${grant} is not qualified for trust mode ${manifest.trust}`,
             });
         }
     }

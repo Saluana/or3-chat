@@ -16,6 +16,7 @@ import { resolveConnectCloudflareReadiness } from './shared/cloud/wizard/cloudfl
 import { DEFAULT_WEBHOOKS_BLOCK_PRIVATE_IPS } from './shared/config/constants';
 import { resolveDevProviderModule } from './shared/dev/local-providers';
 import { resolveLocalPackageAliases } from './shared/dev/local-packages';
+import { hostEsmFacadeImportMapScript } from './shared/plugins/host-esm-facade';
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
@@ -86,6 +87,7 @@ const pluginSdkSourceAliases: Record<string, string> = hasPluginSdkSource
           // resolve the *same* SDK instance this app runs, or its `ui` helpers
           // come from a second copy with a different shape.
           '@or3/plugin-sdk': resolve(pluginSdkSourceRoot, 'index.ts'),
+          '@or3/plugin-sdk/host': resolve(pluginSdkSourceRoot, 'host.ts'),
           '@or3/plugin-sdk/package-tree': resolve(
               pluginSdkSourceRoot,
               'package-tree.ts',
@@ -501,6 +503,7 @@ export default defineNuxtConfig({
         : {}),
     app: {
         head: {
+            script: [hostEsmFacadeImportMapScript()],
             link: [
                 {
                     rel: 'icon',
