@@ -1,5 +1,8 @@
+import { cpSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { dirname, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { verifyPackageTree } from '../../server/admin/plugins/package-tree';
 
@@ -12,7 +15,7 @@ const repoRoot = resolve(import.meta.dirname, '../..');
 const GOLDEN_FIXTURES = [
     {
         root: 'tests/plugin-runtime/v2-conformance/valid',
-        digest: 'sha256-057b74a84c8bf6ab9366e19609af833659d92e916e826df3354baae5e655139e',
+        digest: 'sha256-b06b3156f5ae90d3eff5367a0fa16ee0642ca4101bfe2e08afd8e9a8ebad9c46',
         manifestDigest: 'sha256-173b14cc0bb385413ffad675492f95a4af148333106b98e725ab5aa03ba435d8',
     },
     {
@@ -24,9 +27,25 @@ const GOLDEN_FIXTURES = [
 
 describe('canonical package tree implementation', () => {
     it.each(GOLDEN_FIXTURES)('matches the committed golden digest: $root', async (fixture) => {
-        const verified = await verifyPackageTree(resolve(repoRoot, fixture.root));
-        expect(verified.digest).toBe(fixture.digest);
-        expect(verified.manifestDigest).toBe(fixture.manifestDigest);
+        const temporaryRoot = mkdtempSync(resolve(tmpdir(), 'or3-package-golden-'));
+        try {
+            // Generated directories (such as dist) are ignored by Git but change
+            // the package digest. Verify the tracked fixture bytes in isolation.
+            const tracked = execFileSync('git', ['ls-files', '-z', '--', fixture.root], {
+                cwd: repoRoot,
+            }).toString('utf8').split('\0').filter(Boolean);
+            expect(tracked.length).toBeGreaterThan(0);
+            for (const path of tracked) {
+                const destination = resolve(temporaryRoot, path.slice(fixture.root.length + 1));
+                mkdirSync(dirname(destination), { recursive: true });
+                cpSync(resolve(repoRoot, path), destination);
+            }
+            const verified = await verifyPackageTree(temporaryRoot);
+            expect(verified.digest).toBe(fixture.digest);
+            expect(verified.manifestDigest).toBe(fixture.manifestDigest);
+        } finally {
+            rmSync(temporaryRoot, { recursive: true, force: true });
+        }
     });
 
     // Host code resolves @or3/plugin-sdk from a copied node_modules tree, so an
