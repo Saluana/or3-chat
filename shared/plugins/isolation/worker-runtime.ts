@@ -208,6 +208,10 @@ function readString(value: unknown): string | null {
     return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+function isUnknownArray(value: unknown): value is unknown[] {
+    return Array.isArray(value);
+}
+
 /**
  * Validate a `ui.render` payload against the primitive schema and the UI-tree
  * budgets. Rendering never relies on the publisher validating its own tree.
@@ -223,8 +227,8 @@ export function validateRenderPayload(payload: Readonly<Record<string, unknown>>
     if (payload.key !== undefined && (typeof payload.key !== 'string' || payload.key.length > 128)) return {ok:false,reason:'ui.render key must be a bounded string'};
     const rawNodes = payload.nodes;
     const rawNavigation = payload.navigation ?? [];
-    if (!Array.isArray(rawNavigation)) return {ok:false,reason:'ui.render navigation must be an array'};
-    if (!Array.isArray(rawNodes)) {
+    if (!isUnknownArray(rawNavigation)) return {ok:false,reason:'ui.render navigation must be an array'};
+    if (!isUnknownArray(rawNodes)) {
         return { ok: false, reason: 'ui.render requires a nodes array' };
     }
     const nodes: PortableUiNode[] = [];

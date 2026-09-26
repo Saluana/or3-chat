@@ -35,6 +35,12 @@ const CHAT_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/;
 const MAX_CHAT_CONTENT_BYTES = 256 * 1024;
 const MAX_CHAT_ATTACHMENTS = 100;
 
+function isValidFileIds(value: unknown): value is string[] {
+    return Array.isArray(value) &&
+        value.length <= MAX_CHAT_ATTACHMENTS &&
+        value.every((id: unknown) => typeof id === 'string' && CHAT_ID_PATTERN.test(id));
+}
+
 export function validatePluginChatMessage(input: unknown): PluginChatValidation {
     if (!input || typeof input !== 'object' || Array.isArray(input)) {
         return { ok: false, message: 'chat message must be an object' };
@@ -47,7 +53,7 @@ export function validatePluginChatMessage(input: unknown): PluginChatValidation 
         return { ok: false, message: `chat message content exceeds ${MAX_CHAT_CONTENT_BYTES} bytes or is not text` };
     }
     const fileIds = raw.fileIds === undefined ? [] : raw.fileIds;
-    if (!Array.isArray(fileIds) || fileIds.length > MAX_CHAT_ATTACHMENTS || !fileIds.every((id) => typeof id === 'string' && CHAT_ID_PATTERN.test(id))) {
+    if (!isValidFileIds(fileIds)) {
         return { ok: false, message: 'chat message fileIds are invalid' };
     }
     const attachments = raw.attachments === undefined ? undefined : raw.attachments;

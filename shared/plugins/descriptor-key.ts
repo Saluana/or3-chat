@@ -31,7 +31,7 @@ function canonicalize(value: unknown, ancestors: Set<object>): string {
             return `[${value.map((entry) => canonicalize(entry, ancestors)).join(',')}]`;
         }
 
-        const prototype = Object.getPrototypeOf(value);
+        const prototype = Reflect.getPrototypeOf(value);
         if (prototype !== Object.prototype && prototype !== null) {
             throw new TypeError('Canonical JSON only allows plain objects');
         }

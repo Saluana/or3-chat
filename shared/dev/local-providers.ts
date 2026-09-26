@@ -2,6 +2,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { runForegroundCommand } from '../cloud/wizard/package-manager';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 /** Only the dev launcher supplies this map, after successful local builds. */
 export function resolveDevProviderModule(
     moduleId: string,
@@ -13,7 +17,8 @@ export function resolveDevProviderModule(
     if ((env.NODE_ENV !== 'development' && !requiredForPluginDevelopment) ||
         env.OR3_LOCAL_PROVIDERS === 'false') return moduleId;
     try {
-        const modules = JSON.parse(env.OR3_DEV_PROVIDER_MODULES ?? '{}');
+        const parsedModules: unknown = JSON.parse(env.OR3_DEV_PROVIDER_MODULES ?? '{}');
+        const modules = isRecord(parsedModules) ? parsedModules : {};
         const entry = modules[moduleId];
         if (typeof entry === 'string' && existsSync(entry)) return entry;
         if (requiredForPluginDevelopment) {
@@ -39,17 +44,25 @@ export async function prepareLocalProviders(
         console.log('[or3-local] Using installed providers (local builds disabled).');
         return modules;
     }
-    const manifest = JSON.parse(readFileSync(resolve(projectRoot, 'package.json'), 'utf8'));
-    const dependencies = { ...manifest.dependencies, ...manifest.devDependencies, ...manifest.optionalDependencies };
+    const manifest: unknown = JSON.parse(readFileSync(resolve(projectRoot, 'package.json'), 'utf8'));
+    const dependencies = {
+        ...(isRecord(manifest) && isRecord(manifest.dependencies) ? manifest.dependencies : {}),
+        ...(isRecord(manifest) && isRecord(manifest.devDependencies) ? manifest.devDependencies : {}),
+        ...(isRecord(manifest) && isRecord(manifest.optionalDependencies) ? manifest.optionalDependencies : {}),
+    };
     const watchedAuthProvider = env.OR3_PLUGIN_WATCH_ROOT ? 'or3-provider-basic-auth' : null;
     for (const name of Object.keys(dependencies).filter((name) =>
         /^or3-provider-[a-z0-9-]+$/.test(name) && (!watchedAuthProvider || name === watchedAuthProvider)
     ).sort()) {
         const root = resolve(projectRoot, '..', name);
         try {
-            const local = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+            const parsedLocal: unknown = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+            if (!isRecord(parsedLocal)) throw new Error('sibling package manifest is invalid');
+            const local = parsedLocal;
             if (local.name !== name) throw new Error('sibling package name does not match');
-            const entry = local.exports?.['./nuxt']?.import;
+            const exports = isRecord(local.exports) ? local.exports : {};
+            const nuxtExport = isRecord(exports['./nuxt']) ? exports['./nuxt'] : {};
+            const entry = nuxtExport.import;
             if (typeof entry !== 'string' || !entry.startsWith('./dist/')) {
                 throw new Error('package does not export a built Nuxt module');
             }
