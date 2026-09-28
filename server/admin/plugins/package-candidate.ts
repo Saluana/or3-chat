@@ -4,19 +4,19 @@ import type { Sha256 } from '../../../shared/plugins/runtime-descriptor';
 import {
     preflightPluginStateCompatibility,
     type PluginStatePreflightResult,
-} from '../../../shared/plugins/state-compatibility';
+} from '~~/shared/plugins/state-compatibility';
 import type { PluginGrantReviewSnapshot } from '../../../shared/plugins/grant-review';
 import {
     resolvePluginV2DependencyGraph,
     type PluginV2DependencyGraphResult,
     type PluginV2GraphNode,
-} from '../../../shared/plugins/v2-dependency-graph';
+} from '~~/shared/plugins/v2-dependency-graph';
 import {
     verifyPluginV2Compatibility,
     type AvailablePluginV2Dependency,
     type PluginV2CompatibilityResult,
     type PluginV2HostCapabilities,
-} from '../../../shared/plugins/v2-compatibility';
+} from '~~/shared/plugins/v2-compatibility';
 import {
     Or3ExtensionManifestV2Schema,
     type Or3ExtensionManifestV2,
@@ -48,6 +48,8 @@ export interface PreparePluginPackageCandidateInput {
     readonly availableDependencies: readonly AvailablePluginV2Dependency[];
     readonly dependencyNodes: readonly PluginV2GraphNode[];
     readonly grantReview: PluginGrantReviewSnapshot;
+    /** Raw ZIP upload may store verified bytes before explicit grant consent. */
+    readonly allowPendingGrantReview?: boolean;
     readonly storedStateVersion: number | null;
     readonly loaderPreflight: (input: {
         readonly manifest: Or3ExtensionManifestV2;
@@ -76,6 +78,7 @@ export type PreparePluginPackageCandidateResult =
           readonly stored: StoredPluginPackage;
           readonly pointer: PluginPackagePointer;
           readonly evidence: PluginCandidateGateEvidence;
+          readonly grantReviewRequired: boolean;
       }
     | {
           readonly status: 'blocked';
@@ -201,7 +204,11 @@ export class PluginPackageCandidateService {
             }
 
             const grants = grantReviewCodes(manifest, input.grantReview);
-            if (grants.length > 0) return blocked('grants', grants);
+            const grantReviewRequired = grants.length > 0;
+            if (grantReviewRequired && !(
+                input.allowPendingGrantReview === true &&
+                grants.every((code) => code === 'grant-review-unreviewed' || code === 'grant-review-stale')
+            )) return blocked('grants', grants);
 
             const dependencies = resolvePluginV2DependencyGraph([
                 ...input.dependencyNodes.filter((node) => node.id !== manifest.id),
@@ -248,6 +255,7 @@ export class PluginPackageCandidateService {
                     stored,
                     pointer: currentPointer,
                     evidence: Object.freeze({ compatibility, dependencies, state, loader }),
+                    grantReviewRequired,
                 });
             }
             const candidate: PluginPackagePointerTarget = Object.freeze({
@@ -272,6 +280,7 @@ export class PluginPackageCandidateService {
                 stored,
                 pointer: nextPointer,
                 evidence: Object.freeze({ compatibility, dependencies, state, loader }),
+                grantReviewRequired,
             });
         });
     }

@@ -157,6 +157,7 @@ import {
     onBeforeUnmount,
     onMounted,
     nextTick,
+    inject,
 } from 'vue';
 
 import {
@@ -298,6 +299,7 @@ const authSessionState = useState<{ session?: { authenticated?: boolean } } | nu
 const { apiKey } = useUserApiKey();
 const keyStateReady = ref(false);
 const welcomeDismissed = ref(true); // default hidden until hydrated
+const dashboardModalOpen = inject<Ref<boolean>>('or3:dashboard-modal-open', ref(false));
 const openRouterAvailability = computed(() =>
     resolveOpenRouterKeyAvailability(runtimeConfig.public?.openRouter)
 );
@@ -309,6 +311,7 @@ const showWelcomeCard = computed(
         (runtimeConfig.public?.ssrAuthEnabled !== true ||
             authSessionState.value?.session?.authenticated === true) &&
         !welcomeDismissed.value &&
+        !dashboardModalOpen.value &&
         openRouterAvailability.value.canAcceptUserKey &&
         !openRouterAvailability.value.hasUsableKey(apiKey.value) &&
         allMessages.value.length === 0
@@ -572,7 +575,7 @@ watch(
 function deriveWorkflowText(wf: UiWorkflowState): string {
     if (!wf) return '';
     // Only return finalOutput - never show intermediate node outputs
-    // The result box is controlled by WorkflowChatMessage using workflowState.finalOutput directly
+    // The installed workflow renderer uses finalOutput for its result box.
     if (wf.finalOutput) return wf.finalOutput;
     return '';
 }
@@ -1076,17 +1079,16 @@ watch(panePendingPrompt, (promptId) => {
 
 function onStopStream() {
     try {
-        if (typeof window !== 'undefined') {
+        // A foreground chat stream owns the composer stop control even when an
+        // older workflow is still running in this thread.
+        if (typeof window !== 'undefined' && !loading.value) {
             const workflowMessage = [...messages.value]
                 .reverse()
                 .find((message) => {
                     if (!message.id) return false;
                     const executionState = workflowStates.get(message.id)
                         ?.executionState;
-                    return (
-                        executionState === 'running' ||
-                        executionState === 'idle'
-                    );
+                    return executionState === 'running';
                 });
             if (workflowMessage?.id) {
                 window.dispatchEvent(

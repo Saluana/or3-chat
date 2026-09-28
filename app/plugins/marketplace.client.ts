@@ -74,7 +74,9 @@ export default defineNuxtPlugin(() => {
                 // Configure is contextual: the plugin id is supplied by an
                 // Installed/Discover action, so it should not appear as an
                 // empty tile on the Marketplace landing page.
-                isAvailable: () => useMarketplaceSetupPlugin().value !== null,
+                isAvailable: () => useMarketplaceSetupPlugin().value !== null ||
+                    (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('page') === 'configure' &&
+                        /^[a-z0-9][a-z0-9._-]{0,127}$/.test(new URLSearchParams(window.location.search).get('plugin') ?? '')),
                 component: lazyPage(CONFIGURE, 'Configure'),
             },
         ],

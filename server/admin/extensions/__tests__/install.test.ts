@@ -122,11 +122,14 @@ describe('installExtensionFromZip', () => {
                 },
             }),
             'package/server.mjs': 'export default () => ({ ok: true });',
+            'package/THIRD_PARTY_NOTICES': 'Dependency notices.',
         });
 
         const staged = await stageV2PluginPackageFromZip(zip);
         expect(staged.manifest.id).toBe('test-v2-package');
         await expect(fs.access(join(staged.sourceRoot, 'server.mjs'))).resolves.toBeUndefined();
+        await expect(fs.readFile(join(staged.sourceRoot, 'THIRD_PARTY_NOTICES'), 'utf8'))
+            .resolves.toBe('Dependency notices.');
         await expect(
             fs.access(join(EXTENSIONS_BASE_DIR, 'plugins', 'test-v2-package'))
         ).rejects.toMatchObject({ code: 'ENOENT' });

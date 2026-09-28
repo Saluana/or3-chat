@@ -216,6 +216,8 @@ vi.mock('#imports', async (importOriginal) => {
             return fn ? fn(...args) : undefined;
         },
         useToast: () => ({ add: vi.fn() }),
+        useRoute: () => ({ query: {} }),
+        useRouter: () => ({ replace: vi.fn() }),
         useHooks: () => ({
             on: vi.fn().mockReturnValue(() => {}),
             off: vi.fn(),

@@ -1,4 +1,5 @@
 import { Extension } from '@tiptap/core';
+import { ref } from 'vue';
 
 export interface TrustedEditorExtensionInput {
     readonly id: string;
@@ -12,16 +13,22 @@ interface RegisteredEditorExtension extends TrustedEditorExtensionInput {
 }
 
 const registry = new Map<string, RegisteredEditorExtension>();
+/** Rebuild mounted composers when a package adds or removes an extension. */
+export const trustedEditorRevision = ref(0);
 
 export function registerTrustedEditorExtension(
     input: TrustedEditorExtensionInput
 ): { dispose(): void } {
     const owner = Symbol(input.id);
     registry.set(input.id, { ...input, owner });
+    trustedEditorRevision.value++;
     return {
         dispose() {
             const current = registry.get(input.id);
-            if (current?.owner === owner) registry.delete(input.id);
+            if (current?.owner === owner) {
+                registry.delete(input.id);
+                trustedEditorRevision.value++;
+            }
         },
     };
 }

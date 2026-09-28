@@ -8,6 +8,7 @@ import { requireCloudMutation } from '../../../utils/security/cloud-mutation';
 import { checkRateLimit } from '../../../utils/rate-limit';
 import { libraryLinkServiceFor } from '../../../admin/library/route-support';
 import { LibraryInstallRequestStore } from '../../../admin/library/install-requests';
+import { approvedSiteRelease } from '../../../admin/plugins/site-policy-service';
 
 const Body = z.object({
     releaseId: z.string().regex(/^rel_[A-Za-z0-9._:-]{1,100}$/),
@@ -26,6 +27,12 @@ export default defineEventHandler(async (event) => {
     setResponseHeader(event, 'Cache-Control', 'no-store');
     const body = Body.safeParse(await readLimitedJsonBody(event));
     if (!body.success) throw createError({ statusCode: 400, statusMessage: 'Invalid release request' });
+    const policy = await approvedSiteRelease(body.data.pluginId, body.data.version).catch(() => {
+        throw createError({ statusCode: 503, statusMessage: 'Site approval could not be checked. Try again later.' });
+    });
+    if (!policy || policy.approvedRelease.releaseId !== body.data.releaseId) {
+        throw createError({ statusCode: 404, statusMessage: 'This release is not approved for this site.' });
+    }
     if (!(await checkRateLimit(`library-install-request:${userId}`, { max: 10, window: 3600 }))) {
         throw createError({ statusCode: 429, statusMessage: 'Too many install requests. Try again later.' });
     }

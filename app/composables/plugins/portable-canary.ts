@@ -2,15 +2,14 @@
  * @module app/composables/plugins/portable-canary
  *
  * Purpose:
- * Produce the browser half of a candidate canary: a hidden activation of the
- * candidate package inside the contained sandbox, reported back to the host.
+ * Produce the browser half of a candidate canary and report it to the host.
  *
  * Behavior:
  * - The bytes come from the ticket-scoped canary entry route and are re-hashed
  *   by `startPortableWorker`, so the browser proves it ran the candidate digest.
- * - The activation is invisible and non-publishing; it starts, waits for the
- *   sandbox bootstrap, records any crash or containment violation, and is torn
- *   down immediately afterwards.
+ * - Portable clients activate invisibly in the contained sandbox.
+ * - Trusted clients verify the exact entry digest, host ABI, and module import
+ *   without running setup or publishing contributions.
  * - The outcome is posted with the ticket nonce; the host decides what it means.
  *
  * Constraints:
@@ -24,6 +23,7 @@
 
 import type { PluginGrantReviewSnapshot } from '~~/shared/plugins/grant-review';
 import type { PackageV2ClientEntry } from '~~/shared/plugins/runtime-descriptor';
+import { getTrustedHostUiDecision } from '~~/shared/plugins/host-esm-facade-runtime';
 import {
     PORTABLE_CLIENT_FEATURE,
     PORTABLE_PROFILE_NAME,
@@ -71,6 +71,59 @@ function createCanaryFrame(): HostFrameElementPort {
     return frame as unknown as HostFrameElementPort;
 }
 
+async function runTrustedHostCandidateCanary(
+    ticket: CanaryTicketPayload,
+    entryUrl: string
+): Promise<CanaryOutcome> {
+    if (ticket.clientEntry.isolation !== 'host') {
+        return { status: 'blocked', code: 'client-profile-mismatch', diagnostics: {} };
+    }
+    const decision = getTrustedHostUiDecision();
+    if (decision.status !== 'supported') {
+        return {
+            status: 'blocked', code: 'trusted-host-ui-abi-unproven',
+            diagnostics: { blockCodes: decision.blockCodes },
+        };
+    }
+    try {
+        const response = await fetch(entryUrl, { credentials: 'same-origin', cache: 'no-store' });
+        if (!response.ok || !response.headers.get('content-type')?.includes('javascript')) {
+            throw new Error(`Candidate entry unavailable (${response.status})`);
+        }
+        const bytes = await response.arrayBuffer();
+        const digest = await crypto.subtle.digest('SHA-256', bytes);
+        const actual = `sha256-${[...new Uint8Array(digest)]
+            .map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+        if (actual !== ticket.clientEntry.digest) {
+            return { status: 'blocked', code: 'client-entry-digest-mismatch', diagnostics: {} };
+        }
+        // Importing the exact candidate bytes exercises the live host import map
+        // and singleton Vue/SDK ABI without publishing candidate contributions.
+        const imported = (await import(/* @vite-ignore */ entryUrl)) as { default?: unknown };
+        const definition = imported.default as {
+            manifest?: { id?: unknown; trust?: unknown; manifestVersion?: unknown };
+            setup?: unknown;
+        } | undefined;
+        if (
+            definition?.manifest?.id !== ticket.pluginId ||
+            definition.manifest.trust !== 'trusted-host' ||
+            definition.manifest.manifestVersion !== 2 ||
+            typeof definition.setup !== 'function'
+        ) {
+            return { status: 'blocked', code: 'client-definition-invalid', diagnostics: {} };
+        }
+        return {
+            status: 'passed',
+            diagnostics: { profile: ticket.profile, verifiedImport: true, setupExecuted: false },
+        };
+    } catch (error) {
+        return {
+            status: 'blocked', code: 'client-import-failed',
+            diagnostics: { message: error instanceof Error ? error.message : String(error) },
+        };
+    }
+}
+
 /**
  * Run the candidate once, hidden. A pass means the sandbox started the exact
  * candidate bytes with the workspace's recorded grants and stayed up; a crash,
@@ -82,6 +135,12 @@ export async function runCandidateClientCanary(
     const engine = detectBrowserEngine();
     const observed: string[] = [];
     const entryUrl = `/api/admin/plugins/packages/${encodeURIComponent(ticket.pluginId)}/canary/entry?ticketId=${encodeURIComponent(ticket.ticketId)}`;
+    if (ticket.profile === 'or3-trusted-host-v2') {
+        return runTrustedHostCandidateCanary(ticket, entryUrl);
+    }
+    if (ticket.profile !== PORTABLE_PROFILE_NAME || ticket.clientEntry.isolation === 'host') {
+        return { status: 'blocked', code: 'client-profile-mismatch', diagnostics: {} };
+    }
 
     const started = await startPortableWorker({
         release: {

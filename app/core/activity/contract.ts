@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ActivityRunKind } from '~~/shared/plugins/contracts';
 
 export const ACTIVITY_TERMINAL_STATUSES = [
     'succeeded',

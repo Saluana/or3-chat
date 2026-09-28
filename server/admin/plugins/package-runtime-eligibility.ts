@@ -3,8 +3,8 @@ import type { PluginGateDecision } from '../../../shared/plugins/access-policy';
 import type { PluginGrantReviewSnapshot } from '../../../shared/plugins/grant-review';
 import type { ModuleV2RuntimeDecision } from '../../../shared/plugins/module-v2-runtime-policy';
 import type { PluginRuntimeManifestBlockCode } from '../../../shared/plugins/runtime-manifest';
-import { resolvePluginV2DependencyGraph } from '../../../shared/plugins/v2-dependency-graph';
-import { verifyPluginV2Compatibility } from '../../../shared/plugins/v2-compatibility';
+import { resolvePluginV2DependencyGraph } from '~~/shared/plugins/v2-dependency-graph';
+import { verifyPluginV2Compatibility } from '~~/shared/plugins/v2-compatibility';
 import { checkPluginAccess } from '../../utils/plugins/access/require-plugin-access';
 import type { WorkspaceSettingsStore } from '../stores/types';
 import { getPluginGrantReview } from './workspace-plugin-store';
@@ -134,15 +134,16 @@ export async function evaluateSelectedPackageRuntimeEligibility(
                 if (compatibility.status === 'blocked') {
                     blockCode = compatibilityBlockCode(compatibility);
                 } else if (catalog.manifest.runtime.client) {
-                    // A client package may only run through the contained
-                    // portable profile. Trust mode, feature and grants are already
-                    // checked above, so what remains is the execution boundary:
-                    // `host` isolation would run publisher code in the host window.
+                    // Trust, features, and grants were checked above. Keep the
+                    // reviewed trust mode aligned with its execution boundary.
                     const client = catalog.manifest.runtime.client;
-                    if (
-                        catalog.manifest.trust !== 'isolated-client' ||
-                        client.isolation === 'host'
-                    ) {
+                    const contained =
+                        catalog.manifest.trust === 'isolated-client' &&
+                        (client.isolation === 'worker' || client.isolation === 'iframe');
+                    const trusted =
+                        catalog.manifest.trust === 'trusted-host' &&
+                        client.isolation === 'host';
+                    if (!contained && !trusted) {
                         blockCode = 'trusted-host-ui-abi-unproven';
                     }
                 }

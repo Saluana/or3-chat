@@ -17,7 +17,7 @@
                     "name": "development-setup.md",
                     "path": "/start/development-setup",
                     "category": "Tutorial",
-                    "summary": "One command gets a source checkout running locally. No API key or .env file is required for the local-first app. Local workflow sources are validated as a group; production ignores inherited local-source overrides."
+                    "summary": "One command gets a source checkout running locally. No API key or .env file is required for the local-first app. The Scroll checkout can be aliased in development; Workflows and External Agents are built and installed as separate V2 packages."
                 },
                 {
                     "name": "mini-app-tutorial.md",
@@ -35,7 +35,7 @@
                     "name": "plugin-quickstart.md",
                     "path": "/start/plugin-quickstart",
                     "category": "Tutorial",
-                    "summary": "Start an installable V2 plugin with bun run dev:plugin --create, then use bun run dev in its directory for live edits. Source-level Nuxt and V1 package patterns remain documented separately."
+                    "summary": "Start an installable plugin with bun run dev:plugin --create and continue with the single Plugin authoring guide. Direct Nuxt source changes and V1 compatibility have separate references."
                 },
                 {
                     "name": "snake-game-tutorial.md",
@@ -143,7 +143,7 @@
                     "name": "useChat.md",
                     "path": "/composables/useChat",
                     "category": "Chat",
-                    "summary": "Manages AI chat messages, streaming, retries, and mixed-runtime tools. Background turns execute server tools in the worker and delegate browser tools through a durable claim/result bridge. Chat settings selects a saved system prompt, the current default, or Disabled per chat; the choice applies to future messages."
+                    "summary": "Manages AI chat messages, streaming, retries, and mixed-runtime tools. Chat context follows the selected model's advertised window, reserving response space and refreshing missing model metadata. Background turns execute server tools in the worker and delegate browser tools through a durable claim/result bridge. Chat settings selects a saved system prompt, the current default, or Disabled per chat; the choice applies to future messages."
                 },
                 {
                     "name": "useChatAttachmentDisplay.md",
@@ -926,6 +926,12 @@
                     "summary": "Chat can create and duplicate documents, search them, read bounded open-tab context, and use the document agent's native tools to stage reviewable edits in a visible editor."
                 },
                 {
+                    "name": "thread-chat-tools.md",
+                    "path": "/utils/thread-chat-tools",
+                    "category": "Tools",
+                    "summary": "Chat can search other conversation threads, read their recent messages, and post a message into another thread, all scoped to the active workspace."
+                },
+                {
                     "name": "errors.md",
                     "path": "/utils/errors",
                     "category": "Error Handling",
@@ -1121,7 +1127,7 @@
                     "name": "editor.md",
                     "path": "/workflows/editor",
                     "category": "Guide",
-                    "summary": "Browse, build, validate, and run workflows with explicit agent dataflow and tool selection, cache-efficient prompt routing, generated-image persistence and foreground routing, quick connected-node insertion, and opt-in local package hot reload behavior."
+                    "summary": "Browse, build, validate, and run workflows with explicit agent dataflow, tool selection, generated-image persistence, stop, interrupted-run recovery, and checkpoint resume. The editor is supplied by the separately installed Workflows package."
                 }
             ]
         },
@@ -1313,7 +1319,7 @@
                     "name": "activity-external-agents.md",
                     "path": "/architecture/activity-external-agents",
                     "category": "Architecture",
-                    "summary": "# Activity and External Agents"
+                    "summary": "Activity projects canonical run state. The separately installed External Agents package owns browser sessions and UI, with host-mediated HTTP and SSE for approved hosts; OR3 Connect remains a host service."
                 },
                 {
                     "name": "workspace-profiles.md",
@@ -1355,19 +1361,19 @@
                     "name": "plugin-development-v2.md",
                     "path": "/plugins/plugin-development-v2",
                     "category": "Tutorial",
-                    "summary": "Create a portable V2 plugin with one host command, sign in locally, and see source saves update the real worker preview. Then freeze, verify and qualify an explicit clean candidate for staging review and publication."
+                    "summary": "Author portable or trusted-host packages with defineOr3Plugin and Manifest V2, review grants, validate and pack exact artifacts, test installation and disablement, and qualify a clean candidate for publication."
                 },
                 {
                     "name": "plugin-sdk.md",
                     "path": "/plugins/plugin-sdk",
                     "category": "Reference",
-                    "summary": "Stable Plugin Runtime V2 authoring surface with a host-created, typed capability context (AI, UI, panes, commands, chat, workspace, storage, settings, secrets, files, HTTP, network, activity and events). Storage supports snapshot-safe revisions, CAS, deletion-aware pagination, local live-value quotas and a 10,000-name history cap; real-Dexie conformance covers the portable test host. Unqualified namespaces remain explicit unsupported results until production adapters pass review. The package is not yet published to npm; install it from a packed tarball."
+                    "summary": "Plugin SDK contract reference for the single Manifest V2 authoring path. The host-created capability context serves qualified portable and trusted-host adapters; unsupported methods still return explicit refusals. The package is not yet published to npm; install it from a packed tarball."
                 },
                 {
                     "name": "plugin-sdk-cli.md",
                     "path": "/plugins/plugin-sdk-cli",
                     "category": "Reference",
-                    "summary": "Use bun run dev:plugin --create from an OR3 Chat checkout, then bun run dev in the new portable plugin for live development. The unpublished SDK is packed locally; its standalone CLI also validates, builds and freezes explicit immutable candidates for review."
+                    "summary": "Use the SDK CLI to validate, build, and freeze immutable plugin candidates. The or3-marketplace command signs in with Clerk, qualifies and uploads a candidate, attaches its receipt, and submits it for staging review."
                 },
                 {
                     "name": "portable-profile.md",
@@ -1397,7 +1403,7 @@
                     "name": "runtime-v2-overview.md",
                     "path": "/plugins/runtime-v2-overview",
                     "category": "Guide",
-                    "summary": "Plugin Runtime V2 adds digest-addressed packages, a frozen V1 compatibility line, @or3/plugin-sdk authoring, and optional isolation. The generation-safe manager is promoted by default, but it currently manages bundled V1"
+                    "summary": "Plugin Runtime V2 adds digest-addressed packages, SDK authoring and optional isolation. Reviewed Workflows and External Agents packages activate through browser canary, promotion, and workspace enablement; disabling them disposes their contributions."
                 },
                 {
                     "name": "trust-and-safe-mode.md",
@@ -1415,7 +1421,7 @@
                     "name": "marketplace.md",
                     "path": "/plugins/marketplace",
                     "category": "Guide",
-                    "summary": "Native paged discovery, signed authority consent, resumable acquisition, and update checks with instance version pins and linked Library coverage. A single selected code version serves enabled workspaces; expanded access takes deployment-wide approval and each affected workspace can complete candidate setup. Blocked updates preserve the selected version. Installed management honors a separate system-admin session. Running status uses exact digests and browser activation confirmation. Includes portable Open behavior, local candidate development, submission recovery, and digest-bound uninstall confirmation."
+                    "summary": "Site-approved discovery, guided acquisition, workspace rollout and future defaults. One code version serves enabled workspaces; expanded access gets deployment approval and blocked updates link to affected workspace setup. Slow writes return a resumable rollout instead of blocking workspace creation. Health checks distinguish server readiness from browser activation. Restore opens an exact impact review from the plugin detail and preserves workspace data."
                 },
                 {
                     "name": "library.md",
@@ -1427,7 +1433,7 @@
                     "name": "v1-support-and-migration.md",
                     "path": "/plugins/v1-support-and-migration",
                     "category": "Guide",
-                    "summary": "# V1 Support Policy and V2 Migration"
+                    "summary": "Compatibility window and migration steps for existing V1 packages. New packages use the single Plugin authoring guide and Manifest V2."
                 },
                 {
                     "name": "local-development.md",

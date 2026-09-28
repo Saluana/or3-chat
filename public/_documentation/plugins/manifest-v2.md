@@ -3,10 +3,10 @@
 V2 packages ship `or3.manifest.json` with `manifestVersion: 2`.
 
 The owner-only standard extension install endpoint dispatches a V2 ZIP to the
-immutable candidate store. After a canary and explicit promotion, an enabled
-server-only package can run authorized routes in an SSR deployment. Client-entry
-packages remain intentionally blocked until the host UI ABI qualification is
-complete; see [Plugin Runtime V2 Overview](./runtime-v2-overview).
+immutable candidate store. After grant review, canary, and explicit promotion,
+an enabled package can run authorized routes in an SSR deployment. Trusted-host
+client entries also require the host Vue ABI/browser proof before activation;
+see the [Plugin authoring guide](./plugin-development-v2).
 
 Required concepts:
 
@@ -39,11 +39,10 @@ bytes. SVG, data URLs, and remote image URLs are not accepted as manifest icons.
 maintains a qualification registry that ties each grant to concrete mediated
 methods/events and a conformance receipt. The current portable host qualifies
 the existing dashboard, command-palette, settings, storage, model/connection
-and document grants. The SDK also types the next capability families — panes,
-commands, workspace/events, secrets, files, streaming, chat and activity —
-but those entries remain explicitly unqualified until production adapters and
-fixtures exist. A package requesting an unqualified grant is blocked at
-compatibility review.
+and document grants. The trusted-host profile additionally qualifies reviewed
+pane, command, workspace, secret, file, HTTP/stream, chat, hook, and activity
+adapters used by installed packages. Qualification is method- and runtime-
+specific; a package requesting an unsupported grant is blocked at review.
 
 Parsing dispatches on `manifestVersion ?? 1`. V1 manifests remain valid for legacy workspace packages. V2 validation runs before code import.
 

@@ -125,7 +125,9 @@ export function createWorkspaceFileStore(): FileStore {
     return {
         async put(input) {
             const { createOrRefFile } = await import('~/db/files');
-            const blob = new Blob([input.bytes], { type: input.mimeType });
+            const bytes = new Uint8Array(input.bytes.byteLength);
+            bytes.set(input.bytes);
+            const blob = new Blob([bytes], { type: input.mimeType });
             const meta = await createOrRefFile(blob, input.name);
             return { id: meta.hash };
         },

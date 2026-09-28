@@ -8,6 +8,7 @@ import { cleanupHookBridge } from '~/core/sync/hook-bridge';
 import { cleanupSubscriptionManager } from '~/core/sync/subscription-manager';
 import { logoutCleanup } from '~/utils/logout-cleanup';
 import { stopAllPortableClientsAndAwait } from '~/composables/plugins/portable-client-runtime';
+import { stopAllTrustedV2ClientsAndAwait } from '~/composables/plugins/trusted-v2-manager';
 import { abortBackgroundClientToolDispatchesForWorkspace } from '~/utils/chat/useAi-internal/backgroundJobs';
 
 async function shouldRunLogoutCleanup(
@@ -41,6 +42,7 @@ export default defineNuxtPlugin(async () => {
         if (window.location.pathname === '/openrouter-callback') {
             cleanupOptions.preserveOpenRouterPkce = true;
         }
+        await stopAllTrustedV2ClientsAndAwait();
         await logoutCleanup(
             nuxtApp as Parameters<typeof logoutCleanup>[0],
             cleanupOptions
@@ -76,6 +78,7 @@ export default defineNuxtPlugin(async () => {
                 !newSession?.authenticated &&
                 (await shouldRunLogoutCleanup(newSession?.authenticated))
             ) {
+                await stopAllTrustedV2ClientsAndAwait();
                 await logoutCleanup(nuxtApp as Parameters<typeof logoutCleanup>[0]);
             }
         }

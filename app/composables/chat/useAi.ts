@@ -73,6 +73,7 @@ import {
     type OpenRouterReasoningConfig,
 } from '../../utils/chat/openrouterStream';
 import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
+import type { OpenRouterModel } from '~~/shared/openrouter/types';
 import {
     appendModelVariant,
     stripModelVariantSuffix,
@@ -212,6 +213,44 @@ export function useChat(
     // from an async send handler triggers Vue's "inject() can only be used
     // inside setup()" warning.
     const toast = useToast();
+    const unresolvedModelIds = new Set<string>();
+    async function resolveModelMetadata(
+        selectedModelId: string
+    ): Promise<OpenRouterModel | undefined> {
+        const modelId = stripModelVariantSuffix(
+            stripThinkingSuffix(selectedModelId)
+        );
+        const { catalog, favoriteModels, fetchModels } = useModelStore();
+        const matches = (candidate: OpenRouterModel) =>
+            candidate.id === modelId || candidate.canonical_slug === modelId;
+        const lookup = () =>
+            catalog.value.find(matches) ?? favoriteModels.value.find(matches);
+        const hasContext = (candidate: OpenRouterModel | undefined) =>
+            [
+                candidate?.top_provider?.context_length,
+                candidate?.context_length,
+            ].some(
+                (value) =>
+                    typeof value === 'number' &&
+                    Number.isFinite(value) &&
+                    value > 0
+            );
+
+        let metadata = lookup();
+        if (hasContext(metadata) || unresolvedModelIds.has(modelId)) return metadata;
+        try {
+            await fetchModels();
+            metadata = lookup();
+            if (!hasContext(metadata)) {
+                await fetchModels({ force: true });
+                metadata = lookup();
+            }
+            if (!hasContext(metadata)) unresolvedModelIds.add(modelId);
+        } catch {
+            // Keep the conservative fallback if catalog metadata is unavailable.
+        }
+        return metadata;
+    }
     const appConfig = useAppConfig() as {
         errors?: { showAbortInfo?: boolean };
     };
@@ -681,14 +720,14 @@ export function useChat(
     cleanupFns.push(
         hooks.on(
             'workflow.execution:action:state_update',
-            (payload: {
-                messageId: string;
-                state?: { executionState?: string; finalOutput?: string };
-            }) => {
-                const state = payload.state || {};
+            (payload: { messageId: string; state: unknown }) => {
+                const state =
+                    payload.state !== null && typeof payload.state === 'object'
+                        ? (payload.state as Record<string, unknown>)
+                        : {};
                 const executionState = state.executionState;
                 const isDone =
-                    executionState &&
+                    typeof executionState === 'string' &&
                     executionState !== 'running' &&
                     executionState !== 'idle';
                 const finalOutput =
@@ -2094,17 +2133,7 @@ export function useChat(
                 Array.isArray(effectiveMessages) ? effectiveMessages : []
             ).filter(shouldKeepAssistantMessage);
 
-            const budgetModelId = stripModelVariantSuffix(
-                stripThinkingSuffix(modelId)
-            );
-            const budgetModelMeta =
-                catalog.value.find(
-                    (candidate: ModelInfo) => candidate.id === budgetModelId
-                ) ||
-                favoriteModels.value.find(
-                    (candidate: ModelInfo) => candidate.id === budgetModelId
-                ) ||
-                modelMeta;
+            const budgetModelMeta = await resolveModelMetadata(modelId);
             const maxInputTokens = resolveChatInputTokenBudget(budgetModelMeta);
 
             let orMessages = await buildOpenRouterMessagesForSend({
@@ -3199,22 +3228,10 @@ export function useChat(
                     defaultModelId: DEFAULT_AI_MODEL,
                     getSystemPromptContent,
                     useAiSettings,
-                    resolveInputTokenBudget: (selectedModelId: string) => {
-                        const normalizedId = stripModelVariantSuffix(
-                            stripThinkingSuffix(selectedModelId)
-                        );
-                        const { catalog, favoriteModels } = useModelStore();
-                        const metadata =
-                            catalog.value.find(
-                                (candidate: ModelInfo) =>
-                                    candidate.id === normalizedId
-                            ) ||
-                            favoriteModels.value.find(
-                                (candidate: ModelInfo) =>
-                                    candidate.id === normalizedId
-                            );
-                        return resolveChatInputTokenBudget(metadata);
-                    },
+                    resolveInputTokenBudget: async (selectedModelId: string) =>
+                        resolveChatInputTokenBudget(
+                            await resolveModelMetadata(selectedModelId)
+                        ),
                     backgroundStreamingAllowed:
                         backgroundStreamingAllowed.value,
                     workspaceId: getActiveWorkspaceId() ?? 'local',

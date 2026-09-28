@@ -9,6 +9,7 @@ import {
     type PluginJsonValue,
     type PluginRegistrationHandle,
     type PluginResult,
+    type PluginWorkspaceChange,
 } from '@or3/plugin-sdk';
 import {
     createHostPluginContext,
@@ -142,9 +143,18 @@ export interface CreateTrustedHostContextInput {
     readonly generation?: number;
     readonly grants?: readonly PluginGrant[];
     readonly features?: readonly string[];
+    readonly subscribeWorkspaceChanges?: (
+        listener: (change: PluginWorkspaceChange) => void | Promise<void>
+    ) => PluginRegistrationHandle;
+    readonly subscribeHook?: (
+        name: string,
+        kind: 'action' | 'filter',
+        callback: (...args: unknown[]) => unknown,
+        options?: { readonly priority?: number; readonly signal?: AbortSignal }
+    ) => () => void;
     readonly mediation?: Pick<
         TrustedMediationOptions,
-        'fetch' | 'approvedDestinations' | 'secrets' | 'files' | 'posts'
+        'fetch' | 'approvedDestinations' | 'authorizeDestination' | 'secrets' | 'files' | 'posts'
     >;
 }
 
@@ -169,6 +179,7 @@ export interface TrustedHostContext {
 
 interface ListenerEntry {
     disposed: boolean;
+    stop: () => void;
 }
 
 function denied(grant: PluginGrant): never {
@@ -454,6 +465,9 @@ export function createTrustedHostContext(
         label: string;
         icon?: string;
         order?: number;
+        description?: string;
+        keepAlive?: boolean;
+        usesDefaultHeader?: boolean;
         component?: unknown;
     }): PluginRegistrationHandle {
         allow('ui.sidebar.register');
@@ -464,6 +478,9 @@ export function createTrustedHostContext(
                 label: definition.label,
                 icon: definition.icon ?? SURFACE_ICON,
                 order: definition.order,
+                description: definition.description,
+                keepAlive: definition.keepAlive,
+                usesDefaultHeader: definition.usesDefaultHeader,
                 component: pluginComponent(definition.component),
             })
         );
@@ -474,6 +491,14 @@ export function createTrustedHostContext(
         label: string;
         icon?: string;
         order?: number;
+        postType?: string;
+        createInitialRecord?: () => Promise<{ readonly id: string } | null>;
+        newTab?: {
+            readonly label: string;
+            readonly icon?: string;
+            readonly isAvailable?: () => boolean;
+            readonly createRecordId: () => Promise<string | null>;
+        };
         component?: unknown;
     }): PluginRegistrationHandle {
         allow('ui.pane.register');
@@ -484,6 +509,9 @@ export function createTrustedHostContext(
                 label: definition.label,
                 icon: definition.icon,
                 order: definition.order,
+                postType: definition.postType,
+                createInitialRecord: definition.createInitialRecord,
+                newTab: definition.newTab,
                 component: pluginComponent(definition.component),
             })
         );
@@ -619,23 +647,48 @@ export function createTrustedHostContext(
         );
     }
 
-    function trackListener(): PluginRegistrationHandle {
+    function trackListener(stop: () => void = () => {}): PluginRegistrationHandle {
         allow('hooks.register');
-        const entry: ListenerEntry = { disposed: false };
+        const entry: ListenerEntry = { disposed: false, stop };
         listeners.push(entry);
-        return {
+        const handle = {
             dispose() {
+                if (entry.disposed) return;
                 entry.disposed = true;
+                stop();
             },
         };
+        runtime.api.onCleanup(() => handle.dispose());
+        return handle;
+    }
+
+    const approvedActionHooks = new Set([
+        'ui.chat.editor:action:before_send',
+        'ai.chat.send:action:before',
+        'workflow.execution:action:state_update',
+    ]);
+    const approvedFilterHooks = new Set(['ai.chat.messages:filter:before_send']);
+    function subscribeHook(
+        name: string,
+        kind: 'action' | 'filter',
+        callback: (...args: unknown[]) => unknown,
+        options?: { readonly priority?: number; readonly signal?: AbortSignal }
+    ): PluginRegistrationHandle {
+        allow('hooks.register');
+        // Bundled V1 keeps its legacy lifecycle-only hook handle. Runtime V2
+        // receives only the reviewed chat and workflow hook names below.
+        if (!input.subscribeHook) return trackListener();
+        const approved = kind === 'action' ? approvedActionHooks : approvedFilterHooks;
+        if (!approved.has(name)) unsupported(`Hook ${name} is not available to plugins`);
+        return trackListener(input.subscribeHook(name, kind, callback, options));
     }
 
     const hooks: PluginHooks = {
-        onAction() {
-            return trackListener();
+        onAction(name, callback, options) {
+            return subscribeHook(name, 'action', callback as unknown as (...args: unknown[]) => unknown, options);
         },
-        onFilter() {
-            return trackListener();
+        onFilter(name, callback, options) {
+            return subscribeHook(name, 'filter', callback as (...args: unknown[]) => unknown, options);
         },
     };
 
@@ -713,6 +766,7 @@ export function createTrustedHostContext(
     const mediation = createTrustedMediation({
         fetch: input.mediation?.fetch,
         approvedDestinations: input.mediation?.approvedDestinations,
+        authorizeDestination: input.mediation?.authorizeDestination,
         secrets: input.mediation?.secrets,
         files: input.mediation?.files,
         posts: input.mediation?.posts,
@@ -820,19 +874,20 @@ export function createTrustedHostContext(
                                 return pluginError('host-unavailable', 'Workspace panes are not available');
                             }
                             const target = validated.value.target ?? 'focus-or-new';
+                            const data = asRecord(validated.value.data);
+                            const recordId = typeof data?.recordId === 'string' ? data.recordId : undefined;
                             const existing = api.panes.value.findIndex(
                                 (pane) => pane.mode === validated.value.app
                             );
-                            if (target !== 'new' && existing >= 0) {
+                            if (target === 'replace-active') {
+                                await api.setPaneApp(api.activePaneIndex.value, validated.value.app, { recordId });
+                            } else if (target !== 'new' && existing >= 0) {
+                                if (recordId) await api.setPaneApp(existing, validated.value.app, { recordId });
                                 api.setActive(existing);
-                            } else if (target === 'replace-active') {
-                                await api.setPaneApp(api.activePaneIndex.value, validated.value.app);
                             } else {
-                                await api.newPaneForApp(validated.value.app);
+                                await api.newPaneForApp(validated.value.app, { initialRecordId: recordId });
                             }
-                            const pane =
-                                api.panes.value.find((entry) => entry.mode === validated.value.app) ??
-                                api.panes.value[api.activePaneIndex.value];
+                            const pane = api.panes.value[api.activePaneIndex.value];
                             if (!pane) return pluginError('not-found', 'Pane was not opened');
                             return pluginOk({
                                 id: pane.id,
@@ -863,6 +918,19 @@ export function createTrustedHostContext(
                             return pluginOk(undefined);
                         },
                     },
+                    workspace: {
+                        ...fallback.workspace,
+                        id: input.workspaceId ?? 'local',
+                        onChange(listener) {
+                            allow('workspace.read');
+                            if (!input.subscribeWorkspaceChanges) {
+                                return unsupported('workspace.onChange is unavailable');
+                            }
+                            const handle = input.subscribeWorkspaceChanges(listener);
+                            runtime.api.onCleanup(() => handle.dispose());
+                            return handle;
+                        },
+                    },
                     commands: {
                         register: registerCommand,
                         async run() {
@@ -877,6 +945,7 @@ export function createTrustedHostContext(
                         registerSource: (source) => registerActivity(source),
                     },
                     network: mediation.network,
+                    http: mediation.http,
                     secrets: mediation.secrets,
                     files: mediation.files,
                 };
@@ -910,7 +979,8 @@ export function createTrustedHostContext(
         dispose(reason) {
             if (!closed) {
                 closed = true;
-                for (const entry of listeners) entry.disposed = true;
+                // Listener handles are registered with the managed runtime.
+                // Its cleanup runs every handle even when one unsubscribe throws.
                 listeners.length = 0;
                 activations.length = 0;
                 settings.clear();

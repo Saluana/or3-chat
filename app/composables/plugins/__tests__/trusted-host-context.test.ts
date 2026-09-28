@@ -3,7 +3,7 @@ import { defineComponent, h, nextTick, watch } from 'vue';
 import { pluginOk } from '@or3/plugin-sdk';
 import { messageRowKind, resolveMessageRenderer } from '~/composables/chat/message-renderers';
 import { TRUSTED_HOST_GRANTS } from '../trusted-host-context';
-import { EXTERNAL_AGENT_CREDENTIAL_VAULT_KEY } from '../trusted-mediation';
+import { EXTERNAL_AGENT_CREDENTIAL_VAULT_KEY } from '../trusted-production-stores';
 import {
     createLocalStorageSecretStore,
     createMemoryFileStore,
@@ -333,6 +333,81 @@ describe('trusted host context', () => {
         await trusted.dispose();
     });
 
+    it('provides the approved workspace identity and disposes change subscriptions', async () => {
+        const { createTrustedHostContext } = await import('../trusted-host-context');
+        const subscription: {
+            emit?: (change: { previousId: string; id: string; reason: 'host' }) => void;
+        } = {};
+        const stop = vi.fn();
+        const trusted = createTrustedHostContext({
+            pluginId: 'fixture.workspace',
+            version: '1.0.0',
+            workspaceId: 'workspace-one',
+            grants: ['workspace.read'],
+            subscribeWorkspaceChanges(listener) {
+                subscription.emit = listener;
+                return { dispose: stop };
+            },
+        });
+        const changes: string[] = [];
+        expect(trusted.context.workspace.id).toBe('workspace-one');
+        trusted.context.workspace.onChange((change) => { changes.push(change.id); });
+        subscription.emit?.({ previousId: 'workspace-one', id: 'workspace-two', reason: 'host' });
+        expect(changes).toEqual(['workspace-two']);
+        await trusted.dispose();
+        expect(stop).toHaveBeenCalledOnce();
+    });
+
+    it('forwards approved chat hooks and stops them with the plugin', async () => {
+        const { createTrustedHostContext } = await import('../trusted-host-context');
+        const listeners = new Map<string, (...args: unknown[]) => unknown>();
+        const disposed: string[] = [];
+        const trusted = createTrustedHostContext({
+            pluginId: 'fixture.workflow', version: '1.0.0', grants: ['hooks.register'],
+            subscribeHook(name, kind, callback) {
+                const key = `${kind}:${name}`;
+                listeners.set(key, callback);
+                return () => { listeners.delete(key); disposed.push(key); };
+            },
+        });
+        const seen: unknown[] = [];
+        trusted.context.hooks.onAction('ai.chat.send:action:before', (payload) => {
+            seen.push(payload);
+        });
+        trusted.context.hooks.onFilter('ai.chat.messages:filter:before_send', (payload) => ({
+            messages: [], original: payload,
+        }));
+        const context = { assistant: { id: 'assistant-1', streamId: 'stream-1' } };
+        await listeners.get('action:ai.chat.send:action:before')?.(context);
+        expect(seen).toEqual([context]);
+        expect(await listeners.get('filter:ai.chat.messages:filter:before_send')?.({ messages: [1] }))
+            .toEqual({ messages: [], original: { messages: [1] } });
+        expect(() => trusted.context.hooks.onAction('auth.session:action:changed', () => {}))
+            .toThrow(/not available/);
+        await trusted.dispose();
+        expect(listeners.size).toBe(0);
+        expect(disposed).toHaveLength(2);
+    });
+
+    it('releases later hook subscriptions when one unsubscribe throws', async () => {
+        const { createTrustedHostContext } = await import('../trusted-host-context');
+        const disposed: string[] = [];
+        const trusted = createTrustedHostContext({
+            pluginId: 'fixture.cleanup', version: '1.0.0', grants: ['hooks.register'],
+            subscribeHook(name) {
+                return () => {
+                    disposed.push(name);
+                    if (name === 'ai.chat.send:action:before') throw new Error('unsubscribe failed');
+                };
+            },
+        });
+        trusted.context.hooks.onAction('ai.chat.send:action:before', () => {});
+        trusted.context.hooks.onFilter('ai.chat.messages:filter:before_send', (value) => value);
+        const result = await trusted.dispose();
+        expect(result.status).toBe('degraded');
+        expect(disposed).toEqual(['ai.chat.send:action:before', 'ai.chat.messages:filter:before_send']);
+    });
+
     it('registers a slash extension and intercepts the send', async () => {
         const { createTrustedHostContext } = await import('../trusted-host-context');
         const trusted = createTrustedHostContext({
@@ -374,15 +449,26 @@ describe('trusted host context', () => {
 
     it('streams, stores the agent vault key, and stages a file through approved mediation', async () => {
         const encoder = new TextEncoder();
-        const fetchImpl = (async () =>
-            new Response(
+        const requests: Array<{ url: string; authorization: string | null; method: string; body: string | null }> = [];
+        const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+            requests.push({
+                url: String(input),
+                authorization: new Headers(init?.headers).get('Authorization'),
+                method: init?.method ?? 'GET',
+                body: typeof init?.body === 'string' ? init.body : null,
+            });
+            if (String(input).endsWith('/health')) {
+                return new Response('{"status":"ok"}', { headers: { 'content-type': 'application/json' } });
+            }
+            return new Response(
                 new ReadableStream({
                     start(controller) {
                         controller.enqueue(encoder.encode('data: hello\r\ndata: world\r\n\r\n'));
                         controller.close();
                     },
                 })
-            )) as typeof fetch;
+            );
+        }) as typeof fetch;
         const secretStorage = new Map<string, string>();
         const { createTrustedHostContext } = await import('../trusted-host-context');
         const trusted = createTrustedHostContext({
@@ -410,6 +496,9 @@ describe('trusted host context', () => {
             url: 'https://agent-host.example/events',
             destination: 'agent-host',
             format: 'sse',
+            method: 'POST',
+            headers: { Authorization: 'Bearer stream-token' },
+            body: 'resume',
         });
         expect(streamed.ok).toBe(true);
         if (streamed.ok) {
@@ -420,6 +509,18 @@ describe('trusted host context', () => {
             expect(values).toEqual(['hello\nworld']);
             await expect(streamed.value.result).resolves.toMatchObject({ ok: true });
         }
+        expect(requests[0]).toEqual({
+            url: 'https://agent-host.example/events',
+            authorization: 'Bearer stream-token', method: 'POST', body: 'resume',
+        });
+
+        const health = await trusted.context.http.fetch({
+            url: 'https://agent-host.example/health', destination: 'agent-host',
+            headers: { Authorization: 'Bearer health-token' },
+        });
+        expect(health.ok).toBe(true);
+        if (health.ok) expect(new TextDecoder().decode(health.value.body as Uint8Array)).toBe('{"status":"ok"}');
+        expect(requests[1]?.authorization).toBe('Bearer health-token');
 
         const blocked = await trusted.context.network.stream({
             url: 'https://other.example/events',
@@ -427,6 +528,10 @@ describe('trusted host context', () => {
             format: 'sse',
         });
         expect(blocked.ok).toBe(false);
+        const blockedHttp = await trusted.context.http.fetch({
+            url: 'https://other.example/health', destination: 'other',
+        });
+        expect(blockedHttp.ok).toBe(false);
 
         await trusted.context.secrets.set(EXTERNAL_AGENT_CREDENTIAL_VAULT_KEY, 'sealed');
         const secret = await trusted.context.secrets.get(EXTERNAL_AGENT_CREDENTIAL_VAULT_KEY);

@@ -26,8 +26,6 @@ const disableNonCorePlugins = isNonCorePluginDiscoveryDisabled(
 const isWizardUiProcess = process.env.OR3_WIZARD_UI_ENABLED === 'true';
 const isScrollTestHarnessEnabled =
     process.env.OR3_SCROLL_TEST_HARNESS === 'true';
-const isAgentVisualTestHarnessEnabled =
-    process.env.OR3_AGENT_VISUAL_TEST_HARNESS === 'true';
 const isProductionJourneyTestHarnessEnabled =
     process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS === 'true';
 const productionJourneyPort = Number(process.env.PW_PORT || 3000);
@@ -69,9 +67,6 @@ const sqliteNativeTraceIncludes =
 // never breaks the app.
 const localPackages = resolveLocalPackageAliases(__dirname);
 const localPackageAliases = [...localPackages.aliases];
-const localWorkflowCoreSource = localPackageAliases.find(
-    ({ find }) => find instanceof RegExp && find.source === '^or3-workflow-core$',
-)?.replacement;
 
 // The SDK checkout exposes TypeScript source through its `exports`. Vite can
 // transpile that source, but Nitro's Rollup pipeline cannot parse TypeScript
@@ -539,9 +534,6 @@ export default defineNuxtConfig({
         ...(isScrollTestHarnessEnabled
             ? { '/__or3-scroll-test': { ssr: false } }
             : {}),
-        ...(isAgentVisualTestHarnessEnabled
-            ? { '/__or3-agent-visual-test': { ssr: false } }
-            : {}),
         ...(isProductionJourneyTestHarnessEnabled
             ? {
                   '/__or3-chat-journey-test': { ssr: false },
@@ -907,12 +899,7 @@ export default defineNuxtConfig({
         provider: 'local',
     },
     nitro: {
-        // Keep server-side workflow execution on the same sibling source tree
-        // that Vite uses for the editor during local multi-repo development.
         alias: {
-            ...(localWorkflowCoreSource
-                ? { 'or3-workflow-core': localWorkflowCoreSource }
-                : {}),
             ...pluginSdkSourceAliases,
         },
         // Emit precompressed variants for the self-hosted Node server while
@@ -1234,7 +1221,6 @@ export default defineNuxtConfig({
                 '@openrouter/sdk',
                 '@openrouter/sdk/models/errors',
                 '@orama/orama',
-                '@or3/intern-client',
                 '@tiptap/core',
                 '@tiptap/extension-mention',
                 '@tiptap/extensions/placeholder',
@@ -1244,10 +1230,6 @@ export default defineNuxtConfig({
                 '@tiptap/vue-3',
                 '@vue/devtools-core',
                 '@vue/devtools-kit',
-                '@vue-flow/background',
-                '@vue-flow/controls',
-                '@vue-flow/core',
-                '@vue-flow/minimap',
                 '@vueuse/core',
                 'ajv',
                 'ajv/dist/2020.js',
@@ -1258,9 +1240,7 @@ export default defineNuxtConfig({
                 'tiptap-markdown',
                 'zod',
             ],
-            exclude: localPackageAliases.length
-                ? ['or3-scroll', 'or3-workflow-core', 'or3-workflow-vue']
-                : [],
+            exclude: localPackageAliases.length ? ['or3-scroll'] : [],
         },
         server: {
             fs: {
@@ -1343,16 +1323,6 @@ export default defineNuxtConfig({
                     file: resolve(
                         __dirname,
                         'tests/e2e/fixtures/Or3ScrollCanary.vue'
-                    ),
-                });
-            }
-            if (isAgentVisualTestHarnessEnabled) {
-                pages.push({
-                    name: 'or3-agent-visual-test-harness',
-                    path: '/__or3-agent-visual-test',
-                    file: resolve(
-                        __dirname,
-                        'tests/e2e/fixtures/ExternalAgentVisualHarness.vue',
                     ),
                 });
             }

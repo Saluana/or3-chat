@@ -106,16 +106,14 @@ changing environment files so Nuxt picks them up.
 
 ### Developing sibling OR3 packages
 
-`bun run dev` uses adjacent source checkouts automatically: when a sibling
-`or3-vsc` or `or3-workflows` checkout sits next to `or3-chat`, Vite and Nitro
-alias `or3-scroll`, `or3-workflow-core`, `or3-workflow-vue`, and the workflow
-stylesheet to that package source. Provider packages (`or3-provider-*`) are
-built from their sibling checkouts the same way. The dev banner prints which
+`bun run dev` aliases the adjacent `or3-vsc` checkout to `or3-scroll` when
+its manifest and source are valid. Provider packages (`or3-provider-*`) are
+built from their sibling checkouts separately. The dev banner prints which
 local sources were selected.
 
-Workflow core, UI and styles are selected together. Their declared dependency
-and peer ranges and reachable relative source files must resolve before selection;
-an unusable member rejects the whole workflow group with a startup diagnostic.
+Workflows and External Agents are separate V2 plugin checkouts. Build and pack
+each plugin, then install its archive through the admin package flow. The host
+does not alias their feature dependencies from sibling source directories.
 The scroll package is checked separately. Rejected groups use installed packages.
 Production builds never alias sibling sources, even when the environment inherits
 `OR3_USE_LOCAL_PACKAGES=true`.

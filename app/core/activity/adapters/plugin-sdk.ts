@@ -13,6 +13,7 @@ import {
     type ActivityError,
     type ActivityEvent,
     type ActivityRunDetail,
+    type ActivityRunKind,
     type ActivityRunSummary,
     type ActivitySource,
 } from '../contract';
@@ -48,11 +49,15 @@ function mapEvent(sourceId: string, event: PluginActivityEvent): ActivityEvent {
 }
 
 function mapSummary(source: PluginActivitySource, run: PluginActivityRun): ActivityRunSummary {
+    const kinds: readonly string[] = ['workflow', 'background-chat', 'document-ai', 'external-agent', 'plugin'];
+    const kind: ActivityRunKind = run.kind && kinds.includes(run.kind)
+        ? run.kind as ActivityRunKind
+        : 'plugin';
     return {
         id: run.id,
         sourceId: source.id,
         title: run.title,
-        kind: run.kind ?? 'plugin',
+        kind,
         status: run.status,
         startedAt: run.startedAt ?? run.updatedAt,
         updatedAt: run.updatedAt,

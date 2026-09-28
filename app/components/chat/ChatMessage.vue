@@ -16,11 +16,22 @@
             :message="props.message"
         />
 
-        <!-- Workflow Message Handling -->
-        <WorkflowChatMessage
-            v-else-if="props.message.isWorkflow"
-            :message="props.message"
-        />
+        <section v-else-if="props.message.isWorkflow" class="space-y-2" aria-label="Workflow run">
+            <div class="font-medium">{{ props.message.workflowState?.workflowName || 'Workflow' }}</div>
+            <p class="text-sm opacity-70">
+                Status: {{ props.message.workflowState?.executionState || 'unavailable' }}
+            </p>
+            <p v-if="props.message.workflowState?.prompt" class="text-sm whitespace-pre-wrap break-words">
+                Prompt: {{ props.message.workflowState.prompt }}
+            </p>
+            <p v-if="workflowFallbackError" class="text-sm text-red-600 whitespace-pre-wrap break-words" role="alert">
+                {{ workflowFallbackError }}
+            </p>
+            <p v-if="props.message.workflowState?.finalOutput" class="whitespace-pre-wrap break-words">
+                {{ props.message.workflowState.finalOutput }}
+            </p>
+            <p v-else class="text-sm opacity-70">Open Workflows to view run details.</p>
+        </section>
 
         <!-- Regular Chat Message Handling -->
         <template v-else>
@@ -412,7 +423,6 @@ import {
     onMounted,
 } from 'vue';
 import LoadingGenerating from './LoadingGenerating.vue';
-import WorkflowChatMessage from './WorkflowChatMessage.vue';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
 import { shallowRef } from 'vue';
 import { useToast } from '#imports';
@@ -450,6 +460,10 @@ const props = withDefaults(
 );
 const customMessageRenderer = computed(
     () => resolveMessageRenderer(props.message)?.component ?? null
+);
+const workflowFallbackError = computed(() =>
+    Object.values(props.message.workflowState?.nodeStates ?? {})
+        .find((node) => node.status === 'error' && node.error)?.error ?? null
 );
 const emit = defineEmits<{
     (e: 'retry', id: string): void;

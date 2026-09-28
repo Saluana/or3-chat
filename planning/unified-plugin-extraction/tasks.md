@@ -11,6 +11,7 @@
 
 ## Remaining
 
-- [ ] Phase 5: move Workflows to `or3-plugin-workflows`, retain `workflow-entry` posts, and remove its core dependencies.
-- [ ] Phase 6: move the External Agents UI and client to `or3-plugin-external-agents`, retain Connect's server runtime and vault compatibility, and remove the core client dependency.
-- [ ] Phase 7: publish the authoring guide, pin versions, and verify builds and UI with each plugin installed and both absent.
+- [x] Phase 5 implementation: Workflows moved to `or3-plugin-workflows`; installed UI, background/HITL routes, saved `workflow-entry` posts and execution continuity, and disable/re-enable were tested. Core runtime dependencies were removed.
+- [x] Phase 6 implementation: External Agents moved to `or3-plugin-external-agents`; Connect's server runtime, legacy KV/vault data, logout behavior, and installed UI disable/re-enable were tested. The core client dependency was removed.
+- [ ] Phase 5/6 formal absent-plugin lint gate: the build, direct post-build check, typecheck, and import check pass, but repository-wide lint still fails in unchanged files. See the [authoritative checklist](../../../planning/unified-plugin-extraction/tasks.md) and [verification receipt](../../../planning/unified-plugin-extraction/phase-5-6-verification.md).
+- [ ] Phase 7: the single authoring guide, fresh version pins, exact package checks, installed/absent builds, and installed/absent UI checks are complete. The repository-wide strict lint gate remains open. See the [authoritative checklist](../../../planning/unified-plugin-extraction/tasks.md) and [phase 7 receipt](../../../planning/unified-plugin-extraction/phase-7-verification.md).

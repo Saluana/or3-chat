@@ -42,6 +42,12 @@ vi.mock('../../../admin/plugins/package-route-catalog', () => ({
     },
 }));
 
+const readPackageClientEntryMock = vi.fn();
+vi.mock('../../../admin/plugins/package-client-entry', () => ({
+    readPackageClientEntry: readPackageClientEntryMock as any,
+    PluginPackageClientEntryError: class extends Error {},
+}));
+
 const checkPluginAccessMock = vi.fn();
 vi.mock('../../../utils/plugins/access/require-plugin-access', () => ({
     checkPluginAccess: checkPluginAccessMock as any,
@@ -91,6 +97,11 @@ describe('GET /api/plugins/runtime-manifest', () => {
             status: 'current',
         });
         listSelectedPackagesMock.mockReset().mockResolvedValue([]);
+        readPackageClientEntryMock.mockReset().mockResolvedValue({
+            entry: 'client.mjs',
+            isolation: 'host',
+            digest: 'sha256-' + 'c'.repeat(64),
+        });
         checkPluginAccessMock.mockReset().mockResolvedValue({
             session: { authenticated: true },
             decision: { allowed: true, reasons: [], effectivePolicy: defaultEffectivePolicy },
@@ -330,6 +341,50 @@ describe('GET /api/plugins/runtime-manifest', () => {
                 artifact: {
                     kind: 'package-v2',
                     packageDigest: `sha256-${'a'.repeat(64)}`,
+                },
+            },
+        });
+    });
+
+    it('publishes a selected trusted-host client entry for the proved host loader', async () => {
+        useRuntimeConfigMock.mockReturnValue({
+            admin: {
+                pluginRuntimeLoaderEnabled: true,
+                pluginModuleLoaderV2Enabled: true,
+                pluginModuleLoaderV2WorkspaceIds: ['ws-1'],
+                disableNonCorePlugins: false,
+            },
+        } as any);
+        listSelectedPackagesMock.mockResolvedValue([{
+            status: 'ready',
+            pluginId: 'host-plugin',
+            packageDigest: 'sha256-' + 'a'.repeat(64),
+            routes: [],
+            manifest: {
+                kind: 'plugin', id: 'host-plugin', name: 'Host Plugin', version: '1.0.0',
+                capabilities: [], manifestVersion: 2,
+                engines: { or3: '^0.3.0', pluginApi: '^2.0.0' },
+                runtime: { client: { entry: 'client.mjs', format: 'esm', isolation: 'host' } },
+                requestedGrants: [], features: { required: [], optional: [] },
+                dependencies: { required: [], optional: [] },
+                trust: 'trusted-host', settings: { version: 1 },
+                stateCompatibility: { version: 1, reads: { minimum: 1, maximum: 1 }, rollback: 'safe' },
+            },
+        }]);
+        getEnabledPluginsMock.mockResolvedValue(['host-plugin']);
+
+        const handler = (await import('../runtime-manifest.get')).default as (
+            event: H3Event
+        ) => Promise<any>;
+        const result = await handler(makeEvent());
+        expect(result.runtime['host-plugin']).toMatchObject({
+            descriptorStatus: 'ready',
+            descriptor: {
+                trust: 'trusted-host',
+                artifact: {
+                    kind: 'package-v2',
+                    clientEntry: 'client.mjs',
+                    client: { entry: 'client.mjs', isolation: 'host' },
                 },
             },
         });

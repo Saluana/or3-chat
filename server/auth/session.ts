@@ -423,7 +423,12 @@ export async function resolveSessionContext(
 
         if (created) {
             try {
-                await provisionWorkspaceDefaults(event, workspaceId);
+                const provisioning = await provisionWorkspaceDefaults(event, workspaceId, { ownerUserId: userId, name: workspaceName });
+                if (provisioning.warnings.length) {
+                    console.warn('[auth:session] New workspace plugin defaults need attention', {
+                        workspaceId, warnings: provisioning.warnings,
+                    });
+                }
             } catch (error) {
                 console.warn('[auth:session] Failed to provision new workspace defaults', {
                     workspaceId,

@@ -12,8 +12,8 @@
  * - Instance-selected package: pointer read APIs (`/api/admin/plugins-page`,
  *   `packages/[pluginId]/status`) and the acquisition operation's signed
  *   release identity (`PluginAcquisitionOperation.release`).
- * - Current activation: the live portable activation registry in this browser
- *   (`portable-client-runtime`), keyed by plugin id, workspace and generation.
+ * - Current activation: the live portable or trusted-host activation registry
+ *   in this browser, keyed by plugin id and workspace.
  *
  * Representable states: a selected package with no observation is
  * `not-observed` (or `disabled` when the workspace disabled it, `starting`
@@ -157,4 +157,74 @@ export function describeLifecycleBadge(view: PluginLifecycleView, options: {
                 ? { state: 'activation-not-confirmed', label: ACTIVATION_NOT_CONFIRMED_COPY }
                 : { state: 'not-observed', label: 'Not observed' };
     }
+}
+
+export type PluginStatusState =
+    | 'needs-site-approval'
+    | 'needs-permissions'
+    | 'needs-setup'
+    | 'checking'
+    | 'ready-to-enable'
+    | 'disabled'
+    | 'starting'
+    | 'enabled-unconfirmed'
+    | 'active'
+    | 'needs-attention';
+
+export interface PluginStatusFacts {
+    readonly enabled: boolean;
+    /** Unknown means the server has not supplied a verified decision. */
+    readonly siteApproval: 'approved' | 'required' | 'unknown';
+    readonly grantReview: 'current' | 'required' | 'unknown';
+    readonly setup: 'ready' | 'required' | 'blocked' | 'unknown';
+    readonly packageReady: boolean;
+}
+
+export interface PluginStatusDescription {
+    readonly state: PluginStatusState;
+    readonly label: string;
+    readonly reason: string;
+    readonly action: 'approve-site' | 'review-permissions' | 'configure' | 'enable' | 'retry-check' | 'open' | null;
+}
+
+/** One ordered next action, derived from scoped facts rather than saved as another status. */
+export function describePluginStatus(view: PluginLifecycleView, facts: PluginStatusFacts): PluginStatusDescription {
+    if (!view.selected || !facts.packageReady) {
+        return { state: 'needs-attention', label: 'Needs attention', reason: 'The selected package could not be verified. Check the package details.', action: null };
+    }
+    if (!facts.enabled && facts.siteApproval === 'required') {
+        return { state: 'needs-site-approval', label: 'Needs site approval', reason: 'A site administrator must approve this release before new workspaces can enable it.', action: 'approve-site' };
+    }
+    if (!facts.enabled && facts.siteApproval === 'unknown') {
+        return { state: 'disabled', label: 'Disabled here', reason: 'This workspace has not enabled the plugin. Site approval details are unavailable here; ask a site administrator before enabling it.', action: null };
+    }
+    if (!facts.enabled && (facts.grantReview !== 'current' || facts.setup !== 'ready')) {
+        return { state: 'disabled', label: 'Disabled here', reason: 'This workspace has not enabled the plugin. Enabling it will check permissions and setup.', action: 'enable' };
+    }
+    if (!facts.enabled) {
+        return { state: 'ready-to-enable', label: 'Ready to enable', reason: 'The package is installed and this workspace can enable it.', action: 'enable' };
+    }
+    if (facts.grantReview === 'required') {
+        return { state: 'needs-permissions', label: 'Needs permissions', reason: 'Review the selected release’s access for this workspace.', action: 'review-permissions' };
+    }
+    if (facts.setup === 'required') {
+        return { state: 'needs-setup', label: 'Needs setup', reason: 'Complete this workspace’s plugin setup before enabling it.', action: 'configure' };
+    }
+    if (facts.setup === 'blocked') {
+        return { state: 'needs-attention', label: 'Needs attention', reason: 'This plugin’s setup cannot run on this host. Open setup details for the specific blocker.', action: 'configure' };
+    }
+    if (facts.enabled && view.runtime.state === 'running' &&
+        view.runtime.identity.pluginId === view.selected.pluginId &&
+        view.runtime.identity.packageTreeSha256 === view.selected.packageTreeSha256) {
+        return { state: 'active', label: view.runtime.degradedContributions.length ? 'Active with issues' : 'Active here', reason: 'This browser observed the selected package in this workspace.', action: 'open' };
+    }
+    if (view.runtime.state === 'failed') {
+        return { state: 'needs-attention', label: 'Needs attention', reason: 'Plugin startup failed in this browser. Retry the browser check.', action: 'retry-check' };
+    }
+    if (view.runtime.state === 'starting') {
+        return { state: 'starting', label: 'Starting', reason: 'This browser is starting the selected package.', action: null };
+    }
+    return { state: 'enabled-unconfirmed', label: 'Enabled; browser check pending', reason: facts.grantReview === 'unknown' || facts.setup === 'unknown'
+        ? 'This workspace is enabled, but prerequisite details are unavailable here and this browser has not confirmed the selected package is running.'
+        : 'This workspace is enabled, but this browser has not confirmed the selected package is running.', action: 'retry-check' };
 }

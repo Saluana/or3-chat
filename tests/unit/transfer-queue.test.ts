@@ -121,24 +121,6 @@ describe('FileTransferQueue', () => {
         });
     });
 
-    describe('waitForTransfer', () => {
-        it('should resolve immediately if transfer is done', async () => {
-            mockFileTransfers.get.mockResolvedValue({ state: 'done' });
-            await queue.waitForTransfer('test-id');
-        });
-
-        it('should reject if transfer is failed', async () => {
-            mockFileTransfers.get.mockResolvedValue({ state: 'failed', last_error: 'Test error' });
-            await expect(queue.waitForTransfer('test-id')).rejects.toThrow('Test error');
-        });
-
-        it('should timeout after specified duration', async () => {
-            mockFileTransfers.get.mockResolvedValue({ state: 'queued' });
-            // Using a short timeout for test
-            await expect(queue.waitForTransfer('test-id', 100)).rejects.toThrow('Transfer timeout');
-        });
-    });
-
     describe('readBlobWithProgress', () => {
         it('should throttle progress updates', async () => {
             const transferId = 'test-transfer';

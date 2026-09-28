@@ -78,6 +78,9 @@ export interface PluginSidebarDefinition {
     readonly label: string;
     readonly icon?: string;
     readonly order?: number;
+    readonly description?: string;
+    readonly keepAlive?: boolean;
+    readonly usesDefaultHeader?: boolean;
     /** Host Vue component. Omitted registrations render a placeholder. */
     readonly component?: unknown;
 }
@@ -88,6 +91,14 @@ export interface PluginPaneDefinition {
     readonly icon?: string;
     readonly order?: number;
     readonly dataVersion?: number;
+    readonly postType?: string;
+    readonly createInitialRecord?: () => Promise<{ readonly id: string } | null>;
+    readonly newTab?: {
+        readonly label: string;
+        readonly icon?: string;
+        readonly isAvailable?: () => boolean;
+        readonly createRecordId: () => Promise<string | null>;
+    };
     /** Host Vue component. Omitted registrations render a placeholder. */
     readonly component?: unknown;
 }

@@ -6,6 +6,7 @@ import { getEnabledPlugins } from '../../../../../admin/plugins/workspace-plugin
 import { ImmutablePluginPackageStore } from '../../../../../admin/plugins/package-store';
 import { PluginPackagePointerStore } from '../../../../../admin/plugins/package-pointer-store';
 import { readLocalAdmission } from '../../../../../admin/plugins/local-admission';
+import { readAdminUploadProvenance } from '../../../../../admin/plugins/admin-upload-provenance';
 
 /** Read-only operator status. It deliberately returns identities and lifecycle
  * slots, never package files, settings, grants, or canary state snapshots. */
@@ -32,12 +33,18 @@ export default defineEventHandler(async (event) => {
     ]);
     // Local-development provenance is explicit per digest: a locally admitted
     // candidate is labeled and never presented as a marketplace release.
-    const [currentAdmission, candidateAdmission] = await Promise.all([
+    const [currentAdmission, candidateAdmission, currentUpload, candidateUpload] = await Promise.all([
         pointer?.current?.packageDigest
             ? readLocalAdmission(pluginId, pointer.current.packageDigest)
             : null,
         pointer?.candidate?.packageDigest
             ? readLocalAdmission(pluginId, pointer.candidate.packageDigest)
+            : null,
+        pointer?.current?.packageDigest
+            ? readAdminUploadProvenance(pluginId, pointer.current.packageDigest)
+            : null,
+        pointer?.candidate?.packageDigest
+            ? readAdminUploadProvenance(pluginId, pointer.candidate.packageDigest)
             : null,
     ]);
     return {
@@ -58,6 +65,10 @@ export default defineEventHandler(async (event) => {
             candidate: candidateAdmission
                 ? { provenance: 'local-development', receiptSha256: candidateAdmission.receiptSha256, admittedAt: candidateAdmission.admittedAt }
                 : null,
+        },
+        adminUpload: {
+            current: currentUpload ? { provenance: 'admin-upload', uploadedBy: currentUpload.uploadedBy, uploadedAt: currentUpload.uploadedAt } : null,
+            candidate: candidateUpload ? { provenance: 'admin-upload', uploadedBy: candidateUpload.uploadedBy, uploadedAt: candidateUpload.uploadedAt } : null,
         },
     };
 });

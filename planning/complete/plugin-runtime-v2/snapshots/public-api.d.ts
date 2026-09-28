@@ -272,6 +272,13 @@ export interface PaneAppDef {
     }) => Promise<{
         id: string;
     } | null>;
+    /** Optional new-tab menu contribution. A null result cancels creation. */
+    newTab?: {
+        label: string;
+        icon?: string;
+        isAvailable?: () => boolean;
+        createRecordId: () => Promise<string | null>;
+    };
     /**
      * Optional ordering (lower = earlier in sorted lists). Defaults to 200.
      */
@@ -1519,7 +1526,7 @@ export * from './projects/useProjectsCrud';
 export * from './notifications/useNotifications';
 
 // ---- app/composables/plugins/trusted-host-context.ts ----
-import { type PluginGrant, type PluginRegistrationHandle } from '@or3/plugin-sdk';
+import { type PluginGrant, type PluginRegistrationHandle, type PluginWorkspaceChange } from '@or3/plugin-sdk';
 import type { PluginContext } from '@or3/plugin-sdk';
 import type { ExtendedToolDefinition, ToolHandler } from '~/utils/chat/tool-registry';
 import { type Or3WorkspacePluginApi } from './workspace-runtime';
@@ -1550,7 +1557,12 @@ export interface CreateTrustedHostContextInput {
     readonly generation?: number;
     readonly grants?: readonly PluginGrant[];
     readonly features?: readonly string[];
-    readonly mediation?: Pick<TrustedMediationOptions, 'fetch' | 'approvedDestinations' | 'secrets' | 'files' | 'posts'>;
+    readonly subscribeWorkspaceChanges?: (listener: (change: PluginWorkspaceChange) => void | Promise<void>) => PluginRegistrationHandle;
+    readonly subscribeHook?: (name: string, kind: 'action' | 'filter', callback: (...args: unknown[]) => unknown, options?: {
+        readonly priority?: number;
+        readonly signal?: AbortSignal;
+    }) => () => void;
+    readonly mediation?: Pick<TrustedMediationOptions, 'fetch' | 'approvedDestinations' | 'authorizeDestination' | 'secrets' | 'files' | 'posts'>;
 }
 export interface TrustedHostContext {
     readonly context: PluginContext;
@@ -2787,6 +2799,8 @@ export interface SidebarPageDef {
     id: string;
     /** Display label shown in UI (e.g., tooltips) */
     label: string;
+    /** Optional description in mobile navigation. */
+    description?: string;
     /** Iconify icon name */
     icon: string;
     /** Optional validated app image URL. The Iconify icon remains the fallback. */
@@ -3387,8 +3401,6 @@ export {};
 import type { PaneState as MultiPaneState } from '../../composables/core/useMultiPane';
 import type { ChatMessage } from '~/utils/chat/types';
 import type { ORMessage } from '~/core/auth/openrouter-build';
-import type { WorkflowStreamingState } from '~/composables/chat/useWorkflowStreamAccumulator';
-import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
 import type { AccessDecision, AttachmentEntity, DbCreatePayload, DbDeletePayload, DbUpdatePayload, DocumentEntity, FileEntity, KvEntry, MessageCreateEntity, MessageEntity, NotificationAction, NotificationCreatePayload, NotificationEntity, PostCreateEntity, PostEntity, ProjectEntity, PromptEntity, SessionContext, StorageFileDownloadAfterPayload, StorageFileDownloadBeforePayload, StorageFileGcPayload, StorageFileUploadAfterPayload, StorageFileUploadBeforePayload, StorageFileUploadPolicyPayload, StorageFileUrlOptionsPayload, SyncPendingOpPayload, SyncScopePayload, ThreadCreateEntity, ThreadEntity } from '~~/shared/hooks/hook-domain-types';
 import type { FileKind } from '~~/shared/files/file-kind';
 export type { AccessDecision, AttachmentEntity, DbCreatePayload, DbDeletePayload, DbUpdatePayload, DocumentEntity, FileEntity, KvEntry, MessageCreateEntity, MessageEntity, NotificationAction, NotificationCreatePayload, NotificationEntity, Permission, PostCreateEntity, PostEntity, ProjectEntity, PromptEntity, SessionContext, StorageFileDownloadAfterPayload, StorageFileDownloadBeforePayload, StorageFileGcPayload, StorageFileUploadAfterPayload, StorageFileUploadBeforePayload, StorageFileUploadPolicyPayload, StorageFileUrlOptionsPayload, SyncPendingOpPayload, SyncScopePayload, ThreadCreateEntity, ThreadEntity, WorkspaceRole, } from '~~/shared/hooks/hook-domain-types';
@@ -3757,7 +3769,7 @@ export type CoreHookPayloadMap = {
     'workflow.execution:action:state_update': [
         {
             messageId: string;
-            state: WorkflowStreamingState | WorkflowMessageData;
+            state: unknown;
         }
     ];
     'workflow.execution:action:complete': [

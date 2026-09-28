@@ -436,6 +436,7 @@ import {
     shallowRef,
     markRaw,
     nextTick,
+    provide,
     watch,
 } from 'vue';
 import PaneUnknown from '~/components/PaneUnknown.vue';
@@ -513,6 +514,7 @@ const runtimeConfig = useRuntimeConfig();
 const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
 const sideNavExpandedRef = ref<any | null>(null);
 const showDashboardModal = ref(false);
+provide('or3:dashboard-modal-open', showDashboardModal);
 const dashboardModalActivated = ref(false);
 watch(showDashboardModal, (open) => {
     if (open) dashboardModalActivated.value = true;
@@ -1572,7 +1574,12 @@ function updateUrl(force = false) {
     const id = pane.mode === 'doc' ? pane.documentId : pane.threadId;
     const newPath = id ? `${base}/${id}` : base;
     if (window.location.pathname === newPath) return;
-    window.history.replaceState(window.history.state, '', newPath);
+    // The root entry point can become /chat while a dashboard deep link is
+    // mounting. Keep its operation context through that one route rewrite.
+    const params = new URLSearchParams(window.location.search);
+    const dashboardQuery = parseDashboardDeepLink(Object.fromEntries(params))
+        ? window.location.search : '';
+    window.history.replaceState(window.history.state, '', `${newPath}${dashboardQuery}`);
 }
 
 watch(

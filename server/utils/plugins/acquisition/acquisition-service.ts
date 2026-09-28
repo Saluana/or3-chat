@@ -67,6 +67,7 @@ import {
     loadPackageDescriptors,
     packageAuthorityDigest,
     toEffectiveAuthority,
+    toTrustedManifestAuthority,
 } from '../setup/load-descriptors';
 import { computeAuthorityHash } from '~~/shared/plugins/authority/effective-authority';
 import {
@@ -142,6 +143,8 @@ export interface AcquisitionServiceDeps {
     readonly registry: RegistryClient;
     readonly services: PluginPackageServices;
     readonly routeCatalog: PluginPackageRouteCatalog;
+    /** Recheck exact approval under the package lease before promotion or first enablement. */
+    readonly verifySiteApproval?: (release: PluginAcquisitionReleaseIdentity) => Promise<boolean>;
     /** Every workspace on this instance, used for the instance-wide preflight. */
     readonly listWorkspaceIds: () => Promise<readonly string[]>;
     /**
@@ -225,9 +228,10 @@ function restFailure(
     stage: PluginAcquisitionStage,
     code: PluginAcquisitionFailureCode,
     message: string,
-    retryable: boolean
+    retryable: boolean,
+    workspaceBlocks?: PluginAcquisitionFailure['workspaceBlocks']
 ): PluginAcquisitionFailure {
-    return { code, stage, message, retryable };
+    return { code, stage, message, retryable, ...(workspaceBlocks ? { workspaceBlocks } : {}) };
 }
 
 export class PluginAcquisitionService {
@@ -1206,10 +1210,8 @@ export class PluginAcquisitionService {
             ),
             identityPreflight: () => this.#identityPreflight(record.pluginId),
             // The signed profile decides which loader this candidate is offered
-            // to. A trusted-host profile must be a server package with no client
-            // runtime; a portable profile must be an isolated client package with
-            // no server code at all, so server modules can never ride in under a
-            // client profile.
+            // to. Portable clients forbid server code; trusted-host clients need
+            // the qualified host ABI and browser canary.
             loaderPreflight: ({ manifest: candidateManifest }) => {
                 const codes: string[] = [];
                 if (!requirement) codes.push('package-profile-unknown');
@@ -1309,15 +1311,18 @@ export class PluginAcquisitionService {
             { operationId: record.operationId, includeWorkspaceId: record.workspaceId }
         );
         if (preflight.blocking.length > 0) {
-            const detail = preflight.blocking
+            const detail = preflight.blocking.slice(0, 3)
                 .map((entry) => `${entry.workspaceId} (${entry.code})`)
                 .join(', ');
             return await this.#fail(
                 record,
                 'workspace-preflight-blocked',
-                `Update blocked in these workspaces: ${detail}`,
+                `Update blocked in ${preflight.blocking.length} workspace(s): ${detail}`,
                 true,
-                'blocked'
+                'blocked',
+                {},
+                undefined,
+                { total: preflight.blocking.length, items: preflight.blocking.slice(0, 25) }
             );
         }
 
@@ -1444,7 +1449,7 @@ export class PluginAcquisitionService {
             { operationId: record.operationId, includeWorkspaceId: record.workspaceId }
         );
         if (preflight.blocking.length > 0) {
-            const detail = preflight.blocking
+            const detail = preflight.blocking.slice(0, 3)
                 .map((entry) => `${entry.workspaceId} (${entry.code})`)
                 .join(', ');
             // The candidate was health-checked against a different workspace set,
@@ -1453,11 +1458,12 @@ export class PluginAcquisitionService {
             return await this.#fail(
                 record,
                 'workspace-preflight-blocked',
-                `Update blocked in these workspaces: ${detail}`,
+                `Update blocked in ${preflight.blocking.length} workspace(s): ${detail}`,
                 true,
                 'blocked',
                 {},
-                'candidate-recorded'
+                'candidate-recorded',
+                { total: preflight.blocking.length, items: preflight.blocking.slice(0, 25) }
             );
         }
 
@@ -1469,6 +1475,14 @@ export class PluginAcquisitionService {
             pluginId: record.pluginId,
             workspaceId: record.workspaceId,
             expectedCandidateDigest: record.candidateDigest,
+            preflightWorkspaces: async () => this.preflightWorkspaces(
+                record.pluginId,
+                await this.#consentCandidate(record, manifest.requestedGrants),
+                { operationId: record.operationId, includeWorkspaceId: record.workspaceId },
+            ),
+            ...(this.#deps.verifySiteApproval ? {
+                verifySiteApproval: () => this.#deps.verifySiteApproval!(record.release),
+            } : {}),
             storedStateVersion: await this.#deps.services.migration.getStateVersion(
                 record.workspaceId,
                 record.pluginId
@@ -1556,7 +1570,7 @@ export class PluginAcquisitionService {
             // Stale canary or state evidence must not be retried against itself:
             // restaging re-runs the preflight and canary that produced it.
             const restage =
-                result.stage === 'canary-evidence' || result.stage === 'state'
+                result.stage === 'canary-evidence' || result.stage === 'state' || result.stage === 'workspaces'
                     ? ('candidate-recorded' as const)
                     : undefined;
             return await this.#fail(
@@ -1591,15 +1605,20 @@ export class PluginAcquisitionService {
     async #enableFirstInstall(
         record: PluginAcquisitionOperation,
         wasInstalled: boolean
-    ): Promise<{ readonly ok: true } | { readonly ok: false; readonly code: 'internal-error'; readonly message: string }> {
+    ): Promise<{ readonly ok: true } | { readonly ok: false; readonly code: 'internal-error' | 'package-policy-mismatch'; readonly message: string }> {
         if (wasInstalled) return { ok: true };
         try {
-            await setPluginEnabled(
-                this.#deps.services.settings,
-                record.workspaceId,
-                record.pluginId,
-                true
-            );
+            const approved = await this.#deps.services.packages.runPluginOperation(record.pluginId, async () => {
+                if (this.#deps.verifySiteApproval && !await this.#deps.verifySiteApproval(record.release)) return false;
+                await setPluginEnabled(
+                    this.#deps.services.settings,
+                    record.workspaceId,
+                    record.pluginId,
+                    true
+                );
+                return true;
+            });
+            if (!approved) return { ok: false, code: 'package-policy-mismatch', message: 'Site approval changed before workspace enablement. Review the release again.' };
             return { ok: true };
         } catch {
             return {
@@ -1644,13 +1663,14 @@ export class PluginAcquisitionService {
         retryable: boolean,
         status: 'failed' | 'blocked' | 'paused' = 'failed',
         patch: AcquisitionOperationPatch = {},
-        restage?: PluginAcquisitionStage
+        restage?: PluginAcquisitionStage,
+        workspaceBlocks?: PluginAcquisitionFailure['workspaceBlocks']
     ): Promise<StepResult> {
         const operation = await this.#deps.store.update(record.operationId, record.revision, {
             ...patch,
             ...(restage === undefined ? {} : { restage }),
             status,
-            failure: restFailure(record.stage, code, message, retryable),
+            failure: restFailure(record.stage, code, message, retryable, workspaceBlocks),
             completedAt: this.#now(),
         });
         console.warn('[plugin-acquisition] stopped', {
@@ -1731,6 +1751,23 @@ export class PluginAcquisitionService {
             extensionsBaseDir: this.#deps.extensionsRoot ?? EXTENSIONS_BASE_DIR,
             packagePath: packageRoot,
         });
+        if (profile === 'or3-trusted-host-v2') {
+            if (manifest.trust !== 'trusted-host' || manifest.runtime.client?.isolation !== 'host' ||
+                descriptors.policy || descriptors.setup) {
+                return { code: 'package-profile-mismatch', message: 'The trusted-host package shape does not match its signed profile.' };
+            }
+            if (record.release?.authority === undefined) {
+                return { code: 'authority-mismatch', message: 'Trusted-host releases require a complete signed authority.' };
+            }
+            const derivedAuthority = toTrustedManifestAuthority(manifest);
+            const [derivedDigest, signedDigest] = await Promise.all([
+                computeAuthorityHash(derivedAuthority), computeAuthorityHash(record.release.authority),
+            ]);
+            if (derivedDigest !== record.release.authoritySha256 || signedDigest !== derivedDigest) {
+                return { code: 'authority-mismatch', message: 'The staged trusted-host authority differs from the signed release.' };
+            }
+            return null;
+        }
         if (descriptors.problems.length > 0) {
             return {
                 code: 'package-profile-mismatch',
@@ -2048,11 +2085,15 @@ function promotionBlockFailure(stage: string, code: string): {
     retryable: boolean;
 } {
     const message = `Promotion was blocked at ${stage}: ${code}`;
+    if (stage === 'policy') return { code: 'package-policy-mismatch', message, retryable: false };
     if (stage === 'pointer' || stage === 'pointer-write') {
         return { code: 'pointer-conflict', message, retryable: false };
     }
     if (stage === 'canary-evidence') {
         return { code: 'health-check-failed', message, retryable: true };
+    }
+    if (stage === 'workspaces') {
+        return { code: 'workspace-preflight-blocked', message: 'An enabled workspace changed during update review. Repair its setup or permissions, then continue the same operation.', retryable: true };
     }
     return { code: 'promotion-blocked', message, retryable: false };
 }

@@ -12,11 +12,15 @@ submitting it for review.
 
 Dashboard > Marketplace is the user-facing place to find, install and manage plugins from the configured marketplace registry. It is a dashboard app like the Workspace manager: it reuses the existing navigation, theme and components, has no iframe and has no central-site sign-in.
 
-Discover shows 24 matching plugins per page. Use **Next** and **Previous** to browse the rest; a new search starts on page one.
+Discover shows site-approved plugins, 24 matching plugins per page. Use **Next** and **Previous** to browse the rest; a new search starts on page one. An empty list means the site administrator has not approved a release for discovery yet.
 
 Discovery works on any instance. Installing requires an OR3 Cloud profile with a configured registry — a static or local build shows that installation is unsupported instead of hiding the surface.
 
-Admin > Plugins includes a **Browse Marketplace** link to this dashboard. Sign in
+Admin > Plugins has a **Site catalog** for system administrators. Browse the configured registry, inspect a signed exact release, and choose **Approve for this site** before it appears in Dashboard > Marketplace. **Hide from catalog** removes it from discovery and blocks new acquisition or enablement; it does not disable workspaces already using it. Changing the approved version requires a fresh review. A buyer's Library purchase does not replace site approval or workspace permission review.
+
+To restore discovery of an older version that is already installed, use **Review installed version for site catalog** on its Admin > Plugins card. The server verifies that exact signed release again. A damaged selected package can still be disabled for one workspace or through a reviewed workspace rollout; enablement waits until a verified version is selected.
+
+Admin > Plugins also includes a **Browse Marketplace** link to the dashboard. Sign in
 with a regular Chat account: the system admin login is a separate session and
 does not make authenticated dashboard apps visible to a guest.
 If you are signed in to Chat and separately signed in as system admin, Installed
@@ -24,14 +28,32 @@ shows the site management actions allowed by that admin session even if your
 Chat account has no deployment-admin grant.
 
 Installed V2 packages are detected across the instance, even in workspaces where
-they are disabled. Use **Installed** to activate an existing package in another
-workspace; clicking Install again does not create a second copy. Candidate
-preparation also refuses the already-current package without changing its pointer.
+they are disabled. The package bytes and selected version are site-wide; the
+**Enable** action and permission review are workspace-scoped. Use **Installed**
+to activate an existing package in another workspace, then use **Admin > Plugins >
+Review selected permissions** if that workspace has not reviewed the selected release.
+If an update candidate is staged, **Review candidate permissions** reviews it separately.
+The review checks the exact package digest and signed authority before approval.
+Clicking Install again does not create a second copy. After installation, system administrators can choose **Enable workspaces** on the same plugin detail in Dashboard > Marketplace, or **Enable or disable workspaces** in Admin > Plugins. Preview a selected set, all existing workspaces, or new workspaces only. The preview shows the exact release, permission authority, setup blocks, and how many workspaces will change. Applying it records each workspace result in a resumable operation; reloading the page or closing the browser leaves the completed results intact. **Continue** advances remaining work, **Retry unresolved** rechecks blocked/failed workspaces, and **Cancel remaining** keeps already completed work. Use **Show blocked and failed** to find unresolved workspaces across the full rollout without paging through successful results. A future-workspace default is saved separately and remains saved if the existing-workspace batch is cancelled. A workspace needing setup stays disabled until configured.
+
+If plugin setup fails while a workspace is created, creation still succeeds. The admin workspace page records the creation-time warning and links to the exact plugin rollout when one exists. A slow provider write also returns the created workspace after eight seconds with that rollout link; the write may still finish afterward. Check the rollout's current result before retrying; creating another workspace is not a repair step.
+
+If a provider write takes more than eight seconds, the rollout shows that the batch is still applying. Use **Refresh progress** before continuing or cancelling. The server keeps the plugin operation lock until the write settles and then saves its result; a pending response does not mean the write was canceled. Refresh also reports a later request failure and re-enables recovery actions. A saved future default remains visible even if its rollout journal was interrupted before the workspace batch began.
+
+The selected package version is shared by all workspaces. **Updates** shows the working version alongside a proposed release, the number of enabled workspaces affected, changes in requested access, and the previous version available for a safety-checked restore. Deployment permission approval is bound to the enabled-workspace set measured at review; if that set changes, refresh the review. The approval covers every enabled workspace and the reviewing admin's workspace, even when that admin workspace is disabled; it does not enable a disabled workspace. The approval runs in bounded workspace groups and reports partial failures so the same release can be retried. A failed candidate check leaves the working version selected. A blocked promotion lists affected workspace IDs and links to their setup or review context. Approving a different site release pauses any new-workspace default; after the update, review and enable the default again with **Enable workspaces**. Reloading the page can resume a recorded install operation; the guide keeps its exact plugin, version and workspace context.
+
+After enabling or updating, use **Run check** in Installed for the selected workspace. It refreshes server package status and observes the exact package digest in this browser for up to 30 seconds. “Enabled; browser check pending” means no matching activation was observed here; it does not undo installation or say anything about unopened workspaces. **Open** and **Run check** are recovery actions. The check does not run chat workflows or call a paid model. A failed required pane/sidebar contribution is shown as a failure; optional contribution problems are reported separately.
+
+Open the plugin's **View details** page and choose **Restore previous version**. It first checks the retained release against current trust, dependency and setup rules, and checks every currently enabled workspace for permission, dependency and state compatibility. The review names the exact versions and can expand the affected workspace IDs. If the enabled set changes after review, the restore is refused and must be reviewed again. Restoring changes the shared code selection while preserving workspace enablement and plugin data. Runtime readiness still needs a browser check afterward. If the restore is refused, the current version stays selected. A workspace rollout completed before restore remains in its history; restore does not reverse those workspace choices.
+
+Source-configured `extensions.plugins.defaultEnabled` still seeds source plugins in newly created
+workspaces only; it does not change existing workspaces or bypass site policy for a marketplace plugin. Candidate preparation
+also refuses the already-current package without changing its pointer.
 
 For enabled portable packages, **Open** opens the plugin's running dashboard
 surface. **Configure** opens the Marketplace dashboard's Configure page, with a
-back button to Installed; the direct `/plugins/<pluginId>/setup` route remains
-available for deep links. Disabled packages must be enabled first.
+back button to the plugin detail, Installed, or Updates page that opened it; the direct `/plugins/<pluginId>/setup` route remains
+available for deep links. A saved setup link stays bound to its workspace, release and pending install operation. If any of those changed, reopen Configure from Marketplace rather than using the old link. Permission approval and acquisition also check that the active workspace still matches the one displayed during review. Disabled packages must be enabled first.
 The instance also needs `OR3_PLUGIN_MODULE_LOADER_V2_ENABLED=true` and the target
 workspace must be included in `OR3_PLUGIN_MODULE_LOADER_V2_WORKSPACE_IDS` when that
 allowlist is set. A stored or enabled package alone does not establish runtime
@@ -60,11 +82,13 @@ An instance with no origin or no release key still browses the public catalog if
 
 All are authenticated, workspace-scoped and `no-store`; install actions are owner/super-admin only.
 
-- `GET /api/plugins/marketplace/catalog` — browse the configured registry through the local server (search, category, tag, collection, page, pageSize). Returns `{ configured, catalog }`; `configured: false` means this instance has no registry.
+- `GET /api/plugins/marketplace/catalog` — browse the locally approved catalog through the local server (search, category, tag, page, pageSize). Returns `{ configured, catalog }`; `configured: false` means this instance has no registry.
 - `GET /api/plugins/marketplace/{pluginId}` — one published plugin's public detail.
 - `POST /api/plugins/marketplace/preflight` — the install assessment: `{ pluginId, version?, clientEngine? }` (`clientEngine` is the browser engine the page detected, used for profile qualification).
 - `POST /api/admin/plugins/acquisitions` — start the install (resource documented in [Trusted Registry Acquisition](./trusted-acquisition)).
 - `GET /api/plugins/diagnostics` — the redacted support report (owner only).
+
+System-admin routes under `/api/admin/plugins/site-catalog` browse and approve signed releases. Routes under `/api/admin/plugins/rollouts` preview, start, continue, retry, cancel and inspect a bounded workspace operation. These routes require the separate system-admin session. The selected version is shared by all workspaces; enablement and consent remain workspace-specific.
 
 The browser never talks to the registry: the local server is the configured trusted client, so a self-hosted instance does not need a generic URL proxy and the registry never sees a session cookie.
 
@@ -112,9 +136,9 @@ visible status; it never starts another acquisition.
 
 A release that declares a contained client runtime needs a real browser canary. The host issues a single-use ticket bound to the plugin, package digest, workspace, client id and nonce; the admin's browser performs a hidden activation of the candidate's exact bytes in the contained sandbox, re-hashes them and reports the outcome. Until that evidence exists the operation stays pending with `client-canary-pending`, and the UI completes the check and retries the same operation. A server-side check alone never substitutes for it.
 
-Updates shows two things: staged candidates, and newer published releases found by an explicit, bounded catalog check ("Check for updates"). The check resolves each newer release through the same trust pipeline as acquisition, so a quarantined or unresolvable release is reported as blocked instead of advertised. Reviewing an available update starts the ordinary acquisition operation for that exact release — it never promotes directly — which is what surfaces the authority and setup differences. Checking for updates never stages anything by itself.
+Updates shows two things: staged candidates, and a newer site-approved release found by an explicit catalog check ("Check for updates"). A newer public version first needs approval in Admin > Plugins. The check resolves the approved exact release through the same trust pipeline as acquisition, so a quarantined, changed or unresolvable release is reported as blocked instead of advertised. The review shows the current and proposed versions, the number of enabled workspaces affected and the current version that becomes the potential restore target. Reviewing an available update starts the ordinary acquisition operation for that exact release — it never promotes directly — which is what surfaces the authority and setup differences. Checking for updates never stages anything by itself.
 
-Updates are recorded candidates on the same lifecycle, and an update a previous install recorded is resumed rather than re-implemented: when a candidate is owned by an unfinished install operation, Updates continues that operation so the pipeline's preflight, setup readiness and browser canary all still apply. The promotion boundary enforces this for every caller: it refuses a candidate an unfinished install operation owns (answering with the operation id), and it runs the instance-wide workspace preflight for any promotion, whatever created the candidate. The selected code version is shared across enabled workspaces. The check lists new access from the signed authority; unchanged access needs no repeated approval, while expanded access takes one explicit site-administrator approval for every enabled workspace. If a workspace cannot complete setup or state checks, the update stops before promotion, names the workspace and leaves the selected version running. Switch to that workspace and complete its candidate setup; its values are saved under the same pending update, and Continue rechecks every affected workspace. Rollback, pin and uninstall keep their existing package operations. Uninstall disables the plugin in every live workspace before clearing the instance-wide selection; plugin data is kept unless deletion is requested explicitly. If a workspace write fails, the pointer remains selected and any workspaces already disabled stay disabled; retry after fixing the failing store.
+Updates are recorded candidates on the same lifecycle, and an update a previous install recorded is resumed rather than re-implemented: when a candidate is owned by an unfinished install operation, Updates continues that operation so the pipeline's preflight, setup readiness and browser canary all still apply. The promotion boundary enforces this for every caller: it refuses a candidate an unfinished install operation owns (answering with the operation id), and it runs the instance-wide workspace preflight for any promotion, whatever created the candidate. The selected code version is shared across enabled workspaces. The check lists new access from the signed authority; unchanged access needs no repeated approval, while expanded access takes one explicit site-administrator approval for every enabled workspace. If a workspace cannot complete setup or state checks, the update stops before promotion, names the workspace and leaves the selected version running. Switch to that workspace and complete its candidate setup; its values are saved under the same pending update, and Continue rechecks every affected workspace. Rollback reviews the exact current and previous releases and checks consent, setup and state readability in every enabled workspace before changing the shared selection. A changed pointer or enabled-workspace set makes the review stale; refresh and resolve the named blocker. It preserves plugin data and workspace enablement. Pin and uninstall keep their existing package operations. Uninstall disables the plugin in every live workspace before clearing the instance-wide selection; plugin data is kept unless deletion is requested explicitly. If a workspace write fails, the pointer remains selected and any workspaces already disabled stay disabled; retry after fixing the failing store.
 
 A durable operation outlives the page: opening a plugin's detail restores the unfinished operation the server recorded (matching version first, otherwise the newest), so an operator who reloaded or stepped away can continue or cancel it instead of losing it. Watching is not resuming: a paused, blocked or retryable-failed operation is advanced through the owner-authorized retry (which revalidates setup, consent and evidence server-side) before the UI polls again, and a running operation is only watched. Failures that cannot progress show their message instead of a spinning check. A setup pause is reported as `resumable` and rendered as Continue, and completed operations reconcile the running plugin runtime so enabled code starts, disabled code stops and an update replaces the sandbox.
 
@@ -141,6 +165,15 @@ server marks the operation retryable; setup pauses link to the setup page. Use
 Successful acquisition means the package was installed, not that its first action
 has been exercised successfully.
 
+On **Installed**, choose **Run check** for the current workspace. The check
+reconciles the plugin runtime and waits up to 30 seconds for this browser to
+observe the exact selected package digest. It reports the checked workspace,
+time, package readiness, workspace enablement, permission and setup state, and
+browser activation separately. “Not observed” means this browser did not see
+the plugin start in time; it does not claim the plugin failed in every
+workspace. Run check never submits a workflow or paid model request. Optional
+contribution failures are listed without hiding a successful activation.
+
 **Technical details → Copy diagnostic report** copies an explicit allowlist:
 operation ID, plugin ID, version, workspace ID, status, stage, failure code,
 release digests (release, archive, package tree, manifest, authority),
@@ -152,8 +185,12 @@ If clipboard access fails, the displayed report can be copied manually.
 Recovery limits: an update that fails before promotion leaves the previous
 package selected; a failure after promotion shows the actual selected and
 observed identities rather than assuming a rollback happened. Roll back is
-offered only when a previous selection exists, restores code selection only,
-and never clears plugin data or promises that old code can read newer data.
+offered only when a previous selection exists. **Restore previous version**
+first reviews the exact current and previous version and all enabled
+workspaces, then rechecks consent, setup and state compatibility before the
+shared package selection changes. It preserves plugin data and workspace
+enablement; an incompatible workspace blocks the restore instead of silently
+switching it to old code.
 Cancelling is impossible after promotion has committed.
 
 Server acquisition logs include the same operation ID and structured failure code.
@@ -186,7 +223,7 @@ problem because account access could not be checked; 401 and 403 responses
 instead explain session or workspace access. Failed catalog requests do not
 show the empty-results message or raw API URLs.
 
-The request link is a supported deep link: `/?dashboard=marketplace&plugin=<pluginId>`. Opening it opens the dashboard's Marketplace app and selects that plugin, so the administrator lands on the request instead of the catalog.
+The request link is a supported deep link: `/chat?dashboard=marketplace&plugin=<pluginId>`. Opening it opens the dashboard's Marketplace app and selects that plugin, so the administrator lands on the request instead of the catalog. Internal Installed and Updates links also bind the workspace; a link opened in another workspace pauses its review until the administrator switches back. The admin setup action adds `setup=1` and opens Configure for that plugin after the workspace check.
 
 ## Diagnostics
 

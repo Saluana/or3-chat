@@ -6,7 +6,7 @@
     "moduleManifest": "planning/complete/plugin-runtime-v2/compatibility-ledger.modules.json",
     "moduleManifestSha256": "f732887f9daed262f7fbbaccbe526cf9c4723ae18c3c82340a9ad9f1a10938f5",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
-    "nuxtImportsDeclarationSha256": "ea693425c0240ae3214015e734ac89d1872dbdb1caf6975d58307a9419e8324f",
+    "nuxtImportsDeclarationSha256": "52bb256dc0cee7d0606c82cf9885260db484d5badbd032ecf39ebbeb210f70c0",
     "behaviorProfiles": "planning/complete/plugin-runtime-v2/compatibility-profiles.json",
     "behaviorProfilesSha256": "6e35c5b9392b785e5bb541580865f80f0d5f0888851c2ff68c5a3ecd75097cc1"
   },
@@ -1018,7 +1018,7 @@
     },
     {
       "source": "app/composables/core/usePaneApps.ts",
-      "apiSha256": "8d4595342047dd42761c2c5c000b86cba0d2270ad2b98e4e6931504266f848f6",
+      "apiSha256": "0ae9ddf67a98b848ca7413dacc345505a502714d12bc5076bed3e5b0baa2a5e8",
       "runtime": "client",
       "publicPaths": [
         "~/composables/core/usePaneApps"
@@ -1041,7 +1041,7 @@
               "source": "app/composables/core/usePaneApps.ts",
               "line": 23,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface PaneAppDef {\n    /** Unique identifier for the pane app (used as the pane mode when opened). */\n    id: string;\n\n    /** Display label shown in UI (e.g., sidebar). */\n    label: string;\n\n    /** Optional Iconify icon name. */\n    icon?: string;\n\n    /** Optional validated app image URL. */\n    image?: string;\n\n    /** Vue component or async component factory. */\n    component: Component | (() => Promise<Component>);\n\n    /**\n     * Optional override for the postType stored in the posts table.\n     * If not provided, defaults to the app id.\n     */\n    postType?: string;\n\n    /**\n     * Optional callback to create an initial record when a new pane is opened.\n     * Return { id } to assign as the pane's documentId, or null for no record.\n     */\n    createInitialRecord?: (ctx: {\n        app: PaneAppDef;\n    }) => Promise<{ id: string } | null>;\n\n    /**\n     * Optional ordering (lower = earlier in sorted lists). Defaults to 200.\n     */\n    order?: number;\n    /** Optional owning plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this pane app. */\n    access?: PluginGatePolicy;\n    /** Replace this app's record in the current workspace tab. */\n    replaceRecordInCurrentTab?: boolean;\n}"
+              "text": "export interface PaneAppDef {\n    /** Unique identifier for the pane app (used as the pane mode when opened). */\n    id: string;\n\n    /** Display label shown in UI (e.g., sidebar). */\n    label: string;\n\n    /** Optional Iconify icon name. */\n    icon?: string;\n\n    /** Optional validated app image URL. */\n    image?: string;\n\n    /** Vue component or async component factory. */\n    component: Component | (() => Promise<Component>);\n\n    /**\n     * Optional override for the postType stored in the posts table.\n     * If not provided, defaults to the app id.\n     */\n    postType?: string;\n\n    /**\n     * Optional callback to create an initial record when a new pane is opened.\n     * Return { id } to assign as the pane's documentId, or null for no record.\n     */\n    createInitialRecord?: (ctx: {\n        app: PaneAppDef;\n    }) => Promise<{ id: string } | null>;\n\n    /** Optional new-tab menu contribution. A null result cancels creation. */\n    newTab?: {\n        label: string;\n        icon?: string;\n        isAvailable?: () => boolean;\n        createRecordId: () => Promise<string | null>;\n    };\n\n    /**\n     * Optional ordering (lower = earlier in sorted lists). Defaults to 200.\n     */\n    order?: number;\n    /** Optional owning plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this pane app. */\n    access?: PluginGatePolicy;\n    /** Replace this app's record in the current workspace tab. */\n    replaceRecordInCurrentTab?: boolean;\n}"
             }
           ]
         },
@@ -1053,7 +1053,7 @@
           "declarations": [
             {
               "source": "app/composables/core/usePaneApps.ts",
-              "line": 66,
+              "line": 74,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type RegisteredPaneApp = PaneAppDef;"
             }
@@ -1070,7 +1070,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/core/usePaneApps.ts",
-                "line": 207,
+                "line": 221,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function usePaneApps();"
               }
@@ -1079,7 +1079,7 @@
           "declarations": [
             {
               "source": "app/composables/core/usePaneApps.ts",
-              "line": 207,
+              "line": 221,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function usePaneApps();"
             }
@@ -2797,7 +2797,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "07f2f2ddf37365bdc623d6c178377a152264542eb029fe012b4b24d00efa3354",
+      "apiSha256": "a753c34c629a61babf4f01f03b1dbb0c3324ba181cccc94923ce0ab3c70d1baa",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -4642,7 +4642,7 @@
               "source": "app/composables/core/usePaneApps.ts",
               "line": 23,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface PaneAppDef {\n    /** Unique identifier for the pane app (used as the pane mode when opened). */\n    id: string;\n\n    /** Display label shown in UI (e.g., sidebar). */\n    label: string;\n\n    /** Optional Iconify icon name. */\n    icon?: string;\n\n    /** Optional validated app image URL. */\n    image?: string;\n\n    /** Vue component or async component factory. */\n    component: Component | (() => Promise<Component>);\n\n    /**\n     * Optional override for the postType stored in the posts table.\n     * If not provided, defaults to the app id.\n     */\n    postType?: string;\n\n    /**\n     * Optional callback to create an initial record when a new pane is opened.\n     * Return { id } to assign as the pane's documentId, or null for no record.\n     */\n    createInitialRecord?: (ctx: {\n        app: PaneAppDef;\n    }) => Promise<{ id: string } | null>;\n\n    /**\n     * Optional ordering (lower = earlier in sorted lists). Defaults to 200.\n     */\n    order?: number;\n    /** Optional owning plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this pane app. */\n    access?: PluginGatePolicy;\n    /** Replace this app's record in the current workspace tab. */\n    replaceRecordInCurrentTab?: boolean;\n}"
+              "text": "export interface PaneAppDef {\n    /** Unique identifier for the pane app (used as the pane mode when opened). */\n    id: string;\n\n    /** Display label shown in UI (e.g., sidebar). */\n    label: string;\n\n    /** Optional Iconify icon name. */\n    icon?: string;\n\n    /** Optional validated app image URL. */\n    image?: string;\n\n    /** Vue component or async component factory. */\n    component: Component | (() => Promise<Component>);\n\n    /**\n     * Optional override for the postType stored in the posts table.\n     * If not provided, defaults to the app id.\n     */\n    postType?: string;\n\n    /**\n     * Optional callback to create an initial record when a new pane is opened.\n     * Return { id } to assign as the pane's documentId, or null for no record.\n     */\n    createInitialRecord?: (ctx: {\n        app: PaneAppDef;\n    }) => Promise<{ id: string } | null>;\n\n    /** Optional new-tab menu contribution. A null result cancels creation. */\n    newTab?: {\n        label: string;\n        icon?: string;\n        isAvailable?: () => boolean;\n        createRecordId: () => Promise<string | null>;\n    };\n\n    /**\n     * Optional ordering (lower = earlier in sorted lists). Defaults to 200.\n     */\n    order?: number;\n    /** Optional owning plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this pane app. */\n    access?: PluginGatePolicy;\n    /** Replace this app's record in the current workspace tab. */\n    replaceRecordInCurrentTab?: boolean;\n}"
             }
           ]
         },
@@ -5141,7 +5141,7 @@
           "declarations": [
             {
               "source": "app/composables/core/usePaneApps.ts",
-              "line": 66,
+              "line": 74,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type RegisteredPaneApp = PaneAppDef;"
             }
@@ -6380,7 +6380,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAi.ts",
-                "line": 194,
+                "line": 195,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
               }
@@ -6389,7 +6389,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAi.ts",
-              "line": 194,
+              "line": 195,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
             }
@@ -6940,7 +6940,7 @@
               "resolvedReturnType": "UseMultiPaneApi",
               "declaration": {
                 "source": "app/composables/core/useMultiPane.ts",
-                "line": 264,
+                "line": 265,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useMultiPane(\n    options: UseMultiPaneOptions = {}\n): UseMultiPaneApi;"
               }
@@ -6949,7 +6949,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 264,
+              "line": 265,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useMultiPane(\n    options: UseMultiPaneOptions = {}\n): UseMultiPaneApi;"
             }
@@ -6965,7 +6965,7 @@
               "source": "app/composables/core/useMultiPane.ts",
               "line": 70,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface UseMultiPaneApi {\n    panes: Ref<PaneState[]>;\n    activePaneIndex: Ref<number>;\n    activePaneId: ComputedRef<string | null>;\n    canAddPane: ComputedRef<boolean>;\n    newWindowTooltip: ComputedRef<string>;\n    addPane: () => string | null;\n    closePane: (index: number) => Promise<void> | void;\n    setActive: (index: number) => void;\n    focusPrev: (current: number) => void;\n    focusNext: (current: number) => void;\n    setPaneThread: (index: number, threadId: string) => Promise<void>;\n    loadMessagesFor: (id: string) => Promise<MultiPaneMessage[]>;\n    ensureAtLeastOne: () => void;\n    newPaneForApp: (\n        appId: string,\n        opts?: { initialRecordId?: string }\n    ) => Promise<void>;\n    setPaneApp: (\n        index: number,\n        appId: string,\n        opts?: { recordId?: string }\n    ) => Promise<void>;\n    updatePane: (index: number, updates: Partial<PaneState>) => void;\n    getPaneIndexById: (paneId: string) => number;\n    getPaneById: (paneId: string) => PaneState | undefined;\n    getPaneWidth: (index: number) => string;\n    handleResize: (\n        paneIndex: number,\n        deltaX: number,\n        persist?: boolean\n    ) => void;\n    persistPaneWidths: () => void;\n    recalculateWidthsForContainer: (newContainerWidth: number) => void;\n    paneWidths: Ref<number[]>;\n}"
+              "text": "export interface UseMultiPaneApi {\n    panes: Ref<PaneState[]>;\n    activePaneIndex: Ref<number>;\n    activePaneId: ComputedRef<string | null>;\n    canAddPane: ComputedRef<boolean>;\n    newWindowTooltip: ComputedRef<string>;\n    addPane: () => string | null;\n    closePane: (index: number) => Promise<void> | void;\n    swapAdjacentPanes: (leftIndex: number) => void;\n    setActive: (index: number) => void;\n    focusPrev: (current: number) => void;\n    focusNext: (current: number) => void;\n    setPaneThread: (index: number, threadId: string) => Promise<void>;\n    loadMessagesFor: (id: string) => Promise<MultiPaneMessage[]>;\n    ensureAtLeastOne: () => void;\n    newPaneForApp: (\n        appId: string,\n        opts?: { initialRecordId?: string }\n    ) => Promise<void>;\n    setPaneApp: (\n        index: number,\n        appId: string,\n        opts?: { recordId?: string }\n    ) => Promise<void>;\n    updatePane: (index: number, updates: Partial<PaneState>) => void;\n    getPaneIndexById: (paneId: string) => number;\n    getPaneById: (paneId: string) => PaneState | undefined;\n    getPaneWidth: (index: number) => string;\n    handleResize: (\n        paneIndex: number,\n        deltaX: number,\n        persist?: boolean\n    ) => void;\n    persistPaneWidths: () => void;\n    recalculateWidthsForContainer: (newContainerWidth: number) => void;\n    paneWidths: Ref<number[]>;\n}"
             }
           ]
         },
@@ -7020,7 +7020,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/core/usePaneApps.ts",
-                "line": 207,
+                "line": 221,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function usePaneApps();"
               }
@@ -7029,7 +7029,7 @@
           "declarations": [
             {
               "source": "app/composables/core/usePaneApps.ts",
-              "line": 207,
+              "line": 221,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function usePaneApps();"
             }
@@ -7513,7 +7513,7 @@
     },
     {
       "source": "app/composables/plugins/trusted-host-context.ts",
-      "apiSha256": "1b3c58eb4f16015f33e5b75240cfaba41fa45feb3b88999fa0219b776aecdecf",
+      "apiSha256": "5faea257d3ba194bca4407097231dd4131d19922d730942289b91be18efe5d51",
       "runtime": "client",
       "publicPaths": [
         "~/composables/plugins/trusted-host-context"
@@ -7535,7 +7535,7 @@
               "resolvedReturnType": "TrustedHostContext",
               "declaration": {
                 "source": "app/composables/plugins/trusted-host-context.ts",
-                "line": 419,
+                "line": 430,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createTrustedHostContext(\n    input: CreateTrustedHostContextInput\n): TrustedHostContext;"
               }
@@ -7544,7 +7544,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/trusted-host-context.ts",
-              "line": 419,
+              "line": 430,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createTrustedHostContext(\n    input: CreateTrustedHostContextInput\n): TrustedHostContext;"
             }
@@ -7558,9 +7558,9 @@
           "declarations": [
             {
               "source": "app/composables/plugins/trusted-host-context.ts",
-              "line": 138,
+              "line": 139,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface CreateTrustedHostContextInput {\n    readonly pluginId: string;\n    readonly version: string;\n    readonly workspaceId?: string;\n    readonly generation?: number;\n    readonly grants?: readonly PluginGrant[];\n    readonly features?: readonly string[];\n    readonly mediation?: Pick<\n        TrustedMediationOptions,\n        'fetch' | 'approvedDestinations' | 'secrets' | 'files' | 'posts'\n    >;\n}"
+              "text": "export interface CreateTrustedHostContextInput {\n    readonly pluginId: string;\n    readonly version: string;\n    readonly workspaceId?: string;\n    readonly generation?: number;\n    readonly grants?: readonly PluginGrant[];\n    readonly features?: readonly string[];\n    readonly subscribeWorkspaceChanges?: (\n        listener: (change: PluginWorkspaceChange) => void | Promise<void>\n    ) => PluginRegistrationHandle;\n    readonly subscribeHook?: (\n        name: string,\n        kind: 'action' | 'filter',\n        callback: (...args: unknown[]) => unknown,\n        options?: { readonly priority?: number; readonly signal?: AbortSignal }\n    ) => () => void;\n    readonly mediation?: Pick<\n        TrustedMediationOptions,\n        'fetch' | 'approvedDestinations' | 'authorizeDestination' | 'secrets' | 'files' | 'posts'\n    >;\n}"
             }
           ]
         },
@@ -7572,7 +7572,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/trusted-host-context.ts",
-              "line": 53,
+              "line": 54,
               "syntaxKind": "VariableDeclaration",
               "text": "TRUSTED_HOST_GRANTS = [\n    'ui.dashboard.register',\n    'ui.sidebar.register',\n    'ui.pane.register',\n    'ui.card.register',\n    'ui.action.register',\n    'ui.command-palette.register',\n    'ui.toast',\n    'ui.confirm',\n    'ui.progress',\n    'panes.open',\n    'commands.register',\n    'commands.run.public',\n    'chat.create',\n    'chat.read',\n    'chat.message.write',\n    'chat.message.renderer',\n    'chat.editor.extension',\n    'workspace.read',\n    'workspace.switch',\n    'workspace.connections.read',\n    'workspace.connections.manage',\n    'events.register',\n    'ai.models',\n    'ai.complete',\n    'secrets.read',\n    'secrets.write',\n    'secrets.use',\n    'files.pick',\n    'files.read',\n    'files.write',\n    'network.stream',\n    'activity.register',\n    'documents.read',\n    'documents.write',\n    'tools.register.client',\n    'tools.register.server',\n    'tools.model.register',\n    'posts.read',\n    'posts.write',\n    'hooks.register',\n    'network.http',\n    'storage.read',\n    'storage.write',\n    'settings.read',\n    'settings.write',\n] as const satisfies readonly PluginGrant[]"
             }
@@ -7586,7 +7586,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/trusted-host-context.ts",
-              "line": 151,
+              "line": 161,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface TrustedHostContext {\n    readonly context: PluginContext;\n    /** Client tools. The SDK context has no tools namespace; this is that surface. */\n    readonly tools: TrustedPluginToolsClient;\n    readonly editor: TrustedPluginEditorClient;\n    readonly posts: ReturnType<typeof createTrustedMediation>['posts'];\n    readonly renderers: {\n        register(definition: MessageRendererDefinition): PluginRegistrationHandle;\n    };\n    /**\n     * V1 `{ id, register(api) }` view. Tactics-style and bundled V1 modules\n     * register through this object; it is the same runtime as `context`.\n     */\n    readonly workspaceApi: Or3WorkspacePluginApi;\n    /** Live hook listeners owned by this context. Host leak diagnostic, not a plugin API. */\n    readonly liveListenerCount: number;\n    dispose(reason?: unknown): Promise<LegacyCleanupReport>;\n}"
             }
@@ -7600,7 +7600,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/trusted-host-context.ts",
-              "line": 132,
+              "line": 133,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface TrustedPluginEditorClient {\n    register(input: TrustedEditorExtensionInput): PluginRegistrationHandle;\n    applyExtensions(existing: readonly object[]): object[];\n    handleBeforeSend(text: string): Promise<boolean>;\n}"
             }
@@ -7614,7 +7614,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/trusted-host-context.ts",
-              "line": 124,
+              "line": 125,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface TrustedPluginToolsClient {\n    register(\n        definition: ExtendedToolDefinition,\n        handler: ToolHandler\n    ): PluginRegistrationHandle;\n    registerModel(input: TrustedModelContribution): PluginRegistrationHandle;\n}"
             }
@@ -9128,7 +9128,7 @@
     },
     {
       "source": "app/composables/sidebar/useSidebarPages.ts",
-      "apiSha256": "304774659ff349dc9647632264f1ca69726598ec57b62e15353422c462d8dbbc",
+      "apiSha256": "2d21fd3ecaccfb84960798b09caaf3e8fd88b36bf5c955b4066c8de835f86516",
       "runtime": "client",
       "publicPaths": [
         "~/composables/sidebar",
@@ -9150,7 +9150,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarPages.ts",
-              "line": 143,
+              "line": 145,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type RegisteredSidebarPage = SidebarPageDef;"
             }
@@ -9164,7 +9164,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarPages.ts",
-              "line": 115,
+              "line": 117,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarActivateContext {\n    /** The page being activated/deactivated */\n    page: SidebarPageDef;\n    /** The previously active page, or null if this is the first activation */\n    previousPage: SidebarPageDef | null;\n    /** Whether the sidebar is currently collapsed */\n    isCollapsed: boolean;\n    /** API for managing panes in the multi-pane system */\n    multiPane: UseMultiPaneApi;\n    /** API for pane plugin operations */\n    panePluginApi: PanePluginApi;\n}"
             }
@@ -9178,7 +9178,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarPages.ts",
-              "line": 93,
+              "line": 95,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarPageContext {\n    /** The page definition for this context */\n    page: SidebarPageDef;\n    /** Function to expose APIs to other parts of the application */\n    expose: (api: Record<string, unknown>) => void;\n}"
             }
@@ -9194,7 +9194,7 @@
               "source": "app/composables/sidebar/useSidebarPages.ts",
               "line": 47,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface SidebarPageDef {\n    /** Unique identifier for the sidebar page */\n    id: string;\n    /** Display label shown in UI (e.g., tooltips) */\n    label: string;\n    /** Iconify icon name */\n    icon: string;\n    /** Optional validated app image URL. The Iconify icon remains the fallback. */\n    image?: string;\n    /** Optional ordering (lower = earlier in sorted lists). Defaults to 200 */\n    order?: number;\n    /** Vue component or async component factory */\n    component: Component | (() => Promise<Component>);\n    /** Opt-in caching for the component */\n    keepAlive?: boolean;\n    /** Whether this page uses the default header. Defaults to true for home page */\n    usesDefaultHeader?: boolean;\n    /** Optional context provider for the page */\n    provideContext?: (ctx: SidebarPageContext) => void;\n    /** Optional activation guard - return false to prevent activation */\n    canActivate?: (ctx: SidebarActivateContext) => boolean | Promise<boolean>;\n    /** Optional activation hook called when page becomes active */\n    onActivate?: (ctx: SidebarActivateContext) => void | Promise<void>;\n    /** Optional deactivation hook called when page becomes inactive */\n    onDeactivate?: (ctx: SidebarActivateContext) => void | Promise<void>;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this page. */\n    access?: PluginGatePolicy;\n}"
+              "text": "export interface SidebarPageDef {\n    /** Unique identifier for the sidebar page */\n    id: string;\n    /** Display label shown in UI (e.g., tooltips) */\n    label: string;\n    /** Optional description in mobile navigation. */\n    description?: string;\n    /** Iconify icon name */\n    icon: string;\n    /** Optional validated app image URL. The Iconify icon remains the fallback. */\n    image?: string;\n    /** Optional ordering (lower = earlier in sorted lists). Defaults to 200 */\n    order?: number;\n    /** Vue component or async component factory */\n    component: Component | (() => Promise<Component>);\n    /** Opt-in caching for the component */\n    keepAlive?: boolean;\n    /** Whether this page uses the default header. Defaults to true for home page */\n    usesDefaultHeader?: boolean;\n    /** Optional context provider for the page */\n    provideContext?: (ctx: SidebarPageContext) => void;\n    /** Optional activation guard - return false to prevent activation */\n    canActivate?: (ctx: SidebarActivateContext) => boolean | Promise<boolean>;\n    /** Optional activation hook called when page becomes active */\n    onActivate?: (ctx: SidebarActivateContext) => void | Promise<void>;\n    /** Optional deactivation hook called when page becomes inactive */\n    onDeactivate?: (ctx: SidebarActivateContext) => void | Promise<void>;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this page. */\n    access?: PluginGatePolicy;\n}"
             }
           ]
         },
@@ -9209,7 +9209,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarPages.ts",
-                "line": 308,
+                "line": 311,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarPages();"
               }
@@ -9218,7 +9218,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarPages.ts",
-              "line": 308,
+              "line": 311,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarPages();"
             }
@@ -9826,7 +9826,7 @@
     },
     {
       "source": "app/core/hooks/hook-types.ts",
-      "apiSha256": "468c441b2768d9c4687a2642db27e3afc613f5c5a4a815ddee7feaeebfed6349",
+      "apiSha256": "d4a2b2d24af71e09337423b7b073838401ba200849dda7da7cdd948da50322bf",
       "runtime": "client",
       "publicPaths": [
         "~/core/hooks/hook-types"
@@ -9859,7 +9859,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 448,
+              "line": 446,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ActionHookName =\n    | CoreActionHookName\n    | DbActionHookName\n    | ExtensionActionHookName\n    | (string & {});"
             }
@@ -9873,7 +9873,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 205,
+              "line": 203,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiRetryAfterPayload {\n    threadId?: string;\n    originalUserId: string;\n    originalAssistantId?: string;\n    newUserId?: string;\n    newAssistantId?: string;\n}"
             }
@@ -9887,7 +9887,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 198,
+              "line": 196,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiRetryBeforePayload {\n    threadId?: string;\n    originalUserId: string;\n    originalAssistantId?: string;\n    triggeredBy: 'user' | 'assistant';\n}"
             }
@@ -9901,7 +9901,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 148,
+              "line": 146,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiSendAfterPayload {\n    threadId?: string;\n    request?: { modelId?: string; userId?: string };\n    response?: { assistantId?: string; length?: number };\n    timings?: AiSendAfterPayloadTimings;\n    aborted?: boolean;\n}"
             }
@@ -9915,7 +9915,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 139,
+              "line": 137,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiSendAfterPayloadTimings {\n    startedAt: number;\n    endedAt: number;\n    durationMs: number;\n}"
             }
@@ -9929,7 +9929,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 130,
+              "line": 128,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiSendBeforePayload {\n    threadId?: string;\n    modelId: string;\n    user: { id: string; length: number };\n    assistant: { id: string; streamId: string };\n    messagesCount?: number;\n}"
             }
@@ -9943,7 +9943,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 175,
+              "line": 173,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiStreamCompleteContext {\n    threadId?: string;\n    assistantId: string;\n    streamId: string;\n    totalLength: number;\n    reasoningLength?: number;\n    fileHashes?: string | null;\n}"
             }
@@ -9957,7 +9957,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 195,
+              "line": 193,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AiStreamCompletePayload = AiStreamCompleteContext;"
             }
@@ -9971,7 +9971,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 157,
+              "line": 155,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiStreamDeltaContext {\n    threadId?: string;\n    assistantId: string;\n    streamId: string;\n    deltaLength: number;\n    totalLength: number;\n    chunkIndex: number;\n}"
             }
@@ -9985,7 +9985,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 193,
+              "line": 191,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AiStreamDeltaPayload = AiStreamDeltaContext;"
             }
@@ -9999,7 +9999,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 185,
+              "line": 183,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiStreamErrorContext {\n    threadId?: string;\n    streamId?: string;\n    error?: unknown;\n    aborted?: boolean;\n}"
             }
@@ -10013,7 +10013,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 196,
+              "line": 194,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AiStreamErrorPayload = AiStreamErrorContext;"
             }
@@ -10027,7 +10027,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 167,
+              "line": 165,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiStreamReasoningContext {\n    threadId?: string;\n    assistantId: string;\n    streamId: string;\n    reasoningLength: number;\n}"
             }
@@ -10041,7 +10041,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 194,
+              "line": 192,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AiStreamReasoningPayload = AiStreamReasoningContext;"
             }
@@ -10055,7 +10055,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 312,
+              "line": 310,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AppInitPayload {\n    nuxtApp: unknown; // kept opaque to avoid heavy imports\n}"
             }
@@ -10083,7 +10083,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 358,
+              "line": 356,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface BranchContextAfterPayload {\n    threadId: string;\n    mode: BranchMode;\n    ancestorCount: number;\n    localCount: number;\n    finalCount: number;\n}"
             }
@@ -10097,7 +10097,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 351,
+              "line": 349,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface BranchForkBeforePayload {\n    source: ThreadEntity;\n    anchor: MessageEntity;\n    mode: BranchMode;\n    options?: { titleOverride?: string };\n}"
             }
@@ -10111,7 +10111,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 338,
+              "line": 336,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface BranchForkOptions {\n    sourceThreadId: string;\n    anchorMessageId: string;\n    mode?: BranchMode;\n    titleOverride?: string;\n}"
             }
@@ -10125,7 +10125,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 336,
+              "line": 334,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type BranchMode = 'reference' | 'copy';"
             }
@@ -10139,7 +10139,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 871,
+              "line": 869,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type CallbackMismatch<Expected, Got> =\n    `Callback signature mismatch. Expected ${TypeName<Expected>}, got ${TypeName<Got>}`;"
             }
@@ -10153,7 +10153,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 440,
+              "line": 438,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type CoreActionHookName = Extract<\n    keyof CoreHookPayloadMap,\n    `${string}:action${string}`\n>;"
             }
@@ -10167,7 +10167,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 460,
+              "line": 458,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type CoreFilterHookName = Extract<\n    keyof CoreHookPayloadMap,\n    `${string}:filter${string}`\n>;"
             }
@@ -10181,9 +10181,9 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 483,
+              "line": 481,
               "syntaxKind": "TypeAliasDeclaration",
-              "text": "export type CoreHookPayloadMap = {\n    // AI/Chat Actions\n    'ai.chat.send:action:before': [AiSendBeforePayload];\n    'ai.chat.send:action:after': [AiSendAfterPayload];\n    'ai.chat.stream:action:delta': [string, AiStreamDeltaPayload];\n    'ai.chat.stream:action:reasoning': [string, AiStreamReasoningPayload];\n    'ai.chat.stream:action:complete': [AiStreamCompletePayload];\n    'ai.chat.stream:action:error': [AiStreamErrorPayload];\n    'ai.chat.retry:action:before': [AiRetryBeforePayload];\n    'ai.chat.retry:action:after': [AiRetryAfterPayload];\n    'ai.document.edit:filter:request': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:before': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:after': [DocumentAiEditResultPayload];\n    'ai.document.edit:action:error': [DocumentAiEditResultPayload];\n\n    // Pane Actions (now use named payloads)\n    'ui.pane.active:action': [UiPaneActivePayload];\n    'ui.pane.blur:action': [UiPaneBlurPayload];\n    'ui.pane.switch:action': [UiPaneSwitchPayload];\n    'ui.pane.open:action:after': [UiPaneActivePayload];\n    'ui.pane.close:action:before': [UiPaneActivePayload];\n    'ui.pane.close:action:after': [UiPaneActivePayload];\n    'ui.pane.thread:action:changed': [UiPaneThreadChangedPayload];\n    'ui.pane.doc:action:changed': [UiPaneDocChangedPayload];\n    'ui.pane.doc:action:saved': [UiPaneDocChangedPayload];\n    'ui.pane.msg:action:sent': [UiPaneMsgSentPayload];\n    'ui.pane.msg:action:received': [UiPaneMsgReceivedPayload];\n\n    // Sidebar Actions\n    'ui.sidebar.select:action:before': [UiSidebarSelectPayload];\n    'ui.sidebar.select:action:after': [UiSidebarSelectPayload];\n    'ui.chat.new:action:after': [UiChatNewPayload];\n\n    // App Actions\n    'app.init:action:after': [AppInitPayload];\n\n    // Chat Filters\n    'ui.chat.message:filter:outgoing': [string];\n    'ui.chat.message:filter:incoming': [string, string | undefined];\n    'ai.chat.model:filter:select': [string];\n    'ai.chat.messages:filter:input': [ChatMessage[]];\n\n    // Pane Filters\n    'ui.pane.thread:filter:select': [string, PaneState, string];\n    'ui.pane.doc:filter:select': [string, PaneState, string];\n\n    // Files Filters\n    'files.attach:filter:input': [FilesAttachInputPayload | false];\n\n    // Small, well-known DB-specialized hooks kept explicit\n    'db.messages.files.validate:filter:hashes': [string[]];\n    'db.files.refchange:action:after': [\n        { before: FileEntity; after: FileEntity; delta: number }\n    ];\n    'db.threads.getSystemPrompt:filter:output': [string | null];\n\n    // Editor Lifecycle (Examples/Plugins)\n    'editor.created:action:after': [{ editor: unknown }];\n    'editor.updated:action:after': [{ editor: unknown }];\n    'editor:request-extensions': [void];\n\n    // UI/Chat Extensions\n    'ui.chat.editor:filter:extensions': [unknown[]];\n    'ui.chat.editor:action:before_send': [Record<string, unknown>]; // editor JSON\n    'ai.chat.messages:filter:before_send': [\n        { messages: OpenRouterMessage[] } | { messages: OpenRouterMessage[] }[]\n    ];\n\n    // Branching lifecycle\n    'branch.fork:filter:options': [BranchForkOptions];\n    'branch.fork:action:before': [BranchForkBeforePayload];\n    'branch.fork:action:after': [ThreadEntity];\n    'branch.retry:filter:options': [RetryBranchParams];\n    'branch.retry:action:before': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.retry:action:after': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            newThreadId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.context:filter:messages': [\n        MessageEntity[],\n        string /* threadId */,\n        BranchMode\n    ];\n    'branch.context:action:after': [BranchContextAfterPayload];\n\n    // Documents helpers\n    'db.documents.title:filter': [\n        string,\n        {\n            phase: 'create' | 'update';\n            id: string;\n            rawTitle?: string | null;\n            existing?: DocumentEntity;\n        }\n    ];\n\n    // Workflow Actions\n    'workflow.execution:action:state_update': [\n        { messageId: string; state: WorkflowStreamingState | WorkflowMessageData }\n    ];\n    'workflow.execution:action:complete': [\n        { messageId: string; workflowId: string; finalOutput?: string }\n    ];\n\n    // Auth hooks\n    'auth.access:filter:decision': [\n        AccessDecision,\n        { session: SessionContext | null }\n    ];\n    'auth.user:action:created': [{ userId: string; provider: string }];\n    'auth.workspace:action:created': [{ workspaceId: string; userId: string }];\n\n    // Storage hooks\n    'storage.files.upload:action:before': [StorageFileUploadBeforePayload];\n    'storage.files.upload:action:after': [StorageFileUploadAfterPayload];\n    'storage.files.download:action:before': [StorageFileDownloadBeforePayload];\n    'storage.files.download:action:after': [StorageFileDownloadAfterPayload];\n    'storage.files.url:filter:options': [StorageFileUrlOptionsPayload];\n    'storage.files.upload:filter:policy': [StorageFileUploadPolicyPayload | false];\n    'storage.files.gc:action:run': [StorageFileGcPayload];\n    'storage:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Sync hooks\n    'sync.op:action:captured': [{ op: SyncPendingOpPayload }];\n    'sync.push:action:before': [{ scope: SyncScopePayload; count: number }];\n    'sync.push:action:after': [\n        { scope: SyncScopePayload; successCount: number; failCount: number }\n    ];\n    'sync.bootstrap:action:start': [{ scope: SyncScopePayload }];\n    'sync.bootstrap:action:progress': [\n        {\n            scope: SyncScopePayload;\n            cursor: number;\n            pulledCount: number;\n            hasMore: boolean;\n        }\n    ];\n    'sync.bootstrap:action:complete': [\n        { scope: SyncScopePayload; cursor: number; totalPulled: number; elapsedMs?: number }\n    ];\n    'sync.pull:action:received': [\n        { scope: SyncScopePayload; changeCount: number }\n    ];\n    'sync.pull:action:applied': [\n        {\n            scope: SyncScopePayload;\n            applied: number;\n            skipped: number;\n            conflicts: number;\n        }\n    ];\n    'sync.pull:action:error': [{ scope: SyncScopePayload; error: string }];\n    'sync.pull:action:after': [\n        { scope: SyncScopePayload; count: number; cursor: number }\n    ];\n    'sync.subscription:action:statusChange': [\n        {\n            scope: SyncScopePayload;\n            previousStatus: string;\n            status: string;\n        }\n    ];\n    'sync.conflict:action:detected': [\n        {\n            tableName: string;\n            pk: string;\n            local: unknown;\n            remote: unknown;\n            winner: 'local' | 'remote';\n        }\n    ];\n    'sync.error:action': [{ op: SyncPendingOpPayload; error: unknown; permanent?: boolean }];\n    'sync.retry:action': [{ op: SyncPendingOpPayload; attempt: number }];\n    'sync.queue:action:full': [{ pendingCount: number; maxSize: number }];\n    'sync.rescan:action:starting': [{ scope: SyncScopePayload }];\n    'sync.rescan:action:progress': [{ scope: SyncScopePayload; progress: number }];\n    'sync.rescan:action:completed': [{ scope: SyncScopePayload }];\n    'sync.stats:action': [\n        { pendingCount: number; cursor: number; lastSyncAt: number }\n    ];\n    'sync:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Notification hooks\n    'notify:action:push': [NotificationCreatePayload];\n    'notify:action:read': [{ id: string; readAt: number }];\n    'notify:action:clicked': [{ notification: NotificationEntity; action?: NotificationAction }];\n    'notify:action:cleared': [{ count: number }];\n    'notify:filter:before_store': [NotificationCreatePayload | false, { source: string }];\n};"
+              "text": "export type CoreHookPayloadMap = {\n    // AI/Chat Actions\n    'ai.chat.send:action:before': [AiSendBeforePayload];\n    'ai.chat.send:action:after': [AiSendAfterPayload];\n    'ai.chat.stream:action:delta': [string, AiStreamDeltaPayload];\n    'ai.chat.stream:action:reasoning': [string, AiStreamReasoningPayload];\n    'ai.chat.stream:action:complete': [AiStreamCompletePayload];\n    'ai.chat.stream:action:error': [AiStreamErrorPayload];\n    'ai.chat.retry:action:before': [AiRetryBeforePayload];\n    'ai.chat.retry:action:after': [AiRetryAfterPayload];\n    'ai.document.edit:filter:request': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:before': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:after': [DocumentAiEditResultPayload];\n    'ai.document.edit:action:error': [DocumentAiEditResultPayload];\n\n    // Pane Actions (now use named payloads)\n    'ui.pane.active:action': [UiPaneActivePayload];\n    'ui.pane.blur:action': [UiPaneBlurPayload];\n    'ui.pane.switch:action': [UiPaneSwitchPayload];\n    'ui.pane.open:action:after': [UiPaneActivePayload];\n    'ui.pane.close:action:before': [UiPaneActivePayload];\n    'ui.pane.close:action:after': [UiPaneActivePayload];\n    'ui.pane.thread:action:changed': [UiPaneThreadChangedPayload];\n    'ui.pane.doc:action:changed': [UiPaneDocChangedPayload];\n    'ui.pane.doc:action:saved': [UiPaneDocChangedPayload];\n    'ui.pane.msg:action:sent': [UiPaneMsgSentPayload];\n    'ui.pane.msg:action:received': [UiPaneMsgReceivedPayload];\n\n    // Sidebar Actions\n    'ui.sidebar.select:action:before': [UiSidebarSelectPayload];\n    'ui.sidebar.select:action:after': [UiSidebarSelectPayload];\n    'ui.chat.new:action:after': [UiChatNewPayload];\n\n    // App Actions\n    'app.init:action:after': [AppInitPayload];\n\n    // Chat Filters\n    'ui.chat.message:filter:outgoing': [string];\n    'ui.chat.message:filter:incoming': [string, string | undefined];\n    'ai.chat.model:filter:select': [string];\n    'ai.chat.messages:filter:input': [ChatMessage[]];\n\n    // Pane Filters\n    'ui.pane.thread:filter:select': [string, PaneState, string];\n    'ui.pane.doc:filter:select': [string, PaneState, string];\n\n    // Files Filters\n    'files.attach:filter:input': [FilesAttachInputPayload | false];\n\n    // Small, well-known DB-specialized hooks kept explicit\n    'db.messages.files.validate:filter:hashes': [string[]];\n    'db.files.refchange:action:after': [\n        { before: FileEntity; after: FileEntity; delta: number }\n    ];\n    'db.threads.getSystemPrompt:filter:output': [string | null];\n\n    // Editor Lifecycle (Examples/Plugins)\n    'editor.created:action:after': [{ editor: unknown }];\n    'editor.updated:action:after': [{ editor: unknown }];\n    'editor:request-extensions': [void];\n\n    // UI/Chat Extensions\n    'ui.chat.editor:filter:extensions': [unknown[]];\n    'ui.chat.editor:action:before_send': [Record<string, unknown>]; // editor JSON\n    'ai.chat.messages:filter:before_send': [\n        { messages: OpenRouterMessage[] } | { messages: OpenRouterMessage[] }[]\n    ];\n\n    // Branching lifecycle\n    'branch.fork:filter:options': [BranchForkOptions];\n    'branch.fork:action:before': [BranchForkBeforePayload];\n    'branch.fork:action:after': [ThreadEntity];\n    'branch.retry:filter:options': [RetryBranchParams];\n    'branch.retry:action:before': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.retry:action:after': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            newThreadId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.context:filter:messages': [\n        MessageEntity[],\n        string /* threadId */,\n        BranchMode\n    ];\n    'branch.context:action:after': [BranchContextAfterPayload];\n\n    // Documents helpers\n    'db.documents.title:filter': [\n        string,\n        {\n            phase: 'create' | 'update';\n            id: string;\n            rawTitle?: string | null;\n            existing?: DocumentEntity;\n        }\n    ];\n\n    // Workflow Actions\n    'workflow.execution:action:state_update': [\n        { messageId: string; state: unknown }\n    ];\n    'workflow.execution:action:complete': [\n        { messageId: string; workflowId: string; finalOutput?: string }\n    ];\n\n    // Auth hooks\n    'auth.access:filter:decision': [\n        AccessDecision,\n        { session: SessionContext | null }\n    ];\n    'auth.user:action:created': [{ userId: string; provider: string }];\n    'auth.workspace:action:created': [{ workspaceId: string; userId: string }];\n\n    // Storage hooks\n    'storage.files.upload:action:before': [StorageFileUploadBeforePayload];\n    'storage.files.upload:action:after': [StorageFileUploadAfterPayload];\n    'storage.files.download:action:before': [StorageFileDownloadBeforePayload];\n    'storage.files.download:action:after': [StorageFileDownloadAfterPayload];\n    'storage.files.url:filter:options': [StorageFileUrlOptionsPayload];\n    'storage.files.upload:filter:policy': [StorageFileUploadPolicyPayload | false];\n    'storage.files.gc:action:run': [StorageFileGcPayload];\n    'storage:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Sync hooks\n    'sync.op:action:captured': [{ op: SyncPendingOpPayload }];\n    'sync.push:action:before': [{ scope: SyncScopePayload; count: number }];\n    'sync.push:action:after': [\n        { scope: SyncScopePayload; successCount: number; failCount: number }\n    ];\n    'sync.bootstrap:action:start': [{ scope: SyncScopePayload }];\n    'sync.bootstrap:action:progress': [\n        {\n            scope: SyncScopePayload;\n            cursor: number;\n            pulledCount: number;\n            hasMore: boolean;\n        }\n    ];\n    'sync.bootstrap:action:complete': [\n        { scope: SyncScopePayload; cursor: number; totalPulled: number; elapsedMs?: number }\n    ];\n    'sync.pull:action:received': [\n        { scope: SyncScopePayload; changeCount: number }\n    ];\n    'sync.pull:action:applied': [\n        {\n            scope: SyncScopePayload;\n            applied: number;\n            skipped: number;\n            conflicts: number;\n        }\n    ];\n    'sync.pull:action:error': [{ scope: SyncScopePayload; error: string }];\n    'sync.pull:action:after': [\n        { scope: SyncScopePayload; count: number; cursor: number }\n    ];\n    'sync.subscription:action:statusChange': [\n        {\n            scope: SyncScopePayload;\n            previousStatus: string;\n            status: string;\n        }\n    ];\n    'sync.conflict:action:detected': [\n        {\n            tableName: string;\n            pk: string;\n            local: unknown;\n            remote: unknown;\n            winner: 'local' | 'remote';\n        }\n    ];\n    'sync.error:action': [{ op: SyncPendingOpPayload; error: unknown; permanent?: boolean }];\n    'sync.retry:action': [{ op: SyncPendingOpPayload; attempt: number }];\n    'sync.queue:action:full': [{ pendingCount: number; maxSize: number }];\n    'sync.rescan:action:starting': [{ scope: SyncScopePayload }];\n    'sync.rescan:action:progress': [{ scope: SyncScopePayload; progress: number }];\n    'sync.rescan:action:completed': [{ scope: SyncScopePayload }];\n    'sync.stats:action': [\n        { pendingCount: number; cursor: number; lastSyncAt: number }\n    ];\n    'sync:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Notification hooks\n    'notify:action:push': [NotificationCreatePayload];\n    'notify:action:read': [{ id: string; readAt: number }];\n    'notify:action:clicked': [{ notification: NotificationEntity; action?: NotificationAction }];\n    'notify:action:cleared': [{ count: number }];\n    'notify:filter:before_store': [NotificationCreatePayload | false, { source: string }];\n};"
             }
           ]
         },
@@ -10195,7 +10195,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 415,
+              "line": 413,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbActionHookName =\n    | `db.${DbEntityName}.${DbOperation}:action:${DbPhase}`\n    | `db.${DbEntityName}.delete:action:${DbDeleteType}:${DbPhase}`\n    // extra specialized actions seen in docs\n    | `db.files.refchange:action:after`\n    | `db.kv.upsertByName:action:after`\n    | `db.kv.deleteByName:action:hard:${DbPhase}`;"
             }
@@ -10237,7 +10237,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 412,
+              "line": 410,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbDeleteType = 'soft' | 'hard';"
             }
@@ -10251,7 +10251,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 387,
+              "line": 385,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbEntityName =\n    | 'messages'\n    | 'threads'\n    | 'documents'\n    | 'files'\n    | 'projects'\n    | 'posts'\n    | 'prompts'\n    | 'attachments'\n    | 'kv';"
             }
@@ -10265,7 +10265,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 424,
+              "line": 422,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbFilterHookName =\n    | `db.${DbEntityName}.${DbOperation}:filter:input`\n    | `db.${DbEntityName}.${DbOperation}:filter:output`\n    // extra specialized filters seen in docs\n    | `db.messages.files.validate:filter:hashes`\n    | `db.kv.getByName:filter:output`\n    | `db.kv.upsertByName:filter:input`\n    | `db.threads.searchByTitle:filter:output`\n    | `db.posts.all:filter:output`;"
             }
@@ -10279,7 +10279,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 398,
+              "line": 396,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbOperation =\n    | 'create'\n    | 'upsert'\n    | 'update'\n    | 'delete'\n    | 'get'\n    | 'search'\n    | 'byProject'\n    | 'children'\n    | 'fork'\n    | 'normalize'\n    | 'list';"
             }
@@ -10293,7 +10293,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 411,
+              "line": 409,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbPhase = 'before' | 'after';"
             }
@@ -10321,7 +10321,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 213,
+              "line": 211,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentAiEditRequestPayload {\n    documentId: string;\n    modelId: string;\n    prompt: string;\n    scope: 'selection' | 'section' | 'document';\n    context: string;\n    references: Array<{\n        id: string;\n        source: 'document' | 'chat';\n        label: string;\n    }>;\n    referenceContext: string;\n    tokenEstimate: number;\n    maxIterations?: number;\n    chunkWordLimit?: number;\n}"
             }
@@ -10335,7 +10335,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 230,
+              "line": 228,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentAiEditResultPayload {\n    request: DocumentAiEditRequestPayload;\n    operationCount?: number;\n    accepted?: boolean;\n    error?: unknown;\n}"
             }
@@ -10363,7 +10363,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 105,
+              "line": 103,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface EditorInstance {\n    commands: Record<string, unknown>;\n    getJSON: () => Record<string, unknown>;\n}"
             }
@@ -10377,7 +10377,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 444,
+              "line": 442,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ExtensionActionHookName = keyof Or3ActionHooks;"
             }
@@ -10391,7 +10391,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 464,
+              "line": 462,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ExtensionFilterHookName = keyof Or3FilterHooks;"
             }
@@ -10405,7 +10405,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 781,
+              "line": 779,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ExtractHookPayload<K extends HookName> =\n    K extends keyof HookPayloadMap ? HookPayloadMap[K][0] : unknown;"
             }
@@ -10433,7 +10433,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 324,
+              "line": 322,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface FilesAttachInputPayload {\n    file: File;\n    name: string;\n    mime: string;\n    size: number;\n    kind: FileKind;\n}"
             }
@@ -10447,7 +10447,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 316,
+              "line": 314,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface FilesAttachPayload extends FilesAttachInputPayload {\n    accepted: boolean;\n    url?: string;\n    hash?: string;\n}"
             }
@@ -10461,7 +10461,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 468,
+              "line": 466,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type FilterHookName =\n    | CoreFilterHookName\n    | DbFilterHookName\n    | ExtensionFilterHookName\n    | (string & {});"
             }
@@ -10475,7 +10475,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 476,
+              "line": 474,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type HookName = ActionHookName | FilterHookName;"
             }
@@ -10489,7 +10489,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 738,
+              "line": 736,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type HookPayloadMap = CoreHookPayloadMap &\n    DbActionMap &\n    DbFilterMap &\n    Or3ActionHooks &\n    Or3FilterHooks;"
             }
@@ -10503,7 +10503,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 812,
+              "line": 810,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferDbCreateEntity<K extends string> =\n    K extends `db.messages.${string}`\n        ? MessageCreateEntity\n        : K extends `db.posts.${string}`\n        ? PostCreateEntity\n        : K extends `db.threads.${string}`\n        ? ThreadCreateEntity\n        : InferDbEntity<K>;"
             }
@@ -10517,7 +10517,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 791,
+              "line": 789,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferDbEntity<K extends string> = K extends `db.messages.${string}`\n    ? MessageEntity\n    : K extends `db.threads.${string}`\n    ? ThreadEntity\n    : K extends `db.documents.${string}`\n    ? DocumentEntity\n    : K extends `db.files.${string}`\n    ? FileEntity\n    : K extends `db.projects.${string}`\n    ? ProjectEntity\n    : K extends `db.posts.${string}`\n    ? PostEntity\n    : K extends `db.prompts.${string}`\n    ? PromptEntity\n    : K extends `db.attachments.${string}`\n    ? AttachmentEntity\n    : K extends `db.kv.${string}`\n    ? KvEntry\n    : unknown;"
             }
@@ -10531,7 +10531,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 765,
+              "line": 763,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferHookCallback<K extends HookName> = (\n    ...args: InferHookParams<K>\n) => InferHookReturn<K> | Promise<InferHookReturn<K>>;"
             }
@@ -10545,7 +10545,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 750,
+              "line": 748,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferHookParams<K extends HookName> = K extends keyof HookPayloadMap\n    ? HookPayloadMap[K]\n    : unknown[];"
             }
@@ -10559,7 +10559,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 756,
+              "line": 754,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferHookReturn<K extends HookName> =\n    K extends `${string}:filter${string}`\n        ? K extends keyof HookPayloadMap\n            ? HookPayloadMap[K][0]\n            : unknown\n        : void;"
             }
@@ -10573,7 +10573,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 771,
+              "line": 769,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type IsAction<K extends HookName> = K extends ActionHookName\n    ? true\n    : false;"
             }
@@ -10587,7 +10587,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 775,
+              "line": 773,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type IsFilter<K extends HookName> = K extends FilterHookName\n    ? true\n    : false;"
             }
@@ -10615,7 +10615,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 367,
+              "line": 365,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface KvUpsertByNameInput {\n    name: string;\n    value: unknown;\n}"
             }
@@ -10629,7 +10629,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 785,
+              "line": 783,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type MatchingHooks<Pattern extends string> = Extract<\n    HookName,\n    `${Pattern}`\n>;"
             }
@@ -10713,7 +10713,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 110,
+              "line": 108,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type OpenRouterMessage =\n    | ORMessage\n    | {\n          role: 'tool';\n          [key: string]: unknown;\n      };"
             }
@@ -10797,7 +10797,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 345,
+              "line": 343,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RetryBranchParams {\n    assistantMessageId: string;\n    mode?: BranchMode;\n    titleOverride?: string;\n}"
             }
@@ -10923,7 +10923,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 835,
+              "line": 833,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type SuggestSimilar<K> = K extends `${infer Prefix}.${string}`\n    ? Extract<HookName, `${Prefix}.${string}`>\n    : HookName;"
             }
@@ -10965,7 +10965,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 822,
+              "line": 820,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type Tail<T extends unknown[]> = T extends [unknown, ...infer Rest]\n    ? Rest\n    : [];"
             }
@@ -11007,7 +11007,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 853,
+              "line": 851,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type TypeName<T> = T extends string\n    ? 'string'\n    : T extends number\n    ? 'number'\n    : T extends boolean\n    ? 'boolean'\n    : T extends bigint\n    ? 'bigint'\n    : T extends undefined\n    ? 'undefined'\n    : T extends null\n    ? 'null'\n    : T extends (...args: unknown[]) => unknown\n    ? 'function'\n    : T extends object\n    ? 'object'\n    : 'unknown';"
             }
@@ -11021,7 +11021,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 307,
+              "line": 305,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiChatNewPayload {\n    threadId?: string;\n    createdAt?: number;\n}"
             }
@@ -11035,7 +11035,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 253,
+              "line": 251,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneActivePayload {\n    pane: PaneState;\n    index: number;\n    previousIndex?: number;\n}"
             }
@@ -11049,7 +11049,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 259,
+              "line": 257,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneBlurPayload {\n    pane: PaneState;\n    previousIndex: number;\n}"
             }
@@ -11063,7 +11063,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 278,
+              "line": 276,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneDocChangedPayload {\n    pane: PaneState;\n    oldDocumentId: string;\n    newDocumentId: string;\n    paneIndex: number;\n    meta?: Record<string, unknown>;\n}"
             }
@@ -11077,7 +11077,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 241,
+              "line": 239,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneMsgBase {\n    id: string;\n    threadId?: string;\n    length?: number;\n    fileHashes?: string | null;\n}"
             }
@@ -11091,7 +11091,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 248,
+              "line": 246,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneMsgReceived extends UiPaneMsgBase {\n    reasoningLength?: number;\n}"
             }
@@ -11105,7 +11105,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 293,
+              "line": 291,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneMsgReceivedPayload {\n    pane: PaneState;\n    paneIndex: number;\n    message: UiPaneMsgReceived;\n    meta?: Record<string, unknown>;\n}"
             }
@@ -11119,7 +11119,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 286,
+              "line": 284,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneMsgSentPayload {\n    pane: PaneState;\n    paneIndex: number;\n    message: UiPaneMsgBase;\n    meta?: Record<string, unknown>;\n}"
             }
@@ -11133,7 +11133,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 264,
+              "line": 262,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneSwitchPayload {\n    pane: PaneState;\n    index: number;\n    previousIndex?: number;\n}"
             }
@@ -11147,7 +11147,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 270,
+              "line": 268,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneThreadChangedPayload {\n    pane: PaneState;\n    oldThreadId: string;\n    newThreadId: string;\n    paneIndex: number;\n    messageCount?: number;\n}"
             }
@@ -11161,7 +11161,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 302,
+              "line": 300,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiSidebarSelectPayload {\n    kind: 'chat' | 'doc';\n    id: string;\n}"
             }
@@ -11175,7 +11175,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 842,
+              "line": 840,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ValidateHookName<K> = K extends HookName\n    ? K\n    : `Invalid hook name: ${Extract<\n          K,\n          string\n      >}. Did you mean one of: ${SuggestSimilar<K>}`;"
             }

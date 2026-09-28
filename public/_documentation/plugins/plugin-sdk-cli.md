@@ -94,7 +94,16 @@ inspection, but runtime imports resolve to `dist/`:
   files and `@or3/plugin-sdk/profile` in dot-directories.
 - `test` runs the package's own tests: `bun run test` when a `test` script
   exists, otherwise `bun test`. Bun is the supported runtime.
-- `build` materializes a deterministic build tree and packs it.
+- `build` materializes a deterministic build tree and packs it. For a
+  `trusted-host` client entry, it bundles package-local imports and Vue SFCs,
+  leaves `vue` and `@or3/plugin-sdk` as host singletons, and emits a referenced
+  stylesheet when the entry imports CSS. The stylesheet uses the client entry's
+  basename with a `.css` extension. The host loads that stylesheet with
+  the plugin and removes it on disposal. Declared server route handlers with
+  imports are bundled to their manifest paths so an installed ZIP can run
+  without the author's `node_modules`. Server route `path` values are relative
+  to the plugin route prefix (for example, `workflows/background`, without a
+  leading slash); `validate` rejects paths the host installer cannot accept.
 - `pack` requires a preceding `build` and consumes `<package-root>/dist`,
   including the bundled entry. Source edits require another build; it does not
   silently rebuild. The lower-level `packV2Package` helper packs its explicit
@@ -139,9 +148,50 @@ Run `or3-plugin candidate <package-root> --out <candidate-dir>` and
 then attach `receipt.json` to the draft. CI is optional: a workflow may produce
 and verify the same three frozen files as artifacts, but ordinary pushes must
 not publish a plugin. Marketplace submission, independent review, and signing
-remain separate steps. The Marketplace currently requires an interactive
-developer session for upload and recent MFA for final submission; it has no
-publisher token for unattended CI submission.
+remain separate steps. The Marketplace CLI uses a scoped OAuth token to prepare
+drafts. Final submission for review requires a verified browser session.
+
+The source checkout also has a small submission command. From the `or3-chat`
+checkout, sign in with:
+
+```sh
+bun run marketplace:submit -- login
+```
+
+Login opens the marketplace in your default browser using a localhost callback
+and PKCE. For SSH or a headless terminal, run `bun run marketplace:submit -- login --device`
+and enter the displayed code in your browser. The CLI stores revocable OAuth
+credentials in a private file under your user config directory (mode `0600`).
+Then create a JSON listing with the fields the marketplace requires:
+
+```json
+{
+  "category": "automation",
+  "tags": ["automation"],
+  "supportUrl": "https://example.com/support",
+  "privacyUrl": "https://example.com/privacy",
+  "externalCostNote": "No external charges are required."
+}
+```
+
+Then run:
+
+```sh
+bun run marketplace:submit -- /absolute/path/to/candidate \
+  --source /absolute/path/to/plugin \
+  --listing /absolute/path/to/listing.json
+```
+
+The command verifies and qualifies the frozen candidate, uploads the exact
+package and source, attaches the receipt, saves the listing, checks marketplace
+blockers, and opens the draft in your browser to complete recent verification
+and click **Submit for review**. Use `--draft` to stop at the draft; if a draft
+has blockers, edit the listing and rerun with
+`bun run marketplace:submit -- --resume <submission-id> --listing <listing.json>`. Recent
+account verification is required in the browser for the final submission. Run
+`bun run marketplace:submit -- --help` for options or `bun run marketplace:submit -- logout` to remove the
+saved credentials and revoke the CLI login. The command
+defaults to the staging marketplace and never publishes or signs a release.
 
 ## Portable starter
 
@@ -165,8 +215,10 @@ OR3 reviewer.
 The packer and the runtime import scanner share one exclusion set, so what is
 reviewed is exactly what ships:
 
-- Dot-directories (`.authoring/`, `.git/`) and build outputs (`node_modules/`,
-  `dist/`, `coverage/`, `.or3-pack/`) are never scanned or packed.
+- Dot-directories (`.authoring/`, `.git/`), build outputs (`node_modules/`,
+  `dist/`, `coverage/`, `.or3-pack/`), and standard dependency lockfiles are
+  never scanned or packed. Candidate source snapshots retain lockfiles for
+  clean rebuild qualification.
 - Test and spec files (`*.test.*`, `*.spec.*`, `__tests__/`) are never scanned
   or packed. You can therefore import `@or3/plugin-sdk/testing` in test files
   without it being treated as a shipped runtime import.

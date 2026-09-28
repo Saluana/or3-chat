@@ -1,5 +1,8 @@
 # V1 Support Policy and V2 Migration
 
+New packages use the [single plugin authoring guide](./plugin-development-v2).
+This page describes the compatibility window for packages already using V1.
+
 ## Support window
 
 V1 plugin authoring remains supported through the entire Plugin Runtime V2 line. The earliest removal target is Plugin Runtime V3, only after an announced deprecation window. V2 releases do not remove V1 APIs.
@@ -9,10 +12,10 @@ V1 plugin authoring remains supported through the entire Plugin Runtime V2 line.
 1. `bun run plugin-runtime:cli -- create --id <id> --dir <path> --sdk-source ./packages/plugin-sdk`
 2. Run `bun install` in the generated directory and call `defineOr3Plugin()`.
 3. `validate` / `test` / `build` / `pack` via `plugin-runtime:cli`; packing consumes the build output in `dist`.
-4. Upload the ZIP as a V2 candidate, run its server canary, promote it, and
-   enable it only in the V2 package canary workspace. The initial production
-   profile is server-only; V2 client entries stay blocked pending the separate
-   host-UI ABI qualification.
+4. Upload the ZIP as a V2 candidate, review requested grants, run its browser
+   and server canaries where applicable, promote it, and enable it first in a
+   canary workspace. Trusted-host client entries run only when the host ABI
+   proof and module loader are enabled.
 
 V1 and V2 cannot own the same plugin ID at once. Keep the existing V1 plugin
 running while you validate a differently named V2 package, or wait for an

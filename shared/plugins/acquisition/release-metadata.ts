@@ -313,6 +313,13 @@ export const ACQUISITION_PROFILE_REQUIREMENTS: readonly AcquisitionProfileRequir
             serverRuntime: 'forbidden' as const,
             clientIsolation: Object.freeze(['worker', 'iframe'] as const),
         }),
+        Object.freeze({
+            profile: 'or3-trusted-host-v2',
+            trust: 'trusted-host',
+            clientRuntime: 'required' as const,
+            serverRuntime: 'allowed' as const,
+            clientIsolation: Object.freeze(['host'] as const),
+        }),
     ]);
 
 export function acquisitionProfileRequirement(

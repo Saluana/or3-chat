@@ -7,9 +7,8 @@
  * contained client packages) and only then promoted by exact digest. A newer
  * expanded authority needs one deployment-wide approval before the check can pass.
  */
-import { computed, onMounted, ref } from 'vue';
-import { useToast } from '#imports';
-import { useDashboardNavigation } from '~/composables/dashboard/useDashboardPlugins';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter, useToast } from '#imports';
 import MarketplaceFailure from './MarketplaceFailure.vue';
 import { acquisitionDiagnosticReport, acquisitionFailureHelp } from '~~/shared/plugins/acquisition/failure-presentation';
 import { ACTIVATION_NOT_CONFIRMED_COPY } from '~~/shared/plugins/lifecycle/lifecycle-view';
@@ -22,6 +21,7 @@ import {
     type MarketplaceInstallTarget,
     type MarketplaceUpdateCheckPlugin,
     marketplaceTargetKey,
+    marketplacePluginDeepLink,
     sameMarketplaceTarget,
 } from '~/composables/marketplace/useMarketplace';
 import { reportCandidateClientCanary } from '~/composables/plugins/portable-canary';
@@ -33,7 +33,8 @@ import {
 import { setMarketplaceSetupPlugin } from '~/composables/marketplace/useMarketplaceSetup';
 
 const toast = useToast();
-const navigation = useDashboardNavigation();
+const route = useRoute();
+const router = useRouter();
 const installed = useMarketplaceInstalled();
 const install = useMarketplaceInstall();
 const consent = useMarketplaceConsent();
@@ -44,6 +45,7 @@ const canaryNote = ref<Record<string, string>>({});
 const updateNote = ref<Record<string, { readonly message: string; readonly retryable: boolean }>>(
     {}
 );
+const workspaceBlocks = ref<Record<string, { readonly total: number; readonly items: readonly { readonly workspaceId: string; readonly code: string }[] }>>({});
 const browserEngine = ref<string>('unknown');
 const approvedUpdates = ref<Record<string, string>>({});
 /** Last confirmation target per plugin, so a timeout can retry observation only. */
@@ -61,7 +63,19 @@ const confirmationFailureCode = ref<Record<string, string | null>>({});
 
 function openConfigure(pluginId: string): void {
     setMarketplaceSetupPlugin(pluginId);
-    void navigation.openPage('marketplace', 'configure');
+    const operation = install.status.value?.pluginId === pluginId &&
+        !['completed', 'canceled'].includes(install.status.value.status) ? install.status.value : null;
+    const version = candidates.value.find((entry) => entry.pluginId === pluginId)?.display?.candidateVersion
+        ?? operation?.version
+        ?? updateCheck.result.value?.plugins.find((entry) => entry.pluginId === pluginId)?.latestVersion;
+    void router.replace({ query: { ...route.query, dashboard: 'marketplace', page: 'configure',
+        from: 'updates', setup: '1', plugin: pluginId, version: version ?? undefined,
+        workspace: installed.workspaceId.value ?? undefined,
+        acquisition: operation && operation.version === version ? operation.operationId : undefined } });
+}
+function repairWorkspaceLink(pluginId: string, version: string | null, workspaceId: string, code: string): string {
+    const link = marketplacePluginDeepLink('', pluginId, version ?? undefined, undefined, workspaceId);
+    return `${link}${code.startsWith('setup-') ? '&setup=1' : ''}`;
 }
 
 /** Record one confirmation outcome: status text follows the result, not the attempt. */
@@ -134,6 +148,27 @@ onMounted(() => {
 const candidates = computed(() =>
     installed.packages.value.filter((entry) => Boolean(entry.pointer?.candidate))
 );
+const postSelectionResults = computed(() => [...new Set([
+    ...Object.keys(updateNote.value), ...Object.keys(confirmationTargets.value),
+])].filter((pluginId) => {
+    if (candidates.value.some((entry) => entry.pluginId === pluginId)) return false;
+    const target = confirmationTargets.value[pluginId];
+    if (!target) return true;
+    const selected = installed.packages.value.find((entry) => entry.pluginId === pluginId);
+    return target.workspaceId === installed.workspaceId.value &&
+        (selected?.display?.selectedDigest ?? selected?.startup.selectedDigest) === target.packageTreeSha256;
+}));
+watch(() => installed.workspaceId.value, (next, previous) => {
+    if (previous === null || next === previous) return;
+    approvedUpdates.value = {};
+    updateNote.value = {};
+    workspaceBlocks.value = {};
+    confirmationTargets.value = {};
+    confirmationBusy.value = {};
+    confirmationFailed.value = {};
+    confirmationTimedOut.value = {};
+    confirmationFailureCode.value = {};
+});
 
 /** Newer published releases that nobody has staged yet. */
 const availableUpdates = computed(() =>
@@ -151,7 +186,8 @@ const problemChecks = computed(() =>
 
 async function reviewUpdate(entry: MarketplaceUpdateCheckPlugin): Promise<void> {
     const target = updateTarget(entry);
-    if (!target) return;
+    const reviewedWorkspaceId = installed.workspaceId.value;
+    if (!target || !reviewedWorkspaceId) return;
     if (
         entry.release?.profile === 'or3-portable-client-v1' &&
         !browserEngineQualified(browserEngine.value, QUALIFIED_BROWSER_ENGINES)
@@ -205,11 +241,13 @@ async function reviewUpdate(entry: MarketplaceUpdateCheckPlugin): Promise<void> 
     if (authorityReviewRequired) {
         const recorded = await consent.approve({
             pluginId: target.pluginId,
+            expectedWorkspaceId: reviewedWorkspaceId,
             approvedGrants: grants,
             expectedPackageDigest: target.packageTreeSha256,
             expectedAuthoritySha256: target.authoritySha256,
             version: target.version,
             deploymentWide: true,
+            expectedEnabledWorkspaceSha256: entry.release!.enabledWorkspaceSha256,
         });
         if (!recorded) {
             toast.add({
@@ -219,6 +257,10 @@ async function reviewUpdate(entry: MarketplaceUpdateCheckPlugin): Promise<void> 
             });
             return;
         }
+    }
+    if (installed.workspaceId.value !== reviewedWorkspaceId) {
+        toast.add({ title: 'The active workspace changed', description: 'Reload Updates and review this release again.', color: 'warning' });
+        return;
     }
     const currentEntry = updateCheck.result.value?.plugins.find(
         (candidate) => candidate.pluginId === entry.pluginId
@@ -233,6 +275,8 @@ async function reviewUpdate(entry: MarketplaceUpdateCheckPlugin): Promise<void> 
         return;
     }
     busyPluginId.value = entry.pluginId;
+    const { [entry.pluginId]: _oldBlocks, ...remainingBlocks } = workspaceBlocks.value;
+    workspaceBlocks.value = remainingBlocks;
     canaryNote.value = { ...canaryNote.value, [entry.pluginId]: 'staging review' };
     try {
         // Reviewing starts the ordinary acquisition operation for the selected
@@ -241,7 +285,10 @@ async function reviewUpdate(entry: MarketplaceUpdateCheckPlugin): Promise<void> 
         const finished = await install.start({
             pluginId: entry.pluginId,
             version: target.version,
+            workspaceId: reviewedWorkspaceId,
+            expectedWorkspaceId: reviewedWorkspaceId,
         });
+        if (installed.workspaceId.value !== reviewedWorkspaceId) return;
         reportOutcome(entry.pluginId, finished);
             await Promise.all([installed.load(), refreshUpdates()]);
     } finally {
@@ -326,6 +373,12 @@ async function confirmUpdateRunning(pluginId: string, view: AcquisitionStatusVie
 async function retryUpdateConfirmation(pluginId: string): Promise<void> {
     const target = confirmationTargets.value[pluginId];
     if (!target) return;
+    const selected = installed.packages.value.find((entry) => entry.pluginId === pluginId);
+    if (target.workspaceId !== installed.workspaceId.value ||
+        (selected?.display?.selectedDigest ?? selected?.startup.selectedDigest) !== target.packageTreeSha256) {
+        toast.add({ title: 'The selected workspace or release changed', description: 'Refresh Installed before checking again.', color: 'warning' });
+        return;
+    }
     confirmationBusy.value = { ...confirmationBusy.value, [pluginId]: true };
     try {
         const confirmation = await install.retryActivationConfirmation(target);
@@ -382,13 +435,18 @@ async function confirmPromotedCandidate(
     }
 }
 
-async function copyUpdateDiagnostics(pluginId: string): Promise<void> {    const operation = install.status.value;
-    if (!operation || operation.pluginId !== pluginId) return;
+async function copyUpdateDiagnostics(pluginId: string): Promise<void> {
+    const operation = install.status.value;
+    const target = confirmationTargets.value[pluginId];
+    if (!target) return;
     try {
         await navigator.clipboard.writeText(
-            acquisitionDiagnosticReport(operation, {
-                activationTimedOut: confirmationTimedOut.value[pluginId] === true,
-            })
+            operation?.pluginId === pluginId
+                ? acquisitionDiagnosticReport(operation, { activationTimedOut: confirmationTimedOut.value[pluginId] === true })
+                : JSON.stringify({ pluginId, workspaceId: target.workspaceId,
+                    selectedPackageDigest: target.packageTreeSha256,
+                    activationTimedOut: confirmationTimedOut.value[pluginId] === true,
+                    activationFailureCode: confirmationFailureCode.value[pluginId] ?? null }, null, 2)
         );
         toast.add({ title: 'Diagnostics copied', description: 'Only operation and release identities are included.', color: 'success' });
     } catch {
@@ -423,6 +481,8 @@ async function activate(entry: {
     if (!candidateDigest) return;
     const candidateVersion = entry.display?.candidateVersion ?? '';
     busyPluginId.value = entry.pluginId;
+    const { [entry.pluginId]: _oldBlocks, ...remainingBlocks } = workspaceBlocks.value;
+    workspaceBlocks.value = remainingBlocks;
     canaryNote.value = { ...canaryNote.value, [entry.pluginId]: 'checking' };
     try {
         // A candidate the acquisition pipeline staged belongs to that operation:
@@ -482,13 +542,30 @@ async function activate(entry: {
         }
 
         try {
-            await apiPost(`/api/admin/plugins/packages/${entry.pluginId}/promote`, {
+            const promotion = await apiPost<{ workspaceEnablement?: 'enabled' | 'pending' | 'unchanged'; warning?: string }>(`/api/admin/plugins/packages/${entry.pluginId}/promote`, {
                 body: { candidateDigest },
             });
             installed.reconcile('manifest-revision-change');
-        } catch (promotionError) {            // The promotion boundary refuses a candidate that an install
+            if (promotion.workspaceEnablement === 'pending') {
+                await installed.load();
+                updateNote.value = { ...updateNote.value, [entry.pluginId]: {
+                    message: promotion.warning ?? 'The selected package changed, but workspace enablement needs attention in Installed.',
+                    retryable: false,
+                } };
+                return;
+            }
+        } catch (promotionError) {
+            // The promotion boundary refuses a candidate that an install
             // operation owns; resume that operation instead of reporting failure.
-            const data = (promotionError as { data?: { code?: string; operationId?: string } }).data;
+            const response = (promotionError as { data?: { data?: unknown; code?: string; operationId?: string } }).data;
+            const data = (response?.data ?? response) as { code?: string; operationId?: string;
+                blockingCount?: number; blockingWorkspaces?: readonly { workspaceId: string; code: string }[] } | undefined;
+            if (data?.code === 'workspace-preflight-blocked') {
+                if (data.blockingWorkspaces) workspaceBlocks.value = { ...workspaceBlocks.value, [entry.pluginId]: {
+                    total: data.blockingCount ?? data.blockingWorkspaces.length,
+                    items: data.blockingWorkspaces,
+                } };
+            }
             if (data?.code === 'acquisition-required' && data.operationId) {
                 canaryNote.value = {
                     ...canaryNote.value,
@@ -557,11 +634,21 @@ async function activate(entry: {
                     <span class="font-medium">{{ entry.pluginId }}</span>
                     <span
                         class="font-medium inline-flex items-center text-xs px-2 py-1 gap-1 rounded-md ring ring-inset bg-info text-[var(--md-on-info)] ring-[var(--md-info)]/25"
-                    >v{{ entry.latestVersion }}</span>
+                    >Proposed {{ entry.latestVersion }}</span>
                     <span class="text-xs text-(--ui-text-muted)">
-                        installed {{ entry.installedVersion }}
+                        Current {{ entry.installedVersion }}
                     </span>
                 </div>
+                <UButton size="xs" color="neutral" variant="link"
+                    :to="marketplacePluginDeepLink('', entry.pluginId, entry.latestVersion ?? undefined, undefined, installed.workspaceId.value ?? undefined)">
+                    View plugin details
+                </UButton>
+                <p class="text-xs text-(--ui-text-muted)">
+                    This shared update affects {{ entry.release?.affectedWorkspaces?.toLocaleString() ?? 'an unknown number of' }} enabled workspace(s).
+                    After a successful update, the current {{ entry.installedVersion }} version is the restore target, subject to the rollback safety check.
+                    Disabled workspaces stay disabled.
+                </p>
+                <p class="text-xs text-(--ui-text-muted)">If this plugin was the default for new workspaces, review and enable that default again after the update.</p>
                 <p class="text-xs text-(--ui-text-muted)">
                     Requested authority:
                     {{ entry.release?.requestedGrants.join(', ') || 'none' }}
@@ -573,7 +660,7 @@ async function activate(entry: {
                             {{ accessChangeLabel(change.kind) }}: {{ change.detail }}
                         </li>
                     </ul>
-                    <p v-else>At least one enabled workspace has not approved this signed authority.</p>
+                    <p v-else>At least one enabled workspace or this admin workspace has not approved this signed authority.</p>
                 </div>
                 <p v-else class="text-xs text-(--ui-text-muted)">No new access approval is needed for enabled workspaces.</p>
                 <details v-if="entry.release?.authority" class="rounded-lg border border-(--ui-border) p-3 text-xs">
@@ -613,7 +700,7 @@ async function activate(entry: {
                         :false-value="''"
                         data-testid="marketplace-update-grant-approve"
                     />
-                    I approve this release's access for every enabled workspace.
+                    I approve this release's access for every enabled workspace and this admin workspace for the canary. Disabled workspaces stay disabled.
                 </label>
                 <div class="flex flex-wrap gap-2">
                     <UButton
@@ -656,12 +743,16 @@ async function activate(entry: {
                     <span
                         class="font-medium inline-flex items-center text-xs px-2 py-1 gap-1 rounded-md ring ring-inset bg-info text-[var(--md-on-info)] ring-[var(--md-info)]/25"
                     >
-                        candidate {{ entry.display?.candidateVersion ?? entry.display?.candidateDigest }}
+                        Update being checked: {{ entry.display?.candidateVersion ?? entry.display?.candidateDigest }}
                     </span>
                     <span class="text-xs text-(--ui-text-muted)">
-                        current {{ entry.display?.version ?? 'none' }}
+                        Current {{ entry.display?.version ?? 'none' }}
                     </span>
                 </div>
+                <UButton size="xs" color="neutral" variant="link"
+                    :to="marketplacePluginDeepLink('', entry.pluginId, entry.display?.candidateVersion ?? undefined, undefined, installed.workspaceId.value ?? undefined)">
+                    View plugin details
+                </UButton>
                 <p class="text-xs text-(--ui-text-muted)">
                     The update activates only after a health check of the exact reviewed bytes; expanded
                     authority needs fresh consent first.
@@ -676,51 +767,19 @@ async function activate(entry: {
                 >
                     {{ updateNote[entry.pluginId]?.message }}
                 </p>
-                <div
-                    v-if="confirmationBusy[entry.pluginId] || confirmationTargets[entry.pluginId]"
-                    role="status"
-                    aria-live="polite"
-                    aria-atomic="true"
-                    class="flex flex-col gap-3 rounded-lg border border-(--ui-border) p-4 text-xs"
-                    data-testid="marketplace-update-confirmation"
-                >
-                    <p v-if="confirmationBusy[entry.pluginId]" class="text-(--ui-text-muted)">
-                        Confirming the installed update runs in this workspace…
+                <div v-if="workspaceBlocks[entry.pluginId]" class="text-xs" data-testid="marketplace-update-workspace-blocks">
+                    <p>{{ workspaceBlocks[entry.pluginId]?.total }} workspace(s) need setup, permissions, or state repair before this version can be selected.</p>
+                    <ul class="mt-2 max-h-48 space-y-2 overflow-y-auto">
+                        <li v-for="block in workspaceBlocks[entry.pluginId]?.items" :key="`${block.workspaceId}:${block.code}`" class="flex flex-wrap items-center gap-2 break-all">
+                            <span>{{ block.workspaceId }} · {{ block.code }}</span>
+                            <UButton size="xs" color="neutral" variant="soft" :to="repairWorkspaceLink(entry.pluginId, entry.display?.candidateVersion ?? null, block.workspaceId, block.code)">
+                                {{ block.code.startsWith('setup-') ? 'Open workspace setup' : 'Open workspace review' }}
+                            </UButton>
+                        </li>
+                    </ul>
+                    <p v-if="workspaceBlocks[entry.pluginId]!.total > workspaceBlocks[entry.pluginId]!.items.length">
+                        More workspaces are blocked. Retry after repairing the listed workspaces to refresh the review.
                     </p>
-                    <template v-else>
-                        <p v-if="confirmationTimedOut[entry.pluginId]" class="text-(--ui-text-muted)">
-                            {{ ACTIVATION_NOT_CONFIRMED_COPY }}. The installation stands.
-                        </p>
-                        <p v-else-if="confirmationFailed[entry.pluginId]" class="text-(--ui-text-muted)">
-                            Activation did not complete{{
-                                confirmationFailureCode[entry.pluginId]
-                                    ? ` (${confirmationFailureCode[entry.pluginId]})`
-                                    : ''
-                            }}. The installation stands.
-                        </p>
-                        <div class="flex flex-wrap gap-2">
-                            <UButton
-                                size="sm"
-                                color="neutral"
-                                variant="soft"
-                                icon="i-lucide-rotate-ccw"
-                                data-testid="marketplace-update-retry-confirmation"
-                                @click="retryUpdateConfirmation(entry.pluginId)"
-                            >
-                                Retry confirmation
-                            </UButton>
-                            <UButton
-                                size="sm"
-                                color="neutral"
-                                variant="ghost"
-                                icon="i-lucide-clipboard-list"
-                                data-testid="marketplace-update-copy-diagnostics"
-                                @click="copyUpdateDiagnostics(entry.pluginId)"
-                            >
-                                Copy diagnostics
-                            </UButton>
-                        </div>
-                    </template>
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <UButton
@@ -745,5 +804,25 @@ async function activate(entry: {
                 </div>
             </li>
         </ul>
+        <section v-for="pluginId in postSelectionResults" :key="pluginId"
+            class="flex flex-col gap-3 rounded-lg border border-(--ui-border) p-4 text-xs"
+            role="status" aria-live="polite" aria-atomic="true"
+            data-testid="marketplace-update-confirmation">
+            <p class="font-medium">{{ pluginId }} · selected update</p>
+            <p v-if="updateNote[pluginId]" data-testid="marketplace-update-note">{{ updateNote[pluginId]?.message }}</p>
+            <p v-if="confirmationBusy[pluginId]">Confirming the installed update runs in this workspace…</p>
+            <template v-else-if="confirmationTargets[pluginId]">
+                <p v-if="confirmationTimedOut[pluginId]">{{ ACTIVATION_NOT_CONFIRMED_COPY }}. The installation stands.</p>
+                <p v-else-if="confirmationFailed[pluginId]">
+                    Activation did not complete{{ confirmationFailureCode[pluginId] ? ` (${confirmationFailureCode[pluginId]})` : '' }}. The installation stands.
+                </p>
+                <div class="flex flex-wrap gap-2">
+                    <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-rotate-ccw"
+                        data-testid="marketplace-update-retry-confirmation" @click="retryUpdateConfirmation(pluginId)">Retry confirmation</UButton>
+                    <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-clipboard-list"
+                        data-testid="marketplace-update-copy-diagnostics" @click="copyUpdateDiagnostics(pluginId)">Copy diagnostics</UButton>
+                </div>
+            </template>
+        </section>
     </div>
 </template>

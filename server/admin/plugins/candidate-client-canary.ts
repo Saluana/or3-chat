@@ -2,12 +2,11 @@
  * @module server/admin/plugins/candidate-client-canary
  *
  * Purpose:
- * Collect real browser evidence for a candidate package that runs in the
- * contained client sandbox.
+ * Collect real browser evidence for a candidate package's client profile.
  *
  * A server process cannot prove a browser will start a package, so the host
- * issues a one-time ticket, the admin's own browser performs a hidden activation
- * against the candidate's exact bytes, and the browser reports the outcome back.
+ * issues a one-time ticket, the admin's own browser checks the candidate's
+ * exact bytes under its declared profile, and reports the outcome back.
  * Promotion then requires that recorded evidence.
  *
  * Behavior:
@@ -15,11 +14,11 @@
  *   workspace and client id, so a report cannot be replayed for another release.
  * - Evidence is stored per plugin/digest/workspace and read by the canary's
  *   client step; a missing report is a pending block, never a skipped pass.
- * - Nothing here executes plugin code: the browser does, inside the sandbox.
+ * - Nothing here executes plugin code: the browser runs the profile check.
  *
  * Constraints:
  * - Files live under the extensions root with 0o600 files and 0o700 directories.
- * - A ticket never approves authority: the sandbox runs with the workspace's
+ * - A ticket never approves authority: the browser uses the workspace's
  *   recorded grant review.
  *
  * Non-Goals:

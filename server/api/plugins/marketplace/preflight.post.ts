@@ -8,6 +8,7 @@ import { listInstalledExtensions } from '../../../admin/extensions/extension-man
 import { preflightMarketplaceInstall } from '../../../utils/plugins/marketplace/service';
 import { pluginPackageServices } from '../../../admin/plugins/package-operation-support';
 import { PluginPackageRouteCatalog } from '../../../admin/plugins/package-route-catalog';
+import { approvedSiteRelease } from '../../../admin/plugins/site-policy-service';
 
 type PreflightBody = {
     readonly pluginId?: unknown;
@@ -49,6 +50,13 @@ export default defineEventHandler(async (event) => {
             ? body.clientEngine.toLowerCase()
             : undefined;
 
+    const policy = await approvedSiteRelease(pluginId, version).catch(() => {
+        throw createError({ statusCode: 503, statusMessage: 'Site approval could not be verified. Retry after checking the marketplace registry.' });
+    });
+    if (!policy) {
+        throw createError({ statusCode: 404, statusMessage: 'This release is not approved for this site.', data: { code: 'site-approval-required' } });
+    }
+
     const settingsStore = getWorkspaceSettingsStore(event);
     const services = pluginPackageServices(settingsStore);
     const [installed, enabled, selected] = await Promise.all([
@@ -73,7 +81,7 @@ export default defineEventHandler(async (event) => {
 
     return await preflightMarketplaceInstall({
         pluginId,
-        ...(version === undefined ? {} : { version }),
+        version: policy.approvedRelease.version,
         ...(clientEngine === undefined ? {} : { clientEngine }),
         workspaceId,
         installedPluginIds,

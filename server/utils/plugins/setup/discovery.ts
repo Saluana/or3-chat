@@ -294,6 +294,7 @@ export async function bindCandidateOperation(input: {
     readonly workspaceId: string;
     readonly candidateDigest: string;
     readonly requestedOperationId?: string | null;
+    readonly expectedVersion?: string | null;
     readonly settingsStore?: WorkspaceSettingsStore;
 }): Promise<CandidateOperationBindingResult> {
     const operations = await new PluginAcquisitionOperationStore().list(input.pluginId);
@@ -311,6 +312,7 @@ export async function bindCandidateOperation(input: {
             candidate.pluginId === input.pluginId &&
             (candidate.workspaceId === input.workspaceId || enabledHere) &&
             candidate.candidateDigest === input.candidateDigest &&
+            (input.expectedVersion == null || candidate.version === input.expectedVersion) &&
             candidate.status !== 'completed' &&
             candidate.status !== 'canceled'
     );

@@ -11,14 +11,21 @@
 import { defineEventHandler, getQuery } from 'h3';
 import { requireAdminApiContext } from '../../admin/api';
 import { listInstalledExtensions } from '../../admin/extensions/extension-manager';
-import { getEnabledPlugins } from '../../admin/plugins/workspace-plugin-store';
-import { getWorkspaceSettingsStore } from '../../admin/stores/registry';
+import { getEnabledPlugins, getPluginGrantReview } from '../../admin/plugins/workspace-plugin-store';
+import { getWorkspaceAccessStore, getWorkspaceSettingsStore } from '../../admin/stores/registry';
 import { resolveAdminWorkspaceTarget } from '../../admin/workspace-target';
 import { isSuperAdmin } from '../../admin/context';
 import { ImmutablePluginPackageStore } from '../../admin/plugins/package-store';
 import { PluginPackagePointerStore } from '../../admin/plugins/package-pointer-store';
 import { PluginPackageRouteCatalog } from '../../admin/plugins/package-route-catalog';
 import { readLocalAdmission } from '../../admin/plugins/local-admission';
+import { readAdminUploadProvenance } from '../../admin/plugins/admin-upload-provenance';
+import { packageGrantCandidate } from '../../admin/plugins/package-operation-support';
+import { SitePluginPolicyStore } from '../../admin/plugins/site-policy';
+import { ensureSitePolicyMigrated } from '../../admin/plugins/site-policy-service';
+import { resolveConnectionService } from '../../utils/plugins/connections/resolve';
+import { loadSetupState } from '../../utils/plugins/setup/state';
+import { packageNeedsNoSetup } from '../../admin/plugins/setup-readiness';
 import type { Sha256 } from '~~/shared/plugins/runtime-descriptor';
 
 /**
@@ -54,6 +61,10 @@ export default defineEventHandler(async (event) => {
     ]);
     const packagePlugins = canManageSitePlugins
         ? await (async () => {
+              const sitePolicies = new SitePluginPolicyStore();
+              const sitePolicyReady = await ensureSitePolicyMigrated(sitePolicies).then(() => true).catch(() => false);
+              const workspace = await getWorkspaceAccessStore(event).getWorkspace({ workspaceId });
+              const connections = resolveConnectionService();
               const packages = new ImmutablePluginPackageStore();
               const pointers = new PluginPackagePointerStore(undefined, packages);
               // Pointer slots hold digests only, so the version a package is
@@ -74,7 +85,7 @@ export default defineEventHandler(async (event) => {
                   ]);
                   const selectedDigest = startup?.selected?.packageDigest ?? null;
                   const candidateDigest = pointer?.candidate?.packageDigest ?? null;
-                  const [version, candidateVersion, candidateAdmission] = await Promise.all([
+                  const [version, candidateVersion, candidateAdmission, candidateUpload, selectedAdmission, sitePolicy] = await Promise.all([
                       versionFor(pluginId, selectedDigest),
                       versionFor(pluginId, candidateDigest),
                       // Provenance follows the selected bytes: a promoted
@@ -87,11 +98,49 @@ export default defineEventHandler(async (event) => {
                           }
                           return null;
                       })(),
+                      candidateDigest ? readAdminUploadProvenance(pluginId, candidateDigest).catch(() => null) : null,
+                      selectedDigest ? Promise.all([
+                          readLocalAdmission(pluginId, selectedDigest),
+                          readAdminUploadProvenance(pluginId, selectedDigest),
+                      ]).then(([local, upload]) => local || upload).catch(() => null) : null,
+                      sitePolicies.read(pluginId).catch(() => null),
                   ]);
+                  const grantReview = selectedDigest && startup?.status === 'ready'
+                      ? await (async () => {
+                          try {
+                              const candidate = await packageGrantCandidate({
+                                  packagePath: packages.packagePath(pluginId, selectedDigest),
+                                  packageDigest: selectedDigest,
+                              });
+                              return (await getPluginGrantReview(settingsStore, workspaceId, pluginId, candidate)).status === 'current'
+                                  ? 'current' as const : 'required' as const;
+                          } catch {
+                              return 'unknown' as const;
+                          }
+                      })()
+                      : 'unknown' as const;
+                  const ownerUserId = workspace?.ownerUserId;
+                  const setup = selectedDigest && startup?.status === 'ready' && ownerUserId
+                      ? await packageNeedsNoSetup(packages, pluginId, selectedDigest).then((noSetup) => noSetup
+                          ? 'ready' as const : loadSetupState({
+                          event, pluginId, workspaceId, ownerUserId,
+                          hasSelectedContext: false, service: connections.service,
+                          durableConnections: connections.durable, slot: 'current',
+                      }).then((state) => state.packageDigest === selectedDigest
+                          ? state.status.status === 'ready' ? 'ready' as const
+                              : state.status.status === 'needs-setup' ? 'required' as const : 'blocked' as const
+                          : 'unknown' as const)).catch(() => 'unknown' as const)
+                      : 'unknown' as const;
                   return {
                       pluginId,
                       pointer,
                       workspaceEnabled: enabledPlugins.includes(pluginId),
+                      // Pending facts are explicit; neither package storage nor
+                      // an admin cookie proves browser activation or setup.
+                      siteApproval: selectedAdmission || (sitePolicy?.catalogVisible && sitePolicy.approvedRelease.packageTreeSha256 === selectedDigest)
+                          ? 'approved' as const : sitePolicyReady ? 'required' as const : 'unknown' as const,
+                      grantReview,
+                      setup,
                       startup: {
                           status: startup?.status ?? 'blocked',
                           selectedSlot: startup?.selectedSlot ?? null,
@@ -114,6 +163,7 @@ export default defineEventHandler(async (event) => {
                                 admittedAt: candidateAdmission.admittedAt,
                             }
                           : null,
+                      adminUpload: Boolean(candidateUpload || (selectedAdmission && 'uploadedBy' in selectedAdmission)),
                   };
               }));
           })()

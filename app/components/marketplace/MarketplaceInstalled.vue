@@ -9,24 +9,23 @@
  */
 import { computed, inject, onMounted, ref, watch } from 'vue';
 import ConfirmDialog from '~/components/admin/ConfirmDialog.vue';
-import { useToast } from '#imports';
-import { MarketplaceRefreshError, useMarketplaceInstalled } from '~/composables/marketplace/useMarketplace';
+import { useRoute, useRouter, useToast } from '#imports';
+import { MarketplaceRefreshError, marketplacePluginDeepLink, useMarketplaceInstalled } from '~/composables/marketplace/useMarketplace';
 import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
-import { useDashboardNavigation } from '~/composables/dashboard/useDashboardPlugins';
 import { setMarketplaceSetupPlugin } from '~/composables/marketplace/useMarketplaceSetup';
+import { isPortableActivationReady, usePortableActivations } from '~/composables/plugins/portable-client-runtime';
 import {
-    getPortableClientSource,
-    isPortableActivationReady,
-    usePortableActivations,
-} from '~/composables/plugins/portable-client-runtime';
-import {
-    describeLifecycleBadge,
-    type PluginLifecycleView,
+    describePluginStatus,
 } from '~~/shared/plugins/lifecycle/lifecycle-view';
-import { openPortablePane } from '~/composables/plugins/portable-pane';
+import { pluginLifecycleView } from '~/composables/plugins/plugin-lifecycle-view';
+import { openInstalledPluginPane } from '~/composables/plugins/portable-pane';
+import { useTrustedV2Activations } from '~/composables/plugins/trusted-v2-manager';
+import { requestWorkspacePluginReconcile } from '~/composables/plugins/bundled-v1-manager-runtime';
 
 
 const toast = useToast();
+const route = useRoute();
+const router = useRouter();
 const installed = useMarketplaceInstalled();
 const sessionWorkspaceId = computed(() => getCachedSessionContext()?.workspace?.id ?? null);
 const hasCurrentWorkspace = computed(() => !installed.stale.value &&
@@ -40,14 +39,28 @@ function requestUninstall(pluginId: string): void {
     const digest = entry?.pointer?.current?.packageDigest;
     if (digest) pendingUninstall.value = { pluginId, digest, version: entry?.display?.version ?? 'selected version', workspaceId: installed.workspaceId.value };
 }
-const navigation = useDashboardNavigation();
 const activations = usePortableActivations();
+const trustedActivations = useTrustedV2Activations();
 const closeDashboard = inject<() => void>('or3:dashboard:close', () => {});
 const busyPluginId = ref<string | null>(null);
+type HealthResult = {
+    workspaceId: string;
+    digest: string;
+    checkedAt: string;
+    activation: 'confirmed' | 'failed' | 'not-observed' | 'not-applicable' | 'unavailable';
+    observedAt: string | null;
+    reason: string | null;
+};
+const healthResults = ref<Record<string, HealthResult>>({});
+const checkingPluginId = ref<string | null>(null);
+let healthGeneration = 0;
 onMounted(() => installed.load(sessionWorkspaceId.value));
 watch(sessionWorkspaceId, (next, previous) => {
     if (next === previous) return;
     pendingUninstall.value = null;
+    healthGeneration += 1;
+    healthResults.value = {};
+    checkingPluginId.value = null;
     installed.invalidate();
     void installed.load(next);
 }, { flush: 'sync' });
@@ -55,17 +68,16 @@ watch(sessionWorkspaceId, (next, previous) => {
 function openConfigure(pluginId: string): void {
     if (!hasCurrentWorkspace.value) return;
     setMarketplaceSetupPlugin(pluginId);
-    void navigation.openPage('marketplace', 'configure');
+    void router.replace({ query: { ...route.query, dashboard: 'marketplace', page: 'configure',
+        from: 'installed', setup: '1', plugin: pluginId, workspace: installed.workspaceId.value ?? undefined,
+        acquisition: undefined, installRequest: undefined, rollout: undefined,
+        version: installed.packages.value.find((entry) => entry.pluginId === pluginId)?.display?.version ?? undefined } });
 }
 
 async function openPlugin(pluginId: string): Promise<void> {
     if (!hasCurrentWorkspace.value) return;
-    if (!getPortableClientSource(pluginId)) {
-        toast.add({ title: 'Plugin interface unavailable', description: 'The plugin runtime is not available in this workspace. Check runtime diagnostics in Admin → Plugins. Configure opens setup only.', color: 'warning' });
-        return;
-    }
     try {
-        await openPortablePane(pluginId);
+        await openInstalledPluginPane(pluginId);
         closeDashboard();
     } catch (error) {
         toast.add({title: 'Could not open plugin', description: error instanceof Error ? error.message : 'The workspace pane is unavailable.', color: 'warning'});
@@ -76,95 +88,110 @@ function isEnabled(pluginId: string): boolean {
     return installed.enabled.value.includes(pluginId);
 }
 
-function isPortable(pluginId: string): boolean {
-    return activations.has(`portable:${pluginId}`) || activations.has(pluginId);
-}
-
 function activationFor(pluginId: string) {
     return activations.get(`portable:${pluginId}`) ?? activations.get(pluginId) ?? null;
 }
 
-type InstalledEntry = (typeof installed.packages.value)[number];
-
-/**
- * The truthful lifecycle projection for one installed package: the
- * instance-selected identity comes from the server DTO, the observed identity
- * from the live activation in this browser/workspace. A matching version with
- * a different digest never counts as running.
- */
-function lifecycleFor(entry: InstalledEntry): PluginLifecycleView {
-    const selectedDigest =
-        entry.display?.selectedDigest ?? entry.startup.selectedDigest ?? null;
-    const selected =
-        selectedDigest && entry.display?.version
-            ? {
-                  pluginId: entry.pluginId,
-                  version: entry.display.version,
-                  packageTreeSha256: selectedDigest,
-                  manifestSha256: null,
-                  source: 'instance-selection' as const,
-              }
-            : null;
+function selectedActivationFor(entry: InstalledEntry) {
     const activation = activationFor(entry.pluginId);
-    if (!activation) {
-        return {
-            selected,
-            acquisition: null,
-            runtime: { state: 'not-observed' },
-            activationTimedOut: false,
-        };
-    }
-    if (activation.status === 'blocked' || activation.status === 'stopped') {
-        return {
-            selected,
-            acquisition: null,
-            runtime: {
-                state: 'failed',
-                code: activation.blockCode ?? activation.status,
-            },
-            activationTimedOut: false,
-        };
-    }
-    const observed = {
-        pluginId: activation.pluginId,
-        version: activation.version,
-        packageTreeSha256: activation.packageDigest,
-        manifestSha256: null,
-    };
-    const matches =
-        selected !== null &&
-        activation.packageDigest === selected.packageTreeSha256 &&
-        activation.workspaceId === installed.workspaceId.value;
-    if (activation.status === 'active' && matches && isPortableActivationReady(activation)) {
-        return {
-            selected,
-            acquisition: null,
-            runtime: {
-                state: 'running',
-                identity: observed,
-                observedAt: new Date().toISOString(),
-                degradedContributions: [...activation.degradedContributions],
-            },
-            activationTimedOut: false,
-        };
-    }
-    if (matches) {
-        return {
-            selected,
-            acquisition: null,
-            runtime: { state: 'starting', identity: observed },
-            activationTimedOut: false,
-        };
-    }
-    return { selected, acquisition: null, runtime: { state: 'not-observed' }, activationTimedOut: false };
+    return activation?.workspaceId === installed.workspaceId.value &&
+        activation.packageDigest === (entry.display?.selectedDigest ?? entry.startup.selectedDigest) ? activation : null;
 }
 
-/** Single status badge: installed (selected) versus actually running here. */
-function lifecycleBadge(entry: InstalledEntry): { readonly state: string; readonly label: string } {
-    return describeLifecycleBadge(lifecycleFor(entry), {
-        enabled: isEnabled(entry.pluginId),
-        isDevelopmentCandidate: entry.localAdmission?.provenance === 'local-development',
-    });
+function trustedActivationFor(pluginId: string) {
+    const activation = trustedActivations.get(pluginId);
+    return activation?.workspaceId === installed.workspaceId.value ? activation : null;
+}
+
+type InstalledEntry = (typeof installed.packages.value)[number];
+
+function healthFor(entry: InstalledEntry): HealthResult | null {
+    const result = healthResults.value[entry.pluginId];
+    return result?.workspaceId === installed.workspaceId.value &&
+        result.digest === (entry.display?.selectedDigest ?? entry.startup.selectedDigest) ? result : null;
+}
+
+/** Reconcile and observe this browser only; no package acquisition or workflow execution. */
+async function runHealthCheck(entry: InstalledEntry): Promise<void> {
+    const workspaceId = installed.workspaceId.value;
+    const digest = entry.display?.selectedDigest ?? entry.startup.selectedDigest;
+    if (!workspaceId || !digest || !hasCurrentWorkspace.value) return;
+    const generation = ++healthGeneration;
+    checkingPluginId.value = entry.pluginId;
+    const finish = (activation: HealthResult['activation'], observedAt: string | null, reason: string | null) => {
+        if (generation !== healthGeneration) return;
+        healthResults.value = { ...healthResults.value, [entry.pluginId]: {
+            workspaceId, digest, checkedAt: new Date().toISOString(), activation, observedAt, reason,
+        } };
+    };
+    try {
+        const refreshed = await installed.load(workspaceId);
+        if (generation !== healthGeneration || installed.workspaceId.value !== workspaceId) return;
+        if (!refreshed) {
+            finish('unavailable', null, installed.error.value ?? 'Server status could not be refreshed.');
+            return;
+        }
+        const currentEntry = installed.packages.value.find((item) => item.pluginId === entry.pluginId);
+        const currentDigest = currentEntry?.display?.selectedDigest ?? currentEntry?.startup.selectedDigest;
+        if (!currentEntry || currentDigest !== digest) {
+            finish('not-applicable', null, 'The selected package changed. Run the check again.');
+            return;
+        }
+        if (currentEntry.startup.status !== 'ready' || !isEnabled(entry.pluginId)) {
+            finish('not-applicable', null, currentEntry.startup.status !== 'ready' ? 'The selected package is not ready.' : 'Enable this plugin in the workspace first.');
+            return;
+        }
+        requestWorkspacePluginReconcile('manifest-revision-change');
+        const deadline = Date.now() + 30_000;
+        for (;;) {
+            if (generation !== healthGeneration || installed.workspaceId.value !== workspaceId ||
+                (installed.packages.value.find((item) => item.pluginId === entry.pluginId)?.display?.selectedDigest ?? entry.startup.selectedDigest) !== digest) return;
+            const portable = activationFor(entry.pluginId);
+            if (portable?.workspaceId === workspaceId && portable.packageDigest === digest) {
+                if (portable.status === 'blocked' || portable.status === 'stopped') {
+                    finish('failed', null, portable.blockCode ?? portable.status);
+                    return;
+                }
+                const failedRequired = (['pane', 'sidebar'] as const).find(
+                    (surface) => portable.contributionReadiness?.[surface] === 'failed'
+                );
+                if (failedRequired) {
+                    finish('failed', null, `${failedRequired} contribution failed. Check the plugin diagnostics or configuration.`);
+                    return;
+                }
+                if (portable.status === 'active' && isPortableActivationReady(portable)) {
+                    finish('confirmed', portable.startedAt === null ? new Date().toISOString() : new Date(portable.startedAt).toISOString(),
+                        portable.degradedContributions.length ? `Optional contributions: ${portable.degradedContributions.join(', ')}` : null);
+                    return;
+                }
+            }
+            const trusted = trustedActivationFor(entry.pluginId);
+            if (trusted?.packageDigest === digest) {
+                finish('confirmed', trusted.observedAt, null);
+                return;
+            }
+            if (Date.now() >= deadline) {
+                finish('not-observed', null, 'No matching activation was observed in this browser within 30 seconds.');
+                return;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+    } finally {
+        if (generation === healthGeneration) checkingPluginId.value = null;
+    }
+}
+
+function lifecycleBadge(entry: InstalledEntry) {
+    return describePluginStatus(
+        pluginLifecycleView(entry, installed.workspaceId.value, activations, trustedActivations),
+        {
+            enabled: isEnabled(entry.pluginId),
+            siteApproval: entry.siteApproval ?? 'unknown',
+            grantReview: entry.grantReview ?? 'unknown',
+            setup: entry.setup ?? 'unknown',
+            packageReady: entry.startup.status === 'ready',
+        }
+    );
 }
 
 /**
@@ -177,22 +204,16 @@ function lifecycleBadge(entry: InstalledEntry): { readonly state: string; readon
  */
 function lifecycleBadgeClass(state: string): string {
     switch (state) {
-        case 'running':
+        case 'active':
             return 'bg-success/10 text-success ring-success/25';
-        case 'running-degraded':
+        case 'enabled-unconfirmed':
         case 'starting':
             return 'bg-info text-[var(--md-on-info)] ring-[var(--md-info)]/25';
-        case 'activation-not-confirmed':
-        case 'failed':
+        case 'needs-attention':
             return 'bg-warning/10 text-warning ring-warning/25';
         default:
             return 'bg-elevated text-[var(--ui-text-muted)] ring-[var(--ui-border)]';
     }
-}
-
-/** Previous code selection exists, so recovery can be offered (data is kept, not migrated). */
-function canRollback(entry: InstalledEntry): boolean {
-    return Boolean(entry.pointer?.previous);
 }
 
 async function toggle(pluginId: string): Promise<void> {
@@ -238,23 +259,6 @@ async function uninstall(): Promise<void> {
     }
 }
 
-async function rollback(pluginId: string): Promise<void> {
-    if (!hasCurrentWorkspace.value) return;
-    busyPluginId.value = pluginId;
-    try {
-        await installed.rollback(pluginId);
-        toast.add({ title: 'Rolled back to the previous version', color: 'success' });
-    } catch (error) {
-        toast.add({
-            title: error instanceof MarketplaceRefreshError ? 'Change saved; refresh needed' : 'Rollback was refused',
-            description: error instanceof Error ? error.message : 'State compatibility may block it.',
-            color: 'error',
-        });
-    } finally {
-        busyPluginId.value = null;
-    }
-}
-
 /** Redacted support report: no settings, secrets, content or signed URLs. */
 async function copyDiagnostics(): Promise<void> {
     try {
@@ -276,6 +280,7 @@ async function copyDiagnostics(): Promise<void> {
                 contributionCount: activation.contributions.length,
                 degradedContributions: [...activation.degradedContributions].slice(0, 16),
             })),
+            trustedActivations: [...trustedActivations.values()],
             selected: installed.packages.value.map((entry) => ({
                 pluginId: entry.pluginId,
                 version: entry.display?.version ?? null,
@@ -341,6 +346,7 @@ async function apiGet<T>(url: string): Promise<T> {
 
         <section v-if="!installed.error.value || installed.packages.value.length > 0" class="flex flex-col gap-4" data-testid="marketplace-installed">
             <h3 class="text-base font-medium">Installed</h3>
+            <p class="text-sm text-(--ui-text-muted)">Packages are installed once for this OR3 site. Enable or disable each plugin for the current workspace.</p>
             <div v-if="installed.loading.value" class="text-sm text-(--ui-text-muted)">Loading…</div>
             <div v-else-if="!installed.error.value && installed.packages.value.length === 0" class="text-sm text-(--ui-text-muted)">
                 No packages are installed yet. Browse the marketplace to add one.
@@ -364,13 +370,25 @@ async function apiGet<T>(url: string): Promise<T> {
                             {{ lifecycleBadge(entry).label }}
                         </span>
                         <UBadge
-                            v-if="activationFor(entry.pluginId)?.status === 'blocked'"
+                            v-if="selectedActivationFor(entry)?.status === 'blocked'"
                             color="warning"
                             variant="subtle"
                         >
-                            Blocked: {{ activationFor(entry.pluginId)?.blockCode }}
+                            Blocked: {{ selectedActivationFor(entry)?.blockCode }}
                         </UBadge>
                     </div>
+                    <p class="text-xs text-(--ui-text-muted) break-words">{{ lifecycleBadge(entry).reason }}</p>
+                    <div v-if="healthFor(entry)" class="rounded-md border border-(--ui-border) p-3 text-xs space-y-1" role="status">
+                        <p>Checked {{ healthFor(entry)?.checkedAt }} for workspace {{ healthFor(entry)?.workspaceId }}.</p>
+                        <p>Selected package: {{ entry.startup.status === 'ready' ? 'ready' : 'blocked' }}</p>
+                        <p>Workspace: {{ isEnabled(entry.pluginId) ? 'enabled' : 'disabled' }}; permissions: {{ entry.grantReview ?? 'unknown' }}; setup: {{ entry.setup ?? 'unknown' }}</p>
+                        <p>Browser activation: {{ healthFor(entry)?.activation === 'not-observed' ? 'Enabled; browser check pending' : healthFor(entry)?.activation === 'unavailable' ? 'Check unavailable' : healthFor(entry)?.activation }}<span v-if="healthFor(entry)?.observedAt"> at {{ healthFor(entry)?.observedAt }}</span></p>
+                        <p v-if="healthFor(entry)?.reason" class="break-words">{{ healthFor(entry)?.reason }}</p>
+                    </div>
+                    <UButton v-if="installed.canManageSitePlugins.value && (lifecycleBadge(entry).action === 'approve-site' || lifecycleBadge(entry).action === 'review-permissions')"
+                        size="xs" color="neutral" variant="soft" :to="`/admin/plugins?plugin=${encodeURIComponent(entry.pluginId)}`">
+                        {{ lifecycleBadge(entry).action === 'approve-site' ? 'Review site approval' : 'Review permissions' }}
+                    </UButton>
                     <details class="text-xs text-(--ui-text-muted)">
                         <summary class="cursor-pointer">Package identities</summary>
                         <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
@@ -379,13 +397,23 @@ async function apiGet<T>(url: string): Promise<T> {
                             <dt>Selected digest</dt>
                             <dd class="break-all">{{ entry.display?.selectedDigest ?? entry.startup.selectedDigest ?? 'none' }}</dd>
                             <dt>Running version</dt>
-                            <dd class="break-all">{{ activationFor(entry.pluginId)?.version ?? 'not running here' }}</dd>
+                            <dd class="break-all">{{ activationFor(entry.pluginId)?.version ?? trustedActivationFor(entry.pluginId)?.version ?? 'not running here' }}</dd>
                             <dt>Running digest</dt>
-                            <dd class="break-all">{{ activationFor(entry.pluginId)?.packageDigest ?? 'not running here' }}</dd>
+                            <dd class="break-all">{{ activationFor(entry.pluginId)?.packageDigest ?? trustedActivationFor(entry.pluginId)?.packageDigest ?? 'not running here' }}</dd>
                         </dl>
                         <p class="mt-2">Running means this browser observed the exact selected package; a matching version with a different digest never counts.</p>
                     </details>
                     <div class="flex flex-wrap gap-2">
+                        <UButton size="sm" color="neutral" variant="soft"
+                            :to="marketplacePluginDeepLink('', entry.pluginId, undefined, undefined, installed.workspaceId.value ?? undefined)">
+                            View details
+                        </UButton>
+                        <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-heart-pulse"
+                            :loading="checkingPluginId === entry.pluginId"
+                            :disabled="!hasCurrentWorkspace || !entry.display?.selectedDigest || checkingPluginId !== null"
+                            @click="runHealthCheck(entry)">
+                            Run check
+                        </UButton>
                         <UButton
                             v-if="entry.display?.canOpen"
                             size="sm"
@@ -430,19 +458,6 @@ async function apiGet<T>(url: string): Promise<T> {
                             @click="requestUninstall(entry.pluginId)"
                         >
                             Uninstall
-                        </UButton>
-                        <UButton
-                            v-if="installed.canManageSitePlugins.value && canRollback(entry)"
-                            size="sm"
-                            color="neutral"
-                            variant="ghost"
-                            icon="i-lucide-undo-2"
-                            title="Restores the previous code selection. Plugin data is kept, not migrated: data written by the newer version may not be readable."
-                            :loading="busyPluginId === entry.pluginId"
-                            :disabled="!hasCurrentWorkspace || installed.loading.value || installed.mutating.value"
-                            @click="rollback(entry.pluginId)"
-                        >
-                            Roll back
                         </UButton>
                     </div>
                 </li>

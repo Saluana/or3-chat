@@ -194,11 +194,12 @@ export const SUPER_ADMIN_KIND = 'super_admin';
  * consumes `dashboard`/`plugin` from the query, opens Marketplace and selects
  * the plugin. A link no code reads is not a deep link.
  */
-export function marketplacePluginDeepLink(origin: string, pluginId: string, version?: string, installRequestId?: string): string {
+export function marketplacePluginDeepLink(origin: string, pluginId: string, version?: string, installRequestId?: string, workspaceId?: string): string {
     const params = new URLSearchParams({ dashboard: 'marketplace', plugin: pluginId });
     if (version) params.set('version', version);
     if (installRequestId) params.set('installRequest', installRequestId);
-    return `${origin}/?${params.toString()}`;
+    if (workspaceId) params.set('workspace', workspaceId);
+    return `${origin}/chat?${params.toString()}`;
 }
 
 /**
@@ -499,6 +500,8 @@ export interface MarketplaceUpdateCheckPlugin {
         readonly publishedAt: string;
         readonly profile?: string;
         readonly approvalRequired: boolean;
+        readonly affectedWorkspaces: number;
+        readonly enabledWorkspaceSha256: string;
         readonly addedAccess: readonly { readonly kind: string; readonly detail: string }[];
     };
 }
@@ -620,7 +623,7 @@ export function useMarketplaceInstall() {
      */
     const restore = async (
         pluginId: string,
-        options: { readonly version?: string; readonly workspaceId?: string } = {}
+        options: { readonly version?: string; readonly workspaceId?: string; readonly operationId?: string } = {}
     ): Promise<AcquisitionStatusView | null> => {
         const generation = ++operationGeneration;
         const operations = await listOperations(pluginId);
@@ -643,10 +646,12 @@ export function useMarketplaceInstall() {
                 !matching.some((newer) => newer.workspaceId === operation.workspaceId &&
                     newer.status === 'completed' && newer.updatedAt > operation.updatedAt)
         );
-        const relevant =
-            (options.version === undefined
-                ? null
-                : resumableOperationFor(unfinished, options.version)) ?? unfinished[0] ?? null;
+        const relevant = options.operationId
+            ? unfinished.find((operation) => operation.operationId === options.operationId &&
+                (options.version === undefined || operation.version === options.version)) ?? null
+            : options.version === undefined
+                ? unfinished[0] ?? null
+                : resumableOperationFor(unfinished, options.version);
         if (!relevant) return null;
         if (generation !== operationGeneration) return null;
         operationId.value = relevant.operationId;
@@ -736,6 +741,7 @@ export function useMarketplaceInstall() {
         readonly pluginId: string;
         readonly version?: string;
         readonly workspaceId?: string;
+        readonly expectedWorkspaceId?: string;
         readonly installRequestId?: string;
     }): Promise<AcquisitionStatusView | null> => {
         if (running.value) return null;
@@ -751,6 +757,7 @@ export function useMarketplaceInstall() {
                         pluginId: input.pluginId,
                         ...(input.version === undefined ? {} : { version: input.version }),
                         ...(input.workspaceId === undefined ? {} : { workspaceId: input.workspaceId }),
+                        ...(input.expectedWorkspaceId === undefined ? {} : { expectedWorkspaceId: input.expectedWorkspaceId }),
                         ...(input.installRequestId === undefined ? {} : { installRequestId: input.installRequestId }),
                     },
                 }
@@ -1072,6 +1079,7 @@ export function useMarketplaceConsent() {
 
     const approve = async (input: {
         readonly pluginId: string;
+        readonly expectedWorkspaceId: string;
         readonly approvedGrants: readonly string[];
         readonly version?: string;
         /** Staged digest (or signed archive digest) shown to the reviewer. */
@@ -1079,6 +1087,7 @@ export function useMarketplaceConsent() {
         /** Signed authority hash shown to the reviewer. */
         readonly expectedAuthoritySha256: string;
         readonly deploymentWide?: boolean;
+        readonly expectedEnabledWorkspaceSha256?: string;
     }): Promise<boolean> => {
         saving.value = true;
         error.value = null;
@@ -1086,9 +1095,11 @@ export function useMarketplaceConsent() {
             await apiPost(`/api/admin/plugins/packages/${input.pluginId}/grants`, {
                 body: {
                     approvedGrants: [...input.approvedGrants],
+                    expectedWorkspaceId: input.expectedWorkspaceId,
                     expectedPackageDigest: input.expectedPackageDigest,
                     expectedAuthoritySha256: input.expectedAuthoritySha256,
                     ...(input.deploymentWide ? { deploymentWide: true } : {}),
+                    ...(input.expectedEnabledWorkspaceSha256 ? { expectedEnabledWorkspaceSha256: input.expectedEnabledWorkspaceSha256 } : {}),
                     ...(input.version === undefined ? {} : { version: input.version }),
                 },
             });
@@ -1140,6 +1151,9 @@ export interface InstalledPackageDisplay {
 export interface InstalledPackageView {
     readonly pluginId: string;
     readonly workspaceEnabled: boolean;
+    readonly siteApproval?: 'approved' | 'required' | 'unknown';
+    readonly grantReview?: 'current' | 'required' | 'unknown';
+    readonly setup?: 'ready' | 'required' | 'blocked' | 'unknown';
     readonly pointer: {
         readonly current?: { readonly packageDigest?: string } | null;
         readonly candidate?: { readonly packageDigest?: string } | null;
@@ -1165,6 +1179,20 @@ export class MarketplaceRefreshError extends Error {
         super('The change was saved, but the installed list could not be refreshed. Refresh before making another change.');
         this.name = 'MarketplaceRefreshError';
     }
+}
+
+export interface MarketplaceRollbackReview {
+    readonly ok: boolean;
+    readonly pluginId: string;
+    readonly currentVersion: string;
+    readonly previousVersion: string;
+    readonly currentDigest: string;
+    readonly previousDigest: string;
+    readonly pointerRevision: number;
+    readonly enabledWorkspaces: number;
+    readonly enabledWorkspaceIds: readonly string[];
+    readonly enabledWorkspaceSha256: string;
+    readonly blocking: readonly { readonly workspaceId: string; readonly code: string }[];
 }
 
 /** Installed packages, enabled state and pending candidates for one workspace. */
@@ -1365,9 +1393,18 @@ export function useMarketplaceInstalled() {
         canManageSitePlugins.value
             ? mutate(`/api/admin/plugins/packages/${pluginId}/uninstall`, { expectedPackageDigest }, 'manifest-revision-change')
             : Promise.reject(new Error('An administrator must remove plugins.'));
-    const rollback = (pluginId: string) =>
+    const rollbackReview = (pluginId: string) =>
         canManageSitePlugins.value
-            ? mutate(`/api/admin/plugins/packages/${pluginId}/rollback`, {}, 'manifest-revision-change')
+            ? apiGet<MarketplaceRollbackReview>(`/api/admin/plugins/packages/${encodeURIComponent(pluginId)}/rollback-review`)
+            : Promise.reject(new Error('An administrator must review rollback.'));
+    const rollback = (review: MarketplaceRollbackReview) =>
+        canManageSitePlugins.value
+            ? mutate(`/api/admin/plugins/packages/${encodeURIComponent(review.pluginId)}/rollback`, {
+                expectedCurrentDigest: review.currentDigest,
+                expectedPreviousDigest: review.previousDigest,
+                expectedPointerRevision: review.pointerRevision,
+                expectedEnabledWorkspaceSha256: review.enabledWorkspaceSha256,
+            }, 'manifest-revision-change')
             : Promise.reject(new Error('An administrator must roll back plugins.'));
 
     /** Updates are candidates: same lifecycle, promoted through the package API. */
@@ -1392,6 +1429,7 @@ export function useMarketplaceInstalled() {
         invalidate,
         setEnabled,
         uninstall,
+        rollbackReview,
         rollback,
         reconcile,
     };

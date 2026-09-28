@@ -9,7 +9,6 @@ import type { ContentPart } from './types';
 import { isWorkflowMessageData } from './workflow-types';
 import {
     DEFAULT_MAX_INPUT_TOKENS,
-    MAX_CHAT_INPUT_TOKENS,
     MAX_CHAT_OUTPUT_RESERVE_TOKENS,
     MIN_CHAT_INPUT_TOKENS,
 } from './constants';
@@ -298,13 +297,7 @@ export function resolveChatInputTokenBudget(
         Math.max(1, contextLength - 1)
     );
 
-    return Math.max(
-        minimumBudget,
-        Math.min(
-            contextLength - outputReserve,
-            MAX_CHAT_INPUT_TOKENS
-        )
-    );
+    return Math.max(minimumBudget, contextLength - outputReserve);
 }
 
 /**

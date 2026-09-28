@@ -408,7 +408,9 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
                 artifact: {
                     kind: 'package-v2',
                     packageDigest: catalog.packageDigest,
-                    ...(clientEntryIdentity ? { client: clientEntryIdentity } : {}),
+                    ...(clientEntryIdentity
+                        ? { client: clientEntryIdentity, clientEntry: clientEntryIdentity.entry }
+                        : {}),
                     serverRoutes: manifest.runtime.server?.routes.map((route) => ({
                         method: route.method,
                         path: route.path,

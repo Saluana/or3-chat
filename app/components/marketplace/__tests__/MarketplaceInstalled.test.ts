@@ -22,10 +22,16 @@ vi.mock('~/composables/auth/useSessionContext', async () => {
  */
 const fetchMock = vi.fn();
 const openPageMock = vi.fn();
+const reconcileMock = vi.fn();
+vi.mock('~/composables/plugins/bundled-v1-manager-runtime', () => ({ requestWorkspacePluginReconcile: (...args: unknown[]) => reconcileMock(...args) }));
 const sourceMock = vi.fn(() => ({}));
-vi.mock('~/composables/plugins/portable-pane', () => ({openPortablePane: (...args: unknown[]) => openPageMock(...args)}));
-const { activationsState } = vi.hoisted(() => ({
+vi.mock('~/composables/plugins/portable-pane', () => ({openInstalledPluginPane: (...args: unknown[]) => openPageMock(...args)}));
+const { activationsState, trustedActivationsState } = vi.hoisted(() => ({
     activationsState: { current: new Map() as Map<string, unknown> },
+    trustedActivationsState: { current: new Map() as Map<string, unknown> },
+}));
+vi.mock('~/composables/plugins/trusted-v2-manager', () => ({
+    useTrustedV2Activations: () => trustedActivationsState.current,
 }));
 vi.mock('~/composables/plugins/portable-client-runtime', () => ({
     getPortableClientSource: () => sourceMock(),
@@ -59,6 +65,9 @@ function pageResponse(
             {
                 pluginId: 'sample.plugin',
                 workspaceEnabled: true,
+                siteApproval: 'approved',
+                grantReview: 'current',
+                setup: 'ready',
                 pointer: {
                     current: { packageDigest: `sha256-${'a'.repeat(64)}` },
                     candidate: null,
@@ -80,6 +89,8 @@ function pageResponse(
 beforeEach(async () => {
     fetchMock.mockReset();
     activationsState.current = new Map();
+    trustedActivationsState.current = new Map();
+    reconcileMock.mockReset();
     const auth = await import('~/composables/auth/useSessionContext') as unknown as { testWorkspace: Ref<string | null>; testDeploymentAdmin: Ref<boolean> };
     auth.testWorkspace.value = null;
     auth.testDeploymentAdmin.value = true;
@@ -219,7 +230,22 @@ describe('MarketplaceInstalled', () => {
         expect(wrapper.text()).toContain('Running');
     });
 
-    it('shows Not observed when another digest runs under a matching version', async () => {
+    it('shows a trusted-host package as Running when this browser activated the selected digest', async () => {
+        const digest = `sha256-${'a'.repeat(64)}`;
+        fetchMock.mockResolvedValue(pageResponse({ version: '2.1.0', selectedDigest: digest, canOpen: true }));
+        trustedActivationsState.current = new Map([['sample.plugin', {
+            pluginId: 'sample.plugin', version: '2.1.0', packageDigest: digest,
+            workspaceId: 'ws-1', observedAt: new Date(0).toISOString(),
+        }]]);
+        const wrapper = mount(MarketplaceInstalled, { global: { stubs } });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(wrapper.text()).toContain('Running');
+        expect(wrapper.text()).not.toContain('Not observed');
+        expect(wrapper.text()).toContain(digest);
+    });
+
+    it('keeps a matching version with another digest unconfirmed', async () => {
         fetchMock.mockResolvedValue(
             pageResponse({
                 version: '2.1.0',
@@ -247,43 +273,115 @@ describe('MarketplaceInstalled', () => {
         const wrapper = mount(MarketplaceInstalled, { global: { stubs } });
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        expect(wrapper.text()).toContain('Not observed');
+        expect(wrapper.text()).toContain('Enabled; browser check pending');
         const badges = wrapper.findAll('span').map((span) => span.text());
         expect(badges).not.toContain('Running');
     });
 
-    it('offers roll back only when a previous selection exists', async () => {
-        fetchMock.mockResolvedValue(
-            pageResponse(
-                {
-                    version: '2.1.0',
-                    selectedDigest: `sha256-${'a'.repeat(64)}`,
-                    candidateVersion: null,
-                    candidateDigest: null,
-                    canOpen: true,
-                },
-                { previous: { packageDigest: `sha256-${'9'.repeat(64)}` } }
-            )
-        );
+    it('does not report a stale package failure as the selected package failing', async () => {
+        const selectedDigest = `sha256-${'a'.repeat(64)}`;
+        fetchMock.mockResolvedValue(pageResponse({ version: '2.1.0', selectedDigest, canOpen: true }));
+        activationsState.current = new Map([['sample.plugin', {
+            pluginId: 'sample.plugin', version: '2.0.0', packageDigest: `sha256-${'f'.repeat(64)}`,
+            workspaceId: 'ws-1', generation: 1, status: 'blocked', blockCode: 'old-runtime-failure', degradedContributions: [],
+        }]]);
         const wrapper = mount(MarketplaceInstalled, { global: { stubs } });
         await new Promise((resolve) => setTimeout(resolve, 0));
-        expect(wrapper.text()).toContain('Roll back');
+        expect(wrapper.text()).toContain('Enabled; browser check pending');
+        expect(wrapper.text()).not.toContain('Plugin startup failed in this browser');
+        expect(wrapper.text()).not.toContain('old-runtime-failure');
+        wrapper.unmount();
     });
 
-    it('hides roll back when no previous selection exists', async () => {
-        fetchMock.mockResolvedValue(
-            pageResponse({
-                version: '2.1.0',
-                selectedDigest: `sha256-${'a'.repeat(64)}`,
-                candidateVersion: null,
-                candidateDigest: null,
-                canOpen: true,
-            })
-        );
+    it('checks the exact selected package in the current browser without reinstalling it', async () => {
+        const digest = `sha256-${'a'.repeat(64)}`;
+        fetchMock.mockResolvedValue(pageResponse({ version: '2.1.0', selectedDigest: digest, canOpen: true }));
+        trustedActivationsState.current = new Map([['sample.plugin', {
+            pluginId: 'sample.plugin', version: '2.1.0', packageDigest: digest,
+            workspaceId: 'ws-1', observedAt: '2026-09-27T00:00:00.000Z',
+        }]]);
         const wrapper = mount(MarketplaceInstalled, { global: { stubs } });
         await new Promise((resolve) => setTimeout(resolve, 0));
-        expect(wrapper.text()).not.toContain('Roll back');
+        await wrapper.findAll('button').find((button) => button.text() === 'Run check')!.trigger('click');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(wrapper.text()).toContain('Selected package: ready');
+        expect(wrapper.text()).toContain('Workspace: enabled');
+        expect(wrapper.text()).toContain('Browser activation: confirmed');
+        expect(wrapper.text()).toContain('2026-09-27T00:00:00.000Z');
+        expect(reconcileMock).toHaveBeenCalledOnce();
+        expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining('/acquisitions'), expect.anything());
+        wrapper.unmount();
     });
+
+    it('refreshes server readiness before trusting a matching browser activation', async () => {
+        const digest = `sha256-${'a'.repeat(64)}`;
+        const ready = pageResponse({ version: '2.1.0', selectedDigest: digest, canOpen: true });
+        const blocked = pageResponse({ version: '2.1.0', selectedDigest: digest, canOpen: true });
+        (blocked.packagePlugins as Array<{ startup: { status: string } }>)[0]!.startup.status = 'blocked';
+        fetchMock.mockResolvedValueOnce(ready).mockResolvedValueOnce(blocked);
+        trustedActivationsState.current = new Map([['sample.plugin', {
+            pluginId: 'sample.plugin', version: '2.1.0', packageDigest: digest,
+            workspaceId: 'ws-1', observedAt: '2026-09-27T00:00:00.000Z',
+        }]]);
+        const wrapper = mount(MarketplaceInstalled, { global: { stubs } });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await wrapper.findAll('button').find((button) => button.text() === 'Run check')!.trigger('click');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(wrapper.text()).toContain('Selected package: blocked');
+        expect(wrapper.text()).toContain('Browser activation: not-applicable');
+        expect(reconcileMock).not.toHaveBeenCalled();
+        wrapper.unmount();
+    });
+
+    it('reports a failed server refresh as unavailable instead of an activation timeout', async () => {
+        const digest = `sha256-${'a'.repeat(64)}`;
+        fetchMock.mockResolvedValueOnce(pageResponse({ version: '2.1.0', selectedDigest: digest, canOpen: true }))
+            .mockRejectedValueOnce(new Error('server offline'));
+        const wrapper = mount(MarketplaceInstalled, { global: { stubs } });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await wrapper.findAll('button').find((button) => button.text() === 'Run check')!.trigger('click');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(wrapper.text()).toContain('Browser activation: Check unavailable');
+        wrapper.unmount();
+    });
+
+    it('reports a failed required contribution as a failure without waiting for timeout', async () => {
+        const digest = `sha256-${'a'.repeat(64)}`;
+        fetchMock.mockResolvedValue(pageResponse({ version: '2.1.0', selectedDigest: digest, canOpen: true }));
+        activationsState.current = new Map([['sample.plugin', {
+            pluginId: 'sample.plugin', version: '2.1.0', packageDigest: digest,
+            workspaceId: 'ws-1', status: 'active', blockCode: null, startedAt: Date.now(),
+            contributionReadiness: { pane: 'failed', sidebar: 'ready', tools: 'not-required' },
+            degradedContributions: [],
+        }]]);
+        const wrapper = mount(MarketplaceInstalled, { global: { stubs } });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await wrapper.findAll('button').find((button) => button.text() === 'Run check')!.trigger('click');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(wrapper.text()).toContain('Browser activation: failed');
+        expect(wrapper.text()).toContain('pane contribution failed');
+        wrapper.unmount();
+    });
+
+    it('allows a new browser check after switching workspaces during a pending check', async () => {
+        const digest = `sha256-${'a'.repeat(64)}`;
+        const display = { version: '2.1.0', selectedDigest: digest, canOpen: true };
+        const auth = await import('~/composables/auth/useSessionContext') as unknown as { testWorkspace: Ref<string | null> };
+        auth.testWorkspace.value = 'ws-1';
+        fetchMock.mockResolvedValueOnce(pageResponse(display)).mockResolvedValue({ ...pageResponse(display), workspaceId: 'ws-2' });
+        const wrapper = mount(MarketplaceInstalled, { global: { stubs } });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const check = () => wrapper.findAll('button').find((button) => button.text() === 'Run check')!;
+        await check().trigger('click');
+        expect(check().attributes('disabled')).toBeDefined();
+        auth.testWorkspace.value = 'ws-2';
+        await vi.waitFor(() => {
+            expect(check()).toBeDefined();
+            expect(check()?.attributes('disabled')).toBeUndefined();
+        });
+        wrapper.unmount();
+    });
+
 });
 
 it('requires versioned instance-wide confirmation and cancellation sends no mutation', async () => {

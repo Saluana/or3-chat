@@ -13,12 +13,6 @@ export {
     type OpenRouterClientConfig,
 } from './client';
 
-// Provider-neutral workflow model gateway factory (R3.AC5, R3.AC6)
-export {
-    createWorkflowModelGateway,
-    type WorkflowGatewayConfig,
-} from './gateway';
-
 // Error handling utilities
 export {
     normalizeSDKError,

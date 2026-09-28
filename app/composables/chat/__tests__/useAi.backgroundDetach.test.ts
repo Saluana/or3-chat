@@ -6,6 +6,16 @@ const ensureBackgroundJobTrackerMock = vi.fn();
 const subscribeBackgroundJobMock = vi.fn();
 const stopBackgroundJobTrackingMock = vi.fn();
 const runForegroundStreamLoopMock = vi.fn();
+const buildOpenRouterMessagesForSendMock = vi.fn(async (_params: { maxInputTokens?: number }) => [
+    { role: 'user', content: 'hello' },
+]);
+const fetchModelsMock = vi.fn(async (options?: { force?: boolean }) => {
+    if (options?.force) {
+        catalogModelsRef.value = [{ id: 'xiaomi/mimo-v2.6-pro', context_length: 1_048_576 }];
+    }
+    return catalogModelsRef.value;
+});
+const catalogModelsRef = ref<any[]>([{ id: 'test-model' }]);
 const appendMessageMock = vi.fn();
 const upsertMessageMock = vi.fn();
 const hookOnMock = vi.fn();
@@ -150,7 +160,8 @@ vi.mock('~/utils/chat/uiMessages', () => ({
     recordRawMessage: vi.fn(),
 }));
 
-vi.mock('~/utils/chat/messages', () => ({
+vi.mock('~/utils/chat/messages', async (importOriginal) => ({
+    resolveChatInputTokenBudget: (await importOriginal<typeof import('~/utils/chat/messages')>()).resolveChatInputTokenBudget,
     buildParts: (text: string) => [{ type: 'text', text }],
     deriveMessageContent: ({
         content,
@@ -169,7 +180,6 @@ vi.mock('~/utils/chat/messages', () => ({
         /dall-e|stable-diffusion|midjourney|imagen/i.test(modelId)
             ? ['image', 'text']
             : ['text'],
-    resolveChatInputTokenBudget: () => 8000,
 }));
 
 vi.mock('~/utils/chat/openrouterStream', () => ({
@@ -236,8 +246,9 @@ vi.mock('~/composables/chat/useAiSettings', () => ({
 
 vi.mock('~/composables/chat/useModelStore', () => ({
     useModelStore: () => ({
-        catalog: ref([{ id: 'test-model' }]),
+        catalog: catalogModelsRef,
         favoriteModels: ref([]),
+        fetchModels: fetchModelsMock,
     }),
 }));
 
@@ -284,9 +295,7 @@ vi.mock('~/utils/chat/useAi-internal', () => ({
     runForegroundStreamLoop: runForegroundStreamLoopMock,
     resolveSystemPromptText: vi.fn(async () => ''),
     buildSystemPromptMessage: vi.fn(async () => null),
-    buildOpenRouterMessagesForSend: vi.fn(async () => [
-        { role: 'user', content: 'hello' },
-    ]),
+    buildOpenRouterMessagesForSend: buildOpenRouterMessagesForSendMock,
     enforceOpenRouterMessageTokenBudget: vi.fn(async (messages) => messages),
     retryMessageImpl: vi.fn(),
     continueMessageImpl: vi.fn(),
@@ -352,6 +361,7 @@ describe('useChat background detach race', () => {
         messageStore.clear();
         activeDb = dbMock;
         consumeWorkflowSend = false;
+        catalogModelsRef.value = [{ id: 'test-model' }];
         resolveBackgroundStart = null;
         latestTracker = null;
         enabledToolDefsRef.value = [];
@@ -464,6 +474,25 @@ describe('useChat background detach race', () => {
         );
 
         messagesByThreadMock.mockResolvedValue([]);
+    });
+
+    it('refreshes stale catalog metadata before preparing a chat request', async () => {
+        consumeWorkflowSend = true;
+        vi.resetModules();
+        const { useChat } = await import('~/composables/chat/useAi');
+        const chat = useChat([], 'thread-1');
+
+        await chat.sendMessage('keep the full conversation', {
+            files: [],
+            model: 'xiaomi/mimo-v2.6-pro',
+            file_hashes: [],
+            online: false,
+            context_hashes: [],
+        } as any);
+
+        expect(fetchModelsMock).toHaveBeenCalledWith({ force: true });
+        expect(buildOpenRouterMessagesForSendMock.mock.lastCall?.[0].maxInputTokens)
+            .toBe(1_040_384);
     });
 
     it('does not register a late UI subscriber after clear() detaches the chat', async () => {

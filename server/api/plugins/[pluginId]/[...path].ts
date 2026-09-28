@@ -20,6 +20,7 @@ import {
     ServerModuleResolverError,
     type RuntimePluginRouteHandler,
 } from '../../../admin/plugins/server-module-resolver';
+import { createWorkflowServerBridge } from '../../../utils/workflows/plugin-server-bridge';
 
 type RuntimeRouteDef = {
     method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -286,6 +287,9 @@ export default defineEventHandler(async (event) => {
         routePath: normalizeRoutePath(requestPath) || '/',
     });
     event.context.or3PluginRequest = authorizedContext;
+    if (pluginId === 'or3-workflows') {
+        event.context.or3WorkflowServer = createWorkflowServerBridge();
+    }
 
     try {
         const resolved = await serverModuleResolver.resolveHandler({

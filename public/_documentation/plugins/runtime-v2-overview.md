@@ -2,16 +2,15 @@
 
 Plugin Runtime V2 adds digest-addressed packages, a frozen V1 compatibility
 line, `@or3/plugin-sdk` authoring, and optional isolation. The generation-safe
-manager is promoted by default, but it currently manages bundled V1
-descriptors. The V2 hook engine, digest module loader, and isolation remain off
-by default.
+manager is on by default for bundled V1 plugins. The V2 hook engine and digest
+module loader remain off by default.
 
-> **Integration status:** Manifest V2 ZIP uploads now enter the immutable
-> candidate → canary → promotion flow and promoted **server-only** packages can
-> serve authorized workspace routes in an SSR deployment. The browser continues
-> to activate only V1 descriptors. V2 packages with a client entry are reported
-> as `trusted-host-ui-abi-unproven` until the host ESM facade, Vue/SDK singleton,
-> and CSP qualification suite passes.
+> **Integration status:** Manifest V2 ZIP uploads enter the immutable candidate
+> → canary → promotion flow. Promoted packages can serve authorized server routes.
+> A reviewed `trusted-host` package with a host client entry can also register
+> browser contributions when both V2 runtime and module loader are enabled. The
+> browser candidate canary verifies the exact entry digest, host ABI and import;
+> activation after installation runs `setup` in the host page.
 
 ## What stays the same (V1)
 
@@ -28,27 +27,46 @@ See [V1 support and migration](/plugins/v1-support-and-migration).
 - Manager records, quarantine/retry, package promote/rollback, Runtime Inspector controls
 - Optional isolated client/server execution (not silent fallback to trusted-host)
 
-## Server-only package rollout
+## Package rollout
 
-V2 is disabled by default and is selected only at process startup. Keep the
-first canary to one or a few workspace IDs:
+Workflows and External Agents use this flow as separate trusted-host packages.
+Their editor/session screens, commands, activity sources, message rendering,
+and package routes activate only after workspace enablement. Disabling either
+package disposes its contributions while retaining saved posts, settings, and
+credentials for a later enablement. Their package READMEs list the declared
+grants and build commands.
+
+The digest module loader is disabled by default and is selected at process
+startup. Keep the first canary to one or a few workspace IDs. Client packages
+also require the V2 browser manager:
 
 ```bash
 OR3_PLUGIN_MODULE_LOADER_V2_ENABLED=true
 OR3_PLUGIN_MODULE_LOADER_V2_WORKSPACE_IDS=workspace-canary-1
+OR3_PLUGIN_RUNTIME_V2_ENABLED=true
 ```
 
-The initial supported profile is `trusted-host`, server routes only, with no
-requested grants or optional features. A package requesting client code,
-isolation, a grant, or an unsupported feature remains a stored but blocked
-candidate; it is not downgraded to a different execution mode.
+`trusted-host` browser packages require `runtime.client.isolation: host` and
+explicitly reviewed grants. The host checks its declared feature and grant
+support before activation. A package requesting unsupported authority remains
+a stored but blocked candidate; it is never downgraded to another execution
+mode. Trusted-host code runs in the host page and has the host page's trust
+boundary. The isolated-client profile uses its separate sandbox and canary.
 
 1. Upload a Manifest V2 ZIP to `POST /api/admin/extensions/install`. A valid
    upload returns an inactive candidate digest; it does not enable the plugin.
-2. Run `POST /api/admin/plugins/packages/:pluginId/canary`, then promote that
+   If authority review is pending, the response says `grantReviewRequired` and
+   keeps the verified candidate available for review. Trusted-host packages
+   without portable setup descriptors bind consent to their manifest authority.
+   A site administrator must upload V2 packages. The authenticated upload records the exact package digest as an admin ZIP
+   upload. Its later promotion and workspace permissions use that provenance;
+   marketplace acquisitions still require a verified signed release.
+2. Review requested authority through the package grants control, run
+   `POST /api/admin/plugins/packages/:pluginId/canary`, then promote that
    digest with `POST /api/admin/plugins/packages/:pluginId/promote`.
 3. Enable the plugin in the target workspace with the existing workspace-plugin
-   control. Only then can declared server routes run for authorized users.
+   control. Only then can declared server routes and client contributions run
+   for authorized users.
 4. Roll back with `POST /api/admin/plugins/packages/:pluginId/rollback`, or
    disable it with the workspace-plugin control. Both retain package bytes,
    settings, and state. A rollback commits the verified previous target; if the
@@ -79,8 +97,8 @@ For an immediate startup rollback, set
 `OR3_PLUGIN_MODULE_LOADER_V2_ENABLED=false` and restart the server. This makes
 all V2 package code inactive without changing candidate/current/previous
 pointers or deleting package data. `OR3_PLUGIN_RUNTIME_V2_ENABLED` and
-`OR3_PLUGIN_RUNTIME_V2_WORKSPACE_IDS` are separate controls for the V1
-generation-safe manager; they do not enable V2 packages.
+`OR3_PLUGIN_RUNTIME_V2_WORKSPACE_IDS` select where the bundled V1 manager is
+promoted; they do not enable the digest module loader by themselves.
 
 ## Tooling
 

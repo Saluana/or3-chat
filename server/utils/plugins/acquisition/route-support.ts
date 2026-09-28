@@ -32,6 +32,7 @@ import {
 } from '../../../admin/plugins/package-operation-support';
 import { CLIENT_CANARY_PENDING_CODE } from '../../../admin/plugins/candidate-client-canary';
 import { PluginPackageRouteCatalog } from '../../../admin/plugins/package-route-catalog';
+import { isSiteReleaseStillApproved } from '../../../admin/plugins/site-policy-service';
 import type { AcquisitionConfig } from './config';
 import { acquisitionConfig } from './config';
 import { PluginAcquisitionOperationStore } from './operation-store';
@@ -162,6 +163,12 @@ export async function acquisitionServiceFor(
         ),
         services,
         routeCatalog: new PluginPackageRouteCatalog(services.packages, services.pointers),
+        verifySiteApproval: (release) => isSiteReleaseStillApproved(release.pluginId, {
+            version: release.version,
+            releaseId: release.releaseId,
+            packageTreeSha256: release.packageTreeSha256,
+            authoritySha256: release.authoritySha256,
+        }),
         hostCapabilities: OR3_PLUGIN_V2_HOST_CAPABILITIES,
         setupPlan: await setupPlanFor(event, setupOwnerUserId || requesterUserId),
         // A client profile is only satisfied by evidence a real browser

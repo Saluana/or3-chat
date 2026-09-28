@@ -62,12 +62,12 @@ when the registrations are removed.
 
 ## Examples
 
-- Workflows register `workflow-entry` through the public post-source API
-  (`app/plugins/workflows.client.ts`).
+- The installed Workflows package registers `workflow-entry` through the
+  public post-source API. Its source and aliases disappear when disabled.
 - The todo pane example registers `todo:` with searchable `completed` metadata
   (`app/plugins/examples/custom-pane-todo-example.client.ts`).
 
-Both examples use `Or3WorkspacePluginApi`; plugins should not import the
+Both examples register through the plugin API; plugins should not import the
 internal palette registry or source modules directly.
 
 ## Limitations (v1)

@@ -1,6 +1,8 @@
 # `@or3/plugin-sdk`
 
 Stable Plugin Runtime V2 authoring surface. Import only this package (or documented subpaths: `/manifest`, `/host`, `/testing`, `/profile`, `/package-tree`, `/package-archive`, `/state-compatibility`).
+Start with the [Plugin authoring guide](./plugin-development-v2); this page is
+the SDK contract reference.
 
 The package ships prebuilt ESM and type declarations plus an `or3-plugin` CLI.
 It is **not yet published to npm**; install it from a packed tarball (see
@@ -8,9 +10,10 @@ It is **not yet published to npm**; install it from a packed tarball (see
 workflows contain no SDK publication job, so publishing requires adding that
 release integration.
 
-The package is currently an authoring and compatibility-test surface. OR3's
-production workspace activation path does not yet call a V2 definition's
-`setup(context)` method.
+Production activation calls a promoted, workspace-enabled trusted-host
+definition's `setup(context)` after its host ABI and browser canary gates pass.
+Portable isolated clients use the separate mediated runtime. Both author through
+`defineOr3Plugin()` and Manifest V2.
 
 ## Core exports
 
@@ -19,10 +22,9 @@ production workspace activation path does not yet call a V2 definition's
 - Result helpers (`pluginOk` / `pluginError`)
 - `@or3/plugin-sdk/testing` fake host for local activation/failure tests
 
-`PluginContributionKind` reserves the planned contribution vocabulary. The
-command-palette mapping is the production host mapping currently implemented;
-other kinds remain compatibility/test contracts until their host adapters and
-grants are connected.
+The host qualifies contribution and capability methods individually. A typed
+SDK method may still return `unsupported` when the selected runtime lacks an
+adapter; inspect the host's declared features and reviewed grants.
 
 Plugin packages must not import OR3 app aliases (`~/`, `~~/`, `#imports`) or rely on Nuxt auto-imports. Validate with:
 
@@ -98,9 +100,8 @@ cancel/retry/approval actions; the host adapts those records into the Activity
 center and isolates a failing source from other sources. Registry source IDs
 include a host-issued activation namespace; plugin-supplied logical IDs stay
 local to that activation. Teardown removes subscriptions and rejects late
-list/detail/action results. The production V2
-grant remains unqualified until installed-package conformance is complete,
-while the trusted host adapter and test harness exercise the same mapping.
+list/detail/action results. The trusted-host adapter registers installed
+Workflows and External Agents activity sources under reviewed grants.
 
 Pane registrations and open calls validate opaque ids and restore data before
 navigation. Data is limited by serialized bytes, nesting depth, and item

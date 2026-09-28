@@ -39,6 +39,7 @@ export const or3Config = defineOr3Config({
 ### Feature Toggles
 
 All features are **enabled by default**. Set env to `'false'` to disable.
+The Workflows options control the separately installed plugin; they do not install its package.
 
 #### Workflows
 

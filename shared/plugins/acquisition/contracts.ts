@@ -103,6 +103,8 @@ export interface PluginAcquisitionFailure {
     readonly message: string;
     /** True when retrying the same operation can make progress. */
     readonly retryable: boolean;
+    /** Bounded repair targets for an instance-wide workspace preflight. */
+    readonly workspaceBlocks?: { readonly total: number; readonly items: readonly { readonly workspaceId: string; readonly code: string }[] };
 }
 
 export interface PluginAcquisitionReleaseIdentity {

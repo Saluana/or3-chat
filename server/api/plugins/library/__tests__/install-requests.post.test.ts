@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
     entitlements: vi.fn(),
     list: vi.fn(),
     create: vi.fn(),
+    approvedSiteRelease: vi.fn(),
 }));
 
 vi.mock('h3', () => ({
@@ -31,6 +32,7 @@ vi.mock('../../../../admin/library/install-requests', () => ({
         create(input: unknown) { return mocks.create(input); }
     },
 }));
+vi.mock('../../../../admin/plugins/site-policy-service', () => ({ approvedSiteRelease: mocks.approvedSiteRelease }));
 
 const { default: route } = await import('../install-requests.post');
 const requestBody = { releaseId: 'rel_fixture_1', pluginId: 'sample.plugin', version: '1.0.0' };
@@ -45,6 +47,7 @@ beforeEach(() => {
     mocks.entitlements.mockResolvedValue({ linked: true, accountId: 'buyer-central', acquired: [acquired] });
     mocks.list.mockResolvedValue([]);
     mocks.create.mockImplementation(async (input) => ({ ...input, id: 'lir_1234567890abcdef1234567890abcdef', expiresAt: Date.now() + 1_000 }));
+    mocks.approvedSiteRelease.mockResolvedValue({ approvedRelease: { releaseId: requestBody.releaseId, version: requestBody.version } });
 });
 
 describe('buyer Library install request', () => {
@@ -72,6 +75,12 @@ describe('buyer Library install request', () => {
         await expect(route({ context: {} } as never)).rejects.toMatchObject({ statusCode: 409 });
         mocks.entitlements.mockResolvedValueOnce({ linked: true, accountId: 'buyer-central', acquired: [] });
         await expect(route({ context: {} } as never)).rejects.toMatchObject({ statusCode: 403 });
+        expect(mocks.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses an acquired release hidden by the site administrator', async () => {
+        mocks.approvedSiteRelease.mockResolvedValue(null);
+        await expect(route({ context: {} } as never)).rejects.toMatchObject({ statusCode: 404 });
         expect(mocks.create).not.toHaveBeenCalled();
     });
 });

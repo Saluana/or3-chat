@@ -93,7 +93,9 @@ export default defineEventHandler(async (event) => {
                 packageDigest,
                 workspaceId,
                 clientId,
-                profile: 'or3-portable-client-v1',
+                profile: clientEntry.isolation === 'host'
+                    ? 'or3-trusted-host-v2'
+                    : 'or3-portable-client-v1',
                 clientEntry,
                 grants,
             });

@@ -61,7 +61,7 @@ export function resolveMessageRenderer<TMessage>(
 
 export function messageRowKind(
     message: { readonly isWorkflow?: boolean },
-    renderer: MessageRendererDefinition | null
+    renderer: { readonly id: string } | null
 ): 'custom' | 'workflow' | 'default' {
     if (renderer) return 'custom';
     if (message.isWorkflow) return 'workflow';

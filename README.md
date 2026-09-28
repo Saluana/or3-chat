@@ -296,7 +296,7 @@ hooks.addFilter('ai:request:filter:body', (body) => {
 });
 ```
 
-For full examples and API details, see the [Plugin Quick Start Guide](public/_documentation/start/plugin-quickstart.md).
+For authoring and release steps, see the [Plugin authoring guide](public/_documentation/plugins/plugin-development-v2.md).
 
 ---
 

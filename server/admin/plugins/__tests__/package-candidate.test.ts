@@ -133,6 +133,23 @@ describe('V2 package candidate preparation', () => {
         });
     });
 
+    it('can stage an unreviewed raw ZIP as an inactive candidate for later consent', async () => {
+        const root = mkdtempSync(resolve(tmpdir(), 'or3-candidate-store-'));
+        const packages = new ImmutablePluginPackageStore(root);
+        const pointers = new PluginPackagePointerStore(root, packages);
+        const service = new PluginPackageCandidateService(packages, pointers);
+        const result = await service.prepare({
+            ...baseInput(source('1.0.0')),
+            storedStateVersion: null,
+            grantReview: { ...currentReview, approvedGrants: [], status: 'unreviewed' },
+            allowPendingGrantReview: true,
+        });
+        expect(result).toMatchObject({ status: 'candidate-stored', grantReviewRequired: true });
+        expect(await pointers.readStartupSelection('alpha')).toMatchObject({
+            status: 'inactive', selected: null, pointer: { candidate: {} },
+        });
+    });
+
     it('stores an immutable candidate without changing current', async () => {
         const { service, pointers, pointer: prior } = await setup();
         const result = await service.prepare(baseInput(source('2.0.0')));

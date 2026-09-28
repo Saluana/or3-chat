@@ -161,6 +161,16 @@ Terminal results distinguish `complete`, `aborted`, `detached`, `rejected`, and
 `failed`, including busy, credential, filter, client-limit, empty-context,
 tool-iteration-limit, and stream failures.
 
+## Conversation context
+
+Chat uses the selected OpenRouter model's advertised context length when
+preparing a request. If its metadata is missing from the local catalog, chat
+loads the catalog before trimming older turns. The input budget can use the
+full model window, with up to 8,192 tokens reserved for the response; there is
+no separate 128,000-token input ceiling. When model metadata remains
+unavailable, chat uses an 8,000-token fallback. Token counts are approximate,
+and image and file costs depend on the provider.
+
 ---
 
 ## What you get back

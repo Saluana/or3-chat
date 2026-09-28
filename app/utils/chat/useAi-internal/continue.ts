@@ -110,7 +110,7 @@ export type ContinueMessageContext = {
     defaultModelId: string;
     getSystemPromptContent: () => Promise<string | null>;
     useAiSettings: () => { settings: Ref<ChatSettings | undefined> };
-    resolveInputTokenBudget?: (modelId: string) => number;
+    resolveInputTokenBudget?: (modelId: string) => number | Promise<number>;
     resetStream: () => void;
     backgroundStreamingAllowed?: boolean;
     workspaceId?: string;
@@ -408,7 +408,7 @@ export async function continueMessageImpl(
         if (!ownsThread()) return;
         orMessages = await enforceOpenRouterMessageTokenBudget(
             orMessages,
-            ctx.resolveInputTokenBudget?.(modelId) ??
+            (await ctx.resolveInputTokenBudget?.(modelId)) ??
                 DEFAULT_MAX_INPUT_TOKENS
         );
         // Last setup gate: never publish stream state into a new chat.

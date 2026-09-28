@@ -4,8 +4,8 @@ import {
     QUALIFIED_BROWSER_ENGINES,
 } from '../../../shared/plugins/isolation/portable-bootstrap';
 import { REMOTE_CAPABILITY_METHODS } from '../../../shared/plugins/isolation/capability-bridge';
-import { SDK_LOGIC_RPC_METHODS } from '../../../shared/plugins/isolation/host-rpc-broker';
-import { UI_CONTRIBUTE_EVENT } from '../../../shared/plugins/isolation/worker-runtime';
+import { SDK_LOGIC_RPC_METHODS } from '~~/shared/plugins/isolation/host-rpc-broker';
+import { UI_CONTRIBUTE_EVENT } from '~~/shared/plugins/isolation/worker-runtime';
 
 export type Or3PluginV2GrantRegistration =
     | {
@@ -137,6 +137,9 @@ export const OR3_PLUGIN_V2_GRANT_REGISTRY: readonly Or3PluginV2GrantQualificatio
         ...Object.entries({
             'ui.sidebar.register': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
             'ui.pane.register': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
+            'panes.open': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
+            'workspace.read': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
+            'hooks.register': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
             'commands.register': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
             'activity.register': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
             'chat.message.renderer': ['app/composables/chat/message-renderers.ts', 'registerMessageRenderer'],
@@ -151,7 +154,7 @@ export const OR3_PLUGIN_V2_GRANT_REGISTRY: readonly Or3PluginV2GrantQualificatio
             'files.write': ['app/composables/plugins/trusted-production-stores.ts', 'createWorkspaceFileStore'],
             'posts.read': ['app/composables/plugins/trusted-production-stores.ts', 'createWorkspacePostStore'],
             'posts.write': ['app/composables/plugins/trusted-production-stores.ts', 'createWorkspacePostStore'],
-        }).map(([grant, [module, exportName]]) => ({
+        } as const satisfies Record<string, readonly [string, string]>).map(([grant, [module, exportName]]) => ({
             grant,
             status: 'qualified' as const,
             trustModes: ['trusted-host'] as const,
@@ -165,12 +168,10 @@ export const OR3_PLUGIN_V2_GRANT_REGISTRY: readonly Or3PluginV2GrantQualificatio
             'ui.toast',
             'ui.confirm',
             'ui.progress',
-            'panes.open',
             'commands.run.public',
             'chat.create',
             'chat.read',
             'chat.message.write',
-            'workspace.read',
             'workspace.switch',
             'workspace.connections.read',
             'workspace.connections.manage',
@@ -190,8 +191,11 @@ const qualifiedGrants = OR3_PLUGIN_V2_GRANT_REGISTRY
 
 const grantTrustModes = Object.fromEntries(
     OR3_PLUGIN_V2_GRANT_REGISTRY
-        .filter((entry) => entry.status === 'qualified' && entry.trustModes)
-        .map((entry) => [entry.grant, entry.trustModes])
+        .flatMap((entry) =>
+            entry.status === 'qualified' && entry.trustModes
+                ? [[entry.grant, entry.trustModes] as const]
+                : []
+        )
 );
 
 /** The first public V2 host contract. Keep it independent from app package
@@ -199,8 +203,9 @@ const grantTrustModes = Object.fromEntries(
  *
  * `isolated-client` is declared because the host now runs contained portable
  * clients: the entry bytes are served digest-addressed, verified in the browser,
- * and executed inside the opaque-origin sandbox. `trusted-host` remains declared
- * for server-side packages. Only grants the host actually honors appear here —
+ * and executed inside the opaque-origin sandbox. Reviewed `trusted-host` client
+ * packages run in the host page when the V2 loader and browser runtime are enabled.
+ * Only grants the host actually honors appear here —
  * a package requesting anything else is refused rather than trusted.
  *
  * `documents.read` is honored by the host-mediated selection handoff: the server

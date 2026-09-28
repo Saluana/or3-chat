@@ -1,4 +1,4 @@
-import { defineAsyncComponent, type Component } from 'vue';
+import { defineAsyncComponent, defineComponent, type Component } from 'vue';
 import {
     APP_THEME_COMPONENT_KEYS,
     type AppThemeComponent,
@@ -79,9 +79,12 @@ const SidebarAuthButtonDefault = defineAsyncVueComponent(
 const DocumentationShellDefault = defineAsyncVueComponent(
     () => import('~/components/DocumentationShell.vue')
 );
-const WorkflowStatusDefault = defineAsyncVueComponent(
-    () => import('~/components/chat/WorkflowExecutionStatus.vue')
-);
+// Keep the theme override slot stable; the Workflows package supplies its own
+// default status component when it is installed.
+const WorkflowStatusDefault = defineComponent({
+    name: 'WorkflowStatusSlot',
+    render: () => null,
+});
 
 export const CORE_APP_COMPONENT_DEFAULTS: Record<AppThemeComponent, Component> =
     {

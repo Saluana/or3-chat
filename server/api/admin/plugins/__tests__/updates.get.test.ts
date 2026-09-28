@@ -10,6 +10,8 @@ const entitlementsMock = vi.fn();
 const enabledMock = vi.fn();
 const reviewMock = vi.fn();
 const currentAuthorityMock = vi.fn();
+const policyMock = vi.fn();
+const adminContextMock = vi.fn();
 
 vi.mock('../../../../utils/plugins/marketplace/update-pins', () => ({ readUpdatePin: (...args: unknown[]) => pinMock(...args) }));
 vi.mock('../../../../admin/library/route-support', () => ({ libraryLinkServiceFor: async () => ({ service: { entitlements: entitlementsMock } }) }));
@@ -19,7 +21,7 @@ vi.mock('h3', () => ({
 }));
 
 vi.mock('../../../../admin/api', () => ({
-    requireAdminApiContext: async () => ({ session: { user: { id: 'user-1' } } }),
+    requireAdminApiContext: (...args: unknown[]) => adminContextMock(...args),
 }));
 
 vi.mock('../../../../admin/stores/registry', () => ({
@@ -42,6 +44,8 @@ vi.mock('../../../../admin/plugins/package-route-catalog', () => ({
         }
     },
 }));
+vi.mock('../../../../admin/plugins/site-policy', () => ({ SitePluginPolicyStore: class { read(id: string) { return policyMock(id); } } }));
+vi.mock('../../../../admin/plugins/site-policy-service', () => ({ ensureSitePolicyMigrated: async () => undefined }));
 
 vi.mock('../../../../utils/plugins/marketplace/service', () => ({
     marketplaceRegistryConfigured: () => configuredMock(),
@@ -76,7 +80,7 @@ async function callRoute(): Promise<{
         status: string;
         latestVersion: string | null;
         reason?: string;
-        release?: { authoritySha256: string; approvalRequired: boolean };
+        release?: { authoritySha256: string; approvalRequired: boolean; affectedWorkspaces: number };
     }[];
 }> {
     const handler = (await import('../updates.get')).default;
@@ -85,6 +89,7 @@ async function callRoute(): Promise<{
 
 describe('plugin update check', () => {
     beforeEach(() => {
+        adminContextMock.mockReset().mockResolvedValue({ session: { user: { id: 'user-1' } } });
         enabledMock.mockReset().mockResolvedValue(['or3.model-compare']);
         reviewMock.mockReset().mockResolvedValue({ status: 'current', approvedGrants: ['documents.read'] });
         currentAuthorityMock.mockReset().mockResolvedValue({ authority: null });
@@ -100,6 +105,10 @@ describe('plugin update check', () => {
             readyPackage('or3.sample', '3.0.0'),
         ]);
         configuredMock.mockReset().mockReturnValue(true);
+        policyMock.mockReset().mockImplementation(async (pluginId: string) => ({ catalogVisible: true, approvedRelease: {
+            version: pluginId === 'or3.document-utilities' ? '2.0.0' : pluginId === 'or3.sample' ? '3.1.0' : '1.3.0',
+            releaseId: `rel_${pluginId}`, packageTreeSha256: `sha256-${'c'.repeat(64)}`, authoritySha256: `sha256-${'b'.repeat(64)}`,
+        } }));
         latestVersionMock.mockReset();
         latestVersionMock.mockImplementation(async (pluginId: string) => {
             if (pluginId === 'or3.model-compare') return '1.3.0';
@@ -121,6 +130,7 @@ describe('plugin update check', () => {
                         releaseId: `rel_${input.expectation.pluginId}`,
                         version: '1.3.0',
                         archiveSha256: `sha256-${'a'.repeat(64)}`,
+                        packageTreeSha256: `sha256-${'c'.repeat(64)}`,
                         authoritySha256: `sha256-${'b'.repeat(64)}`,
                         requestedGrants: ['documents.read'],
                         publishedAt: '2026-01-01T00:00:00.000Z',
@@ -159,7 +169,23 @@ describe('plugin update check', () => {
         expect((await callRoute()).plugins[0]?.release?.approvalRequired).toBe(true);
     });
 
+    it('counts only enabled workspaces but also checks the disabled initiating canary consent', async () => {
+        adminContextMock.mockResolvedValue({ session: { user: { id: 'user-1' }, workspace: { id: 'ws-2' } } });
+        listSelectedMock.mockResolvedValue([readyPackage('or3.model-compare', '1.2.0')]);
+        enabledMock.mockImplementation(async (_settings: unknown, workspaceId: string) => workspaceId === 'ws-1' ? ['or3.model-compare'] : []);
+        reviewMock.mockImplementation(async (_settings: unknown, workspaceId: string) => ({
+            status: workspaceId === 'ws-2' ? 'stale' : 'current', approvedGrants: ['documents.read'],
+        }));
+        expect((await callRoute()).plugins[0]?.release).toMatchObject({ affectedWorkspaces: 1, approvalRequired: true });
+        expect(reviewMock.mock.calls.map((call) => call[1])).toEqual(['ws-1', 'ws-2']);
+    });
+
     it('shows the exact new access in an expanded authority update', async () => {
+        policyMock.mockImplementation(async (pluginId: string) => ({ catalogVisible: true, approvedRelease: {
+            version: pluginId === 'or3.document-utilities' ? '2.0.0' : pluginId === 'or3.sample' ? '3.1.0' : '1.3.0',
+            releaseId: pluginId === 'or3.model-compare' ? 'rel_2' : `rel_${pluginId}`,
+            packageTreeSha256: `sha256-${'c'.repeat(64)}`, authoritySha256: `sha256-${'b'.repeat(64)}`,
+        } }));
         const authority = {
             trust: 'isolated-client', grants: ['documents.read'], features: [], engines: [],
             destinations: [], connectionScopes: [], dataScopes: [], writes: [], setupHooks: [], dependencies: [],
@@ -208,14 +234,36 @@ describe('plugin update check', () => {
         expect((await callRoute()).plugins[0]).toMatchObject({ status: 'blocked', reason: 'This release requires Library coverage.' });
     });
 
-    it('falls back to a compatible covered release using semantic ordering', async () => {
+    it('does not offer a public release until it is approved for this site', async () => {
+        listSelectedMock.mockResolvedValue([readyPackage('or3.model-compare', '1.2.0')]);
+        policyMock.mockResolvedValue(null);
+        const result = await callRoute();
+        expect(result.plugins[0]).toMatchObject({ status: 'blocked' });
+        expect(result.plugins[0]?.reason).toContain('site');
+        expect(resolveReleaseMock).not.toHaveBeenCalled();
+    });
+
+    it('uses the exact approved release when a newer public version exists', async () => {
         listSelectedMock.mockResolvedValue([readyPackage('or3.model-compare', '1.2.0')]);
         catalogMock.mockResolvedValue({ price: { kind: 'free' }, releases: [{ version: '1.9.0' }, { version: '1.10.0' }] });
+        policyMock.mockResolvedValue({ catalogVisible: true, approvedRelease: { version: '1.9.0', releaseId: 'rel_9',
+            packageTreeSha256: `sha256-${'c'.repeat(64)}`, authoritySha256: `sha256-${'b'.repeat(64)}` } });
         resolveReleaseMock.mockImplementation(async ({ expectation }: { expectation: { version: string } }) => expectation.version === '1.10.0'
             ? { ok: false, failure: { message: 'Unsupported engine' } }
-            : { ok: true, value: { document: { releaseId: 'rel_9', version: '1.9.0', requestedGrants: [] } } });
+            : { ok: true, value: { document: { releaseId: 'rel_9', version: '1.9.0', requestedGrants: [],
+                packageTreeSha256: `sha256-${'c'.repeat(64)}`, authoritySha256: `sha256-${'b'.repeat(64)}` } } });
         expect((await callRoute()).plugins[0]).toMatchObject({ status: 'update-available', latestVersion: '1.9.0' });
-        expect(resolveReleaseMock.mock.calls[0]?.[0].expectation.version).toBe('1.10.0');
+        expect(resolveReleaseMock.mock.calls[0]?.[0].expectation.version).toBe('1.9.0');
+    });
+
+    it('still finds an approved release beneath fifty newer catalog versions', async () => {
+        listSelectedMock.mockResolvedValue([readyPackage('or3.model-compare', '1.2.0')]);
+        catalogMock.mockResolvedValue({ price: { kind: 'free' }, releases: [
+            ...Array.from({ length: 51 }, (_, index) => ({ version: `1.${index + 4}.0` })),
+            { version: '1.3.0' },
+        ] });
+        expect((await callRoute()).plugins[0]).toMatchObject({ status: 'update-available', latestVersion: '1.3.0' });
+        expect(resolveReleaseMock.mock.calls[0]?.[0].expectation.version).toBe('1.3.0');
     });
 
 });

@@ -82,6 +82,20 @@ beforeEach(() => {
 });
 
 describe('candidate setup binding', () => {
+    it('refuses an old setup link when its operation or release no longer owns the candidate', async () => {
+        const digest = `sha256-${'a'.repeat(64)}` as `sha256-${string}`;
+        mocks.listOperations.mockResolvedValue([{
+            pluginId: PLUGIN_ID, workspaceId: 'ws-a', candidateDigest: digest,
+            operationId: 'acq_new', version: '2.0.0', status: 'paused',
+        } satisfies Partial<PluginAcquisitionOperation>]);
+        await expect(bindCandidateOperation({ pluginId: PLUGIN_ID, workspaceId: 'ws-a',
+            candidateDigest: digest, requestedOperationId: 'acq_old', expectedVersion: '1.0.0' }))
+            .resolves.toMatchObject({ ok: false, code: 'setup-operation-conflict' });
+        await expect(bindCandidateOperation({ pluginId: PLUGIN_ID, workspaceId: 'ws-a',
+            candidateDigest: digest, expectedVersion: '1.0.0' }))
+            .resolves.toMatchObject({ ok: false, code: 'setup-operation-conflict' });
+    });
+
     it('allows the same update operation in an enabled second workspace only', async () => {
         const digest = `sha256-${'a'.repeat(64)}` as `sha256-${string}`;
         mocks.listOperations.mockResolvedValue([{

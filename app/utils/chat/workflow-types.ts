@@ -13,7 +13,16 @@
  * - These are structural types only; runtime validation is minimal
  */
 
-import type { Attachment } from 'or3-workflow-core';
+/** Persisted attachment shape shared with the installed Workflows package. */
+export interface WorkflowAttachment {
+    id: string;
+    type: string;
+    name: string;
+    mimeType: string;
+    url?: string;
+    content?: string;
+    size?: number;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Status Types
@@ -178,24 +187,6 @@ export interface BranchState {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Base message data type for regular chat messages.
- * Used for discriminated union with workflow messages.
- */
-export interface BaseMessageData {
-    /** Discriminator for regular messages */
-    type: 'message';
-
-    /** Reasoning text from model (optional) */
-    reasoning_text?: string | null;
-
-    /** Tool calls info (optional) */
-    tool_calls?: unknown[];
-
-    /** Allow additional properties */
-    [key: string]: unknown;
-}
-
-/**
  * Workflow execution message data stored in the message.data field.
  * Uses 'workflow-execution' as a discriminator for type narrowing.
  */
@@ -213,7 +204,7 @@ export interface WorkflowMessageData {
     prompt: string;
 
     /** Attachments available to the workflow execution */
-    attachments?: Attachment[];
+    attachments?: WorkflowAttachment[];
 
     /** Auto-generated caption for image attachments */
     imageCaption?: string;
@@ -311,12 +302,6 @@ export interface WorkflowMessageData {
     };
 }
 
-/**
- * Union type for message data - enables discriminated union pattern.
- * Use `isWorkflowMessageData()` type guard for safe type narrowing.
- */
-export type MessageDataUnion = BaseMessageData | WorkflowMessageData;
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Type Guards
 // ─────────────────────────────────────────────────────────────────────────────
@@ -338,25 +323,6 @@ export function isWorkflowMessageData(
     );
 }
 
-/**
- * `isBaseMessageData`
- *
- * Purpose:
- * Type guard for regular message data.
- */
-export function isBaseMessageData(data: unknown): data is BaseMessageData {
-    if (data === null || data === undefined) return true;
-    if (typeof data !== 'object') return false;
-    // If it has a type field that's 'workflow-execution', it's not a base message
-    if (
-        'type' in data &&
-        (data as { type: unknown }).type === 'workflow-execution'
-    ) {
-        return false;
-    }
-    return true;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // UI State Types (for component props)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -376,7 +342,7 @@ export interface UiWorkflowState {
     prompt?: string;
 
     /** Attachments available to the workflow execution */
-    attachments?: Attachment[];
+    attachments?: WorkflowAttachment[];
 
     /** Auto-generated caption for image attachments */
     imageCaption?: string;
@@ -429,77 +395,6 @@ export interface UiWorkflowState {
     /** Version counter for reactivity */
     version?: number;
 }
-
-/** Maximum live reasoning retained per node/branch in the synced message. */
-export const WORKFLOW_REASONING_TRACE_LIMIT = 12_000;
-
-export function appendWorkflowReasoningTrace(
-    current: string | undefined,
-    delta: string,
-    limit = WORKFLOW_REASONING_TRACE_LIMIT,
-): { text: string; truncated: boolean } {
-    const combined = `${current || ''}${delta}`;
-    if (combined.length <= limit) {
-        return { text: combined, truncated: false };
-    }
-    return {
-        text: combined.slice(combined.length - limit),
-        truncated: true,
-    };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Utilities
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * `deriveStartNodeId`
- *
- * Purpose:
- * Determines the best node ID to resume a workflow execution from.
- */
-export function deriveStartNodeId(opts: {
-    resumeState?: WorkflowResumeState;
-    failedNodeId?: string | null;
-    currentNodeId?: string | null;
-    nodeStates?: Record<string, NodeState>;
-    lastActiveNodeId?: string | null;
-}): string | undefined {
-    const activeFromStates = opts.nodeStates
-        ? Object.entries(opts.nodeStates).find(
-              ([, ns]) => ns.status === 'active'
-          )?.[0]
-        : undefined;
-
-    return (
-        opts.resumeState?.startNodeId ||
-        opts.failedNodeId ||
-        opts.currentNodeId ||
-        activeFromStates ||
-        opts.lastActiveNodeId ||
-        undefined
-    );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Constants
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * `MERGE_BRANCH_ID`
- *
- * Purpose:
- * Special branch ID used by parallel nodes for the merge step.
- */
-export const MERGE_BRANCH_ID = '__merge__';
-
-/**
- * `MERGE_BRANCH_LABEL`
- *
- * Purpose:
- * Display label for the merge branch.
- */
-export const MERGE_BRANCH_LABEL = 'Merging results...';
 
 /** Resume metadata for workflow executions */
 export interface WorkflowResumeState {

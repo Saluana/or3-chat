@@ -214,6 +214,37 @@ describe('client canary evidence', () => {
         expect(await step(clientContext(clientPackage, DIGEST))).toEqual({ status: 'passed' });
     });
 
+    it('requires trusted browser evidence for a trusted host client', async () => {
+        const root = mkdtempSync(resolve(tmpdir(), 'or3-canary-'));
+        const store = new PluginClientCanaryStore(root);
+        const packagePath = writePackage(root, 'or3.sample-utility', {
+            trust: 'trusted-host',
+            client: { entry: 'client.mjs', format: 'esm', isolation: 'host' },
+        });
+        const step = clientCanaryStepFromEvidence(store, {
+            pluginId: 'or3.sample-utility', packageDigest: DIGEST, workspaceId: 'ws-1',
+        });
+        expect(await step(clientContext(packagePath, DIGEST))).toEqual({
+            status: 'blocked', code: CLIENT_CANARY_PENDING_CODE,
+        });
+        await store.recordEvidence({
+            schemaVersion: 1, pluginId: 'or3.sample-utility', packageDigest: DIGEST,
+            workspaceId: 'ws-1', clientId: 'admin-browser-canary',
+            profile: 'or3-portable-client-v1', browser: 'chromium', abiVersion: 1,
+            status: 'passed', recordedAt: 8,
+        });
+        expect(await step(clientContext(packagePath, DIGEST))).toEqual({
+            status: 'blocked', code: CLIENT_CANARY_PENDING_CODE,
+        });
+        await store.recordEvidence({
+            schemaVersion: 1, pluginId: 'or3.sample-utility', packageDigest: DIGEST,
+            workspaceId: 'ws-1', clientId: 'admin-browser-canary',
+            profile: 'or3-trusted-host-v2', browser: 'chromium', abiVersion: 1,
+            status: 'passed', recordedAt: 9,
+        });
+        expect(await step(clientContext(packagePath, DIGEST))).toEqual({ status: 'passed' });
+    });
+
     it('reports a blocked browser run with its code and skips server-only packages', async () => {
         const root = mkdtempSync(resolve(tmpdir(), 'or3-canary-'));
         const store = new PluginClientCanaryStore(root);
@@ -302,6 +333,57 @@ describe('client entry reading', () => {
             })
         ).rejects.toMatchObject({ code: 'client-entry-unresolvable' });
     });
+
+    it('preserves host isolation and permits only mapped Vue and SDK imports', async () => {
+        const root = mkdtempSync(resolve(tmpdir(), 'or3-host-entry-'));
+        const pluginId = 'or3.sample-utility';
+        const packageRoot = resolve(root, '.store', pluginId, DIGEST);
+        mkdirSync(packageRoot, { recursive: true });
+        const manifest = v2Manifest(pluginId, {
+            client: { entry: 'client.mjs', format: 'esm', isolation: 'host' },
+        });
+        manifest.trust = 'trusted-host';
+        writeFileSync(resolve(packageRoot, 'or3.manifest.json'), JSON.stringify(manifest));
+        const packages = new ImmutablePluginPackageStore(root);
+        const reader = new PluginPackageAssetReader(
+            packages,
+            new PluginPackagePointerStore(root, packages)
+        );
+        writeFileSync(resolve(packageRoot, 'client.mjs'),
+            "import { ref } from 'vue'; import { defineOr3Plugin } from '@or3/plugin-sdk'; const hint = \"Please import '@vue-flow/core/dist/style.css'\"; export default [ref, defineOr3Plugin, hint];\n");
+        const entry = await readPackageClientEntry({
+            pluginId, packageDigest: DIGEST, manifest, reader, requireSelected: false,
+        });
+        expect(entry?.isolation).toBe('host');
+
+        writeFileSync(resolve(packageRoot, 'client.mjs'), "import x from 'left-pad'; export default x;\n");
+        await expect(readPackageClientEntry({
+            pluginId, packageDigest: DIGEST, manifest, reader, requireSelected: false,
+        })).rejects.toMatchObject({ code: 'client-entry-unresolvable' });
+    });
+
+    it('does not treat a tagged template after `from` as an import', async () => {
+        const root = mkdtempSync(resolve(tmpdir(), 'or3-template-entry-'));
+        const pluginId = 'or3.sample-utility';
+        const packageRoot = resolve(root, '.store', pluginId, DIGEST);
+        mkdirSync(packageRoot, { recursive: true });
+        const manifest = v2Manifest(pluginId, {
+            client: { entry: 'client.mjs', format: 'esm', isolation: 'host' },
+        });
+        manifest.trust = 'trusted-host';
+        writeFileSync(resolve(packageRoot, 'or3.manifest.json'), JSON.stringify(manifest));
+        writeFileSync(resolve(packageRoot, 'client.mjs'),
+            'const from = (parts) => parts[0]; const message = from`still data`; export default message;\n');
+        const packages = new ImmutablePluginPackageStore(root);
+        const reader = new PluginPackageAssetReader(
+            packages,
+            new PluginPackagePointerStore(root, packages)
+        );
+
+        await expect(readPackageClientEntry({
+            pluginId, packageDigest: DIGEST, manifest, reader, requireSelected: false,
+        })).resolves.toMatchObject({ isolation: 'host' });
+    });
 });
 
 function clientContext(packagePath: string, packageDigest: `sha256-${string}`): CandidateClientCanaryContext {
@@ -320,7 +402,7 @@ function clientContext(packagePath: string, packageDigest: `sha256-${string}`): 
 function v2Manifest(
     pluginId: string,
     input: {
-        readonly client?: { entry: string; format: 'esm'; isolation: 'worker' };
+        readonly client?: { entry: string; format: 'esm'; isolation: 'worker' | 'host' };
         readonly trust?: 'isolated-client' | 'trusted-host';
     } = {}
 ): Or3ExtensionManifestV2 {
@@ -353,7 +435,7 @@ function writePackage(
     pluginId: string,
     input: {
         readonly trust: 'isolated-client' | 'trusted-host';
-        readonly client: { entry: string; format: 'esm'; isolation: 'worker' } | undefined;
+        readonly client: { entry: string; format: 'esm'; isolation: 'worker' | 'host' } | undefined;
     }
 ): string {
     // The immutable store keeps verified packages under `<root>/.store/...`.
