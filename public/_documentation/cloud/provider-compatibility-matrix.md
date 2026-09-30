@@ -14,7 +14,7 @@ Compatibility guide for common OR3 Cloud provider combinations.
 
 ## Notes
 
-- Providers are registry-driven. Core only loads packages present in `node_modules`.
+- Providers are registry-driven. Core resolves selected module entries using package exports, including scoped and linked packages.
 - Auth, sync, and storage providers can be mixed as long as each selected provider package is installed and configured.
 - Background provider and limits provider are independent knobs.
 - Static builds must keep SSR auth disabled.
@@ -31,7 +31,9 @@ Compatibility guide for common OR3 Cloud provider combinations.
 
 - Provider IDs map to Nuxt modules as `or3-provider-<id>/nuxt`.
 - Local IDs like `custom`, `memory`, `redis`, and `postgres` are intentionally not package-resolved.
-- Wizard-generated modules and config-derived modules are merged.
+- Wizard-generated JSON module IDs and config-derived modules are merged. Missing required server entries fail configuration.
+- Auth always requires the selected sync backend's workspace store, even when sync transfer is disabled.
+- Provider-free operation is intentional (`SSR_AUTH_ENABLED=false`); missing packages never silently select that mode.
 
 ## Standalone Clone Support
 

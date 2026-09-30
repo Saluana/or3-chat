@@ -36,8 +36,8 @@ Supporting SDK/host work:
   `PortableClient` contract the sandbox provides (canned answers *and*
   refusals, working settings/storage, captured renders/contributions/events), so
   packages test through the real `createPortablePlugin()` path.
-- Docs: `public/_documentation/plugins/official-products.md` (+ docmap),
-  `plugin-sdk.md` host-capability and test-host sections, `portable-profile.md`
+- Docs: `public/_documentation/plugins/overview.md` (+ docmap),
+  `plugin-sdk.md` host-capability and test-host sections, `manifest.md`
   sample rule.
 
 ## Package evidence

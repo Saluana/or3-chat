@@ -109,6 +109,31 @@ Use host surface, text, border and primary color tokens for pane controls; keep 
 
 Give a pane sidebar `min-height: 0` and a dedicated scrolling navigation region when it has a persistent action footer. Verify that the host's overflow boundaries cannot clip lower actions. Canvas containers need a definite height so intrinsic bitmap dimensions do not stretch their surrounding controls. Test both host themes, a narrow pane, keyboard focus and any independently exported shell.
 
+## Responsive chat
+
+Chat uses the same 768px boundary as Tailwind's `md:` utilities: mobile is below
+768px, and tablet presentation starts at 768px. Drawers close when entering
+mobile presentation, keep focus within the open navigation, and restore focus
+to the trigger after dismissal. Closed drawers are inert.
+
+Composer drafts and attachment previews have separate scrolling regions capped
+by their chat pane height (`cqh`), with smaller shared limits when both are present
+on short panes. The application frame follows the unzoomed visual viewport on
+touch devices so Safari keyboard opening and panning do not cover the composer.
+Nested page shells inherit that frame height; do not restore `100dvh` on them. Attachment grids size themselves to their pane, and Blank's
+compact composer places controls below the editor when its container is narrow.
+When the visible application frame is shorter than 140px, the composer uses a
+single row with 44px controls and temporarily hides optional chrome and preview
+grids. Drafts and attachment selections remain intact. Preserve these bounds
+when overriding a composer. Show message actions and
+attachment removal on touch devices; hover can remain an enhancement on desktop.
+
+Run `bun run test:e2e:theme-tokens --grep 'chat responsive layout' --reporter=dot`
+for the phone, tablet, desktop, landscape, reduced-height and split-pane matrix.
+Run `bun run test:e2e:journeys --grep 'responsive messages' --reporter=dot` for
+deterministic rich-message rendering and touch editing. Both attach screenshots
+to the Playwright results.
+
 ## Testing
 
 - Run `bun run theme:validate` to catch schema and selector issues.

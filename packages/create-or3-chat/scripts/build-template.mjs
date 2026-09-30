@@ -35,7 +35,7 @@ const TOP_LEVEL_FILES = [
     'config.or3cloud.ts',
     'eslint.config.mjs',
     'nuxt.config.ts',
-    'or3.providers.generated.ts',
+    'or3.providers.generated.json',
     'raw-assets.d.ts',
     'tsconfig.eslint.extensions.json',
     'tsconfig.eslint.json',

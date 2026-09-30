@@ -10,17 +10,17 @@ interface PackageJson {
 
 const DOCUMENT_ASSERTIONS = [
   {
-    path: 'public/_documentation/plugins/runtime-v2-overview.md',
-    text: 'The initial supported profile is `trusted-host`, server routes only',
-    code: 'v2-server-only-activation-contract-changed',
+    path: 'public/_documentation/plugins/overview.md',
+    text: 'isolated-client',
+    code: 'portable-runtime-contract-changed',
   },
   {
-    path: 'public/_documentation/plugins/runtime-v2-overview.md',
-    text: 'trusted-host-ui-abi-unproven',
-    code: 'v2-client-abi-gate-changed',
+    path: 'public/_documentation/plugins/runtime-and-security.md',
+    text: 'host Vue ABI',
+    code: 'client-abi-gate-changed',
   },
   {
-    path: 'public/_documentation/plugins/manifest-v2.md',
+    path: 'public/_documentation/plugins/manifest.md',
     text: 'requestedGrants',
     code: 'manifest-contract-changed',
   },

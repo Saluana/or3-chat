@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { onBeforeUnmount, reactive, watch, ref, nextTick, computed } from 'vue';
+import { onBeforeUnmount, reactive, watch, computed, ref } from 'vue';
 import type { FileMeta } from '~/db/schema';
 import { getFileBlob } from '~/db/files';
-import { onKeyStroke } from '@vueuse/core';
+import { useDialogFocus } from '~/composables/ui/useDialogFocus';
 import { reportError } from '~/utils/errors';
 import { useSharedPreviewCache } from '~/composables/core/usePreviewCache';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
@@ -31,7 +31,7 @@ const emit = defineEmits<{
 }>();
 
 const state = reactive<{ url?: string }>({ url: undefined });
-const overlayEl = ref<HTMLElement | null>(null);
+const dialogContent = useDialogFocus(undefined, () => 'fullscreen');
 const cache = useSharedPreviewCache();
 const currentHash = ref<string | null>(null);
 
@@ -45,11 +45,7 @@ const imageViewerModalOverrides = useThemeOverrides({
 const imageViewerModalProps = computed(() => {
     return buildThemeOverrideProps(imageViewerModalOverrides.value, {
         baseUi: {
-            footer: 'justify-end border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))]',
-            body: 'overflow-hidden flex-1 p-0! h-[100dvh] w-[100dvw]',
-        },
-        baseContent: {
-            'aria-describedby': undefined,
+            content: 'image-preview-modal flex flex-col min-h-0 max-h-[100dvh]! overflow-hidden! p-0! divide-y-0!',
         },
     });
 });
@@ -131,7 +127,8 @@ const closeButtonProps = computed(() => {
     });
     return {
         size: 'md' as const,
-        class: 'flex items-center justify-center',
+        class: 'flex items-center justify-center shrink-0',
+        'aria-label': 'Close image preview',
         ...overrides.value,
     };
 });
@@ -144,7 +141,7 @@ const backdropProps = computed(() => {
         isNuxtUI: false,
     });
     return {
-        class: 'bg-black/75 dark:bg-white/5 backdrop-blur-xs w-dvw h-dvh z-99 overflow-hidden absolute top-0 left-0',
+        class: 'bg-black/75 dark:bg-white/5 flex-1 min-h-0 overflow-hidden relative',
         ...overrides.value,
     };
 });
@@ -157,7 +154,7 @@ const topBarProps = computed(() => {
         isNuxtUI: false,
     });
     return {
-        class: 'fixed inset-x-0 top-0 z-1200 px-2 pt-2',
+        class: 'relative shrink-0 px-2 pt-[max(0.5rem,env(safe-area-inset-top))] bg-[var(--md-surface)]',
         ...overrides.value,
     };
 });
@@ -170,7 +167,7 @@ const innerTopBarProps = computed(() => {
         isNuxtUI: false,
     });
     return {
-        class: 'mx-auto flex max-w-[min(728px,90vw)] flex-wrap items-center justify-between gap-2 p-1',
+        class: 'mx-auto flex max-w-[728px] flex-wrap items-center justify-between gap-2 p-1',
         ...overrides.value,
     };
 });
@@ -183,7 +180,7 @@ const imageContainerProps = computed(() => {
         isNuxtUI: false,
     });
     return {
-        class: 'inset-0 grid h-full w-full place-items-center px-4 pb-4 pt-24 sm:pt-6',
+        class: 'grid h-full min-h-0 w-full place-items-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))]',
         ...overrides.value,
     };
 });
@@ -196,7 +193,7 @@ const imageProps = computed(() => {
         isNuxtUI: false,
     });
     return {
-        class: 'max-w-[90dvw] sm:max-w-[min(96dvw,1400px)] h-[70dvh] object-contain',
+        class: 'max-w-full max-h-full min-h-0 object-contain',
         ...overrides.value,
     };
 });
@@ -209,7 +206,7 @@ const fieldGroupWrapperProps = computed(() => {
         isNuxtUI: false,
     });
     return {
-        class: 'flex items-center',
+        class: 'flex min-w-0 items-center [&_[data-slot=root]]:flex-wrap',
         ...overrides.value,
     };
 });
@@ -243,7 +240,7 @@ async function load() {
             const url = URL.createObjectURL(blob);
             return { url, bytes: blob.size };
         });
-        if (url) {
+        if (url && props.modelValue && props.meta?.hash === nextMeta.hash) {
             state.url = url;
             cache.promote(nextMeta.hash, 2);
         }
@@ -267,12 +264,6 @@ function downgrade() {
     currentHash.value = null;
 }
 
-watch(
-    () => props.meta?.hash,
-    () => load(),
-    { immediate: true }
-);
-
 onBeforeUnmount(() => {
     downgrade();
     state.url = undefined;
@@ -283,40 +274,36 @@ function close() {
     emit('update:modelValue', false);
 }
 
-onKeyStroke('Escape', (e) => {
-    close();
-});
-
 watch(
-    () => props.modelValue,
-    async (v) => {
-        if (v) {
-            await nextTick().then(() => overlayEl.value?.focus());
-        } else {
-            downgrade();
-            state.url = undefined;
-        }
-    }
+    [() => props.meta?.hash, () => props.modelValue],
+    ([, open]) => {
+        if (open) void load();
+        else { downgrade(); state.url = undefined; }
+    },
+    { immediate: true }
 );
 // Keep template overlay at document level so backdrop covers entire screen
 </script>
 
 <template>
-    <teleport to="body">
         <UModal
-            v-if="modelValue"
-            role="dialog"
-            fullscreen
             v-bind="imageViewerModalProps"
+            :open="modelValue"
+            title="Image preview"
+            :description="meta?.name || 'View image'"
+            :content="dialogContent"
+            fullscreen
+            @update:open="!$event && close()"
         >
+        <template #content>
             <div v-bind="topBarProps">
                 <div v-bind="innerTopBarProps">
                     <div v-bind="fieldGroupWrapperProps">
-                        <UFieldGroup v-if="!props.trashMode">
+                        <UFieldGroup v-if="!props.trashMode" class="flex-wrap min-w-0 max-w-full">
                             <UButton
                                 v-bind="downloadButtonProps"
                                 :icon="iconDownload"
-                                @click.stop.self="
+                                @click.stop="
                                     meta && emit('download', meta)
                                 "
                             >
@@ -337,7 +324,7 @@ watch(
                                 Delete
                             </UButton>
                         </UFieldGroup>
-                        <UFieldGroup v-else>
+                        <UFieldGroup v-else class="flex-wrap min-w-0 max-w-full">
                             <UButton
                                 v-bind="restoreButtonProps"
                                 :icon="iconRepeat"
@@ -364,9 +351,7 @@ watch(
             </div>
             <div v-bind="backdropProps" @click.self="close">
                 <div
-                    ref="overlayEl"
                     v-bind="imageContainerProps"
-                    tabindex="-1"
                     @click.self="close"
                 >
                     <img
@@ -378,8 +363,17 @@ watch(
                     <div v-else v-bind="loadingTextProps">Loading…</div>
                 </div>
             </div>
+        </template>
         </UModal>
-    </teleport>
 </template>
 
-<style scoped></style>
+<style>
+@layer utilities {
+@media (max-width: 767px), (pointer: coarse) {
+    .image-preview-modal[role=dialog] button {
+        min-height: 44px !important;
+        min-width: 44px !important;
+    }
+}
+}
+</style>

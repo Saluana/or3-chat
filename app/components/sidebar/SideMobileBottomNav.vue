@@ -123,12 +123,19 @@
             <span class="mobile-nav-label">More</span>
         </button>
 
-        <Teleport to="body">
-            <Transition name="more-sheet" :css="!dismissByDrag">
+        <UModal
+            v-model:open="moreOpen"
+            fullscreen
+            :title="infoOpen ? 'About OR3' : 'More'"
+            description="Manage your workspace and account."
+            :content="moreDialogContent"
+            :transition="false"
+            :ui="{ content: 'more-sheet-dialog bg-transparent! border-0! ring-0! p-0! divide-y-0! z-[80]!' }"
+        >
+            <template #content>
                 <div
                     v-if="moreOpen"
                     class="more-sheet-root"
-                    @keydown.esc.prevent="closeMore"
                 >
                     <button
                         type="button"
@@ -145,18 +152,6 @@
                             'more-sheet-panel--dragging': isDragging,
                         }"
                         :style="panelStyle"
-                        role="dialog"
-                        aria-modal="true"
-                        :aria-labelledby="
-                            infoOpen
-                                ? 'mobile-more-info-title'
-                                : 'mobile-more-title'
-                        "
-                        :aria-describedby="
-                            infoOpen
-                                ? 'mobile-more-info-desc'
-                                : 'mobile-more-description'
-                        "
                     >
                         <div
                             class="more-sheet-handle-hit"
@@ -478,13 +473,14 @@
                     </footer>
                 </div>
             </div>
-            </Transition>
-        </Teleport>
+            </template>
+        </UModal>
     </nav>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, provide, ref, watch } from 'vue';
+import { useDialogFocus } from '~/composables/ui/useDialogFocus';
 import { navigateTo, useRuntimeConfig, useToast } from '#imports';
 import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
@@ -603,6 +599,7 @@ const modeLabel = computed(() => (isSsrAuthEnabled.value ? 'Cloud' : 'Local'));
 
 const createOpen = ref(false);
 const moreOpen = ref(false);
+const moreDialogContent = useDialogFocus(undefined, () => 'fullscreen');
 const infoOpen = ref(false);
 const sheetPanelRef = ref<HTMLElement | null>(null);
 const dragY = ref(0);
@@ -705,9 +702,6 @@ async function dismissSheetByDrag() {
     infoOpen.value = false;
     dragY.value = 0;
     dismissByDrag.value = false;
-    if (import.meta.client) {
-        document.body.style.overflow = '';
-    }
 }
 
 function closeMore() {
@@ -722,7 +716,6 @@ function closeMore() {
 
 watch(moreOpen, (open) => {
     if (!import.meta.client) return;
-    document.body.style.overflow = open ? 'hidden' : '';
     if (!open) {
         infoOpen.value = false;
         dragY.value = 0;
@@ -732,8 +725,6 @@ watch(moreOpen, (open) => {
 
 onBeforeUnmount(() => {
     cleanupDragListeners();
-    if (!import.meta.client) return;
-    document.body.style.overflow = '';
 });
 
 function tileAccent(index: number) {

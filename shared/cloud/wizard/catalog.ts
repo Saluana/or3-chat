@@ -83,7 +83,7 @@ export const SECRET_ANSWER_KEYS: Array<keyof WizardAnswers> = [
 /**
  * Provider IDs that are local/built-in and do not have a publishable
  * `or3-provider-${id}` package. These are excluded from
- * `or3.providers.generated.ts` module list generation.
+ * `or3.providers.generated.json` module list generation.
  */
 export { LOCAL_PROVIDER_IDS };
 

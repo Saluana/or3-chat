@@ -18,7 +18,7 @@
             <!-- Main Input Area -->
             <div class="relative">
                 <div
-                    class="chat-input-editor-container max-h-40 md:max-h-96 w-full overflow-y-auto wrap-break-word min-h-4 md:min-h-12"
+                    class="chat-input-editor-container w-full overflow-y-auto wrap-anywhere min-h-4 md:min-h-12"
                     :class="editorProps?.class || ''"
                     :data-theme-target="editorProps?.['data-theme-target']"
                     :data-theme-matches="editorProps?.['data-theme-matches']"
@@ -140,7 +140,7 @@
                 </div>
 
                 <div
-                    class="chat-input-composer-actions flex items-center gap-1 shrink-0"
+                    class="chat-input-composer-actions order-first flex w-full min-w-0 flex-wrap items-center gap-1"
                     v-if="composerActions.length"
                 >
                     <UTooltip
@@ -151,6 +151,7 @@
                     >
                         <UButton
                             v-bind="composerActionButtonProps"
+                            :aria-label="entry.action.tooltip || entry.action.label || entry.action.id"
                             :disabled="entry.disabled"
                             @click="handleComposerAction(entry)"
                         >
@@ -213,7 +214,7 @@
         <!-- Attachment Thumbnails (Images + Large Text Blocks) -->
         <div
             v-if="uploadedImages.length > 0 || largeTextBlocks.length > 0"
-            class="chat-input-attachments mx-3.5 mb-3.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
+            class="chat-input-attachments mx-3.5 mb-3.5 grid gap-3"
         >
             <!-- Images -->
             <div

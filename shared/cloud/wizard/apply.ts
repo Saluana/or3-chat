@@ -7,7 +7,7 @@
  *
  * Responsibilities:
  * - Non-destructive env file writing via `writeEnvFileDetailed()`
- * - Provider module file generation (`or3.providers.generated.ts`)
+ * - Provider module file generation (`or3.providers.generated.json`)
  * - Theme installation pipeline (no-op in v1 via `NoopThemeInstaller`)
  * - Dry-run mode for previewing changes without writing
  * - Backup creation before overwriting env files
@@ -26,7 +26,9 @@
  * @see writeEnvFileDetailed for the underlying env file writer
  * @see renderProviderModulesFile for the generated file format
  */
-import { writeFile } from 'node:fs/promises';
+import { writeFile, rename, rm } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { providerMetadataSchema, PROVIDER_METADATA_FILENAME } from '../provider-metadata';
 import { resolve } from 'node:path';
 import { writeEnvFileDetailed } from '../../../server/admin/config/env-file';
 import {
@@ -87,31 +89,15 @@ export class NoopThemeInstaller implements ThemeInstaller {
     }
 }
 
-/**
- * Renders the contents of `or3.providers.generated.ts` from a list of
- * Nuxt module IDs. The output is a self-contained TypeScript module
- * that exports the `or3ProviderModules` array.
- *
- * @example
- * ```ts
- * renderProviderModulesFile(['or3-provider-basic-auth/nuxt', 'or3-provider-sqlite/nuxt'])
- * // => '// Overwritten by the cloud install wizard.\n// ...\nexport const or3ProviderModules: ...'
- * ```
- */
+/** Data only: the generated provider list is never executed by configuration. */
 export function renderProviderModulesFile(modules: string[]): string {
-    const lines = [
-        '// Overwritten by the cloud install wizard.',
-        '// Keep this file tiny and explicit.',
-        '',
-        `export const or3ProviderModules: readonly string[] = ${JSON.stringify(modules, null, 4)};`,
-        '',
-    ];
-    return lines.join('\n');
+    const data = providerMetadataSchema.parse({ schemaVersion: 1, modules });
+    return JSON.stringify({ ...data, modules: [...new Set(data.modules)] }, null, 4) + '\n';
 }
 
-/** Resolves the absolute path to `or3.providers.generated.ts` in the instance directory. */
+/** Resolves the absolute path to `or3.providers.generated.json` in the instance directory. */
 export function getProviderModuleFilePath(instanceDir: string): string {
-    return resolve(instanceDir, 'or3.providers.generated.ts');
+    return resolve(instanceDir, PROVIDER_METADATA_FILENAME);
 }
 
 /**
@@ -122,7 +108,7 @@ export function getProviderModuleFilePath(instanceDir: string): string {
  * 2. Derives wizard-owned env updates from the validated answers.
  * 3. Optionally executes theme installation plan.
  * 4. Writes env file via `writeEnvFileDetailed()` with optional backup.
- * 5. Writes `or3.providers.generated.ts` with selected provider modules.
+ * 5. Writes `or3.providers.generated.json` with selected provider modules.
  *
  * Constraints:
  * - In dry-run mode (`options.dryRun` or `answers.dryRun`), no files are
@@ -179,11 +165,14 @@ export async function applyAnswers(
             if (envLocalWrite.backupPath) backupFiles.push(envLocalWrite.backupPath);
         }
 
-        await writeFile(
-            providerModuleFilePath,
-            renderProviderModulesFile(validation.derived.providerModules),
-            'utf8'
-        );
+        const contents = renderProviderModulesFile(validation.derived.providerModules);
+        const temporary = providerModuleFilePath + '.' + randomUUID() + '.tmp';
+        try {
+            await writeFile(temporary, contents, 'utf8');
+            await rename(temporary, providerModuleFilePath);
+        } finally {
+            await rm(temporary, { force: true });
+        }
         writtenFiles.push(providerModuleFilePath);
     }
 

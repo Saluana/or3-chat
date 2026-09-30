@@ -1112,4 +1112,30 @@ const streamMdClasses = [
 .attachment-more {
     min-height: 44px;
 }
+
+/* Touch users need visible actions, and wrapped rows keep short bubbles and
+   plugin actions inside the pane instead of hanging past its right edge. */
+@media (width < 768px), (pointer: coarse) {
+    .cm-actions-user,
+    .cm-actions-assistant {
+        position: static;
+        transform: none;
+        translate: none;
+        margin-top: 0.75rem;
+        max-width: 100%;
+    }
+
+    .cm-action-group {
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        max-width: 100%;
+        opacity: 1 !important;
+    }
+
+    .cm-action-group :deep(button) {
+        min-width: 44px;
+        min-height: 44px;
+        margin-inline-start: 0;
+    }
+}
 </style>

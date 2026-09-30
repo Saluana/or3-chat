@@ -35,7 +35,7 @@
                     "name": "plugin-quickstart.md",
                     "path": "/start/plugin-quickstart",
                     "category": "Tutorial",
-                    "summary": "Start an installable plugin with bun run dev:plugin --create and continue with the single Plugin authoring guide. Direct Nuxt source changes and V1 compatibility have separate references."
+                    "summary": "Start a portable plugin with the guided greeting tutorial, then add features and publish an exact tested package."
                 },
                 {
                     "name": "snake-game-tutorial.md",
@@ -1271,7 +1271,7 @@
                     "name": "providers.md",
                     "path": "/cloud/providers",
                     "category": "Guide",
-                    "summary": "Provider discovery, installation, automatic sibling builds in dev, explicit fallback warnings, OR3_LOCAL_PROVIDERS opt-out, and the Clerk to Convex token bridge. For normal local or VPS operation, use the managed @or3/cloud operator. For editable source or custom providers, use the"
+                    "summary": "Provider entry resolution, data-only JSON metadata migration, required server capabilities, and intentional static/offline operation."
                 },
                 {
                     "name": "release-checklist.md",
@@ -1334,112 +1334,112 @@
             "path": "/plugins",
             "files": [
                 {
-                    "name": "admin-plugins.md",
-                    "path": "/plugins/admin-plugins",
-                    "category": "Reference",
-                    "summary": "Admin plugins add trusted client-side pages and overview widgets to the global admin dashboard. They are a separate V1 extension kind from workspace plugins and only load when SSR authentication is enabled."
+                    "name": "overview.md",
+                    "path": "/plugins/overview",
+                    "title": "Plugins overview",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 0,
+                    "summary": "Choose a plugin development path, understand current host support, and find the guide or example you need."
                 },
                 {
-                    "name": "command-palette.md",
-                    "path": "/plugins/command-palette",
-                    "category": "Reference",
-                    "summary": "Plugins can contribute local searchable records and commands to OR3's global command palette. The Cmd/Ctrl+K overlay consumes these registrations immediately and removes them with the owning plugin scope."
-                },
-                {
-                    "name": "manifest-v2.md",
-                    "path": "/plugins/manifest-v2",
-                    "category": "Reference",
-                    "summary": "V2 package manifest, runtime, authority, and immutable asset contract, including bounded static PNG/WebP app icons validated during packing and host admission."
-                },
-                {
-                    "name": "official-products.md",
-                    "path": "/plugins/official-products",
-                    "category": "Guide",
-                    "summary": "Three first-party plugins — Model Compare, Prompt Workbench and Document Utilities — ship as ordinary portable packages: the same SDK, profile, review lane and setup flow as community plugins. Model calls go through the host's governed ai.models/ai.complete capabilities (operator allowlist and prices, plugin-attributed spend, no credential in the plugin), writes happen only through host-rendered actions the user clicks, and the declared first action resolves on the selected document or the package's own sample file."
-                },
-                {
-                    "name": "plugin-development-v2.md",
-                    "path": "/plugins/plugin-development-v2",
-                    "category": "Tutorial",
-                    "summary": "Author portable or trusted-host packages with defineOr3Plugin and Manifest V2, review grants, validate and pack exact artifacts, test installation and disablement, and qualify a clean candidate for publication."
-                },
-                {
-                    "name": "plugin-sdk.md",
-                    "path": "/plugins/plugin-sdk",
-                    "category": "Reference",
-                    "summary": "Plugin SDK contract reference for the single Manifest V2 authoring path. The host-created capability context serves qualified portable and trusted-host adapters; unsupported methods still return explicit refusals. The package is not yet published to npm; install it from a packed tarball. Trusted-host message renderers and chat editor extensions use typed, grant-checked SDK contributions with activation cleanup."
-                },
-                {
-                    "name": "plugin-sdk-cli.md",
-                    "path": "/plugins/plugin-sdk-cli",
-                    "category": "Reference",
-                    "summary": "Use the SDK CLI to validate, build, and freeze immutable plugin candidates. The or3-marketplace command signs in with Clerk, qualifies and uploads a candidate, attaches its receipt, and submits it for staging review."
-                },
-                {
-                    "name": "portable-profile.md",
-                    "path": "/plugins/portable-profile",
-                    "category": "Reference",
-                    "summary": "Portable authoring descriptors and isolated browser-only packages, plus the or3-portable-workspace-v1 sidebar, workspace tab, theme-aware 860px content layout, independently scrolling inspector and mobile slide-out, bounded live field actions and permission-gated chat tools grouped by reviewed plugin name in a dedicated chat settings subview."
-                },
-                {
-                    "name": "connections.md",
-                    "path": "/plugins/connections",
-                    "category": "Reference",
-                    "summary": "Connect a plugin to an external service without giving it your credential: AES-256-GCM storage with the key outside the database, opaque orc_ references, owner-scoped listing and resolution, an operation allowlist intersected with the release's own approved operations and destinations, exact-origin and segment-bounded path checks, host-minted approvals for external/commercial/destructive operations, credential injection after every check, no redirect forwarding, bounded response reads with allowlisted headers and recursive secret refusal, same-origin mutation guards, setup tests restricted to read-only idempotent operations and bound to the connection revision, and the one supported provider (OpenRouter) whose paid completion is routed through the governed AI capability."
-                },
-                {
-                    "name": "portable-containment-and-setup.md",
-                    "path": "/plugins/portable-containment-and-setup",
-                    "category": "Reference",
-                    "summary": "What the portable client sandbox can and cannot reach (parent DOM, cookies, web storage, IndexedDB, fetch/WebSocket/imports/nested workers, navigation) proved by an uncontained control worker against reachable targets, the measured wire bounds and UTF-8-bounded AI spend reservations, mandatory host-minted session binding stamped by the frame shim with generation invalidation, the granted-capability registry and authenticated server capability bridge, the host-rendered UI primitives with workspace-scoped draft retention and activation-bound replies, grant revocation of in-flight calls, and markdown sanitizer with validated ui.render/ui.contribute events, effective-authority hashing with release-bound consent, action approvals that only the host UI can mint so AI cannot authorize purchases or destructive writes, and how host-generated setup reaches a first useful action."
-                },
-                {
-                    "name": "selected-document-utility.md",
-                    "path": "/plugins/selected-document-utility",
-                    "category": "Tutorial",
-                    "summary": "A complete free selected-document utility example: one host-mediated summarize command, a committed first-action fixture, a generated authoring profile, and a pinned Bun test container with a documented sample workspace."
-                },
-                {
-                    "name": "runtime-v2-overview.md",
-                    "path": "/plugins/runtime-v2-overview",
-                    "category": "Guide",
-                    "summary": "Plugin Runtime V2 adds digest-addressed packages, SDK authoring and optional isolation. Reviewed Workflows and External Agents packages activate through browser canary, promotion, and workspace enablement; disabling them disposes their contributions."
-                },
-                {
-                    "name": "trust-and-safe-mode.md",
-                    "path": "/plugins/trust-and-safe-mode",
-                    "category": "Reference",
-                    "summary": "Package pointer rollback runs on the server promotion service and is gated by state preflight. A successful code rollback does not claim incompatible migrated state was restored. Disable, uninstall, GC, and data deletion remain separate."
-                },
-                {
-                    "name": "trusted-acquisition.md",
-                    "path": "/plugins/trusted-acquisition",
-                    "category": "Reference",
-                    "summary": "Reviewed acquisition installs a package published and signed by a configured marketplace registry. It refuses arbitrary package URLs, verifies signed metadata, archive and canonical tree digests before any pointer changes, enforces the signed checkpoint's monotonic security revision (rollback, equivocation and replay are refused), and preflights every enabled workspace for an instance-wide update. Existing access approvals carry forward; expanded access takes one deployment-wide administrator approval, and blocked candidates leave the current version selected. Runner leases retain live ownership and cancellation preserves committed stage evidence; interrupted work is explicitly resumable."
-                },
-                {
-                    "name": "marketplace.md",
-                    "path": "/plugins/marketplace",
-                    "category": "Guide",
-                    "summary": "Site-approved discovery, guided acquisition, workspace rollout and future defaults. One code version serves enabled workspaces; expanded access gets deployment approval and blocked updates link to affected workspace setup. Slow writes return a resumable rollout instead of blocking workspace creation. Health checks distinguish server readiness from browser activation. Restore opens an exact impact review from the plugin detail and preserves workspace data. Public marketplace history supports loading older releases and publisher links show destination hostnames."
+                    "name": "install-and-manage.md",
+                    "path": "/plugins/install-and-manage",
+                    "title": "Install and manage plugins",
+                    "category": "Using plugins",
+                    "categoryOrder": 1,
+                    "order": 0,
+                    "summary": "Find, configure, enable, update, restore, and remove plugins, with recovery steps for interrupted installations."
                 },
                 {
                     "name": "library.md",
                     "path": "/plugins/library",
-                    "category": "Guide",
-                    "summary": "Dashboard > Library connects one local user to a marketplace account through bounded pairing. The local server keeps the polling secret and encrypted, user-bound credential; the browser receives only a comparison code and verification link. The 90-day link grants library:read and downloads:acquire, and disconnect stops local use immediately. Linked users see acquired versions and update coverage. Administrators can open exact-version verified installs; ordinary buyers can create credential-free, workspace-bound install requests for administrator review. Account switches clear stale purchases, and installed software keeps running after link loss."
+                    "title": "Your Library",
+                    "category": "Using plugins",
+                    "categoryOrder": 1,
+                    "order": 1,
+                    "summary": "Connect a marketplace account, use acquired releases, request administrator installation, and manage the account link."
                 },
                 {
-                    "name": "v1-support-and-migration.md",
-                    "path": "/plugins/v1-support-and-migration",
-                    "category": "Guide",
-                    "summary": "Compatibility window and migration steps for existing V1 packages, plus shared workspace manifest coordination across bundled, trusted and isolated client runtimes. New packages use the single Plugin authoring guide and Manifest V2."
+                    "name": "first-plugin.md",
+                    "path": "/plugins/first-plugin",
+                    "title": "Build your first plugin",
+                    "category": "Building plugins",
+                    "categoryOrder": 2,
+                    "order": 0,
+                    "summary": "Build a portable greeting app with a form and saved value, then verify reload and disable/re-enable behavior in OR3."
                 },
                 {
-                    "name": "local-development.md",
-                    "path": "/plugins/local-development",
-                    "category": "Guide",
-                    "summary": "Create a portable plugin and live-edit it in an isolated loopback host with one local sign-in. Saves build, canary and update the real worker view; errors preserve the last package and new permissions get review. Explicit frozen candidates remain the release handoff."
+                    "name": "add-features.md",
+                    "path": "/plugins/add-features",
+                    "title": "Add features to your plugin",
+                    "category": "Building plugins",
+                    "categoryOrder": 2,
+                    "order": 1,
+                    "summary": "Recipes for workspace UI, storage, chat tools, document context, approved model calls, and trusted-host commands."
+                },
+                {
+                    "name": "publish.md",
+                    "path": "/plugins/publish",
+                    "title": "Publish your plugin",
+                    "category": "Building plugins",
+                    "categoryOrder": 2,
+                    "order": 2,
+                    "summary": "Freeze and qualify an exact candidate, test its files, prepare a marketplace draft, and follow review and publication."
+                },
+                {
+                    "name": "manifest.md",
+                    "path": "/plugins/manifest",
+                    "title": "Manifest",
+                    "category": "Reference",
+                    "categoryOrder": 3,
+                    "order": 0,
+                    "summary": "Complete package manifest, field contracts, generated policy/setup descriptors, runtime restrictions, icons, and server routes."
+                },
+                {
+                    "name": "plugin-sdk.md",
+                    "path": "/plugins/plugin-sdk",
+                    "title": "SDK",
+                    "category": "Reference",
+                    "categoryOrder": 3,
+                    "order": 1,
+                    "summary": "Supported methods, required permissions, runtime availability, results, storage, UI actions, contributions, and SDK exports."
+                },
+                {
+                    "name": "plugin-sdk-cli.md",
+                    "path": "/plugins/plugin-sdk-cli",
+                    "title": "CLI",
+                    "category": "Reference",
+                    "categoryOrder": 3,
+                    "order": 2,
+                    "summary": "SDK installation and command reference for scaffolding, validation, tests, deterministic builds, packing, inspection, and frozen candidates."
+                },
+                {
+                    "name": "connections.md",
+                    "path": "/plugins/connections",
+                    "title": "Connections",
+                    "category": "Reference",
+                    "categoryOrder": 3,
+                    "order": 3,
+                    "summary": "Declare supported connection slots, configure and test credentials, and understand ownership, custody, dispatch policy, and refusals."
+                },
+                {
+                    "name": "runtime-and-security.md",
+                    "path": "/plugins/runtime-and-security",
+                    "title": "Runtime and security",
+                    "category": "Advanced",
+                    "categoryOrder": 4,
+                    "order": 0,
+                    "summary": "Operator configuration, package verification, permission review, browser checks, containment, budgets, safe mode, and recovery."
+                },
+                {
+                    "name": "admin-plugins.md",
+                    "path": "/plugins/admin-plugins",
+                    "title": "Admin plugins",
+                    "category": "Advanced",
+                    "categoryOrder": 4,
+                    "order": 1,
+                    "summary": "Separate trusted extension API for administrator pages and overview widgets, with install, rebuild, and lifecycle limitations."
                 }
             ]
         }

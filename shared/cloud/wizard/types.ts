@@ -550,7 +550,7 @@ export interface WizardValidationResult {
         env: Record<string, string>;
         /** Key/value pairs to set in the Convex backend (Clerk + Convex only). */
         convexEnv: Record<string, string>;
-        /** Nuxt module IDs for `or3.providers.generated.ts`. */
+        /** Nuxt module IDs for `or3.providers.generated.json`. */
         providerModules: string[];
     };
 }
@@ -572,7 +572,7 @@ export interface WizardApplyResult {
     backupFiles: string[];
     /** Env var updates applied. `null` values indicate keys that were cleared. */
     envUpdates: Record<string, string | null>;
-    /** Provider module IDs written to `or3.providers.generated.ts`. */
+    /** Provider module IDs written to `or3.providers.generated.json`. */
     providerModules: string[];
     /** True when no files were actually written (preview mode). */
     dryRun: boolean;
@@ -620,7 +620,7 @@ export interface WizardConnectionTestResult {
  * - `validate` runs two-tier validation: field-level checks followed
  *   by authoritative config builders (`defineOr3CloudConfig`).
  * - `review` returns a redacted summary for user confirmation.
- * - `apply` writes `.env` + `or3.providers.generated.ts`; supports dry-run.
+ * - `apply` writes `.env` + `or3.providers.generated.json`; supports dry-run.
  * - `deploy` executes `bun install` and the appropriate dev/build command.
  *
  * Constraints:

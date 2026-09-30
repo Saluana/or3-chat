@@ -18,6 +18,17 @@ The sidebar layout API provides:
 
 ---
 
+## Visible frame on touch devices
+
+`ResizableSidebarLayout` follows `window.visualViewport` resize and scroll events
+at normal zoom. The fixed frame uses the visible height, Safari pan offset and
+landscape safe-area insets. `PageShell` and pane children inherit its height.
+Pinch zoom restores the normal page frame so browser zoom can pan naturally.
+Frames under 140px hide optional workspace chrome while retaining the compact
+chat composer.
+
+---
+
 ## Basic Example
 
 ```ts
@@ -284,7 +295,7 @@ closeSidebarIfMobile();  // No-ops if unavailable
 
 ### Sidebar not closing on mobile
 
-- Verify you're actually on mobile viewport (≤768px)
+- Verify you're actually on mobile viewport (<768px)
 - Check that `closeSidebarIfMobile()` is being called
 - Ensure PageShell has mounted (API available)
 

@@ -25,9 +25,12 @@ On narrow screens, the workspace shell fills the viewport. Width is capped by
 the viewport and content scrolls within the available height. The footer slot is optional; omitting it
 does not reserve footer space.
 
-The shell owns 24px outer padding, a 20px semibold title, a 36px close control,
-28px header-to-content spacing, and a right-aligned footer with a 10px action
-gap. Theme tokens still own surface colors, border width, radius, elevation,
+On desktop the shell owns 24px outer padding, a 20px semibold title, a 36px close
+control, and 28px header-to-content spacing. Phones and short viewports use 16px
+padding. Touch controls have at least 44px height and the close control is square.
+Footer actions wrap inside the dialog with a 10px gap; long labels and descriptions
+wrap rather than widening the viewport. Long titles wrap and clamp to two lines,
+keeping the close button and content reachable; the accessible title remains complete. Theme tokens still own surface colors, border width, radius, elevation,
 and focus color. The `modal` input/textarea variant and button size are defined
 once in `app/app.config.ts`. Use an 18px gap between form fields.
 
@@ -41,3 +44,27 @@ Dashboard's launcher uses the medium size and grows with its registered cards.
 Opening a registered page uses the large size with a bounded, scrolling page
 area. Tile descriptions come from the existing `DashboardPlugin.description`
 field, and images retain their Iconify fallback.
+
+## Keyboard and nested dialogs
+
+The shell keeps Tab and Shift+Tab inside the active dialog, including Safari's
+button focus behavior, and scrolls the focused control into view. Escape and
+backdrop dismissal close the active layer. Closing a dialog restores its opener
+or a visible navigation/input control when resizing removed the opener. Opening
+a second dialog during an action preserves the new dialog's autofocus.
+
+Use a second AppModal for nested confirmations, filters, or details so each layer
+has its own accessible title, focus scope, and dismissal behavior. The optional
+`content` prop preserves custom autofocus callbacks, including cancellation with
+`preventDefault()`. Do not add a separate body scroll lock or a global Escape
+listener around a UModal.
+
+Safari's software keyboard can shrink and pan `window.visualViewport` while
+`100dvh` retains the page height. AppModal follows that visible frame, keeping
+its header and footer reachable and its body scrollable. Pinch zoom leaves the
+normal layout intact. Custom UModal hosts use the internal
+`useDialogFocus(options, layout)` helper with a `center`, `workspace`,
+`fullscreen`, or `palette` layout; the first-run card uses
+`useDialogViewport` for the same geometry. The first-run card keeps 16px side
+margins and a fixed close header and helper footer around its scrolling form,
+including when the key input opens the keyboard.

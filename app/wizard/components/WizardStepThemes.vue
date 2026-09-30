@@ -52,28 +52,20 @@
         </div>
 
         <!-- Lightbox -->
-        <Teleport to="body">
-            <Transition
-                enter-active-class="transition duration-150 ease-out"
-                enter-from-class="opacity-0"
-                enter-to-class="opacity-100"
-                leave-active-class="transition duration-100 ease-in"
-                leave-from-class="opacity-100"
-                leave-to-class="opacity-0"
-            >
+        <UModal
+            v-model:open="lightboxOpen"
+            fullscreen
+            :title="selectedThemeLabel + ' preview'"
+            description="Preview this theme. Close the preview to return to setup."
+            :content="lightboxDialogContent"
+            :ui="{ overlay: 'z-[9998]!', content: 'z-[9999]! bg-black/80! rounded-none! border-0! ring-0! p-0! divide-y-0!' }"
+        >
+            <template #content>
                 <div
-                    v-if="lightboxOpen"
-                    ref="lightboxEl"
-                    class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-                    tabindex="-1"
-                    role="dialog"
-                    aria-modal="true"
-                    :aria-labelledby="lightboxTitleId"
-                    :aria-describedby="lightboxHintId"
+                    class="flex h-full w-full items-center justify-center p-4"
                     @click.self="closeLightbox"
-                    @keydown="onLightboxKeydown"
                 >
-                    <div class="relative max-h-full max-w-5xl w-full">
+                    <div class="relative max-h-full max-w-5xl w-full pt-12">
                         <h3
                             :id="lightboxTitleId"
                             class="sr-only"
@@ -81,9 +73,8 @@
                             {{ selectedThemeLabel }} preview
                         </h3>
                         <button
-                            ref="closeButtonEl"
                             type="button"
-                            class="absolute -right-3 -top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-800 shadow-lg transition-transform hover:scale-110 focus:outline-none"
+                            class="absolute right-0 top-0 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white text-gray-800 shadow-lg transition-transform hover:scale-110 focus:outline-none"
                             aria-label="Close preview"
                             @click="closeLightbox"
                         >
@@ -94,7 +85,7 @@
                         <img
                             :src="previewImage"
                             :alt="selectedThemeLabel"
-                            class="max-h-[85vh] w-full rounded-[var(--md-border-radius-large)] object-contain shadow-2xl"
+                            class="max-h-[calc(100dvh-8rem)] w-full rounded-[var(--md-border-radius-large)] object-contain shadow-2xl"
                         />
                         <p
                             :id="lightboxHintId"
@@ -104,14 +95,15 @@
                         </p>
                     </div>
                 </div>
-            </Transition>
-        </Teleport>
+            </template>
+        </UModal>
     </div>
 </template>
 
 <script setup lang="ts">
 import type { WizardAnswers, WizardField, WizardStep } from '~~/shared/cloud/wizard/types';
 import WizardFieldRenderer from './WizardFieldRenderer.vue';
+import { useDialogFocus } from '~/composables/ui/useDialogFocus';
 
 const props = defineProps<{
     step: WizardStep;
@@ -125,21 +117,9 @@ const emit = defineEmits<{
 }>();
 
 const lightboxOpen = ref(false);
-const lightboxEl = ref<HTMLElement | null>(null);
-const closeButtonEl = ref<HTMLElement | null>(null);
-const previouslyFocusedEl = ref<HTMLElement | null>(null);
+const lightboxDialogContent = useDialogFocus(undefined, () => 'fullscreen');
 const lightboxTitleId = 'wizard-theme-preview-title';
 const lightboxHintId = 'wizard-theme-preview-hint';
-
-const LIGHTBOX_FOCUSABLE_SELECTOR =
-    'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-function getLightboxFocusableElements(): HTMLElement[] {
-    if (!lightboxEl.value) return [];
-    return Array.from(
-        lightboxEl.value.querySelectorAll<HTMLElement>(LIGHTBOX_FOCUSABLE_SELECTOR)
-    );
-}
 
 function openLightbox(): void {
     lightboxOpen.value = true;
@@ -148,60 +128,6 @@ function openLightbox(): void {
 function closeLightbox(): void {
     lightboxOpen.value = false;
 }
-
-function onLightboxKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
-        event.preventDefault();
-        closeLightbox();
-        return;
-    }
-
-    if (event.key !== 'Tab') {
-        return;
-    }
-
-    const focusableElements = getLightboxFocusableElements();
-    if (focusableElements.length === 0) {
-        event.preventDefault();
-        lightboxEl.value?.focus();
-        return;
-    }
-
-    const first = focusableElements[0]!;
-    const last = focusableElements[focusableElements.length - 1]!;
-    const active = import.meta.client
-        ? (document.activeElement as HTMLElement | null)
-        : null;
-
-    if (event.shiftKey) {
-        if (!active || active === first || !lightboxEl.value?.contains(active)) {
-            event.preventDefault();
-            last.focus();
-        }
-        return;
-    }
-
-    if (!active || active === last || !lightboxEl.value?.contains(active)) {
-        event.preventDefault();
-        first.focus();
-    }
-}
-
-watch(lightboxOpen, (open) => {
-    if (open) {
-        if (import.meta.client) {
-            previouslyFocusedEl.value = document.activeElement as HTMLElement | null;
-        }
-        nextTick(() => {
-            const focusableElements = getLightboxFocusableElements();
-            (closeButtonEl.value ?? focusableElements[0] ?? lightboxEl.value)?.focus();
-        });
-        return;
-    }
-
-    previouslyFocusedEl.value?.focus();
-    previouslyFocusedEl.value = null;
-});
 
 const visibleFields = computed<WizardField[]>(() =>
     props.step.fields.filter((field) =>

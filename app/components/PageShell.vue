@@ -26,7 +26,7 @@
             />
         </template>
         <div
-            class="flex-1 h-dvh w-full relative flex flex-col"
+            class="flex-1 h-full min-h-0 w-full relative flex flex-col"
             :class="legacyCompatClasses.height"
             :style="paneChromeClearanceStyle"
             :data-workspace-profile="resolvedProfile.id"
@@ -489,7 +489,7 @@ import type {
 } from '~/core/workspace-tabs/types';
 
 const legacyCompatClasses = {
-    height: `h-[${'100dvh'}]`,
+    height: 'h-full',
     borderInverse: `border-[${'var(--md-inverse-surface)'}]`,
     borderPrimary: `border-[${'var(--md-primary)'}]`,
     bgSurfaceVariant20: `bg-[${'var(--md-surface-variant)'}]/20`,

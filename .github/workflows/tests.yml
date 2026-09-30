@@ -89,7 +89,7 @@ jobs:
               - 'extensions/**'
               - 'modules/**'
               - 'nuxt.config.ts'
-              - 'or3.providers.generated.ts'
+              - 'or3.providers.generated.json'
               - 'package-lock.json'
               - 'package.json'
               - 'packages/create-or3-chat/first-party-versions.json'

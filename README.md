@@ -296,7 +296,7 @@ hooks.addFilter('ai:request:filter:body', (body) => {
 });
 ```
 
-For authoring and release steps, see the [Plugin authoring guide](public/_documentation/plugins/plugin-development-v2.md).
+For authoring and release steps, see the [Plugin authoring guide](public/_documentation/plugins/first-plugin.md).
 
 ---
 

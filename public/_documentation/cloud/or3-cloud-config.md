@@ -33,6 +33,10 @@ export const or3CloudConfig = defineOr3CloudConfig({
 });
 ```
 
+## Required server providers
+
+Enabling authentication requires both the auth provider and an `AuthWorkspaceStore` supplied by the selected sync backend. Disabling sync transfer does not remove that store requirement. Missing required module entries stop configuration; strict startup also verifies real registrations. To run intentionally offline, disable SSR auth. See [provider metadata and migration](./providers).
+
 ## Configuration Sections
 
 ### Authentication

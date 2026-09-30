@@ -2,11 +2,13 @@
  * Extended health checks for `or3-cloud doctor`.
  * Kept separate from the CLI entry so or3-cloud.ts stays dispatch-focused.
  */
-import { accessSync, constants, existsSync, readFileSync } from 'node:fs';
+import { accessSync, constants, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { preflightConvex } from '../../shared/cloud/wizard/deploy';
 import { isPortAvailable as sharedIsPortAvailable } from '../../shared/cloud/wizard/dev-server';
-import { LOCAL_PROVIDER_IDS } from '../../shared/cloud/provider-compatibility';
+import { providerIdToModuleId, requiredProviderModules } from '../../shared/cloud/provider-compatibility';
+import { resolveModuleEntry } from '../../shared/config/module-resolution';
+import { readProviderMetadata } from '../../shared/cloud/provider-metadata';
 import type { Or3CloudConfig } from '../../types/or3-cloud-config';
 
 export type DoctorCheckResult = {
@@ -19,23 +21,8 @@ export function providerPackageInstalled(
     providerId: string,
     cwd = process.cwd()
 ): boolean {
-    if (!providerId || LOCAL_PROVIDER_IDS.has(providerId)) return true;
-    return existsSync(resolve(cwd, 'node_modules', `or3-provider-${providerId}`));
-}
-
-export function generatedFileContainsProvider(
-    providerId: string,
-    cwd = process.cwd()
-): boolean {
-    if (!providerId || LOCAL_PROVIDER_IDS.has(providerId)) return true;
-    const generatedPath = resolve(cwd, 'or3.providers.generated.ts');
-    if (!existsSync(generatedPath)) return false;
-    try {
-        const content = readFileSync(generatedPath, 'utf8');
-        return content.includes(`or3-provider-${providerId}`);
-    } catch {
-        return false;
-    }
+    const moduleId = providerIdToModuleId(providerId);
+    return !moduleId || resolveModuleEntry(moduleId, cwd).ok;
 }
 
 export function checkWritableDir(pathValue: string): boolean {
@@ -66,40 +53,26 @@ export async function runDoctorChecks(input: {
 
     const authProvider = config.auth.provider;
     const syncProvider = config.sync.provider;
-    const storageProvider = config.storage.provider;
 
-    if (authProvider) {
-        const ok = providerPackageInstalled(authProvider, cwd);
-        lines.push(
-            ok
-                ? `  ✅ Auth provider "${authProvider}" — package installed`
-                : `  ❌ Auth provider "${authProvider}" — package or3-provider-${authProvider} not found in node_modules`
-        );
-        if (!ok) exitCode = 1;
+    for (const { moduleId, setting } of requiredProviderModules(config, map)) {
+        const result = resolveModuleEntry(moduleId, cwd);
+        lines.push(result.ok
+            ? `  ✅ ${setting}: ${moduleId} — module entry resolved`
+            : `  ❌ ${setting} requires ${moduleId}. ${result.message} Install/build the selected provider.`);
+        if (!result.ok) exitCode = 1;
     }
-    if (syncProvider && config.sync.enabled) {
-        const ok = providerPackageInstalled(syncProvider, cwd);
-        lines.push(
-            ok
-                ? `  ✅ Sync provider "${syncProvider}" — package installed`
-                : `  ❌ Sync provider "${syncProvider}" — package or3-provider-${syncProvider} not found in node_modules`
-        );
-        if (!ok) exitCode = 1;
-    }
-    if (storageProvider && config.storage.enabled) {
-        const ok = providerPackageInstalled(storageProvider, cwd);
-        lines.push(
-            ok
-                ? `  ✅ Storage provider "${storageProvider}" — package installed`
-                : `  ❌ Storage provider "${storageProvider}" — package or3-provider-${storageProvider} not found in node_modules`
-        );
-        if (!ok) exitCode = 1;
-    }
-
-    if (authProvider && !generatedFileContainsProvider(authProvider, cwd)) {
-        lines.push(
-            `  ⚠️  Generated providers file (or3.providers.generated.ts) may not include "${authProvider}". Run the install wizard to regenerate it.`
-        );
+    if (config.auth.enabled && map.OR3_WIZARD_UI_ENABLED !== 'true' && !map.OR3_PLUGIN_WATCH_ROOT) {
+        try {
+            const metadata = readProviderMetadata(cwd);
+            lines.push(...metadata.warnings.map((warning) => `  ⚠️  ${warning}`));
+            for (const moduleId of metadata.modules) {
+                const result = resolveModuleEntry(moduleId, cwd);
+                if (!result.ok) lines.push(`  ⚠️  Supplemental module ${moduleId}: ${result.message}`);
+            }
+        } catch (error) {
+            lines.push(`  ❌ ${error instanceof Error ? error.message : 'Invalid provider metadata.'}`);
+            exitCode = 1;
+        }
     }
 
     if (syncProvider === 'sqlite' && config.sync.enabled) {

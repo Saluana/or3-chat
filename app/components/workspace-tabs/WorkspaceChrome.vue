@@ -88,7 +88,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { WorkspaceTab, WorkspaceTabStatus } from '~/core/workspace-tabs/types';
 import {
     workspaceTabFallbackIcon,
@@ -145,6 +145,9 @@ const emit = defineEmits<{
 }>();
 
 const switcherOpen = ref(false);
+watch(() => props.mobile, (mobile) => {
+    if (!mobile) switcherOpen.value = false;
+});
 
 const chromeProps = useThemeOverrides({
     component: 'header',

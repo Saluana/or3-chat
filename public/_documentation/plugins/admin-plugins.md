@@ -1,7 +1,7 @@
 # Admin plugins
 
 Admin plugins add trusted client-side pages and overview widgets to the global
-admin dashboard. They are a separate V1 extension kind from workspace plugins
+admin dashboard. They use a separate extension API from workspace plugins
 and only load when SSR authentication is enabled.
 
 ## Package layout
@@ -14,9 +14,10 @@ or3.manifest.json
 admin.plugin.ts
 components/
   ExampleAdminPage.vue
+  ExampleOverviewWidget.vue
 ```
 
-Use a V1 manifest:
+Use the admin extension manifest below. It does not use the workspace SDK package schema:
 
 ```json
 {
@@ -28,8 +29,8 @@ Use a V1 manifest:
 }
 ```
 
-`version` must be a non-empty string for V1 compatibility; semantic versioning
-is recommended.
+`version` must be a non-empty string; semantic versioning is recommended.
+Keep the manifest ID, directory, and exported ID identical.
 
 ## Entrypoint
 
@@ -117,3 +118,7 @@ await $fetch('/api/admin/extensions/uninstall', {
   security boundary.
 - The manifest ID, package directory, and exported plugin ID should be kept
   identical. The current loader does not enforce the exported ID.
+
+For workspace apps, use [Build your first plugin](/documentation/plugins/first-plugin). See
+[Runtime and security](/documentation/plugins/runtime-and-security) for safe mode and the distinction
+between admin extensions and workspace package permissions.

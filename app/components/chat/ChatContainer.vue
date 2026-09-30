@@ -3,7 +3,7 @@
         ref="containerRoot"
         v-bind="containerProps"
         :class="[
-            'chat-container-root flex w-full flex-1 h-full flex-col overflow-hidden relative',
+            'chat-container-root flex w-full flex-1 h-full min-h-0 flex-col overflow-hidden relative [container:chat-pane/size]',
             containerProps?.class ?? '',
         ]"
     >
@@ -74,7 +74,7 @@
         <Teleport to="body">
             <div
                 v-if="showWelcomeCard"
-                class="fixed inset-0 z-50 flex items-center justify-center bg-[color:color-mix(in_oklab,var(--md-scrim,#000)_45%,transparent)] p-4"
+                class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[color:color-mix(in_oklab,var(--md-scrim,#000)_45%,transparent)] p-4"
                 data-welcome-backdrop
             >
                 <ChatWelcomeCard @dismiss="onWelcomeDismiss" />
@@ -250,16 +250,16 @@ const scrollParentStyle = computed<CSSProperties>(() => ({
 // Use CSS breakpoints (not JS isMobile) so SSR HTML matches the first client
 // render. ChatContainer is async-hydrated after useResponsiveState may already
 // have flipped global isMobile, which previously caused hydration class mismatches.
-// Breakpoint matches useResponsiveState: (max-width: 768px).
+// Breakpoint matches useResponsiveState and Tailwind's md boundary.
 const inputWrapperClass =
-    'pointer-events-none absolute inset-x-0 bottom-0 z-10 max-[768px]:fixed max-[768px]:z-40';
+    'pointer-events-none absolute inset-x-0 bottom-0 z-10 max-md:z-40';
 const inputWrapperStyle = computed<CSSProperties>(() => ({
     minHeight: `${DEFAULT_INPUT_HEIGHT}px`, // Reserve space to prevent CLS
     // Prevent child content from changing wrapper height during hydration
     contain: 'layout' as const,
 }));
 const innerInputContainerClass =
-    'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-2 max-[768px]:pb-[calc(env(safe-area-inset-bottom)+6px)]';
+    'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-2 max-md:pb-[calc(env(safe-area-inset-bottom)+6px)]';
 function onInputResize(e: { height: number }) {
     emittedInputHeight.value = e?.height || null;
 }

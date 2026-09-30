@@ -36,47 +36,6 @@
                 @keydown="handleKeydown"
             >
                 <div
-                    v-if="deleteConfirmPrompt"
-                    class="absolute inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-[2px]"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="delete-prompt-title"
-                >
-                    <div
-                        class="w-full max-w-md rounded-[var(--md-border-radius-large,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[var(--md-border-color)] bg-[var(--md-surface)] p-5 shadow-xl"
-                    >
-                        <h3
-                            id="delete-prompt-title"
-                            class="m-0 text-base font-semibold"
-                        >
-                            Delete system prompt?
-                        </h3>
-                        <p
-                            class="mb-5 mt-2 text-sm text-[var(--md-on-surface-variant)]"
-                        >
-                            “{{ deleteConfirmPrompt.title || 'Untitled Prompt' }}”
-                            will be removed from your prompt library.
-                        </p>
-                        <div class="flex justify-end gap-2">
-                            <UButton
-                                color="neutral"
-                                variant="outline"
-                                @click="deleteConfirmId = null"
-                            >
-                                Cancel
-                            </UButton>
-                            <UButton
-                                color="error"
-                                data-test="system-prompts-confirm-delete"
-                                @click="confirmDeletePrompt"
-                            >
-                                Delete prompt
-                            </UButton>
-                        </div>
-                    </div>
-                </div>
-
-                <div
                     v-if="errorMessage"
                     class="shrink-0 border-b-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)] bg-error/10 px-4 py-2 text-sm text-error"
                     role="alert"
@@ -422,7 +381,7 @@
                                                     class="h-[18px] w-[18px]"
                                                 />
                                             </button>
-                                            <UPopover>
+                                            <UPopover :open="promptActionsId === prompt.id" @update:open="promptActionsId = $event ? prompt.id : null">
                                                 <button
                                                     type="button"
                                                     class="rounded p-1.5 text-[var(--md-on-surface-variant)] opacity-50 transition hover:opacity-100"
@@ -757,6 +716,20 @@
             </div>
         </template>
     </AppModal>
+    <AppModal
+        :open="!!deleteConfirmPrompt"
+        title="Delete system prompt?"
+        description="Remove this prompt from your library."
+        @update:open="!$event && (deleteConfirmId = null)"
+    >
+        <p class="text-sm text-[var(--md-on-surface-variant)]">
+            “{{ deleteConfirmPrompt?.title || 'Untitled Prompt' }}” will be removed from your prompt library.
+        </p>
+        <template #footer>
+            <UButton variant="ghost" size="modal" @click="deleteConfirmId = null">Cancel</UButton>
+            <UButton color="error" size="modal" data-test="system-prompts-confirm-delete" @click="confirmDeletePrompt">Delete prompt</UButton>
+        </template>
+    </AppModal>
 </template>
 
 <script setup lang="ts">
@@ -823,6 +796,7 @@ const editingPromptId = ref<string | null>(null);
 const view = ref<ModalView>('library');
 const tagDraft = ref('');
 const deleteConfirmId = ref<string | null>(null);
+const promptActionsId = ref<string | null>(null);
 const threadPromptId = ref<string | null>(null);
 const pendingPromptId = ref<string | null>(null);
 const searchInputRef = ref<{ inputRef?: HTMLInputElement } | null>(null);
@@ -1226,6 +1200,7 @@ async function useSelectedPrompt(): Promise<void> {
 }
 
 function requestDeletePrompt(id: string): void {
+    promptActionsId.value = null;
     deleteConfirmId.value = id;
 }
 

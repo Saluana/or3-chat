@@ -89,7 +89,10 @@ export function useChatInputAttachments(options: UseChatInputAttachmentsOptions)
 
     async function processFiles(files: FileList | null) {
         if (!files) return;
-        for (let i = 0; i < files.length; i++) {
+        // The dialog resets its input immediately after this call. FileList
+        // is live, so capture every selected file before the first await.
+        const selected = Array.from(files);
+        for (const file of selected) {
             if (attachments.value.length >= options.maxFiles) {
                 useToast().add({
                     title: 'Attachment limit reached',
@@ -98,8 +101,6 @@ export function useChatInputAttachments(options: UseChatInputAttachmentsOptions)
                 });
                 break;
             }
-            const file = files[i];
-            if (!file) continue;
             await processAttachment(file);
         }
     }

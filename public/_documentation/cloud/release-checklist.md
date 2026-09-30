@@ -155,9 +155,9 @@ signer, migration, commerce and storefront gates.
       product acceptance. Local unit tests and synthetic browser harnesses do
       not replace this deployed journey.
 
-See [Native Marketplace](../plugins/marketplace),
-[Library linking](../plugins/library), and
-[Trusted Registry Acquisition](../plugins/trusted-acquisition).
+See [Install and manage plugins](/documentation/plugins/install-and-manage),
+[Library linking](/documentation/plugins/library), and
+[Runtime and security](/documentation/plugins/runtime-and-security).
 
 ## Related
 

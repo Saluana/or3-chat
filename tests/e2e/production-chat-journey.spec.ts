@@ -31,6 +31,57 @@ async function send(page: Page, message: string): Promise<void> {
 }
 
 test.describe('production chat journey', () => {
+    for (const theme of ['blank', 'retro', 'cyberpunk']) {
+        test(`${theme} responsive messages preserve rich content and touch editing`, async ({ browser }, info) => {
+            const context = await browser.newContext({
+                viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
+            });
+            const page = await context.newPage();
+            try {
+                await context.addCookies([
+                    { name: 'or3_active_theme', value: theme, domain: '127.0.0.1', path: '/' },
+                ]);
+                await page.addInitScript((theme) => localStorage.setItem('activeTheme', theme), theme);
+                await openChat(page);
+                await send(page, 'journey:responsive');
+                await expect(page.getByText('End of layout sample.')).toBeVisible();
+                await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
+                await page.mouse.move(0, 0);
+                for (const button of await page.getByRole('button', {
+                    name: /^(Copy message|Retry message|Branch conversation|Edit message)$/,
+                }).all()) {
+                    const bounds = await button.boundingBox();
+                    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+                    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+                }
+                const edit = page.getByRole('button', { name: 'Edit message' }).last();
+                await expect(edit.locator('xpath=ancestor::*[contains(@class,"cm-action-group")]'))
+                    .toHaveCSS('opacity', '1');
+                await edit.click();
+                const draft = page.locator('.cm-editor-assistant [contenteditable="true"]');
+                await expect(draft).toBeVisible();
+                await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+                for (const viewport of [{ width: 320, height: 568 }, { width: 844, height: 390 }, { width: 1920, height: 1080 }]) {
+                    await page.setViewportSize(viewport);
+                    expect(await page.evaluate(() => document.documentElement.scrollWidth))
+                        .toBeLessThanOrEqual(viewport.width);
+                    const markdown = page.locator('.cm-markdown-assistant');
+                    await expect(markdown.locator('table')).toBeAttached();
+                    await expect(markdown.locator('pre')).toBeAttached();
+                    expect(await markdown.evaluate((element) => element.scrollWidth - element.clientWidth))
+                        .toBeLessThanOrEqual(1);
+                    const path = info.outputPath(`messages-${theme}-${viewport.width}x${viewport.height}.png`);
+                    await page.screenshot({ path, animations: 'disabled' });
+                    await info.attach('responsive-message', { path, contentType: 'image/png' });
+                }
+                await page.reload();
+                await expect(page.getByText('End of layout sample.')).toBeVisible();
+            } finally {
+                await context.close();
+            }
+        });
+    }
+
     test('can stop a continuation without losing the existing partial reply', async ({ page }) => {
         await openChat(page);
         await send(page, 'journey:stop');

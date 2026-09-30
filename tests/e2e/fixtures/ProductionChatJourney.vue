@@ -144,7 +144,23 @@ function installDeterministicFetch(): void {
                     new Promise((resolve) => setTimeout(resolve, ms));
 
                 try {
-                    if (text.includes('journey:refresh')) {
+                    if (text.includes('journey:responsive')) {
+                        enqueue(sseChunk([
+                            '## Responsive reply',
+                            '',
+                            'A long URL: https://example.com/' + 'unbroken-segment'.repeat(25),
+                            '',
+                            '| Column one | Column two | Column three | Column four |',
+                            '| --- | --- | --- | --- |',
+                            '| Long table content | Long table content | Long table content | Long table content |',
+                            '',
+                            '```ts',
+                            'const longLine = "' + 'long-code-value'.repeat(30) + '";',
+                            '```',
+                            '',
+                            'End of layout sample.',
+                        ].join('\n')));
+                    } else if (text.includes('journey:refresh')) {
                         enqueue(sseChunk('Partial response before refresh.'));
                         await delay(650);
                         enqueue(sseChunk(' Ready to recover.'));

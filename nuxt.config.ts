@@ -1,54 +1,33 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { basename, resolve } from 'path';
-import * as ts from 'typescript';
 import { or3CloudConfig } from './config.or3cloud';
 import { or3Config } from './config.or3';
 import { printStartupBanner as printOr3StartupBanner } from './shared/dev/startup-banner';
-import {
-    discoverNonCorePlugins,
-    isNonCorePluginDiscoveryDisabled,
-} from './shared/plugins/safe-mode';
-import { providerIdToModuleId } from './shared/cloud/provider-compatibility';
+import { discoverNonCorePlugins } from './shared/plugins/safe-mode';
+import { requiredProviderModules } from './shared/cloud/provider-compatibility';
+import { readProviderMetadata } from './shared/cloud/provider-metadata';
+import { modulePackageName, resolveModuleEntry } from './shared/config/module-resolution';
+import { buildApplicationPlan } from './shared/config/application-plan';
 import { stripBrokenOpenRouterSourcemapsPlugin } from './plugins/vite-strip-broken-openrouter-sourcemaps';
-import { resolveConnectCloudflareReadiness } from './shared/cloud/wizard/cloudflare-attestation';
-import { DEFAULT_WEBHOOKS_BLOCK_PRIVATE_IPS } from './shared/config/constants';
 import { resolveDevProviderModule } from './shared/dev/local-providers';
 import { resolveLocalPackageAliases } from './shared/dev/local-packages';
 import { hostEsmFacadeImportMapScript } from './shared/plugins/host-esm-facade';
 
+const env = { ...process.env };
+
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
-const disableNonCorePlugins = isNonCorePluginDiscoveryDisabled(
-    or3CloudConfig.admin,
-);
 const isWizardUiProcess = process.env.OR3_WIZARD_UI_ENABLED === 'true';
 const isScrollTestHarnessEnabled =
     process.env.OR3_SCROLL_TEST_HARNESS === 'true';
 const isProductionJourneyTestHarnessEnabled =
     process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS === 'true';
-const productionJourneyPort = Number(process.env.PW_PORT || 3000);
-const productionJourneyOpenRouterBaseUrl =
-    `http://127.0.0.1:${
-        Number.isInteger(productionJourneyPort) ? productionJourneyPort : 3000
-    }/api/__or3-e2e`;
 const isStaticGenerateBuild = process.argv.includes('generate');
-const isStaticCloudDisabledBuild = isStaticGenerateBuild && !isSsrAuthEnabled;
 const shouldLoadCloudProviderModules =
-    !isWizardUiProcess && !isStaticCloudDisabledBuild;
+    !isWizardUiProcess && isSsrAuthEnabled && !isStaticGenerateBuild;
 
-const convexUrl = or3CloudConfig.sync.convex?.url || '';
-const convexAdminKey = or3CloudConfig.sync.convex?.adminKey || '';
-const isConnectEnabled = process.env.OR3_CONNECT_ENABLED === 'true';
-const connectProvider =
-    process.env.OR3_CONNECT_PROVIDER?.trim() ||
-    or3CloudConfig.sync.provider;
-const connectRelayProvider =
-    process.env.OR3_CONNECT_RELAY_PROVIDER?.trim() || 'cloudflare';
-const strictConnectConfig =
-    process.env.NODE_ENV === 'production' ||
-    process.env.OR3_STRICT_CONFIG === 'true';
 const sqliteRuntime = process.env.OR3_SQLITE_DRIVER?.trim().toLowerCase() ||
     'better-sqlite3';
 const sqliteNativeTraceIncludes =
@@ -98,248 +77,77 @@ const pluginSdkSourceAliases: Record<string, string> = hasPluginSdkSource
           // Server-side setup descriptors are parsed with the shared SDK
           // parser, so the package profile source must resolve to the
           // transformable source in a checkout build.
-          '@or3/plugin-sdk/profile': resolve(
-              pluginSdkSourceRoot,
-              'profile.ts',
-          ),
+          '@or3/plugin-sdk/profile': resolve(pluginSdkSourceRoot, 'profile.ts'),
           // The root entry too: a plugin loaded from a sibling checkout must
           // resolve the *same* SDK instance this app runs, or its `ui` helpers
           // come from a second copy with a different shape.
           '@or3/plugin-sdk': resolve(pluginSdkSourceRoot, 'index.ts'),
       }
     : {};
-const pluginSdkViteAliases = Object.entries(pluginSdkSourceAliases).map(
-    ([find, replacement]) => ({ find, replacement }),
-).sort((left, right) => right.find.length - left.find.length);
+const pluginSdkViteAliases = Object.entries(pluginSdkSourceAliases)
+    .map(([find, replacement]) => ({ find, replacement }))
+    .sort((left, right) => right.find.length - left.find.length);
 
-function isPackageInstalled(pkgName: string): boolean {
-    return existsSync(resolve(__dirname, 'node_modules', pkgName));
-}
-
-function isProviderAvailable(providerId: string): boolean {
-    const moduleId = providerIdToModuleId(providerId);
-    if (!moduleId) return true;
-    const pkgName = moduleId.split('/')[0];
-    return Boolean(pkgName && isPackageInstalled(pkgName));
-}
-
-function loadGeneratedProviderModules(): string[] {
-    if (!shouldLoadCloudProviderModules || process.env.OR3_PLUGIN_WATCH_ROOT) {
-        return [];
-    }
-
-    const generatedModulesPath = resolve(
-        __dirname,
-        'or3.providers.generated.ts',
+// Keep cloud discovery outside the helpers: static/offline/setup need no provider files.
+if (isStaticGenerateBuild && isSsrAuthEnabled) {
+    throw new Error(
+        '[or3-config] Static generation cannot enable server auth. Use bun run generate:static or a server build.',
     );
-    if (!existsSync(generatedModulesPath)) {
-        return [];
-    }
-
-    try {
-        const source = readFileSync(generatedModulesPath, 'utf8');
-        const transpiled = ts.transpileModule(source, {
-            compilerOptions: {
-                module: ts.ModuleKind.CommonJS,
-                target: ts.ScriptTarget.ES2020,
-            },
-        }).outputText;
-        const module = { exports: {} as { or3ProviderModules?: unknown } };
-        const exports = module.exports;
-        const evaluate = new Function('module', 'exports', transpiled);
-        evaluate(module, exports);
-
-        const parsed = module.exports.or3ProviderModules;
-        if (!Array.isArray(parsed)) {
-            console.warn(
-                `[or3-provider] Could not parse generated provider modules from "${generatedModulesPath}".`,
-            );
-            return [];
-        }
-
-        return parsed.filter(
-            (entry): entry is string => typeof entry === 'string',
-        );
-    } catch (error) {
-        console.warn(
-            `[or3-provider] Failed to read generated provider modules from "${generatedModulesPath}": ${
-                error instanceof Error ? error.message : String(error)
-            }`,
-        );
-        return [];
-    }
 }
-
-const or3ProviderModules = loadGeneratedProviderModules();
-
-const providerIdsFromConfig = new Set<string>();
-if (shouldLoadCloudProviderModules) {
-    if (or3CloudConfig.auth.enabled)
-        providerIdsFromConfig.add(or3CloudConfig.auth.provider);
-    if (or3CloudConfig.sync.enabled)
-        providerIdsFromConfig.add(or3CloudConfig.sync.provider);
-    if (or3CloudConfig.storage.enabled)
-        providerIdsFromConfig.add(or3CloudConfig.storage.provider);
-    if (isConnectEnabled) providerIdsFromConfig.add(connectProvider);
-    if (
-        or3CloudConfig.limits?.enabled &&
-        or3CloudConfig.limits.storageProvider
-    ) {
-        providerIdsFromConfig.add(or3CloudConfig.limits.storageProvider);
-    }
-    if (
-        or3CloudConfig.backgroundStreaming?.enabled &&
-        or3CloudConfig.backgroundStreaming.storageProvider
-    ) {
-        providerIdsFromConfig.add(
-            or3CloudConfig.backgroundStreaming.storageProvider,
-        );
-    }
-}
-
-const providerModulesFromConfig: string[] = [];
-for (const providerId of providerIdsFromConfig) {
-    const moduleId = providerIdToModuleId(providerId);
-    if (!moduleId) continue;
-    const pkgName = moduleId.split('/')[0];
-    if (pkgName && isPackageInstalled(pkgName)) {
-        providerModulesFromConfig.push(moduleId);
-    } else {
-        console.warn(
-            `[or3-provider] Configured provider "${providerId}" expects package "${pkgName}", but it is not installed.`,
-        );
-    }
-}
-
+const providerMetadata =
+    shouldLoadCloudProviderModules && !env.OR3_PLUGIN_WATCH_ROOT
+        ? readProviderMetadata(__dirname)
+        : { modules: [], warnings: [] };
 const configuredPluginModules =
     discoverNonCorePlugins(
         or3CloudConfig.admin,
         () =>
-            or3Config.extensions?.plugins?.modules?.filter((entry) =>
-                typeof entry === 'string' ? entry.trim().length > 0 : false,
-            ) ?? [],
+            or3Config.extensions?.plugins?.modules?.filter((id) => id.trim()) ??
+            [],
     ) ?? [];
-const pluginModulesFromConfig: string[] = [];
-for (const moduleId of configuredPluginModules) {
-    const pkgName = moduleId.split('/')[0];
-    if (!pkgName) {
-        console.warn(
-            `[or3-plugin] Ignoring invalid plugin module id "${moduleId}".`,
-        );
-        continue;
-    }
-    if (isStaticCloudDisabledBuild && pkgName.startsWith('or3-provider-')) {
-        continue;
-    }
-    if (!isPackageInstalled(pkgName)) {
-        console.warn(
-            `[or3-plugin] Configured plugin module "${moduleId}" expects package "${pkgName}", but it is not installed.`,
-        );
-        continue;
-    }
-    pluginModulesFromConfig.push(moduleId);
-}
-
-const generatedProviderModules: string[] = [];
-for (const moduleId of or3ProviderModules) {
-    const pkgName = moduleId.split('/')[0];
-    if (!pkgName) {
-        console.warn(
-            `[or3-provider] Ignoring invalid generated provider module id "${moduleId}".`,
-        );
-        continue;
-    }
-    if (!isPackageInstalled(pkgName)) {
-        console.warn(
-            `[or3-provider] Generated provider module "${moduleId}" expects package "${pkgName}", but it is not installed yet.`,
-        );
-        continue;
-    }
-    generatedProviderModules.push(moduleId);
-}
-
-const activeProviderModules = Array.from(
-    new Set([
-        ...generatedProviderModules,
-        ...providerModulesFromConfig,
-        ...pluginModulesFromConfig,
-    ])
-).map((moduleId) => resolveDevProviderModule(moduleId));
-
-const authProviderAvailable =
-    isStaticCloudDisabledBuild ||
-    isProviderAvailable(or3CloudConfig.auth.provider);
-const syncProviderAvailable =
-    isStaticCloudDisabledBuild ||
-    isProviderAvailable(or3CloudConfig.sync.provider);
-const storageProviderAvailable =
-    isStaticCloudDisabledBuild ||
-    isProviderAvailable(or3CloudConfig.storage.provider);
-const connectProviderAvailable =
-    isStaticCloudDisabledBuild || isProviderAvailable(connectProvider);
-
-const effectiveSsrAuthEnabled =
-    isSsrAuthEnabled && authProviderAvailable && syncProviderAvailable;
-
-const resolvedRegistrationMode =
-    or3CloudConfig.auth.registrationMode ??
-    ((or3CloudConfig.auth.autoProvision ?? true) ? 'open' : 'disabled');
-const effectiveSyncEnabled =
-    effectiveSsrAuthEnabled &&
-    or3CloudConfig.sync.enabled &&
-    syncProviderAvailable;
-const effectiveStorageEnabled =
-    effectiveSsrAuthEnabled &&
-    or3CloudConfig.storage.enabled &&
-    storageProviderAvailable;
-const requestedConnectEnabled =
-    effectiveSsrAuthEnabled && isConnectEnabled && connectProviderAvailable;
-const connectCloudflareConfig = {
-    accountId: process.env.OR3_CONNECT_CLOUDFLARE_ACCOUNT_ID || '',
-    zoneId: process.env.OR3_CONNECT_CLOUDFLARE_ZONE_ID || '',
-    apiToken: process.env.OR3_CONNECT_CLOUDFLARE_API_TOKEN || '',
-    hostnameSuffix: process.env.OR3_CONNECT_HOSTNAME_SUFFIX || '',
-};
-const connectReadiness = resolveConnectCloudflareReadiness({
-    requestedEnabled: requestedConnectEnabled,
-    strict: strictConnectConfig,
-    relayProvider: connectRelayProvider,
-    attestation:
-        process.env.OR3_CONNECT_CLOUDFLARE_VALIDATION_ATTESTATION,
-    config: connectCloudflareConfig,
+const moduleIds = [
+    ...new Set(
+        [
+            ...providerMetadata.modules,
+            ...requiredProviderModules(or3CloudConfig, env).map(
+                ({ moduleId }) => moduleId,
+            ),
+            ...configuredPluginModules.filter(
+                (id) =>
+                    shouldLoadCloudProviderModules ||
+                    !modulePackageName(id)
+                        ?.split('/')
+                        .at(-1)
+                        ?.startsWith('or3-provider-'),
+            ),
+        ].map((id) => id.trim()),
+    ),
+];
+const availableModules = new Map(
+    moduleIds.map((id) => [
+        id,
+        resolveModuleEntry(resolveDevProviderModule(id, env), __dirname),
+    ]),
+);
+const result = buildApplicationPlan({
+    or3Config,
+    or3CloudConfig,
+    env,
+    modules: availableModules,
+    isStaticGenerateBuild,
+    now: Date.now(),
 });
-const effectiveConnectEnabled = connectReadiness.enabled;
+if (!result.ok)
+    throw new Error(
+        `[or3-config] Invalid application configuration:\n- ${result.errors.join('\n- ')}`,
+    );
+const applicationPlan = result.plan;
+for (const warning of [...providerMetadata.warnings, ...result.warnings])
+    console.warn(warning);
+const effectiveSsrAuthEnabled = applicationPlan.features.auth.enabled;
+const effectiveSyncEnabled = applicationPlan.features.sync.enabled;
+const effectiveStorageEnabled = applicationPlan.features.storage.enabled;
 
-if (isSsrAuthEnabled && !authProviderAvailable) {
-    console.warn(
-        `[or3-provider] Auth provider "${or3CloudConfig.auth.provider}" is not available. Falling back to local-only auth mode.`,
-    );
-}
-if (isSsrAuthEnabled && !syncProviderAvailable) {
-    console.warn(
-        `[or3-provider] Sync provider "${or3CloudConfig.sync.provider}" is not available. SSR auth requires the matching AuthWorkspaceStore, so cloud auth and sync are disabled.`,
-    );
-}
-if (or3CloudConfig.storage.enabled && !storageProviderAvailable) {
-    console.warn(
-        `[or3-provider] Storage provider "${or3CloudConfig.storage.provider}" is not available. Cloud storage is disabled.`,
-    );
-}
-if (isConnectEnabled && !connectProviderAvailable) {
-    console.warn(
-        `[or3-provider] Connect provider "${connectProvider}" is not available. Remote access is disabled.`,
-    );
-}
-if (connectReadiness.status === 'degraded') {
-    console.warn(
-        `[or3-connect] ${connectReadiness.message} OR3 Chat will start with remote Connect disabled.`
-    );
-} else if (
-    strictConnectConfig &&
-    connectReadiness.status === 'unverified'
-) {
-    console.warn(`[or3-connect] ${connectReadiness.message}`);
-}
 // Branding defaults (sourced from or3Config)
 const appName = or3Config.site.name;
 const appShortName = appName.length > 12 ? appName.slice(0, 12) : appName;
@@ -347,150 +155,6 @@ const pwaNavigateFallback = isStaticGenerateBuild ? '/index.html' : null;
 const pwaOpenRouterCallbackFallback = isStaticGenerateBuild
     ? '/openrouter-callback/index.html'
     : undefined;
-
-// Shared config objects (DRY: used in both server and public runtimeConfig)
-const limitsConfig = {
-    enabled: or3CloudConfig.limits!.enabled!,
-    requestsPerMinute: or3CloudConfig.limits!.requestsPerMinute!,
-    maxConversations: or3CloudConfig.limits!.maxConversations!,
-    maxMessagesPerDay: or3CloudConfig.limits!.maxMessagesPerDay!,
-    storageProvider: or3CloudConfig.limits!.storageProvider || 'memory',
-    operationRateLimits: or3CloudConfig.limits!.operationRateLimits || {},
-};
-const publicLimitsConfig = {
-    enabled: limitsConfig.enabled,
-    requestsPerMinute: limitsConfig.requestsPerMinute,
-    maxConversations: limitsConfig.maxConversations,
-    maxMessagesPerDay: limitsConfig.maxMessagesPerDay,
-};
-const brandingConfig = {
-    appName: or3Config.site.name,
-    logoUrl: or3Config.site.logoUrl,
-    defaultTheme: or3Config.site.defaultTheme,
-    disabledThemes: or3Config.site.disabledThemes,
-};
-const legalConfig = {
-    termsUrl: or3Config.legal.termsUrl,
-    privacyUrl: or3Config.legal.privacyUrl,
-};
-const adminConfig = {
-    basePath: or3CloudConfig.admin?.basePath || '/admin',
-    allowedHosts: or3CloudConfig.admin?.allowedHosts || [],
-    allowRestart: Boolean(or3CloudConfig.admin?.allowRestart),
-    allowRebuild: Boolean(or3CloudConfig.admin?.allowRebuild),
-    disableNonCorePlugins,
-    pluginRuntimeShadowEnabled:
-        or3CloudConfig.admin?.pluginRuntimeShadowEnabled !== false,
-    pluginRuntimeLoaderEnabled:
-        or3CloudConfig.admin?.pluginRuntimeLoaderEnabled !== false,
-    pluginRuntimeV2Enabled:
-        or3CloudConfig.admin?.pluginRuntimeV2Enabled === true,
-    pluginRuntimeV2WorkspaceIds:
-        or3CloudConfig.admin?.pluginRuntimeV2WorkspaceIds ?? [],
-    pluginContributionV2Surfaces:
-        or3CloudConfig.admin?.pluginContributionV2Surfaces ?? [],
-    hookEngineV2Enabled: or3CloudConfig.admin?.hookEngineV2Enabled === true,
-    pluginModuleLoaderV2Enabled:
-        or3CloudConfig.admin?.pluginModuleLoaderV2Enabled === true,
-    pluginModuleLoaderV2WorkspaceIds:
-        or3CloudConfig.admin?.pluginModuleLoaderV2WorkspaceIds ?? [],
-    pluginIsolationEnabled:
-        or3CloudConfig.admin?.pluginIsolationEnabled === true,
-    pluginZipInstallEnabled:
-        or3CloudConfig.admin?.pluginZipInstallEnabled !== false,
-    pluginRouteDispatcherEnabled:
-        or3CloudConfig.admin?.pluginRouteDispatcherEnabled !== false,
-    /**
-     * Serves the host-owned containment probe assets used by real-browser
-     * qualification (task 4.13). Off by default and never required at runtime.
-     */
-    containmentProbeEnabled: process.env.OR3_CONTAINMENT_PROBE_ENABLED === 'true',
-    /**
-     * Approved models a plugin may use, and their trusted prices (USD per 1M
-     * tokens). Both are operator configuration; an unpriced model is refused
-     * rather than recorded as free, and an empty allowlist means plugins have no
-     * approved models at all. Parsed strictly at the boundary
-     * (`shared/plugins/ai/model-catalog.ts`).
-     */
-    pluginAllowedModels: (process.env.OR3_PLUGIN_ALLOWED_MODELS ?? '')
-        .split(',')
-        .map((entry) => entry.trim())
-        .filter(Boolean),
-    pluginModelPrices: (() => {
-        const raw = (process.env.OR3_PLUGIN_MODEL_PRICES ?? '').trim();
-        if (!raw) return {};
-        try {
-            const parsed: unknown = JSON.parse(raw);
-            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-        } catch {
-            return {};
-        }
-    })(),
-    /**
-     * AES-256-GCM key for plugin connection secrets. Held outside the database
-     * (env/secret store); empty means connections are unavailable, never stored
-     * in plaintext.
-     *
-     * Deliberately never read from the build environment: a prebuilt image must
-     * take it from the runtime override `NUXT_ADMIN_PLUGIN_CONNECTION_SECRET`
-     * (translated from `OR3_PLUGIN_CONNECTION_SECRET` by the container entrypoint)
-     * so the key is not baked into an image layer.
-     */
-    pluginConnectionSecret: '',
-    /**
-     * AES-256-GCM key for the personal Library link credential
-     * (`OR3_LIBRARY_LINK_SECRET`). Held outside the database and never read from
-     * the build environment; empty means linking is unavailable rather than
-     * storing a polling secret or token in plaintext.
-     */
-    libraryLinkSecret: '',
-    rebuildCommand: or3CloudConfig.admin?.rebuildCommand || 'bun run build',
-    extensionMaxZipBytes: or3CloudConfig.admin?.extensionMaxZipBytes
-        ? String(or3CloudConfig.admin.extensionMaxZipBytes)
-        : undefined,
-    extensionMaxFiles: or3CloudConfig.admin?.extensionMaxFiles
-        ? String(or3CloudConfig.admin.extensionMaxFiles)
-        : undefined,
-    extensionMaxTotalBytes: or3CloudConfig.admin?.extensionMaxTotalBytes
-        ? String(or3CloudConfig.admin.extensionMaxTotalBytes)
-        : undefined,
-    extensionAllowedExtensions: or3CloudConfig.admin?.extensionAllowedExtensions
-        ? or3CloudConfig.admin.extensionAllowedExtensions.join(',')
-        : undefined,
-    // Admin auth configuration (server-only, never expose secrets to client)
-    auth: {
-        username: or3CloudConfig.admin?.auth?.username ?? '',
-        password: or3CloudConfig.admin?.auth?.password ?? '',
-        jwtSecret: or3CloudConfig.admin?.auth?.jwtSecret ?? '',
-        jwtExpiry: or3CloudConfig.admin?.auth?.jwtExpiry || '24h',
-        deletedWorkspaceRetentionDays:
-            or3CloudConfig.admin?.auth?.deletedWorkspaceRetentionDays !==
-            undefined
-                ? String(
-                      or3CloudConfig.admin?.auth?.deletedWorkspaceRetentionDays,
-                  )
-                : '',
-    },
-};
-const lockPageConfig = {
-    enabled:
-        effectiveSsrAuthEnabled &&
-        (or3CloudConfig.auth.lockPage?.enabled ?? false),
-    adapter: or3CloudConfig.auth.lockPage?.adapter || 'default',
-};
-const webhooksConfig = {
-    enabled: or3CloudConfig.webhooks?.enabled ?? false,
-    maxPerUser: or3CloudConfig.webhooks?.maxPerUser ?? 20,
-    adminMax: or3CloudConfig.webhooks?.adminMax ?? 50,
-    rateLimitPerMinute: or3CloudConfig.webhooks?.rateLimitPerMinute ?? 120,
-    deliveryTimeoutMs: or3CloudConfig.webhooks?.deliveryTimeoutMs ?? 10_000,
-    blockPrivateIps:
-        or3CloudConfig.webhooks?.blockPrivateIps ??
-        DEFAULT_WEBHOOKS_BLOCK_PRIVATE_IPS,
-    encryptionKey: or3CloudConfig.webhooks?.encryptionKey ?? '',
-    maxRetryHours: or3CloudConfig.webhooks?.maxRetryHours ?? 1,
-    logRetentionHours: or3CloudConfig.webhooks?.logRetentionHours ?? 72,
-};
 
 export default defineNuxtConfig({
     ...(process.env.OR3_PLUGIN_WATCH_ROOT && process.env.OR3_PLUGIN_DEV_PROFILE
@@ -542,301 +206,7 @@ export default defineNuxtConfig({
             : {}),
     },
     compatibilityDate: '2025-07-15',
-    runtimeConfig: {
-        // Server-only env variables (auto-mapped from NUXT_*)
-        openrouterApiKey:
-            or3CloudConfig.services.llm?.openRouter?.instanceApiKey || '',
-        openrouterBaseUrl:
-            isProductionJourneyTestHarnessEnabled
-                ? productionJourneyOpenRouterBaseUrl
-                : or3CloudConfig.services.llm?.openRouter?.baseUrl ||
-                  'https://openrouter.ai/api/v1',
-        openrouterAllowUserOverride:
-            or3CloudConfig.services.llm?.openRouter?.allowUserOverride ?? true,
-        openrouterRequireUserKey:
-            or3CloudConfig.services.llm?.openRouter?.requireUserKey ?? false,
-        clerkSecretKey: '', // Auto-mapped from NUXT_CLERK_SECRET_KEY
-        auth: {
-            enabled: effectiveSsrAuthEnabled,
-            provider: or3CloudConfig.auth.provider,
-            autoProvision: or3CloudConfig.auth.autoProvision ?? true,
-            registrationMode: resolvedRegistrationMode,
-            sessionProvisioningFailure:
-                or3CloudConfig.auth.sessionProvisioningFailure ?? 'throw',
-            lockPage: lockPageConfig,
-            invite: {
-                tokenSecret: process.env.OR3_AUTH_INVITE_TOKEN_SECRET,
-                tokenTtlSeconds: process.env.OR3_AUTH_INVITE_TOKEN_TTL_SECONDS
-                    ? Number(process.env.OR3_AUTH_INVITE_TOKEN_TTL_SECONDS)
-                    : 7 * 24 * 60 * 60,
-            },
-            bootstrapEmail: process.env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL || '',
-        },
-        sync: {
-            enabled: effectiveSyncEnabled,
-            provider: or3CloudConfig.sync.provider,
-            convexUrl,
-            convexAdminKey,
-        },
-        connect: {
-            enabled: effectiveConnectEnabled,
-            requestedEnabled: requestedConnectEnabled,
-            readinessStatus: connectReadiness.status,
-            readinessMessage: connectReadiness.message || '',
-            cloudflareValidationAttestation:
-                process.env
-                    .OR3_CONNECT_CLOUDFLARE_VALIDATION_ATTESTATION ||
-                '',
-            provider: connectProvider,
-            relayProvider: connectRelayProvider,
-            publicURL: process.env.OR3_CONNECT_PUBLIC_URL || '',
-            encryptionKey: process.env.OR3_CONNECT_ENCRYPTION_KEY || '',
-            maxComputers: process.env.OR3_CONNECT_MAX_COMPUTERS ?? '3',
-            cloudflare: {
-                accountId:
-                    process.env.OR3_CONNECT_CLOUDFLARE_ACCOUNT_ID || '',
-                zoneId: process.env.OR3_CONNECT_CLOUDFLARE_ZONE_ID || '',
-                apiToken:
-                    process.env.OR3_CONNECT_CLOUDFLARE_API_TOKEN || '',
-                hostnameSuffix:
-                    process.env.OR3_CONNECT_HOSTNAME_SUFFIX || '',
-            },
-        },
-        storage: {
-            enabled: effectiveStorageEnabled,
-            provider: or3CloudConfig.storage.provider,
-            allowedMimeTypes:
-                or3CloudConfig.storage.allowedMimeTypes ?? undefined,
-            allowAnyFileType: or3CloudConfig.storage.allowAnyFileType ?? false,
-            workspaceQuotaBytes:
-                or3CloudConfig.storage.workspaceQuotaBytes !== undefined
-                    ? String(or3CloudConfig.storage.workspaceQuotaBytes)
-                    : undefined,
-            gcRetentionSeconds:
-                or3CloudConfig.storage.gcRetentionSeconds !== undefined
-                    ? String(or3CloudConfig.storage.gcRetentionSeconds)
-                    : undefined,
-            gcCooldownMs:
-                or3CloudConfig.storage.gcCooldownMs !== undefined
-                    ? String(or3CloudConfig.storage.gcCooldownMs)
-                    : undefined,
-        },
-        limits: limitsConfig,
-        branding: brandingConfig,
-        legal: legalConfig,
-        plugins: {
-            defaultEnabled:
-                or3Config.extensions?.plugins?.defaultEnabled?.filter(
-                    Boolean,
-                ) ?? [],
-            modules:
-                or3Config.extensions?.plugins?.modules?.filter(Boolean) ?? [],
-        },
-        security: {
-            allowedOrigins: or3CloudConfig.security!.allowedOrigins!,
-            forceHttps: or3CloudConfig.security!.forceHttps!,
-            proxy: {
-                trustProxy: or3CloudConfig.security?.proxy?.trustProxy ?? false,
-                forwardedForHeader:
-                    or3CloudConfig.security?.proxy?.forwardedForHeader ??
-                    'x-forwarded-for',
-                forwardedHostHeader:
-                    or3CloudConfig.security?.proxy?.forwardedHostHeader ??
-                    'x-forwarded-host',
-            },
-        },
-        admin: adminConfig,
-        webhooks: webhooksConfig,
-        wizardUi: {
-            enabled: process.env.OR3_WIZARD_UI_ENABLED === 'true',
-            token: process.env.OR3_WIZARD_UI_TOKEN ?? '',
-        },
-        // Background streaming configuration (SSR mode only)
-        backgroundJobs: {
-            enabled: or3CloudConfig.backgroundStreaming?.enabled ?? false,
-            storageProvider:
-                or3CloudConfig.backgroundStreaming?.storageProvider ?? 'memory',
-            maxConcurrentJobs:
-                or3CloudConfig.backgroundStreaming?.maxConcurrentJobs ?? 20,
-            maxConcurrentJobsPerUser:
-                or3CloudConfig.backgroundStreaming?.maxConcurrentJobsPerUser ??
-                5,
-            jobTimeoutMs:
-                (or3CloudConfig.backgroundStreaming?.jobTimeoutSeconds ?? 300) *
-                1000,
-            // Terminal jobs are the durable buffer the browser uses to persist
-            // completed output after navigation/disconnect. Keep them
-            // retrievable for a full day instead of minutes so returning
-            // clients and reattachment can still recover the result.
-            completedJobRetentionMs: 24 * 60 * 60 * 1000,
-            encryptionKey:
-                or3CloudConfig.backgroundStreaming?.encryptionKey ?? '',
-        },
-        public: {
-            appVersion: process.env.npm_package_version || '0.1.0',
-            pluginDevelopment: process.env.NODE_ENV !== 'production' && Boolean(process.env.OR3_PLUGIN_WATCH_ROOT),
-            /**
-             * Mirrors the server-side probe flag so the qualification harness can
-             * exercise the real startup API from a page. Off in every other profile.
-             */
-            containmentProbeEnabled:
-                process.env.OR3_CONTAINMENT_PROBE_ENABLED === 'true',
-            // Declaring these keys makes NUXT_PUBLIC_OPENROUTER_* available to
-            // the client instead of silently falling back to the current URL.
-            openRouterRedirectUri:
-                process.env.NUXT_PUBLIC_OPENROUTER_REDIRECT_URI || '',
-            openRouterClientId:
-                process.env.NUXT_PUBLIC_OPENROUTER_CLIENT_ID || '',
-            openRouterAuthUrl:
-                process.env.NUXT_PUBLIC_OPENROUTER_AUTH_URL || '',
-            // Single source of truth for client gating.
-            // Avoid inferring enablement from presence of publishable keys.
-            ssrAuthEnabled: effectiveSsrAuthEnabled,
-            authProvider: or3CloudConfig.auth.provider,
-            guestAccessEnabled: or3CloudConfig.auth.guestAccessEnabled ?? false,
-            registrationMode: resolvedRegistrationMode,
-            lockPage: lockPageConfig,
-            openRouter: {
-                allowUserOverride:
-                    or3CloudConfig.services.llm?.openRouter
-                        ?.allowUserOverride ?? true,
-                hasInstanceKey: Boolean(
-                    or3CloudConfig.services.llm?.openRouter?.instanceApiKey,
-                ),
-                requireUserKey:
-                    or3CloudConfig.services.llm?.openRouter?.requireUserKey ??
-                    false,
-                baseUrl:
-                    isProductionJourneyTestHarnessEnabled
-                        ? productionJourneyOpenRouterBaseUrl
-                        : or3CloudConfig.services.llm?.openRouter?.baseUrl ||
-                          'https://openrouter.ai/api/v1',
-            },
-            storage: {
-                enabled: effectiveStorageEnabled,
-                provider: or3CloudConfig.storage.provider,
-                allowAnyFileType: or3CloudConfig.storage.allowAnyFileType ?? false,
-            },
-            sync: {
-                enabled: effectiveSyncEnabled,
-                provider: or3CloudConfig.sync.provider,
-                convexUrl,
-            },
-            connect: {
-                enabled: effectiveConnectEnabled,
-                status: connectReadiness.status,
-                statusMessage: connectReadiness.message || '',
-                provider: connectProvider,
-                relayProvider: connectRelayProvider,
-                publicUrl: process.env.OR3_CONNECT_PUBLIC_URL || '',
-            },
-            limits: publicLimitsConfig,
-            branding: brandingConfig,
-            legal: legalConfig,
-            backgroundStreaming: {
-                enabled: or3CloudConfig.backgroundStreaming?.enabled ?? false,
-            },
-            admin: {
-                basePath: adminConfig.basePath,
-                disableNonCorePlugins: adminConfig.disableNonCorePlugins,
-                pluginRuntimeShadowEnabled:
-                    adminConfig.pluginRuntimeShadowEnabled,
-                pluginRuntimeLoaderEnabled:
-                    adminConfig.pluginRuntimeLoaderEnabled,
-                pluginRuntimeV2Enabled: adminConfig.pluginRuntimeV2Enabled,
-                pluginRuntimeV2WorkspaceIds:
-                    adminConfig.pluginRuntimeV2WorkspaceIds,
-                pluginContributionV2Surfaces:
-                    adminConfig.pluginContributionV2Surfaces,
-                hookEngineV2Enabled: adminConfig.hookEngineV2Enabled,
-                pluginModuleLoaderV2Enabled:
-                    adminConfig.pluginModuleLoaderV2Enabled,
-                pluginModuleLoaderV2WorkspaceIds:
-                    adminConfig.pluginModuleLoaderV2WorkspaceIds,
-                pluginIsolationEnabled: adminConfig.pluginIsolationEnabled,
-                pluginRouteDispatcherEnabled:
-                    adminConfig.pluginRouteDispatcherEnabled,
-                pluginZipInstallEnabled: adminConfig.pluginZipInstallEnabled,
-                allowRestart: adminConfig.allowRestart,
-                allowRebuild: adminConfig.allowRebuild,
-            },
-            webhooks: {
-                enabled: webhooksConfig.enabled,
-            },
-            wizardUi: {
-                enabled: process.env.OR3_WIZARD_UI_ENABLED === 'true',
-            },
-            // Feature toggles from OR3 config - exposed for client-side gating
-            features: {
-                workflows: {
-                    enabled: or3Config.features.workflows.enabled,
-                    editor: or3Config.features.workflows.editor,
-                    slashCommands: or3Config.features.workflows.slashCommands,
-                    execution: or3Config.features.workflows.execution,
-                },
-                documents: {
-                    enabled: or3Config.features.documents.enabled,
-                },
-                backup: {
-                    enabled: or3Config.features.backup.enabled,
-                },
-                mentions: {
-                    enabled: or3Config.features.mentions.enabled,
-                    documents: or3Config.features.mentions.documents,
-                    conversations: or3Config.features.mentions.conversations,
-                },
-                dashboard: {
-                    enabled: or3Config.features.dashboard.enabled,
-                },
-                workspaceTabs: {
-                    enabled: or3Config.features.workspaceTabs.enabled,
-                },
-            },
-            // Base OR3 config for client/runtime access (avoid importing config.or3 in app runtime)
-            or3: {
-                site: {
-                    name: or3Config.site.name,
-                    description: or3Config.site.description,
-                    logoUrl: or3Config.site.logoUrl,
-                    faviconUrl: or3Config.site.faviconUrl,
-                    defaultTheme: or3Config.site.defaultTheme,
-                    disabledThemes: or3Config.site.disabledThemes,
-                },
-                limits: {
-                    maxFileSizeBytes: or3Config.limits.maxFileSizeBytes,
-                    maxCloudFileSizeBytes:
-                        or3Config.limits.maxCloudFileSizeBytes,
-                    maxFilesPerMessage: or3Config.limits.maxFilesPerMessage,
-                    localStorageQuotaMB:
-                        or3Config.limits.localStorageQuotaMB !== null
-                            ? String(or3Config.limits.localStorageQuotaMB)
-                            : undefined,
-                },
-                ui: {
-                    defaultPaneCount: or3Config.ui.defaultPaneCount,
-                    maxPanes: or3Config.ui.maxPanes,
-                    sidebarCollapsedByDefault:
-                        or3Config.ui.sidebarCollapsedByDefault,
-                },
-                legal: {
-                    termsUrl: or3Config.legal.termsUrl,
-                    privacyUrl: or3Config.legal.privacyUrl,
-                },
-                plugins: {
-                    defaultEnabled:
-                        or3Config.extensions?.plugins?.defaultEnabled?.filter(
-                            Boolean,
-                        ) ?? [],
-                    modules:
-                        or3Config.extensions?.plugins?.modules?.filter(
-                            Boolean,
-                        ) ?? [],
-                },
-            },
-            // Auto-mapped from NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-            clerkPublishableKey: '',
-        },
-    },
+    runtimeConfig: applicationPlan.runtimeConfig,
     experimental: {
         defaults: {
             nuxtLink: {
@@ -863,7 +233,7 @@ export default defineNuxtConfig({
         '@nuxt/ui',
         '@nuxt/fonts',
         '@vite-pwa/nuxt',
-        ...activeProviderModules,
+        ...applicationPlan.modules,
     ],
     // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
     srcDir: 'app',
@@ -1258,7 +628,7 @@ export default defineNuxtConfig({
                     ? [
                           '**/.env',
                           '**/.env.local',
-                          '**/or3.providers.generated.ts',
+                          '**/or3.providers.generated.json',
                       ]
                     : [],
             },
@@ -1359,10 +729,7 @@ export default defineNuxtConfig({
                 printOr3StartupBanner({
                     appUrl: url,
                     ssrAuthEnabled: effectiveSsrAuthEnabled,
-                    degradedCloud:
-                        isSsrAuthEnabled &&
-                        !effectiveSsrAuthEnabled &&
-                        !isStaticGenerateBuild,
+                    degradedCloud: false,
                     authProvider: or3CloudConfig.auth.provider,
                     syncEnabled: effectiveSyncEnabled,
                     syncProvider: or3CloudConfig.sync.provider,

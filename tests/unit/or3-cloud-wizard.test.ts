@@ -839,7 +839,7 @@ describe('or3 cloud wizard apply', () => {
 
         const envPath = resolve(dir, '.env');
         const envLocalPath = resolve(dir, '.env.local');
-        const providerModulesPath = resolve(dir, 'or3.providers.generated.ts');
+        const providerModulesPath = resolve(dir, 'or3.providers.generated.json');
 
         await writeFile(envPath, 'OR3_SITE_NAME=Before\n', 'utf8');
         await writeFile(

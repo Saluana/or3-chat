@@ -482,9 +482,9 @@ function validateConfig(config: Or3CloudConfig, strict: boolean): void {
         );
     }
 
-    if (config.sync.enabled && config.sync.provider === CONVEX_PROVIDER_ID) {
+    if ((config.auth.enabled || config.sync.enabled) && config.sync.provider === CONVEX_PROVIDER_ID) {
         if (!config.sync.convex?.url) {
-            errors.push('sync.convex.url is required when sync is enabled.');
+            errors.push('sync.convex.url is required for the auth workspace store or sync.');
         } else {
             try {
                 new URL(config.sync.convex.url);
