@@ -104,12 +104,6 @@ const stubs = {
         template:
             '<div class="modal-stub"><slot name="header" /><slot name="body" /></div>',
     },
-    DialogTitle: {
-        template: '<h2><slot /></h2>',
-    },
-    DialogDescription: {
-        template: '<p><slot /></p>',
-    },
     UButton: {
         inheritAttrs: false,
         emits: ['click'],
@@ -124,9 +118,6 @@ const stubs = {
     },
     USelectMenu: {
         template: '<select />',
-    },
-    UDropdownMenu: {
-        template: '<div><slot /></div>',
     },
     UPopover: {
         template: '<div><slot /><slot name="content" /></div>',
