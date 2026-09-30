@@ -9,6 +9,8 @@ This provider:
 - binds uploads to the declared SHA-256 checksum and exact content length
 - keeps S3 credentials **server-only** (never shipped to the browser)
 
+Managed installations use the fixed profile in [Set up Cloud](/documentation/cloud/setup). The install commands and manual settings below are for editable source deployments; install only the providers your source configuration selects.
+
 ## Install
 
 ```bash
@@ -112,6 +114,6 @@ queries, and immediate pre-delete reference checks are bounded and fail closed.
 
 ## Related
 
-- [cloud/storage-layer](./storage-layer)
-- [cloud/or3-cloud-wizard](./or3-cloud-wizard)
-- [cloud/providers](./providers)
+- [cloud/storage-layer](/documentation/cloud/storage-layer)
+- [cloud/or3-cloud-wizard](/documentation/cloud/or3-cloud-wizard)
+- [cloud/providers](/documentation/cloud/providers)

@@ -1,6 +1,6 @@
-# schema
+# Entity schemas
 
-Central Zod schemas and generated TypeScript types for all Dexie tables.
+Central Zod schemas and inferred TypeScript types for core entity rows. Sync queues, transfer state, and other internal tables have separate contracts.
 
 ---
 
@@ -32,7 +32,7 @@ Derived types mirror the schemas exactly: `Project`, `Thread`, `ThreadCreate`, `
 
 ### Local derived fields
 
-`PostSchema.document_reference_key` and `FileMetaSchema.gallery_state` are optional, local-only index fields. They are recomputed from canonical fields by `app/db/derived-indexes.ts` whenever rows are written, are never sent to sync backends (`sanitizePayloadForSync` strips them), and incoming values are ignored. See `database/client` and `database/files-select` for their indexes and query behavior.
+`PostSchema.document_reference_key` and `FileMetaSchema.gallery_state` are optional, local-only index fields. They are recomputed from canonical fields by `app/db/derived-indexes.ts` whenever rows are written, are never sent to sync backends (`sanitizePayloadForSync` strips them), and incoming values are ignored. See [client/indexes](/documentation/database/client) and [image queries](/documentation/database/files-select) for their indexes and query behavior.
 
 ---
 

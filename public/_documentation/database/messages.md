@@ -1,4 +1,4 @@
-# messages
+# Messages
 
 Thread message CRUD utilities with hook integration, sparse indexing, and attachment support.
 
@@ -19,8 +19,8 @@ Thread message CRUD utilities with hook integration, sparse indexing, and attach
 | ------------- | --------------------------------------------------------------- |
 | `id`          | Message UUID (auto-generated for create flows).                 |
 | `thread_id`   | Foreign key to the parent thread.                               |
-| `role`        | Free string; normalized to `'user' \| 'assistant' \| 'system'` at the hook boundary. |
-| `data`        | Arbitrary payload (serialized JSON) used by renderers.          |
+| `role`        | Stored as a string; the hook entity adapter casts its type without runtime normalization. |
+| `data`        | Unknown structured payload used by renderers; narrow before use.          |
 | `index`       | Sparse ordering integer (default increments by 1000).           |
 | `order_key`   | HLC-derived ordering key that breaks `index` ties deterministically. |
 | `file_hashes` | Serialized JSON array of file hashes; use `files-util` helpers. |
@@ -74,6 +74,6 @@ message after an asynchronous hook.
 
 ## Usage tips
 
--   Always feed `file_hashes` as string arrays; the module serializes and bounds automatically.
+-   Creation helpers accept hash arrays and serialize them; full-row upserts use the stored JSON string contract. Use [message-file helpers](/documentation/database/message-files) to change an existing message's attachments.
 -   Use `appendMessage` rather than manual `createMessage` when you need thread timestamps updated.
--   Call `normalizeThreadIndexes` after bulk edits to keep indexes tidy.
+-   Keep sparse indexes. Insert helpers normalize only when needed; do not renumber entire threads after every edit.

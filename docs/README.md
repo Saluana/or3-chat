@@ -57,7 +57,7 @@ Connect capability, and editable source development.
 -   **[Hooks Augmentation](hooks-augmentation.md)** - Extending the hook system
 -   **[Tokenizer Optimization](tokenizer-optimization.md)** - Tokenizer performance
 -   **[Images Preview Cache](images-preview-cache.md)** - Image caching system
--   **[Release notes](../public/_documentation/cloud/release-notes-production-readiness.md)** - Recent production-readiness changes
+-   **[Release notes](history/cloud-production-readiness.md)** - Historical production-readiness changes
 
 ## Planning
 

@@ -1,410 +1,70 @@
-# buildOpenRouterMessages
+# Build provider messages
 
-Utility for building OpenAI-compatible message arrays with hydrated images and files. Converts internal message format to OpenRouter API format with support for image deduplication, limits, and historical image inclusion policies.
+`buildOpenRouterMessages` translates OR3 chat content into provider messages. It hydrates attachments, applies image-history policies, and preserves tool-call metadata. It does not choose a model, decide output modalities, authenticate, or send a request.
 
-Think of `buildOpenRouterMessages` as your message translator — it takes your chat messages and converts them into the exact format OpenRouter expects, handling all the tricky image and file stuff.
+This is a browser-side host utility: local file hydration uses IndexedDB and FileReader. Portable plugins should use [SDK model calls](/documentation/plugins/plugin-sdk).
 
----
-
-## What does it do?
-
-`buildOpenRouterMessages` prepares messages for the OpenRouter API by:
-
-- Converting internal format to OpenAI-compatible content arrays
-- Hydrating file hashes into data URLs
-- Deduplicating and limiting images
-- Applying inclusion policies (all vs recent vs role-based)
-- Handling PDFs, images, and other files
-
----
-
-## Basic Example
+## Build a text request payload
 
 ```ts
-import { buildOpenRouterMessages } from '~/core/auth/openrouter-build';
-
-const messages = [
-  { role: 'user', content: 'Analyze this image', file_hashes: 'hash123' },
-  { role: 'assistant', content: 'I see...' }
-];
-
-const orMessages = await buildOpenRouterMessages(messages, {
-  maxImageInputs: 8,
-  dedupeImages: true
-});
-
-// Send to OpenRouter API
-const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-  method: 'POST',
-  body: JSON.stringify({ messages: orMessages })
-});
-```
-
----
-
-## How to use it
-
-### 1. Prepare your messages
-
-```ts
-interface ChatMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string | any[];  // string or parts array
-  file_hashes?: string;     // space-separated hashes
-}
-
-const messages: ChatMessage[] = [
-  { role: 'system', content: 'You are helpful' },
-  { role: 'user', content: 'Hi', file_hashes: 'hash1 hash2' },
-  { role: 'assistant', content: 'Hello!' }
-];
-```
-
-### 2. Build with options
-
-```ts
-const orMessages = await buildOpenRouterMessages(messages, {
-  maxImageInputs: 8,           // Total images across history (default)
-  dedupeImages: true,          // Skip duplicate hashes (default)
-  imageInclusionPolicy: 'all', // 'all' | 'recent' | 'recent-user' | 'recent-assistant'
-  recentWindow: 12,            // Last N messages when using recent policy (default)
-  debug: false
-});
-```
-
-### 3. Result format
-
-```ts
-interface ORMessage {
-  role: 'user' | 'assistant' | 'system' | 'tool';
-  content: ORContentPart[];
-  tool_calls?: unknown[];   // copied through when present
-  tool_call_id?: string;
-  name?: string;
-}
-
-interface ORContentPart {
-  type: 'text' | 'image_url' | 'file';
-  text?: string;
-  image_url?: { url: string };
-  file?: { filename: string; file_data: string };
-}
-```
-
-### Default options
-
-| Option | Default |
-|--------|---------|
-| `maxImageInputs` | `8` |
-| `dedupeImages` | `true` |
-| `imageInclusionPolicy` | `'all'` |
-| `recentWindow` | `12` |
-| `debug` | `false` |
-
----
-
-## Image Inclusion Policies
-
-### 'all' (default)
-
-Include images from all messages, up to `maxImageInputs`.
-
-```ts
-// Message 1: [img1]
-// Message 2: [img2]
-// Message 3: [img3]
-// Result: [img1, img2, img3] (or limited to maxImageInputs)
-```
-
-### 'recent'
-
-Only include images from the last `recentWindow` messages.
-
-```ts
-await buildOpenRouterMessages(messages, {
-  imageInclusionPolicy: 'recent',
-  recentWindow: 12  // Last 12 messages
-});
-```
-
-### 'recent-user'
-
-Only images from recent user messages.
-
-```ts
-await buildOpenRouterMessages(messages, {
-  imageInclusionPolicy: 'recent-user',
-  recentWindow: 5  // Last 5 user messages
-});
-```
-
-### 'recent-assistant'
-
-Only images from recent assistant messages.
-
-```ts
-await buildOpenRouterMessages(messages, {
-  imageInclusionPolicy: 'recent-assistant',
-  recentWindow: 3
-});
-```
-
----
-
-## What you get back
-
-```ts
-interface ORMessage {
-  role: 'user' | 'assistant' | 'system' | 'tool';
-  content: ORContentPart[];
-  tool_calls?: unknown[];
-  tool_call_id?: string;
-  name?: string;
-}
-
-// ORContentPart can be:
-
-interface ORContentPartText {
-  type: 'text';
-  text: string;
-}
-
-interface ORContentPartImageUrl {
-  type: 'image_url';
-  image_url: { url: string };
-}
-
-interface ORContentPartFile {
-  type: 'file';
-  file: { filename: string; file_data: string };
-}
-```
-
----
-
-## How it works (under the hood)
-
-Here's the flow:
-
-1. **Parse policies**: Determine which messages to inspect for images
-2. **Collect candidates**: Find image hashes in `file_hashes` and inline `type: 'image'` content parts
-3. **External filter**: Optional hook to filter/veto specific images
-4. **Dedupe & limit**: Remove duplicates, enforce max count
-5. **Group by message**: Organize images back to their original messages
-6. **Build content parts**: 
-   - Extract text content
-   - Hydrate files to data URLs
-   - Hydrate hashes to base64 data URLs
-   - Add files/images to content array
-7. **Return**: OpenRouter-compatible message array
-
----
-
-## File Hydration
-
-Files are converted to data URLs for API transmission:
-
-### Local hash → data URL
-
-```ts
-// Hash from Dexie
-hash = 'abc123def456'
-→ getFileBlob(hash)
-→ blobToDataUrl(blob)
-→ 'data:image/png;base64,...'
-```
-
-Only metadata classified as `kind: "image"` with a supported raster MIME is
-hydrated into an `image_url` part. Generic files, including files whose MIME
-starts with `image/`, remain file attachments and are never sent as model
-images.
-
-### Remote URL → data URL
-
-```ts
-url = 'https://example.com/image.png'
-→ fetch(url)          // 8-second timeout, ~5MB size cap
-→ blob
-→ blobToDataUrl(blob)
-→ 'data:image/png;base64,...'
-```
-
-### Blob URL → (not sent)
-
-Blob URLs (`blob:`) can't be accessed server-side, so they're skipped.
-
-### Pass-through refs
-
-Some refs are used as-is without hydration:
-
-- Supported raster `data:` URLs go straight into the message; SVG and other
-  active `image/*` URLs are rejected.
-- Remote URLs that look like images (`.png`, `.jpg`, `.gif`, `.webp`, `.avif`,
-  or a query string) are fetched through the bounded hydrator and become model
-  images only when the response has a supported raster MIME.
-
----
-
-## Caching
-
-Images are cached in memory to avoid repeated conversions:
-
-```ts
-// Global caches (persistent in window)
-window.__or3ImageDataUrlCache    // Maps ref → data URL (LRU, max 64 entries)
-window.__or3ImageHydrateInflight // In-flight promises
-```
-
-**Benefits:**
-- Fast repeated builds
-- No duplicate network requests
-- Automatic deduplication
-
-**Lifetime:**
-- The cache is an LRU map capped at 64 entries
-- Cleared on page reload
-- Persists across multiple API calls
-
----
-
-## Common patterns
-
-### Limit to recent images only
-
-```ts
-const orMessages = await buildOpenRouterMessages(messages, {
-  imageInclusionPolicy: 'recent',
-  recentWindow: 5,
-  maxImageInputs: 3
-});
-```
-
-### Vision-only mode (user images only)
-
-```ts
-const orMessages = await buildOpenRouterMessages(messages, {
-  imageInclusionPolicy: 'recent-user',
-  recentWindow: 10,
-  maxImageInputs: 5
-});
-```
-
-### No images (text only)
-
-```ts
-const orMessages = await buildOpenRouterMessages(messages, {
-  maxImageInputs: 0  // Disables all images
-});
-```
-
-### Custom filter
-
-```ts
-const orMessages = await buildOpenRouterMessages(messages, {
-  filterIncludeImages: async (candidates) => {
-    // Only include images from user messages
-    return candidates.filter(c => c.role === 'user');
+import {
+  buildOpenRouterMessages,
+  AttachmentHydrationError,
+  type ORMessage,
+} from '~/core/auth/openrouter-build';
+import type { ChatMessage } from '~/utils/chat/types';
+
+export async function prepareMessages(history: ChatMessage[]): Promise<ORMessage[]> {
+  try {
+    return await buildOpenRouterMessages(history, {
+      imageInclusionPolicy: 'recent-user',
+      recentWindow: 12,
+      maxImageInputs: 4,
+      dedupeImages: true,
+    });
+  } catch (error) {
+    if (error instanceof AttachmentHydrationError) {
+      // Show this safe message in the existing request error UI.
+      throw new Error(error.message);
+    }
+    throw error;
   }
-});
-```
-
-### Debug output
-
-```ts
-const orMessages = await buildOpenRouterMessages(messages, {
-  debug: true
-});
-// Logs candidate count, selected count, hydration status
-```
-
----
-
-## Important notes
-
-### Memory limits
-
-- Remote and blob URL fetches are capped at ~5MB (enforced during hydration)
-- Large remote files are dropped, not truncated
-- Base64 encoding increases size ~33%
-- Local file hydration has no size cap
-
-### Image types supported
-
-- **Input**: PNG, JPG, GIF, WebP, AVIF
-- **Detection**: Local hashes are checked against file metadata (`kind:
-  'image'` with a supported raster MIME); remote URLs use an extension or
-  query-string heuristic followed by bounded response-MIME validation.
-- **Inline formats**: data URLs, https URLs, local hashes, blob URLs
-
-### PDF handling
-
-PDFs are sent as files, not images:
-
-```ts
-content: [
-  { type: 'text', text: 'Analyze this' },
-  { type: 'file', file: { filename: 'doc.pdf', file_data: 'data:application/pdf;base64,...' } }
-]
-```
-
-- File parts hydrate local hashes through `getFileBlob`, preserving the MIME type
-- PDF data URLs are normalized to the `application/pdf` MIME prefix
-- A local hash that is not an image (for example, a PDF) is skipped from the image parts and handled as a file part instead
-
-### Dedupe strategy
-
-Hashes are compared for exact matches. If same image appears twice:
-- First occurrence kept
-- Second and later deduplicated (removed)
-
-### Errors on hydration
-
-If any hydration fails:
-- Image is skipped silently
-- Debug logging shows why
-- Rest of message unaffected
-
----
-
-## Decide modalities
-
-Output modalities are chosen by the caller based on the model id (see `getChatModalities` in `~/utils/chat/messages`). This module only builds the message payload; it does not decide output format.
-
----
-
-## Related
-
-- `useChat` — uses this to build API requests
-- `modelsService` — check model capabilities
-- `~/db/files` — file storage and retrieval
-- OpenRouter API docs — message format reference
-
----
-
-## TypeScript
-
-```ts
-export interface BuildImageCandidate {
-  hash: string;
-  role: 'user' | 'assistant';
-  messageIndex: number;
 }
-
-export interface BuildOptions {
-  maxImageInputs?: number;
-  dedupeImages?: boolean;
-  imageInclusionPolicy?: 'all' | 'recent' | 'recent-user' | 'recent-assistant';
-  recentWindow?: number;
-  filterIncludeImages?: (candidates: BuildImageCandidate[]) => Promise<BuildImageCandidate[]> | BuildImageCandidate[];
-  debug?: boolean;
-}
-
-export async function buildOpenRouterMessages(
-  messages: ChatMessageLike[],
-  opts?: BuildOptions
-): Promise<ORMessage[]>;
 ```
 
----
+Use the existing chat request flow to send the result. A direct fetch example would omit the host's credential routing, authorization, limits, and error handling.
 
-Document generated from `app/core/auth/openrouter-build.ts` implementation.
+## Input and output
+
+Input messages have a role of `user`, `assistant`, `system`, or `tool`, and string content or internal content parts. Text parts become provider text; internal image parts become `image_url`; internal file parts become `file` with `filename` and `file_data`. The result is `ORMessage[]` whose `content` is a part array. `tool_calls`, `tool_call_id`, and `name` are copied when present.
+
+Stored `file_hashes` is a **JSON-serialized array**, not a space-separated or comma-separated string. Use `serializeFileHashes` from `~/db/files-util`, or the [message-file helpers](/documentation/database/message-files), when constructing it. The builder also accepts binary image/file content; views respect their byte offsets.
+
+## Image options
+
+| Option | Default | Behavior |
+| --- | --- | --- |
+| `maxImageInputs` | 8 | Maximum selected image candidates across history; zero excludes image candidates. Explicit file parts remain. |
+| `dedupeImages` | true | Keeps the first occurrence of a reference. |
+| `imageInclusionPolicy` | `all` | `all`, `recent`, `recent-user`, or `recent-assistant`. |
+| `recentWindow` | 12 | The last N messages in the entire history, then role filtering for the role-specific policies. It is not the last N messages of that role. |
+| `filterIncludeImages` | none | Optional synchronous or async callback over candidates before final selection. |
+| `debug` | false | Accepted option; current implementation suppresses debug logging. |
+
+A `BuildImageCandidate` has `hash`, `role`, and `messageIndex`. Policies apply to image candidates, not to ordinary file parts. Image count limiting is not token budgeting or a guarantee that the model supports images.
+
+## Attachment hydration
+
+Local hashes load file metadata and blobs. Only metadata classified as an image with a supported raster MIME becomes an image part. Generic files with image-looking MIME remain files. Non-image hashes are excluded from image candidates; their content must be represented by file parts.
+
+Supported raster data URLs can pass through after validation. Image-like remote URLs are fetched and checked by response MIME. Remote/blob fetch hydration has an eight-second timeout and a 5 MiB blob-size cap; failures do not produce a usable image. Local hash and binary hydration do not use that remote-fetch cap. Base64 encoding increases payload size, so upstream file/request limits still matter.
+
+Explicit file content has its own behavior: a valid data URL or HTTP(S) URL can be used as file data; binary values and local hashes are converted; blob references need hydration. A blob URL cannot be sent directly to a remote model.
+
+Hydrated references use shared in-memory data-URL and in-flight caches. Completed entries are bounded to 64 and disappear on page reload. Do not log attachment data, URLs, or the prepared provider payload.
+
+## Handle failures
+
+Attachment preparation can throw `AttachmentHydrationError` with `code: 'ATTACHMENT_HYDRATION_FAILED'`, `messageIndex`, optional filename, and a reason: `missing`, `unsupported`, `unavailable`, `invalid`, or `not-image`. It does **not** silently drop an attachment that failed hydration and proceed with a changed request.
+
+Show the error and let the user remove or reattach the file. Do not catch it and resend text-only without the user's choice. The error text omits attachment data and URLs. See `app/core/auth/openrouter-build.ts` for the source contracts and [chat types](/documentation/types/chat-types) for internal message shapes.

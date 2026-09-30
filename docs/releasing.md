@@ -19,6 +19,8 @@ version must match in:
 Published npm versions and image tags are immutable. Never force-move a tag or
 republish a version with different contents.
 
+The detailed acceptance inventory is the [Cloud release checklist](cloud-release-checklist.md).
+
 ## CI lanes
 
 The **Checks** workflow (`.github/workflows/tests.yml`) separates a fast source

@@ -1,4 +1,4 @@
-# posts
+# Custom posts
 
 Generic post storage built on the `posts` Dexie table; used for lightweight CMS data like release notes or docs.
 
@@ -21,7 +21,7 @@ Generic post storage built on the `posts` Dexie table; used for lightweight CMS 
 | `title`    | Required, trimmed string.                                        |
 | `content`  | Arbitrary string content (often Markdown).                       |
 | `postType` | Logical discriminator (e.g., `'markdown'`, `'doc'`, `'prompt'`). |
-| `meta`     | JSON string or structured object/array; normalized upstream.     |
+| `meta`     | Stored string or null; structured input is JSON-serialized by helpers.     |
 | `file_hashes` | Serialized JSON array of file hashes; nullable.              |
 | `deleted`  | Soft delete flag.                                                |
 
@@ -55,7 +55,7 @@ Internal post types `or3:document-revision` and `or3:document-revision-chunk` (e
 ## Usage tips
 
 -   Use `postType` to segment content (e.g., `'doc'` and `'prompt'` reuse this table via other modules).
--   Normalize heavily structured `meta` objects before calling `createPost`; the helper will serialize for you but invalid JSON becomes `undefined`.
+-   Helpers serialize structured `meta`. Unserializable values can be dropped; string input passes through without JSON validation. Validate the shape before use instead of assuming every stored string is valid JSON.
 -   Hooks are the right place to inject slug generation or analytics side effects.
 
 ## Prepared plugin batches and private records

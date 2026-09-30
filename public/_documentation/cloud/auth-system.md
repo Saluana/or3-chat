@@ -1,313 +1,97 @@
-# Authentication System
+# Accounts and access
 
-The OR3 Authentication System uses a hybrid approach: an **auth provider** (Clerk or basic-auth, selected by `OR3_AUTH_PROVIDER`) handles user identity and workspace provisioning, while **OpenRouter** is used separately for LLM API access via PKCE. This separation ensures that we can manage user access and billing for the "cloud" features (Sync, Share) independently of their chosen LLM provider. The docs below describe the Clerk + Convex setup; basic-auth + SQLite is the default SSR stack.
+Cloud login verifies who you are; workspace membership and permissions decide what you can do. OpenRouter authorization and the deployment admin panel use separate credentials. This page explains the distinctions for both Basic Auth/SQLite and Clerk/Convex deployments.
 
----
+## Sign in, invitations, and workspaces
 
-## Architecture Overview
+Managed Cloud uses Basic Auth and invite-only registration. Sign in with the bootstrap account, then invite people through the workspace/admin invitation flow. On a source deployment, provisioning depends on `registrationMode`, `autoProvision`, and the workspace store: first login does not universally create a workspace.
 
-### 1. Identity & Workspace Provisioning (Clerk + Convex)
+A user can belong to multiple workspaces. Each request resolves one active workspace and its membership role. Switching workspaces refreshes the session and switches the browser's Dexie database to `or3-db-${workspaceId}`. It does not merge or delete the old workspace data.
 
-When a user logs in via Clerk, we automatically provision a **Convex Workspace** for them. This creates a 1:1 mapping between the Clerk User and an OR3 Workspace.
+The store honors `users.active_workspace_id`. Workspace switches are coordinated across tabs using a monotonic revision, so a late response cannot commit an older selection. If data looks empty after login or switching, check the resolved workspace before resetting local storage.
 
-**Flow:**
-1.  **Login**: User authenticates on the client with Clerk.
-2.  **Session Resolution**: The Nuxt server interceptor (`/api/auth/session`) verifies the Clerk session.
-3.  **Provisioning**: The server calls the Convex mutation `api.workspaces.ensure`.
-    *   If the user is new, a Workspace is created.
-    *   If existing, their role and details are returned.
-4.  **Context**: The `SessionContext` is returned to the client, containing the `workspaceId` needed for sync.
+## Two user identifiers
 
-### 2. Client-Side Session Management
+| Identifier | Used for |
+|---|---|
+| `session.providerUserId` | External provider identity and provider-level cache keys |
+| `session.user.id` | Canonical internal OR3 user, membership, sync/storage authorization, notification scope |
 
-The client app uses composables to manage this state:
+The selected sync backend implements `AuthWorkspaceStore` for internal users and workspaces. The auth provider verifies external identity; it is not a second workspace database. This store is required even when sync transfer is disabled.
 
-*   **`useSessionContext`**: Fetches the resolved session from the server (SSR-safe).
-*   **`useSession`**: Provides reactive "Is Signed In" state and User ID.
-*   **`or3-provider-clerk/runtime/plugins/auth-token-broker.client.ts`**: Registers a client `AuthTokenBroker` that reads Clerk JWT templates.
-*   **`or3-provider-convex/runtime/plugins/convex-auth.client.ts`**: Uses that broker to set Convex auth (`client.setAuth`) and refreshes tokens on session changes.
+## Roles and permissions
 
-### 3. LLM Authorization (OpenRouter)
+| Workspace role | Permissions |
+|---|---|
+| owner | Read/write workspace data, manage workspace settings, users, and plugins |
+| editor | Read/write workspace data |
+| viewer | Read workspace data |
 
-Access to LLM models is handled separately via **OAuth PKCE** with OpenRouter. The key is stored locally in IndexedDB and never written to server storage.
+Server handlers use `can()` or `requireCan()` for resource authorization. Authentication alone is insufficient: membership, resource ownership, capability policy, and optional constraints can deny a request. The [capability matrix](/documentation/cloud/capability-matrix) lists operation-specific requirements.
 
-*   **Flow**: User clicks "Connect OpenRouter" -> PKCE Handshake -> Token received.
-*   **Storage**: Token is saved in local Dexie DB (`kv` table).
-*   **Usage**:
-    - Local mode: injected directly into browser-side API calls to OpenRouter.
-    - SSR mode: the key is sent as a request header (`x-or3-openrouter-key` or `Authorization: Bearer`) to `/api/openrouter/stream`, which proxies the stream to OpenRouter server-side. The key is used per request and is never persisted on the server.
+Entitlements are separate plan/feature flags resolved by a registered backend resolver and cached per request. With no resolver, entitlements are empty; a plugin policy requiring `paid` will deny access. [Plugin access policy](/documentation/cloud/plugin-access-gating) controls feature availability, while server permissions protect the underlying data. Hiding a button is not server authorization.
 
-### 4. Admin Dashboard Authorization (Clerk + Convex)
+## Session resolution and refresh
 
-Admin dashboard access is super-admin-only.
+The core server resolver in `server/auth/session.ts` verifies a registered provider session, maps the external identity through `AuthWorkspaceStore`, resolves active membership and role, and checks deployment-admin status. The result is cached on the current request. It does not directly hard-code a Convex workspace mutation.
 
-- `deploymentAdmin` is still resolved from Convex `admin_users`.
-- Super-admin bootstrap can auto-grant the current Clerk user via the signed bridge flow.
-- That grant does not bypass super-admin-only `/admin/*` route policy.
+`GET /api/auth/session` returns an envelope with `session` and `appAccessAllowed`. Client code reads it through `useSessionContext()`:
 
-Important:
-
-- Admin logout clears the super-admin cookie only.
-- It does not revoke `admin_users` grants.
-
-See: [admin-access-bridge](./admin-access-bridge)
-
----
-
-## Server-Side Implementation
-
-The core logic resides in `server/auth/session.ts` implementation of `resolveSessionContext`.
-
-```typescript
-// Simplified logic
-export async function resolveSessionContext(event) {
-    // 1. Verify Clerk Session
-    const providerSession = await provider.getSession(event);
-    if (!providerSession) return null;
-
-    // 2. Ensure Workspace exists in Convex
-    const workspace = await convex.mutation(api.workspaces.ensure, {
-        identity: providerSession.user
-    });
-
-    // 3. Return combined context
-    return {
-        user: providerSession.user,
-        workspace: { id: workspace.id },
-        authenticated: true
-    };
-}
+```ts
+const context = useSessionContext();
+const authenticated = computed(() => context.data.value?.session.authenticated === true);
+await context.refresh();
 ```
 
-## Sync Integration
+Auth-provider client adapters signal sign-in/sign-out changes so the application refreshes its session and workspace scope. Provider SDK refresh/recovery belongs in those adapters; there is no `AuthProvider.refreshSession` interface method or POST session-refresh endpoint.
 
-The Sync Engine (`convex-sync`) relies on the session to authenticate its WebSocket connection.
-*   It uses `useAuthTokenBroker` to request a fresh JWT from Clerk on demand.
-*   This token is passed to the Sync Provider during the handshake.
+Direct sync providers acquire provider-specific JWTs through `AuthTokenBroker`. Gateway providers call SSR endpoints that enforce `can()`; core should not reach directly into a Clerk SDK for tokens.
 
----
+## OpenRouter is separate
 
-## Configuration
+Connect OpenRouter with OAuth PKCE or paste a supported key. Source code must use `persistUserApiKey()` to save browser keys in Dexie `kv`, update reactive state, and emit the connection signal.
 
-Two env vars control the default Clerk + Convex auth/sync setup:
+Local mode can use the browser key directly. SSR mode forwards the key per request to the server stream route, unless the host supplies an instance key under its override policy. Plaintext user keys are not persisted as ordinary server configuration; durable background jobs can keep an encrypted credential envelope so work continues after detachment. Keep its encryption secret server-only. See [background execution](/documentation/cloud/background-execution) and [configuration](/documentation/cloud/config-reference#servicesllmopenrouter).
 
-*   `SSR_AUTH_ENABLED`: Enables the Clerk integration and server-side session resolution.
-*   `VITE_CONVEX_URL`: Convex deployment URL (used for workspace provisioning + sync/storage).
+## Deployment administration
 
-If `SSR_AUTH_ENABLED` is false, the app runs in "Local Mode" (no sync, local storage only).
+The `/admin/*` panel requires the super-admin `or3_admin` cookie obtained from the admin login credentials. A workspace owner is not automatically a deployment admin. A persisted `deploymentAdmin` grant permits deployment-level `admin.access` checks but does not, on its own, unlock super-admin panel routes.
 
-You can also disable sync/storage independently (while keeping auth enabled) via:
+Admin APIs resolve `WorkspaceAccessStore`, `WorkspaceSettingsStore`, and `AdminUserStore` from the selected sync backend. SQLite and Convex implement the shared bridge. Unsupported providers fail explicitly rather than borrowing another backend's admin data.
 
-- `OR3_SYNC_ENABLED=false`
-- `OR3_STORAGE_ENABLED=false`
+For Clerk + Convex, signing into the super-admin panel while also signed into Clerk can persist a deployment-admin grant through the signed bridge. `OR3_ADMIN_JWT_SECRET` must match between Nuxt and Convex. Inspect and revoke persistent grants at `/admin/admin-users`.
 
----
+Admin logout clears the super-admin cookie. It does not sign out the application auth provider or revoke persisted deployment-admin grants. Account logout is a separate operation; local workspace data remains in Dexie.
 
-## Implementing Custom Auth Providers
+## Custom auth provider contract
 
-While Clerk is the default provider, you can implement custom authentication (Firebase Auth, Auth0, custom JWT, etc.) by implementing the `AuthProvider` interface.
+This is an advanced source integration, not a complete new-provider tutorial. The actual contract in `server/auth/types.ts` is:
 
-### 1. The AuthProvider Interface
+```ts
+import type { H3Event } from 'h3';
 
-```typescript
-// server/auth/types.ts
-export interface AuthProvider {
-    id: string;
-    
-    // Extract and verify session from request
+interface ProviderSession {
+    provider: string;
+    user: { id: string; email?: string; displayName?: string };
+    expiresAt: Date;
+    claims?: Record<string, unknown>;
+}
+interface AuthProvider {
+    name: string;
     getSession(event: H3Event): Promise<ProviderSession | null>;
-    
-    // Optional: Handle token refresh
-    refreshSession?(event: H3Event): Promise<ProviderSession | null>;
-}
-
-export interface ProviderSession {
-    user: {
-        id: string;
-        email?: string;
-        displayName?: string;
-    };
-    token: string;
-    expiresAt?: number;
 }
 ```
 
-### 2. Implementation Example
+Validate the provider's token/cookie and its expiry before returning a normalized identity; return null for unauthenticated requests. Do not accept a user ID supplied by the request as proof of identity.
 
-```typescript
-// server/auth/firebase-provider.ts
-import { initializeApp, getApps } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
-import type { AuthProvider, ProviderSession } from './types';
+A Nitro server plugin registers a factory with `registerAuthProvider({ id, create: () => provider })`, and a thin Nuxt module adds that server plugin. Keep server SDKs under `runtime/server/**`, install the module, and register the required workspace store. Client UI, session-change signaling, recovery, and any direct-provider token broker also need adapters. Copy a first-party provider's structure and verify the whole sign-in/workspace/logout journey before calling a custom stack supported.
 
-export class FirebaseAuthProvider implements AuthProvider {
-    id = 'firebase';
-    
-    constructor() {
-        // Initialize Firebase Admin if not already done
-        if (getApps().length === 0) {
-            initializeApp({
-                credential: applicationDefault(),
-            });
-        }
-    }
-    
-    async getSession(event: H3Event): Promise<ProviderSession | null> {
-        const token = getHeader(event, 'authorization')?.replace('Bearer ', '');
-        if (!token) return null;
-        
-        try {
-            const decoded = await getAuth().verifyIdToken(token);
-            
-            return {
-                user: {
-                    id: decoded.uid,
-                    email: decoded.email,
-                    displayName: decoded.name,
-                },
-                token,
-                expiresAt: decoded.exp * 1000,
-            };
-        } catch (error) {
-            console.error('Firebase auth error:', error);
-            return null;
-        }
-    }
-}
-```
+## Diagnose an access denial
 
-### 3. Register the Provider
+1. Confirm the SSR server and selected provider are running.
+2. Inspect the GET session envelope for authentication, internal user ID, workspace ID, and role.
+3. Check the operation in the [capability matrix](/documentation/cloud/capability-matrix).
+4. For plugin surfaces, inspect their [access policy](/documentation/cloud/plugin-access-gating), enabled-plugin setting, and entitlement resolver.
+5. For the admin panel, verify the separate super-admin session.
 
-```typescript
-// server/auth/providers.ts
-import { FirebaseAuthProvider } from './firebase-provider';
-import { registerAuthProvider } from './registry';
-
-export function registerAuthProviders() {
-    registerAuthProvider(new FirebaseAuthProvider());
-}
-```
-
-### 4. Configure Environment
-
-```bash
-# .env
-SSR_AUTH_ENABLED=true
-AUTH_PROVIDER=firebase
-FIREBASE_PROJECT_ID=your-project
-# Firebase Admin SDK credentials
-GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
-```
-
-### 5. Client-Side Integration
-
-```typescript
-// plugins/firebase-auth.client.ts
-import { initializeApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged } from 'firebase/auth';
-
-export default defineNuxtPlugin(() => {
-    const config = useRuntimeConfig();
-    
-    if (config.public.authProvider !== 'firebase') return;
-    
-    const app = initializeApp({
-        apiKey: config.public.firebaseApiKey,
-        authDomain: config.public.firebaseAuthDomain,
-        projectId: config.public.firebaseProjectId,
-    });
-    
-    const auth = getAuth(app);
-    
-    // Watch auth state and sync to session
-    onAuthStateChanged(auth, async (user) => {
-        if (user) {
-            const token = await user.getIdToken();
-            // Send token to server
-            await $fetch('/api/auth/session', {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            });
-        }
-    });
-});
-```
-
-### Provider Comparison
-
-| Provider | Best For | Setup Complexity | Features |
-|----------|----------|------------------|----------|
-| **Clerk** | Default, modern UX | Low | Sessions, MFA, orgs |
-| **Firebase** | Google ecosystem | Medium | Realtime, analytics |
-| **Auth0** | Enterprise | Medium | SSO, compliance |
-| **Custom JWT** | Full control | High | Maximum flexibility |
-
----
-
-## Session Lifecycle
-
-### Token Refresh
-
-Sessions are automatically refreshed:
-- Clerk: Handled by Clerk SDK
-- Custom: Implement `refreshSession` in provider
-
-### Session Expiration
-
-```typescript
-// Check session validity
-const session = useSessionContext();
-const isValid = computed(() => {
-    if (!session.data.value?.session) return false;
-    // Check expiration if available
-    return true;
-});
-```
-
-### Logout Flow
-
-1. Client calls logout endpoint
-2. Server clears session cookie
-3. Client clears local state
-4. Auth provider signs out (e.g., Clerk signOut)
-5. Workspace data remains in Dexie (local-first)
-
-For Clerk + Convex admin grant persistence details, see: [admin-access-bridge](./admin-access-bridge)
-
----
-
-## Troubleshooting Auth
-
-### "Unauthorized: No identity"
-- User not authenticated
-- Check Clerk session
-- Verify auth provider is configured
-
-### "Workspace not found"
-- Session valid but workspace provisioning failed
-- Check Convex connection
-- Verify `workspaces.ensure` mutation
-
-### "Session expired"
-- Token expired and refresh failed
-- Check token refresh implementation
-- Verify user still exists in auth provider
-
-### CORS errors
-- Check `allowedOrigins` configuration
-- Verify Clerk allowed origins
-- Check redirect URLs match
-
----
-
-## Related
-
-- [identity-access-concepts](./identity-access-concepts) - Shared vocabulary for users/workspaces/roles/entitlements/permissions
-- [or3-cloud-config](./or3-cloud-config) - Configuration reference
-- [providers](./providers) - Provider install and Clerk to Convex bridge wiring
-- [provider-clerk](./provider-clerk) - Clerk provider install and token broker details
-- [provider-convex](./provider-convex) - Convex provider install and auth bridge details
-- [Sync Layer](./sync-layer) - Sync depends on auth
-- [Troubleshooting](./troubleshooting) - Common issues
+Use [Troubleshooting](/documentation/cloud/troubleshooting) for session, provisioning, and workspace-scope symptoms.

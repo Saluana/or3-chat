@@ -12,7 +12,7 @@ Required paths by surface:
 
 | Surface | First paths |
 | --- | --- |
-| Setup | `public/_documentation/cloud/or3-cloud-wizard.md`, `cloud/or3-config.md`, `scripts/cli/or3-cloud.ts` |
+| Setup | `public/_documentation/cloud/or3-cloud-wizard.md`, `cloud/configure.md`, `scripts/cli/or3-cloud.ts` |
 | Plugin | `public/_documentation/plugins/`, `packages/plugin-sdk/`, `examples/plugins/`, `tests/plugin-runtime/` |
 | Theme | `public/_documentation/themes/`, `app/theme/`, `scripts/cli/validate-theme.ts` |
 | Core | Relevant docmap page, public type, existing extension registry or hook, its canonical test |

@@ -2,6 +2,8 @@
 
 Dedicated install and wiring guide for the Convex sync/storage/backend provider package.
 
+Managed installations use the fixed profile in [Set up Cloud](/documentation/cloud/setup). The install commands and manual settings below are for editable source deployments; install only the providers your source configuration selects.
+
 ## What It Provides
 
 - Convex sync provider (direct mode)
@@ -131,7 +133,7 @@ values, and the host policy copies only user setup values and the AI spend
 ledger (byte-for-byte, preserving an active window). Plugin authority, consent
 reviews, access policy, migration state, and guest access are never copied and
 require fresh trusted writes/approval. See
-[plugin-access-gating](./plugin-access-gating) for the consent model.
+[Plugin access policy](/documentation/cloud/plugin-access-gating) for the consent model.
 
 ## Runtime Registration
 
@@ -167,7 +169,7 @@ When using Clerk + Convex, there is an additional bridge used by the admin dashb
 - The grant is persisted in Convex (`admin_users`) and is not removed by admin logout.
 - This is expected bootstrap behavior, not Clerk role assignment.
 
-See the detailed behavior here: [admin-access-bridge](./admin-access-bridge).
+See the detailed behavior here: [Deployment administration](/documentation/cloud/auth-system#deployment-administration).
 
 ## Direct API Authorization Guardrails
 
@@ -263,12 +265,12 @@ If `AUTH_PROVIDER=clerk` and Convex is active, install `or3-provider-clerk` so t
 
 ## Related
 
-- [providers](./providers)
-- [provider-clerk](./provider-clerk)
-- [admin-access-bridge](./admin-access-bridge)
-- [sync-layer](./sync-layer)
-- [storage-layer](./storage-layer)
-- [or3-cloud-config](./or3-cloud-config)
+- [Choose and wire providers](/documentation/cloud/providers)
+- [Clerk](/documentation/cloud/provider-clerk)
+- [Deployment administration](/documentation/cloud/auth-system#deployment-administration)
+- [Sync internals](/documentation/cloud/sync-layer)
+- [Storage internals](/documentation/cloud/storage-layer)
+- [Configure OR3](/documentation/cloud/configure)
 
 ## Provider template development
 

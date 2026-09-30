@@ -224,13 +224,14 @@ Where `timestamp` is the exact value from the `X-OR3-Timestamp` header and `rawB
 2. Compute HMAC-SHA256 of `"${timestamp}.${rawBody}"` using your signing secret.
 3. Format as `sha256=${hex}`.
 4. Compare using a timing-safe function to prevent timing attacks.
-5. Optionally reject payloads with timestamps older than 5 minutes to prevent replay attacks.
+5. Reject malformed timestamps or timestamps outside a five-minute freshness window.
+6. Deduplicate verified `event_id` values in durable storage before applying side effects; a retry can contain the same event with a fresh signature.
 
 ---
 
 ## Express Receiver Example
 
-A complete Express server that receives OR3 webhook events, verifies signatures, and processes payloads.
+An Express receiver that verifies signatures and logs events. For production side effects, additionally persist `event_id` with a unique constraint and commit the effect and deduplication marker atomically; this logging example does not implement a durable inbox.
 
 ### Setup
 
@@ -268,9 +269,11 @@ function verifySignature(
     .update(`${timestamp}.${rawBody}`)
     .digest('hex')}`;
 
-  if (expected.length !== signature.length) return false;
+  const expectedBytes = Buffer.from(expected);
+  const receivedBytes = Buffer.from(signature);
+  if (expectedBytes.length !== receivedBytes.length) return false;
 
-  return timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+  return timingSafeEqual(expectedBytes, receivedBytes);
 }
 
 // ─── Webhook Payload Types ──────────────────────────────────────
@@ -390,6 +393,8 @@ curl -X POST http://localhost:4000/webhooks/or3 \
 ---
 
 ## Verification in Other Languages
+
+These helpers verify HMAC only. Before using either, enforce the same timestamp freshness check and durable event-ID deduplication described above. Authentication of bytes alone does not prevent replay.
 
 ### Python
 
@@ -523,7 +528,7 @@ Logs are retained for the configured `OR3_WEBHOOKS_LOG_RETENTION_HOURS` (default
 ## Operational Notes
 
 - Pending deliveries **survive server restarts** — they are stored in the webhook store and reprocessed on startup.
-- Stale `in_flight` rows (from worker crashes) are automatically reaped after 5 minutes.
+- Stale `in_flight` rows (from worker crashes) are automatically eligible for reaping after 2 minutes (the reaper runs every 60 seconds).
 - The dispatcher polls for claimable work every 5 seconds and processes in batches of 25.
 - A webhook is marked `failing` health after consecutive delivery failures.
 - Use the **Test Ping** button in the UI to verify connectivity before going live.

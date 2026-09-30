@@ -198,9 +198,9 @@ ${docDescription}
 This theme is automatically discovered by the theme system. To activate it:
 
 \`\`\`typescript
-// In your component or app config
-const { setActiveTheme } = useTheme();
-setActiveTheme(${safeName});
+// In a Vue component setup
+const { setActiveTheme } = useThemeResolver();
+await setActiveTheme(${safeName});
 \`\`\`
 
 ## Customization
@@ -211,7 +211,9 @@ Edit \`theme.ts\` to customize:
 2. **Overrides**: Add component-specific styles using CSS selector syntax
 3. **Dark Mode**: Configure dark mode color overrides
 
-See the [Theme System Documentation](../../../docs/themes/) for more details.
+See [Style your theme](../../../public/_documentation/themes/styling.md)
+and [Package and install](../../../public/_documentation/themes/package-install.md).
+This source scaffold is a trusted-code theme; add a manifest before packaging.
 `;
 }
 

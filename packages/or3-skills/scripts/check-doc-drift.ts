@@ -30,7 +30,7 @@ const DOCUMENT_ASSERTIONS = [
     code: 'plugin-sdk-contract-changed',
   },
   {
-    path: 'public/_documentation/themes/quick-start.md',
+    path: 'public/_documentation/themes/overview.md',
     text: 'bun run theme:create',
     code: 'theme-create-guidance-changed',
   },
@@ -40,7 +40,7 @@ const DOCUMENT_ASSERTIONS = [
     code: 'setup-guidance-changed',
   },
   {
-    path: 'public/_documentation/hooks/typed-hooks.md',
+    path: 'public/_documentation/hooks/reference.md',
     text: 'createTypedHookEngine',
     code: 'typed-hooks-contract-changed',
   },

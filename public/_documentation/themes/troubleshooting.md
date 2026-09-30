@@ -1,135 +1,90 @@
-# Troubleshooting
+# Theme troubleshooting
 
-Common issues and fixes for the current theme system.
+Start by identifying what changed: the selected theme, light/dark mode, personal
+customizations, or a package. These have different owners and persistence.
+[Customize your appearance](/documentation/themes/customize#what-gets-saved)
+explains the distinction.
 
 ## Quick checks
 
-```bash
-# Validate themes + regenerate types
-bun run theme:validate
+From the source checkout:
 
-# Build cssSelectors style output
+```sh
+bun run theme:validate
 bun run theme:build-css
 ```
 
-Browser console checks:
+Validation regenerates metadata/types and checks configuration; it does not
+prove TypeScript correctness, caller conformance, or browser appearance. CSS
+building is needed for `cssSelectors.style`. Check the browser's actual
+`document.documentElement.dataset.theme` and its light/dark classes. A cached
+`localStorage.activeTheme` value alone does not prove the theme applied.
 
-```js
-// Theme selection lives in Dexie KV under 'theme_selection'.
-// The legacy key below still exists during migration and is re-read as a
-// fallback, but it is no longer the source of truth.
-localStorage.getItem('activeTheme');
-document.documentElement.getAttribute('data-theme');
-```
+## Installation and selection
 
-## Theme not applying
+| Symptom | Check / recovery |
+| --- | --- |
+| New theme is absent | Check required package files and discovery; restart development or rebuild/redeploy production |
+| Restart did not add a production theme | Restarting the old bundle cannot add build-time modules; build the installed source |
+| ID conflicts with a built-in directory | Choose a unique ID or remove your own disposable source preview folder before installation |
+| Declarative package is refused | Include valid manifest/definition JSON with matching ID/name; exclude TS/JS/Vue and preprocessors |
+| Theme appears but cannot be selected | Check administrator disablement and whether it is still discovered |
+| Upload API answers 403 | Use the authenticated global admin UI; custom requests need intent and matching Origin/Referer |
+| Theme selection will not persist | Inspect `[useThemeSelection]` errors and the active workspace's KV/storage; check the SSR cookie |
+| Personal changes do not follow another browser | Those overrides and accessibility settings are browser-local, not account-synced |
 
-1. Ensure the theme exists at `app/theme/<name>/theme.ts`.
-2. Set the active theme:
+For packaging and overwrite steps, use
+[Package and install](/documentation/themes/package-install).
 
-```ts
-const { setActiveTheme } = useThemeResolver();
-await setActiveTheme('my-theme');
-```
+## Appearance does not change
 
-3. Confirm component props bind `useThemeOverrides()` with `v-bind`; use
-   `v-theme` only for DOM decoration/target annotation.
+Disable personal style overrides first. They sit above the authored theme and
+can make a correctly switched theme look unchanged. Confirm the active theme
+and color mode before inspecting selectors.
 
-## Overrides not working
+A missing required stylesheet can leave the previous theme active. Check the
+Network panel for failed local stylesheets/generated CSS, then retry after
+fixing the package/build. Only declare files that exist. A missing background
+image or font needs its actual built URL checked; a font-family declaration does
+not fetch a font.
 
-### Identifier and context mismatch
+For component props, bind `useThemeOverrides()` with `v-bind`. `v-theme` changes
+DOM decoration and annotations, not Vue props. Ensure component name and
+identifier match an actual host target. String bindings set an identifier;
+they do not infer a context from that string.
 
-Remember: `v-theme="'chat.send'"` sets **identifier** only. Context is detected
-separately or passed explicitly. It does not mutate Vue component props.
+The directive auto-detects chat/sidebar/dashboard/header only. Use explicit
+`context` for other supported contexts; an arbitrary wrapper attribute is not
+sufficient. Native hover/focus states use CSS. See
+[Style your theme](/documentation/themes/styling#style-a-named-control).
 
-```vue
-<UButton v-theme="{ identifier: 'chat.send', context: 'chat' }" />
-```
+## CSS classes or styles are missing
 
-### Context detection
+`cssSelectors.style` needs generated `/themes/<name>.css`.
+`cssSelectors.class` is applied by runtime sessions to matching DOM and added
+nodes. Existing-node attribute changes are not a universal rescan trigger.
+Verify the selector matches and inspect competing specificity before adding
+manual rescans. The deprecated `useThemeClasses()` helper is a no-op.
 
-Auto-detection only covers a few containers:
+Scope raw stylesheets to `[data-theme="<name>"]`. Check narrow panes, teleported
+dialogs, light/dark mode, and switching away so leaked rules are visible.
 
-- `#app-chat-container` or `[data-context="chat"]`
-- `#app-sidebar` or `[data-context="sidebar"]`
-- `#app-dashboard-modal` or `[data-context="dashboard"]`
-- `#app-header` or `[data-context="header"]`
+## Replacement components fail
 
-For other areas, add `data-context` on a wrapper.
+Check the exact `customComponents` key, relative `.vue` path, contract version,
+and current build. Unknown keys may pass runtime configuration validation but
+are not recognized replacement targets. Missing/unsafe paths fall back to core
+components; check dev warnings and the rendered component in Vue DevTools.
 
-### State selectors
+If it renders but actions fail, compare its caller's props/events/slots and
+exposed methods. Attr forwarding does not forward ref methods. SSR must hydrate
+the server-rendered theme first; avoid independently swapping components during
+hydration. See [Replace app components](/documentation/themes/component-overrides).
 
-`:hover` and `:active` only match if you pass `state` to the resolver manually.
-The directive always uses `state: 'default'`. Use `cssSelectors` for DOM states.
+## Capture a useful report
 
-## cssSelectors not applying
-
-1. If you use `style`, run `bun run theme:build-css`.
-2. Ensure `<html>` has `data-theme="<name>"`.
-3. Runtime classes are applied automatically by a DOM observer, including for
-   lazy-loaded components. The old `useThemeClasses()` helper is deprecated and
-   is now a no-op; you do not need to call it.
-
-## Theme switching does not persist
-
-Theme selection is stored in the Dexie KV store (`theme_selection`), with the
-`or3_active_theme` cookie and a legacy `localStorage.activeTheme` fallback.
-The KV record enables cross-device sync. Blocked storage (private browsing,
-disabled cookies) or a failed KV write can prevent persistence; check the
-console for `[useThemeSelection]` errors.
-
-## TypeScript types missing
-
-Types are generated by `bun run theme:validate` into
-`types/theme-generated.d.ts`. Make sure your `tsconfig.json` includes
-`types/**/*.d.ts`.
-
-## Light/dark mode issues
-
-Light/dark mode is separate from theme selection:
-
-```ts
-const theme = useNuxtApp().$theme;
-theme.set('dark');
-theme.toggle();
-```
-
-## Debugging tips
-
-In dev mode, resolved overrides expose:
-
-- `data-theme-target`
-- `data-theme-matches`
-
-You can inspect them in DevTools on themed elements.
-
-To inspect resolver output:
-
-```ts
-const { $theme } = useNuxtApp();
-const resolver = $theme.getResolver($theme.activeTheme.value);
-const props = resolver?.resolve({
-  component: 'button',
-  context: 'chat',
-  identifier: 'chat.send',
-});
-console.log(props);
-```
-
-## Build errors
-
-### Missing default export
-
-Make sure each theme file has a default export:
-
-```ts
-export default defineTheme({ name: 'my-theme', colors: { ... } });
-```
-
-### Invalid theme name
-
-Theme names must be kebab-case and start with a letter:
-
-```ts
-name: 'my-theme' // ok
-```
+Record theme ID/version, host revision, route, color mode, whether personal
+overrides were enabled, and the exact failure. Attach before/after screenshots
+from the same viewport and relevant console/network errors. For a layout issue,
+include a narrow pane and keyboard/scroll reproduction. Review logs before
+sharing; do not include admin cookies or private document content.

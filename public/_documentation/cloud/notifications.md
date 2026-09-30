@@ -1,6 +1,6 @@
 # Notification Center
 
-The OR3 Notification Center provides real-time, in-app notifications for AI events, sync conflicts, system warnings, and custom plugin events. It works offline-first and syncs across devices when OR3 Cloud is enabled.
+The OR3 Notification Center provides real-time, in-app notifications for AI completions, system warnings, and custom plugin events. It works offline-first and syncs across devices when OR3 Cloud is enabled.
 
 ---
 
@@ -59,7 +59,9 @@ seconds starts a 60-second cooldown).
 
 ---
 
-## Developer Guide
+## Source extension guide
+
+These private imports are for application source and trusted source extensions. Installable packages must use the [SDK](/documentation/plugins/plugin-sdk) and its supported runtime/permission surfaces.
 
 ### Creating Notifications
 
@@ -122,6 +124,7 @@ import { useHooks } from '~/core/hooks/useHooks';
 const hooks = useHooks();
 
 hooks.addFilter('notify:filter:before_store', (notification, context) => {
+    if (!notification) return false; // A previous filter may have vetoed it.
     // Block spam notifications
     if (notification.title.includes('SPAM')) {
         return false; // Reject
@@ -147,10 +150,10 @@ import { useHooks } from '~/core/hooks/useHooks';
 
 const hooks = useHooks();
 
-// When notification is created
+// Observe a request to create a notification (not proof of storage)
 hooks.addAction('notify:action:push', (payload) => {
-    console.log('Notification created:', payload);
-    // Send analytics, play sound, etc.
+    console.log('Notification requested:', payload);
+    // Filters may still veto storage.
 });
 
 // When notification is marked read
@@ -203,7 +206,7 @@ Notifications for detached background chat jobs follow strict creation rules:
 When OR3 Cloud is enabled:
 
 ```
-Device 1 → Dexie → Convex Cloud → Device 2
+Device 1 → Dexie → selected sync backend → Device 2
 ```
 
 - Notifications sync automatically
@@ -224,27 +227,9 @@ Device 1 → Dexie → Convex Cloud → Device 2
 
 ## Configuration
 
-### Static Build (Default)
+Local notifications need no Cloud configuration and work in static builds. Cross-device delivery requires an authenticated workspace with sync enabled and its selected backend configured. See [Set up Cloud](/documentation/cloud/setup) and [configuration](/documentation/cloud/configure). `OR3_CLOUD_ENABLED` is not a supported master switch.
 
-No configuration needed. Notifications work locally only.
-
-```bash
-# .env
-OR3_CLOUD_ENABLED=false
-```
-
-### OR3 Cloud Enabled
-
-Notifications sync across devices.
-
-```bash
-# .env
-SSR_AUTH_ENABLED=true
-OR3_SYNC_ENABLED=true
-VITE_CONVEX_URL=https://your-project.convex.cloud
-```
-
----
+Notification queries are scoped to the resolved internal user ID. A row in Dexie is not proof that it belongs in the active user's panel. Use the same `resolveNotificationUserId(session)` scope when creating and querying notifications.
 
 ## Troubleshooting
 
@@ -278,7 +263,7 @@ echo $VITE_CONVEX_URL    # Should be set
 
 **Solutions:**
 - Enable OR3 Cloud features
-- Configure Convex URL correctly
+- Configure the selected sync backend (a Convex URL is only relevant to Convex)
 - Check network connectivity
 - Verify user authentication
 
@@ -311,7 +296,7 @@ console under these prefixes:
 
 ```typescript
 interface NotificationCreatePayload {
-    type: string;           // Notification type (e.g., 'sync.conflict')
+    type: string;           // Notification type (e.g., 'custom.event')
     title: string;          // Short title
     body?: string;          // Detailed message
     threadId?: string;      // Associated thread
@@ -353,7 +338,7 @@ interface NotificationAction {
 
 ## Related
 
-- [Sync Layer](./sync-layer) - How data synchronization works
-- [Auth System](./auth-system) - Authentication architecture
-- [Hooks](../hooks/hooks) - Hook system documentation
-- [Troubleshooting](./troubleshooting) - Common issues and solutions
+- [Sync Layer](/documentation/cloud/sync-layer) - How data synchronization works
+- [Auth System](/documentation/cloud/auth-system) - Authentication architecture
+- [Hooks](/documentation/hooks/overview) - Hook system documentation
+- [Troubleshooting](/documentation/cloud/troubleshooting) - Common issues and solutions

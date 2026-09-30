@@ -1,4 +1,4 @@
-# kv
+# Preferences and KV
 
 Key-value helpers for storing small preference or credential blobs in the Dexie `kv` table.
 
@@ -20,7 +20,7 @@ Key-value helpers for storing small preference or credential blobs in the Dexie 
 | `id`         | `string` | Primary key. Name-based helpers use `kv:${name}` convention. |
 | `name`       | `string` | Logical key.                                                 |
 | `value`      | `string` | Serialized payload (often JSON or token); nullable.          |
-| `deleted`    | `boolean`| Soft delete flag; KV rows are removed with hard deletes only.|
+| `deleted`    | `boolean`| Soft delete flag; tombstoneKvByName retains deletion history.|
 | `clock`      | `number` | Monotonic counter incremented on every write.                |
 | `created_at` | `number` | Unix seconds.                                                |
 | `updated_at` | `number` | Unix seconds.                                                |
@@ -55,9 +55,9 @@ Key-value helpers for storing small preference or credential blobs in the Dexie 
 
 ## Usage tips
 
--   Store encrypted or user-provided tokens by name; `setKvByName` will generate IDs automatically.
+-   KV stores strings; it does not encrypt values. Use [the key API](/documentation/auth/reference) for OpenRouter keys so persistence and reactive state stay aligned.
 -   Use hooks to redact values before logging or to enforce naming conventions.
--   Keep payloads tiny (<10 KB) to avoid IndexedDB quota pressure.
+-   Keep preference payloads small. For structured values, serialize and validate explicitly; `kv.get(name)` returns a row, not the parsed value.
 -   Revision allocation and CAS span sync tombstone history, so a key recreated after snapshot recovery continues past the deletion clock instead of restarting (no ABA).
 -   `StorageQuota` accounting is derived from the live rows under its `prefix` inside the write transaction; it is never stored as a synchronized counter row, so multi-device merges cannot undercount.
 -   `StorageQuota.maxRetainedKeys` optionally caps distinct live/deleted names across KV and sync tombstones. At the cap, existing names remain writable but new names are refused. Portable storage uses 10,000 retained names, 1000 live keys and 1 MiB of serialized live values. These limits govern local writes; they do not reserve capacity globally across offline clients.

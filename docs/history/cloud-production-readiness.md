@@ -2,9 +2,7 @@
 
 Release notes for the production-readiness tranche covering sync casing normalization, background execution hardening, and documentation completion.
 
-> **Current code verdict: RELEASE CANDIDATE.** Production promotion still
-> requires recorded staging, backup/restore, and rollback evidence from the
-> [OR3 Cloud release checklist](./release-checklist).
+> **Historical record.** This page records an earlier production-readiness tranche. It is not a current release verdict or an installation guide. Current promotion requirements live in the [Cloud release checklist](../cloud-release-checklist.md) and [release procedure](../releasing.md).
 
 ## Highlights
 
@@ -92,7 +90,7 @@ Release notes for the production-readiness tranche covering sync casing normaliz
 
 ## Related
 
-- [migration-default-stack](./migration-default-stack)
-- [deployment-operations](./deployment-operations)
-- [provider-compatibility-matrix](./provider-compatibility-matrix)
-- [release-checklist](./release-checklist)
+- [Configuration and migration safety](../../public/_documentation/cloud/configure.md)
+- [deployment-operations](../../public/_documentation/cloud/deployment-operations.md)
+- [Supported provider combinations](../../public/_documentation/cloud/providers.md)
+- [release-checklist](../cloud-release-checklist.md)

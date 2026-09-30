@@ -38,7 +38,6 @@
     "planning/complete/auth-registration-controls/**",
     "planning/complete/or3-cloud-lock-page/**",
     "public/_documentation/cloud/auth-system.md",
-    "public/_documentation/cloud/admin-access-bridge.md",
     "public/_documentation/cloud/provider-basic-auth.md",
     "public/_documentation/cloud/provider-clerk.md"
   ],

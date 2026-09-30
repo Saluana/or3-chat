@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * Checks the small set of setup/release documents that promise the managed
- * Cloud experience. The check is intentionally dependency-free so it can run
+ * Checks setup/release documents and the audited public documentation
+ * categories (excluding composables). The check is intentionally dependency-free so it can run
  * before image publication on a clean CI runner.
  *
  * Without --cloud-tarball this validates local links and displayed beginner
@@ -10,7 +10,7 @@
  * the exact CLI entry point and version are executed as well.
  */
 
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { dirname, extname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -24,16 +24,20 @@ const docs = [
   'docs/installation.md',
   'docs/cloud-updates.md',
   'packages/or3-cloud/README.md',
-  'public/_documentation/cloud/deployment-operations.md',
-  'public/_documentation/cloud/or3-cloud-wizard.md',
-  'public/_documentation/cloud/or3-connect.md',
-  'public/_documentation/cloud/release-notes-production-readiness.md',
+  'docs/history/cloud-production-readiness.md',
+  'docs/cloud-release-checklist.md',
+  'docs/hooks.md',
+  ...['hooks', 'cloud', 'start', 'auth', 'database', 'types'].flatMap((category) =>
+    readdirSync(resolve(root, 'public/_documentation', category))
+      .filter((name) => name.endsWith('.md') && !(category === 'types' && name === 'composables.md'))
+      .map((name) => `public/_documentation/${category}/${name}`)),
 ];
 const beginnerDocs = new Set([
   'README.md',
   'docs/start-here.md',
   'docs/installation.md',
   'packages/or3-cloud/README.md',
+  'public/_documentation/cloud/setup.md',
 ]);
 
 function fail(message) {
@@ -50,7 +54,9 @@ function resolveMarkdownTarget(source, rawTarget) {
   if (/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(target)) return null;
   const [pathPart] = target.split(/[?#]/, 1);
   if (!pathPart) return null;
-  const resolved = pathPart.startsWith('/')
+  const resolved = pathPart.startsWith('/documentation/')
+    ? resolve(root, 'public/_documentation', pathPart.slice('/documentation/'.length))
+    : pathPart.startsWith('/')
     ? resolve(root, `.${pathPart}`)
     : resolve(root, source, '..', pathPart);
   const candidates = [resolved];

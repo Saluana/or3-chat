@@ -157,8 +157,8 @@ behind the authenticated SSR routes and provider adapters described above.
 
 ## Related
 
-- [identity-access-concepts](./identity-access-concepts)
-- [provider-convex](./provider-convex)
-- [background-execution](./background-execution)
-- [sync-layer](./sync-layer)
-- [storage-layer](./storage-layer)
+- [Accounts and access](/documentation/cloud/auth-system)
+- [Convex](/documentation/cloud/provider-convex)
+- [Background execution](/documentation/cloud/background-execution)
+- [Sync internals](/documentation/cloud/sync-layer)
+- [Storage internals](/documentation/cloud/storage-layer)

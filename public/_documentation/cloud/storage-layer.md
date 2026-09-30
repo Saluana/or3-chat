@@ -72,11 +72,11 @@ The `FileTransferQueue` (`core/storage/transfer-queue.ts`) manages all network a
 
 The system supports pluggable backends via the `ObjectStorageProvider` interface.
 
-### Default: Convex Storage
-Matches the default architecture.
-*   **Uploads**: Uses standard Convex `generateUploadUrl` flow.
-*   **Downloads**: Uses `storage.get` to generate temporary signed URLs.
-*   **Proxy**: All requests go through the Nuxt server (`/api/storage/*`) to handle rate limiting and session validation before hitting Convex.
+### First-party backends
+
+Managed Cloud uses [filesystem storage](/documentation/cloud/provider-fs). Source deployments can use [Convex](/documentation/cloud/provider-convex) or [S3-compatible storage](/documentation/cloud/provider-s3). The canonical workspace/sync backend still supplies authorized file metadata; selecting an object store does not create an independent workspace database.
+
+Honor the upload method returned by presign metadata. The filesystem token endpoint `/api/storage/fs/upload?token=…` is **PUT-only**; default to PUT for that endpoint when method metadata is absent. A successful byte upload is not a committed file until the authorized commit step verifies the declared hash, size, and upload intent.
 
 ### Custom Providers
 
@@ -117,7 +117,7 @@ OR3_STORAGE_S3_URL_TTL_SECONDS=900
 
 See the dedicated setup guide:
 
-- [cloud/provider-s3](./provider-s3)
+- [cloud/provider-s3](/documentation/cloud/provider-s3)
 
 ### Provider registry API (client/runtime wiring)
 
@@ -155,14 +155,7 @@ export default defineNuxtPlugin(() => {
 });
 ```
 
-### Provider Comparison
-
-| Provider | Best For | Setup Complexity | Cost |
-|----------|----------|------------------|------|
-| **Convex** | Default, simple setup | Low | Included with OR3 Cloud |
-| **S3** | Enterprise, large files | Medium | Pay per GB |
-| **Cloudflare R2** | No egress fees | Medium | Pay per GB stored |
-| **Backblaze B2** | Budget option | Medium | Very low cost |
+For backend-specific credentials, persistence, URL lifetime, and limitations, use the provider guides above rather than assuming a pricing or compatibility guarantee for any S3-compatible service.
 
 ---
 

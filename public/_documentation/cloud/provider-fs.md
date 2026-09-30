@@ -2,6 +2,8 @@
 
 Setup and operating guide for the default-stack object storage backend.
 
+Managed installations use the fixed profile in [Set up Cloud](/documentation/cloud/setup). The install commands and manual settings below are for editable source deployments; install only the providers your source configuration selects.
+
 ## What It Provides
 
 - Gateway-mode blob storage using local filesystem paths.
@@ -66,7 +68,7 @@ OR3_STORAGE_WORKSPACE_QUOTA_BYTES=optional-quota-bytes
 
 ## Related
 
-- [providers](./providers)
-- [storage-layer](./storage-layer)
-- [provider-basic-auth](./provider-basic-auth)
-- [provider-sqlite](./provider-sqlite)
+- [Choose and wire providers](/documentation/cloud/providers)
+- [Storage internals](/documentation/cloud/storage-layer)
+- [Basic Auth](/documentation/cloud/provider-basic-auth)
+- [SQLite](/documentation/cloud/provider-sqlite)

@@ -1,227 +1,66 @@
-# Development Environment Setup
+# Develop OR3 from source
 
-One command gets a source checkout running locally. No API key or `.env` file
-is required for the local-first app.
+Use this path to change OR3 itself or work on a trusted source extension. To run a managed deployment, use [Cloud setup](/documentation/cloud/setup). To build a portable plugin, start with [your first plugin](/documentation/plugins/first-plugin).
 
----
+## Install and start
 
-## 1. Prerequisites
-
-You need only:
-
-- **Node.js 24+**. Verify with `node -v`.
-- **Git** to clone the repository.
-- A modern browser.
-
-**Bun** is the repository's canonical package manager (the project pins
-`bun@1.3.14` in `package.json`). Install it from [bun.sh](https://bun.sh) and
-verify with `bun -v`. The npm/npx equivalents still work, but the commands
-below use Bun.
-
----
-
-## 2. Clone the repository
+The repository requires Git, Node.js 24 or newer, and Bun. The package manager version is pinned in `package.json` (currently Bun 1.3.14). Use Bun for repository commands.
 
 ```bash
-# Fork the repo first if you plan on contributing
 git clone https://github.com/Saluana/or3-chat.git
 cd or3-chat
-
-# (Optional) add upstream remote for syncing later
-git remote add upstream https://github.com/Saluana/or3-chat.git
-```
-
-The project expects the working directory to remain `or3-chat/`. Nuxt uses `app/` as the `srcDir`, so you will find pages, layouts, and components there.
-
----
-
-## 3. Start OR3
-
-Install dependencies once, then start the dev server:
-
-```bash
 bun install
 bun run dev
 ```
 
-`bun run dev` runs `scripts/cli/dev.ts`, a wrapper around `nuxt dev`. It checks
-that the target port (3000 by default) is free on both IPv4 and IPv6 loopback
-before starting. If another OR3 or Nuxt server is already running there, it
-explains the conflict and offers the next free port instead of silently
-starting a second broken server.
+Open the URL printed by the startup banner. Local-first development needs no account or environment file; connect OpenRouter through the app when you want to generate a response.
 
-Available sibling provider repositories are rebuilt and selected automatically
-by the dev wrapper. Build failures or missing siblings fall back to installed
-packages with a warning. Use `OR3_LOCAL_PROVIDERS=false bun run dev` to test
-installed packages only. See [local provider development](../cloud/providers#local-provider-development).
+The dev wrapper checks port availability on both IPv4 and IPv6. If the port is occupied, it explains the conflict and offers an alternative. Use the printed URL: another server on port 3000 may be serving older code. To request another port, run `bun run dev -- --port 3001`.
 
-Local-first mode needs no account or `.env` file. It stores data in the
-browser. Connect OpenRouter from the in-app onboarding when you are ready.
+## Choose a development mode
 
-Other dev modes:
+| Command | Purpose |
+| --- | --- |
+| `bun run dev` | Normal source development. |
+| `bun run dev:offline` | Local-first development with Cloud features disabled. |
+| `bun run dev:ssr` | Develop SSR auth and Cloud integrations; requires a working provider configuration for authenticated features. |
+| `bun run build` | Build application output. |
+| `bun run generate:static` | Build the explicitly static, Cloud-disabled output. |
+| `bun run preview` | Preview built application output. |
 
-```bash
-bun run dev:ssr     # SSR auth on (cloud mode), 127.0.0.1:3000
-bun run dev:offline # all cloud features off, pure local-first session
-```
+For provider configuration, use the [source setup wizard](/documentation/cloud/or3-cloud-wizard). Restart after configuration changes. An environment file is an advanced integration tool, not a prerequisite for the ordinary local-first app.
 
-### Managed Cloud (no source checkout)
+## Find the right files
 
-The supported way to run a Cloud deployment is the small `@or3/cloud` operator
-package, which uses the version-matched OR3 image and needs no source checkout
-or manually entered environment variables:
+Nuxt's source directory is `app/`: `~/` and `@/` refer there, while `~~/` refers to the repository root.
 
-```bash
-npx @or3/cloud init --local
-```
+| Directory | Responsibility |
+| --- | --- |
+| `app/pages/`, `app/components/` | Routes and UI. |
+| `app/core/`, `app/composables/` | Feature logic, hooks, and registries. |
+| `app/db/` | Browser persistence and entity helpers. |
+| `server/` | SSR endpoints and server integrations. |
+| `shared/` | Contracts shared across runtimes. |
+| `public/_documentation/` | Documentation pages and navigation map. |
 
-For a public VPS behind Caddy:
+Use [hooks](/documentation/hooks/overview) and registries for extension points. Use existing Nuxt UI variants in `app.config.ts` and the [theme system](/documentation/themes/overview) for UI changes. Keep server SDKs under server boundaries and browser storage in client paths.
 
-```bash
-npx @or3/cloud init --public --domain chat.example.com
-```
+## Work with sibling packages
 
-See `docs/start-here.md` in the repository root for the full path comparison.
+The dev wrapper can rebuild available sibling provider repositories. Missing siblings or build failures fall back to installed packages with a warning. Use `OR3_LOCAL_PROVIDERS=false bun run dev` to use installed provider packages. See [provider development](/documentation/cloud/providers#local-provider-development).
 
-> **Note:** The older `npm start` / `bun start` entry point
-> (`scripts/cli/start.mjs`) still works and installs dependencies on first
-> run, but it is a legacy convenience for source checkouts. It is not the
-> beginner or release path.
+Development can also alias the adjacent Scroll checkout when valid. Use `OR3_USE_LOCAL_PACKAGES=false bun run dev` to disable those source aliases. Portable plugins such as Workflows and External Agents are built and installed as packages; the host does not alias their feature dependencies. Production builds use installed packages.
 
----
+## Verify a change
 
-## 4. Optional developer configuration
+Run the narrowest affected existing test files, or `bun run test:changed`. `bun run test` runs the fast core lane; integration, scripts, release policy, and plugin compatibility have separate lanes. Use the named E2E harness for browser journeys rather than a broad command that also runs credential or paid-network suites.
 
-You only need `.env` values when developing a specific integration. For
-example, an OpenRouter API key can be supplied to test server-side behavior:
+For docs, update `docmap.json`, use `/documentation/...` links, and run `bun scripts/release/check-docs.mjs`. Open changed pages to check navigation and readability.
 
-Edit `.env` (git-ignored) and set at least:
+## Troubleshoot without losing data
 
-```ini
-OPENROUTER_API_KEY=sk-or-xxxxxxxxxxxxxxxxxxxxxxxx
-```
+Inspect IndexedDB in browser developer tools. Local-first storage uses `or3-db`; authenticated workspaces use `or3-db-<workspaceId>`. Obtain the active database at operation time with `getDb()`; see [database safety](/documentation/database/safe-changes).
 
-These are optional for normal local development. Restart the dev server after
-changing environment files so Nuxt picks them up.
+Export **Workspace Backup** before clearing site data. Clearing localStorage alone does not reset Dexie data, and deleting an IndexedDB database removes local workspace records and blobs. Check the active profile, origin, workspace, and dev-server URL before concluding that data has disappeared.
 
-### Developing sibling OR3 packages
-
-`bun run dev` aliases the adjacent `or3-vsc` checkout to `or3-scroll` when
-its manifest and source are valid. Provider packages (`or3-provider-*`) are
-built from their sibling checkouts separately. The dev banner prints which
-local sources were selected.
-
-Workflows and External Agents are separate V2 plugin checkouts. Build and pack
-each plugin, then install its archive through the admin package flow. The host
-does not alias their feature dependencies from sibling source directories.
-The scroll package is checked separately. Rejected groups use installed packages.
-Production builds never alias sibling sources, even when the environment inherits
-`OR3_USE_LOCAL_PACKAGES=true`.
-
-To test installed packages during development:
-
-```bash
-OR3_USE_LOCAL_PACKAGES=false bun run dev   # always use installed packages
-```
-
-Local source graphs make each HMR invalidation more expensive, so turn them off
-when you are not editing those packages.
-
----
-
-## 5. Dev server flags
-
--   Nuxt serves the app at **http://localhost:3000/** by default.
--   Pass extra flags after `--` (e.g., `bun run dev -- --https --open`).
--   Expect warm-up time on first boot while Nuxt generates `.nuxt/` and Vite builds chunks.
--   Nuxt DevTools remains available, but its Vite Inspect and timeline collectors are disabled because they retain transform and hook history across long HMR sessions.
-
----
-
-## 6. Tailwind 4 + design system notes
-
-Tailwind v4 is configured via `app/assets/css/main.css`:
-
-```css
-@import 'tailwindcss';
-@plugin "@tailwindcss/typography";
-@import '@nuxt/ui';
-```
-
--   Utility scanning relies on the `@source` directive that already targets `app.config.ts` and the `app/` directory.
--   To add custom utilities, extend `app/assets/css/theme.css` (or another stylesheet imported from `main.css`).
--   Tailwind tokens pull fonts from Nuxt Fonts (`Press Start 2P`, `VT323`). `@nuxt/ui` is layered above Tailwind, then mapped to the retro theme in `nuxt-ui-map.css`.
-
-When you add new components, Tailwind picks up classes instantly through Vite HMR—no config reloads necessary.
-
----
-
-## 7. Useful developer workflows
-
-### Run unit tests (Vitest + jsdom)
-
-```bash
-bun run test       # one-off
-bun run test:watch # watch mode with UI prompts
-```
-
-### Build static output (for smoke testing deployment)
-
-```bash
-bun run build
-bun run preview    # serves the built output on port 3000 by default
-
-# Static pre-render suitable for GitHub Pages / static hosting
-bun run generate
-```
-
-### Inspect and reset local data
-
--   Use your browser DevTools → **Application** → **IndexedDB** → `or3-db` to view Dexie tables.
--   Delete the `or3-db` database or clear site data to reset threads, docs, and cached files.
--   Run `localStorage.clear()` in the console to remove cached preferences (model selection, theme settings, etc.).
-
----
-
-## 8. Debugging tips
-
--   **Nuxt DevTools** → Components tab shows reactive state, props, and emitted events. Use the Graph tab to inspect route params and runtime config.
--   **Network throttling**: Test streaming behavior by enabling Slow 3G in browser DevTools. The chat UI renders incremental tokens from the OpenRouter stream helper.
--   **Console logging**: leverage OR3's `~/utils/errors.ts` helpers (`reportError` with `{ toast: true }`, `err`) for structured logs and toast integration.
--   **Dexie debugging**: install the [Dexie Inspector](https://chromewebstore.google.com/detail/dexie-inspector/dhgnppuogchnjdlacomooganmphadamk) for richer IndexedDB views.
--   **VS Code launch config**: attach to the Vite server by adding a "Chrome" debug profile pointing at `http://localhost:3000`. Source maps resolve back to files in `app/` thanks to Nuxt 4 + Vite.
--   **Hot module quirks**: if Nuxt HMR gets stuck, stop the dev server, delete `.nuxt/` and `node_modules/.vite`, then rerun `bun run dev`.
-
----
-
-## 9. Keeping dependencies up to date
-
--   Upgrade Nuxt/Tailwind by running `bun x nuxi upgrade` or editing `package.json`, then `bun install`.
--   Regenerate type imports after dependency changes:
-
-```bash
-bun x nuxi cleanup
-bun x nuxi prepare
-```
-
--   Commit the updated `bun.lock` so teammates pull the same versions.
-
----
-
-## 10. Common issues & fixes
-
-| Problem                           | Fix                                                                                                                   |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `Error: Please use Node.js >= 24` | Update Node via nvm/Homebrew. Run `nvm install 24 && nvm use 24`.                                                     |
-| Port 3000 already in use          | `bun run dev` detects the conflict and offers the next free port. To force a port, run `bun run dev -- --port 3001`, or free the port (`lsof -ti:3000 \| xargs kill`). |
-| Tailwind classes not applied      | Ensure the file lives under `app/` or add an explicit `@source` path in `main.css`.                                   |
-| OpenRouter auth redirect fails    | Confirm `NUXT_PUBLIC_OPENROUTER_REDIRECT_URI` matches the URL registered with OpenRouter and the Nuxt dev server URL. |
-| PWA caches stale assets           | Clear Application → Cache Storage and unregister the service worker.                                                  |
-
----
-
-## Next steps
-
--   Review the repository `README.md` for feature overview and architecture notes.
--   Explore the documentation under `/documentation` once the dev server is running—the docs shell uses the same responsive layout you just configured.
--   Try the plugin examples in `app/plugins/examples/` to see how hooks and UI registries integrate with the running app.
+If a PWA serves old assets, inspect Cache Storage and service-worker registration. If HMR becomes stuck, stop your own dev process, remove generated `.nuxt/` and `node_modules/.vite/` caches, and restart. For model connection errors, follow [OpenRouter troubleshooting](/documentation/auth/connect#troubleshooting).

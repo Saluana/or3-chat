@@ -152,8 +152,8 @@ A `viewer` will not see this item in the dashboard, and even if they navigate di
 
 ## Related
 
-- [Identity, Workspaces, Roles, and Entitlements](./identity-access-concepts)
-- [Authentication System](./auth-system)
-- [Cloud Providers](./providers)
-- [Troubleshooting OR3 Cloud](./troubleshooting)
-- [useDashboardPlugins](../composables/useDashboardPlugins)
+- [Identity, Workspaces, Roles, and Entitlements](/documentation/cloud/auth-system)
+- [Authentication System](/documentation/cloud/auth-system)
+- [Cloud Providers](/documentation/cloud/providers)
+- [Troubleshooting OR3 Cloud](/documentation/cloud/troubleshooting)
+- [useDashboardPlugins](/documentation/composables/useDashboardPlugins)

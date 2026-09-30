@@ -1,410 +1,129 @@
-# Guide: Theme Component Overrides
+# Replace app components
 
-Theme component overrides let a theme replace selected OR3 app components with
-theme-local Vue components.
+A trusted-code theme can replace selected Vue surfaces with theme-local
+components. Start with [Style your theme](/documentation/themes/styling) when
+tokens, recipes, or CSS can express the change. Declarative packages cannot ship
+Vue replacements.
 
-They are a **trusted-code** capability. Declarative themes cannot ship Vue
-components. The current component contract version is `1`.
-Machine-readable contracts in
-`app/theme/_shared/theme-component-contracts.ts` cover every supported target
-and record required props, emits, slots, and accessibility expectations.
+## Supported targets
 
-This is the highest-leverage part of the theme system when you need to change
-real structure, layout, or interaction chrome instead of only changing props or
-CSS.
-
-Use this guide when:
-
-- a `v-theme` override is not enough
-- a `cssSelectors` rule would be fragile or hard to maintain
-- you want a theme to ship its own sidebar, chat input, or other major surface
-
-## What Component Overrides Are For
-
-The OR3 theme system has three different layers:
-
-1. `overrides`
-   Use these when the component already exposes the right props. This is the
-   cheapest and safest option.
-2. `cssSelectors`
-   Use these when you need to style DOM that cannot easily take `v-theme`, or
-   when you are targeting third-party markup.
-3. `customComponents`
-   Use this when you need to replace the actual Vue component used by the app.
-
-As a rule:
-
-- if the problem is "the button should be a different color", use `overrides`
-- if the problem is "this DOM needs extra spacing", use `cssSelectors`
-- if the problem is "this entire surface should be structured differently", use
-  `customComponents`
-
-Component overrides are intentionally narrow. They do not replace every
-component in the app. They replace a curated set of high-value surfaces where
-themes often need deeper control.
-
-## Supported Override Targets
-
-`customComponents` keys must come from the shared `AppThemeComponent` union.
-
-Current supported targets:
+`customComponents` keys are the `AppThemeComponent` union:
 
 ```ts
 type AppThemeComponent =
-  | 'sidebar'
-  | 'sidebar-collapsed'
-  | 'chat-page'
-  | 'chat-message'
-  | 'chat-input'
-  | 'document-editor'
-  | 'dashboard-modal'
-  | 'model-selector'
-  | 'system-prompts-modal'
-  | 'model-catalog-modal'
-  | 'sidebar-auth-button'
-  | 'documentation-shell'
-  | 'workflow-status';
+  | 'sidebar' | 'sidebar-collapsed' | 'chat-page' | 'chat-message'
+  | 'chat-input' | 'document-editor' | 'dashboard-modal' | 'model-selector'
+  | 'system-prompts-modal' | 'model-catalog-modal' | 'sidebar-auth-button'
+  | 'documentation-shell' | 'workflow-status';
 ```
 
-These are not arbitrary strings. If a key is not in that union, the theme
-validator and TypeScript will reject it.
+TypeScript checks these keys. Current runtime configuration validation checks
+the contract version but does not reject every unknown key or validate every
+replacement's props/events. Unknown keys are not useful targets. Missing/unsafe
+paths fall back to the core default, so inspect the rendered component too.
 
-## Directory Layout
+## A complete wrapper example
 
-Theme component files live inside the theme directory, usually under
-`components/`.
-
-Example:
-
-```text
-app/theme/my-theme/
-  theme.ts
-  styles.css
-  components/
-    MySidebar.vue
-    MyChatInput.vue
-```
-
-The file paths you register in `customComponents` are resolved relative to the
-theme root.
-
-## Registering Component Overrides
-
-Register overrides in `app/theme/<theme>/theme.ts`:
-
-```ts
-import { defineTheme } from '~/theme/_shared/define-theme';
-
-export default defineTheme({
-  name: 'my-theme',
-  displayName: 'My Theme',
-  colors: {
-    primary: '#086db8',
-    secondary: '#ff6b6b',
-    surface: '#ffffff',
-  },
-
-  customComponents: {
-    sidebar: './components/MySidebar.vue',
-    'chat-input': './components/MyChatInput.vue',
-  },
-  componentContractVersion: 1,
-});
-```
-
-Important rules:
-
-- Paths are relative to the theme directory.
-- The path must point to a `.vue` file discovered by the theme runtime.
-- You can override one target, several targets, or none.
-- Any target you do not override keeps the core default component.
-- Declare `componentContractVersion: 1`; incompatible versions fail validation.
-
-## How The Runtime Applies Overrides
-
-The runtime keeps a default component map for every supported target. When a
-theme is activated, the client builds a new component map by merging the theme's
-`customComponents` over that default map.
-
-In practical terms:
-
-- No theme override means the app uses the normal core component.
-- A valid override path swaps that target to your theme component.
-- Invalid or missing paths fall back to the core default instead of crashing the
-  whole theme.
-
-### SSR and hydration behavior
-
-Theme component overrides are resolved during SSR and reused during hydration.
-
-The runtime flow is:
-
-1. The server resolves the active theme before render.
-2. The server builds the same component map the client will hydrate with.
-3. The client hydrates against that same active-theme component tree.
-
-This matters because valid overrides now render correctly in SSR and do not
-flash back to the core default during hydration.
-
-If an override path is missing or invalid, the runtime still falls back to the
-core default component for that target instead of failing the whole theme.
-
-## The Safest Pattern: Wrap, Do Not Fork
-
-In most cases, the best theme override is a wrapper around the core component.
-
-Why:
-
-- you keep core business logic
-- upstream fixes still land automatically
-- the theme only owns presentation and small behavior adjustments
-
-For example, a custom sidebar can render the core sidebar inside a wrapper and
-apply deep, scoped styling:
+Create a trusted source theme with `bun run theme:create ocean-docs`. Add
+`app/theme/ocean-docs/components/OceanDocumentation.vue`:
 
 ```vue
+<script setup lang="ts">
+import { useAttrs } from 'vue';
+import CoreDocumentationShell from '~/components/DocumentationShell.vue';
+
+defineOptions({ inheritAttrs: false });
+const attrs = useAttrs();
+</script>
+
 <template>
-  <div class="my-sidebar-shell">
-    <SideBar
-      ref="sidebarRef"
-      v-bind="forwardedAttrs"
-      :active-thread="props.activeThread ?? undefined"
-      @chat-selected="(id) => emit('chat-selected', id)"
-      @new-chat="emit('new-chat')"
-      @new-document="emit('new-document')"
-      @document-selected="(id) => emit('document-selected', id)"
-      @toggle-dashboard="emit('toggle-dashboard')"
-    />
-  </div>
+  <CoreDocumentationShell v-bind="attrs" class="ocean-documentation" />
 </template>
-```
 
-For a custom chat input, the same idea applies:
-
-```vue
-<template>
-  <div class="my-chat-input-shell">
-    <ChatInputDropper
-      v-bind="attrs"
-      :loading="props.loading"
-      :streaming="props.streaming"
-      :container-width="props.containerWidth"
-      :thread-id="props.threadId"
-      :pane-id="props.paneId"
-      @send="(payload) => emit('send', payload)"
-      @model-change="(model) => emit('model-change', model)"
-      @stop-stream="emit('stop-stream')"
-      @pending-prompt-selected="(id) => emit('pending-prompt-selected', id)"
-      @resize="(payload) => emit('resize', payload)"
-    />
-  </div>
-</template>
-```
-
-This pattern keeps the theme override thin and makes breakage far less likely.
-
-## When A Full Fork Makes Sense
-
-Sometimes a wrapper is not enough.
-
-You may need a true theme-local implementation when:
-
-- the DOM structure must be fundamentally different
-- you need to remove or reposition core subtrees that cannot be restyled cleanly
-- the layout depends on markup the core component does not expose
-
-If you fully fork a component, treat it like a public contract, not a visual
-mock.
-
-That means your replacement must still match what the caller expects:
-
-- the same required props
-- the same emitted events
-- the same exposed methods (if the parent uses `ref` access)
-
-The theme system only swaps components. It does not adapt props, emits, or
-exposed instance methods for you.
-
-## Contracts Come From The Call Site
-
-This is the most important rule to understand:
-
-The component contract is defined by the core component that renders the theme
-slot, not by the theme system itself.
-
-Examples in the current codebase:
-
-- `chat-input` is rendered by `app/components/chat/ChatContainer.vue`
-- `sidebar` is rendered by `app/components/PageShell.vue` and related shell
-  layout components
-
-Before replacing a target, inspect the caller and confirm:
-
-- which props are passed in
-- which events are listened to
-- whether the parent uses a component ref
-
-If you skip this step, the theme may render but silently break real
-functionality.
-
-### Current high-value contracts to preserve
-
-These are especially important today:
-
-- `sidebar`
-  The parent may rely on exposed methods such as focusing the search input or
-  opening create modals.
-- `chat-input`
-  The caller expects send/stop/model/prompt/resize events to continue working.
-- `workflow-status`
-  The replacement must preserve the status UI's expected data flow and actions.
-
-If you are unsure, wrap the core component first. That keeps the contract intact
-while you iterate on the design.
-
-## Styling Strategies That Age Well
-
-When you build a wrapper component, use one of these two approaches:
-
-### 1. Restyle the wrapper shell
-
-Use this when the main difference is framing:
-
-- background treatment
-- panel shape
-- spacing
-- overlays
-- labels or decorative chrome
-
-This is simple and usually stable.
-
-### 2. Use scoped `:deep(...)` selectors against stable class hooks
-
-Use this when you need to restyle the inner component without copying it.
-
-This works best when you target stable semantic hooks such as:
-
-- IDs used for layout containers
-- class names that clearly represent a feature area
-- wrapper classes already intended for theming or composition
-
-Avoid depending on brittle descendant chains or generated utility-class order.
-
-Good:
-
-```css
-:deep(#nav-content-container) {
-  border-radius: 2rem;
+<style scoped>
+.ocean-documentation :deep(.docs-header) {
+  border-bottom: 2px solid var(--md-primary);
 }
-
-:deep(.sb-group-header) {
-  border-radius: 999px;
-}
+</style>
 ```
 
-Risky:
+This wrapper forwards supplied props and listeners through attrs and uses the
+actual core import, rather than resolving its own themed slot recursively.
+This target does not need a forwarded exposed-method contract or custom slots.
+That is not a universal wrapper pattern: inspect other targets' callers before
+reusing it.
 
-```css
-:deep(.flex > .flex-1 > .mt-3 > div:nth-child(2)) {
-  /* fragile */
-}
-```
-
-## Best Practices
-
-- Prefer wrapping the core component before forking it.
-- Keep theme overrides focused on presentation and layout.
-- Preserve emits and exposed methods exactly when the parent relies on them.
-- Use `defineOptions({ inheritAttrs: false })` when wrapping so you control
-  where root attributes land.
-- Forward only the attributes that belong on the inner component.
-- Keep any extra theme-only markup clearly decorative and easy to remove later.
-- Test theme switches at runtime, not only a hard load.
-- Validate both desktop and mobile layouts.
-
-## Common Mistakes
-
-### Registering a path that is not relative to the theme root
-
-This is wrong:
+Add these fields to the scaffold's existing `defineTheme()` object:
 
 ```ts
 customComponents: {
-  sidebar: './app/theme/my-theme/components/MySidebar.vue',
-}
+  'documentation-shell': './components/OceanDocumentation.vue',
+},
+componentContractVersion: 1,
 ```
 
-This is correct:
+Paths are relative to the theme root and must name discovered `.vue` files.
+Declare the current contract version, `1`. A mismatch is a validation error;
+omitting it with replacements currently produces a warning. A packaged manifest
+also declares `themeTrust: 'trusted-code'` and the relevant contract version.
 
-```ts
-customComponents: {
-  sidebar: './components/MySidebar.vue',
-}
+Run `bun run theme:validate ocean-docs`, select Ocean docs in Theme studio, then
+open documentation and verify the header, search, navigation, and mobile drawer.
+Switch to another theme and back, and reload the documentation route. A new
+production component needs a rebuild, not just a package upload.
+
+## Preserve the caller contract
+
+The theme system swaps components; it does not adapt props, events, slots, or
+exposed methods. Inspect the core implementation and each caller.
+
+| Target | Important boundary |
+| --- | --- |
+| Sidebar | Navigation/create events and any search/modal methods used through a ref |
+| Chat input | Loading/streaming and pane/thread data; send, model, stop, prompt, and resize events; draft/attachment lifecycle |
+| Document editor | Editor data/events, focus, selection, and ref methods used by its callers |
+| Workflow status | Installed workflow package's data/actions and accessible status updates |
+
+`theme-component-contracts.ts` provides guidance for all target names, with
+specific contracts for some high-value targets. It is not exhaustive automatic
+conformance enforcement. The workflow slot's core default is empty; an installed
+Workflows package supplies its real default status surface.
+
+A wrapper needing slots must forward those slots. A wrapper around a component
+used through a ref must explicitly expose the methods the parent calls. Do not
+assume `$attrs` forwards instance methods. Prefer a direct core import plus a
+small presentational change; a full fork owns the behavior and maintenance cost.
+Use stable class hooks rather than descendant chains or generated utility order.
+
+## Dialogs and accessibility
+
+Keep shared dialogs on `~/components/ui/AppModal.vue`. It wraps `UModal` and
+owns bounded geometry, title/description semantics, focus, Escape, backdrop
+dismissal, and focus restoration. Theme tokens own its visual treatment.
+
+```vue
+<AppModal v-model:open="open" title="Theme details" description="Preview this theme." size="sm">
+  <p>Check this surface in light and dark mode.</p>
+  <template #footer>
+    <UButton variant="ghost" size="modal" @click="open = false">Close</UButton>
+  </template>
+</AppModal>
 ```
 
-### Breaking the parent contract
+Here `open` is a component-owned boolean ref. Use `sm`, `md`, `lg`, or
+`workspace`; the workspace layout has independently scrolling content and fills
+narrow screens. Modal control variants are defined in `app/app.config.ts`.
+Theme `ui` overrides must respect the shell's shared geometry. Preserve nested
+dialog focus scopes and do not add global Escape listeners or a second body
+scroll lock. Custom UModal hosts use the existing `useDialogFocus` helper for
+viewport and focus behavior rather than reimplementing it.
 
-A replacement that looks correct but drops an event or exposed method is still
-broken.
+## Verify the replacement
 
-For example:
-
-- a custom chat input that no longer emits `send`
-- a custom sidebar that no longer exposes a search-focus method
-
-### Replacing logic when styling would have been enough
-
-If `overrides` or `cssSelectors` can solve the problem, use them first.
-
-Component overrides are powerful, but they are also the easiest way to create
-theme drift from core behavior.
-
-## Troubleshooting
-
-### The override never appears
-
-Check these first:
-
-- `customComponents` is defined in the active theme
-- the key is valid (`'chat-input'`, not `'chatInput'`)
-- the file path is relative to the theme root
-- the active theme is the one you think it is
-
-### The override works on the client but breaks behavior
-
-You almost always dropped part of the caller contract.
-
-Inspect the call site and compare:
-
-- props
-- emits
-- `defineExpose()` methods
-
-### The override appears, but styling is inconsistent
-
-If you wrapped the core component and used deep selectors, your selectors may be
-targeting unstable internal structure.
-
-Tighten the targets to stable semantic classes or IDs, or move the visual change
-to the wrapper shell instead.
-
-### The override looked fine until a core refactor
-
-That is a sign the theme relied too heavily on internal DOM details.
-
-When possible:
-
-- prefer wrapper-level styling
-- prefer stable semantic hooks over structural selectors
-- re-check the core component before expanding the override further
-
-## Recommended Workflow
-
-1. Start with `overrides`.
-2. Escalate to `cssSelectors` if you only need extra styling control.
-3. Use `customComponents` only when you need real component replacement.
-4. Wrap the core component first.
-5. Fork only after the wrapper approach clearly stops being enough.
-
-That sequence keeps themes flexible without turning them into parallel copies of
-the application.
+Check runtime theme switches, a hard reload, SSR hydration, keyboard navigation,
+mobile controls, reduced motion, and all caller actions. For chat replacements,
+include send/stop, attachment removal, editor focus, and narrow/short panes.
+Retain screenshots and the host revision with the theme. A visually correct
+replacement that drops a caller event is still broken. Use
+[Troubleshooting](/documentation/themes/troubleshooting) when the replacement
+falls back or stops working after a host refactor.

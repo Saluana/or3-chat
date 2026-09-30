@@ -2,11 +2,11 @@
 
 > This is an advanced source-development path. Managed Cloud intentionally
 > withholds remote Connect until its operator and staging proof are complete;
-> use [Start Here](../../../docs/start-here.md) for supported beginner routes.
+> use [Set up Cloud](/documentation/cloud/setup) for supported beginner routes.
 
 This page documents the repository-local wizard for contributors and advanced
 custom-provider deployments. Normal local or VPS installations should use the
-managed `@or3/cloud` distribution documented in `/docs/installation`.
+managed `@or3/cloud` distribution documented in [Set up Cloud](/documentation/cloud/setup).
 
 ## Quick Start
 
@@ -60,7 +60,7 @@ based upgrades. It remains available through the application repository's
 10. Optionally sets Convex backend env vars for Clerk + Convex stacks.
 11. Optionally runs deploy commands (`bun install`, `bun run dev:ssr` or `bun run build`).
 
-`npm start` (or `bun start`) asks whether to run locally or use managed Cloud. Choosing Cloud runs `npx @or3/cloud init --local`, which asks once for a real administrator email and creates the supported deployment. The source wizard remains for contributors and advanced custom-provider deployments.
+For managed installation use `npx @or3/cloud init --local` or the public-domain route in [Set up Cloud](/documentation/cloud/setup). Contributors start this checkout with `bun run dev` or `bun run dev:ssr`.
 
 ## Commands
 
@@ -163,7 +163,7 @@ Compatibility aliases are also written for forward naming cleanup support:
 
 For the authoritative config reference, see:
 
-- [Configuration Reference](./config-reference)
+- [Configuration Reference](/documentation/cloud/config-reference)
 
 ## Installation Modes
 
@@ -208,8 +208,8 @@ When Clerk + Convex is selected, the wizard keeps Convex backend env separate fr
 
 ## Related
 
-- [Configuration Reference](./config-reference)
-- [Environment and Provider Settings Reference](./environment-reference)
-- [Cloud Providers](./providers)
-- [OR3 Cloud Config](./or3-cloud-config)
-- [OR3 Connect](./or3-connect)
+- [Configuration Reference](/documentation/cloud/config-reference)
+- [Environment and Provider Settings Reference](/documentation/cloud/environment-reference)
+- [Cloud Providers](/documentation/cloud/providers)
+- [OR3 Cloud Config](/documentation/cloud/configure)
+- [OR3 Connect](/documentation/cloud/or3-connect)

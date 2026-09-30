@@ -81,4 +81,4 @@ impact, documentation/docmap updates, checks, and a concrete revert path.
 - [Quality gates](../../shared/quality-gates.md)
 - [Permissions and trust](../../shared/permissions-and-trust.md)
 - Relevant path selected from `public/_documentation/docmap.json`
-- `public/_documentation/hooks/typed-hooks.md` when adding a hook contract
+- `public/_documentation/hooks/reference.md` when adding a hook contract

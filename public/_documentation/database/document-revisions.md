@@ -1,4 +1,4 @@
-# document-revisions
+# Document history
 
 Document revision manifests and chunks stored in the shared `posts` table, with retention pruning.
 
@@ -32,7 +32,7 @@ Manifest lookups use the `posts` compound index `[postType+title]`, where `title
 | `CompleteDocumentRevision`    | A manifest plus its decoded snapshot (`title` and TipTap `content`).     |
 | `DocumentRevisionSource`      | `'auto'`, `'manual'`, `'ai'`, or `'restore'`.                            |
 
-The retention budget is 5 MB total encoded size (`DOCUMENT_REVISION_BUDGET_BYTES`).
+The retention target is 5 MiB of encoded revision content per document (`DOCUMENT_REVISION_BUDGET_BYTES`). It is best effort because the newest revision is always retained.
 
 ---
 
@@ -52,7 +52,7 @@ The retention budget is 5 MB total encoded size (`DOCUMENT_REVISION_BUDGET_BYTES
 ## Implementation notes
 
 1. **Deduplication** — Creating a revision with the same title/content hash as the newest kept revision returns null and writes nothing.
-2. **Budget** — Retention caps total encoded size at 5 MB. When over budget, the oldest preferred checkpoints are dropped until the cap is met; the newest revision is never removed.
+2. **Budget** — Retention prunes toward 5 MiB. When over budget, the oldest preferred checkpoints are dropped; the newest revision is never removed. A newest snapshot larger than the budget can leave `overBudget: true`.
 3. **Worker encoding** — Snapshots are encoded and decoded in a Web Worker (`encodeRevisionInWorker` and `decodeRevisionInWorker`).
 4. **Sync safety** — Every stored row is checked against the sync payload size limit before writing.
 5. **Chunk links** — Chunk rows use `revisionId:chunk:N` ids and carry the revision id in `title`; the manifest stores the chunk id list.

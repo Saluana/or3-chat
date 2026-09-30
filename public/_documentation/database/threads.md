@@ -1,4 +1,4 @@
-# threads
+# Threads
 
 Thread CRUD and query helpers with hook integration, branching support, and system prompt utilities.
 

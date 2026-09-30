@@ -1,4 +1,4 @@
-# branching
+# Branch conversations
 
 Utilities for forking threads, retry-branching assistant replies, and building merged conversation contexts across Dexie tables.
 
@@ -6,7 +6,7 @@ Utilities for forking threads, retry-branching assistant replies, and building m
 
 ## What does it do?
 
--   Provides `forkThread`, `retryBranch`, and `buildContext` helpers that run inside Dexie transactions.
+-   Provides transactional `forkThread`, a delegating `retryBranch`, and a read-based `buildContext`.
 -   Normalizes branch modes (`reference` vs `copy`) and message roles for consistent downstream handling.
 -   Clones ancestor messages when in copy mode and keeps indexes dense.
 -   Merges ancestor + local messages for context building while respecting hook-driven filtering.
@@ -58,4 +58,4 @@ Utilities for forking threads, retry-branching assistant replies, and building m
 
 -   Use `mode: 'copy'` when you need historical messages physically duplicated for offline tweaks; otherwise the cheaper reference mode keeps storage down.
 -   Customize `branch.fork:filter:options` to auto-name forks (e.g., prepend emoji or include anchor timestamp).
--   When building custom prompts, call `buildContext` to get the exact message list that the composer expects.
+-   Import these anchor-aware helpers from `~/db/branching`. The same-named `forkThread` in `~/db/threads` is a different metadata/optional-copy API.

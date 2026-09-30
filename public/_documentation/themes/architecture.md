@@ -1,238 +1,101 @@
-# Theme System Architecture
+# Runtime and architecture
 
-This document describes how the current OR3 theme system is wired from
-definition to runtime application.
+This page explains implementation and lifecycle. Start with
+[Themes overview](/documentation/themes/overview) for the user and author paths.
 
-## Overview
+## Discovery and compilation
 
-```
-Theme Definition (app/theme/*/theme.ts)
-  -> Theme Manifest (import.meta.glob)
-  -> Runtime compile + CSS variables
-  -> Theme plugin ($theme) applies theme
-  -> RuntimeResolver resolves overrides
-  -> useThemeOverrides applies Vue props; v-theme decorates DOM targets
-  -> cssSelectors apply styles/classes
-```
+`app/theme/_shared/theme-manifest.ts` discovers `app/theme/*/theme.ts`, optional
+icon configurations, and local stylesheets with Vite globs. Installing source
+files therefore requires a new production build before they can be loaded.
+Declarative installation generates a `theme.ts` from validated JSON.
 
-## 1) Theme discovery
+The default is the valid runtime-config branding theme, then a theme marked
+`isDefault`, then the `retro` fallback, then the first sorted entry. Multiple
+manifest defaults are rejected. This deployment default is separate from a
+persisted personal/workspace selection.
 
-`app/theme/_shared/theme-manifest.ts` uses `import.meta.glob` to find:
+`compileThemeDefinition()` is shared by runtime, SSR, and tooling. It generates
+CSS variables and compiles overrides; `RuntimeResolver` merges matched props.
+The compiler writes metadata to `theme-manifest.generated.ts` and available
+names/contexts/identifiers to `types/theme-generated.d.ts`. Do not edit these
+outputs manually. Configuration validation is best-effort and does not validate
+every Vue caller contract or perform a full TypeScript check.
 
-- `app/theme/*/theme.ts`
-- optional `icons.config.ts`
-- optional `*.css` stylesheets
+## Activation
 
-The loader still recognizes a legacy `app.config.ts` from installed themes for
-compatibility, but new and shipped themes author Nuxt UI recipes in
-`theme.ts → ui`.
+A theme activation loads its definition and required stylesheets before changing
+the visible selection. A failed required stylesheet load preserves the previous
+theme. The activation coordinator discards stale concurrent switches.
 
-Each theme becomes a `ThemeManifestEntry` with loaders and metadata.
+Successful application updates `data-theme`, theme variables, selector classes,
+backgrounds, icon registration, component mappings, and effective Nuxt UI config.
+Generic config starts from the immutable host baseline, then a compatibility
+app-config patch, then the canonical definition's `ui`. New themes author `ui`
+in the definition rather than a separate `app.config.ts`.
 
-Default theme precedence is:
+Loaded definitions/resolvers can remain cached. Inactive visual resources and
+owned runtime classes are withdrawn so a switch does not carry the old theme's
+appearance into the new one. Selector sessions observe added DOM, cancel stale
+jobs, and remove only their owned classes. They do not require a global rerender
+or the obsolete `useThemeClasses()` helper.
 
-1. `runtimeConfig.public.branding.defaultTheme` (if valid)
-2. Theme marked with `isDefault`
-3. Fallback constant (`retro`)
-4. First sorted manifest entry
+Packaged workspace profiles are registered as choices by
+`92.workspace-profile-theme.client.ts`. Selecting a theme never silently applies
+one; a recommendation is an explicit action. See
+[Workspace profiles](/documentation/architecture/workspace-profiles).
 
-Multiple manifest defaults are rejected so selection cannot depend on import
-order.
+## SSR and hydration
 
-In dev mode, OR3 logs one warning when runtime config overrides manifest
-default selection.
+The server selects an available theme from the SSR cookie/default and prepares
+its tokens, stylesheets, app config, and component map for rendering. The client
+first reapplies the theme named by the server-rendered HTML, including its
+component overrides. A different persisted client preference is applied after
+Nuxt is ready. Changing component implementations before hydrating the rendered
+tree would corrupt that boundary.
 
-## 2) Runtime compilation
+Missing or unsafe replacement paths fall back to core components. This fallback
+is not proof a package's requested replacement worked. User style overrides are
+client-applied; their browser-local values are not a complete SSR appearance
+snapshot. See [Replace app components](/documentation/themes/component-overrides).
 
-When a theme is loaded:
+## Persistence
 
-- Overrides are compiled with `compileOverridesRuntime()`.
-- CSS variables are generated with `generateThemeCssVariables()`.
-- A `RuntimeResolver` instance is created for the theme.
+| State | Owner / key |
+| --- | --- |
+| Selected theme | Active workspace Dexie KV: `theme_selection` |
+| SSR selection | `or3_active_theme` cookie |
+| Deployment default tracking | `or3_previous_default_theme` cookie |
+| Light/dark mode | Browser localStorage: `theme` |
+| Theme selection cache/compatibility | Browser localStorage: `activeTheme` |
+| Personal style overrides | Browser localStorage: `or3:user-theme-overrides:light` and `:dark` |
+| Accessibility | Browser localStorage: `or3:user-theme-accessibility` |
 
-The canonical `compileThemeDefinition()` path is shared by the client, SSR,
-and build tooling so all environments produce the same payload fields.
+`useThemeSelection()` captures the originating database during loads/saves so a
+late completion cannot publish into a different active workspace. KV is the
+selection repository; localStorage is compatibility/cache state and the cookie
+supports SSR. Sync of KV depends on the workspace's configured sync.
 
-## 3) Theme application
+Personal styles and accessibility currently persist in browser localStorage,
+not a signed-in account preference repository. Style groups apply above the
+active authored theme and are separate per mode. Disabling a group removes its
+inline values and restores authored tokens while preserving its saved settings.
+Density/elevation presets are per mode. Focus width and reduced motion are
+global browser preferences. Read the user workflow in
+[Customize your appearance](/documentation/themes/customize).
 
-Activating a theme does the following:
+## Styling boundaries
 
-1. Sets `data-theme="<name>"` on `<html>`.
-2. Injects CSS variables into a per-theme `<style>` tag.
-3. Loads theme stylesheets declared in `stylesheets`.
-4. Loads `/themes/<name>.css` if `cssSelectors.style` exists.
-5. Applies `cssSelectors.class` via `applyThemeClasses()`.
-6. Applies background layers (`app/core/theme/backgrounds.ts`).
-7. Merges the immutable app config, an optional legacy app-config patch, and
-   canonical `theme.ui`, in that order.
-8. Registers theme icons with `iconRegistry`.
-9. Registers packaged workspace profiles
-   (`app/plugins/92.workspace-profile-theme.client.ts`) as choices, with the
-   theme's `recommendedWorkspaceProfileId` surfaced as a recommendation.
+| Mechanism | Vue props | DOM appearance | Code requirement |
+| --- | --- | --- | --- |
+| Tokens and `ui` | Nuxt UI recipes | Shared variables/recipes | Declarative |
+| `useThemeOverrides()` with `v-bind` | Yes | Bound class/style props | Host source integration |
+| `v-theme` | No | Owned decoration and annotations | Host source integration |
+| `cssSelectors.style` | No | Build-generated scoped CSS | Declarative |
+| `cssSelectors.class` | No | Runtime-owned classes | Declarative |
+| `customComponents` | Caller contract | Replacement Vue tree | Trusted-code |
 
-### Visual ownership and cascade
-
-- Theme tokens own shared values.
-- `theme.ui` owns generic Nuxt UI controls.
-- `theme.overrides` owns context- and identifier-specific controls.
-- Theme stylesheets own only CSS-only effects, complex selectors, and
-  third-party DOM.
-
-Runtime override classes are ordered generic → context → identifier. This
-keeps the most specific utility last for class-merging consumers. Density never
-targets every native interactive element; each component opts into its intended
-small, medium, or large token. Focus indicators are also attached explicitly
-with `:focus-visible`, rather than through a global input selector.
-
-### User theme overrides
-
-Per-user overrides (`app/core/theme/useUserThemeOverrides.ts`) sit on top of
-the active theme. Users can change colors, shared shape tokens, background
-layers, and base font size without editing the theme. Overrides are stored per
-color mode in localStorage (`or3:user-theme-overrides:light` / `:dark`) and
-merged into the DOM at runtime. Each group has an `enabled` toggle, and values
-are clamped (font size 14-24px, opacity 0-1). See the capability table below.
-
-Typography overrides independently select body and heading fonts from the
-bundled font catalog or retain the active theme's authored font for either
-role. Existing saved `useSystemFont` values remain supported as a fallback for
-profiles created before the independent selectors were introduced.
-
-The color editor presents the highest-impact roles first: accent, app and panel
-surfaces, text, borders, hover/selected states, and status colors. Less common
-Material roles and individual surface levels remain available in a collapsed
-Advanced section. Basic panel/elevated controls update their paired surface
-levels, the Borders control also updates the subtle outline role, and primary
-accent text is assigned a readable black or white contrast color. The exact
-outline role remains independently editable for stronger component outlines.
-Success and warning overrides also feed Nuxt UI's extended semantic color
-variables.
-
-The editor uses a responsive list-and-detail layout: users select a color role
-from the categorized list, then edit that color with one full-size picker, hex
-and RGB fields, quick colors, and a contextual preview. The picker is never
-visually scaled, so its rendered geometry remains aligned with pointer and
-touch coordinates on desktop and mobile.
-
-The Backgrounds section uses the same focused editing model. Workspace base,
-workspace overlay, and sidebar appear as lightweight area selectors, while one
-inspector edits the selected area's image, layout, opacity, pattern size, and
-base color. The master switch preserves saved values when disabled and restores
-the active theme's authored backgrounds.
-
-Theme Studio controls use the active theme's paired semantic roles for every
-state: primary/on-primary for selected controls, surface/on-surface for neutral
-controls, and the corresponding hover or container pair for interaction and
-selection. The editor does not impose a fixed accent color, and it always
-changes foreground and background together to preserve contrast in both modes.
-
-These mappings are user-override behavior only. With color overrides disabled,
-the active theme's authored variables—including custom state tokens—continue to
-cascade unchanged. Existing saved detailed values remain supported and editable
-under Advanced colors, and disabling then re-enabling colors preserves those
-saved values.
-
-The Shape section exposes three border-width tiers and three radius tiers.
-`--md-border-width-subtle` is for dividers, `--md-border-width` remains the
-standard component token, and `--md-border-width-strong` is for emphasis.
-`--md-border-radius-small` is for controls, `--md-border-radius` remains the
-standard surface token, and `--md-border-radius-large` is for large surfaces.
-The established middle tokens remain the compatibility defaults: the four new
-tiers inherit from them until a theme or user override opts in. Shape overrides
-are stored separately per color mode, have their own enabled toggle, and
-restore the active theme's authored values when disabled. Theme authors can set
-the same tiers with `borderWidthSubtle`, `borderWidth`, `borderWidthStrong`,
-`borderRadiusSmall`, `borderRadius`, and `borderRadiusLarge` on
-`ThemeDefinition`; omitted outer tiers continue to inherit their middle token.
-The shipped Blank theme uses a 1px component border by default so inputs and
-other neutral controls remain visibly bounded, while its divider and emphasis
-tiers remain at 0px to preserve the minimal layout.
-
-Density and elevation use the same per-mode override model. Their constrained
-presets set only the five `--app-control-height-*` / `--app-space-*` variables
-or the three `--app-elevation-*` variables that the runtime owns. Selecting
-Theme default or disabling a group removes those inline declarations and the
-`data-density` / `data-elevation` markers, allowing authored theme values and
-component-local fallbacks to cascade unchanged. Flat elevation removes generic
-depth only; elevated overlays retain their opaque surface and border.
-
-Focus width and motion are global accessibility preferences, rather than
-per-mode style overrides. They are persisted in browser localStorage under
-`or3:user-theme-accessibility`, apply to both light and dark modes, and are
-validated on load. Focus width is 1–4px. Motion is `System` or `Reduced`; the
-operating-system reduced-motion preference takes precedence, writing a short
-100ms transition tier and stopping decorative loops while status content
-remains visible. Themes retain ownership of normal-motion durations, focus
-color, focus offset, and their authored elevation stacks through optional
-`density`, `focus`, `motion`, and `elevation` fields on `ThemeDefinition`.
-
-The signed-in preference repository is canonical once account storage is
-ready. The SSR cookie supplies first paint, and localStorage is a migration and
-offline cache. The selected source is exposed for diagnostics. Light/dark mode
-is separate and stored in `theme` localStorage via `$theme.set()` and
-`$theme.toggle()`.
-
-## 4) Override resolution
-
-`RuntimeResolver` matches overrides by:
-
-- component name
-- context (`data-context`)
-- identifier (`data-id`)
-- state (only when provided)
-- HTML attribute selectors (when `element` is provided)
-
-Matches are merged by specificity. Non-Nuxt UI components map `variant`/`size`/
-`color` to classes via `propMaps`.
-
-## 5) Component integration
-
-Sidebar entity dialogs and Dashboard use the shared [AppModal](./app-modal.md)
-shell. It owns dialog geometry while consuming the active theme's surface,
-shape, elevation, and focus tokens.
-
-### v-theme
-
-`app/plugins/91.auto-theme.client.ts` provides the directive. It:
-
-- detects component name from the VNode
-- auto-detects context from DOM containers
-- resolves overrides via `$theme.getResolver()`
-- applies owned classes, inline styles, and `data-*` annotations to the rendered
-  element
-
-It cannot mutate Vue component props. Bind `useThemeOverrides()` with `v-bind`
-when `variant`, `color`, `size`, `ui`, or other component props must change.
-
-### useThemeOverrides
-
-`app/composables/useThemeResolver.ts` provides `useThemeOverrides` for
-programmatic resolution and reactive updates on theme changes.
-
-## 6) CSS selectors
-
-`cssSelectors` supports:
-
-- `style`: compiled into `/public/themes/<name>.css` via
-  `bun run theme:build-css`
-- `class`: applied at runtime via `applyThemeClasses()`
-
-Theme CSS is scoped by `[data-theme="<name>"]` to avoid cross-theme bleed.
-
-## 7) Dynamic DOM
-
-One selector session observes added DOM and applies matching runtime classes.
-It tracks only the classes it owns, cancels stale jobs during activation, and
-restores classes when a theme is removed. No global force-render mixin or
-page-level rescans are required.
-
-## Capability truth table
-
-| Mechanism | Tokens | Vue props | DOM class/style | Trusted code | SSR |
-|---|---:|---:|---:|---:|---:|
-| Theme colors/fonts/backgrounds | Yes | No | CSS variables | No | Yes |
-| `useThemeOverrides()` + `v-bind` | No | Yes | Via bound `class`/`style` | No | Yes |
-| `v-theme` | No | No | Yes, owned DOM state | No | Annotation only |
-| `cssSelectors.style` | No | No | Yes, generated/scoped | No | Yes |
-| `customComponents` | Any | Any | Any | Yes | Yes |
-| User overrides | Yes | No | Effective variables/backgrounds | No | Hydrated client |
+The directive detects only four built-in contexts and always supplies default
+state. Explicit context and manual resolver state are separate features; native
+hover/focus styling belongs in CSS. [Style your theme](/documentation/themes/styling)
+shows examples.

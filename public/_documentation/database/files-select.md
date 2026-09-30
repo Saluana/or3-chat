@@ -1,4 +1,4 @@
-# files-select
+# Image library queries
 
 Index-key queries for paging `file_meta` rows and browsing the image library.
 
@@ -28,13 +28,11 @@ Index-key queries for paging `file_meta` rows and browsing the image library.
 ### Page input
 
 ```ts
-listImagePage({
-  state: 'active' | 'trash',
-  sort: 'newest' | 'oldest' | 'largest' | 'smallest',
-  limit: number,               // positive, finite; 50 for the gallery
-  cursor?: ImageIndexedCursor, // exclusive [sortValue, hash] continuation
-  hashes?: ReadonlySet<string>, // optional membership restriction
-});
+import { listImagePage } from '~/db/files-select';
+
+export async function readFirstImagePage() {
+  return listImagePage({ state: 'active', sort: 'newest', limit: 50 });
+}
 ```
 
 The result reports `items`, `hasMore`, `nextCursor`, and `missing`. `missing` counts selected index rows that disappeared before hydration; callers should discard that revision and re-run the query instead of advancing the cursor past it. Cursors are scoped to their `state` and `sort`, and invalid limits or mismatched cursors throw. Every scan is bounded to the requested `active` or `trash` partition on both ends, so an empty view never walks the opposite state's keys.

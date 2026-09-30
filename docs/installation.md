@@ -168,8 +168,11 @@ The CLI records the exact image version and digest, runs the service from a
 digest-qualified reference, stops OR3 briefly to make a consistent `/data`
 backup, waits for Compose and deep health, and verifies the image of the
 running container before it commits state. It keeps the previous image/data
-snapshot as the immediate rollback point. If the new version fails deep health,
-it restores the previous version and snapshot automatically.
+snapshot as the immediate rollback point. Failures before the target can accept writes can restore the known-good source
+automatically. Once the target starts, failed verification preserves the journal
+for explicit recovery: inspect `recover --dry-run`, then choose `recover --finish`
+for a proven replacement or `recover --restore --yes` to discard later writes
+and return to the recorded snapshot.
 
 On new managed Linux deployments using a local Docker socket, the same update
 flow is also available to super admins at **Admin → Operations → Dashboard
@@ -186,9 +189,9 @@ remains locked for host-side `npx @or3/cloud recover`.
 
 For adopted legacy volumes owned by an older runtime UID, the updater changes
 only the volume mount root and re-extracts the checksummed backup as the target
-runtime user. It never applies a recursive ownership rewrite. If startup or
-the stronger SQLite readiness check fails, it restores the recorded legacy
-root owner, image, configuration, and backup before reporting failure.
+runtime user. It never applies a recursive ownership rewrite. The recorded root owner, image, configuration, and backup remain recovery
+material. A failure after target startup requires the explicit recovery choice
+above because new writes may have been accepted.
 
 To target a specific published version:
 
@@ -265,9 +268,9 @@ The command rotates the owner and admin credentials separately and invalidates
 their existing sessions; save the new values in a password manager.
 
 If a command is interrupted, the deployment is intentionally locked. Review
-`doctor` and the printed logs, then run `npx @or3/cloud recover`; it restores
-the journaled verified snapshot whenever the target may have begun mutating
-data and clears the lock only after deep health passes. Do not remove the lock
+`doctor` and the printed logs, then inspect `npx @or3/cloud recover --dry-run`. Recovery finishes a proven
+replacement or requires `recover --restore --yes` to restore a snapshot that
+discards later writes; it clears the lock only after verification passes. Do not remove the lock
 or state files manually. Dashboard-owned stale jobs can recover themselves
 with their exact target CLI; recovery refuses to guess for any other operation.
 

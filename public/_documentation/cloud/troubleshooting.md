@@ -6,23 +6,19 @@ This guide helps you diagnose and fix common issues with OR3 Cloud features incl
 
 ## Quick Diagnostic Checklist
 
-Run through this checklist first:
+For managed deployments, run these read-only diagnostics from the deployment directory:
 
 ```bash
-# 1. Verify environment variables
-echo $SSR_AUTH_ENABLED        # Should be "true" for cloud features
-echo $OR3_AUTH_PROVIDER        # Selected provider (e.g., basic-auth, clerk)
-echo $OR3_SYNC_ENABLED         # Should be "true" for sync
-echo $VITE_CONVEX_URL          # Should be set for sync/storage (Convex provider)
-
-# 2. Check build mode
-# Static builds (nuxt generate) don't support cloud features
-# SSR builds (nuxt build) required for cloud features
-
-# 3. Verify network connectivity
-# - Can you reach Convex? (check browser console)
-# - Can you reach your auth provider? (check auth popup)
+npx @or3/cloud doctor
+npx @or3/cloud status --json
+npx @or3/cloud logs --tail 200
 ```
+
+For source deployments, use the [source wizard doctor](/documentation/cloud/or3-cloud-wizard) and [environment reference](/documentation/cloud/environment-reference). Confirm the selected provider, its required workspace store, and the effective canonical feature flags. A Convex URL is required only when Convex is selected. Do not print secrets into shared logs.
+
+Cloud requires the SSR server. If an endpoint is unexpectedly missing, confirm which development process owns ports 3000 and 24678 before restarting. Preserve queued local changes while investigating.
+
+The code snippets below run in application source with `useHooks`, `getDb`, and composables in scope; they are not globals available by pasting into a plain browser console.
 
 ---
 
@@ -34,23 +30,10 @@ echo $VITE_CONVEX_URL          # Should be set for sync/storage (Convex provider
 
 **Common Causes & Solutions:**
 
-1. **Missing Environment Variables**
-   ```bash
-   # Required for auth
-   NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
-   NUXT_CLERK_SECRET_KEY=sk_test_...
-   SSR_AUTH_ENABLED=true
-   ```
-
-2. **Popup Blocked**
-   - Check browser popup blocker settings
-   - Look for blocked popup icon in address bar
-   - Allow popups for your domain
-
-3. **Clerk Configuration**
-   - Verify Clerk publishable key is correct
-   - Check Clerk dashboard for allowed origins
-   - Ensure redirect URLs are configured
+1. **Managed Basic Auth:** use the saved account credentials, check cookie policy and origin, and run doctor. The application login and `/admin` login are separate.
+2. **Source Basic Auth:** verify its JWT secret, persistent auth DB, and bootstrap email/password. Invite-only registration also requires the invitation token secret; see [Basic Auth](/documentation/cloud/provider-basic-auth).
+3. **Clerk only:** check publishable/secret key pairing, allowed origins, redirect URLs, and popup blockers; see [Clerk](/documentation/cloud/provider-clerk).
+4. Inspect `GET /api/auth/session` and server logs for verified identity and provisioning failures. An authenticated identity can still lack access to a workspace.
 
 ### Session Not Persisting
 
@@ -80,7 +63,7 @@ Note:
 - Revoke the user in `/admin/admin-users` if they should not have deployment admin.
 - Optionally sign out Clerk from the main app session too.
 
-See: [admin-access-bridge](./admin-access-bridge)
+See: [Deployment administration](/documentation/cloud/auth-system#deployment-administration)
 
 ### Workspace Not Created
 
@@ -91,12 +74,12 @@ See: [admin-access-bridge](./admin-access-bridge)
 // Check session context
 const session = useSessionContext();
 console.log('Session:', session.data.value);
-// Should have: user, workspace.id, authenticated: true
+// Envelope: data.value?.session contains user, workspace.id, and authenticated.
 ```
 
 **Solutions:**
-- Verify `VITE_CONVEX_URL` is set
-- Check Convex dashboard for workspace creation errors
+- Verify the selected backend's workspace store and provider health
+- Check invite-only/auto-provision policy; a first login does not always create a workspace
 - Ensure user has proper permissions
 - Check server logs for `resolveSessionContext` errors
 
@@ -112,7 +95,7 @@ console.log('Session:', session.data.value);
 
 1. **Check Sync Status**
    ```typescript
-   // In browser console
+   // In source, after resolving hooks
    hooks.addAction('sync.subscription:action:statusChange', (data) => {
        console.log('Sync status:', data.status);
        // Should be: 'connected'
@@ -123,7 +106,7 @@ console.log('Session:', session.data.value);
    ```bash
    SSR_AUTH_ENABLED=true
    OR3_SYNC_ENABLED=true
-   VITE_CONVEX_URL=https://your-project.convex.cloud
+   OR3_SYNC_PROVIDER=sqlite # or convex, with its required connection URL
    ```
 
 3. **Check Pending Operations**
@@ -136,7 +119,7 @@ console.log('Session:', session.data.value);
 
 **Solutions:**
 - Ensure OR3 Cloud is enabled
-- Check network connectivity to Convex
+- Check network connectivity to the selected backend
 - Verify user is authenticated
 - Look for sync errors in console
 - Check if sync provider is registered
@@ -188,14 +171,16 @@ hooks.addAction('sync.bootstrap:action:complete', (data) => {
 **Symptoms:** Sync keeps restarting, data re-downloads frequently.
 
 **Causes:**
-- Cursor expiration (default 24 hours)
+- The server has pruned history beyond this device's cursor and requests a snapshot
+- Legacy providers without retention fields can trigger the 24-hour client fallback
 - Device cursor tracking issues
 - Clock skew between devices
 
 **Solutions:**
 - Check `sync.rescan:action:starting` frequency in console
 - Verify device cursor is being updated
-- Check for clock synchronization issues
+- Inspect pull response `oldestRetainedVersion` / `requiresSnapshot` and provider `snapshot-v1` capability
+- Do not reset the cursor or discard pending writes to suppress the symptom
 
 ---
 
@@ -209,9 +194,8 @@ hooks.addAction('sync.bootstrap:action:complete', (data) => {
 
 1. **Check File Size**
    ```typescript
-   // Default limits
-   maxFileSizeBytes: 20MB (local)
-   maxCloudFileSizeBytes: 100MB (cloud)
+   const limits = useOr3Config().limits;
+   console.log(limits.maxFileSizeBytes, limits.maxCloudFileSizeBytes);
    ```
 
 2. **Verify Storage Configuration**
@@ -224,8 +208,8 @@ hooks.addAction('sync.bootstrap:action:complete', (data) => {
    ```typescript
    const db = getDb();
    const transfers = await db.file_transfers
-       .where('status')
-       .equals('error')
+       .where('state')
+       .equals('failed')
        .toArray();
    console.log('Failed transfers:', transfers);
    ```
@@ -248,8 +232,11 @@ const blob = await db.file_blobs.get(fileHash);
 console.log('Blob exists:', !!blob);
 
 // Check transfer status
-const transfer = await db.file_transfers.get(fileHash);
-console.log('Transfer status:', transfer?.status);
+const transfers = await db.file_transfers
+    .where('[hash+direction]')
+    .equals([fileHash, 'download'])
+    .toArray();
+console.log('Download state and errors:', transfers.map(({ state, last_error }) => ({ state, last_error })));
 ```
 
 **Solutions:**
@@ -263,10 +250,9 @@ console.log('Transfer status:', transfer?.status);
 **Symptoms:** Uploads fail with quota errors, console shows storage warnings.
 
 **Solutions:**
-- Clear old files from recycle bin
-- Export and delete old workspaces
-- Increase `localStorageQuotaMB` in config
-- Check browser storage usage
+- Distinguish a browser `QuotaExceededError` from a server workspace-quota rejection.
+- `localStorageQuotaMB` is a warning threshold; increasing it does not increase browser capacity. Export and verify data before deleting anything.
+- Server quota is `OR3_STORAGE_WORKSPACE_QUOTA_BYTES`, enforced against canonical metadata and upload reservations. Review the storage provider and active reservations before changing that quota.
 
 ---
 
@@ -409,13 +395,7 @@ providers.
 **Checks:**
 
 1. **Build Mode**
-   ```bash
-   # Wrong - static build doesn't support cloud
-   nuxt generate
-   
-   # Correct - SSR build required
-   nuxt build
-   ```
+   Managed deployments use the versioned container. For editable source, use `bun run build` for SSR; `bun run generate:static` produces local-only output with Cloud disabled.
 
 2. **Environment Variables**
    - Ensure env vars are set in production
@@ -495,15 +475,11 @@ console prefixes:
 ```typescript
 const hooks = useHooks();
 
-// Log all sync events
-hooks.addAction('sync.*', (data, name) => {
-    console.log(`[${name}]`, data);
-});
-
-// Log all notification events
-hooks.addAction('notify.*', (data, name) => {
-    console.log(`[${name}]`, data);
-});
+// Wildcard callbacks receive each emitter's arguments, not an appended hook name.
+const offSync = hooks.on('sync.*', (...args) => console.log('Sync event:', ...args));
+const offNotify = hooks.on('notify.*', (...args) => console.log('Notification event:', ...args));
+// Remove when debugging ends:
+// offSync(); offNotify();
 ```
 
 ### Check Database State
@@ -518,8 +494,8 @@ console.log('Pending ops:', await db.pending_ops.count());
 console.log('File blobs:', await db.file_blobs.count());
 
 // Check sync state
-const cursor = await db.sync_state.get('cursor');
-console.log('Sync cursor:', cursor);
+const states = await db.sync_state.toArray();
+console.log('Workspace-scoped sync state:', states);
 ```
 
 ### Performance Profiling
@@ -559,11 +535,11 @@ If you're still stuck:
    - Create minimal reproduction
 
 4. **Review Documentation**
-   - [Configuration Reference](./config-reference)
-   - [Auth System](./auth-system)
-   - [Sync Layer](./sync-layer)
-   - [Storage Layer](./storage-layer)
-   - [Notifications](./notifications)
+   - [Configuration Reference](/documentation/cloud/config-reference)
+   - [Auth System](/documentation/cloud/auth-system)
+   - [Sync Layer](/documentation/cloud/sync-layer)
+   - [Storage Layer](/documentation/cloud/storage-layer)
+   - [Notifications](/documentation/cloud/notifications)
 
 5. **Check Related Issues**
    - Search GitHub issues
@@ -576,11 +552,11 @@ If you're still stuck:
 
 ### "Unauthorized: No identity"
 **Cause:** User not authenticated
-**Solution:** Check Clerk session, verify auth flow
+**Solution:** Check the selected auth provider and resolved session envelope.
 
 ### "Sync provider not found"
 **Cause:** No sync provider registered
-**Solution:** Ensure `convex-sync.client.ts` plugin loads
+**Solution:** Check the selected provider package, client registration, and SSR gateway registration.
 
 ### "Circuit breaker open"
 **Cause:** Too many sync failures
@@ -588,8 +564,8 @@ If you're still stuck:
 
 ### "Database version mismatch"
 **Cause:** Dexie schema version conflict
-**Solution:** Clear IndexedDB, reload page
+**Solution:** Confirm application/provider versions and inspect the migration error. Export and verify a backup before any reset; preserve unsynced data and report the failed schema migration.
 
 ### "QuotaExceededError"
 **Cause:** Browser storage full
-**Solution:** Clear old data, increase quota, export workspace
+**Solution:** Export and verify a backup first. Inspect browser storage capacity; changing the local warning threshold does not grant more space. Do not clear unsynced workspace data.

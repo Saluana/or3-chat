@@ -360,7 +360,7 @@ bun run theme:switch
 - **Backgrounds** — layered background effects (gradients, patterns, images)
 - **Icons** — swap the icon set used throughout the app
 
-For the full theme API, see the [Theme Documentation](public/_documentation/themes/quick-start.md).
+For the full theme API, see the [Theme Documentation](public/_documentation/themes/overview.md).
 
 ---
 

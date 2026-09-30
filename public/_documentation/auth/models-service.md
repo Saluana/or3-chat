@@ -1,462 +1,64 @@
-# modelsService
+# Model catalog
 
-Service for fetching, caching, and filtering OpenRouter's model catalog. Provides utilities to query available models by text, modalities, context length, parameters, and pricing tier.
+The host model service fetches OpenRouter model metadata and supplies small, pure filters. Import it from `~/core/auth/models-service`. It does not manage login, persist keys, send chat requests, or build a search index.
 
-Think of `modelsService` as your model marketplace — it keeps an up-to-date catalog of 200+ OpenRouter models with powerful filtering to find exactly what you need.
+## Fetch and filter
 
----
-
-## What does it do?
-
-`modelsService` manages the OpenRouter model catalog by:
-
-- Fetching the latest model list from OpenRouter API
-- Caching models locally (1 hour TTL by default)
-- Filtering by text search, modalities, context, parameters, and price
-- Resolving default model based on settings and availability
-
----
-
-## Basic Example
+Run this from a client-side Nuxt context where runtime configuration is available:
 
 ```ts
-import { modelsService } from '~/core/auth/models-service';
+import {
+  fetchModels,
+  filterByText,
+  filterByModalities,
+  filterByContextLength,
+  filterByParameters,
+} from '~/core/auth/models-service';
 
-// Fetch all models
-const models = await modelsService.fetchModels();
-
-// Filter by text
-const gpts = modelsService.filterByText(models, 'gpt');
-
-// Find vision models
-const vision = modelsService.filterByModalities(models, {
-  input: ['image'],
-  output: ['text']
-});
-
-// Find cheap models
-const cheap = modelsService.filterByPriceBucket(models, 'free');
-```
-
----
-
-## How to use it
-
-### 1. Fetch models
-
-```ts
-// Get all available models
-const models = await modelsService.fetchModels();
-
-// Force refresh (ignore cache)
-const fresh = await modelsService.fetchModels({ force: true });
-
-// Custom TTL (2 hours)
-const models = await modelsService.fetchModels({ ttlMs: 2 * 60 * 60 * 1000 });
-```
-
-### 2. Search by text
-
-```ts
-const query = 'claude';
-const claudes = modelsService.filterByText(models, query);
-// Searches: id, name, description
-```
-
-### 3. Filter by modalities
-
-```ts
-// Vision models (image input)
-const vision = modelsService.filterByModalities(models, {
-  input: ['image']
-});
-
-// Models that can generate images
-const imageGen = modelsService.filterByModalities(models, {
-  output: ['image']
-});
-
-// Text-to-image models
-const txt2img = modelsService.filterByModalities(models, {
-  input: ['text'],
-  output: ['image']
-});
-```
-
-### 4. Filter by context length
-
-```ts
-// Models with at least 100K context
-const longContext = modelsService.filterByContextLength(models, 100000);
-```
-
-### 5. Filter by supported parameters
-
-```ts
-// Models supporting reasoning
-const reasoning = modelsService.filterByParameters(models, ['reasoning']);
-
-// Models supporting temperature and top_p
-const flexible = modelsService.filterByParameters(models, [
-  'temperature',
-  'top_p'
-]);
-```
-
-### 6. Filter by price
-
-```ts
-// Free models
-const free = modelsService.filterByPriceBucket(models, 'free');
-
-// Low-cost models (< $0.000002 per token)
-const budget = modelsService.filterByPriceBucket(models, 'low');
-
-// Medium cost
-const medium = modelsService.filterByPriceBucket(models, 'medium');
-
-// All models
-const any = modelsService.filterByPriceBucket(models, 'any');
-```
-
-### 7. Resolve default model
-
-```ts
-import { resolveDefaultModel } from '~/core/auth/models-service';
-
-const selected = resolveDefaultModel(
-  {
-    defaultModelMode: 'fixed',
-    fixedModelId: 'anthropic/claude-3-sonnet'
-  },
-  {
-    isAvailable: (id) => models.some(m => m.id === id),
-    lastSelectedModelId: () => localStorage.getItem('last_model'),
-    recommendedDefault: () => '~openai/gpt-luna-latest'
-  }
-);
-
-// Result: { id: 'anthropic/claude-3-sonnet', reason: 'fixed' }
-```
-
----
-
-## Model Format
-
-Each model object has:
-
-```ts
-interface OpenRouterModel {
-  id: string;                          // e.g. 'anthropic/claude-3-sonnet'
-  name: string;
-  description?: string;
-  created?: number;                    // Unix timestamp
-  architecture?: {
-    input_modalities?: string[];       // ['text', 'image']
-    output_modalities?: string[];      // ['text']
-    tokenizer?: string;
-    instruct_type?: string;
-  };
-  top_provider?: {
-    is_moderated?: boolean;
-    context_length?: number;           // Max input tokens
-    max_completion_tokens?: number;    // Max output tokens
-  };
-  pricing?: {
-    prompt?: string;                   // USD per 1M input tokens
-    completion?: string;               // USD per 1M output tokens
-    image?: string;
-    request?: string;
-    web_search?: string;
-    internal_reasoning?: string;
-    input_cache_read?: string;
-    input_cache_write?: string;
-  };
-  canonical_slug?: string;
-  context_length?: number;             // Alternative field
-  hugging_face_id?: string;
-  per_request_limits?: Record<string, unknown>;
-  supported_parameters?: string[];     // ['temperature', 'top_p', 'reasoning']
-  reasoning?: {
-    supported_efforts?: string[] | null; // ['low', 'medium', 'high', ...]
-    default_effort?: string;             // 'none' or an effort level
-    default_enabled?: boolean;
-    supports_max_tokens?: boolean;
-    mandatory?: boolean;
-  };
+export async function findImageToolModels(query: string) {
+  let models = await fetchModels();
+  models = filterByText(models, query);
+  models = filterByModalities(models, { input: ['text', 'image'], output: ['text'] });
+  models = filterByContextLength(models, 32_000);
+  return filterByParameters(models, ['tools']);
 }
 ```
 
----
+Filtering metadata does not guarantee that a particular account can use a model, that a provider is available, or that a request will succeed. Use current catalog IDs rather than a hard-coded list of recommended models.
 
-## Caching Strategy
+| Function | Contract |
+| --- | --- |
+| `fetchModels({ force?, ttlMs? })` | Returns `OpenRouterModel[]`; defaults to a one-hour cache TTL. |
+| `filterByText(models, query)` | Case-insensitive substring match over ID, name, and description. Empty query returns the input list. |
+| `filterByModalities(models, { input?, output? })` | Requires every requested input/output modality in the advertised arrays. |
+| `filterByContextLength(models, min)` | Uses top-provider context length, then model context length, then zero. |
+| `filterByParameters(models, names)` | Requires every parameter in `supported_parameters`. |
+| `filterByPriceBucket(models, bucket)` | Coarse UI heuristic; see below. |
+| `resolveDefaultModel(settings, dependencies)` | Chooses an available fixed model, then available last selection, then the supplied recommended default; returns `{ id, reason }`. |
 
-### Default cache
+The `modelsService` namespace/default export groups fetch and filter functions. Import `resolveDefaultModel` separately. Model typing is defined in `shared/openrouter/types.ts` and re-exported by this module.
 
-- **Key**: `'openrouter_model_catalog_v1'` in localStorage
-- **TTL**: 1 hour (default)
-- **Format**: JSON object with `{ data: OpenRouterModel[], fetchedAt: number }`
-- **Fallback**: If fetch fails, returns last cached data if available; throws if there is no cache
+## Cache and errors
 
-### Cache invalidation
+The service stores `{ data, fetchedAt }` under `openrouter_model_catalog_v1` in localStorage. A fresh nonempty cache is returned without a request. `force: true` bypasses that initial cache check, but a failed network request can still return a stale nonempty cache. With no usable cache, fetching rejects with a normalized error. Cache writes are best effort when browser storage is unavailable.
 
-```ts
-// Force refresh
-await modelsService.fetchModels({ force: true });
+Fetching uses the shared SDK client and collects its paginated model results, then converts them to OR3's snake_case model shape. The configured API URL is `runtimeConfig.public.openRouter.baseUrl`.
 
-// Manual clear
-localStorage.removeItem('openrouter_model_catalog_v1');
-```
+The current catalog implementation reads the **legacy** localStorage `openrouter_api_key` entry when constructing the catalog client. That is a compatibility read, not the canonical persistence path for user keys. Do not copy it into new code or store credentials there; use [the key APIs](/documentation/auth/reference). A successful catalog fetch is not proof that a saved personal key was used or validated.
 
-### How models are fetched
+## Prices and capability checks
 
-`fetchModels()` calls the OpenRouter SDK's `models.list()` through the shared client, iterates the result pages, and maps each SDK model to the local `OpenRouterModel` shape. The stored user key from `localStorage['openrouter_api_key']` is attached when present. The base URL comes from `runtimeConfig.public.openRouter.baseUrl` when set.
+Prompt and completion prices are numeric strings **per token**. To display a per-million-token value, parse a finite number and multiply by 1,000,000; OR3's `app/utils/modelCatalog.ts` contains its display helpers. Other price fields represent their own billing units; do not apply that multiplier indiscriminately.
 
-### Relation to `useModelStore`
+Price buckets use the larger of prompt and completion prices:
 
-`models-service` keeps a 1-hour localStorage cache. `useModelStore` (Composables section) layers three tiers on top — memory, Dexie, and this network fetch — and persists the catalog in Dexie for 48 hours by default. The two docs describe different layers of the same catalog, not competing caches.
+| Bucket | Current heuristic |
+| --- | --- |
+| `free` | Maximum is zero. |
+| `low` | Greater than zero and at most 0.000002 per token. |
+| `medium` | Greater than 0.000002 and at most 0.00001 per token. |
+| `any` | No price filter. |
 
----
+Missing or invalid prices become zero in this helper, so `free` can include unknown pricing. These buckets are not a price quote or cost estimate. There is no “high” bucket, and `medium` does not include everything above “low.”
 
-## Common patterns
-
-### Multi-filter query
-
-```ts
-let results = models;
-
-// Start with all models
-results = modelsService.filterByText(results, 'claude');
-results = modelsService.filterByModalities(results, { input: ['image'] });
-results = modelsService.filterByContextLength(results, 100000);
-results = modelsService.filterByPriceBucket(results, 'low');
-
-console.log(`Found ${results.length} models`);
-```
-
-### Vision model selector
-
-```ts
-async function getVisionModels() {
-  const models = await modelsService.fetchModels();
-  return modelsService.filterByModalities(models, {
-    input: ['image'],
-    output: ['text']
-  }).sort((a, b) => {
-    // Sort by price (cheapest first)
-    const aPrice = toNumber(a.pricing?.prompt) ?? Infinity;
-    const bPrice = toNumber(b.pricing?.prompt) ?? Infinity;
-    return aPrice - bPrice;
-  });
-}
-```
-
-### Model availability check
-
-```ts
-async function isModelAvailable(modelId: string) {
-  const models = await modelsService.fetchModels();
-  return models.some(m => m.id === modelId);
-}
-```
-
-### Find best for task
-
-```ts
-async function findBestModel(task: 'vision' | 'reasoning' | 'text') {
-  let models = await modelsService.fetchModels();
-  
-  switch (task) {
-    case 'vision':
-      models = modelsService.filterByModalities(models, { input: ['image'] });
-      break;
-    case 'reasoning':
-      models = modelsService.filterByParameters(models, ['reasoning']);
-      break;
-  }
-  
-  // Sort by price
-  models = modelsService.filterByPriceBucket(models, 'low');
-  
-  return models[0] || null;
-}
-```
-
----
-
-## Important notes
-
-### Authentication
-
-- Without API key: Sees all models
-- With API key: Sees additional info (pricing, context limits)
-- Never expose key in requests; use server-side if needed
-
-### Price format
-
-Prices are **stringified decimals**:
-- `"0.00001"` = $0.00001 per token
-- `"0"` = Free
-- Can be converted with `Number(string)`
-
-`filterByPriceBucket` uses the maximum of the prompt and completion price as the effective price.
-
-Price buckets are heuristic:
-- **free**: $0
-- **low**: > $0 and ≤ $0.000002
-- **medium**: > $0.000002 and ≤ $0.00001
-
-### Context length
-
-- **Input context**: Maximum tokens for prompt history
-- **Max completion**: Maximum tokens model can generate
-- Some models return both, some only one
-
-### Modalities
-
-Common modalities:
-- **input**: `'text'`, `'image'`, `'audio'`
-- **output**: `'text'`, `'image'`, `'audio'`
-
-Check model docs for exact support.
-
-### Rate limits
-
-- No explicit rate limits for model listing
-- Queries cached locally for 1 hour
-- Multiple rapid fetches use same cache
-
----
-
-## Filtering chaining
-
-All filters return a new array, safe to chain:
-
-```ts
-const result = modelsService.filterByText(
-  modelsService.filterByModalities(
-    modelsService.filterByPriceBucket(models, 'low'),
-    { input: ['text'] }
-  ),
-  'claude'
-);
-```
-
----
-
-## Default model resolution
-
-Helper to pick default model based on settings:
-
-```ts
-interface AiSettingsForModel {
-  defaultModelMode: 'lastSelected' | 'fixed';
-  fixedModelId: string | null;
-}
-
-interface ModelResolverDeps {
-  isAvailable: (id: string) => boolean;
-  lastSelectedModelId: () => string | null;
-  recommendedDefault: () => string;
-}
-
-function resolveDefaultModel(
-  set: AiSettingsForModel,
-  deps: ModelResolverDeps
-): { id: string; reason: 'fixed' | 'lastSelected' | 'recommended' }
-```
-
-Priority:
-1. **Fixed**: Use configured fixed model if available
-2. **Last selected**: Use previously selected model if available
-3. **Recommended**: Fall back to recommended default
-
----
-
-## Related
-
-- `useChat` — uses models for API calls
-- `useModelStore` — wraps this service in composable
-- `useAiSettings` — stores default model preference
-- OpenRouter API docs — model catalog endpoint
-
----
-
-## TypeScript
-
-```ts
-export interface OpenRouterModel {
-  id: string;
-  name: string;
-  description?: string;
-  // ... (see Model Format section; includes per_request_limits and reasoning)
-}
-
-export interface ModelCatalogCache {
-  data: OpenRouterModel[];
-  fetchedAt: number;
-}
-
-export interface AiSettingsForModel {
-  defaultModelMode: 'lastSelected' | 'fixed';
-  fixedModelId: string | null;
-}
-
-export interface ModelResolverDeps {
-  isAvailable: (id: string) => boolean;
-  lastSelectedModelId: () => string | null;
-  recommendedDefault: () => string;
-}
-
-export type PriceBucket = 'free' | 'low' | 'medium' | 'any';
-
-export async function fetchModels(opts?: {
-  force?: boolean;
-  ttlMs?: number;
-}): Promise<OpenRouterModel[]>;
-
-export function filterByText(
-  models: OpenRouterModel[],
-  q: string
-): OpenRouterModel[];
-
-export function filterByModalities(
-  models: OpenRouterModel[],
-  opts?: { input?: string[]; output?: string[] }
-): OpenRouterModel[];
-
-export function filterByContextLength(
-  models: OpenRouterModel[],
-  minCtx: number
-): OpenRouterModel[];
-
-export function filterByParameters(
-  models: OpenRouterModel[],
-  params: string[]
-): OpenRouterModel[];
-
-export function filterByPriceBucket(
-  models: OpenRouterModel[],
-  bucket: PriceBucket
-): OpenRouterModel[];
-
-export function resolveDefaultModel(
-  set: AiSettingsForModel,
-  deps: ModelResolverDeps
-): { id: string; reason: 'fixed' | 'lastSelected' | 'recommended' };
-
-export const modelsService: {
-  fetchModels: typeof fetchModels;
-  filterByText: typeof filterByText;
-  filterByModalities: typeof filterByModalities;
-  filterByContextLength: typeof filterByContextLength;
-  filterByParameters: typeof filterByParameters;
-  filterByPriceBucket: typeof filterByPriceBucket;
-};
-
-export default modelsService;
-```
-
----
-
-Document generated from `app/core/auth/models-service.ts` implementation.
+For capability checks, inspect `architecture.input_modalities`, `architecture.output_modalities`, `supported_parameters`, and context limits. Preserve unknown values rather than treating absent metadata as a supported capability. See [chat types](/documentation/types/chat-types) and [provider message preparation](/documentation/auth/openrouter-build).

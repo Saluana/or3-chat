@@ -6,7 +6,7 @@ for the ordinary UI workflow.
 
 ## Operator configuration
 
-Managed deployments should follow the existing [Cloud configuration](/documentation/cloud/or3-cloud-config)
+Managed deployments should follow the existing [Cloud configuration](/documentation/cloud/configure)
 and the repository's `docs/cloud-updates.md` workflow. These are advanced configuration keys, not a replacement installation
 procedure. Restart or redeploy through that workflow when build-time config changes.
 

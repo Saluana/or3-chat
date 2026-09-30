@@ -2,6 +2,8 @@
 
 Dedicated install and wiring guide for the Clerk auth provider package.
 
+Managed installations use the fixed profile in [Set up Cloud](/documentation/cloud/setup). The install commands and manual settings below are for editable source deployments; install only the providers your source configuration selects.
+
 ## What It Provides
 
 - SSR auth middleware (`@clerk/nuxt`)
@@ -115,7 +117,7 @@ accepted for email-bound workspace provisioning or invitations.
 
 ## Related
 
-- [providers](./providers)
-- [provider-convex](./provider-convex)
-- [auth-system](./auth-system)
-- [or3-cloud-config](./or3-cloud-config)
+- [Choose and wire providers](/documentation/cloud/providers)
+- [Convex](/documentation/cloud/provider-convex)
+- [Accounts and access](/documentation/cloud/auth-system)
+- [Configure OR3](/documentation/cloud/configure)

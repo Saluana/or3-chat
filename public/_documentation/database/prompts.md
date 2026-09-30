@@ -1,4 +1,4 @@
-# prompts
+# Saved prompts
 
 Prompt library built on the shared `posts` table (`postType: 'prompt'`) with TipTap JSON payloads.
 

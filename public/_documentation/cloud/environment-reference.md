@@ -4,9 +4,9 @@ This is the deployment-oriented reference for environment variables consumed by
 `or3-chat` and its first-party provider packages. It complements the typed
 configuration reference:
 
-- [Base configuration](./or3-config) documents `config.or3.ts`.
-- [Cloud configuration](./or3-cloud-config) documents `config.or3cloud.ts`.
-- [Configuration reference](./config-reference) explains the resolved config
+- [Base configuration](/documentation/cloud/configure) documents `config.or3.ts`.
+- [Cloud configuration](/documentation/cloud/configure) documents `config.or3cloud.ts`.
+- [Configuration reference](/documentation/cloud/config-reference) explains the resolved config
   objects and validation rules.
 - The provider pages document provider-specific installation and operations.
 
@@ -44,7 +44,7 @@ they are not application configuration.
 | `OR3_STRICT_CONFIG` | production-only | Enables strict configuration validation in non-production environments. |
 
 Static builds (`bun run generate:static`) do not provide SSR auth, server
-routes, or server provider storage. See [Cloud providers](./providers) for
+routes, or server provider storage. See [Cloud providers](/documentation/cloud/providers) for
 the static/SSR boundary.
 
 ### Nuxt and prebuilt-container compatibility names
@@ -186,7 +186,7 @@ The existing `better-sqlite3` local-file path remains the default. Set
 
 Turso adds the `libsql` dependency. Bun uses `bun:sqlite`; D1 uses the Worker
 binding and must run in a Workers request context. See
-[SQLite provider setup](./provider-sqlite) for runtime limitations.
+[SQLite provider setup](/documentation/cloud/provider-sqlite) for runtime limitations.
 
 ## Storage providers
 
@@ -351,7 +351,7 @@ are for explicitly configured source/self-hosted deployments.
 | `OR3_CONNECT_HOSTNAME_SUFFIX` | discovered | Hostname suffix used for per-computer tunnels. |
 | `OR3_CONNECT_CLOUDFLARE_VALIDATION_ATTESTATION` | unset | Signed wizard verification result for Cloudflare permissions. |
 
-See [OR3 Connect](./or3-connect) before enabling this feature.
+See [OR3 Connect](/documentation/cloud/or3-connect) before enabling this feature.
 
 ## Wizard and operator tooling
 
@@ -364,7 +364,7 @@ See [OR3 Connect](./or3-connect) before enabling this feature.
 
 The wizard writes only selected provider settings, removes stale values from
 the selected provider family, redacts secrets in reviews, and preserves the
-existing `better-sqlite3` default. See [OR3 Cloud Wizard](./or3-cloud-wizard).
+existing `better-sqlite3` default. See [OR3 Cloud Wizard](/documentation/cloud/or3-cloud-wizard).
 
 ## Managed `@or3/cloud` deployment metadata
 

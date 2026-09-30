@@ -1,4 +1,4 @@
-# documents
+# Documents
 
 Document storage built on the shared `posts` table (`postType: 'doc'`) with TipTap JSON payloads and hook integration.
 

@@ -8,40 +8,58 @@
             "path": "/start",
             "files": [
                 {
+                    "name": "overview.md",
+                    "path": "/start/overview",
+                    "title": "Welcome to OR3",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 0,
+                    "summary": "Choose between using OR3, running Cloud, and source or plugin development."
+                },
+                {
+                    "name": "first-chat.md",
+                    "path": "/start/first-chat",
+                    "title": "Send your first message",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 1,
+                    "summary": "Connect a provider, select a model, send a message, and verify saved work."
+                },
+                {
                     "name": "command-palette.md",
                     "path": "/start/command-palette",
-                    "category": "Introduction",
-                    "summary": "The command palette is the fastest way to move around OR3. It searches the full contents of your workspace — chats, documents, projects, system prompts, images, dashboard pages, and plugin records — and it runs commands without leaving the"
+                    "title": "Find work and run commands",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 2,
+                    "summary": "Search your workspace and use keyboard shortcuts, previews, and actions."
                 },
                 {
                     "name": "development-setup.md",
                     "path": "/start/development-setup",
-                    "category": "Tutorial",
-                    "summary": "One command gets a source checkout running locally. No API key or .env file is required for the local-first app. The Scroll checkout can be aliased in development; Workflows and External Agents are built and installed as separate V2 packages."
-                },
-                {
-                    "name": "mini-app-tutorial.md",
-                    "path": "/start/mini-app-tutorial",
-                    "category": "Tutorial",
-                    "summary": "Build a real mini app using the sidebar page registry, the multi-pane workspace, and the posts helpers that now ship with OR3. By the end you will have: - A registered pane app (example-todo) that opens inside the workspace."
-                },
-                {
-                    "name": "overview.md",
-                    "path": "/start/overview",
-                    "category": "Introduction",
-                    "summary": "Or3.chat is an open source, fast, extendable, and privacy-focused AI chat interface that lets developers build customized chat experiences. Philosophy: Or3 prioritizes being a lean, polished foundation rather than adding bloat. Users can extend it themselve..."
+                    "title": "Develop from source",
+                    "category": "Development",
+                    "categoryOrder": 1,
+                    "order": 0,
+                    "summary": "Install with Bun, choose a development mode, and troubleshoot without losing data."
                 },
                 {
                     "name": "plugin-quickstart.md",
                     "path": "/start/plugin-quickstart",
-                    "category": "Tutorial",
-                    "summary": "Start a portable plugin with the guided greeting tutorial, then add features and publish an exact tested package."
+                    "title": "Build a plugin",
+                    "category": "Development",
+                    "categoryOrder": 1,
+                    "order": 1,
+                    "summary": "Start a portable package using the maintained plugin tutorial."
                 },
                 {
-                    "name": "snake-game-tutorial.md",
-                    "path": "/start/snake-game-tutorial",
-                    "category": "Tutorial",
-                    "summary": "Learn how to build fully-featured custom pane applications for OR3's multi-pane workspace. This tutorial walks through creating a Snake Game mini-app from scratch, covering data persistence, sidebar integration, and proper pane management patterns."
+                    "name": "mini-app-tutorial.md",
+                    "path": "/start/mini-app-tutorial",
+                    "title": "Add a source pane and sidebar",
+                    "category": "Development",
+                    "categoryOrder": 1,
+                    "order": 2,
+                    "summary": "Register trusted source UI with owned lifecycle cleanup."
                 }
             ]
         },
@@ -710,46 +728,49 @@
             "path": "/hooks",
             "files": [
                 {
+                    "name": "overview.md",
+                    "path": "/hooks/overview",
+                    "title": "Hooks overview",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 0,
+                    "summary": "Hooks let features cooperate without importing each other's implementation. An action announces an event; a filter transforms a value before the caller uses it. Start with your first hook, then use the catalog to choose a hook that the appl"
+                },
+                {
+                    "name": "first-hook.md",
+                    "path": "/hooks/first-hook",
+                    "title": "Build your first hook",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 1,
+                    "summary": "This tutorial adds a source extension that removes trailing spaces from outgoing chat text. It runs in an editable OR3 checkout, using the application engine. For installable packages, start with Build your first plugin and check SDK runtim"
+                },
+                {
                     "name": "chat-editor-extensions.md",
                     "path": "/hooks/chat-editor-extensions",
-                    "category": "Integration",
-                    "summary": "Enable plugins to add TipTap extensions to the chat composer without touching the component. ChatInputDropper.vue exposes two hook points so plugins can lazy‑load heavy code and inject their extensions at initialization time."
+                    "title": "Extend the chat editor",
+                    "category": "Guides",
+                    "categoryOrder": 1,
+                    "order": 2,
+                    "summary": "Source extensions can add TipTap functionality to ChatInputDropper.vue before each chat composer is initialized. This guide uses application hooks in an editable checkout; these private imports are not a portable plugin API."
+                },
+                {
+                    "name": "reference.md",
+                    "path": "/hooks/reference",
+                    "title": "API and types",
+                    "category": "Reference",
+                    "categoryOrder": 2,
+                    "order": 3,
+                    "summary": "This reference covers the host application engine. useHooks() returns a TypedHookEngine; you normally do not create another engine. Installable packages use the SDK, whose permissions and runtime limits are separate."
                 },
                 {
                     "name": "hook-catalog.md",
                     "path": "/hooks/hook-catalog",
+                    "title": "Hook catalog",
                     "category": "Reference",
-                    "summary": "Authoritative catalog of available hooks with their argument shapes and return values. This is derived from the codebase (hook keys, payload types, and call sites) so developers don’t have to console.log."
-                },
-                {
-                    "name": "hook-keys.md",
-                    "path": "/hooks/hook-keys",
-                    "category": "Types",
-                    "summary": "Catalog of high-signal hook keys and typed helpers for ergonomically registering listeners."
-                },
-                {
-                    "name": "hook-types.md",
-                    "path": "/hooks/hook-types",
-                    "category": "Types",
-                    "summary": "TypeScript toolkit describing hook names, payload interfaces, and inference helpers for the OR3 hook engine."
-                },
-                {
-                    "name": "hooks.md",
-                    "path": "/hooks/hooks",
-                    "category": "Core",
-                    "summary": "Lightweight hook engine that powers OR3’s action/filter system with priority scheduling, async support, and diagnostics."
-                },
-                {
-                    "name": "typed-hooks.md",
-                    "path": "/hooks/typed-hooks",
-                    "category": "Core",
-                    "summary": "Typed wrapper around the hook engine that preserves runtime behavior while delivering full TypeScript inference."
-                },
-                {
-                    "name": "useHooks.md",
-                    "path": "/hooks/useHooks",
-                    "category": "Integration",
-                    "summary": "Nuxt composable that returns the app-wide typed hook engine, injected as $hooks by the 00-hooks plugin."
+                    "categoryOrder": 2,
+                    "order": 4,
+                    "summary": "Curated catalog of hook names, argument shapes, return values, and known emitters, checked against the payload map and production call sites. Typed-only rows are not runtime events."
                 }
             ]
         },
@@ -758,154 +779,226 @@
             "path": "/database",
             "files": [
                 {
-                    "name": "attachments.md",
-                    "path": "/database/attachments",
-                    "category": "Entities",
-                    "summary": "Attachment table helpers for creating, updating, and deleting upload metadata with full hook coverage."
+                    "name": "overview.md",
+                    "path": "/database/overview",
+                    "title": "Database overview",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 0,
+                    "summary": "Choose storage helpers and understand browser/workspace boundaries."
                 },
                 {
-                    "name": "branching.md",
-                    "path": "/database/branching",
-                    "category": "Threads",
-                    "summary": "Utilities for forking threads, retry-branching assistant replies, and building merged conversation contexts across Dexie tables."
+                    "name": "first-data.md",
+                    "path": "/database/first-data",
+                    "title": "Persist your first data",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 1,
+                    "summary": "Save and reload a preference and a document using entity helpers."
                 },
                 {
-                    "name": "client.md",
-                    "path": "/database/client",
-                    "category": "Core",
-                    "summary": "Dexie database client that defines the Or3DB schema, typed tables, versioning rules, and local derived-index hooks including the v17 outbox readyAt projection."
-                },
-                {
-                    "name": "dbTry.md",
-                    "path": "/database/dbTry",
-                    "category": "Utilities",
-                    "summary": "Thin error-handling wrapper around Dexie calls that surfaces quota issues and standardizes error metadata."
-                },
-                {
-                    "name": "document-revisions.md",
-                    "path": "/database/document-revisions",
-                    "category": "Entities",
-                    "summary": "Document revision manifests and chunks stored in the shared posts table, with retention pruning."
-                },
-                {
-                    "name": "documents.md",
-                    "path": "/database/documents",
-                    "category": "Entities",
-                    "summary": "Document storage built on the shared posts table (postType: 'doc') with TipTap JSON payloads and hook integration."
-                },
-                {
-                    "name": "files-select.md",
-                    "path": "/database/files-select",
-                    "category": "Utilities",
-                    "summary": "Read-only helpers for paging file meta rows when browsing uploads or the recycle bin."
-                },
-                {
-                    "name": "files-util.md",
-                    "path": "/database/files-util",
-                    "category": "Utilities",
-                    "summary": "Utility helpers for enforcing message file limits and serializing file hash arrays."
-                },
-                {
-                    "name": "files.md",
-                    "path": "/database/files",
-                    "category": "Entities",
-                    "summary": "File storage layer that deduplicates blobs by hash, keeps metadata in Dexie, classifies verified raster/PDF files with a generic fallback, and exposes hook-friendly lifecycle helpers."
-                },
-                {
-                    "name": "index.md",
-                    "path": "/database/index",
-                    "category": "Core",
-                    "summary": "Barrel exports for the database layer, re-exporting the Dexie client, CRUD helpers, and common type aliases."
-                },
-                {
-                    "name": "kv.md",
-                    "path": "/database/kv",
-                    "category": "Entities",
-                    "summary": "Key-value helpers for storing small preference or credential blobs in the Dexie kv table."
-                },
-                {
-                    "name": "message-files.md",
-                    "path": "/database/message-files",
-                    "category": "Messages",
-                    "summary": "Helpers for attaching/detaching files to chat messages while maintaining ref counts and serialized hash lists."
-                },
-                {
-                    "name": "messages.md",
-                    "path": "/database/messages",
-                    "category": "Messages",
-                    "summary": "Thread message CRUD utilities with hook integration, sparse indexing, attachment support, and atomic guarded patches for generation ownership."
-                },
-                {
-                    "name": "posts.md",
-                    "path": "/database/posts",
-                    "category": "Entities",
-                    "summary": "Post persistence, captured atomic plugin batches, related-record preconditions, and private plugin record visibility."
-                },
-                {
-                    "name": "projects.md",
-                    "path": "/database/projects",
-                    "category": "Entities",
-                    "summary": "CRUD helpers for project metadata stored in the projects Dexie table."
-                },
-                {
-                    "name": "prompts.md",
-                    "path": "/database/prompts",
-                    "category": "Entities",
-                    "summary": "Prompt library built on the shared posts table (postType: 'prompt') with TipTap JSON payloads."
-                },
-                {
-                    "name": "schema.md",
-                    "path": "/database/schema",
-                    "category": "Core",
-                    "summary": "Central Zod schemas and generated TypeScript types for all Dexie tables."
+                    "name": "safe-changes.md",
+                    "path": "/database/safe-changes",
+                    "title": "Make safe database changes",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 2,
+                    "summary": "Workspace-safe writes, transactions, error propagation, deletion, and upgrades."
                 },
                 {
                     "name": "threads.md",
                     "path": "/database/threads",
-                    "category": "Threads",
-                    "summary": "Thread CRUD and query helpers with hook integration, branching support, and system prompt utilities."
+                    "title": "Threads",
+                    "category": "Records",
+                    "categoryOrder": 1,
+                    "order": 0,
+                    "summary": "Source API reference for threads."
                 },
                 {
-                    "name": "util.md",
-                    "path": "/database/util",
-                    "category": "Utilities",
-                    "summary": "Shared helpers for parsing with Zod, generating IDs, and producing Unix timestamps."
+                    "name": "messages.md",
+                    "path": "/database/messages",
+                    "title": "Messages",
+                    "category": "Records",
+                    "categoryOrder": 1,
+                    "order": 1,
+                    "summary": "Source API reference for messages."
+                },
+                {
+                    "name": "branching.md",
+                    "path": "/database/branching",
+                    "title": "Branch conversations",
+                    "category": "Records",
+                    "categoryOrder": 1,
+                    "order": 2,
+                    "summary": "Source API reference for branch conversations."
+                },
+                {
+                    "name": "projects.md",
+                    "path": "/database/projects",
+                    "title": "Projects",
+                    "category": "Records",
+                    "categoryOrder": 1,
+                    "order": 3,
+                    "summary": "Source API reference for projects."
+                },
+                {
+                    "name": "posts.md",
+                    "path": "/database/posts",
+                    "title": "Custom posts",
+                    "category": "Records",
+                    "categoryOrder": 1,
+                    "order": 4,
+                    "summary": "Source API reference for custom posts."
+                },
+                {
+                    "name": "documents.md",
+                    "path": "/database/documents",
+                    "title": "Documents",
+                    "category": "Records",
+                    "categoryOrder": 1,
+                    "order": 5,
+                    "summary": "Source API reference for documents."
+                },
+                {
+                    "name": "prompts.md",
+                    "path": "/database/prompts",
+                    "title": "Saved prompts",
+                    "category": "Records",
+                    "categoryOrder": 1,
+                    "order": 6,
+                    "summary": "Source API reference for saved prompts."
+                },
+                {
+                    "name": "document-revisions.md",
+                    "path": "/database/document-revisions",
+                    "title": "Document history",
+                    "category": "Records",
+                    "categoryOrder": 1,
+                    "order": 7,
+                    "summary": "Source API reference for document history."
+                },
+                {
+                    "name": "kv.md",
+                    "path": "/database/kv",
+                    "title": "Preferences and KV",
+                    "category": "Records",
+                    "categoryOrder": 1,
+                    "order": 8,
+                    "summary": "Name-based storage, revisions, compare-and-set, and quotas."
+                },
+                {
+                    "name": "files.md",
+                    "path": "/database/files",
+                    "title": "File storage",
+                    "category": "Files",
+                    "categoryOrder": 2,
+                    "order": 0,
+                    "summary": "Blob deduplication, classification, transfer queue, and deletion contracts."
+                },
+                {
+                    "name": "message-files.md",
+                    "path": "/database/message-files",
+                    "title": "Message attachments",
+                    "category": "Files",
+                    "categoryOrder": 2,
+                    "order": 1,
+                    "summary": "Attach and detach files while reconciling references and serialized hashes."
+                },
+                {
+                    "name": "files-select.md",
+                    "path": "/database/files-select",
+                    "title": "Image library queries",
+                    "category": "Files",
+                    "categoryOrder": 2,
+                    "order": 2,
+                    "summary": "Bounded indexed pages, summary queries, and image eligibility."
+                },
+                {
+                    "name": "attachments.md",
+                    "path": "/database/attachments",
+                    "title": "URL attachment records",
+                    "category": "Files",
+                    "categoryOrder": 2,
+                    "order": 3,
+                    "summary": "Legacy URL metadata; separate from persisted file blobs."
+                },
+                {
+                    "name": "client.md",
+                    "path": "/database/client",
+                    "title": "Client and indexes",
+                    "category": "Internals",
+                    "categoryOrder": 3,
+                    "order": 0,
+                    "summary": "Active workspace databases, tables, local derived indexes, and migrations."
+                },
+                {
+                    "name": "schema.md",
+                    "path": "/database/schema",
+                    "title": "Entity schemas",
+                    "category": "Internals",
+                    "categoryOrder": 3,
+                    "order": 1,
+                    "summary": "Runtime validation and inferred entity input/row types."
+                },
+                {
+                    "name": "utilities.md",
+                    "path": "/database/utilities",
+                    "title": "Validation and errors",
+                    "category": "Internals",
+                    "categoryOrder": 3,
+                    "order": 2,
+                    "summary": "Zod helpers, IDs, clocks, transaction scopes, and dbTry error contracts."
                 }
             ]
         },
         {
-            "title": "Auth",
+            "title": "OpenRouter",
             "path": "/auth",
             "files": [
                 {
-                    "name": "models-service.md",
-                    "path": "/auth/models-service",
-                    "category": "Models",
-                    "summary": "Service for fetching, caching, and filtering OpenRouter's model catalog. Provides utilities to query available models by text, modalities, context length, parameters, and pricing tier. Think of modelsService as your model marketplace — it keeps an up-to-dat..."
+                    "name": "overview.md",
+                    "path": "/auth/overview",
+                    "title": "OpenRouter overview",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 0,
+                    "summary": "Find connection, key, model catalog, and provider payload guidance."
                 },
                 {
-                    "name": "openrouter-auth.md",
-                    "path": "/auth/openrouter-auth",
-                    "category": "Exchange",
-                    "summary": "Function that exchanges an OpenRouter authorization code for an API key. Handles PKCE code verification and retrieves the user's API key after successful authentication. Think of exchangeOpenRouterCode as the handshake — after OpenRouter redirects you back,..."
+                    "name": "connect.md",
+                    "path": "/auth/connect",
+                    "title": "Connect OpenRouter",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 1,
+                    "summary": "Connect or paste a personal key, disconnect, and recover from callback errors."
+                },
+                {
+                    "name": "reference.md",
+                    "path": "/auth/reference",
+                    "title": "Connection and key APIs",
+                    "category": "Developer reference",
+                    "categoryOrder": 1,
+                    "order": 0,
+                    "summary": "Component setup, persistent key lifecycle, PKCE callback, and one-shot exchange contracts."
+                },
+                {
+                    "name": "models-service.md",
+                    "path": "/auth/models-service",
+                    "title": "Model catalog",
+                    "category": "Developer reference",
+                    "categoryOrder": 1,
+                    "order": 1,
+                    "summary": "Fetch and filter current metadata, understand cache fallback and per-token pricing."
                 },
                 {
                     "name": "openrouter-build.md",
                     "path": "/auth/openrouter-build",
-                    "category": "Messages",
-                    "summary": "Utility for building OpenAI-compatible message arrays with hydrated images and files. Converts internal message format to OpenRouter API format with support for image deduplication, limits, and historical image inclusion policies."
-                },
-                {
-                    "name": "useOpenrouter.md",
-                    "path": "/auth/useOpenrouter",
-                    "category": "Authentication",
-                    "summary": "Authentication composable for OpenRouter PKCE login flow. Manages the OAuth-like authentication process with OpenRouter, including code verification, session storage, and API key management. Think of useOpenRouterAuth as your authentication gateway to OpenR..."
-                },
-                {
-                    "name": "useUserApiKey.md",
-                    "path": "/auth/useUserApiKey",
-                    "category": "Authentication",
-                    "summary": "Composable for managing the OpenRouter API key in shared application state. Provides reactive access to the stored API key with sync between global state and Dexie database. Think of useUserApiKey as your API key vault — it securely stores and retrieves you..."
+                    "title": "Build provider messages",
+                    "category": "Developer reference",
+                    "categoryOrder": 1,
+                    "order": 2,
+                    "summary": "Translate internal content, select images, hydrate files, and handle attachment failures."
                 }
             ]
         },
@@ -1016,34 +1109,58 @@
             "path": "/types",
             "files": [
                 {
-                    "name": "chat-types.md",
-                    "path": "/types/chat-types",
-                    "category": "Chat",
-                    "summary": "TypeScript type definitions for OR3 chat messages, tool calling, and streaming. Defines the core interfaces used throughout the chat system for messages, content parts, tool definitions, and stream events."
+                    "name": "overview.md",
+                    "path": "/types/overview",
+                    "title": "TypeScript contracts",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 0,
+                    "summary": "Choose host, SDK, stored-row, parsed-record, and provider contracts."
                 },
                 {
-                    "name": "composables.md",
-                    "path": "/types/composables",
-                    "category": "Composables",
-                    "summary": "Canonical reference for every exported TypeScript type and interface defined under app/composables. These contracts power registry utilities, workspace state, streaming, UI chrome, and plugin extension points. Each table links the shape you consume when bui..."
+                    "name": "chat-types.md",
+                    "path": "/types/chat-types",
+                    "title": "Chat types",
+                    "category": "Reference",
+                    "categoryOrder": 1,
+                    "order": 0,
+                    "summary": "Internal content, durable send results, tools, and stream events."
                 },
                 {
                     "name": "database.md",
                     "path": "/types/database",
-                    "category": "Database",
-                    "summary": "Reference for every exported type and interface defined under app/db. These aliases describe the Dexie schema, higher-level records, and helper payloads that wrap database operations."
+                    "title": "Database types",
+                    "category": "Reference",
+                    "categoryOrder": 1,
+                    "order": 1,
+                    "summary": "Create inputs, stored rows, parsed documents, and local derived fields."
                 },
                 {
                     "name": "hooks.md",
                     "path": "/types/hooks",
-                    "category": "Hooks",
-                    "summary": "Canonical reference for every exported TypeScript type and interface that powers the hook engine. All definitions come from app/core/hooks/ / .ts (with the engine primitives defined in shared/hooks/hook-engine-core.ts and re-exported) and are grouped by con..."
+                    "title": "Hook types",
+                    "category": "Reference",
+                    "categoryOrder": 1,
+                    "order": 2,
+                    "summary": "Source imports and the canonical typed hook/augmentation reference."
                 },
                 {
                     "name": "plugins.md",
                     "path": "/types/plugins",
-                    "category": "Plugins",
-                    "summary": "Reference for plugin-facing TypeScript types, including the pane plugin API, access gate policy, theme declarations, and the bundled plugin catalog declaration in shared/plugins/."
+                    "title": "Plugin types",
+                    "category": "Reference",
+                    "categoryOrder": 1,
+                    "order": 3,
+                    "summary": "Portable SDK contracts versus trusted host registry types."
+                },
+                {
+                    "name": "composables.md",
+                    "path": "/types/composables",
+                    "title": "Composable types",
+                    "category": "Reference",
+                    "categoryOrder": 1,
+                    "order": 4,
+                    "summary": "Existing composable return-type reference."
                 }
             ]
         },
@@ -1052,70 +1169,85 @@
             "path": "/themes",
             "files": [
                 {
+                    "name": "overview.md",
+                    "path": "/themes/overview",
+                    "title": "Themes overview",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 0,
+                    "summary": "Choose between personal customization, declarative themes, and trusted-code themes."
+                },
+                {
+                    "name": "customize.md",
+                    "path": "/themes/customize",
+                    "title": "Customize your appearance",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 1,
+                    "summary": "Use Theme studio and understand how appearance preferences are saved."
+                },
+                {
+                    "name": "first-theme.md",
+                    "path": "/themes/first-theme",
+                    "title": "Build your first theme",
+                    "category": "Building themes",
+                    "categoryOrder": 1,
+                    "order": 0,
+                    "summary": "Create, preview, and verify a complete declarative theme."
+                },
+                {
+                    "name": "styling.md",
+                    "path": "/themes/styling",
+                    "title": "Style your theme",
+                    "category": "Building themes",
+                    "categoryOrder": 1,
+                    "order": 1,
+                    "summary": "Use tokens, props, CSS, icons, fonts, backgrounds, and dialog styling."
+                },
+                {
+                    "name": "package-install.md",
+                    "path": "/themes/package-install",
+                    "title": "Package and install",
+                    "category": "Building themes",
+                    "categoryOrder": 1,
+                    "order": 2,
+                    "summary": "Package themes safely and install them into development or production hosts."
+                },
+                {
                     "name": "api-reference.md",
                     "path": "/themes/api-reference",
+                    "title": "Theme reference",
                     "category": "Reference",
-                    "summary": "Reference for the current OR3 theme system API, types, and tooling."
-                },
-                {
-                    "name": "app-modal.md",
-                    "path": "/themes/app-modal",
-                    "category": "Reference",
-                    "summary": "Shared dialog shell with three sizes, consistent headers and footers, theme-owned surface tokens, and compact Dashboard launcher cards."
-                },
-                {
-                    "name": "architecture.md",
-                    "path": "/themes/architecture",
-                    "category": "Reference",
-                    "summary": "This document describes how the current OR3 theme system is wired from definition to runtime application."
-                },
-                {
-                    "name": "best-practices.md",
-                    "path": "/themes/best-practices",
-                    "category": "Guide",
-                    "summary": "Guidance for maintainable, performant themes, including theme-aware embedded panes, scrolling sidebars and responsive canvas layouts."
-                },
-                {
-                    "name": "component-overrides.md",
-                    "path": "/themes/component-overrides",
-                    "category": "Guide",
-                    "summary": "Theme component overrides let a theme replace selected OR3 app components with theme-local Vue components. They are a trusted-code capability. Declarative themes cannot ship Vue components. The current component contract version is 1."
-                },
-                {
-                    "name": "css-selectors.md",
-                    "path": "/themes/css-selectors",
-                    "category": "Reference",
-                    "summary": "cssSelectors lets themes target DOM that cannot easily use component overrides (third-party widgets, portals, legacy HTML)."
-                },
-                {
-                    "name": "custom-theme-tutorial.md",
-                    "path": "/themes/custom-theme-tutorial",
-                    "category": "Tutorial",
-                    "summary": "This tutorial walks you through creating a fully-featured OR3 theme from scratch, packaging it as a ZIP, and installing it via the admin panel. We'll use the Cyberpunk theme (already in the repo) as our working reference so every"
-                },
-                {
-                    "name": "migration-guide.md",
-                    "path": "/themes/migration-guide",
-                    "category": "Guide",
-                    "summary": "This guide explains how to move from legacy CSS-based theming to the current theme system."
-                },
-                {
-                    "name": "quick-start.md",
-                    "path": "/themes/quick-start",
-                    "category": "Tutorial",
-                    "summary": "This guide walks through creating a theme and wiring it into components."
-                },
-                {
-                    "name": "theme-icons.md",
-                    "path": "/themes/theme-icons",
-                    "category": "Reference",
-                    "summary": "OR3 uses semantic icon tokens so themes can swap icon sets without changing component code."
+                    "categoryOrder": 2,
+                    "order": 0,
+                    "summary": "Configuration types, composables, runtime APIs, and CLI commands."
                 },
                 {
                     "name": "troubleshooting.md",
                     "path": "/themes/troubleshooting",
-                    "category": "Guide",
-                    "summary": "Common issues and fixes for the current theme system."
+                    "title": "Troubleshooting",
+                    "category": "Reference",
+                    "categoryOrder": 2,
+                    "order": 1,
+                    "summary": "Resolve installation, selection, styling, and component problems."
+                },
+                {
+                    "name": "component-overrides.md",
+                    "path": "/themes/component-overrides",
+                    "title": "Replace app components",
+                    "category": "Advanced",
+                    "categoryOrder": 3,
+                    "order": 0,
+                    "summary": "Replace app components while preserving caller contracts and accessibility."
+                },
+                {
+                    "name": "architecture.md",
+                    "path": "/themes/architecture",
+                    "title": "Runtime and architecture",
+                    "category": "Advanced",
+                    "categoryOrder": 3,
+                    "order": 1,
+                    "summary": "Understand discovery, compilation, activation, hydration, and persistence."
                 }
             ]
         },
@@ -1136,178 +1268,220 @@
             "path": "/cloud",
             "files": [
                 {
-                    "name": "admin-access-bridge.md",
-                    "path": "/cloud/admin-access-bridge",
-                    "category": "Architecture",
-                    "summary": "This page explains why a Clerk user can appear as an admin in deployments that use the Convex provider."
+                    "name": "overview.md",
+                    "path": "/cloud/overview",
+                    "title": "Cloud overview",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 0,
+                    "summary": "OR3 Cloud adds accounts, shared workspaces, cross-device sync, server-side file storage, and background execution to the local-first app. Your browser still stores workspace data in Dexie and queues local changes while offline. Cloud featur"
+                },
+                {
+                    "name": "setup.md",
+                    "path": "/cloud/setup",
+                    "title": "Set up Cloud",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 1,
+                    "summary": "Use the managed @or3/cloud distribution for normal local or single-VPS deployments. It runs a versioned container with Basic Auth, SQLite sync, and filesystem storage. The canonical host installation guide, including firewall, Caddy, Cloudf"
+                },
+                {
+                    "name": "configure.md",
+                    "path": "/cloud/configure",
+                    "title": "Configure OR3",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 2,
+                    "summary": "For a managed deployment, start with setup: the operator creates a coherent configuration and credentials for its fixed Basic Auth + SQLite + filesystem profile. The environment and source configuration described below is for contributors a"
                 },
                 {
                     "name": "auth-system.md",
                     "path": "/cloud/auth-system",
-                    "category": "Architecture",
-                    "summary": "The OR3 Authentication System uses a hybrid approach: an auth provider (Clerk or basic-auth, selected by OR3 AUTH PROVIDER) handles user identity and workspace provisioning, while OpenRouter is used separately for LLM API access via PKCE. This separation en..."
+                    "title": "Accounts and access",
+                    "category": "Using Cloud",
+                    "categoryOrder": 1,
+                    "order": 3,
+                    "summary": "Cloud login verifies who you are; workspace membership and permissions decide what you can do. OpenRouter authorization and the deployment admin panel use separate credentials. This page explains the distinctions for both Basic Auth/SQLite "
                 },
                 {
                     "name": "background-execution.md",
                     "path": "/cloud/background-execution",
-                    "category": "Architecture",
-                    "summary": "OR3 supports SSR background jobs for chat streaming, mixed server/browser tool execution, and workflows so work can continue when the user detaches or navigates away."
-                },
-                {
-                    "name": "capability-matrix.md",
-                    "path": "/cloud/capability-matrix",
-                    "category": "Reference",
-                    "summary": "This is the normative authorization inventory for public OR3 Cloud operations. Authorization is derived from a verified provider identity and the canonical workspace membership. Request bodies may identify resources, content, and"
-                },
-                {
-                    "name": "config-reference.md",
-                    "path": "/cloud/config-reference",
-                    "category": "Reference",
-                    "summary": "This page is the typed reference for the base and cloud configuration objects, including defaults, validation, and how settings affect behavior. The complete deployment environment-variable matrix is maintained separately below."
-                },
-                {
-                    "name": "deployment-operations.md",
-                    "path": "/cloud/deployment-operations",
-                    "category": "Operations",
-                    "summary": "Operational runbook for OR3 Cloud SSR deployments, including authenticated recovery, preservation of legacy adoption and pre-authentication backups, operator checks, and verified CLI and dashboard updates."
-                },
-                {
-                    "name": "environment-reference.md",
-                    "path": "/cloud/environment-reference",
-                    "category": "Reference",
-                    "summary": "This is the deployment-oriented reference for environment variables consumed by or3-chat and its first-party provider packages. It complements the typed configuration reference: - Base configuration documents config.or3.ts."
-                },
-                {
-                    "name": "identity-access-concepts.md",
-                    "path": "/cloud/identity-access-concepts",
-                    "category": "Architecture",
-                    "summary": "OR3 access control has more moving parts than a simple \"is the user logged in?\" check. This doc explains those parts, why they exist, and how they combine to produce a final allow/deny decision."
-                },
-                {
-                    "name": "migration-default-stack.md",
-                    "path": "/cloud/migration-default-stack",
-                    "category": "Guide",
-                    "summary": "This guide migrates an existing SSR deployment from clerk + convex to basic-auth + sqlite + fs."
+                    "title": "Background execution",
+                    "category": "Using Cloud",
+                    "categoryOrder": 1,
+                    "order": 4,
+                    "summary": "OR3 supports SSR background jobs for chat streaming, tool execution, and workflows so work can continue when the user detaches or navigates away."
                 },
                 {
                     "name": "notifications.md",
                     "path": "/cloud/notifications",
-                    "category": "Features",
-                    "summary": "The OR3 Notification Center provides real-time, in-app notifications for AI events, sync conflicts, system warnings, and custom plugin events. It works offline-first and syncs across devices when OR3 Cloud is enabled."
-                },
-                {
-                    "name": "or3-cloud-config.md",
-                    "path": "/cloud/or3-cloud-config",
-                    "category": "Configuration",
-                    "summary": "Server-side configuration for authentication, sync, storage, rate limiting, and security. Requires SSR mode. For the complete deployment environment-variable matrix—including provider credentials, SQLite runtimes, webhooks, Connect, plugin controls, and wizard"
-                },
-                {
-                    "name": "or3-cloud-wizard.md",
-                    "path": "/cloud/or3-cloud-wizard",
-                    "category": "Guide",
-                    "summary": "This is an advanced source-development path. Managed Cloud intentionally withholds remote Connect until its operator and staging proof are complete; use Start Here for supported beginner routes."
-                },
-                {
-                    "name": "or3-config.md",
-                    "path": "/cloud/or3-config",
-                    "category": "Configuration",
-                    "summary": "Local-first configuration for site branding, feature toggles, and client-side limits. Works with both static and SSR builds. For a complete, setting-by-setting deep dive (including defaults, validation rules, and how each setting affects behavior), see:"
-                },
-                {
-                    "name": "or3-connect.md",
-                    "path": "/cloud/or3-connect",
-                    "category": "Guide",
-                    "summary": "Managed Cloud status: withheld. Remote Connect is not part of the supported managed Cloud launch. Local Intern is independently available through the pinned @or3/connect@0.1.3 bootstrap."
-                },
-                {
-                    "name": "plugin-access-gating.md",
-                    "path": "/cloud/plugin-access-gating",
-                    "category": "Architecture",
-                    "summary": "Plugin gating controls which plugins, dashboard items, and sidebar surfaces a user can see and interact with. It has two distinct jobs that must both work correctly: - Client-side gating hides UI surfaces the user can’t access. This is a UX concern — it kee..."
-                },
-                {
-                    "name": "provider-basic-auth.md",
-                    "path": "/cloud/provider-basic-auth",
-                    "category": "Guide",
-                    "summary": "Setup and operating guide for the default-stack auth provider."
-                },
-                {
-                    "name": "provider-clerk.md",
-                    "path": "/cloud/provider-clerk",
-                    "category": "Guide",
-                    "summary": "Dedicated install and wiring guide for the Clerk auth provider package."
-                },
-                {
-                    "name": "provider-compatibility-matrix.md",
-                    "path": "/cloud/provider-compatibility-matrix",
-                    "category": "Reference",
-                    "summary": "Compatibility guide for common OR3 Cloud provider combinations."
-                },
-                {
-                    "name": "provider-convex.md",
-                    "path": "/cloud/provider-convex",
-                    "category": "Guide",
-                    "summary": "Dedicated install and wiring guide for the Convex sync/storage/backend provider package, including the typed generic-file compatibility boundary and private host-settings storage with legacy migration."
-                },
-                {
-                    "name": "provider-fs.md",
-                    "path": "/cloud/provider-fs",
-                    "category": "Guide",
-                    "summary": "Setup and operating guide for the default-stack object storage backend."
-                },
-                {
-                    "name": "provider-s3.md",
-                    "path": "/cloud/provider-s3",
-                    "category": "Guide",
-                    "summary": "S3-compatible storage provider for OR3 Cloud. This provider: - registers a server-side StorageGatewayAdapter with ID s3 - generates short-lived presigned upload/download URLs - binds uploads to the declared SHA-256 checksum and exact content length"
-                },
-                {
-                    "name": "provider-sqlite.md",
-                    "path": "/cloud/provider-sqlite",
-                    "category": "Guide",
-                    "summary": "Setup and operating guide for the default-stack sync backend."
-                },
-                {
-                    "name": "providers.md",
-                    "path": "/cloud/providers",
-                    "category": "Guide",
-                    "summary": "Provider entry resolution, data-only JSON metadata migration, required server capabilities, and intentional static/offline operation."
-                },
-                {
-                    "name": "release-checklist.md",
-                    "path": "/cloud/release-checklist",
-                    "category": "Operations",
-                    "summary": "The authoritative OR3 Cloud promotion gate separates reproducible code checks from exact-artifact staging and scale checks. Marketplace launch also requires published provider fixes, signed installation and recovery, paid Library and administrator-request journeys, and retained acceptance evidence."
-                },
-                {
-                    "name": "release-notes-production-readiness.md",
-                    "path": "/cloud/release-notes-production-readiness",
-                    "category": "Release Notes",
-                    "summary": "Release notes for the production-readiness tranche covering sync casing normalization, background execution hardening, and documentation completion. Current code verdict: RELEASE CANDIDATE. Production promotion still"
-                },
-                {
-                    "name": "storage-layer.md",
-                    "path": "/cloud/storage-layer",
-                    "category": "Architecture",
-                    "summary": "The OR3 Storage Layer handles hash-addressed binary assets separately from database sync, with explicit MIME admission, safe generic-file download policy, and a typed reader/writer compatibility gate."
-                },
-                {
-                    "name": "sync-layer.md",
-                    "path": "/cloud/sync-layer",
-                    "category": "Architecture",
-                    "summary": "OR3 sync is offline-first Dexie plus a change-log. Outbox selection is readyAt-bounded and fair across pending and retry_wait with guarded winner application and delay-free recovery; pulls include oldestRetainedVersion and requiresSnapshot."
-                },
-                {
-                    "name": "troubleshooting.md",
-                    "path": "/cloud/troubleshooting",
-                    "category": "Guide",
-                    "summary": "This guide helps you diagnose and fix common issues with OR3 Cloud features including authentication, sync, storage, and notifications."
+                    "title": "Notifications",
+                    "category": "Using Cloud",
+                    "categoryOrder": 1,
+                    "order": 5,
+                    "summary": "The OR3 Notification Center provides real-time, in-app notifications for AI completions, system warnings, and custom plugin events. It works offline-first and syncs across devices when OR3 Cloud is enabled."
                 },
                 {
                     "name": "webhooks.md",
                     "path": "/cloud/webhooks",
-                    "category": "Guide",
-                    "summary": "OR3 webhooks deliver real-time server-side events to external HTTP endpoints. Every delivery is a signed JSON payload with automatic retries, delivery logging, and SSRF protection. There are two webhook scopes:"
+                    "title": "Webhooks",
+                    "category": "Using Cloud",
+                    "categoryOrder": 1,
+                    "order": 6,
+                    "summary": "OR3 webhooks deliver real-time server-side events to external HTTP endpoints. Every delivery is a signed JSON payload with automatic retries, delivery logging, and SSRF protection."
+                },
+                {
+                    "name": "providers.md",
+                    "path": "/cloud/providers",
+                    "title": "Choose and wire providers",
+                    "category": "Providers",
+                    "categoryOrder": 2,
+                    "order": 7,
+                    "summary": "This guide covers how OR3 discovers provider packages, how to install them, and how the Clerk to Convex token bridge works."
+                },
+                {
+                    "name": "provider-basic-auth.md",
+                    "path": "/cloud/provider-basic-auth",
+                    "title": "Basic Auth",
+                    "category": "Providers",
+                    "categoryOrder": 2,
+                    "order": 8,
+                    "summary": "Setup and operating guide for the default-stack auth provider."
+                },
+                {
+                    "name": "provider-sqlite.md",
+                    "path": "/cloud/provider-sqlite",
+                    "title": "SQLite",
+                    "category": "Providers",
+                    "categoryOrder": 2,
+                    "order": 9,
+                    "summary": "Setup and operating guide for the default-stack sync backend."
+                },
+                {
+                    "name": "provider-fs.md",
+                    "path": "/cloud/provider-fs",
+                    "title": "Filesystem",
+                    "category": "Providers",
+                    "categoryOrder": 2,
+                    "order": 10,
+                    "summary": "Setup and operating guide for the default-stack object storage backend."
+                },
+                {
+                    "name": "provider-clerk.md",
+                    "path": "/cloud/provider-clerk",
+                    "title": "Clerk",
+                    "category": "Providers",
+                    "categoryOrder": 2,
+                    "order": 11,
+                    "summary": "Dedicated install and wiring guide for the Clerk auth provider package."
+                },
+                {
+                    "name": "provider-convex.md",
+                    "path": "/cloud/provider-convex",
+                    "title": "Convex",
+                    "category": "Providers",
+                    "categoryOrder": 2,
+                    "order": 12,
+                    "summary": "Dedicated install and wiring guide for the Convex sync/storage/backend provider package."
+                },
+                {
+                    "name": "provider-s3.md",
+                    "path": "/cloud/provider-s3",
+                    "title": "S3-compatible storage",
+                    "category": "Providers",
+                    "categoryOrder": 2,
+                    "order": 13,
+                    "summary": "S3-compatible storage provider for OR3 Cloud."
+                },
+                {
+                    "name": "deployment-operations.md",
+                    "path": "/cloud/deployment-operations",
+                    "title": "Operate and recover Cloud",
+                    "category": "Operations",
+                    "categoryOrder": 3,
+                    "order": 14,
+                    "summary": "Operational runbook for OR3 Cloud SSR deployments."
+                },
+                {
+                    "name": "troubleshooting.md",
+                    "path": "/cloud/troubleshooting",
+                    "title": "Troubleshooting",
+                    "category": "Operations",
+                    "categoryOrder": 3,
+                    "order": 15,
+                    "summary": "This guide helps you diagnose and fix common issues with OR3 Cloud features including authentication, sync, storage, and notifications."
+                },
+                {
+                    "name": "config-reference.md",
+                    "path": "/cloud/config-reference",
+                    "title": "Configuration reference",
+                    "category": "Reference",
+                    "categoryOrder": 4,
+                    "order": 16,
+                    "summary": "This page is the typed reference for the base and cloud configuration objects, including defaults, validation, and how settings affect behavior. The complete deployment environment-variable matrix is maintained separately below."
+                },
+                {
+                    "name": "environment-reference.md",
+                    "path": "/cloud/environment-reference",
+                    "title": "Environment reference",
+                    "category": "Reference",
+                    "categoryOrder": 4,
+                    "order": 17,
+                    "summary": "This is the deployment-oriented reference for environment variables consumed by or3-chat and its first-party provider packages. It complements the typed configuration reference:"
+                },
+                {
+                    "name": "capability-matrix.md",
+                    "path": "/cloud/capability-matrix",
+                    "title": "Capability matrix",
+                    "category": "Reference",
+                    "categoryOrder": 4,
+                    "order": 18,
+                    "summary": "This is the normative authorization inventory for public OR3 Cloud operations. Authorization is derived from a verified provider identity and the canonical workspace membership. Request bodies may identify resources, content, and desired op"
+                },
+                {
+                    "name": "sync-layer.md",
+                    "path": "/cloud/sync-layer",
+                    "title": "Sync internals",
+                    "category": "Advanced",
+                    "categoryOrder": 5,
+                    "order": 19,
+                    "summary": "The OR3 Sync Layer provides offline-first, bidirectional synchronization between a workspace-scoped local Dexie database and the selected sync backend (SQLite or Convex in first-party deployments). It enables users to work offline and have "
+                },
+                {
+                    "name": "storage-layer.md",
+                    "path": "/cloud/storage-layer",
+                    "title": "Storage internals",
+                    "category": "Advanced",
+                    "categoryOrder": 5,
+                    "order": 20,
+                    "summary": "Authenticated storage writes (presign upload, commit, delete, and GC) require JSON plus x-or3-cloud-intent: mutation from browser callers. The server checks the exact origin against its effective request origin or OR3_ALLOWED_ORIGINS before"
+                },
+                {
+                    "name": "plugin-access-gating.md",
+                    "path": "/cloud/plugin-access-gating",
+                    "title": "Plugin access policy",
+                    "category": "Advanced",
+                    "categoryOrder": 5,
+                    "order": 21,
+                    "summary": "Plugin gating controls which plugins, dashboard items, and sidebar surfaces a user can see and interact with. It has two distinct jobs that must both work correctly:"
+                },
+                {
+                    "name": "or3-cloud-wizard.md",
+                    "path": "/cloud/or3-cloud-wizard",
+                    "title": "Source setup wizard",
+                    "category": "Advanced",
+                    "categoryOrder": 5,
+                    "order": 22,
+                    "summary": "> This is an advanced source-development path. Managed Cloud intentionally > withholds remote Connect until its operator and staging proof are complete; > use Set up Cloud for supported beginner routes."
+                },
+                {
+                    "name": "or3-connect.md",
+                    "path": "/cloud/or3-connect",
+                    "title": "Connect status and source integration",
+                    "category": "Advanced",
+                    "categoryOrder": 5,
+                    "order": 23,
+                    "summary": "> Managed Cloud status: withheld. Remote Connect is not part of the > supported managed Cloud launch. Its Cloudflare/domain/attestation flow and a > disposable staging lifecycle must pass before the production UI or beginner > docs can offe"
                 }
             ]
         },

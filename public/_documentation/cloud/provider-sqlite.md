@@ -2,6 +2,8 @@
 
 Setup and operating guide for the default-stack sync backend.
 
+Managed installations use the fixed profile in [Set up Cloud](/documentation/cloud/setup). The install commands and manual settings below are for editable source deployments; install only the providers your source configuration selects.
+
 ## What It Provides
 
 - Gateway-mode sync backend for OR3 sync endpoints.
@@ -106,7 +108,7 @@ profile.
 
 ## Related
 
-- [providers](./providers)
-- [sync-layer](./sync-layer)
-- [provider-basic-auth](./provider-basic-auth)
-- [provider-fs](./provider-fs)
+- [Choose and wire providers](/documentation/cloud/providers)
+- [Sync internals](/documentation/cloud/sync-layer)
+- [Basic Auth](/documentation/cloud/provider-basic-auth)
+- [Filesystem](/documentation/cloud/provider-fs)

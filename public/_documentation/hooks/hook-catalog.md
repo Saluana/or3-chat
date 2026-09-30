@@ -1,18 +1,18 @@
-# hook-catalog
+# Hook catalog
 
-Authoritative catalog of available hooks with their argument shapes and return values. This is derived from the codebase (hook keys, payload types, and call sites) so developers don’t have to console.log.
+Curated catalog of hook names, argument shapes, return values, and known emitters, checked against the payload map and production call sites. Typed-only rows are not runtime events.
 
 ---
 
 ## How to read this
 
 -   Kind: action vs filter. Actions return void; filters must return the next value in the chain.
--   Args: tuple passed to your handler. Use `typedOn(hooks).on(key, fn)` for editor inference.
+-   Args: tuple passed to your handler. Use `useHooks().on(key, fn)` for inference and automatic filter-kind selection.
 -   Returns: concrete return type for filters. Veto-capable filters allow `false` (or `''`) to cancel/clear.
 -   Typed-only: the key exists in `hook-types.ts` but no call site emits it yet. Registering still typechecks; nothing will fire.
 -   Server-side: hooks in the final section run on the admin hook engine or Nitro webhook events, not on `$hooks`.
 
-See also: `hooks.md` for engine API, `hook-keys.md` and `hook-types.md` for detailed payload types.
+See [API and types](/documentation/hooks/reference) for engine semantics, lifecycle, inference, and custom names.
 
 ---
 
@@ -20,7 +20,7 @@ See also: `hooks.md` for engine API, `hook-keys.md` and `hook-types.md` for deta
 
 | Key                                   | Kind   | Args (tuple)                                     | Returns                            |
 | ------------------------------------- | ------ | ------------------------------------------------ | ---------------------------------- |
-| `ui.chat.message:filter:outgoing`     | filter | `[text: string]`                                 | `string \| false` (veto to cancel) |
+| `ui.chat.message:filter:outgoing`     | filter | `[text: string]`                                 | `string` in the typed map; caller also recognizes `false` at runtime (see [boundary](/documentation/hooks/reference#outgoing-chat-cancellation-boundary)) |
 | `ui.chat.message:filter:incoming`     | filter | `[text: string, threadId?: string]`              | `string`                           |
 | `ai.chat.model:filter:select`         | filter | `[modelId: string]`                              | `string` (new model id)            |
 | `ai.chat.messages:filter:input`       | filter | `[messages: any[]]`                              | `any[]`                            |

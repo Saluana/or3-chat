@@ -2,6 +2,8 @@
 
 Setup and operating guide for the default-stack auth provider.
 
+Managed installations use the fixed profile in [Set up Cloud](/documentation/cloud/setup). The install commands and manual settings below are for editable source deployments; install only the providers your source configuration selects.
+
 ## What It Provides
 
 - SSR auth endpoints for sign-in/sign-out/session/refresh.
@@ -85,7 +87,7 @@ OR3_AUTH_INVITE_TOKEN_TTL_SECONDS=604800
 
 ## Related
 
-- [providers](./providers)
-- [provider-sqlite](./provider-sqlite)
-- [provider-fs](./provider-fs)
-- [auth-system](./auth-system)
+- [Choose and wire providers](/documentation/cloud/providers)
+- [SQLite](/documentation/cloud/provider-sqlite)
+- [Filesystem](/documentation/cloud/provider-fs)
+- [Accounts and access](/documentation/cloud/auth-system)

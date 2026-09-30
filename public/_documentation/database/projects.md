@@ -1,4 +1,4 @@
-# projects
+# Projects
 
 CRUD helpers for project metadata stored in the `projects` Dexie table.
 

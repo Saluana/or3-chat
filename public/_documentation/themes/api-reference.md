@@ -1,11 +1,13 @@
-# API Reference: Theme System
+# Theme reference
 
 Reference for the current OR3 theme system API, types, and tooling.
 
 ## ThemeDefinition
 
-Theme definitions live in `app/theme/<theme>/theme.ts` and use
-`defineTheme()` from `app/theme/_shared/define-theme.ts`.
+Trusted-code definitions live in `app/theme/<theme>/theme.ts` and use
+`defineTheme()` from `app/theme/_shared/define-theme.ts`. Declarative packages
+express the same configuration as JSON in `or3.theme.json`; the installer
+generates the runtime adapter. Start with [Build your first theme](/documentation/themes/first-theme).
 
 ```ts
 export interface ThemeDefinition {
@@ -45,16 +47,17 @@ export interface ThemeDefinition {
 The middle width and radius fields remain the compatibility defaults. Omitted
 outer tiers inherit from `borderWidth` or `borderRadius`, respectively.
 
-- `componentContractVersion` must match the current contract version (`1`);
-  incompatible versions fail validation. See `/themes/component-overrides`.
+- When `customComponents` is non-empty, `componentContractVersion` must match
+  the current contract version (`1`). A missing version warns; an incompatible
+  version fails validation. See [Replace app components](/documentation/themes/component-overrides).
 - `workspaceProfiles` packages declarative workspace layouts with the theme.
   They are registered as choices only; activating a theme never applies one.
-  See `/architecture/workspace-profiles`.
+  See [Workspace profiles](/documentation/architecture/workspace-profiles).
 - `recommendedWorkspaceProfileId` points at one of the packaged profiles as
   an explicit recommendation action, never an automatic selection.
 
 For a practical guide to replacing app components, see
-`/themes/component-overrides`.
+[Replace app components](/documentation/themes/component-overrides).
 
 ### AppThemeComponent
 
@@ -358,20 +361,6 @@ const overrides = useThemeOverrides({
 });
 ```
 
-### useThemeClasses
-
-**Deprecated.** This helper used to apply `cssSelectors.class` for lazy-loaded
-components:
-
-```ts
-import { useThemeClasses } from '~/composables/core/useThemeClasses';
-useThemeClasses();
-```
-
-It is now a no-op that logs a warning in dev. The active theme's runtime
-classes are applied automatically: a DOM observer watches for newly added
-elements and applies matching classes. You do not need to call it.
-
 ### useIcon
 
 Resolves a semantic icon token to a concrete icon name for the active theme:
@@ -383,8 +372,9 @@ const icon = useIcon('chat.send'); // computed<string>
 
 ### useThemeSelection
 
-Reads and writes the user's theme selection. The source of truth is the Dexie
-KV store (`theme_selection`), which syncs across devices. A legacy
+Reads and writes the active workspace's theme selection. The source of truth is
+its Dexie KV store (`theme_selection`); cross-device propagation depends on
+the configured workspace sync provider. A legacy
 `localStorage.activeTheme` value is migrated once. The `or3_active_theme`
 cookie supplies the first SSR paint.
 
@@ -392,6 +382,9 @@ cookie supplies the first SSR paint.
 const { selectedTheme, selectionSource, setSelectedTheme } = useThemeSelection();
 await setSelectedTheme('cyberpunk');
 ```
+
+`setSelectedTheme()` persists the preference; activate the appearance through
+`useThemeResolver().setActiveTheme()` or `$theme.setActiveTheme()`.
 
 `getThemeSelectionSync()` returns the current selection synchronously (with a
 localStorage fallback) for plugin initialization.
@@ -431,10 +424,10 @@ Key APIs:
 It always contains every supported `AppThemeComponent` key. Any key not
 overridden by the active theme points to the core default component.
 
-The client keeps this map on the default component set through hydration, then
-swaps in theme overrides after mount. That behavior is intentional and prevents
-SSR hydration mismatches when a theme override renders a different root
-structure than the core component.
+SSR resolves components for the cookie/default theme. The client applies that
+server-rendered theme before hydration. If the persisted client selection differs,
+it switches after `onNuxtReady`, preserving the server-rendered structure during
+hydration. See [Runtime and architecture](/documentation/themes/architecture).
 
 ## CLI Commands
 
@@ -442,11 +435,14 @@ structure than the core component.
   `theme.ts` and a `README.md`).
 - `bun run theme:validate [name]` validate themes and regenerate
   `types/theme-generated.d.ts` and the metadata manifest
-  (`app/theme/_shared/theme-manifest.generated.ts`).
+  (`app/theme/_shared/theme-manifest.generated.ts`). The compiler processes all
+  themes before filtering the requested report. This is configuration validation,
+  not a full TypeScript or component conformance check.
 - `bun run theme:build-css` build `/public/themes/<name>.css` from
   `cssSelectors.style`.
 - `bun run theme:switch` update `OR3_DEFAULT_THEME` in `.env`
-  (does not change the current runtime theme).
+  (restart the host to pick up the new deployment default; this does not change
+  the current browser selection).
 
 During development, the theme compiler also runs as a Vite plugin
 (`plugins/vite-theme-compiler.ts`). It validates themes on build start and

@@ -1,94 +1,66 @@
-# Register chat editor extensions (ChatInputDropper)
+# Extend the chat editor
 
-Enable plugins to add TipTap extensions to the chat composer without touching the component. `ChatInputDropper.vue` exposes two hook points so plugins can lazy‑load heavy code and inject their extensions at initialization time.
+Source extensions can add TipTap functionality to `ChatInputDropper.vue` before each chat composer is initialized. This guide uses application hooks in an editable checkout; these private imports are not a portable plugin API.
 
-## TL;DR
+## Initialization contract
 
--   Fire your lazy imports when the editor is about to initialize: `editor:request-extensions` (action)
--   Append your TipTap extensions using: `ui.chat.editor:filter:extensions` (filter)
--   Return the full array from the filter; the component will pass it to TipTap
+The composer awaits `editor:request-extensions`, then awaits `ui.chat.editor:filter:extensions` with its base extension array. The action may lazy-load code; its return value is ignored but async completion is awaited. The filter must return the full extension array.
 
-The component: `app/components/chat/ChatInputDropper.vue`
+The composer already includes Placeholder. Adding another Placeholder extension is not a way to configure the existing one and can create duplicate-name conflicts. Give your extension a distinct name. The base composer also disables the Link mark so pasted URLs stay editable text; if you add links, prevent editor clicks from navigating away.
 
-The base chat composer disables TipTap's Link mark so pasted URLs remain plain,
-editable text. Plugins that add link behavior should keep clicks inside the
-editor from navigating away.
+## Add a keyboard shortcut
+
+Create `app/editor/ExampleComposerShortcut.ts`:
 
 ```ts
-// Inside ChatInputDropper.vue (simplified)
-await hooks.doAction('editor:request-extensions');
-const extensions = await hooks.applyFilters(
-    'ui.chat.editor:filter:extensions',
-    baseExtensions
-);
-new Editor({ extensions });
+import { Extension } from '@tiptap/core';
+
+export default Extension.create({
+    name: 'exampleComposerShortcut',
+    addKeyboardShortcuts() {
+        return {
+            'Mod-Shift-l': () => this.editor.commands.insertContent('Hello'),
+        };
+    },
+});
 ```
 
-## Contract
-
--   Action: `editor:request-extensions`
-
-    -   When: right before the editor is created
-    -   Use it to: kick off dynamic imports, initialize registries/state, prefetch assets
-    -   Return value: ignored (fire‑and‑forget)
-
--   Filter: `ui.chat.editor:filter:extensions`
-    -   Input: `Extension[]` (the current list)
-    -   Output: `Extension[]` (your modified list)
-    -   Use it to: push/unshift your TipTap extension(s), or adjust ordering
-    -   Notes: ordering matters in TipTap; append for default order or unshift to run earlier
-
-See the Hook Engine docs for priorities if you need to ensure your filter runs before/after others.
-
-## Minimal plugin example
-
-Create a client‑only plugin file, e.g. `app/plugins/my-editor-extension.client.ts`:
+Create `app/plugins/example-editor.client.ts`:
 
 ```ts
 import { defineNuxtPlugin } from '#app';
 import { useHooks } from '#imports';
 
 export default defineNuxtPlugin(() => {
-    if (!process.client) return; // SSR-safe
-
     const hooks = useHooks();
+    let extension: typeof import('../editor/ExampleComposerShortcut').default | undefined;
 
-    // 1) Preload heavy code when the editor asks for extensions
-    hooks.on('editor:request-extensions', async () => {
-        // Optional: warm up dynamic imports so the first keypress feels fast
-        await import('@tiptap/extension-placeholder').catch(() => null);
+    const offLoad = hooks.on('editor:request-extensions', async () => {
+        extension ??= (await import('../editor/ExampleComposerShortcut')).default;
     });
-
-    // 2) Provide your TipTap extension(s) via filter
-    hooks.on('ui.chat.editor:filter:extensions', async (extensions) => {
-        try {
-            const { default: Placeholder } = await import(
-                '@tiptap/extension-placeholder'
-            );
-            extensions.push(
-                Placeholder.configure({
-                    placeholder: 'Write something …',
-                })
-            );
-        } catch (e) {
-            console.error('[my-editor-extension] failed to add Placeholder', e);
+    const offExtensions = hooks.on('ui.chat.editor:filter:extensions', (extensions) => {
+        const loaded = extension;
+        if (!loaded || extensions.some(item => item.name === loaded.name)) {
+            return extensions;
         }
-        return extensions; // important: always return the array
+        return [...extensions, loaded];
     });
+
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => {
+            offLoad();
+            offExtensions();
+        });
+    }
 });
 ```
 
-That’s it—no edits to `ChatInputDropper.vue` are required. When the chat composer mounts, it triggers the action, gathers extensions from every registered filter, and builds the TipTap editor with the combined list.
+The first hook finishes the import before the second adds the extension. If loading fails, the default engine logs the action error; the filter leaves the base array intact. Returning a new array avoids mutating shared configuration, and the name check prevents duplicate insertion.
 
-## Tips
+## Verify and iterate
 
--   Guard with `process.client` to avoid SSR import errors.
--   Prefer dynamic imports for heavy extensions to keep initial bundle small.
--   If your extension opens popovers or overlays, make sure it doesn’t steal focus from the editor.
--   Handle failures gracefully—log and keep returning the input array so other plugins aren’t affected.
+Run `bun run dev`, open a chat, focus the composer, and press Cmd+Shift+L on macOS or Ctrl+Shift+L elsewhere. It should insert `Hello` once. Check a second pane too, then confirm ordinary typing, attachments, and sending still work.
 
-## Related
+Extension lists apply when an editor is created. Recreate the composer or reload after changing the extension; an existing editor is not reconfigured by registering another filter. HMR disposal removes listeners, and each editor owns its own TipTap instance.
 
--   `ChatInputDropper.vue` (loads TipTap and applies the hooks)
--   Hooks: `hooks/hooks`, `hooks/hook-catalog`, `hooks/typed-hooks`
--   Editor registries: `composables/useEditorNodes`, `composables/useEditorExtensionLoader`
+See the [API reference](/documentation/hooks/reference) for priorities and cleanup, and the [catalog](/documentation/hooks/hook-catalog) for other composer hooks.

@@ -1,14 +1,33 @@
-# Cloud Providers: Install and Wiring
+# Cloud providers
 
 This guide covers how OR3 discovers provider packages, how to install them, and how the Clerk to Convex token bridge works.
 
-For normal local or VPS operation, use the managed [`@or3/cloud`](/docs/installation)
+For normal local or VPS operation, use the managed [`@or3/cloud`](/documentation/cloud/setup)
 operator. For editable source or custom providers, use the
-[Cloud Source Wizard](./or3-cloud-wizard).
+[Cloud Source Wizard](/documentation/cloud/or3-cloud-wizard).
 
-Use the [Environment and Provider Settings Reference](./environment-reference)
+Use the [Environment and Provider Settings Reference](/documentation/cloud/environment-reference)
 as the complete env-var matrix. The provider pages below then add provider-
 specific installation and operational details.
+
+## Supported combinations
+
+The managed distribution uses Basic Auth + SQLite + filesystem storage. The other combinations below are source deployments; installing packages does not make them options in the managed installer.
+
+| Auth | Canonical workspace/sync backend | Object storage | Path |
+|---|---|---|---|
+| None | None | Browser only | Local-only/static |
+| Basic Auth | SQLite | Filesystem | Managed or source |
+| Clerk | SQLite | Filesystem | Source |
+| Clerk | Convex | Convex | Source |
+| Basic Auth | Convex | Convex | Source |
+| Basic Auth | Convex | S3-compatible | Source |
+
+These rows follow `shared/cloud/provider-compatibility.ts`. SQLite and Convex both register durable background-job providers; memory is process-local and loses jobs on restart. Background and limits stores are independently selected. D1 runtime support in the SQLite package does not implement every admin, Connect, or webhook store; do not assume the complete managed profile works on D1.
+
+Auth needs the selected backend's workspace store even when sync transfer is disabled. Private workspace authority uses atomic, workspace-scoped settings: SQLite's `admin_workspace_settings` and Convex's private `host_settings` stay outside client sync. Legacy client `kv` values are not trusted as marketplace authority.
+
+A provider switch does not copy identities, accounts, memberships, records, or files. Verify a migration against an isolated copy with backups before changing a live backend. See [configuration](/documentation/cloud/configure).
 
 ## Provider Model
 
@@ -36,7 +55,7 @@ separate cloud database. Relay selection is independent and configured with
 
 ## Install Providers
 
-Install from npm:
+For an editable source checkout, install only the packages selected by your configuration. Each provider page explains its credentials and persistent data paths:
 
 ```bash
 bun add or3-provider-clerk
@@ -128,15 +147,7 @@ OR3_STORAGE_FS_ROOT=/srv/or3/.data/storage
 OR3_STORAGE_FS_TOKEN_SECRET=replace-with-random-secret
 ```
 
-The same stack can enable account-bound remote computers with:
-
-```bash
-OR3_CONNECT_ENABLED=true
-OR3_CONNECT_PROVIDER=sqlite
-OR3_CONNECT_RELAY_PROVIDER=cloudflare
-```
-
-See [OR3 Connect](./or3-connect) for the remaining relay and encryption values.
+Remote Connect is withheld from managed Cloud. Its [advanced source reference](/documentation/cloud/or3-connect) describes separate persistence, relay, and qualification requirements; the stack above does not enable it.
 
 ## Clerk to Convex Bridge
 
@@ -200,18 +211,15 @@ Configuration is normalized once for modules, feature decisions, and private/pub
 
 ## Related
 
-- [provider-clerk](./provider-clerk)
-- [provider-convex](./provider-convex)
-- [provider-basic-auth](./provider-basic-auth)
-- [provider-sqlite](./provider-sqlite)
-- [provider-fs](./provider-fs)
-- [provider-s3](./provider-s3)
-- [provider-compatibility-matrix](./provider-compatibility-matrix)
-- [migration-default-stack](./migration-default-stack)
-- [deployment-operations](./deployment-operations)
-- [release-notes-production-readiness](./release-notes-production-readiness)
-- [or3-cloud-config](./or3-cloud-config)
-- [config-reference](./config-reference)
-- [auth-system](./auth-system)
-- [sync-layer](./sync-layer)
-- [storage-layer](./storage-layer)
+- [Clerk](/documentation/cloud/provider-clerk)
+- [Convex](/documentation/cloud/provider-convex)
+- [Basic Auth](/documentation/cloud/provider-basic-auth)
+- [SQLite](/documentation/cloud/provider-sqlite)
+- [Filesystem](/documentation/cloud/provider-fs)
+- [S3-compatible storage](/documentation/cloud/provider-s3)
+- [Operate and recover Cloud](/documentation/cloud/deployment-operations)
+- [Configure OR3](/documentation/cloud/configure)
+- [Configuration reference](/documentation/cloud/config-reference)
+- [Accounts and access](/documentation/cloud/auth-system)
+- [Sync internals](/documentation/cloud/sync-layer)
+- [Storage internals](/documentation/cloud/storage-layer)

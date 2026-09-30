@@ -82,5 +82,5 @@ backed-up files, start command, and restoration path.
 - [Quality gates](../../shared/quality-gates.md)
 - [Permissions and trust](../../shared/permissions-and-trust.md)
 - `public/_documentation/cloud/or3-cloud-wizard.md`
-- `public/_documentation/cloud/or3-config.md`
+- `public/_documentation/cloud/configure.md`
 - Provider page(s) selected from `public/_documentation/docmap.json`

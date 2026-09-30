@@ -1,4 +1,4 @@
-# client
+# Database client and indexes
 
 Dexie database client that defines the `Or3DB` schema, typed tables, and versioning rules.
 
@@ -62,11 +62,17 @@ The v17 upgrade backfills `readyAt` transactionally from the same projection rul
 ## Usage
 
 ```ts
-import { db } from '~/app/db';
+import { getDb } from '~/db/client';
 
-await db.open();
-const allThreads = await db.threads.toArray();
+// Run in a client-side lifecycle or user action, not at module load.
+export async function readRecentThreads() {
+  const db = getDb();
+  await db.open();
+  return db.threads.orderBy('updated_at').reverse().limit(50).toArray();
+}
 ```
+
+The raw query above includes soft-deleted rows; use entity query helpers or apply your feature's deletion rules before showing results. Long-running operations need a captured database and explicit guards; see [safe changes](/documentation/database/safe-changes).
 
 -   Prefer the higher-level modules (`threads.ts`, `messages.ts`, etc.) for business logic and hook coverage.
 -   Use `getDb()` instead of importing `db` directly; the bare `db` reference goes stale when the active workspace changes.

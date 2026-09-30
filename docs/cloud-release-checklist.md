@@ -1,4 +1,4 @@
-# OR3 Cloud Release Checklist
+# OR3 Cloud release checklist
 
 This is the authoritative promotion gate for OR3 Cloud. It separates
 reproducible code checks from deployment-specific checks that must be performed
@@ -155,12 +155,12 @@ signer, migration, commerce and storefront gates.
       product acceptance. Local unit tests and synthetic browser harnesses do
       not replace this deployed journey.
 
-See [Install and manage plugins](/documentation/plugins/install-and-manage),
-[Library linking](/documentation/plugins/library), and
-[Runtime and security](/documentation/plugins/runtime-and-security).
+See [Install and manage plugins](../public/_documentation/plugins/install-and-manage.md),
+[Library linking](../public/_documentation/plugins/library.md), and
+[Runtime and security](../public/_documentation/plugins/runtime-and-security.md).
 
 ## Related
 
-- [deployment-operations](./deployment-operations)
-- [provider-compatibility-matrix](./provider-compatibility-matrix)
-- [release-notes-production-readiness](./release-notes-production-readiness)
+- [deployment-operations](../public/_documentation/cloud/deployment-operations.md)
+- [Supported provider combinations](../public/_documentation/cloud/providers.md)
+- [Historical readiness notes](history/cloud-production-readiness.md)

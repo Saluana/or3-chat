@@ -1,6 +1,6 @@
 # Database Sync Layer
 
-The OR3 Sync Layer provides offline-first, bidirectional synchronization between the local Dexie database and the Convex backend. It enables users to work offline and have their changes automatically synced when connectivity is restored, with support for multi-device synchronization and conflict resolution.
+The OR3 Sync Layer provides offline-first, bidirectional synchronization between a workspace-scoped local Dexie database and the selected sync backend (SQLite or Convex in first-party deployments). It enables users to work offline and have their changes automatically synced when connectivity is restored, with support for multi-device synchronization and conflict resolution.
 
 ## Materialized snapshot bootstrap contract
 
@@ -225,36 +225,11 @@ hooks.addAction("sync.bootstrap:action:complete", () => {
 
 The sync layer is backend-agnostic. You can implement your own provider (e.g., for Supabase, Firebase, or a custom WebSocket server) by implementing the `SyncProvider` interface.
 
-### 1. The SyncProvider Interface
+### 1. The SyncProvider contract
 
-The core contract is defined in `shared/sync/types.ts`. Your provider must implement these methods:
+The authoritative interface lives in `shared/sync/types.ts`. Implement `id`, `mode: 'direct' | 'gateway'`, `subscribe` (returning an unsubscribe function), `pull`, `push`, `updateCursor`, and async `dispose`. Subscription callbacks may be async and accept subscription options. Optional methods include `snapshot`, `gcTombstones`, and `gcChangeLog`.
 
-```typescript
-export interface SyncProvider {
-  id: string; // Unique identifier (e.g., 'supabase', 'custom-ws')
-  mode: "direct" | "gateway"; // 'direct' for client-side, 'gateway' for SSR proxies
-
-  // Real-time subscription
-  subscribe(
-    scope: SyncScope,
-    tables: string[],
-    onChanges: (changes: SyncChange[]) => void,
-  ): Promise<() => void>;
-
-  // Bootstrap / Catch-up
-  pull(request: PullRequest): Promise<PullResponse>;
-
-  // Outbox Flush
-  push(batch: PushBatch): Promise<PushResult>;
-
-  // Cursor Checkpointing
-  updateCursor(
-    scope: SyncScope,
-    deviceId: string,
-    version: number,
-  ): Promise<void>;
-}
-```
+The `snapshotBootstrap` and `historyRetention` capabilities each declare `'snapshot-v1'`. Advertise them only with the corresponding materialized snapshot and retention behavior implemented. A missing retention contract fails closed; an empty pull response is not a bootstrap implementation. Direct providers declare their auth requirement and use `AuthTokenBroker`; gateway clients use the authorized SSR adapter.
 
 ### 2. Backend Requirements
 
@@ -264,7 +239,7 @@ To support the OR3 Sync Protocol, your backend must:
 2.  **LWW Logic**: When receiving a push, compare validation logic:
     - If `incoming.clock > current.clock`: Write.
     - If `incoming.clock == current.clock` and `incoming.hlc > current.hlc`: Write.
-    - Else: Ignore (out of order).
+    - If both are equal, use the deterministic `op_id` tie-breaker defined by the shared stamp comparison. Do not invent a backend-specific winner.
 3.  **Tombstones**: Never hard-delete synced records. Mark them as `deleted=true` so the deletion can propagate to other clients.
 4.  **Batching**: Support atomic batches for both reads (`pull`) and writes (`push`).
 
@@ -292,69 +267,11 @@ HTTP 401/403 responses stop gateway polling and trigger session refresh. Queued
 writes stay in `retry_wait` without consuming an attempt, so signing out or an
 expired session does not create a retry/log storm or discard local changes.
 
-### 3. Implementation Example (Skeleton)
+### 3. Build and wire the complete provider
 
-```typescript
-import { registerSyncProvider } from "~/core/sync/sync-provider-registry";
-import type { SyncProvider, SyncChange } from "~~/shared/sync/types";
+Use the SQLite or Convex provider package as the reference for server registration, atomic writes, subscriptions, snapshots, and cleanup. A stub with only `subscribe/pull/push` is not a working provider. For a gateway backend, register its `SyncGatewayAdapter` and workspace/admin stores in a Nitro plugin; add that plugin through a thin Nuxt module. For a direct backend, register its client provider and token-broker requirement.
 
-export class MyCustomProvider implements SyncProvider {
-  id = "my-custom-backend";
-  mode = "direct" as const;
-
-  async subscribe(scope, tables, onChanges) {
-    // 1. Connect to your WebSocket / Realtime channel
-    const channel = myClient.subscribe(`workspace:${scope.workspaceId}`);
-
-    // 2. Listen for events
-    channel.on("db_change", (event) => {
-      // 3. Map backend event to SyncChange format
-      const changes: SyncChange[] = event.data.map((row) => ({
-        tableName: row.table,
-        pk: row.id,
-        op: row.deleted ? "delete" : "put",
-        payload: row.data,
-        serverVersion: row.global_sequence_number,
-        stamp: {
-          clock: row.clock,
-          hlc: row.hlc,
-          deviceId: row.device_id,
-          opId: row.op_id,
-        },
-      }));
-
-      onChanges(changes);
-    });
-
-    // Return cleanup function
-    return () => channel.unsubscribe();
-  }
-
-  async pull(req) {
-    // Fetch changes > req.cursor
-    // Return { changes: [], nextCursor: 123, hasMore: false }
-  }
-
-  async push(batch) {
-    // Send batch.ops to server
-    // Return results for each op (success/fail) to update local queue
-  }
-}
-
-// 4. Register the provider
-registerSyncProvider(new MyCustomProvider());
-```
-
-### 4. Integration
-
-To activate your provider:
-
-1.  Create a client plugin (e.g., `plugins/my-sync.client.ts`).
-2.  Instantiate your provider.
-3.  Call `registerSyncProvider(instance)`.
-4.  Ensure `activeProviderId` is set to your provider's ID (or relying on default behavior if it's the only one).
-
-The `ConvexSyncClient` (`plugins/convex-sync.client.ts`) is a reference implementation showing how to hook into session state and start/stop the engine.
+Verify duplicate `op_id` replay, rejected identity/workspace fields, monotonic workspace versions, deterministic LWW ties, remote-apply suppression, offline outbox recovery, expired-cursor snapshot recovery, and teardown before enabling it on real data. Preserve snake_case wire payloads and one cursor per workspace.
 
 ---
 
@@ -375,7 +292,7 @@ echo $VITE_CONVEX_URL    # Should be set
 
 **Solutions:**
 
-- Ensure OR3 Cloud is enabled (see [or3-cloud-config](./or3-cloud-config))
+- Ensure OR3 Cloud is enabled (see [Configure OR3](/documentation/cloud/configure))
 - Check network connectivity
 - Verify user is authenticated
 - Check browser console for sync errors
@@ -435,7 +352,7 @@ bounded and does not create large browser quota fixtures. CI also builds the
 production application and enforces total/largest compressed and uncompressed
 JavaScript and CSS budgets. All gates retain versioned reports as trend
 artifacts once the standalone dependency publishing blocker described in the
-[provider compatibility matrix](./provider-compatibility-matrix) is resolved.
+[provider compatibility matrix](/documentation/cloud/providers#supported-combinations) is resolved.
 
 ### Cursor Reset / Rescan Loop
 
@@ -481,7 +398,7 @@ console.log("Local message count:", count);
 
 ## Related
 
-- [Notifications](./notifications) - Notification system that integrates with sync
-- [Auth System](./auth-system) - Authentication required for sync
-- [Troubleshooting](./troubleshooting) - General troubleshooting guide
-- [Hooks](../hooks/hooks) - Hook system for sync events
+- [Notifications](/documentation/cloud/notifications) - Notification system that integrates with sync
+- [Auth System](/documentation/cloud/auth-system) - Authentication required for sync
+- [Troubleshooting](/documentation/cloud/troubleshooting) - General troubleshooting guide
+- [Hooks](/documentation/hooks/overview) - Hook system for sync events

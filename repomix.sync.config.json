@@ -23,7 +23,7 @@
     "app/db/__tests__/clock-increments.test.ts",
     "planning/complete/db-sync-layer/**",
     "public/_documentation/cloud/sync-layer.md",
-    "public/_documentation/cloud/release-notes-production-readiness.md"
+    "docs/history/cloud-production-readiness.md"
   ],
   "ignore": {
     "customPatterns": [

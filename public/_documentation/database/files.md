@@ -1,4 +1,4 @@
-# files
+# File storage
 
 File storage layer that deduplicates blobs by hash, keeps metadata in Dexie, and exposes hook-friendly lifecycle helpers.
 
@@ -71,7 +71,7 @@ These make it easy to inject custom validation, analytics, or audit trails aroun
 
 ## Usage tips
 
--   Always call `derefFile` when removing file references from messages to keep ref counts accurate.
+-   Use [message-file helpers](/documentation/database/message-files) to remove a reference. They decrement counts themselves; do not call `derefFile` again afterward.
 -   `ref_count` represents unique live message edges, not upload attempts. Use the message-file helpers so duplicate or hook-pruned attachments are reconciled automatically.
 -   Hook into `db.files.create:filter:input` to enforce custom size caps or rename files.
--   When batch deleting, prefer `softDeleteMany` first; run `hardDeleteMany` during periodic cleanups to reclaim storage.
+-   `hardDeleteMany` deletes the supplied metadata and blobs without checking live references. Validate references and apply the existing deletion policy first; see [safe changes](/documentation/database/safe-changes#deletion-and-file-ownership).

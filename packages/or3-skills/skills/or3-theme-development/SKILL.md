@@ -26,7 +26,7 @@ the [extension decision tree](../../shared/extension-decision-tree.md).
 ## Required first steps
 
 1. Read [repository navigation](../../shared/repository-navigation.md).
-2. Read the theme quick start and only the API, component-override, selector,
+2. Read the themes overview and first-theme tutorial and only the API, component-override, selector,
    or packaging documentation needed by the request.
 3. Inspect the target component and its existing `v-theme`, theme identifiers,
    Nuxt UI variant, and visual-state coverage before changing styles.
@@ -82,7 +82,7 @@ validation, package/install status, and the restoration path.
 
 - [Quality gates](../../shared/quality-gates.md)
 - [Permissions and trust](../../shared/permissions-and-trust.md)
-- `public/_documentation/themes/quick-start.md`
+- `public/_documentation/themes/first-theme.md`
 - `public/_documentation/themes/api-reference.md`
 - `public/_documentation/themes/component-overrides.md`
-- `public/_documentation/themes/best-practices.md`
+- `public/_documentation/themes/styling.md`

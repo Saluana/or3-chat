@@ -1,57 +1,26 @@
-# attachments
+# URL attachment records
 
-Attachment table helpers for creating, updating, and deleting upload metadata with full hook coverage.
+The legacy `attachments` table stores URL metadata. It is distinct from [file metadata and blobs](/documentation/database/files) and does not manage message/file relationships.
 
----
+Import the helpers from `~/db/attachments`. They validate input and emit attachment hooks; they do not upload, delete, or revoke the referenced resource.
 
-## What does it do?
+| Field | Meaning |
+| --- | --- |
+| id | Caller-provided primary key. |
+| type / name | Type tag and display name. |
+| url | Schema-validated URL; a blob/object URL is not durable file persistence. |
+| created_at / updated_at | Unix seconds. |
+| deleted | Soft deletion flag. |
+| clock | Required numeric revision field on full-row input. |
 
--   Validates attachment payloads against `AttachmentCreateSchema`/`AttachmentSchema`.
--   Pipes all mutations through `dbTry` so quota and Dexie errors surface with contextual toasts.
--   Fires hook filters/actions around create, upsert, soft delete, hard delete, and reads.
--   Provides `nowSec()` driven soft delete flagging so rows stay recoverable until hard-deleted.
+| Function | Contract |
+| --- | --- |
+| createAttachment(input) | Validates AttachmentCreate and writes metadata; returns the row. |
+| upsertAttachment(value) | Validates and replaces a full Attachment row. |
+| getAttachment(id) | Reads a filtered row or undefined. |
+| softDeleteAttachment(id) | Marks deleted and updates the timestamp; keeps the row. |
+| hardDeleteAttachment(id) | Removes the row. Does not delete a blob or remote file. |
 
----
+Unlike newer entity helpers, these legacy writes do not automatically allocate a new clock on every mutation. Do not describe them as a complete sync-safe file lifecycle. Use the dedicated file helpers for uploaded bytes and [message files](/documentation/database/message-files) for attaching those bytes to messages.
 
-## Data shape
-
-| Field        | Type      | Notes                                                |
-| ------------ | --------- | ---------------------------------------------------- |
-| `id`         | `string`  | Primary key supplied by caller.                      |
-| `type`       | `string`  | Attachment type tag (image/pdf/etc).                 |
-| `name`       | `string`  | Display name.                                        |
-| `url`        | `string`  | Blob/object URL or remote link. Must be a valid URL. |
-| `created_at` | `number`  | Unix timestamp (sec). Auto-defaulted by schema.      |
-| `updated_at` | `number`  | Unix timestamp (sec). Auto-defaulted by schema.      |
-| `deleted`    | `boolean` | Soft delete flag toggled by `softDeleteAttachment`.  |
-| `clock`      | `number`  | Monotonic revision counter.                          |
-
----
-
-## API surface
-
-| Function               | Signature                                          | Description                                              |
-| ---------------------- | -------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------- |
-| `createAttachment`     | `(input: AttachmentCreate) => Promise<Attachment>` | Filter + validate + insert new attachment row.           |
-| `upsertAttachment`     | `(value: Attachment) => Promise<void>`             | Filter + validate + replace existing attachment.         |
-| `softDeleteAttachment` | `(id: string) => Promise<void>`                    | Marks an attachment as deleted and bumps `updated_at`.   |
-| `hardDeleteAttachment` | `(id: string) => Promise<void>`                    | Removes the row outright (no blob storage handled here). |
-| `getAttachment`        | `(id: string) => Promise<Attachment                | undefined>`                                              | Reads a single attachment and applies output filters. |
-
----
-
-## Hook points
-
--   `db.attachments.create:filter:input` → mutate incoming payloads before validation.
--   `db.attachments.create:action:before/after`
--   `db.attachments.upsert:filter:input` + matching before/after actions.
--   `db.attachments.delete:action:soft:*` and `db.attachments.delete:action:hard:*` fire during deletes.
--   `db.attachments.get:filter:output` lets consumers normalize read results.
-
----
-
-## Usage tips
-
--   Always supply a `clock` increment when calling `upsertAttachment`; schema enforces numeric clocks.
--   Soft deletes keep the blob data available; schedule `hardDeleteAttachment` when you want to reclaim disk.
--   Extend hooks to inject signed URLs or sanitize file names before persistence.
+Hooks include `db.attachments.create:filter:input`, create/upsert before and after actions, soft/hard delete actions, and `db.attachments.get:filter:output`. An output URL filter does not authorize the remote resource; authorization belongs to its serving endpoint.
