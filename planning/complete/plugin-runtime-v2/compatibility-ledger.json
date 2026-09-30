@@ -6,7 +6,7 @@
     "moduleManifest": "planning/complete/plugin-runtime-v2/compatibility-ledger.modules.json",
     "moduleManifestSha256": "f732887f9daed262f7fbbaccbe526cf9c4723ae18c3c82340a9ad9f1a10938f5",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
-    "nuxtImportsDeclarationSha256": "52bb256dc0cee7d0606c82cf9885260db484d5badbd032ecf39ebbeb210f70c0",
+    "nuxtImportsDeclarationSha256": "b95eb96834b6ca1696ca0db13f0ec5cc25371be67aae53da33235c498a2ae398",
     "behaviorProfiles": "planning/complete/plugin-runtime-v2/compatibility-profiles.json",
     "behaviorProfilesSha256": "6e35c5b9392b785e5bb541580865f80f0d5f0888851c2ff68c5a3ecd75097cc1"
   },
@@ -2797,7 +2797,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "a753c34c629a61babf4f01f03b1dbb0c3324ba181cccc94923ce0ab3c70d1baa",
+      "apiSha256": "b137df6d7f3e5bff7d1fd70cd6eee72bb9ebe9ec8e45412cf4c4f70d09b0ecae",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -6380,7 +6380,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAi.ts",
-                "line": 195,
+                "line": 212,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
               }
@@ -6389,7 +6389,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAi.ts",
-              "line": 195,
+              "line": 212,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
             }

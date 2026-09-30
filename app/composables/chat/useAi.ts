@@ -1450,8 +1450,8 @@ export function useChat(
                           : 'failed',
                     {
                         status,
-                        content: tracker.terminalContent ?? tracker.lastContent,
-                        reasoning: tracker.lastReasoning,
+                        content: status.content ?? tracker.terminalContent ?? tracker.lastContent,
+                        reasoning: status.reasoning_text ?? tracker.lastReasoning,
                         delta: '',
                     }
                 );

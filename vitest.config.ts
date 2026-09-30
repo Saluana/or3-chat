@@ -2,6 +2,8 @@ import { defineConfig } from 'vitest/config';
 import path from 'path';
 import vue from '@vitejs/plugin-vue';
 
+const rootDir = import.meta.dirname;
+
 const pluginCompatibilityTests = [
     'app/composables/__tests__/action-surface-adapters.test.ts',
     'app/composables/__tests__/admin-extensions-surface-adapter.test.ts',
@@ -47,63 +49,63 @@ export default defineConfig({
             // instance under Vitest (the `file:` dependency in node_modules is a
             // copy and would otherwise create a duplicate class identity).
             '@or3/plugin-sdk/package-tree': path.resolve(
-                __dirname,
+                rootDir,
                 'packages/plugin-sdk/src/package-tree.ts'
             ),
             '@or3/plugin-sdk/package-archive': path.resolve(
-                __dirname,
+                rootDir,
                 'packages/plugin-sdk/src/cli/archive.ts'
             ),
             '@or3/plugin-sdk/candidate': path.resolve(
-                __dirname,
+                rootDir,
                 'packages/plugin-sdk/src/candidate.ts'
             ),
             '@or3/plugin-sdk/state-compatibility': path.resolve(
-                __dirname,
+                rootDir,
                 'packages/plugin-sdk/src/state-compatibility.ts'
             ),
             '@or3/plugin-sdk/profile': path.resolve(
-                __dirname,
+                rootDir,
                 'packages/plugin-sdk/src/profile.ts'
             ),
             '@or3/plugin-sdk/testing': path.resolve(
-                __dirname,
+                rootDir,
                 'packages/plugin-sdk/src/testing.ts'
             ),
             '@or3/plugin-sdk/manifest': path.resolve(
-                __dirname,
+                rootDir,
                 'packages/plugin-sdk/src/manifest.ts'
             ),
             '@or3/plugin-sdk/ui': path.resolve(
-                __dirname,
+                rootDir,
                 'packages/plugin-sdk/src/ui.ts'
             ),
             '@or3/plugin-sdk/portable': path.resolve(
-                __dirname,
+                rootDir,
                 'packages/plugin-sdk/src/portable.ts'
             ),
             '@or3/plugin-sdk/portable-runtime': path.resolve(
-                __dirname,
+                rootDir,
                 'packages/plugin-sdk/src/portable-runtime.ts'
             ),
             '@or3/plugin-sdk/host': path.resolve(
-                __dirname,
+                rootDir,
                 'packages/plugin-sdk/src/host.ts'
             ),
-            '#imports': path.resolve(__dirname, 'tests/stubs/nuxt-imports.ts'),
+            '#imports': path.resolve(rootDir, 'tests/stubs/nuxt-imports.ts'),
             '#build/or3/bundled-plugin-catalog': path.resolve(
-                __dirname,
+                rootDir,
                 'tests/stubs/bundled-plugin-catalog.ts'
             ),
             '#or3-bundled-plugin-catalog': path.resolve(
-                __dirname,
+                rootDir,
                 'tests/stubs/bundled-plugin-catalog.ts'
             ),
-            '~': path.resolve(__dirname, 'app'),
-            '~~': path.resolve(__dirname),
-            '~~/': path.resolve(__dirname) + '/',
-            '#app': path.resolve(__dirname, 'tests/stubs/nuxt-app.ts'),
-            'nuxt/app': path.resolve(__dirname, 'tests/stubs/nuxt-app.ts'),
+            '~': path.resolve(rootDir, 'app'),
+            '~~': path.resolve(rootDir),
+            '~~/': path.resolve(rootDir) + '/',
+            '#app': path.resolve(rootDir, 'tests/stubs/nuxt-app.ts'),
+            'nuxt/app': path.resolve(rootDir, 'tests/stubs/nuxt-app.ts'),
         },
     },
     test: {

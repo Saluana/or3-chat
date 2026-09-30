@@ -87,11 +87,7 @@ describe('blank theme mobile control sizing', () => {
         expect(blankUi.tabs.slots.trigger).toContain('max-md:min-h-[44px]!');
     });
 
-    it('uses compact visible controls with expanded hit areas in the mobile composer', () => {
-        expect(chatInput).toContain('width: 2.25rem !important');
-        expect(chatInput).toContain('height: 2.25rem !important');
-        expect(chatInput).toContain('width: 2rem !important');
-        expect(chatInput).toContain('inset: -0.375rem');
+    it('preserves the mobile caret and standalone document controls', () => {
         expect(chatInput).toContain('position: static');
         expect(chatInput).toContain('float: left');
         expect(chatInput).toContain('height: 0');

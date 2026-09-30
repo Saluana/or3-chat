@@ -174,6 +174,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
 import { useMediaQuery } from '@vueuse/core';
+import { useDialogFocus } from '~/composables/ui/useDialogFocus';
 import { buildThemeOverrideProps } from '~/composables/ui/themeOverrideProps';
 import { useCommandPalette } from '~/composables/search/useCommandPalette';
 import { useCommandPaletteShortcut } from '~/composables/search/useCommandPaletteShortcut';
