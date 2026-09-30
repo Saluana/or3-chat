@@ -152,7 +152,9 @@ persisted conversation rows.
 ## Request state and send results
 
 Admission is synchronous and single-flight. Every accepted request owns its
-abort controller, accumulator, stream ID, tool replay ledger, and persister.
+originating workspace database, cancellation, accumulator, stream ID, tool replay
+ledger, background admission identity, and persister. Stop also cancels a request
+that is still waiting for a filter or background job ID.
 `requestState` transitions through `admitted`, `persisted`, `streaming`, and one
 `terminal` result. `sendMessage()` returns a typed `SendResult`; callers should
 clear drafts only after the result contains a durable `userMessageId`.
@@ -160,6 +162,24 @@ clear drafts only after the result contains a durable `userMessageId`.
 Terminal results distinguish `complete`, `aborted`, `detached`, `rejected`, and
 `failed`, including busy, credential, filter, client-limit, empty-context,
 tool-iteration-limit, and stream failures.
+
+One idempotent finalization operation handles foreground, background,
+continuation, and stale-generation recovery. Completion runs its hooks after a
+successful save; Stop retains partial text, reasoning, and tools; empty filtered
+model input retains the durable user turn and reports an empty-context failure.
+Late results from an older retry or workspace cannot overwrite the current view.
+Preparation hooks run outside write transactions; each final write checks the
+stored generation inside its transaction. Continuations retain a failed result
+when terminal persistence fails.
+
+`loading` is a read-only projection of all attached requests' lifecycles. Each
+reattached background job updates and settles its own message, including jobs
+whose tracker already completed while retrying persistence. Stop controls move
+to another attached streaming job when the selected one finishes. View
+attachment and persistence are tracked separately from generation outcome:
+transport loss detaches a background job for reattachment, and a failed save
+releases loading while retaining the terminal snapshot. The background tracker
+continues to own retries of failed terminal writes.
 
 ## Conversation context
 

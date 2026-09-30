@@ -741,6 +741,15 @@ export function createTrustedHostContext(
             }
             case 'chat.action':
                 return registerMessageAction(contribution.definition);
+            case 'chat.message.renderer': {
+                allow('chat.message.renderer');
+                const definition = asRecord(contribution.definition);
+                if (!definition || typeof definition.match !== 'function' ||
+                    (!asRecord(definition.component) && typeof definition.component !== 'function')) {
+                    invalid('A message renderer requires a matcher and Vue component');
+                }
+                return registerRenderer({ ...definition, id: contribution.id } as unknown as MessageRendererDefinition);
+            }
             case 'chat.tool.client': {
                 const record = asRecord(contribution.definition);
                 const fn = record ? asRecord(record.function) : null;
@@ -749,9 +758,16 @@ export function createTrustedHostContext(
                 }
                 return registerTool(contribution.definition as ExtendedToolDefinition, async () => '{}');
             }
+            case 'editor.extension': {
+                allow('chat.editor.extension');
+                const definition = asRecord(contribution.definition);
+                if (!definition || !asRecord(definition.extension)) {
+                    invalid('An editor contribution requires an extension object');
+                }
+                return registerEditor({ ...definition, id: contribution.id } as unknown as TrustedEditorExtensionInput);
+            }
             case 'chat.tool.server':
-            case 'editor.extension':
-                return unsupported(`${kind} must be registered through context editor.register`);
+                return unsupported(`${kind} is not available on the trusted host context`);
             case 'editor.inspector.panel':
             case 'document.ai.action':
             case 'admin.extension':

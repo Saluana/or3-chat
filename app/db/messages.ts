@@ -242,6 +242,8 @@ function jsonEqual(left: unknown, right: unknown): boolean {
  *
  * Constraints:
  * - No-op when the row does not exist and no fallback is supplied.
+ * - An optional synchronous `ifCurrent` guard checks the stored row inside
+ *   the write transaction; false skips the write, including fallback creation.
  *
  * Non-Goals:
  * - Does not replace `upsertMessageInDb` for full-row replaces.
@@ -252,7 +254,8 @@ export async function patchMessageInDb(
     patch: Partial<Message> & {
         data?: Record<string, unknown> | null;
     },
-    fallback?: Message | null
+    fallback?: Message | null,
+    ifCurrent?: (message: Message | undefined) => boolean
 ): Promise<void> {
     const hooks = useHooks();
     // Preparation hooks run outside the write transaction (see upsertMessageInDb:
@@ -333,6 +336,7 @@ export async function patchMessageInDb(
                 entity: 'messages',
                 action: 'get',
             });
+            if (ifCurrent && !ifCurrent(stored)) return undefined;
             const base = stored ?? fallback;
             if (!base) return undefined;
             const baseData = dataRecord(base.data);

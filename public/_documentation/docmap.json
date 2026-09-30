@@ -833,7 +833,7 @@
                     "name": "messages.md",
                     "path": "/database/messages",
                     "category": "Messages",
-                    "summary": "Thread message CRUD utilities with hook integration, sparse indexing, and attachment support."
+                    "summary": "Thread message CRUD utilities with hook integration, sparse indexing, attachment support, and atomic guarded patches for generation ownership."
                 },
                 {
                     "name": "posts.md",
@@ -1367,7 +1367,7 @@
                     "name": "plugin-sdk.md",
                     "path": "/plugins/plugin-sdk",
                     "category": "Reference",
-                    "summary": "Plugin SDK contract reference for the single Manifest V2 authoring path. The host-created capability context serves qualified portable and trusted-host adapters; unsupported methods still return explicit refusals. The package is not yet published to npm; install it from a packed tarball."
+                    "summary": "Plugin SDK contract reference for the single Manifest V2 authoring path. The host-created capability context serves qualified portable and trusted-host adapters; unsupported methods still return explicit refusals. The package is not yet published to npm; install it from a packed tarball. Trusted-host message renderers and chat editor extensions use typed, grant-checked SDK contributions with activation cleanup."
                 },
                 {
                     "name": "plugin-sdk-cli.md",
@@ -1421,7 +1421,7 @@
                     "name": "marketplace.md",
                     "path": "/plugins/marketplace",
                     "category": "Guide",
-                    "summary": "Site-approved discovery, guided acquisition, workspace rollout and future defaults. One code version serves enabled workspaces; expanded access gets deployment approval and blocked updates link to affected workspace setup. Slow writes return a resumable rollout instead of blocking workspace creation. Health checks distinguish server readiness from browser activation. Restore opens an exact impact review from the plugin detail and preserves workspace data."
+                    "summary": "Site-approved discovery, guided acquisition, workspace rollout and future defaults. One code version serves enabled workspaces; expanded access gets deployment approval and blocked updates link to affected workspace setup. Slow writes return a resumable rollout instead of blocking workspace creation. Health checks distinguish server readiness from browser activation. Restore opens an exact impact review from the plugin detail and preserves workspace data. Public marketplace history supports loading older releases and publisher links show destination hostnames."
                 },
                 {
                     "name": "library.md",
@@ -1433,7 +1433,7 @@
                     "name": "v1-support-and-migration.md",
                     "path": "/plugins/v1-support-and-migration",
                     "category": "Guide",
-                    "summary": "Compatibility window and migration steps for existing V1 packages. New packages use the single Plugin authoring guide and Manifest V2."
+                    "summary": "Compatibility window and migration steps for existing V1 packages, plus shared workspace manifest coordination across bundled, trusted and isolated client runtimes. New packages use the single Plugin authoring guide and Manifest V2."
                 },
                 {
                     "name": "local-development.md",

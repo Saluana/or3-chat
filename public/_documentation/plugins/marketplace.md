@@ -283,3 +283,17 @@ Package bytes and saved data remain retained.
 The uninstall API requires `expectedPackageDigest` in the body of
 `POST /api/admin/plugins/packages/{pluginId}/uninstall`. A changed selection
 returns HTTP 409 without disabling the workspace or clearing the pointer.
+
+
+## Marketplace release history
+
+The public marketplace plugin page shows 100 releases at a time. Select **Load
+older releases** to continue through history. Exact-version signed metadata and
+source retrieval are independent of this page limit. Releases are ordered by
+publication time, with strict SemVer precedence breaking ties; build metadata
+does not affect precedence. Publisher support and privacy links show their
+external destination hostname and open without sending a referrer.
+
+For catalog API consumers, detail responses include `nextReleaseCursor`.
+Request `GET /api/v1/catalog/:pluginId/releases?after=<cursor>` to receive
+`releases` and `nextCursor`; a null cursor marks the end.

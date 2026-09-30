@@ -31,6 +31,72 @@ async function send(page: Page, message: string): Promise<void> {
 }
 
 test.describe('production chat journey', () => {
+    test('can stop a continuation without losing the existing partial reply', async ({ page }) => {
+        await openChat(page);
+        await send(page, 'journey:stop');
+        await expect(page.getByText('Partial response before stop.')).toBeVisible();
+        await page.getByRole('button', { name: 'Stop generation' }).click();
+        await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
+        await page.reload();
+        await expect(page.getByText('Partial response before stop.')).toBeVisible();
+        await page.getByRole('button', { name: 'Continue generation' }).click();
+        await expect(page.getByRole('button', { name: 'Stop generation' })).toBeVisible();
+        await page.getByRole('button', { name: 'Stop generation' }).click();
+        await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
+        await page.reload();
+        await expect(page.getByText('Partial response before stop.')).toBeVisible();
+    });
+    test('recovers a partial foreground response after refresh during streaming', async ({ page }) => {
+        test.setTimeout(60_000);
+        await openChat(page);
+        await send(page, 'journey:refresh');
+        await expect(page.getByText('Partial response before refresh. Ready to recover.')).toBeVisible();
+        await page.reload();
+        await expect(page.getByText('Partial response before refresh. Ready to recover.')).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Continue generation', exact: true }).last()).toBeVisible({ timeout: 35_000 });
+        await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
+        await expect(page.getByText(/Late response from the old page/)).toHaveCount(0);
+    });
+    test('stops an admitted request before its outgoing filter resolves', async ({
+        page,
+    }) => {
+        await openChat(page);
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        await input.fill('journey:admission-stop');
+        await page.getByRole('button', { name: 'Send message' }).click();
+        await page.getByRole('button', { name: 'Stop generation' }).click();
+        await expect(
+            page.getByRole('button', { name: 'Send message' })
+        ).toBeVisible();
+        await expect(input).toHaveText('journey:admission-stop');
+        await expect(
+            page.getByText('Hello from deterministic stream.')
+        ).toHaveCount(0);
+    });
+
+    test('retains the durable user turn and settles when filters remove model input', async ({
+        page,
+    }) => {
+        await openChat(page);
+        await send(page, 'journey:empty');
+        await expect(
+            page.getByRole('button', { name: 'Send message' })
+        ).toBeVisible();
+        await expect(
+            page.getByRole('button', { name: 'Stop generation' })
+        ).toHaveCount(0);
+        await expect(
+            page.getByText('Hello from deterministic stream.')
+        ).toHaveCount(0);
+        await page.reload();
+        await expect(
+            page.getByText('journey:empty', { exact: true })
+        ).toBeVisible();
+        await expect(
+            page.getByRole('button', { name: 'Send message' })
+        ).toBeVisible();
+    });
+
     test('streams a response and restores its durable thread after reload', async ({
         page,
     }) => {

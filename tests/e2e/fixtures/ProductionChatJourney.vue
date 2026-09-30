@@ -20,6 +20,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import ChatContainer from '~/components/chat/ChatContainer.vue';
 import { persistUserApiKey } from '~/core/auth/useUserApiKey';
+import { useHooks } from '~/core/hooks/useHooks';
 import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
 import type { ChatMessage } from '~/utils/chat/types';
 
@@ -30,6 +31,20 @@ const ready = ref(false);
 const threadId = ref('');
 const messageHistory = ref<ChatMessage[]>([]);
 const attemptsByPrompt = new Map<string, number>();
+const hooks = useHooks();
+const pauseAdmission = async (text: string) => {
+    if (text.includes('journey:admission-stop'))
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+    return text;
+};
+const emptyInput = (request: { messages: unknown[] }) => {
+    const prompt = [...request.messages].reverse().find((message) =>
+        message && typeof message === 'object' && (message as { role?: unknown }).role === 'user'
+    );
+    if (messageText(prompt).includes('journey:empty'))
+        return { ...request, messages: [] };
+    return request;
+};
 const encoder = new TextEncoder();
 let restoreFetch: (() => void) | undefined;
 
@@ -129,7 +144,13 @@ function installDeterministicFetch(): void {
                     new Promise((resolve) => setTimeout(resolve, ms));
 
                 try {
-                    if (text.includes('journey:stop')) {
+                    if (text.includes('journey:refresh')) {
+                        enqueue(sseChunk('Partial response before refresh.'));
+                        await delay(650);
+                        enqueue(sseChunk(' Ready to recover.'));
+                        await delay(10_000);
+                        enqueue(sseChunk(' Late response from the old page.'));
+                    } else if (text.includes('journey:stop')) {
                         enqueue(sseChunk('Partial response before stop.'));
                         await delay(1_200);
                         enqueue(sseChunk(' Late response that must be ignored.'));
@@ -178,6 +199,8 @@ function rememberThread(id: string) {
 }
 
 onMounted(async () => {
+    hooks.addFilter('ui.chat.message:filter:outgoing', pauseAdmission);
+    hooks.addFilter('ai.chat.messages:filter:before_send', emptyInput);
     installDeterministicFetch();
     localStorage.setItem(
         'or3:server-route-available',
@@ -196,6 +219,8 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+    hooks.removeFilter('ui.chat.message:filter:outgoing', pauseAdmission);
+    hooks.removeFilter('ai.chat.messages:filter:before_send', emptyInput);
     restoreFetch?.();
 });
 </script>

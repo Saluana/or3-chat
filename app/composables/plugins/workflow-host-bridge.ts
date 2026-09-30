@@ -30,15 +30,11 @@ import { programmaticPrefill } from '~/composables/chat/useChatInputBridge';
 import { parseHashes } from '~/utils/files/attachments';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { getDb } from '~/db/client';
-import { deriveMessageContent } from '~/utils/chat/messages';
 import { createOpenRouterClient, DEFAULT_HEADERS, wrapLegacyChatSendArgs } from '~~/shared/openrouter';
 import { createOrRefFile, changeRefCount } from '~/db/files';
 import { dataUrlToBlob } from '~/utils/chat/files';
 import { hasSupportedRasterBlobSignature, isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
-import { isWorkflowMessageData } from '~/utils/chat/workflow-types';
-import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
-import type { Message } from '~/db';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { useUserApiKey } from '~/core/auth/useUserApiKey';
 import { nowSec, nextClock, getWriteTxTableNames } from '~/db/util';
@@ -47,31 +43,14 @@ import { abortBackgroundJob, pollJobStatus, isBackgroundStreamingEnabled } from 
 import { ensureBackgroundJobTracker } from '~/utils/chat/useAi-internal/backgroundJobs';
 import { reportError } from '~/utils/errors';
 
-type WorkflowData = { nodes: unknown[]; edges: unknown[]; meta: Record<string, unknown> };
-type WorkflowActivityMessage = {
-    id: string;
-    threadId: string;
-    createdAt: number;
-    updatedAt: number;
-    data: WorkflowMessageData;
-};
+import { createScopedRecordStore } from './trusted-production-stores';
+import { createLegacyWorkflowRecordAccess } from './workflow-records-compat';
+import { isWorkflowMessageData } from '~/utils/chat/workflow-types';
+import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
+import type { Message } from '~/db/schema';
 
 function getPostsApi(): PanePluginApi | null {
     return (globalThis as { __or3PanePluginApi?: PanePluginApi }).__or3PanePluginApi ?? null;
-}
-
-function parseWorkflowMeta(meta: unknown): WorkflowData | null {
-    try {
-        const parsed: unknown = typeof meta === 'string' ? JSON.parse(meta) : meta;
-        if (!parsed || typeof parsed !== 'object') return null;
-        const candidate = parsed as { nodes?: unknown; edges?: unknown; meta?: unknown };
-        return Array.isArray(candidate.nodes) && Array.isArray(candidate.edges) &&
-            candidate.meta && typeof candidate.meta === 'object'
-            ? parsed as WorkflowData
-            : null;
-    } catch {
-        return null;
-    }
 }
 
 async function persistGeneratedImage(messageId: string, dataUrl: string, signal?: AbortSignal): Promise<string> {
@@ -114,26 +93,8 @@ async function persistGeneratedImage(messageId: string, dataUrl: string, signal?
     return file.hash;
 }
 
-async function searchWorkflows(query: string, limit = 10, db = getDb()) {
-    const posts = await db.posts
-        .where('postType')
-        .equals('workflow-entry')
-        .and((post) => !post.deleted)
-        .toArray();
-    const normalized = query.trim().toLowerCase();
-    return posts
-        .filter((post) => !normalized || (post.title || '').toLowerCase().includes(normalized))
-        .sort((left, right) => (right.updated_at || 0) - (left.updated_at || 0))
-        .slice(0, Math.max(0, limit))
-        .map((post) => ({
-            id: post.id,
-            label: post.title || 'Untitled Workflow',
-            updatedAt: post.updated_at || post.created_at || 0,
-        }));
-}
-
 /** Resolve only while a Nuxt plugin setup context is active. */
-export function createWorkflowHostBridge() {
+export function createWorkflowHostBridge(signal?: AbortSignal) {
     const nuxtApp = useNuxtApp();
     const modelStore = useModelStore();
     const hooks = useHooks();
@@ -145,50 +106,20 @@ export function createWorkflowHostBridge() {
     const workflowFeatures = useOr3Config().features.workflows;
     const appConfig = useAppConfig() as { workflowSlashCommands?: { enabled?: boolean } };
     const assertOriginWorkspace = () => {
-        if (getDb() !== activationDb) throw new Error('Workflow workspace changed');
+        if (getDb() !== activationDb || signal?.aborted) throw new Error('Workflow workspace changed');
     };
-    const toActivityMessage = (row: Message | undefined): WorkflowActivityMessage | undefined => {
-        if (!row || !isWorkflowMessageData(row.data)) return undefined;
-        return {
-            id: row.id,
-            threadId: row.thread_id,
-            createdAt: row.created_at,
-            updatedAt: row.updated_at,
-            data: row.data,
-        };
-    };
+    const records = createScopedRecordStore(activationDb, {
+        postType: 'workflow-entry', messageType: 'workflow-execution',
+    }, assertOriginWorkspace);
+    const legacyRecords = createLegacyWorkflowRecordAccess(records);
 
     return {
         workflowFeatures,
         workflowSlashEnabled: appConfig.workflowSlashCommands?.enabled !== false,
-        async reconcileInterruptedRuns() {
-            assertOriginWorkspace();
-            const running = await activationDb.messages
-                .where('[data.type+data.executionState]')
-                .equals(['workflow-execution', 'running'])
-                .toArray();
-            assertOriginWorkspace();
-            const interrupted = running.filter((message) => {
-                const data = message.data;
-                return isWorkflowMessageData(data) &&
-                    !(data.background_job_id && data.background_job_status === 'streaming');
-            });
-            if (!interrupted.length) return;
-            await activationDb.transaction('rw', getWriteTxTableNames(activationDb, 'messages'), async () => {
-                for (const message of interrupted) {
-                    const current = await activationDb.messages.get(message.id);
-                    if (!current || !isWorkflowMessageData(current.data) || current.data.executionState !== 'running' ||
-                        (current.data.background_job_id && current.data.background_job_status === 'streaming')) continue;
-                    await activationDb.messages.put({
-                        ...current,
-                        data: { ...current.data, executionState: 'interrupted' },
-                        pending: false,
-                        updated_at: nowSec(),
-                        clock: nextClock(current.clock),
-                    });
-                }
-            });
-        },
+        records,
+        // Retain the old private contract until existing artifacts are upgraded.
+        searchWorkflows: legacyRecords.searchWorkflows,
+        reconcileInterruptedRuns: legacyRecords.reconcileInterruptedRuns,
         ports: {
             uiComponents: {
                 UBadge, UButton, UDropdownMenu, UFieldGroup, UIcon, UInput,
@@ -234,48 +165,32 @@ export function createWorkflowHostBridge() {
                 return watch(modelStore.favoriteModels, listener, { deep: true });
             },
         },
-        searchWorkflows: (query: string, limit?: number) => searchWorkflows(query, limit, activationDb),
         sendPorts: {
+            getWorkflowById: legacyRecords.getWorkflowById,
+            getWorkflowByName: legacyRecords.getWorkflowByName,
+            listWorkflowNames: legacyRecords.listWorkflowNames,
+            getMessage: legacyRecords.getMessage,
             getApiKey: () => apiKey.value || null,
             requestApiKeyLogin: () => window.dispatchEvent(new CustomEvent('openrouter:login')),
-            async getWorkflowById(id: string) {
-                const post = await activationDb.posts.get(id);
-                if (!post || post.deleted || post.postType !== 'workflow-entry') return null;
-                const meta = parseWorkflowMeta(post.meta);
-                return { id: post.id, title: post.title || 'Untitled Workflow', updated_at: post.updated_at, meta };
-            },
-            async getWorkflowByName(name: string) {
-                const post = await activationDb.posts.where('postType').equals('workflow-entry')
-                    .and((item) => !item.deleted && item.title === name).first();
-                if (!post) return null;
-                const meta = parseWorkflowMeta(post.meta);
-                return { id: post.id, title: post.title || 'Untitled Workflow', updated_at: post.updated_at, meta };
-            },
-            async listWorkflowNames() {
-                return (await searchWorkflows('', Number.POSITIVE_INFINITY, activationDb)).map((item) => item.label);
-            },
-            async getMessage(id: string) {
-                const message = await activationDb.messages.get(id);
-                if (!message || !isWorkflowMessageData(message.data)) return null;
-                return { id: message.id, threadId: message.thread_id, streamId: message.stream_id || '', data: message.data };
-            },
             async upsertWorkflowMessage(input: {
-                id: string; threadId: string; streamId: string; data: WorkflowActivityMessage['data']; pending: boolean;
+                id: string; threadId: string; streamId: string; data: unknown; pending: boolean;
             }) {
+                assertOriginWorkspace();
                 const db = activationDb;
                 await db.transaction('rw', getWriteTxTableNames(db, 'messages'), async () => {
+                    assertOriginWorkspace();
                     const previous = await db.messages.get(input.id);
                     const timestamp = nowSec();
                     await db.messages.put(previous ? {
                         ...previous,
-                        data: input.data,
+                        data: input.data as Message['data'],
                         pending: input.pending,
                         updated_at: timestamp,
                         clock: nextClock(previous.clock),
                     } : {
                         id: input.id,
                         role: 'assistant',
-                        data: input.data,
+                        data: input.data as Message['data'],
                         pending: input.pending,
                         created_at: timestamp,
                         updated_at: timestamp,
@@ -374,22 +289,9 @@ export function createWorkflowHostBridge() {
             notify: (message: string, kind: 'info' | 'warning' | 'error') => toast.add({ title: message, color: kind }),
         },
         activity: {
-            store: {
-                async list() {
-                    const rows = await activationDb.messages
-                        .where('data.type')
-                        .equals('workflow-execution')
-                        .toArray();
-                    return rows.map(toActivityMessage).filter(
-                        (message): message is WorkflowActivityMessage => message !== undefined
-                    );
-                },
-                async get(messageId: string) {
-                    return toActivityMessage(await activationDb.messages.get(messageId));
-                },
-            },
+            store: legacyRecords.activityStore,
             updates: {
-                subscribe(listener: (messageId: string, state: WorkflowActivityMessage['data']) => void) {
+                subscribe(listener: (messageId: string, state: WorkflowMessageData) => void) {
                     return hooks.on('workflow.execution:action:state_update', ({ messageId, state }) => {
                         if (isWorkflowMessageData(state)) listener(messageId, state);
                     });
@@ -397,25 +299,9 @@ export function createWorkflowHostBridge() {
             },
         },
         executionPorts: {
+            listWorkflowsWithMeta: legacyRecords.listWorkflowsWithMeta,
+            loadConversationHistory: legacyRecords.loadConversationHistory,
             toolRegistry: useToolRegistry,
-            async listWorkflowsWithMeta() {
-                const posts = await activationDb.posts
-                    .where('postType')
-                    .equals('workflow-entry')
-                    .and((post) => !post.deleted)
-                    .toArray();
-                return posts.map((post) => {
-                    let meta: unknown = post.meta;
-                    if (typeof meta === 'string') {
-                        try {
-                            meta = JSON.parse(meta) as unknown;
-                        } catch {
-                            meta = null;
-                        }
-                    }
-                    return { id: post.id, title: post.title || 'Untitled Workflow', meta };
-                });
-            },
             createOpenRouterClient: (apiKey: string) => ({
                 client: createOpenRouterClient({ apiKey }),
                 headers: DEFAULT_HEADERS,
@@ -425,31 +311,6 @@ export function createWorkflowHostBridge() {
             persistGeneratedImage: (messageId: string, dataUrl: string, signal?: AbortSignal) => {
                 assertOriginWorkspace();
                 return persistGeneratedImage(messageId, dataUrl, signal);
-            },
-            async loadConversationHistory(threadId: string) {
-                if (!threadId) return [];
-                const messages = await activationDb.messages
-                    .where('thread_id')
-                    .equals(threadId)
-                    .sortBy('index');
-                const history: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
-                for (const message of messages) {
-                    if (message.deleted) continue;
-                    const data: unknown = message.data;
-                    if (data && typeof data === 'object' && 'type' in data && data.type === 'workflow-execution') {
-                        const workflowData = data as Record<string, unknown>;
-                        const prompt: unknown = workflowData.prompt;
-                        const finalOutput: unknown = workflowData.finalOutput;
-                        if (typeof prompt === 'string' && prompt) history.push({ role: 'user', content: prompt });
-                        if (typeof finalOutput === 'string' && finalOutput) history.push({ role: 'assistant', content: finalOutput });
-                        continue;
-                    }
-                    const content = deriveMessageContent({ data });
-                    if (content && (message.role === 'user' || message.role === 'assistant' || message.role === 'system')) {
-                        history.push({ role: message.role, content });
-                    }
-                }
-                return history;
             },
         },
     };

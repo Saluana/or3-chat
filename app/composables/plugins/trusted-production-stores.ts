@@ -1,3 +1,8 @@
+import type { Or3DB } from '~/db/client';
+import type { Message } from '~/db/schema';
+import { getWriteTxTableNames, nextClock, nowSec } from '~/db/util';
+import { deriveMessageContent } from '~/utils/chat/messages';
+
 /** Same storage key the external-agents credential vault already uses. */
 export const EXTERNAL_AGENT_CREDENTIAL_VAULT_KEY = 'or3.external-agents.credentials.v1';
 
@@ -165,6 +170,87 @@ export function createWorkspacePostStore(): PostStore {
                 content: '',
             });
             return { id: post.id };
+        },
+    };
+}
+
+/** Captured record access for compatibility adapters; interpretation stays in the package. */
+export function createScopedRecordStore(
+    db: Or3DB,
+    scope: { readonly postType: string; readonly messageType: string },
+    assertCurrent: () => void
+) {
+    const toMessage = (row: Message) => ({
+        id: row.id, threadId: row.thread_id, streamId: row.stream_id || '',
+        role: row.role, content: deriveMessageContent({ data: row.data }), data: row.data as unknown,
+        createdAt: row.created_at, updatedAt: row.updated_at, clock: row.clock,
+    });
+    const ownsMessage = (row: Message) => {
+        const data = row.data;
+        return !row.deleted && data !== null && typeof data === 'object' &&
+            'type' in data && data.type === scope.messageType;
+    };
+    return {
+        posts: {
+            async get(id: string) {
+                assertCurrent();
+                const post = await db.posts.get(id);
+                assertCurrent();
+                return post && !post.deleted && post.postType === scope.postType
+                    ? { id: post.id, title: post.title, meta: post.meta as unknown, created_at: post.created_at, updated_at: post.updated_at }
+                    : null;
+            },
+            async list() {
+                assertCurrent();
+                const posts = await db.posts.where('postType').equals(scope.postType).and((post) => !post.deleted).toArray();
+                assertCurrent();
+                return posts.map((post) => ({
+                    id: post.id, title: post.title, meta: post.meta as unknown,
+                    created_at: post.created_at, updated_at: post.updated_at,
+                }));
+            },
+        },
+        messages: {
+            async get(id: string) {
+                assertCurrent();
+                const row = await db.messages.get(id);
+                assertCurrent();
+                return row && ownsMessage(row) ? toMessage(row) : null;
+            },
+            async list() {
+                assertCurrent();
+                const rows = await db.messages.where('data.type').equals(scope.messageType).and((row) => !row.deleted).toArray();
+                assertCurrent();
+                return rows.map(toMessage);
+            },
+            async listByThread(threadId: string) {
+                assertCurrent();
+                const rows = await db.messages.where('thread_id').equals(threadId).and((row) => !row.deleted).sortBy('index');
+                assertCurrent();
+                return rows.map(toMessage);
+            },
+            async updateData(updates: readonly { id: string; ifClock: number; ifData: unknown; data: unknown; pending: boolean }[]) {
+                assertCurrent();
+                for (const update of updates) {
+                    if (!update.data || typeof update.data !== 'object' ||
+                        (update.data as { type?: unknown }).type !== scope.messageType) {
+                        throw new Error('Message updates must preserve the scoped message type');
+                    }
+                }
+                await db.transaction('rw', getWriteTxTableNames(db, 'messages'), async () => {
+                    for (const update of updates) {
+                        assertCurrent();
+                        const row = await db.messages.get(update.id);
+                        if (!row || !ownsMessage(row) || row.clock !== update.ifClock ||
+                            JSON.stringify(row.data) !== JSON.stringify(update.ifData)) continue;
+                        await db.messages.put({
+                            ...row, data: update.data as Message['data'], pending: update.pending,
+                            updated_at: nowSec(), clock: nextClock(row.clock),
+                        });
+                    }
+                    assertCurrent();
+                });
+            },
         },
     };
 }

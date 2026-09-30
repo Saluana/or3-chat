@@ -20,7 +20,7 @@ const appendMessageMock = vi.fn();
 const upsertMessageMock = vi.fn();
 const hookOnMock = vi.fn();
 const hookDisposeMock = vi.fn();
-const hookDoActionMock = vi.fn(async () => {});
+const hookDoActionMock = vi.fn(async (_name: string, ..._args: unknown[]) => {});
 const hookApplyFiltersMock = vi.fn(
     async (_name: string, value: unknown) => value
 );
@@ -52,9 +52,15 @@ const runtimeConfigRef = {
 };
 const streamAccResetMock = vi.fn();
 const streamAccAppendMock = vi.fn();
+const abortAdmissionMock = vi.fn(async () => ({
+    pending: true,
+    aborted: false,
+}));
+const terminalPersistFailure = { value: false };
 
 let resolveBackgroundStart: ((value: { jobId: string }) => void) | null = null;
 let latestTracker: any = null;
+let holdBackgroundCompletion = false;
 
 vi.mock('#imports', () => ({
     useRuntimeConfig: () => runtimeConfigRef.value,
@@ -142,6 +148,15 @@ vi.mock('~/utils/files/attachments', () => ({
 }));
 
 vi.mock('~/db/messages', () => ({
+    patchMessageInDb: async (_db: unknown, id: string, patch: any) => {
+        const existing = messageStore.get(id);
+        if (existing)
+            messageStore.set(id, {
+                ...existing,
+                ...patch,
+                data: { ...(existing.data ?? {}), ...(patch.data ?? {}) },
+            });
+    },
     messagesByThread: messagesByThreadMock,
     appendMessageToDb: (_db: unknown, payload: unknown) =>
         appendMessageMock(payload),
@@ -185,6 +200,7 @@ vi.mock('~/utils/chat/messages', async (importOriginal) => ({
 vi.mock('~/utils/chat/openrouterStream', () => ({
     startBackgroundStream: startBackgroundStreamMock,
     abortBackgroundJob: vi.fn(),
+    abortBackgroundAdmission: abortAdmissionMock,
     isBackgroundStreamingEnabled: () => true,
     isBackgroundClientToolBridgeAvailable: async () => true,
 }));
@@ -301,6 +317,9 @@ vi.mock('~/utils/chat/useAi-internal', () => ({
     continueMessageImpl: vi.fn(),
     makeAssistantPersister:
         (_db: unknown, message: any) => async (patch: any) => {
+            if (patch.finalize && terminalPersistFailure.value) {
+                throw new Error('terminal save unavailable');
+            }
             const existing = messageStore.get(message.id) ?? message;
             const next = {
                 ...existing,
@@ -356,7 +375,9 @@ async function waitForCall(mock: {
 
 describe('useChat background detach race', () => {
     beforeEach(() => {
+        holdBackgroundCompletion = false;
         vi.clearAllMocks();
+        startBackgroundStreamMock.mockReset();
         backgroundJobTrackers.clear();
         messageStore.clear();
         activeDb = dbMock;
@@ -364,6 +385,7 @@ describe('useChat background detach race', () => {
         catalogModelsRef.value = [{ id: 'test-model' }];
         resolveBackgroundStart = null;
         latestTracker = null;
+        terminalPersistFailure.value = false;
         enabledToolDefsRef.value = [];
         runtimeConfigRef.value = {
             public: {
@@ -461,6 +483,11 @@ describe('useChat background detach race', () => {
                 resolveCompletion: () => {},
             };
             backgroundJobTrackers.set(params.jobId, latestTracker);
+            if (holdBackgroundCompletion) {
+                latestTracker.completion = new Promise((resolve) => {
+                    latestTracker.resolveCompletion = resolve;
+                });
+            }
             return latestTracker;
         });
 
@@ -474,6 +501,101 @@ describe('useChat background detach race', () => {
         );
 
         messagesByThreadMock.mockResolvedValue([]);
+    });
+
+    it('cancels synchronously admitted work while its outgoing filter is awaiting', async () => {
+        startBackgroundStreamMock.mockResolvedValueOnce({
+            jobId: 'unexpected-job',
+        });
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        hookApplyFiltersMock.mockImplementation(async (name, value) => {
+            if (name === 'ui.chat.message:filter:outgoing') await gate;
+            return value;
+        });
+        vi.resetModules();
+        const { useChat } = await import('~/composables/chat/useAi');
+        const chat = useChat([], 'thread-1');
+        const sending = chat.sendMessage('hello');
+        expect(chat.loading.value).toBe(true);
+        chat.abort();
+        release();
+        await expect(sending).resolves.toMatchObject({ status: 'aborted' });
+        expect(appendMessageMock).not.toHaveBeenCalled();
+        expect(startBackgroundStreamMock).not.toHaveBeenCalled();
+        expect(chat.loading.value).toBe(false);
+        expect(chat.requestState.value).toMatchObject({ status: 'terminal' });
+    });
+
+    it('preserves reasoning-only output on a foreground stop', async () => {
+        runtimeConfigRef.value.public.backgroundStreaming.enabled = false;
+        runForegroundStreamLoopMock.mockImplementationOnce(
+            ({ tailAssistant, abortSignal }: any) => {
+                tailAssistant.value = {
+                    id: 'assistant-msg-1',
+                    role: 'assistant',
+                    text: '',
+                    reasoning_text: 'partial reasoning',
+                    pending: true,
+                };
+                return new Promise<void>((_resolve, reject) => {
+                    abortSignal.addEventListener(
+                        'abort',
+                        () => reject(new DOMException('Stopped', 'AbortError')),
+                        { once: true }
+                    );
+                });
+            }
+        );
+        vi.resetModules();
+        const { useChat } = await import('~/composables/chat/useAi');
+        const chat = useChat([], 'thread-1');
+        const sending = chat.sendMessage('hello');
+        await waitForCall(runForegroundStreamLoopMock);
+        chat.abort();
+        await expect(sending).resolves.toMatchObject({ status: 'aborted' });
+        expect(messageStore.get('assistant-msg-1')).toMatchObject({
+            pending: false,
+            error: 'stopped',
+            data: { reasoning_text: 'partial reasoning' },
+        });
+        expect(chat.loading.value).toBe(false);
+    });
+
+    it('settles a failed terminal save without announcing successful completion', async () => {
+        runtimeConfigRef.value.public.backgroundStreaming.enabled = false;
+        terminalPersistFailure.value = true;
+        runForegroundStreamLoopMock.mockImplementationOnce(
+            ({ tailAssistant }: any) => {
+                tailAssistant.value = {
+                    id: 'assistant-msg-1',
+                    role: 'assistant',
+                    text: 'finished answer',
+                    pending: false,
+                };
+            }
+        );
+        vi.resetModules();
+        const { useChat } = await import('~/composables/chat/useAi');
+        const chat = useChat([], 'thread-1');
+        await expect(chat.sendMessage('hello')).resolves.toMatchObject({
+            status: 'failed',
+            error: expect.stringContaining('terminal save unavailable'),
+        });
+        expect(chat.loading.value).toBe(false);
+        expect(chat.requestState.value).toMatchObject({ status: 'terminal' });
+        expect(
+            hookDoActionMock.mock.calls.some(
+                ([name]) => name === 'ai.chat.stream:action:complete'
+            )
+        ).toBe(false);
+        expect(
+            chat.messages.value.some(
+                (message) => message.text === 'finished answer'
+            ) || chat.tailAssistant.value?.text === 'finished answer'
+        ).toBe(true);
     });
 
     it('refreshes stale catalog metadata before preparing a chat request', async () => {
@@ -729,7 +851,7 @@ describe('useChat background detach race', () => {
         expect(chat.requestState.value).toMatchObject({ status: 'terminal' });
     });
 
-    it('registers a UI subscriber when chat remains attached', async () => {
+    it('keeps the completed result stable when late background callbacks arrive', async () => {
         vi.resetModules();
         const { useChat } = await import('~/composables/chat/useAi');
 
@@ -753,6 +875,20 @@ describe('useChat background detach race', () => {
         expect(ensureBackgroundJobTrackerMock).toHaveBeenCalledTimes(1);
         expect(subscribeBackgroundJobMock).toHaveBeenCalledTimes(1);
         expect(latestTracker?.subscribers.size ?? 0).toBe(1);
+        const subscriber = latestTracker.subscribers.values().next().value;
+        subscriber.onUpdate({
+            content: 'late text', delta: 'late text',
+            status: { status: 'streaming' },
+        });
+        subscriber.onComplete({
+            content: 'duplicate completion', status: { status: 'complete' },
+        });
+        await Promise.resolve();
+        expect(chat.tailAssistant.value?.text).toBe('done');
+        expect(chat.loading.value).toBe(false);
+        expect(chat.requestState.value).toMatchObject({
+            status: 'terminal', result: { status: 'complete' },
+        });
     });
 
     it('keeps server tools in background streaming', async () => {
@@ -943,6 +1079,7 @@ describe('useChat background detach race', () => {
     });
 
     it('appends background deltas to the tail accumulator without full resets', async () => {
+        holdBackgroundCompletion = true;
         vi.resetModules();
         const { useChat } = await import('~/composables/chat/useAi');
 
@@ -961,7 +1098,7 @@ describe('useChat background detach race', () => {
             throw new Error('Background start resolver was not initialized');
         }
         resolveBackgroundStart({ jobId: 'job-delta-1' });
-        await sendPromise;
+        await waitForCall(subscribeBackgroundJobMock);
         const resetCallsBeforeUpdates = streamAccResetMock.mock.calls.length;
 
         const subscriber = latestTracker?.subscribers.values().next().value as
@@ -995,9 +1132,12 @@ describe('useChat background detach race', () => {
         expect(streamAccResetMock.mock.calls.length).toBe(
             resetCallsBeforeUpdates
         );
+        latestTracker.resolveCompletion({ status: 'complete', content: 'abcd' });
+        await sendPromise;
     });
 
     it('clears stale live text for an empty recovery replacement', async () => {
+        holdBackgroundCompletion = true;
         vi.resetModules();
         const { useChat } = await import('~/composables/chat/useAi');
         const chat = useChat([], 'thread-1');
@@ -1013,7 +1153,7 @@ describe('useChat background detach race', () => {
             throw new Error('Background start resolver was not initialized');
         }
         resolveBackgroundStart({ jobId: 'job-reset-1' });
-        await sendPromise;
+        await waitForCall(subscribeBackgroundJobMock);
         const subscriber = latestTracker?.subscribers.values().next().value as
             | { onUpdate?: (payload: any) => void }
             | undefined;
@@ -1037,6 +1177,8 @@ describe('useChat background detach race', () => {
             status: { status: 'streaming', attempt: 2 },
         });
         expect(chat.streamState.text).toBe('new');
+        latestTracker.resolveCompletion({ status: 'complete', content: 'new', attempt: 2 });
+        await sendPromise;
     });
 
     it('persists extraTextParts in the user message data.content', async () => {

@@ -36,7 +36,7 @@ export interface BundledV1ManagerRecord {
 }
 
 export interface BundledV1PluginManagerOptions {
-    fetchDesired(signal: AbortSignal): Promise<BundledV1ManagerDesiredState>;
+    fetchDesired?(signal: AbortSignal): Promise<BundledV1ManagerDesiredState>;
     load(
         descriptor: BundledV1PluginDescriptor,
         signal: AbortSignal
@@ -111,6 +111,12 @@ export class BundledV1PluginManager {
         return this.#coordinator.request({ lease, trigger });
     }
 
+    /** Apply an accepted snapshot supplied by the workspace coordinator. */
+    reconcile(desiredState: BundledV1ManagerDesiredState, trigger: string): Promise<void> {
+        const lease = this.#generationClock.supersede('__reconcile__', trigger);
+        return this.#coordinator.request({ lease, trigger, desiredState });
+    }
+
     /** Serialized context teardown used before a workspace/session boundary. */
     stopAll(trigger = 'stop-all'): Promise<void> {
         const lease = this.#generationClock.supersede('__reconcile__', trigger);
@@ -121,6 +127,8 @@ export class BundledV1PluginManager {
                 descriptors: [],
                 revision: `empty:${lease.generation}`,
             },
+        }).then(() => {
+            if (this.#active.size) throw new Error('Bundled workspace plugin teardown failed');
         });
     }
 
@@ -173,7 +181,9 @@ export class BundledV1PluginManager {
             try {
                 desiredState = await work.lease.after(
                     'fetch',
-                    this.#options.fetchDesired(work.lease.signal)
+                    this.#options.fetchDesired
+                        ? this.#options.fetchDesired(work.lease.signal)
+                        : Promise.resolve({ descriptors: [...this.#lastDesired.values()], revision: this.#lastManifestRevision })
                 );
             } catch (error) {
                 // Unknown/transient manifest failure or supersession preserves every
@@ -368,6 +378,14 @@ export class BundledV1PluginManager {
                 lastError: serializeError(error, 'stop', true, 'cleanup-failed'),
                 diff,
                 updatedAt: this.#now(),
+            });
+            return false;
+        }
+        if (diff.action === 'stop' && (report.timedOut || report.errors.length)) {
+            this.#records.set(active.descriptor.id, {
+                ...this.#records.get(active.descriptor.id)!,
+                status: 'failed',
+                lastError: serializeError('Workspace teardown did not complete cleanly', 'stop', false, 'cleanup-failed'),
             });
             return false;
         }

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, nextTick, watch } from 'vue';
+import Dexie from 'dexie';
 import { pluginOk } from '@or3/plugin-sdk';
 import { messageRowKind, resolveMessageRenderer } from '~/composables/chat/message-renderers';
 import { TRUSTED_HOST_GRANTS } from '../trusted-host-context';
@@ -8,6 +9,7 @@ import {
     createLocalStorageSecretStore,
     createMemoryFileStore,
     createMemoryPostStore,
+    createScopedRecordStore,
 } from '../trusted-production-stores';
 import { slashFixtureExtension } from '../trusted-editor';
 import { readTrustedExecutionModel } from '../trusted-models';
@@ -416,13 +418,16 @@ describe('trusted host context', () => {
             grants: TRUSTED_HOST_GRANTS,
         });
         const commands: string[] = [];
-        trusted.editor.register({
+        trusted.context.contributions.register({
+            kind: 'editor.extension',
             id: 'slash-fixture',
-            extension: slashFixtureExtension(),
-            suggestion: { char: '/' },
-            onSlashCommand(command) {
-                commands.push(command);
-                return true;
+            definition: {
+                extension: slashFixtureExtension(),
+                suggestion: { char: '/' },
+                onSlashCommand(command: string) {
+                    commands.push(command);
+                    return true;
+                },
             },
         });
 
@@ -583,10 +588,13 @@ describe('trusted host context', () => {
             { immediate: true }
         );
         expect(seen).toEqual([null]);
-        trusted.renderers.register({
+        trusted.context.contributions.register({
+            kind: 'chat.message.renderer',
             id: 'plugin-row-live',
-            match: (message) => (message as { id?: string }).id === 'm1',
-            component,
+            definition: {
+                match: (message: unknown) => (message as { id?: string }).id === 'm1',
+                component,
+            },
         });
         await nextTick();
         expect(seen.at(-1)).toBe('plugin-row-live');
@@ -596,5 +604,98 @@ describe('trusted host context', () => {
         await trusted.dispose();
         expect(resolveMessageRenderer(plain)).toBeNull();
         expect(messageRowKind(plain, null)).toBe('default');
+    });
+
+    it.each([
+        ['editor.extension', { id: 'denied-editor', extension: slashFixtureExtension() }],
+        ['chat.message.renderer', { id: 'denied-renderer', match: () => true, component: defineComponent({}) }],
+    ] as const)('requires the reviewed grant for %s contributions', async (kind, definition) => {
+        const { createTrustedHostContext } = await import('../trusted-host-context');
+        const trusted = createTrustedHostContext({ pluginId: 'fixture.denied', version: '1.0.0', grants: [] });
+        expect(() => trusted.context.contributions.register({ kind, id: definition.id, definition }))
+            .toThrow(/Grant/);
+        await trusted.dispose();
+    });
+
+    it('scopes captured records and conditionally updates message data in one transaction', async () => {
+        const db = new Dexie(`trusted-records-${crypto.randomUUID()}`);
+        db.version(1).stores({ posts: 'id,postType', messages: 'id,thread_id,data.type' });
+        const posts = db.table('posts');
+        const messages = db.table('messages');
+        let current = true;
+        const records = createScopedRecordStore(
+            Object.assign(db, { posts, messages }) as Parameters<typeof createScopedRecordStore>[0],
+            { postType: 'fixture-record', messageType: 'fixture-execution' },
+            () => { if (!current) throw new Error('Workspace changed'); }
+        );
+        try {
+            await posts.bulkPut([
+                { id: 'owned', postType: 'fixture-record', title: 'Owned', meta: '{raw}', deleted: false },
+                { id: 'foreign', postType: 'another-record', title: 'Foreign', deleted: false },
+                { id: 'deleted', postType: 'fixture-record', title: 'Deleted', deleted: true },
+            ]);
+            const row = (id: string, clock = 2) => ({
+                id, thread_id: 'thread', role: 'assistant', data: { type: 'fixture-execution', state: 'running' },
+                clock, pending: true, created_at: 1, updated_at: 1, index: 1, deleted: false,
+            });
+            await messages.bulkPut([row('first'), row('second'), { ...row('other'), data: { type: 'other', state: 'running' } }]);
+            expect((await records.posts.list()).map((post) => post.id)).toEqual(['owned']);
+            expect((await records.posts.get('owned'))?.meta).toBe('{raw}');
+            expect(await records.posts.get('foreign')).toBeNull();
+            expect(await records.posts.get('deleted')).toBeNull();
+            expect(await records.messages.get('other')).toBeNull();
+            await records.messages.updateData([
+                { id: 'first', ifClock: 1, ifData: row('first').data, data: { type: 'fixture-execution', state: 'stale' }, pending: false },
+                { id: 'second', ifClock: 2, ifData: row('second').data, data: { type: 'fixture-execution', state: 'done' }, pending: false },
+                { id: 'other', ifClock: 2, ifData: { type: 'other' }, data: { type: 'fixture-execution', state: 'done' }, pending: false },
+            ]);
+            expect((await messages.get('first')).data.state).toBe('running');
+            expect(await messages.get('second')).toMatchObject({ clock: 3, pending: false, data: { state: 'done' } });
+            expect((await messages.get('other')).data.state).toBe('running');
+            await expect(records.messages.updateData([
+                { id: 'first', ifClock: 2, ifData: row('first').data, data: { type: 'another-type' }, pending: false },
+            ])).rejects.toThrow(/message type/);
+            await messages.put({ ...row('first'), data: { type: 'fixture-execution', state: 'resumed' } });
+            await records.messages.updateData([
+                { id: 'first', ifClock: 2, ifData: row('first').data, data: { type: 'fixture-execution', state: 'interrupted' }, pending: false },
+            ]);
+            expect((await messages.get('first')).data.state).toBe('resumed');
+            await messages.put(row('first'));
+            await messages.put(row('second'));
+            const interrupt = () => { current = false; };
+            messages.hook('updating', interrupt);
+            await expect(records.messages.updateData(['first', 'second'].map((id) => ({
+                id, ifClock: 2, ifData: row(id).data, data: { type: 'fixture-execution', state: 'interrupted' }, pending: false,
+            })))).rejects.toThrow('Workspace changed');
+            messages.hook('updating').unsubscribe(interrupt);
+            expect((await messages.get('first')).data.state).toBe('running');
+            expect((await messages.get('second')).data.state).toBe('running');
+            await expect(records.posts.list()).rejects.toThrow('Workspace changed');
+            await expect(records.messages.get('first')).rejects.toThrow('Workspace changed');
+        } finally {
+            await db.delete();
+        }
+    });
+
+    it('keeps installed Workflow packages working through their legacy record callbacks', async () => {
+        const { createLegacyWorkflowRecordAccess } = await import('../workflow-records-compat');
+        const meta = { nodes: [], edges: [], meta: { version: '2.0.0' } };
+        const records = {
+            posts: {
+                get: async () => ({ id: 'saved', title: 'Saved workflow', meta: JSON.stringify(meta), updated_at: 2, created_at: 1 }),
+                list: async () => [{ id: 'saved', title: 'Saved workflow', meta: JSON.stringify(meta), updated_at: 2, created_at: 1 }],
+            },
+            messages: {
+                get: async () => null, list: async () => [], listByThread: async () => [], updateData: async () => {},
+            },
+        };
+        const legacy = createLegacyWorkflowRecordAccess(records as Parameters<typeof createLegacyWorkflowRecordAccess>[0]);
+        expect(await legacy.getWorkflowById('saved')).toMatchObject({ id: 'saved', meta });
+        expect(await legacy.getWorkflowByName('Saved workflow')).toMatchObject({ id: 'saved', meta });
+        expect(await legacy.searchWorkflows(' saved ', 1)).toEqual([{ id: 'saved', label: 'Saved workflow', updatedAt: 2 }]);
+        expect(await legacy.listWorkflowNames()).toEqual(['Saved workflow']);
+        expect(await legacy.getMessage('missing')).toBeNull();
+        expect(await legacy.activityStore.list()).toEqual([]);
+        await expect(legacy.reconcileInterruptedRuns()).resolves.toBeUndefined();
     });
 });

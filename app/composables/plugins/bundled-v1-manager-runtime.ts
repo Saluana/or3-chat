@@ -1,3 +1,4 @@
+import { eligibleWorkspacePluginDescriptors } from '~~/shared/plugins/workspace-plugin-coordinator';
 import type { PluginRuntimeManifestResponse } from '~~/shared/plugins/runtime-manifest';
 import type { BundledV1PluginDescriptor } from '~~/shared/plugins/runtime-descriptor';
 import { BundledV1Loader } from '~~/shared/plugins/bundled-v1-loader';
@@ -59,8 +60,6 @@ export function parseWorkspacePluginModule(
 
 export interface CreateBundledV1WorkspaceManagerOptions {
     readonly loader: BundledV1Loader;
-    readonly getWorkspaceId: () => string | null | undefined;
-    readonly fetchManifest: (signal: AbortSignal) => Promise<PluginRuntimeManifestResponse>;
 }
 
 type ManagerRuntimeGlobals = typeof globalThis & {
@@ -71,24 +70,15 @@ export function getBundledV1WorkspaceManager(): BundledV1PluginManager | null {
     return (globalThis as ManagerRuntimeGlobals).__or3BundledV1WorkspaceManager ?? null;
 }
 
-function desiredStateFromManifest(
+export function desiredStateFromManifest(
     manifest: PluginRuntimeManifestResponse,
     workspaceId: string
 ): BundledV1ManagerDesiredState {
     if (manifest.workspaceId !== workspaceId) {
         throw new Error('Runtime manifest workspace does not match the active session');
     }
-    const descriptors: BundledV1PluginDescriptor[] = [];
-    for (const pluginId of manifest.enabledPluginIds) {
-        const runtime = manifest.runtime[pluginId];
-        if (
-            runtime?.loadAllowed !== false &&
-            runtime?.descriptorStatus === 'ready' &&
-            runtime.descriptor.manifestVersion === 1
-        ) {
-            descriptors.push(runtime.descriptor);
-        }
-    }
+    const descriptors = eligibleWorkspacePluginDescriptors(manifest, workspaceId)
+        .filter((descriptor): descriptor is BundledV1PluginDescriptor => descriptor.manifestVersion === 1);
     descriptors.sort((left, right) => left.id.localeCompare(right.id));
     return { descriptors, revision: manifest.revision };
 }
@@ -97,12 +87,6 @@ export function createBundledV1WorkspaceManager(
     options: CreateBundledV1WorkspaceManagerOptions
 ): BundledV1PluginManager {
     const manager = new BundledV1PluginManager({
-        async fetchDesired(signal) {
-            const workspaceId = options.getWorkspaceId();
-            if (!workspaceId) return { descriptors: [], revision: 'no-workspace' };
-            const manifest = await options.fetchManifest(signal);
-            return desiredStateFromManifest(manifest, workspaceId);
-        },
         async load(descriptor, signal): Promise<ManagedBundledV1Instance> {
             const resolution = options.loader.resolve(descriptor.id);
             if (
@@ -148,7 +132,9 @@ export function createBundledV1WorkspaceManager(
                         registered = false;
                         unregisterWorkspacePluginInstance(descriptor.id);
                     }
-                    return trusted.dispose(reason);
+                    const report = await trusted.dispose(reason);
+                    if (report.timedOut || report.errors.length) throw new Error('Bundled plugin teardown failed');
+                    return report;
                 },
             };
         },

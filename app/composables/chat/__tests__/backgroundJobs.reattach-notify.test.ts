@@ -368,17 +368,26 @@ describe('backgroundJobs reattach + notifications', () => {
             useSse: true,
         });
         const onUpdate = vi.fn();
-        subscribeBackgroundJob(tracker, { onUpdate });
+        const onComplete = vi.fn();
+        subscribeBackgroundJob(tracker, { onUpdate, onComplete });
 
         streamParams!.onStatus(makeStatus('streaming', {
             content: 'stale old response', content_length: 18,
             content_reset: true, attempt: 1,
         }));
+        streamParams!.onStatus(
+            makeStatus('complete', {
+                content: 'stale completed response',
+                content_length: 24,
+                attempt: 1,
+            })
+        );
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         expect(tracker.lastAttempt).toBe(2);
         expect(tracker.lastContent).toBe('new');
         expect(onUpdate).not.toHaveBeenCalled();
+        expect(onComplete).not.toHaveBeenCalled();
         stopBackgroundJobTracking(tracker);
         backgroundJobTrackers.clear();
     });

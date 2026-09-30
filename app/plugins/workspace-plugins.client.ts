@@ -1,9 +1,7 @@
-import { watch } from 'vue';
 import { useRuntimeConfig } from '#imports';
 import { bundledPluginCatalog } from '#build/or3/bundled-plugin-catalog';
-import { useSessionContext } from '~/composables/auth/useSessionContext';
 import {
-    createWorkspacePluginApi,
+    createManagedWorkspacePluginRuntime,
     registerWorkspacePluginInstance,
     unregisterWorkspacePluginInstance,
 } from '~/composables/plugins/workspace-runtime';
@@ -12,14 +10,15 @@ import { discoverNonCorePlugins } from '~~/shared/plugins/safe-mode';
 import { createWorkspacePluginShadowObserver } from '~/composables/plugins/workspace-plugin-shadow-observer';
 import { BundledV1Loader } from '~~/shared/plugins/bundled-v1-loader';
 import {
-    WORKSPACE_PLUGIN_RECONCILE_EVENT,
     createWorkspaceManagerCanarySelector,
     createStartupSelectedWorkspaceManager,
     createBundledV1WorkspaceManager,
     parseWorkspacePluginModule,
-    type WorkspacePluginReconcileEventDetail,
-    type WorkspacePluginReconcileReason,
+    desiredStateFromManifest,
 } from '~/composables/plugins/bundled-v1-manager-runtime';
+
+import { getWorkspacePluginCoordinator } from '~/composables/plugins/workspace-plugin-coordinator';
+import type { LegacyCleanupReport } from '~~/shared/plugins/legacy-plugin-scope';
 
 export default defineNuxtPlugin(() => {
     if (!process.client) return;
@@ -45,7 +44,6 @@ export default defineNuxtPlugin(() => {
     if (!modules) return;
     const bundledV1Loader = new BundledV1Loader(bundledPluginCatalog, modules);
 
-    const session = useSessionContext();
     // Snapshot startup-only cutover flags before any plugin code executes.
     const managerFlags = Object.freeze({
         enabled: runtimeConfig.public?.admin?.pluginRuntimeV2Enabled === true,
@@ -57,60 +55,32 @@ export default defineNuxtPlugin(() => {
     const v2Manager = createStartupSelectedWorkspaceManager(managerFlags.enabled, () =>
         createBundledV1WorkspaceManager({
             loader: bundledV1Loader,
-            getWorkspaceId: () => session.data.value?.session?.workspace?.id,
-            fetchManifest: (signal) =>
-                $fetch<PluginRuntimeManifestResponse>('/api/plugins/runtime-manifest', {
-                    cache: 'no-store',
-                    signal,
-                }),
         })
     );
     const shadowObserver = createWorkspacePluginShadowObserver({
         enabled: runtimeConfig.public?.admin?.pluginRuntimeShadowEnabled !== false,
         catalog: bundledPluginCatalog,
     });
-    let currentRevision = '';
-    let syncToken = 0;
     const managedPluginIds = new Set<string>();
+    const descriptorKeys = new Map<string, string>();
+    const disposers = new Map<string, () => Promise<LegacyCleanupReport>>();
+    const stopLegacyPlugin = async (id: string) => {
+        const report = await disposers.get(id)?.();
+        if (report && (report.timedOut || report.errors.length)) throw new Error(`Plugin ${id} cleanup failed`);
+        unregisterWorkspacePluginInstance(id);
+        managedPluginIds.delete(id);
+        descriptorKeys.delete(id);
+        disposers.delete(id);
+        shadowObserver?.observeStop(id);
+    };
 
-    const syncManifest = async () => {
-        const token = ++syncToken;
-        const workspaceId = session.data.value?.session?.workspace?.id;
-        if (!workspaceId) {
-            for (const id of Array.from(managedPluginIds)) {
-                unregisterWorkspacePluginInstance(id);
-                managedPluginIds.delete(id);
-                shadowObserver?.observeStop(id);
-            }
-            currentRevision = '';
-            return;
-        }
-
-        let manifest: PluginRuntimeManifestResponse;
-        try {
-            manifest = await $fetch<PluginRuntimeManifestResponse>(
-                '/api/plugins/runtime-manifest',
-                { cache: 'no-store' }
-            );
-        } catch (error) {
-            if (import.meta.dev) {
-                console.warn('[workspace-plugins] failed to fetch runtime manifest', error);
-            }
-            return;
-        }
-
-        if (token !== syncToken) return;
-
-        if (manifest.revision === currentRevision) {
-            return;
-        }
-
+    const syncManifest = async (manifest: PluginRuntimeManifestResponse, isCurrent: () => boolean) => {
+        const workspaceId = manifest.workspaceId!;
         // Server-authoritative load set: only plugins the host decided are loadable.
         const enabledSet = new Set(
             manifest.enabledPluginIds.filter((pluginId) => {
                 const runtime = manifest.runtime[pluginId];
                 return (
-                    runtime?.loadAllowed !== false &&
                     runtime?.descriptorStatus === 'ready' &&
                     runtime.descriptor.manifestVersion === 1
                 );
@@ -118,17 +88,15 @@ export default defineNuxtPlugin(() => {
         );
 
         for (const id of Array.from(managedPluginIds)) {
-            if (!enabledSet.has(id)) {
-                unregisterWorkspacePluginInstance(id);
-                managedPluginIds.delete(id);
-                shadowObserver?.observeStop(id);
+            const entry = manifest.runtime[id];
+            if (!enabledSet.has(id) || (entry?.descriptorStatus === 'ready' && descriptorKeys.get(id) !== entry.descriptor.descriptorKey)) {
+                await stopLegacyPlugin(id);
+                if (!isCurrent()) return;
             }
         }
 
-        let hadFailure = false;
-
         for (const pluginId of Array.from(enabledSet)) {
-            if (token !== syncToken) return;
+            if (!isCurrent()) return;
 
             if (managedPluginIds.has(pluginId)) {
                 continue;
@@ -153,14 +121,13 @@ export default defineNuxtPlugin(() => {
                             `(${clientEntry}).`
                     );
                 }
-                hadFailure = true;
                 continue;
             }
 
-            let dispose: (() => void) | null = null;
+            let dispose: (() => Promise<LegacyCleanupReport>) | null = null;
             try {
                 const mod = await loaderResolution.load();
-                if (token !== syncToken) {
+                if (!isCurrent()) {
                     return;
                 }
 
@@ -169,25 +136,28 @@ export default defineNuxtPlugin(() => {
                     throw new Error('Invalid plugin module export or plugin id mismatch');
                 }
 
-                const runtime = createWorkspacePluginApi(pluginId);
+                const runtime = createManagedWorkspacePluginRuntime({ pluginId });
                 dispose = runtime.dispose;
                 await plugin.register(runtime.api);
-                if (token !== syncToken) {
-                    dispose();
+                if (!isCurrent()) {
+                    await dispose();
                     return;
                 }
 
                 const registration = registerWorkspacePluginInstance(
                     pluginId,
                     'extension',
-                    dispose
+                    async () => { await runtime.dispose(); }
                 );
                 if (!registration.accepted) {
-                    dispose();
+                    await dispose();
                     dispose = null;
                     continue;
                 }
                 managedPluginIds.add(pluginId);
+                disposers.set(pluginId, runtime.dispose);
+                const entry = manifest.runtime[pluginId];
+                if (entry?.descriptorStatus === 'ready') descriptorKeys.set(pluginId, entry.descriptor.descriptorKey);
                 // Shadow-only: V1 has already imported and registered. Descriptor
                 // verification observes that outcome and never controls it.
                 shadowObserver?.observeActivation({
@@ -198,14 +168,13 @@ export default defineNuxtPlugin(() => {
                 });
                 dispose = null;
             } catch (error) {
-                hadFailure = true;
                 shadowObserver?.recordDivergence({
                     pluginId,
                     workspaceId: manifest.workspaceId ?? workspaceId,
                     runtimeEntry: manifest.runtime[pluginId],
                 });
                 if (dispose) {
-                    dispose();
+                    await dispose();
                 }
                 if (import.meta.dev) {
                     console.error(
@@ -216,76 +185,25 @@ export default defineNuxtPlugin(() => {
             }
         }
 
-        if (token !== syncToken) return;
-
-        // Only commit revision after a fully successful sync so transient failures retry.
-        if (!hadFailure) {
-            currentRevision = manifest.revision;
-        }
     };
 
-    let workspaceTransition = 0;
-    const stopLegacyPlugins = () => {
-        ++syncToken;
-        currentRevision = '';
-        for (const id of Array.from(managedPluginIds)) {
-            unregisterWorkspacePluginInstance(id);
-            managedPluginIds.delete(id);
-            shadowObserver?.observeStop(id);
-        }
-    };
-    const reconcileWorkspace = async (
-        workspaceId: string | null,
-        reason: WorkspacePluginReconcileReason
-    ) => {
-        const transition = ++workspaceTransition;
-        // A workspace/session boundary must never retain the previous tenant's
-        // active generations if the next manifest fetch is unavailable.
-        await v2Manager?.stopAll('workspace-session-change');
-        if (transition !== workspaceTransition) return;
-        if (isManagerWorkspace(workspaceId)) {
-            stopLegacyPlugins();
-            await v2Manager?.schedule(reason);
-            return;
-        }
-        await syncManifest();
-    };
-
-    const stopWatcher = watch(
-        () => session.data.value?.session?.workspace?.id ?? null,
-        (workspaceId) => {
-            void reconcileWorkspace(workspaceId, 'workspace-session-change');
+    const unregister = getWorkspacePluginCoordinator().register({
+        name: 'bundled-v1',
+        async stop() {
+            const results = await Promise.allSettled([
+                ...(v2Manager ? [v2Manager.stopAll('workspace-session-change')] : []),
+                ...Array.from(managedPluginIds, stopLegacyPlugin),
+            ]);
+            const failures = results.filter((result) => result.status === 'rejected');
+            if (failures.length) throw new AggregateError(failures.map((result) => result.reason), 'Bundled plugin teardown failed');
         },
-        { immediate: true }
-    );
-
-    const onFocus = () => {
-        const workspaceId = session.data.value?.session?.workspace?.id;
-        if (isManagerWorkspace(workspaceId)) {
-            void v2Manager?.schedule('focus-refresh');
-        } else {
-            void syncManifest();
-        }
-    };
-    const onRuntimeReconcile = (event: Event) => {
-        const detail = (event as CustomEvent<WorkspacePluginReconcileEventDetail>).detail;
-        const workspaceId = session.data.value?.session?.workspace?.id;
-        if (isManagerWorkspace(workspaceId)) {
-            void v2Manager?.schedule(detail?.reason ?? 'local-admin-change');
-        } else {
-            void syncManifest();
-        }
-    };
-    window.addEventListener('focus', onFocus);
-    window.addEventListener(WORKSPACE_PLUGIN_RECONCILE_EVENT, onRuntimeReconcile);
-
-    if (import.meta.hot) {
-        import.meta.hot.dispose(() => {
-            stopWatcher();
-            window.removeEventListener('focus', onFocus);
-            window.removeEventListener(WORKSPACE_PLUGIN_RECONCILE_EVENT, onRuntimeReconcile);
-            stopLegacyPlugins();
-            void v2Manager?.stopAll('hmr-dispose');
-        });
-    }
+        async reconcile(manifest, isCurrent) {
+            if (isManagerWorkspace(manifest.workspaceId)) {
+                await v2Manager?.reconcile(desiredStateFromManifest(manifest, manifest.workspaceId!), 'accepted-manifest');
+            } else {
+                await syncManifest(manifest, isCurrent);
+            }
+        },
+    });
+    if (import.meta.hot) import.meta.hot.dispose(() => { void unregister(); });
 });

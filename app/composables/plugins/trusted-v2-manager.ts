@@ -1,3 +1,4 @@
+import { eligibleWorkspacePluginDescriptors } from '~~/shared/plugins/workspace-plugin-coordinator';
 import { shallowReactive } from 'vue';
 import type { PluginRuntimeManifestResponse } from '~~/shared/plugins/runtime-manifest';
 import type { PackageV2PluginDescriptor } from '~~/shared/plugins/runtime-descriptor';
@@ -29,19 +30,10 @@ function desiredDescriptors(
     workspaceId: string
 ): Map<string, PackageV2PluginDescriptor> {
     const desired = new Map<string, PackageV2PluginDescriptor>();
-    if (manifest.workspaceId !== workspaceId) return desired;
-    for (const id of manifest.enabledPluginIds) {
-        const entry = manifest.runtime[id];
-        if (entry?.loadAllowed === false || entry?.descriptorStatus !== 'ready') continue;
-        const descriptor = entry.descriptor;
-        if (
-            descriptor.manifestVersion !== 2 ||
-            descriptor.trust !== 'trusted-host' ||
-            descriptor.workspaceId !== workspaceId ||
-            !descriptor.artifact.clientEntry ||
-            descriptor.artifact.client?.isolation !== 'host'
-        ) continue;
-        desired.set(id, descriptor);
+    for (const descriptor of eligibleWorkspacePluginDescriptors(manifest, workspaceId)) {
+        if (descriptor.manifestVersion === 2 && descriptor.trust === 'trusted-host') {
+            desired.set(descriptor.id, descriptor);
+        }
     }
     return desired;
 }

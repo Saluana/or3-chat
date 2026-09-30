@@ -204,6 +204,16 @@ The official feature packages also receive narrowly scoped host integrations
 for existing workspace and background-job behavior; those are not general SDK
 APIs for third-party packages.
 
+Chat message renderers and chat editor extensions use
+`context.contributions.register()` with `chat.message.renderer` and
+`editor.extension`; see the [SDK contribution contracts](./plugin-sdk).
+Workflows interprets metadata, lookup/search, interrupted executions, Activity
+records, and conversation history in its package. Its temporary host bridge
+supplies captured, type-scoped records and conditional message-data updates.
+The old record callbacks remain in a compatibility adapter for installed
+artifacts; they are not a second SDK. Background jobs, execution ports, and
+shell UI dependencies still use the private bridge.
+
 Run the package's tests and typecheck, then `or3-plugin validate .`,
 `or3-plugin build .`, and `or3-plugin pack . --archive <path>`. Build again
 after every source edit before packing. The packed ZIP follows the same

@@ -11,10 +11,9 @@ import {
     TrustedV2ClientManager,
     installTrustedV2ClientManager,
 } from '~/composables/plugins/trusted-v2-manager';
-import { WORKSPACE_PLUGIN_RECONCILE_EVENT } from '~/composables/plugins/bundled-v1-manager-runtime';
+import { getWorkspacePluginCoordinator } from '~/composables/plugins/workspace-plugin-coordinator';
 import { createProductionModuleV2Loader } from '~~/shared/plugins/host-esm-facade-runtime';
 import { buildPluginPackageAssetUrl } from '~~/shared/plugins/module-v2-loader';
-import type { PluginRuntimeManifestResponse } from '~~/shared/plugins/runtime-manifest';
 import type { PackageV2PluginDescriptor } from '~~/shared/plugins/runtime-descriptor';
 
 const AGENT_BRIDGE_GRANTS: readonly PluginGrant[] = [
@@ -61,7 +60,7 @@ async function pluginContext(
             ui: Object.freeze({
                 ...base.ui,
                 workflowHostIntegrations: {
-                    ...(await runWithContext(() => createWorkflowHostBridge())),
+                    ...(await runWithContext(() => createWorkflowHostBridge(base.signal))),
                     registerRenderer: trusted.renderers.register,
                     registerEditor: trusted.editor.register,
                 },
@@ -225,39 +224,10 @@ export default defineNuxtPlugin((nuxtApp) => {
         },
     });
     installTrustedV2ClientManager(manager);
-    let fetchGeneration = 0;
-    const reconcile = async (workspaceChanged = false) => {
-        const fetchId = ++fetchGeneration;
-        // Own the transition here: teardown must precede activation for the
-        // destination workspace, even when portable cleanup is still pending.
-        if (workspaceChanged) {
-            try {
-                await manager.stopAll();
-            } catch (error) {
-                console.error('[trusted-v2-clients] workspace teardown failed', error);
-                return;
-            }
-        }
-        if (fetchId !== fetchGeneration) return;
-        const workspaceId = session.data.value?.session?.workspace?.id;
-        if (!workspaceId) {
-            await manager.stopAll();
-            return;
-        }
-        try {
-            const manifest = await $fetch<PluginRuntimeManifestResponse>('/api/plugins/runtime-manifest', {
-                cache: 'no-store',
-            });
-            if (fetchId !== fetchGeneration) return;
-            await manager.reconcile(manifest, workspaceId);
-        } catch (error) {
-            if (fetchId === fetchGeneration) {
-                console.error('[trusted-v2-clients] manifest reconciliation failed', error);
-            }
-        }
-    };
-    watch(() => session.data.value?.session?.workspace?.id, () => { void reconcile(true); }, { immediate: true });
-    window.addEventListener(WORKSPACE_PLUGIN_RECONCILE_EVENT, () => { void reconcile(); });
-    window.addEventListener('focus', () => { void reconcile(); });
-    window.addEventListener('beforeunload', () => { void manager.stopAll(); });
+    const unregister = getWorkspacePluginCoordinator().register({
+        name: 'trusted-v2',
+        stop: () => manager.stopAll(),
+        reconcile: (manifest) => manager.reconcile(manifest, manifest.workspaceId!),
+    });
+    if (import.meta.hot) import.meta.hot.dispose(() => { void unregister(); });
 });

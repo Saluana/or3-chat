@@ -34,6 +34,7 @@ Thread message CRUD utilities with hook integration, sparse indexing, and attach
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `createMessage(input)`                            | Validates payload (including array → string conversion for `file_hashes`) and writes a row. |
 | `upsertMessage(value)` / `upsertMessageInDb(db, value)` | Validates and replaces a row; the `InDb` variant targets an explicit DB.              |
+| `patchMessageInDb(db, id, patch, fallback?, ifCurrent?)` | Merges owned fields into the latest row without replacing concurrent updates. |
 | `messagesByThread(threadId)`                      | Fetches ordered messages, applying output filters.                                          |
 | `getMessage(id)` / `messageByStream(streamId)`    | Targeted lookups with output filters.                                                       |
 | `softDeleteMessage(id)` / `hardDeleteMessage(id)` | Delete flows with before/after hook actions.                                                |
@@ -53,6 +54,13 @@ Thread message CRUD utilities with hook integration, sparse indexing, and attach
 -   Action hooks for delete, append, move, copy, insert, and normalize operations.
 
 These hooks allow feature modules to enrich messages (e.g., auto-tagging, analytics) and react to lifecycle changes.
+
+`patchMessageInDb` runs preparation hooks before opening its write transaction.
+Its optional synchronous `ifCurrent` callback then receives the stored row
+(`undefined` if it was deleted) inside that transaction. Returning `false` skips
+the write and after hook, even when a fallback was supplied. Chat finalization
+uses this guard to avoid saving over a newer generation or resurrecting a deleted
+message after an asynchronous hook.
 
 ---
 

@@ -23,16 +23,14 @@
  * - No package bytes are fetched before the descriptor is verified.
  */
 
-import { defineAsyncComponent, h, watch } from 'vue';
+import { defineAsyncComponent, h } from 'vue';
 import { useRuntimeConfig } from '#imports';
-import { useSessionContext } from '~/composables/auth/useSessionContext';
 import type { PluginRuntimeManifestResponse } from '~~/shared/plugins/runtime-manifest';
 import type { PackageV2PluginDescriptor } from '~~/shared/plugins/runtime-descriptor';
 import { buildPluginPackageAssetUrl } from '~~/shared/plugins/module-v2-loader';
 import {
     clearPortableSurfaceRegistrations,
     deactivatePortableClient,
-    installPortableUnloadTeardown,
     listPortableActivations,
     listPortableClientSources,
     removePortableClientSource,
@@ -44,7 +42,7 @@ import {
     unregisterDashboardPlugin,
     type DashboardPluginPage,
 } from '~/composables/dashboard/useDashboardPlugins';
-import { WORKSPACE_PLUGIN_RECONCILE_EVENT } from '~/composables/plugins/bundled-v1-manager-runtime';
+import { getWorkspacePluginCoordinator } from '~/composables/plugins/workspace-plugin-coordinator';
 import { registerPortableTools, toolDiscoveryCode } from '~/composables/plugins/portable-tools';
 
 import { usePaneApps } from "~/composables/core/usePaneApps";
@@ -72,7 +70,7 @@ export function isPortableClientDescriptor(
         descriptor.source === 'package' &&
         descriptor.trust === 'isolated-client' &&
         descriptor.artifact?.kind === 'package-v2' &&
-        Boolean(descriptor.artifact.client)
+        (descriptor.artifact.client?.isolation === 'iframe' || descriptor.artifact.client?.isolation === 'worker')
     );
 }
 
@@ -127,13 +125,8 @@ export default defineNuxtPlugin(() => {
         return;
     }
 
-    installPortableUnloadTeardown();
-
-    const session = useSessionContext();
     const registeredPages = new Set<string>();
     const surfaceDisposers = new Map<string, () => void>();
-    let currentRevision = '';
-    let syncToken = 0;
 
     const stop = async (pluginId: string, preserveDrafts = false): Promise<void> => {
         surfaceDisposers.get(pluginId)?.();
@@ -145,32 +138,8 @@ export default defineNuxtPlugin(() => {
         await deactivatePortableClient(pluginId);
     };
 
-    const syncManifest = async (): Promise<void> => {
-        const token = ++syncToken;
-        const workspaceId = session.data.value?.session?.workspace?.id;
-        if (!workspaceId) {
-            for (const source of listPortableClientSources()) {
-                await stop(source.descriptor.id);
-            }
-            currentRevision = '';
-            return;
-        }
-
-        let manifest: PluginRuntimeManifestResponse;
-        try {
-            manifest = await $fetch<PluginRuntimeManifestResponse>(
-                '/api/plugins/runtime-manifest',
-                { cache: 'no-store' }
-            );
-        } catch (error) {
-            if (import.meta.dev) {
-                console.warn('[portable-clients] failed to fetch runtime manifest', error);
-            }
-            return;
-        }
-        if (token !== syncToken) return;
-        if (manifest.revision === currentRevision) return;
-
+    const syncManifest = async (manifest: PluginRuntimeManifestResponse, isCurrent: () => boolean): Promise<void> => {
+        const workspaceId = manifest.workspaceId!;
         // Ready isolated-client descriptors, keyed by plugin id.
         const wanted = new Map<string, PackageV2PluginDescriptor>();
         for (const pluginId of manifest.enabledPluginIds) {
@@ -200,7 +169,7 @@ export default defineNuxtPlugin(() => {
         }
 
         for (const [pluginId, descriptor] of wanted) {
-            if (token !== syncToken) return;
+            if (!isCurrent()) return;
             setPortableClientSource({
                 descriptor,
                 workspaceId,
@@ -268,27 +237,18 @@ export default defineNuxtPlugin(() => {
             });
         }
 
-        if (token !== syncToken) return;
-        currentRevision = manifest.revision;
     };
 
-    watch(
-        () => session.data.value?.session?.workspace?.id,
-        () => {
-            ++syncToken;
-            currentRevision = '';
-            for (const source of listPortableClientSources()) {
-                void stop(source.descriptor.id);
-            }
-            void syncManifest();
+    const unregister = getWorkspacePluginCoordinator().register({
+        name: 'portable',
+        async stop() {
+            const ids = new Set([
+                ...listPortableClientSources().map((source) => source.descriptor.id),
+                ...listPortableActivations().map((activation) => activation.pluginId),
+            ]);
+            await Promise.all(Array.from(ids, (id) => stop(id)));
         },
-        { immediate: true }
-    );
-
-    // Reconcile requests are the same signal the V1 manager listens to: a
-    // settings/selection change should re-evaluate which packages are available.
-    window.addEventListener(WORKSPACE_PLUGIN_RECONCILE_EVENT, () => {
-        currentRevision = '';
-        void syncManifest();
+        reconcile: syncManifest,
     });
+    if (import.meta.hot) import.meta.hot.dispose(() => { void unregister(); });
 });

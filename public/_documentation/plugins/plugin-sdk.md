@@ -128,6 +128,37 @@ reconnect, and lifetime budgets remain host responsibilities.
 CR-only terminators dispatch immediately, including at chunk boundaries;
 unterminated events are discarded at EOF.
 
+## Trusted chat contributions
+
+Any reviewed trusted-host package can register these contributions through
+`context.contributions.register()`; no plugin-ID-specific loader integration is
+needed. The host checks the grant and disposes the registration with the
+activation. The portable profile does not accept Vue component or extension
+objects.
+
+| Contribution kind | Definition type | Required grant |
+|---|---|---|
+| `chat.message.renderer` | `PluginMessageRendererDefinition<TMessage>`: `match` and `component` | `chat.message.renderer` |
+| `editor.extension` | `PluginEditorExtensionDefinition`: `extension`, optional `suggestion` and `onSlashCommand` | `chat.editor.extension` |
+
+The contribution's `id` identifies the registration. A renderer receives the
+host's UI message; its package decides whether to match and supplies its Vue
+component. An editor contribution supplies a package-owned TipTap extension.
+These registrations do not grant message writes or model/tool execution.
+
+```js
+context.contributions.register({
+  kind: 'chat.message.renderer',
+  id: 'example-result',
+  definition: { match: message => message.id === resultMessageId, component: ResultRow },
+});
+context.contributions.register({
+  kind: 'editor.extension',
+  id: 'example-slash',
+  definition: { extension: ExampleSlashExtension },
+});
+```
+
 ## Host capabilities (portable AI)
 
 The root export also carries typed helpers for the host's governed model

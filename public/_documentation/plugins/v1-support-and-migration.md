@@ -31,3 +31,24 @@ Avoid `~/`, `~~/`, `@/`, `@@/`, `#imports`, `#app`, and Nuxt auto-imports inside
 - V1 registrations are immediately visible and may use global side effects (`legacy-global-possible`).
 - V2 activation is per process/client generation, not fleet-atomic.
 - Disable retains digests, settings, and migrated state.
+
+
+## Workspace manifest coordination
+
+Bundled V1, trusted V2, and isolated client plugins consume snapshots from one
+workspace plugin coordinator. It owns the runtime-manifest request, session and
+workspace subscription, focus refresh, and `or3:workspace-plugin-reconcile`
+signal. A burst of refresh requests coalesces; superseded requests are aborted
+and late responses cannot activate plugins in a different workspace or account.
+
+All adapters complete teardown before the coordinator applies a destination
+workspace snapshot. A teardown failure blocks destination activation and is
+reported; another refresh retries cleanup. A failed manifest request in the
+same workspace preserves healthy plugins. Unchanged descriptor identities keep
+their existing registrations.
+
+Execution stays separate: bundled V1 uses its compatibility lifecycle, trusted
+V2 runs through the reviewed host context, and isolated clients retain their
+containment boundary. Portable plugin code starts only when a surface opens or
+the user requests a restart; manifest reconciliation registers availability
+without consuming the containment watchdog budget.
