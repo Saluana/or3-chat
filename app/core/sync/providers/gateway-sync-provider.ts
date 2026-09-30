@@ -200,6 +200,7 @@ async function requestJson<T>(
         credentials: 'include',
         headers: {
             'Content-Type': 'application/json',
+            'x-or3-cloud-intent': 'mutation',
         },
         body: JSON.stringify(body),
         signal: options.signal,

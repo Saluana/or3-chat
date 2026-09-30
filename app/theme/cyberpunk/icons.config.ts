@@ -43,8 +43,8 @@ export default <IconMap>{
     // Sidebar
     'sidebar.search': 'carbon:search',
     'sidebar.new_chat': 'carbon:chat',
-    'sidebar.new_folder': 'carbon:folder-add',
-    'sidebar.new_note': 'carbon:document-add',
+    'sidebar.new_folder': 'carbon:folder',
+    'sidebar.new_note': 'carbon:document',
     'sidebar.edit': 'carbon:edit',
     'sidebar.delete': 'carbon:trash-can',
     'sidebar.folder': 'carbon:folder',

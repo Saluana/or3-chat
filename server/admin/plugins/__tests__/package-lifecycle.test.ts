@@ -63,6 +63,7 @@ async function setup() {
     await pointers.writePointer('alpha', pointer);
     const settings = memoryStore({
         'ws-1:plugins.enabled': JSON.stringify(['alpha']),
+        'ws-2:plugins.enabled': JSON.stringify(['alpha']),
         'ws-1:plugins.settings.alpha': JSON.stringify({ keep: true }),
         'ws-1:plugins.stateVersion.alpha': '1',
     });
@@ -93,7 +94,10 @@ describe('PluginPackageLifecycleService', () => {
             expect.arrayContaining([current.digest, previous.digest])
         );
 
-        const uninstalled = await service.uninstallPackage('alpha');
+        const uninstalled = await service.uninstallPackage('alpha', {
+            expectedPackageDigest: current.digest,
+            workspaceIds: ['ws-1', 'ws-2'],
+        });
         expect(uninstalled.pointerCleared).toBe(true);
         expect(await getPluginSettings(settings, 'ws-1', 'alpha')).toEqual({ keep: true });
         await expect(
@@ -135,4 +139,37 @@ describe('PluginPackageLifecycleService', () => {
             packages.verifyStoredPackage('alpha', current.digest)
         ).resolves.toBeTruthy();
     });
+});
+
+it('refuses stale uninstall confirmation before disabling or clearing selection', async () => {
+    const {service, settings, pointers, current, previous} = await setup();
+    await expect(service.uninstallPackage('alpha', {workspaceIds: ['ws-1', 'ws-2'], expectedPackageDigest: previous.digest})).rejects.toThrow('Selected package changed');
+    expect(await getEnabledPlugins(settings, 'ws-1')).toEqual(['alpha']);
+    expect((await pointers.readPointer('alpha'))?.current?.packageDigest).toBe(current.digest);
+    await service.uninstallPackage('alpha', {workspaceIds: ['ws-1', 'ws-2'], expectedPackageDigest: current.digest});
+    expect(await getEnabledPlugins(settings, 'ws-1')).toEqual([]);
+    expect(await getEnabledPlugins(settings, 'ws-2')).toEqual([]);
+    expect((await pointers.readPointer('alpha'))?.current).toBeNull();
+});
+
+it('keeps the package selected if disabling any workspace fails', async () => {
+    const { packages, pointers, current } = await setup();
+    const values = memoryStore({
+        'ws-1:plugins.enabled': JSON.stringify(['alpha']),
+        'ws-2:plugins.enabled': JSON.stringify(['alpha']),
+    });
+    const failing: WorkspaceSettingsStore = {
+        get: values.get.bind(values),
+        async set(workspaceId, key, value) {
+            if (workspaceId === 'ws-2' && key === 'plugins.enabled') throw new Error('write failed');
+            await values.set(workspaceId, key, value);
+        },
+    };
+    const service = new PluginPackageLifecycleService(packages, pointers, failing);
+    await expect(service.uninstallPackage('alpha', {
+        workspaceIds: ['ws-1', 'ws-2'], expectedPackageDigest: current.digest,
+    })).rejects.toThrow('write failed');
+    expect((await pointers.readPointer('alpha'))?.current?.packageDigest).toBe(current.digest);
+    expect(await getEnabledPlugins(values, 'ws-1')).toEqual([]);
+    expect(await getEnabledPlugins(values, 'ws-2')).toEqual(['alpha']);
 });

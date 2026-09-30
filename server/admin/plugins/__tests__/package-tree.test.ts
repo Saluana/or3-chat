@@ -10,6 +10,10 @@ import {
 } from '../package-tree';
 
 const manifest = Buffer.from('{"manifestVersion":2,"kind":"plugin","id":"example"}');
+const onePixelPng = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    'base64'
+);
 
 function entries(...extra: PackageTreeEntryInput[]): PackageTreeEntryInput[] {
     return [
@@ -29,6 +33,32 @@ function expectCode(action: () => unknown, code: string): void {
 }
 
 describe('canonical package tree validation', () => {
+    it('binds a declared validated icon into package verification', () => {
+        const iconManifest = Buffer.from(
+            '{"manifestVersion":2,"kind":"plugin","id":"example","icon":"assets/icon.png"}'
+        );
+        const verified = verifyCanonicalPackageEntries([
+            { path: 'or3.manifest.json', kind: 'file', mode: 0o100644, bytes: iconManifest },
+            { path: 'assets', kind: 'directory', mode: 0o040755 },
+            { path: 'assets/icon.png', kind: 'file', mode: 0o100644, bytes: onePixelPng },
+        ]);
+        expect(verified.iconPath).toBe('assets/icon.png');
+
+        expectCode(
+            () => verifyCanonicalPackageEntries([
+                { path: 'or3.manifest.json', kind: 'file', mode: 0o100644, bytes: iconManifest },
+            ]),
+            'plugin-icon-invalid'
+        );
+        expectCode(
+            () => verifyCanonicalPackageEntries([
+                { path: 'or3.manifest.json', kind: 'file', mode: 0o100644, bytes: iconManifest },
+                { path: 'assets/icon.png', kind: 'file', mode: 0o100644, bytes: Buffer.alloc(15 * 1024 * 1024) },
+            ]),
+            'plugin-icon-invalid'
+        );
+    });
+
     it.each(['../escape.mjs', '/absolute.mjs', 'C:\\escape.mjs'])(
         'rejects traversal or absolute path %s',
         (path) => expectCode(() => verifyCanonicalPackageEntries(entries({ path, kind: 'file', mode: 0o644 })), 'path-traversal')

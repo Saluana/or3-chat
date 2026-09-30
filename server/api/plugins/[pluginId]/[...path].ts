@@ -4,7 +4,9 @@ import { createError, defineEventHandler, getMethod, getRouterParam } from 'h3';
 import { useRuntimeConfig } from '#imports';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 import { listInstalledExtensions } from '../../../admin/extensions/extension-manager';
+import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
 import { requirePluginAccess } from '../../../utils/plugins/access/require-plugin-access';
+import { resolvePluginPackage } from '../../../utils/plugins/setup/discovery';
 import { requireCan } from '../../../auth/can';
 import { isNonCorePluginDiscoveryDisabled } from '../../../../shared/plugins/safe-mode';
 import { resolvePluginRoutePermission } from '../../../../shared/plugins/route-permissions';
@@ -18,6 +20,7 @@ import {
     ServerModuleResolverError,
     type RuntimePluginRouteHandler,
 } from '../../../admin/plugins/server-module-resolver';
+import { createWorkflowServerBridge } from '../../../utils/workflows/plugin-server-bridge';
 
 type RuntimeRouteDef = {
     method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -92,11 +95,15 @@ export default defineEventHandler(async (event) => {
             (runtimeConfig.admin as { pluginModuleLoaderV2WorkspaceIds?: string[] } | undefined)
                 ?.pluginModuleLoaderV2WorkspaceIds ?? [],
     });
-    const packageCatalog = v2Enabled
-        ? await packageRouteCatalog.readSelected(pluginId)
-        : { status: 'inactive' as const, pluginId };
+    // The pointer is inspected even when the V2 module loader is disabled: a
+    // recorded V2 identity must never be served by the legacy loader, and a
+    // candidate-only or cleared pointer owns the id just as a ready one does.
+    const packageCatalog = await packageRouteCatalog.readSelected(pluginId);
 
     if (packageCatalog.status === 'blocked') {
+        throw createError({ statusCode: 404, statusMessage: 'Plugin not found' });
+    }
+    if (packageCatalog.status === 'ready' && !v2Enabled) {
         throw createError({ statusCode: 404, statusMessage: 'Plugin not found' });
     }
 
@@ -111,6 +118,15 @@ export default defineEventHandler(async (event) => {
                 : null);
         packageDigest = packageCatalog.packageDigest;
     } else {
+        // Only a plugin with no V2 pointer at all may use the legacy loader.
+        const selection = await resolvePluginPackage(
+            pluginId,
+            EXTENSIONS_BASE_DIR,
+            'current'
+        );
+        if (!selection || selection.status !== 'legacy') {
+            throw createError({ statusCode: 404, statusMessage: 'Plugin not found' });
+        }
         const installed = await listInstalledExtensions();
         const plugin = installed.find(
             (entry) => entry.kind === 'plugin' && entry.id === pluginId
@@ -271,6 +287,9 @@ export default defineEventHandler(async (event) => {
         routePath: normalizeRoutePath(requestPath) || '/',
     });
     event.context.or3PluginRequest = authorizedContext;
+    if (pluginId === 'or3-workflows') {
+        event.context.or3WorkflowServer = createWorkflowServerBridge();
+    }
 
     try {
         const resolved = await serverModuleResolver.resolveHandler({

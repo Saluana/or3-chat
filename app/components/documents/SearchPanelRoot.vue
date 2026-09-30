@@ -46,7 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount, computed } from 'vue';
+import { ref, watch, onMounted, computed } from 'vue';
 import { watchDebounced } from '@vueuse/core';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 
@@ -187,8 +187,4 @@ function handleNavigate(result: SearchResult) {
     emit('navigate', result.path);
 }
 
-// Cleanup timeout on unmount
-onBeforeUnmount(() => {
-    // No manual timeout cleanup needed
-});
 </script>

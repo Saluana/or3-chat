@@ -13,8 +13,9 @@ unsupported-version profile falls back to Standard OR3 with diagnostics.
 Initial pane entries use `{ id, recordId? }`, where `id` is a registered pane
 app ID.
 
-Built-ins include Standard OR3, Minimal Chat, Document Workspace, and a Coding
-Workspace that degrades safely when External Agents is unavailable.
+Core built-ins include Standard OR3, Minimal Chat, and Document Workspace.
+The External Agents plugin registers Coding Workspace while installed; removing
+that registration makes a saved selection fall back to Standard OR3.
 
 ## Selection, themes, and lifecycle
 

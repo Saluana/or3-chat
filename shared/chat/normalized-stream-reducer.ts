@@ -88,11 +88,19 @@ function assertCanonicalBudget(
 }
 
 function toolEntryBytes(tool: NormalizedToolState): number {
-    return (
-        utf8Bytes(tool.arguments) +
-        utf8Bytes(tool.result ?? '') +
-        utf8Bytes(tool.error ?? '')
-    );
+    // Canonical history serializes both the tool state and its transcript.
+    // Measuring JSON also accounts for quotes/control-character escaping.
+    return utf8Bytes(JSON.stringify({
+        id: tool.id,
+        name: tool.name,
+        args: tool.arguments,
+        result: tool.result,
+        error: tool.error,
+        transcript: {
+            result: tool.result,
+            error: tool.error,
+        },
+    })) + 256;
 }
 
 function applyToolBytes(

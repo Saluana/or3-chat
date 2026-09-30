@@ -21,6 +21,12 @@ interface PaneAppDef {
     component: Component | (() => Promise<Component>);
     postType?: string; // defaults to app id
     createInitialRecord?: (ctx) => Promise<{ id: string } | null>;
+    newTab?: {
+        label: string;
+        icon?: string;
+        isAvailable?: () => boolean;
+        createRecordId: () => Promise<string | null>;
+    }; // optional action in the workspace new-tab menu
     order?: number; // defaults to 200
     pluginId?: string;
     access?: PluginGatePolicy;
@@ -50,6 +56,7 @@ await multiPane.newPaneForApp('snake-game');
 
 -   Access policies are enforced at read time; blocked apps never appear in `listPaneApps`.
 -   Registrations survive HMR through the shared registry.
+-   The new-tab menu reads `newTab` from available pane registrations. Disposing the pane registration removes its menu item. Return `null` from `createRecordId` to cancel creation.
 
 ## Related
 

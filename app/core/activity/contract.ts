@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ActivityRunKind } from '~~/shared/plugins/contracts';
 
 export const ACTIVITY_TERMINAL_STATUSES = [
     'succeeded',
@@ -35,12 +36,7 @@ export type ActivityRunStatus = z.infer<typeof ActivityRunStatusSchema>;
 export type ActivityEventType = z.infer<typeof ActivityEventTypeSchema>;
 export type ActivityRunAction = z.infer<typeof ActivityRunActionSchema>;
 
-export type ActivityRunKind =
-    | 'workflow'
-    | 'background-chat'
-    | 'document-ai'
-    | 'external-agent'
-    | (string & {});
+export type { ActivityRunKind } from '~~/shared/plugins/contracts';
 
 export interface ActivityArtifact {
     readonly id: string;
@@ -202,7 +198,7 @@ export const ActivitySourceIdentitySchema = z.object({
         .string()
         .trim()
         .min(1)
-        .max(100)
+        .max(200)
         .regex(/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/),
     label: z.string().trim().min(1).max(100),
     actions: z.array(ActivityRunActionSchema).optional(),

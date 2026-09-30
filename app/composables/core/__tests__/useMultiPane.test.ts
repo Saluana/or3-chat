@@ -626,6 +626,35 @@ describe('useMultiPane - message loading with validation', () => {
         expect(messages[0]?.id).toBe('msg-1');
     });
 
+    it('reloads the retried turn at the bottom without resurrecting its superseded pair', async () => {
+        vi.doUnmock('~/db/client');
+        vi.doMock('~/db/client', () => ({
+            getDb: () => ({
+                messages: {
+                    where: () => ({
+                        between: () => ({
+                            filter: () => ({
+                                toArray: async () => [
+                                    { id: 'u1', role: 'user', content: 'retry me', index: 1, data: { superseded_by: 'u3' }, deleted: false },
+                                    { id: 'a1', role: 'assistant', content: 'old answer', index: 2, data: { superseded_by: 'u3' }, deleted: false },
+                                    { id: 'a2', role: 'assistant', content: 'later answer', index: 4, deleted: false },
+                                    { id: 'u2', role: 'user', content: 'later turn', index: 3, deleted: false },
+                                    { id: 'u3', role: 'user', content: 'retry me', index: 5, deleted: false },
+                                    { id: 'a3', role: 'assistant', content: 'new answer', index: 6, deleted: false },
+                                ],
+                            }),
+                        }),
+                    }),
+                },
+            }),
+        }));
+
+        const { useMultiPane } = await import('../useMultiPane');
+        const messages = await useMultiPane().loadMessagesFor('thread-retry');
+
+        expect(messages.map((message) => message.id)).toEqual(['u2', 'a2', 'u3', 'a3']);
+    });
+
     it('handles completely invalid data without crashing', async () => {
         vi.doUnmock('~/db/client');
         vi.doMock('~/db/client', () => ({

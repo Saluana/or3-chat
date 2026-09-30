@@ -11,7 +11,6 @@ export type PaletteCategoryId =
     | 'document'
     | 'project'
     | 'prompt'
-    | 'workflow'
     | 'image'
     | 'setting'
     | 'dashboard'
@@ -109,6 +108,7 @@ export interface PaletteResource {
     keywords?: readonly string[];
     updatedAt?: number;
     icon?: string;
+    image?: string;
     primaryAction: PaletteAction;
     secondaryActions?: readonly PaletteAction[];
     metadata?: Readonly<Record<string, string | number | boolean | null>>;
@@ -126,6 +126,7 @@ export interface PaletteResult {
     subtitle?: string;
     snippet?: string;
     icon?: string;
+    image?: string;
     updatedAt?: number;
     score?: number;
     primaryAction: PaletteAction;
@@ -331,13 +332,6 @@ export const CORE_PALETTE_CATEGORIES: readonly PaletteCategory[] = [
         aliases: ['prompt'],
         icon: 'i-lucide-scroll-text',
         order: 45,
-    },
-    {
-        id: 'workflow',
-        label: 'Workflows',
-        aliases: ['workflow'],
-        icon: 'i-lucide-git-branch',
-        order: 50,
     },
     {
         id: 'image',

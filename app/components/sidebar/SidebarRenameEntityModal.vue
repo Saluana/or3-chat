@@ -1,13 +1,14 @@
 <template>
-    <UModal
+    <AppModal
         v-bind="modalProps"
         :open="open"
         :title="title"
         @update:open="emit('update:open', $event)"
     >
-        <template #body>
+        <template #default>
             <div class="space-y-4">
                 <UInput
+                    variant="modal"
                     :model-value="value"
                     class="w-full"
                     :placeholder="placeholder"
@@ -20,19 +21,20 @@
         <template #footer>
             <UButton
                 variant="ghost"
-                class="theme-btn"
+                size="modal"
                 @click="emit('update:open', false)"
             >
                 Cancel
             </UButton>
-            <UButton color="primary" class="theme-btn" @click="emit('submit')">
+            <UButton color="primary" size="modal" @click="emit('submit')">
                 Save
             </UButton>
         </template>
-    </UModal>
+    </AppModal>
 </template>
 
 <script setup lang="ts">
+import AppModal from '~/components/ui/AppModal.vue';
 defineProps<{
     modalProps: Record<string, unknown>;
     open: boolean;

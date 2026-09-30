@@ -26,7 +26,7 @@
             />
         </template>
         <div
-            class="flex-1 h-dvh w-full relative flex flex-col"
+            class="flex-1 h-full min-h-0 w-full relative flex flex-col"
             :class="legacyCompatClasses.height"
             :style="paneChromeClearanceStyle"
             :data-workspace-profile="resolvedProfile.id"
@@ -45,6 +45,7 @@
                 :visible-tab-ids="workspaceTabs.visibleTabIds.value"
                 :status-by-tab-id="workspaceTabs.statusByTabId.value"
                 :icon-by-tab-id="workspaceTabIcons"
+                :image-by-tab-id="workspaceTabImages"
                 :can-open-split="canAddPane"
                 :can-reopen-closed="workspaceTabs.state.value.recentlyClosed.length > 0"
                 :copyable-tab-ids="workspaceCopyableTabIds"
@@ -52,8 +53,7 @@
                 @activate="onWorkspaceTabActivate"
                 @close="onWorkspaceTabClose"
                 :can-create-document="documentsEnabled"
-                :can-create-workflow="canCreateWorkflowTab"
-                :can-create-agent="canCreateAgentTab"
+                :plugin-items="pluginNewTabItems"
                 @new-tab="onWorkspaceNewTab"
                 @create-tab="onWorkspaceCreateTab"
                 @reorder="onWorkspaceTabReorder"
@@ -294,13 +294,14 @@
                           ? 'pt-[46px] h-full'
                           : 'pt-0 h-full',
                     'flex flex-row gap-0 items-stretch w-full pane-container',
+                    { 'pane-container--multiple': panes.length > 1 && !isMobile },
                 ]"
             >
                 <div
                     v-for="(pane, i) in panes"
                     :key="pane.id"
                     v-show="!isMobile || i === activePaneIndex"
-                    class="relative flex flex-col border-l-[var(--md-border-width)] first:border-l-0 outline-none focus-visible:ring-0 overflow-visible"
+                    class="workspace-pane relative flex flex-col border-l-[var(--md-border-width)] first:border-l-0 outline-none focus-visible:ring-0 overflow-visible"
                     :style="{ width: isMobile ? '100%' : getPaneWidth(i) }"
                     :class="[
                         ...(i === activePaneIndex && panes.length > 1
@@ -365,17 +366,19 @@
                         :is-desktop="!isMobile"
                         @resize-start="onPaneResizeStart"
                         @resize-keydown="onPaneResizeKeydown"
+                        @swap="onSwapAdjacentPanes"
                     />
                 </div>
             </div>
         </div>
         <component
             :is="dashboardModalComponent"
-            v-if="dashboardEnabled"
+            v-if="dashboardEnabled && dashboardModalActivated"
             v-model:showModal="showDashboardModal"
         />
         <ClientOnly>
             <component
+                v-if="systemPromptsModalActivated"
                 :is="systemPromptsModalComponent"
                 v-model:showModal="systemPromptsModalOpen"
                 :mode="systemPromptsModalRequest?.mode"
@@ -392,6 +395,7 @@
 // Generic PageShell merging chat + docs functionality.
 // Props allow initializing with a thread OR a document and choosing default mode.
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
+import ChatContainer from '~/components/chat/ChatContainer.vue';
 import { useMultiPane, type PaneState } from '~/composables/core/useMultiPane';
 import { useWorkspaceTabHost } from '~/composables/core/useWorkspaceTabHost';
 import { useWorkspaceTabs } from '~/composables/core/useWorkspaceTabs';
@@ -399,12 +403,6 @@ import { useWorkspaceTabMetadata } from '~/composables/core/useWorkspaceTabMetad
 import WorkspaceChrome from '~/components/workspace-tabs/WorkspaceChrome.vue';
 import type { WorkspaceNewTabCreateKind } from '~/components/workspace-tabs/WorkspaceNewTabControl.vue';
 import { usePaneApps } from '~/composables/core/usePaneApps';
-import {
-    EXTERNAL_AGENT_LAUNCHER_REF,
-    EXTERNAL_AGENT_PANE_APP_ID,
-} from '~/core/external-agents/refs';
-import { useExternalAgentRuntime } from '~/core/external-agents/runtime';
-import { useWorkflowsCrud } from '~/plugins/workflows/composables/useWorkflows';
 import {
     getActiveWorkspaceId,
     getDb,
@@ -438,18 +436,19 @@ import {
     shallowRef,
     markRaw,
     nextTick,
+    provide,
     watch,
 } from 'vue';
 import PaneUnknown from '~/components/PaneUnknown.vue';
 import PaneResizeHandle from '~/components/panes/PaneResizeHandle.vue';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
+import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 import { usePageShellTheme } from '~/composables/core/usePageShellTheme';
 import { CORE_APP_COMPONENT_DEFAULTS } from '~/theme/_shared/theme-components-registry';
 import {
     validateDbRecordWithRetry,
     type ValidationStatus,
 } from '~/composables/core/recordValidation';
-import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 import { useIcon } from '~/composables/useIcon';
 import { useOr3Config } from '~/composables/useOr3Config';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
@@ -459,7 +458,18 @@ import {
     type SidebarLayoutApi,
 } from '~/utils/sidebarLayoutApi';
 import { setWorkspaceResourceNavigationApi } from '~/utils/workspaceResourceNavigation';
-import { useDashboardNavigation } from '~/composables/dashboard/useDashboardPlugins';
+import {
+    dashboardDeepLinkPageId,
+    parseDashboardDeepLink,
+} from '~/utils/dashboardDeepLink';
+import {
+    listDashboardPluginPages,
+    useDashboardNavigation,
+} from '~/composables/dashboard/useDashboardPlugins';
+import {
+    createCoreDashboardItems,
+    registerCoreDashboardPages,
+} from '~/core/dashboard/core-items';
 import {
     setPaletteHostContext,
     useCommandPalette,
@@ -479,7 +489,7 @@ import type {
 } from '~/core/workspace-tabs/types';
 
 const legacyCompatClasses = {
-    height: `h-[${'100dvh'}]`,
+    height: 'h-full',
     borderInverse: `border-[${'var(--md-inverse-surface)'}]`,
     borderPrimary: `border-[${'var(--md-primary)'}]`,
     bgSurfaceVariant20: `bg-[${'var(--md-surface-variant)'}]/20`,
@@ -504,6 +514,11 @@ const runtimeConfig = useRuntimeConfig();
 const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
 const sideNavExpandedRef = ref<any | null>(null);
 const showDashboardModal = ref(false);
+provide('or3:dashboard-modal-open', showDashboardModal);
+const dashboardModalActivated = ref(false);
+watch(showDashboardModal, (open) => {
+    if (open) dashboardModalActivated.value = true;
+});
 const hasSyncedInitial = ref(false);
 const or3Config = useOr3Config();
 const showNotificationBell = computed(
@@ -514,27 +529,14 @@ const dashboardEnabled = computed(() => or3Config.features.dashboard.enabled);
 const workspaceTabsEnabled = computed(
     () => or3Config.features.workspaceTabs.enabled
 );
-const canCreateWorkflowTab = computed(
-    () =>
-        or3Config.features.workflows.enabled &&
-        or3Config.features.workflows.editor
+const { getPaneApp, listPaneApps } = usePaneApps();
+const pluginNewTabItems = computed(() =>
+    listPaneApps.value.flatMap((app) =>
+        app.newTab && (app.newTab.isAvailable?.() ?? true)
+            ? [{ id: app.id, label: app.newTab.label, icon: app.newTab.icon }]
+            : []
+    )
 );
-const externalAgentRuntime = useExternalAgentRuntime();
-const canCreateAgentTab = computed(() => {
-    const snapshot = externalAgentRuntime.snapshot.value;
-    if (!snapshot) return false;
-    if (
-        snapshot.connectionState !== 'online' &&
-        snapshot.connectionState !== 'degraded'
-    ) {
-        return false;
-    }
-    return (
-        externalAgentRuntime.controller
-            ?.availableRunnerOptions()
-            .some((runner) => runner.available) ?? false
-    );
-});
 // Pane and tab IDs are runtime UUIDs. Render the deterministic legacy chrome
 // until hydration finishes, then mount the workspace chrome with client IDs.
 // This avoids server/client attribute mismatches without making IDs global.
@@ -578,6 +580,7 @@ const {
     newWindowTooltip,
     addPane,
     closePane,
+    swapAdjacentPanes,
     setActive,
     focusPrev,
     focusNext,
@@ -711,6 +714,7 @@ const workspaceScopeId = ref<string | null>(
     process.client ? getActiveWorkspaceId() : null
 );
 let activeWorkspaceTabsScope = '';
+const workspaceTabsTransitioning = ref(false);
 const disposeWorkspaceScopeSubscription = process.client
     ? subscribeActiveWorkspaceDb(({ newWorkspaceId }) => {
           workspaceScopeId.value = newWorkspaceId;
@@ -730,10 +734,12 @@ function requestWorkspaceTabsScope(
     const scope = `${workspaceId ?? 'local'}\0${profileId}`;
     if (scope === activeWorkspaceTabsScope) return;
     activeWorkspaceTabsScope = scope;
+    workspaceTabsTransitioning.value = true;
     void workspaceTabs
         .switchScope(workspaceId, profileId)
         .then((switched) => {
             if (!switched || scope !== activeWorkspaceTabsScope) return;
+            workspaceTabsTransitioning.value = false;
             hasSyncedInitial.value = true;
             updateUrl(true);
         })
@@ -770,6 +776,15 @@ const workspaceTabIcons = computed(
             [...workspaceTabMetadata.metadata].map(([tabId, metadata]) => [
                 tabId,
                 metadata.icon,
+            ])
+        )
+);
+const workspaceTabImages = computed(
+    () =>
+        new Map(
+            [...workspaceTabMetadata.metadata].map(([tabId, metadata]) => [
+                tabId,
+                metadata.image,
             ])
         )
 );
@@ -882,7 +897,6 @@ whenever(shiftRight, () => {
 });
 
 // ---------------- Pane Component Resolution ----------------
-const { getPaneApp } = usePaneApps();
 
 /**
  * Resolve the component to render for a pane based on its mode.
@@ -894,10 +908,10 @@ function resolvePaneComponent(pane: PaneState): Component {
         if (import.meta.dev) {
             console.debug('[PageShell] resolve component: chat');
         }
-        return (
-            themePlugin?.activeComponents.value['chat-page'] ??
-            CORE_APP_COMPONENT_DEFAULTS['chat-page']
-        );
+        const active = themePlugin?.activeComponents.value['chat-page'];
+        return !active || active === CORE_APP_COMPONENT_DEFAULTS['chat-page']
+            ? ChatContainer
+            : active;
     }
 
     // Built-in: doc (lazy loaded)
@@ -1011,6 +1025,11 @@ function onPaneFocused(index: number): void {
     if (tabId) void workspaceTabs.activateTab(tabId, 'pointer');
 }
 
+function onSwapAdjacentPanes(leftIndex: number): void {
+    swapAdjacentPanes(leftIndex);
+    if (workspaceTabsEnabled.value) workspaceTabs.flushPersistence();
+}
+
 function onWorkspaceTabActivate(
     tabId: string,
     reason: 'pointer' | 'keyboard'
@@ -1084,13 +1103,6 @@ function onWorkspaceNewTab(): void {
     void workspaceTabs.newTab();
 }
 
-function getPanePluginPostsApi(): PanePluginApi['posts'] | null {
-    return (
-        (globalThis as { __or3PanePluginApi?: PanePluginApi }).__or3PanePluginApi
-            ?.posts ?? null
-    );
-}
-
 async function onWorkspaceCreateTab(
     kind: WorkspaceNewTabCreateKind
 ): Promise<void> {
@@ -1102,61 +1114,25 @@ async function onWorkspaceCreateTab(
         await onNewDocument();
         return;
     }
-    if (kind === 'workflow') {
-        if (!canCreateWorkflowTab.value) {
-            toast.add({
-                title: 'Workflows disabled',
-                description: 'This deployment has workflow editing turned off.',
-                color: 'warning',
-            });
-            return;
-        }
-        const posts = getPanePluginPostsApi();
-        if (!posts) {
-            toast.add({
-                title: 'Could not create workflow',
-                description: 'The workspace posts API is not ready yet.',
-                color: 'warning',
-            });
-            return;
-        }
-        const { createWorkflow } = useWorkflowsCrud(posts);
-        const result = await createWorkflow('Untitled Workflow');
-        if (!result.ok) {
-            toast.add({
-                title: 'Workflow creation failed',
-                description: result.error,
-                color: 'error',
-            });
-            return;
-        }
+    const app = getPaneApp(kind);
+    if (!app?.newTab || !(app.newTab.isAvailable?.() ?? true)) return;
+    try {
+        const recordId = await app.newTab.createRecordId();
+        if (!recordId || getPaneApp(kind) !== app) return;
         await workspaceTabs.openResource(
             {
                 kind: 'app',
-                appId: 'or3-workflows',
-                recordId: result.id,
+                appId: kind,
+                recordId,
             },
             { allowDuplicate: true }
         );
-        return;
-    }
-    if (kind === 'agent') {
-        if (!canCreateAgentTab.value) {
-            toast.add({
-                title: 'Agent host unavailable',
-                description: 'Connect a trusted external agent host first.',
-                color: 'warning',
-            });
-            return;
-        }
-        await workspaceTabs.openResource(
-            {
-                kind: 'app',
-                appId: EXTERNAL_AGENT_PANE_APP_ID,
-                recordId: EXTERNAL_AGENT_LAUNCHER_REF,
-            },
-            { allowDuplicate: true }
-        );
+    } catch (error) {
+        toast.add({
+            title: `Could not create ${app.label.toLowerCase()}`,
+            description: error instanceof Error ? error.message : 'Unknown error',
+            color: 'error',
+        });
     }
 }
 
@@ -1598,7 +1574,12 @@ function updateUrl(force = false) {
     const id = pane.mode === 'doc' ? pane.documentId : pane.threadId;
     const newPath = id ? `${base}/${id}` : base;
     if (window.location.pathname === newPath) return;
-    window.history.replaceState(window.history.state, '', newPath);
+    // The root entry point can become /chat while a dashboard deep link is
+    // mounting. Keep its operation context through that one route rewrite.
+    const params = new URLSearchParams(window.location.search);
+    const dashboardQuery = parseDashboardDeepLink(Object.fromEntries(params))
+        ? window.location.search : '';
+    window.history.replaceState(window.history.state, '', `${newPath}${dashboardQuery}`);
 }
 
 watch(
@@ -1727,13 +1708,14 @@ function onNewChat() {
 
 async function openWorkspaceResource(
     resource: WorkspaceResource,
-    destination: 'new-tab' | 'new-pane'
+    destination: 'new-tab' | 'new-pane',
+    options: { reuseExisting?: boolean } = {}
 ): Promise<boolean> {
     if (destination === 'new-tab') {
         if (!workspaceTabsEnabled.value) return false;
         return !!(await workspaceTabs.openResource(resource, {
             target: 'active',
-            allowDuplicate: true,
+            allowDuplicate: !options.reuseExisting,
             reuseActiveBlank: false,
         }));
     }
@@ -1824,7 +1806,12 @@ const themeToggleIcon = computed(() =>
 // --------------- Command palette ---------------
 // PageShell is the single host: it owns the navigation context the palette
 // actions dispatch through, and registers the core sources once per session.
-const dashboardNavigation = useDashboardNavigation();
+// Deep links and palette actions need core pages before the modal first opens.
+const coreDashboardItems = dashboardEnabled.value
+    ? createCoreDashboardItems(runtimeConfig.public.ssrAuthEnabled === true)
+    : [];
+registerCoreDashboardPages(coreDashboardItems);
+const dashboardNavigation = useDashboardNavigation({ baseItems: coreDashboardItems });
 const {
     open: openCommandPalette,
     close: closeCommandPalette,
@@ -1836,6 +1823,10 @@ const {
     open: openSystemPromptsModal,
     notifySelected: notifySystemPromptSelected,
 } = useSystemPromptsModal();
+const systemPromptsModalActivated = ref(systemPromptsModalOpen.value);
+watch(systemPromptsModalOpen, (open) => {
+    if (open) systemPromptsModalActivated.value = true;
+});
 let disposePaletteHostContext: (() => void) | null = null;
 let disposeWorkspaceTabPaletteProvider: (() => void) | null = null;
 let disposeWorkspaceResourceNavigation: (() => void) | null = null;
@@ -1872,6 +1863,23 @@ function setDashboardOpen(open: boolean) {
     showDashboardModal.value = open;
 }
 
+/**
+ * Supported deep link for dashboard apps: `?dashboard=<pluginId>&page=<pageId>`
+ * (the page defaults to the app's first). The marketplace request link uses it,
+ * and any other app can: this is the one place the modal is opened from a URL.
+ */
+async function consumeDashboardDeepLink(): Promise<void> {
+    if (!dashboardEnabled.value) return;
+    const link = parseDashboardDeepLink(route.query);
+    if (!link) return;
+    const pageId = dashboardDeepLinkPageId(
+        link,
+        listDashboardPluginPages(link.pluginId).map((page) => page.id)
+    );
+    if (!pageId) return;
+    await openDashboardPage(link.pluginId, pageId);
+}
+
 async function openDashboardPage(pluginId: string, pageId: string) {
     setDashboardOpen(true);
     await nextTick();
@@ -1897,7 +1905,9 @@ onMounted(() => {
     });
     disposeWorkspaceTabPaletteProvider?.();
     disposeWorkspaceTabPaletteProvider = setWorkspaceTabPaletteProvider(
-        () => workspaceTabs.tabs.value
+        () => workspaceTabsReady.value && !workspaceTabsTransitioning.value
+            ? workspaceTabs.tabs.value
+            : []
     );
     disposePaletteHostContext?.();
     disposePaletteHostContext = setPaletteHostContext(
@@ -1952,7 +1962,18 @@ onMounted(() => {
                 openSystemPromptsFromPalette({ mode: 'new' }),
         },
     });
+
+    // A deep link opens its dashboard app once the shell is ready; a later
+    // navigation to another link is handled by the watcher below.
+    void consumeDashboardDeepLink();
 });
+
+watch(
+    () => [route.query.dashboard, route.query.page, route.query.plugin, route.query.version, route.query.installRequest],
+    () => {
+        void consumeDashboardDeepLink();
+    }
+);
 
 onUnmounted(() => {
     closeCommandPalette();

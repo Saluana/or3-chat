@@ -4,11 +4,44 @@ export type PluginServerRouteMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE
 
 export type PluginGrant =
     | 'ui.dashboard.register'
+    | 'ui.sidebar.register'
+    | 'ui.pane.register'
+    | 'ui.card.register'
+    | 'ui.action.register'
     | 'ui.command-palette.register'
+    | 'ui.toast'
+    | 'ui.confirm'
+    | 'ui.progress'
+    | 'panes.open'
+    | 'commands.register'
+    | 'commands.run.public'
+    | 'chat.create'
+    | 'chat.read'
+    | 'chat.message.write'
+    | 'chat.message.renderer'
+    | 'chat.editor.extension'
+    | 'workspace.read'
+    | 'workspace.switch'
+    | 'workspace.connections.read'
+    | 'workspace.connections.manage'
+    | 'events.register'
+    | 'ai.models'
+    | 'ai.complete'
+    | 'secrets.read'
+    | 'secrets.write'
+    | 'secrets.use'
+    | 'files.pick'
+    | 'files.read'
+    | 'files.write'
+    | 'network.stream'
+    | 'activity.register'
     | 'documents.read'
     | 'documents.write'
     | 'tools.register.client'
     | 'tools.register.server'
+    | 'tools.model.register'
+    | 'posts.read'
+    | 'posts.write'
     | 'hooks.register'
     | 'network.http'
     | 'storage.read'
@@ -29,6 +62,10 @@ export interface PluginManifestV2 {
     readonly name: string;
     readonly version: string;
     readonly description?: string;
+    /** Package-relative path to a validated static PNG or WebP app icon. */
+    readonly icon?: string;
+    /** Publisher-declared SPDX license identifier or expression. */
+    readonly license?: string;
     readonly capabilities?: readonly string[];
     readonly engines: {
         readonly or3: string;

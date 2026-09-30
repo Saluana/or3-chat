@@ -3,7 +3,7 @@
         ref="containerRoot"
         v-bind="containerProps"
         :class="[
-            'chat-container-root flex w-full flex-1 h-full flex-col overflow-hidden relative',
+            'chat-container-root flex w-full flex-1 h-full min-h-0 flex-col overflow-hidden relative [container:chat-pane/size]',
             containerProps?.class ?? '',
         ]"
     >
@@ -41,9 +41,10 @@
                         :data-stream-id="item.stream_id"
                     >
                         <component
-                            :is="$theme.activeComponents.value['chat-message']"
+                            :is="resolveCoreChatComponent($theme.activeComponents.value['chat-message'], 'chat-message')"
                             :message="item"
                             :thread-id="props.threadId"
+                            :retry-disabled="retryPending || loading"
                             @retry="onRetry"
                             @continue="onContinue"
                             @branch="onBranch"
@@ -55,13 +56,25 @@
                     </div>
                 </template>
             </Or3Scroll>
+            <template #fallback>
+                <div
+                    class="chat-message-list flex-1 min-h-0 px-4 pt-8"
+                    :style="scrollParentStyle"
+                    aria-hidden="true"
+                >
+                    <div v-if="threadId" class="mx-auto max-w-[780px] space-y-6 animate-pulse">
+                        <div class="ml-auto h-12 w-2/3 bg-[var(--md-surface-variant)]" />
+                        <div class="h-24 w-5/6 bg-[var(--md-surface-variant)]" />
+                    </div>
+                </div>
+            </template>
         </ClientOnly>
 
         <!-- First-run welcome: true modal layer above mobile input (z-40) -->
         <Teleport to="body">
             <div
                 v-if="showWelcomeCard"
-                class="fixed inset-0 z-50 flex items-center justify-center bg-[color:color-mix(in_oklab,var(--md-scrim,#000)_45%,transparent)] p-4"
+                class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[color:color-mix(in_oklab,var(--md-scrim,#000)_45%,transparent)] p-4"
                 data-welcome-backdrop
             >
                 <ChatWelcomeCard @dismiss="onWelcomeDismiss" />
@@ -98,8 +111,18 @@
                         class="pointer-events-auto"
                     />
                 </div>
+                <div
+                    v-if="retryPending && !loading"
+                    role="status"
+                    aria-live="polite"
+                    class="absolute bottom-full left-0 right-0 mb-12 flex justify-center pointer-events-none"
+                >
+                    <span class="rounded-full bg-(--md-surface) px-3 py-1 text-sm shadow-sm">
+                        Preparing retry…
+                    </span>
+                </div>
                 <component
-                    :is="$theme.activeComponents.value['chat-input']"
+                    :is="resolveCoreChatComponent($theme.activeComponents.value['chat-input'], 'chat-input')"
                     :loading="inputLoading"
                     :streaming="streamingActive"
                     :container-width="containerWidth"
@@ -130,9 +153,11 @@ import {
     isRef,
     type Ref,
     type CSSProperties,
+    type Component,
     onBeforeUnmount,
     onMounted,
     nextTick,
+    inject,
 } from 'vue';
 
 import {
@@ -149,6 +174,9 @@ import type {
     SendResult,
 } from '~/utils/chat/types';
 import { Or3Scroll } from 'or3-scroll';
+import ChatInputDropper from '~/components/chat/ChatInputDropper.vue';
+import ChatMessage from '~/components/chat/ChatMessage.vue';
+import { CORE_APP_COMPONENT_DEFAULTS } from '~/theme/_shared/theme-components-registry';
 import 'or3-scroll/style.css';
 import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
@@ -183,7 +211,15 @@ import type {
 
 // Debug utilities removed per request.
 
-const model = ref('openai/gpt-oss-120b');
+function resolveCoreChatComponent(
+    active: Component | undefined,
+    key: 'chat-input' | 'chat-message'
+): Component {
+    if (active && active !== CORE_APP_COMPONENT_DEFAULTS[key]) return active;
+    return key === 'chat-input' ? ChatInputDropper : ChatMessage;
+}
+
+const model = ref('~openai/gpt-luna-latest');
 const pendingPromptId = ref<string | null>(null);
 // Resize (Req 3.4): useElementSize -> reactive width
 const containerRoot: Ref<HTMLElement | null> = ref(null);
@@ -214,16 +250,16 @@ const scrollParentStyle = computed<CSSProperties>(() => ({
 // Use CSS breakpoints (not JS isMobile) so SSR HTML matches the first client
 // render. ChatContainer is async-hydrated after useResponsiveState may already
 // have flipped global isMobile, which previously caused hydration class mismatches.
-// Breakpoint matches useResponsiveState: (max-width: 768px).
+// Breakpoint matches useResponsiveState and Tailwind's md boundary.
 const inputWrapperClass =
-    'pointer-events-none absolute inset-x-0 bottom-0 z-10 max-[768px]:fixed max-[768px]:z-40';
+    'pointer-events-none absolute inset-x-0 bottom-0 z-10 max-md:z-40';
 const inputWrapperStyle = computed<CSSProperties>(() => ({
     minHeight: `${DEFAULT_INPUT_HEIGHT}px`, // Reserve space to prevent CLS
     // Prevent child content from changing wrapper height during hydration
     contain: 'layout' as const,
 }));
 const innerInputContainerClass =
-    'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-2 max-[768px]:pb-[calc(env(safe-area-inset-bottom)+6px)]';
+    'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-2 max-md:pb-[calc(env(safe-area-inset-bottom)+6px)]';
 function onInputResize(e: { height: number }) {
     emittedInputHeight.value = e?.height || null;
 }
@@ -263,16 +299,19 @@ const authSessionState = useState<{ session?: { authenticated?: boolean } } | nu
 const { apiKey } = useUserApiKey();
 const keyStateReady = ref(false);
 const welcomeDismissed = ref(true); // default hidden until hydrated
+const dashboardModalOpen = inject<Ref<boolean>>('or3:dashboard-modal-open', ref(false));
 const openRouterAvailability = computed(() =>
     resolveOpenRouterKeyAvailability(runtimeConfig.public?.openRouter)
 );
 
 const showWelcomeCard = computed(
     () =>
+        runtimeConfig.public.pluginDevelopment !== true &&
         keyStateReady.value &&
         (runtimeConfig.public?.ssrAuthEnabled !== true ||
             authSessionState.value?.session?.authenticated === true) &&
         !welcomeDismissed.value &&
+        !dashboardModalOpen.value &&
         openRouterAvailability.value.canAcceptUserKey &&
         !openRouterAvailability.value.hasUsableKey(apiKey.value) &&
         allMessages.value.length === 0
@@ -399,6 +438,7 @@ const messages = computed<UiChatMessage[]>(
 const workflowStates = reactive(new Map<string, UiWorkflowState>());
 
 const loading = computed(() => chat.value?.loading?.value || false);
+const retryPending = ref(false);
 const backgroundJobId = computed(() =>
     unwrapRef(chat.value?.backgroundJobId ?? null)
 );
@@ -427,7 +467,7 @@ watch(
     { immediate: true }
 );
 const inputLoading = computed(
-    () => loading.value || backgroundStreaming.value
+    () => retryPending.value || loading.value || backgroundStreaming.value
 );
 
 // Tail streaming now provided directly by useChat composable
@@ -535,7 +575,7 @@ watch(
 function deriveWorkflowText(wf: UiWorkflowState): string {
     if (!wf) return '';
     // Only return finalOutput - never show intermediate node outputs
-    // The result box is controlled by WorkflowChatMessage using workflowState.finalOutput directly
+    // The installed workflow renderer uses finalOutput for its result box.
     if (wf.finalOutput) return wf.finalOutput;
     return '';
 }
@@ -887,7 +927,7 @@ function waitForDurableSendAcceptance(
 }
 
 function onSend(payload: ChatInputSendPayload) {
-    if (loading.value) return;
+    if (loading.value || retryPending.value) return;
     model.value = payload.model || model.value;
     const attachments = payload.attachments?.length
         ? payload.attachments
@@ -967,12 +1007,36 @@ function onSend(payload: ChatInputSendPayload) {
         .catch(() => {});
 }
 
-function onRetry(messageId: string) {
-    if (!chat.value || chat.value?.loading?.value) return;
-    // Provide current model so retry uses same selection
-    chat.value.retryMessage(messageId, model.value);
-    // Retry changes message state, force measure
-    nextTick(() => scroller.value?.refreshMeasurements?.());
+async function onRetry(messageId: string) {
+    const activeChat = chat.value;
+    if (!activeChat || activeChat.loading.value || retryPending.value) return;
+    retryPending.value = true;
+    try {
+        // A retry is appended after the remaining conversation. Move the
+        // viewport there immediately instead of leaving it at the old turn.
+        await nextTick();
+        scroller.value?.scrollToBottom?.({ smooth: false });
+        const result = await activeChat.retryMessage(messageId, model.value);
+        if (!result || result.status === 'rejected') {
+            toast.add({
+                title: 'Retry did not start',
+                description: 'Your conversation is unchanged. Please try again.',
+                color: 'warning',
+                duration: 3500,
+            });
+        }
+    } catch (error) {
+        toast.add({
+            title: 'Retry failed',
+            description: error instanceof Error ? error.message : 'Please try again.',
+            color: 'error',
+            duration: 3500,
+        });
+    } finally {
+        retryPending.value = false;
+        await nextTick();
+        scroller.value?.refreshMeasurements?.();
+    }
 }
 
 function onContinue(messageId: string) {
@@ -1015,17 +1079,16 @@ watch(panePendingPrompt, (promptId) => {
 
 function onStopStream() {
     try {
-        if (typeof window !== 'undefined') {
+        // A foreground chat stream owns the composer stop control even when an
+        // older workflow is still running in this thread.
+        if (typeof window !== 'undefined' && !loading.value) {
             const workflowMessage = [...messages.value]
                 .reverse()
                 .find((message) => {
                     if (!message.id) return false;
                     const executionState = workflowStates.get(message.id)
                         ?.executionState;
-                    return (
-                        executionState === 'running' ||
-                        executionState === 'idle'
-                    );
+                    return executionState === 'running';
                 });
             if (workflowMessage?.id) {
                 window.dispatchEvent(

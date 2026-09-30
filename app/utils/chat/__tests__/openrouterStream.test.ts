@@ -144,7 +144,7 @@ describe('openrouterStream', () => {
 
         for await (const _event of openRouterStream({
             apiKey: 'key-1',
-            model: 'openai/gpt-oss-120b',
+            model: '~openai/gpt-luna-latest',
             orMessages: [{ role: 'user', content: 'hi' }],
             modalities: ['text'],
         })) {

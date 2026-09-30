@@ -22,9 +22,10 @@ export async function projectCanonicalBackgroundMessage(
         pending?: boolean;
         error?: string | null;
         data?: Record<string, unknown>;
-    }
-): Promise<void> {
-    await db.transaction(
+    },
+    expected?: { generationId?: string; jobId?: string }
+): Promise<boolean> {
+    return await db.transaction(
         'rw',
         getWriteTxTableNames(db, 'messages'),
         async () => {
@@ -35,17 +36,28 @@ export async function projectCanonicalBackgroundMessage(
             const existing = (await db.messages.get(messageId)) as
                 | StoredMessage
                 | undefined;
-            if (!existing) return;
+            if (!existing) return false;
             const data =
                 existing.data && typeof existing.data === 'object'
                     ? (existing.data as Record<string, unknown>)
                     : {};
+            if (
+                expected &&
+                ((expected.generationId &&
+                    typeof data.generation_id === 'string' &&
+                    data.generation_id !== expected.generationId) ||
+                    (expected.jobId &&
+                        typeof data.background_job_id === 'string' &&
+                        data.background_job_id !== expected.jobId))
+            )
+                return false;
             await db.messages.put({
                 ...existing,
                 ...('pending' in patch ? { pending: patch.pending } : {}),
                 ...('error' in patch ? { error: patch.error } : {}),
                 data: { ...data, ...(patch.data ?? {}) },
             });
+            return true;
         }
     );
 }

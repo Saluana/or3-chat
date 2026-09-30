@@ -28,7 +28,7 @@
  * @see shared/sync/sanitize for payload sanitization
  */
 import type { Or3DB } from '~/db/client';
-import type { SyncProvider, SyncScope, PendingOp } from '~~/shared/sync/types';
+import type { SyncProvider, SyncScope, PendingOp, PushWinner } from '~~/shared/sync/types';
 import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
 import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
@@ -40,6 +40,7 @@ import { markRecentOpId, unmarkRecentOpId } from './recent-op-cache';
 import { getHookBridge } from './hook-bridge';
 import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 import { compareSyncRevision } from '~~/shared/sync/revision';
+import { normalizeSyncPayload } from './sync-payload-normalizer';
 
 /** Default retry delays in milliseconds */
 const DEFAULT_RETRY_DELAYS = [250, 1000, 3000, 5000];
@@ -584,22 +585,28 @@ export class OutboxManager {
                 }
 
                 if (res.success && res.applied === false) {
-                    const hasWinner =
-                        res.payload !== undefined && res.payload !== null;
-                    if (!hasWinner && op.operation !== 'delete') {
+                    // Older providers return a live winner as payload. Newer
+                    // providers also identify tombstone winners and their
+                    // authoritative revision explicitly.
+                    const winner: PushWinner | undefined = res.winner ??
+                        (res.payload && typeof res.payload === 'object' && !Array.isArray(res.payload)
+                            ? {
+                                  kind: 'put',
+                                  payload: res.payload as Record<string, unknown>,
+                                  revision: winnerRevisionFromPayload(res.payload, op.stamp),
+                              }
+                            : undefined);
+                    if (!winner) {
                         await this.handleFailedOp(
                             op,
-                            'Missing winner payload',
+                            'Missing winner state',
                             'UNKNOWN'
                         );
                         failCount += 1;
                         continue;
                     }
-                    await this.applyRemoteWinner(op, res.payload);
+                    await this.applyRemoteWinner(op, winner);
                     unmarkRecentOpId(op.stamp.opId);
-                    if (op.operation === 'delete') {
-                        await this.markTombstoneSynced(op, res.serverVersion);
-                    }
                     await this.db.pending_ops.put({ ...op, status: 'applied' });
                     await this.db.pending_ops.delete(op.id);
                     successCount += 1;
@@ -718,20 +725,20 @@ export class OutboxManager {
         return status === 400 || status === 413;
     }
 
-    private async applyRemoteWinner(op: PendingOp, winnerPayload: unknown): Promise<void> {
+    private async applyRemoteWinner(op: PendingOp, winner: PushWinner): Promise<void> {
         const hookBridge = getHookBridge(this.db);
         const tableNames = Array.from(new Set([op.tableName, 'tombstones']));
         await this.db.transaction('rw', tableNames, async (tx) => {
             hookBridge.markSyncTransaction(tx);
             const table = tx.table(op.tableName);
-            if (winnerPayload && typeof winnerPayload === 'object' && !Array.isArray(winnerPayload)) {
+            if (winner.kind === 'put') {
                 // Eligibility-first selection can push an older revision while a
                 // newer revision for the same record stays deferred. The server
                 // winner is newer than the pushed op but may still be older
                 // than local materialized state; applying it unconditionally
                 // would overwrite newer local data that the deferred row alone
                 // cannot restore. Fail closed on ambiguous ties.
-                const winnerRev = winnerRevisionFromPayload(winnerPayload, op.stamp);
+                const winnerRev = winner.revision;
                 const local: unknown = await table.get(op.pk);
                 if (local) {
                     if (compareSyncRevision(winnerRev, materializedRevisionFromRow(local)) <= 0) {
@@ -754,42 +761,58 @@ export class OutboxManager {
                         return;
                     }
                 }
-                await table.put(winnerPayload as Record<string, unknown>);
+                const normalized = normalizeSyncPayload(op.tableName, op.pk, winner.payload, winnerRev);
+                if (!normalized.isValid) {
+                    throw new Error(`Invalid server winner for ${op.tableName}:${op.pk}: ${normalized.errors?.join(', ')}`);
+                }
+                const localRefCount = (local as { ref_count?: unknown } | undefined)?.ref_count;
+                const payload = op.tableName === 'file_meta'
+                    ? {
+                          ...normalized.payload,
+                          ref_count:
+                              typeof localRefCount === 'number' &&
+                              Number.isSafeInteger(localRefCount) &&
+                              localRefCount >= 0
+                                  ? localRefCount
+                                  : 0,
+                      }
+                    : normalized.payload;
+                await table.put(payload);
+                await tx.table('tombstones').delete(`${op.tableName}:${op.pk}`);
                 return;
             }
-            if (op.operation === 'delete') {
-                // A stale delete must not remove a newer local put.
-                const local: unknown = await table.get(op.pk);
-                if (local && compareSyncRevision(op.stamp, materializedRevisionFromRow(local)) <= 0) {
-                    return;
-                }
-                const existingTombstone: unknown = await tx.table('tombstones').get(`${op.tableName}:${op.pk}`);
-                const existingRev = tombstoneRevisionFromRow(existingTombstone);
-                if (
-                    existingRev &&
-                    tombstoneBlocksRevision(
-                        {
-                            clock: existingRev.clock,
-                            hlc: existingRev.hlc || undefined,
-                            opId: existingRev.opId || undefined,
-                        },
-                        op.stamp
-                    )
-                ) {
-                    return;
-                }
-                await table.delete(op.pk);
-                const deletedAt = nowSec();
-                await tx.table('tombstones').put({
-                    id: `${op.tableName}:${op.pk}`,
-                    tableName: op.tableName,
-                    pk: op.pk,
-                    deletedAt,
-                    clock: op.stamp.clock,
-                    hlc: op.stamp.hlc,
-                    opId: op.stamp.opId,
-                });
+            // A tombstone winner can supersede either a put or a delete.
+            const local: unknown = await table.get(op.pk);
+            if (local && compareSyncRevision(winner.revision, materializedRevisionFromRow(local)) <= 0) {
+                return;
             }
+            const existingTombstone: unknown = await tx.table('tombstones').get(`${op.tableName}:${op.pk}`);
+            const existingRev = tombstoneRevisionFromRow(existingTombstone);
+            if (
+                existingRev &&
+                tombstoneBlocksRevision(
+                    {
+                        clock: existingRev.clock,
+                        hlc: existingRev.hlc || undefined,
+                        opId: existingRev.opId || undefined,
+                    },
+                    winner.revision
+                )
+            ) {
+                return;
+            }
+            await table.delete(op.pk);
+            const deletedAt = winner.serverDeletedAt ?? nowSec();
+            await tx.table('tombstones').put({
+                id: `${op.tableName}:${op.pk}`,
+                tableName: op.tableName,
+                pk: op.pk,
+                deletedAt,
+                clock: winner.revision.clock,
+                hlc: winner.revision.hlc,
+                opId: winner.revision.opId,
+                syncedAt: nowSec(),
+            });
         });
     }
 

@@ -123,12 +123,19 @@
             <span class="mobile-nav-label">More</span>
         </button>
 
-        <Teleport to="body">
-            <Transition name="more-sheet" :css="!dismissByDrag">
+        <UModal
+            v-model:open="moreOpen"
+            fullscreen
+            :title="infoOpen ? 'About OR3' : 'More'"
+            description="Manage your workspace and account."
+            :content="moreDialogContent"
+            :transition="false"
+            :ui="{ content: 'more-sheet-dialog bg-transparent! border-0! ring-0! p-0! divide-y-0! z-[80]!' }"
+        >
+            <template #content>
                 <div
                     v-if="moreOpen"
                     class="more-sheet-root"
-                    @keydown.esc.prevent="closeMore"
                 >
                     <button
                         type="button"
@@ -145,18 +152,6 @@
                             'more-sheet-panel--dragging': isDragging,
                         }"
                         :style="panelStyle"
-                        role="dialog"
-                        aria-modal="true"
-                        :aria-labelledby="
-                            infoOpen
-                                ? 'mobile-more-info-title'
-                                : 'mobile-more-title'
-                        "
-                        :aria-describedby="
-                            infoOpen
-                                ? 'mobile-more-info-desc'
-                                : 'mobile-more-description'
-                        "
                     >
                         <div
                             class="more-sheet-handle-hit"
@@ -251,10 +246,9 @@
                                             class="more-tile-icon"
                                             aria-hidden="true"
                                         >
-                                            <UIcon
-                                                :name="
-                                                    page.icon || iconPageDefault
-                                                "
+                                            <AppIcon
+                                                :image="page.image"
+                                                :icon="page.icon || iconPageDefault"
                                             />
                                         </span>
                                         <span class="more-tile-copy">
@@ -479,18 +473,20 @@
                     </footer>
                 </div>
             </div>
-            </Transition>
-        </Teleport>
+            </template>
+        </UModal>
     </nav>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, provide, ref, watch } from 'vue';
+import { useDialogFocus } from '~/composables/ui/useDialogFocus';
 import { navigateTo, useRuntimeConfig, useToast } from '#imports';
 import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
+import AppIcon from '~/components/ui/AppIcon.vue';
 import { useOr3Config } from '~/composables/useOr3Config';
 import {
     projectProfileItems,
@@ -512,11 +508,6 @@ provide('or3:auth-ui-popover-content', {
 provide('or3:auth-ui-layout', 'more-sheet');
 
 const DEFAULT_PAGE_ID = 'sidebar-home';
-
-const PAGE_DESCRIPTIONS: Record<string, string> = {
-    'or3-external-agents': 'Build & manage AI agents',
-    'or3-workflows-page': 'Automate tasks & flows',
-};
 
 const TILE_ACCENTS = ['primary', 'secondary', 'tertiary'] as const;
 
@@ -608,6 +599,7 @@ const modeLabel = computed(() => (isSsrAuthEnabled.value ? 'Cloud' : 'Local'));
 
 const createOpen = ref(false);
 const moreOpen = ref(false);
+const moreDialogContent = useDialogFocus(undefined, () => 'fullscreen');
 const infoOpen = ref(false);
 const sheetPanelRef = ref<HTMLElement | null>(null);
 const dragY = ref(0);
@@ -710,9 +702,6 @@ async function dismissSheetByDrag() {
     infoOpen.value = false;
     dragY.value = 0;
     dismissByDrag.value = false;
-    if (import.meta.client) {
-        document.body.style.overflow = '';
-    }
 }
 
 function closeMore() {
@@ -727,7 +716,6 @@ function closeMore() {
 
 watch(moreOpen, (open) => {
     if (!import.meta.client) return;
-    document.body.style.overflow = open ? 'hidden' : '';
     if (!open) {
         infoOpen.value = false;
         dragY.value = 0;
@@ -737,16 +725,14 @@ watch(moreOpen, (open) => {
 
 onBeforeUnmount(() => {
     cleanupDragListeners();
-    if (!import.meta.client) return;
-    document.body.style.overflow = '';
 });
 
 function tileAccent(index: number) {
     return TILE_ACCENTS[index % TILE_ACCENTS.length] ?? 'primary';
 }
 
-function pageDescription(page: { id: string; label: string }) {
-    return PAGE_DESCRIPTIONS[page.id] ?? `Open ${page.label}`;
+function pageDescription(page: { id: string; label: string; description?: string }) {
+    return page.description ?? `Open ${page.label}`;
 }
 
 /* ---------------- Pages (mobile projection) ---------------- */
@@ -1240,7 +1226,8 @@ const createItemProps = computed(() => {
 }
 
 .more-tile-icon :deep(.iconify),
-.more-tile-icon :deep(svg) {
+.more-tile-icon :deep(svg),
+.more-tile-icon :deep(.app-icon) {
     width: 1.15rem;
     height: 1.15rem;
 }

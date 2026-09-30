@@ -22,8 +22,9 @@
                         :aria-label="`Open tabs, current: ${activeTitle}`"
                         @click="switcherOpen = true"
                     >
-                        <UIcon
-                            :name="activeIcon"
+                        <AppIcon
+                            :image="activeImage"
+                            :icon="activeIcon"
                             class="workspace-chrome-active-icon"
                         />
                         <span class="workspace-chrome-active-label">{{
@@ -35,8 +36,7 @@
                     <WorkspaceNewTabControl
                         class="workspace-chrome-new-tab"
                         :can-create-document="canCreateDocument"
-                        :can-create-workflow="canCreateWorkflow"
-                        :can-create-agent="canCreateAgent"
+                        :plugin-items="pluginItems"
                         @new-tab="emit('new-tab')"
                         @create="emit('create-tab', $event)"
                     />
@@ -49,6 +49,7 @@
                 :active-tab-id="activeTabId"
                 :status-by-tab-id="statusByTabId"
                 :icon-by-tab-id="iconByTabId"
+                :image-by-tab-id="imageByTabId"
                 :can-reopen-closed="canReopenClosed"
                 @activate="(tabId) => emit('activate', tabId, 'pointer')"
                 @close="emit('close', $event)"
@@ -64,12 +65,12 @@
                 :visible-tab-ids="visibleTabIds"
                 :status-by-tab-id="statusByTabId"
                 :icon-by-tab-id="iconByTabId"
+                :image-by-tab-id="imageByTabId"
                 :can-open-split="canOpenSplit"
                 :can-reopen-closed="canReopenClosed"
                 :copyable-tab-ids="copyableTabIds"
                 :can-create-document="canCreateDocument"
-                :can-create-workflow="canCreateWorkflow"
-                :can-create-agent="canCreateAgent"
+                :plugin-items="pluginItems"
                 @activate="(tabId, reason) => emit('activate', tabId, reason)"
                 @close="emit('close', $event)"
                 @new-tab="emit('new-tab')"
@@ -87,7 +88,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { WorkspaceTab, WorkspaceTabStatus } from '~/core/workspace-tabs/types';
 import {
     workspaceTabFallbackIcon,
@@ -99,7 +100,9 @@ import WorkspaceTabBar from './WorkspaceTabBar.vue';
 import WorkspaceTabSwitcher from './WorkspaceTabSwitcher.vue';
 import WorkspaceNewTabControl, {
     type WorkspaceNewTabCreateKind,
+    type WorkspaceNewTabItem,
 } from './WorkspaceNewTabControl.vue';
+import AppIcon from '~/components/ui/AppIcon.vue';
 
 const props = withDefaults(
     defineProps<{
@@ -108,23 +111,23 @@ const props = withDefaults(
         visibleTabIds: ReadonlySet<string>;
         statusByTabId?: ReadonlyMap<string, WorkspaceTabStatus>;
         iconByTabId?: ReadonlyMap<string, string | undefined>;
+        imageByTabId?: ReadonlyMap<string, string | undefined>;
         mobile: boolean;
         canOpenSplit?: boolean;
         canReopenClosed?: boolean;
         copyableTabIds?: ReadonlySet<string>;
         canCreateDocument?: boolean;
-        canCreateWorkflow?: boolean;
-        canCreateAgent?: boolean;
+        pluginItems?: readonly WorkspaceNewTabItem[];
     }>(),
     {
         statusByTabId: undefined,
         iconByTabId: undefined,
+        imageByTabId: undefined,
         canOpenSplit: true,
         canReopenClosed: false,
         copyableTabIds: () => new Set<string>(),
         canCreateDocument: false,
-        canCreateWorkflow: false,
-        canCreateAgent: false,
+        pluginItems: () => [],
     }
 );
 
@@ -142,6 +145,9 @@ const emit = defineEmits<{
 }>();
 
 const switcherOpen = ref(false);
+watch(() => props.mobile, (mobile) => {
+    if (!mobile) switcherOpen.value = false;
+});
 
 const chromeProps = useThemeOverrides({
     component: 'header',
@@ -165,6 +171,9 @@ const activeIcon = computed(() => {
         workspaceTabFallbackIcon(activeTab.value)
     );
 });
+const activeImage = computed(() =>
+    activeTab.value ? props.imageByTabId?.get(activeTab.value.id) : undefined
+);
 
 function openTabSwitcher() {
     switcherOpen.value = true;

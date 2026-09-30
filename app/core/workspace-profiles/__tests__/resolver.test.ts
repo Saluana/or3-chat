@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   BUILTIN_WORKSPACE_PROFILES,
-  CODING_WORKSPACE_PROFILE,
   STANDARD_OR3_PROFILE,
 } from "../builtins";
 import { resolveWorkspaceProfile } from "../resolver";
@@ -140,21 +139,12 @@ describe("resolveWorkspaceProfile", () => {
     expect(result.usedFallback).toBe(false);
   });
 
-  it("ships four valid built-ins and degrades Coding Workspace without agents", () => {
+  it("ships valid core profiles without optional plugin panes", () => {
     for (const profile of BUILTIN_WORKSPACE_PROFILES) {
       expect(WorkspaceProfileV1Schema.safeParse(profile).success).toBe(true);
+      expect(profile.workspace?.initialPanes?.every((pane) =>
+        pane.id === "chat" || pane.id === "doc"
+      )).toBe(true);
     }
-    const result = resolveWorkspaceProfile(
-      CODING_WORKSPACE_PROFILE,
-      inventory,
-      limits,
-    );
-    expect(result.workspace.initialPanes).toEqual([{ id: "chat" }]);
-    expect(result.diagnostics).toContainEqual(
-      expect.objectContaining({
-        code: "unknown-pane",
-        id: "or3-external-agent",
-      }),
-    );
   });
 });

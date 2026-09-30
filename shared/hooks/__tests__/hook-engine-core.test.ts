@@ -386,6 +386,50 @@ describe.each([
         expect(engine.currentPriority()).toBe(false);
     });
 
+    it('reports priority only inside synchronous callback frames without async context isolation', async () => {
+        vi.stubGlobal('process', undefined);
+        vi.stubGlobal('AsyncLocalStorage', undefined);
+        const engine = createHookEngine();
+        vi.unstubAllGlobals();
+
+        let releaseA!: () => void;
+        let releaseB!: () => void;
+        const gateA = new Promise<void>((resolve) => { releaseA = resolve; });
+        const gateB = new Promise<void>((resolve) => { releaseB = resolve; });
+        const observedA: Array<number | false> = [];
+        const observedB: Array<number | false> = [];
+
+        engine.addAction('outer:a', async () => {
+            observedA.push(engine.currentPriority());
+            engine.doActionSync('inner');
+            observedA.push(engine.currentPriority());
+            await gateA;
+            observedA.push(engine.currentPriority());
+        }, 10);
+        engine.addAction('inner', () => {
+            observedA.push(engine.currentPriority());
+        }, 5);
+        engine.addAction('outer:b', async () => {
+            observedB.push(engine.currentPriority());
+            await gateB;
+            observedB.push(engine.currentPriority());
+        }, 20);
+
+        const runningA = engine.doAction('outer:a');
+        const runningB = engine.doAction('outer:b');
+        expect(observedA).toEqual([10, 5, 10]);
+        expect(observedB).toEqual([20]);
+        expect(engine.currentPriority()).toBe(false);
+
+        releaseA();
+        await runningA;
+        expect(observedA).toEqual([10, 5, 10, false]);
+        expect(engine.currentPriority()).toBe(false);
+        releaseB();
+        await runningB;
+        expect(observedB).toEqual([20, false]);
+    });
+
     it('off invokes disposers and reports disposer errors through the configured callback', async () => {
         const onOffError = vi.fn();
         const engine = createHookEngine({ onOffError });

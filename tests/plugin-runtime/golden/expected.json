@@ -1,0 +1,32 @@
+{
+  "formatVersion": 1,
+  "validPortable": {
+    "root": "tests/plugin-runtime/golden/valid-portable",
+    "digest": "sha256-13b0a4d83dc8a2724c277474dc27d3496882e8c2de7d2d7c6cd7e882a41968ba",
+    "manifestDigest": "sha256-78e294282a0449ebd9944cc01bae432bf6d72084a0fc1c03b77d8cdba7eda6c4",
+    "entryCount": 8,
+    "manifestId": "or3.golden-portable",
+    "manifestVersion": 2,
+    "conformanceStatus": "conformant"
+  },
+  "invalidTrees": {
+    "manifest-integrity-mismatch": {
+      "root": "tests/plugin-runtime/golden/invalid/manifest-integrity-mismatch",
+      "errorCode": "manifest-integrity-mismatch",
+      "conformanceCode": "manifest-integrity-mismatch",
+      "conformanceStatus": "nonconformant"
+    }
+  },
+  "inMemory": {
+    "path-not-normalized-dot": "path-not-normalized",
+    "path-not-normalized-backslash": "path-not-normalized",
+    "path-traversal": "path-traversal",
+    "case-fold-collision": "case-fold-collision",
+    "duplicate-path": "duplicate-path",
+    "unsafe-mode-setuid": "unsafe-mode",
+    "unsupported-type-symlink": "symlink",
+    "unsupported-type-fifo": "unsupported-file-type",
+    "missing-manifest": "manifest-missing",
+    "self-integrity-exclusion": null
+  }
+}

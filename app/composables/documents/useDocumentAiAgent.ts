@@ -33,6 +33,10 @@ import {
 } from '~/utils/documents/document-ai-index';
 import { resolveDocumentAiToolsForRun } from '~/utils/documents/document-ai-registry-tools';
 import {
+    executeDocumentAiTool,
+    isDocumentAiNativeTool,
+} from '~/utils/documents/document-ai-tools';
+import {
     validateDocumentAiAttachments,
     type DocumentAiAttachment,
 } from '~/utils/documents/document-ai-attachments';
@@ -293,6 +297,19 @@ export function useDocumentAiAgent(options: {
     const error = ref('');
     const tokenEstimate = ref(0);
     const proposal = ref<DocumentAiProposal | null>(null);
+    const chatToolRuns = new Map<string, {
+        snapshotId: string;
+        documentId: string;
+        version: number;
+        snapshot: DocumentAiFrozenSnapshot;
+        scope: DocumentAiScope;
+        allowedRefs: Set<string>;
+        readableRefs: Set<string>;
+        seedText: string;
+        stagedOperations: DocumentAiOperation[];
+    }>();
+    const retiredChatRequests = new Set<string>();
+    let chatPreviewRequestId: string | null = null;
     const agentStatus = ref('');
     const controller = ref<AbortController | null>(null);
     const checkpointCreated = ref(false);
@@ -345,6 +362,135 @@ export function useDocumentAiAgent(options: {
             status: status.value,
             accepting: accepting.value,
         }));
+    }
+
+    function retireChatRuns() {
+        if (chatPreviewRequestId) retiredChatRequests.add(chatPreviewRequestId);
+        for (const requestId of chatToolRuns.keys()) retiredChatRequests.add(requestId);
+        chatToolRuns.clear();
+        // Bound retained turn IDs. A stale snapshotId still prevents edits if
+        // an older request eventually falls out of this history.
+        while (retiredChatRequests.size > 128) {
+            retiredChatRequests.delete(retiredChatRequests.values().next().value!);
+        }
+    }
+
+    function chatToolRun(requestId: string, refreshIfChanged = false) {
+        const editor = options.editor.value;
+        if (!editor || editor.isDestroyed) throw new Error('The document editor is not open.');
+        if (retiredChatRequests.has(requestId)) {
+            throw new Error('This chat edit was reviewed. Start a new chat turn to edit this document again.');
+        }
+        if (status.value === 'streaming' || accepting.value) {
+            throw new Error('The document editor is busy.');
+        }
+        let existing = chatToolRuns.get(requestId);
+        if (existing) {
+            if (existing.documentId === options.documentId.value
+                && existing.version === options.contentVersion.value) return { editor, run: existing };
+            if (!refreshIfChanged || existing.stagedOperations.length || chatPreviewRequestId === requestId) {
+                throw new Error('The document changed. Read its outline again before editing.');
+            }
+            chatToolRuns.delete(requestId);
+        }
+        if (proposal.value) throw new Error('Review or discard the existing document proposal before reading a new snapshot.');
+        const snapshot = freezeDocumentForAi(editor);
+        const scope = resolveAutomaticDocumentAiScope(editor);
+        const seed = seedEditableContext(editor, snapshot, scope, settings.value.chunkWordLimit);
+        const run = {
+            snapshotId: crypto.randomUUID(),
+            documentId: options.documentId.value,
+            version: options.contentVersion.value,
+            snapshot,
+            scope,
+            allowedRefs: seed.allowedRefs,
+            readableRefs: seed.readableRefs,
+            seedText: '',
+            stagedOperations: [] as DocumentAiOperation[],
+        };
+        run.seedText = JSON.stringify({
+            snapshotId: run.snapshotId,
+            ...JSON.parse(seed.seedText),
+        });
+        if (chatToolRuns.size >= 8) {
+            const oldest = chatToolRuns.keys().next().value;
+            if (oldest) {
+                chatToolRuns.delete(oldest);
+                retiredChatRequests.add(oldest);
+            }
+        }
+        chatToolRuns.set(requestId, run);
+        return { editor, run };
+    }
+
+    function getChatContext(requestId: string): string {
+        return chatToolRun(requestId, true).run.seedText;
+    }
+
+    function executeChatTool(name: string, argsJson: string, requestId: string): string {
+        if (!isDocumentAiNativeTool(name)) throw new Error(`Unknown document tool: ${name}`);
+        const parsed = JSON.parse(argsJson) as { documentId?: unknown; snapshotId?: unknown };
+        if (parsed.documentId !== options.documentId.value) {
+            throw new Error('The requested document is no longer open in this editor.');
+        }
+        if (name === 'get_proposal_status' && proposal.value && chatPreviewRequestId !== requestId) {
+            return JSON.stringify({
+                totalStaged: proposal.value.operations.length,
+                reviewPending: true,
+                message: 'A proposal is already waiting for review in the document editor.',
+            });
+        }
+        const refreshIfChanged = name === 'get_document_outline'
+            || name === 'list_document_chunks' || name === 'search_document'
+            || name === 'get_proposal_status';
+        const { editor, run } = chatToolRun(requestId, refreshIfChanged);
+        if ((name === 'read_blocks' || name === 'propose_edits')
+            && parsed.snapshotId !== run.snapshotId) {
+            throw new Error('The document snapshot changed. Read its outline again and use the new snapshotId.');
+        }
+        if (name === 'propose_edits' && proposal.value && chatPreviewRequestId !== requestId) {
+            throw new Error('Review or discard the existing document proposal before staging new edits.');
+        }
+
+        const result = executeDocumentAiTool(name, argsJson, {
+            editor,
+            snapshot: run.snapshot,
+            scope: run.scope,
+            allowedRefs: run.allowedRefs,
+            readableRefs: run.readableRefs,
+            chunkWordLimit: settings.value.chunkWordLimit,
+            stagedOperations: run.stagedOperations,
+            onStageOperations(operations) {
+                const combined = [...run.stagedOperations, ...operations];
+                const candidate = buildDocumentAiCandidate(editor, run.snapshot, combined);
+                const hunks = createDocumentAiHunks(combined, run.snapshot);
+                bindHunkHandlers(editor);
+                clearScopeHighlight();
+                run.stagedOperations.push(...operations);
+                chatPreviewRequestId = requestId;
+                proposal.value = {
+                    documentId: run.documentId,
+                    candidate,
+                    diff: summarizeDocumentAiDiff(run.snapshot.content, candidate),
+                    operations: combined,
+                    hunks,
+                    snapshot: run.snapshot,
+                    requestVersion: options.contentVersion.value,
+                    prompt: 'Chat edit',
+                    scope: run.scope,
+                };
+                focusedHunkId.value = hunks[0]?.id ?? null;
+                syncHunkDecorations(editor, proposal.value, focusedHunkId.value);
+                status.value = 'preview';
+                syncEditorLock();
+                // The editor lock itself must not invalidate the frozen run.
+                run.version = options.contentVersion.value;
+                proposal.value.requestVersion = run.version;
+            },
+        });
+        return refreshIfChanged
+            ? JSON.stringify({ snapshotId: run.snapshotId, result: JSON.parse(result) as unknown })
+            : result;
     }
 
     /**
@@ -602,6 +748,8 @@ export function useDocumentAiAgent(options: {
         const editor = options.editor.value;
         if (!editor || !submission.prompt.trim() || status.value === 'streaming') return;
         const submitDocumentId = options.documentId.value;
+        retireChatRuns();
+        chatPreviewRequestId = null;
         abort();
         // New generation after abort so this submit owns status transitions.
         const myGeneration = runControl.bump();
@@ -657,7 +805,7 @@ export function useDocumentAiAgent(options: {
             return;
         }
         if (!tools.some((tool) => tool.function.name === 'propose_edits')) {
-            error.value = 'Enable “Propose edits” in Document AI settings to stage document changes.';
+            error.value = 'Enable “Suggest edits” in Document AI settings to prepare document changes for review.';
             status.value = 'error';
             return;
         }
@@ -837,6 +985,8 @@ export function useDocumentAiAgent(options: {
             await options.persistCurrent();
             if (!proposalStillOwned(current)) return;
             proposal.value = null;
+            retireChatRuns();
+            chatPreviewRequestId = null;
             focusedHunkId.value = null;
             syncHunkDecorations(editor, null);
             status.value = 'idle';
@@ -856,6 +1006,7 @@ export function useDocumentAiAgent(options: {
 
             await ensureAiCheckpoint(editor);
             if (proposal.value !== current || stale.value) return;
+            if (chatPreviewRequestId) retireChatRuns();
 
             const nextHunks = current.hunks.map((entry) => (
                 entry.id === hunkId ? { ...entry, status: 'accepted' as const } : entry
@@ -888,6 +1039,8 @@ export function useDocumentAiAgent(options: {
 
             if (!pending.length) {
                 proposal.value = null;
+                retireChatRuns();
+                chatPreviewRequestId = null;
                 focusedHunkId.value = null;
                 syncHunkDecorations(editor, null);
                 status.value = 'idle';
@@ -917,6 +1070,8 @@ export function useDocumentAiAgent(options: {
         const editor = options.editor.value;
         const current = proposal.value;
         if (!editor || !current) return;
+        if (!current.hunks.some((hunk) => hunk.id === hunkId && hunk.status === 'pending')) return;
+        if (chatPreviewRequestId) retireChatRuns();
         const nextHunks = current.hunks.map((entry) => (
             entry.id === hunkId ? { ...entry, status: 'discarded' as const } : entry
         ));
@@ -933,6 +1088,8 @@ export function useDocumentAiAgent(options: {
         if (!pendingOps.length) {
             // All remaining were discarded; live doc already reflects accepted hunks.
             proposal.value = null;
+            retireChatRuns();
+            chatPreviewRequestId = null;
             focusedHunkId.value = null;
             syncHunkDecorations(editor, null);
             status.value = 'idle';
@@ -956,6 +1113,8 @@ export function useDocumentAiAgent(options: {
     function reject() {
         const editor = options.editor.value;
         proposal.value = null;
+        retireChatRuns();
+        chatPreviewRequestId = null;
         focusedHunkId.value = null;
         syncHunkDecorations(editor, null);
         error.value = '';
@@ -1031,6 +1190,8 @@ export function useDocumentAiAgent(options: {
         accepting: readonly(accepting),
         estimate,
         submit,
+        getChatContext,
+        executeChatTool,
         accept,
         acceptHunk,
         discardHunk,

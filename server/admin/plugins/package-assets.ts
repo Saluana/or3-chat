@@ -101,7 +101,6 @@ export class PluginPackageAssetReader {
     ) {}
 
     async readSelectedAsset(request: PluginPackageAssetRequest): Promise<PluginPackageAsset> {
-        const packageRoot = this.packages.packagePath(request.pluginId, request.packageDigest);
         const selection = await this.pointers.readStartupSelection(request.pluginId);
         if (selection.selected?.packageDigest !== request.packageDigest) {
             throw new PluginPackageAssetError(
@@ -110,6 +109,17 @@ export class PluginPackageAssetReader {
                 'Package digest is not the selected runtime version'
             );
         }
+        return await this.readAsset(request);
+    }
+
+    /**
+     * Read one file from a stored package digest without requiring it to be the
+     * selected runtime version. Callers must already hold an explicit grant for
+     * that exact digest (for example a single-use canary ticket), because the
+     * selection check is what normally proves the package is the reviewed one.
+     */
+    async readAsset(request: PluginPackageAssetRequest): Promise<PluginPackageAsset> {
+        const packageRoot = this.packages.packagePath(request.pluginId, request.packageDigest);
         const relativePath = normalizePackageAssetPath(request.requestPath);
         const assetPath = resolve(packageRoot, relativePath);
         if (!isInside(packageRoot, assetPath)) {

@@ -177,6 +177,29 @@ describe('sync schemas', () => {
         expect(parsed.success).toBe(true);
     });
 
+    it('requires an explicit winner for a superseded replay', () => {
+        const result = {
+            opId: 'op-replay',
+            success: true,
+            replayed: true,
+            applied: false,
+            serverVersion: 1,
+        };
+        expect(PushResultSchema.safeParse({
+            results: [result], serverVersion: 2,
+        }).success).toBe(false);
+        expect(PushResultSchema.safeParse({
+            results: [{
+                ...result,
+                winner: {
+                    kind: 'delete',
+                    revision: { clock: 2, hlc: '2000-b', opId: 'op-delete' },
+                },
+            }],
+            serverVersion: 2,
+        }).success).toBe(true);
+    });
+
     it('rejects unordered pull versions and duplicate pull operation IDs', () => {
         const opId = 'a1b2c3d4-5678-4abc-8def-123456789001';
         const baseChange = {

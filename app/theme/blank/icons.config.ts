@@ -2,8 +2,8 @@ import type { IconMap } from '~/theme/_shared/icon-registry';
 
 export default <IconMap>{
     // Shell & Navigation
-    'shell.sidebar.toggle.left': 'tabler:arrow-bar-to-left',
-    'shell.sidebar.toggle.right': 'tabler:arrow-bar-to-right',
+    'shell.sidebar.toggle.left': 'tabler:layout-sidebar-left-collapse',
+    'shell.sidebar.toggle.right': 'tabler:layout-sidebar-left-expand',
     'shell.pane.add': 'tabler:square-plus-2',
     'shell.pane.close': 'tabler:x',
     'shell.theme.light': 'tabler:sun',
@@ -49,9 +49,9 @@ export default <IconMap>{
 
     // Sidebar
     'sidebar.search': 'tabler:search',
-    'sidebar.new_chat': 'tabler:message-circle-plus',
-    'sidebar.new_folder': 'tabler:folder-plus',
-    'sidebar.new_note': 'tabler:file-plus',
+    'sidebar.new_chat': 'tabler:message-circle',
+    'sidebar.new_folder': 'tabler:folder',
+    'sidebar.new_note': 'tabler:files',
     'sidebar.edit': 'tabler:pencil',
     'sidebar.delete': 'tabler:trash',
     'sidebar.folder': 'tabler:folder',

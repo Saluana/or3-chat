@@ -2,6 +2,10 @@
 
 Controller for resizing panes in the multi-pane workspace. It wires pointer-drag resizing, keyboard resizing, and container-width recalculation into a single component.
 
+On desktop, the divider also contains a centered button that swaps its two neighboring panes. The button appears when the divider is hovered or keyboard-focused. Clicking it does not start a resize drag; the active pane stays selected as it moves.
+
+Hovering or focusing the divider shows a thin highlight along its length. The hit area stays wide enough to drag without adding a heavy bar over the pane content.
+
 ## Purpose
 
 `usePaneResizeController(options)` returns:

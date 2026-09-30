@@ -864,7 +864,7 @@ function closeCreateProject() {
 }
 
 async function submitCreateProject() {
-    if (creatingProject.value) return;
+    if (!showCreateProjectModal.value || creatingProject.value) return;
     const name = createProjectState.value.name.trim();
     if (!name) {
         createProjectErrors.value.name = 'Title required';
@@ -939,7 +939,7 @@ function closeAddToProject() {
 }
 
 async function submitAddToProject() {
-    if (addingToProject.value) return;
+    if (!showAddToProjectModal.value || addingToProject.value) return;
     if (!addToProjectThreadId.value && !addToProjectDocumentId.value) return;
     addToProjectError.value = null;
     addingToProject.value = true;
@@ -1027,7 +1027,7 @@ function closeCreateDocumentModal() {
     showCreateDocumentModal.value = false;
 }
 async function submitCreateDocument() {
-    if (creatingDocument.value) return;
+    if (!showCreateDocumentModal.value || creatingDocument.value) return;
     if (!documentsEnabled.value) return;
     const title = newDocumentState.value.title.trim();
     if (!title) {

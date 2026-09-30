@@ -5,7 +5,7 @@
             (typeof attrs.id === 'string' ? attrs.id : null) ??
             'bottom-nav-root'
         "
-        class="bottomnav-root absolute bottom-0 w-[63.5px] bg-transparent px-1 flex flex-col items-center justify-between"
+        class="bottomnav-root w-[63.5px] bg-transparent px-1 flex flex-col items-center justify-between"
     >
         <!-- DASHBOARD -->
         <UTooltip
@@ -89,37 +89,16 @@
             </template>
         </UPopover>
 
-        <!-- Mode badge: shows Local / Cloud so users always know what they're running -->
-        <UTooltip
-            :delay-duration="0"
-            :content="{
-                side: 'right',
-            }"
-            :text="modeTooltip"
-        >
-            <component
-                :is="modeLinkComponent"
-                v-bind="modeLinkProps"
-                :aria-label="modeLabel"
-                class="sidebar-mode-badge mt-auto mb-1 block rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] px-1.5 py-0.5 text-[9px] uppercase tracking-wider whitespace-nowrap"
-                :class="
-                    isSsrAuthEnabled
-                        ? 'border-[var(--md-primary)]/40 text-[var(--md-primary)]'
-                        : 'border-[var(--md-border-color)] text-[var(--md-secondary)]'
-                "
-            >
-                {{ modeLabel }}
-            </component>
-        </UTooltip>
     </div>
     <component
+        v-if="settingsModalActivated"
         :is="modelCatalogModalComponent"
         v-model:showModal="showSettingsModal"
     />
 </template>
 
 <script lang="ts" setup>
-import { computed, defineAsyncComponent, ref, useAttrs } from 'vue';
+import { computed, defineAsyncComponent, ref, useAttrs, watch } from 'vue';
 import { useNuxtApp, useRuntimeConfig } from '#imports';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
@@ -151,20 +130,12 @@ const modelCatalogModalComponent = computed(
 const config = useRuntimeConfig();
 const isSsrAuthEnabled = computed(() => config.public?.ssrAuthEnabled === true);
 
-// Mode badge: shows the active runtime mode so users aren't guessing.
-const modeLabel = computed(() => (isSsrAuthEnabled.value ? 'Cloud' : 'Local'));
-const modeTooltip = computed(() =>
-    isSsrAuthEnabled.value
-        ? 'Cloud mode — user accounts, sync & file storage enabled. Click to open admin dashboard.'
-        : 'Local mode — your data stays in this browser. Run `bun run or3-cloud:init` to enable accounts & sync.'
-);
-const modeLinkComponent = computed(() => (isSsrAuthEnabled.value ? 'NuxtLink' : 'div'));
-const modeLinkProps = computed(() =>
-    isSsrAuthEnabled.value ? { to: '/admin', external: false } : {}
-);
-
 defineOptions({ inheritAttrs: false });
 const showSettingsModal = ref(false);
+const settingsModalActivated = ref(false);
+watch(showSettingsModal, (open) => {
+    if (open) settingsModalActivated.value = true;
+});
 const attrs = useAttrs();
 const rootAttrs = computed(() => {
     return Object.fromEntries(

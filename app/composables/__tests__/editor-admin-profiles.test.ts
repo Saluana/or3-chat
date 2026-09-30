@@ -1,9 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { isReactive, toRaw } from 'vue';
 import {
-    loadAdminPlugins,
     registerAdminPage,
     registerAdminWidget,
     resolveAdminComponent,
@@ -130,12 +127,4 @@ describe('V1 admin extension profile', () => {
         expect(resolveAdminComponent(lastDef)).toBe(last);
     });
 
-    it('freezes loaded-once discovery and per-plugin failure continuation in source and callable behavior', async () => {
-        await expect(loadAdminPlugins()).resolves.toBeUndefined();
-        await expect(loadAdminPlugins()).resolves.toBeUndefined();
-        const source = readFileSync(resolve(process.cwd(), 'app/composables/admin/useAdminPlugins.ts'), 'utf8');
-        expect(source).toContain('if (loaded.value) return');
-        expect(source).toContain('loaded.value = true');
-        expect(source).toContain("console.error('[admin-plugins] Failed to load admin plugin'");
-    });
 });

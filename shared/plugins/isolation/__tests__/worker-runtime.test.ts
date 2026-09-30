@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PluginGrantReviewSnapshot } from '../../grant-review';
 import {
+    createRpcEvent,
     createRpcRequest,
     createRpcResponse,
     parseRpcEnvelope,
@@ -21,6 +22,8 @@ function grants(
         approvedGrants: [...approved],
         revision: 'g1',
         status: 'current',
+        authoritySha256: null,
+        packageDigest: null,
     };
 }
 
@@ -71,6 +74,7 @@ describe('worker-runtime (8.4-8.6)', () => {
         for (let i = 0; i < 3; i += 1) {
             const inbox: RpcEnvelope[] = [];
             const fake = createFakeWorkerFactory(inbox);
+            const onCrash = vi.fn();
             const runtime = new WorkerIsolationRuntime({
                 pluginId: 'iso.worker',
                 workspaceId: 'ws-1',
@@ -78,6 +82,7 @@ describe('worker-runtime (8.4-8.6)', () => {
                 moduleUrl: 'https://plugins.local/worker.mjs',
                 grants: grants(),
                 createWorker: fake.factory,
+                onCrash,
                 services: {
                     storage: {
                         get: () => ({ value: i }),
@@ -93,6 +98,7 @@ describe('worker-runtime (8.4-8.6)', () => {
             expect(runtime.active).toBe(false);
             expect(runtime.pendingRpcCount).toBe(0);
             expect(fake.terminated()).toBe(true);
+            expect(onCrash).not.toHaveBeenCalled();
         }
     });
 
@@ -118,6 +124,14 @@ describe('worker-runtime (8.4-8.6)', () => {
                 },
                 settings: {
                     get: () => ({ theme: 'retro' }),
+                    list: (_params, context) => {
+                        context.emitEvent?.('settings.changed', {
+                            key: 'theme',
+                            revision: 2,
+                            deleted: false,
+                        });
+                        return { values: { theme: 'retro' } };
+                    },
                 },
                 hooks: {
                     onAction: () => ({ registered: true }),
@@ -150,6 +164,23 @@ describe('worker-runtime (8.4-8.6)', () => {
             storage
         );
 
+        fake.emit(
+            serializeRpcEnvelope(
+                createRpcRequest({
+                    id: 'w-settings-list',
+                    method: 'settings.list',
+                    params: {},
+                })
+            )
+        );
+        await vi.waitFor(() => {
+            expect(inbox.some((e) => e.kind === 'response' && e.id === 'w-settings-list')).toBe(true);
+        });
+        expect(inbox.find((e) => e.kind === 'response' && e.id === 'w-settings-list')).toMatchObject({
+            result: { values: { theme: 'retro' } },
+        });
+        expect(inbox.some((e) => e.kind === 'event' && e.name === 'settings.changed')).toBe(true);
+
         runtime.dispose();
     });
 
@@ -170,6 +201,7 @@ describe('worker-runtime (8.4-8.6)', () => {
             reason: 'boom',
             fatal: true,
         });
+        expect(runtime.crashReports).toHaveLength(1);
         expect(runtime.active).toBe(false);
         expect(fake.terminated()).toBe(true);
     });
@@ -222,6 +254,172 @@ describe('worker-runtime (8.4-8.6)', () => {
             result: { pong: true },
         });
         expect(lastRequestId).toEqual(expect.any(String));
+        runtime.dispose();
+    });
+
+    it('charges the activation ledger and stops on a terminal breach (finding 2)', async () => {
+        const inbox: RpcEnvelope[] = [];
+        const fake = createFakeWorkerFactory(inbox);
+        const crashes: string[] = [];
+        const runtime = new WorkerIsolationRuntime({
+            pluginId: 'iso.worker',
+            workspaceId: 'ws-1',
+            generation: 1,
+            moduleUrl: 'https://plugins.local/worker.mjs',
+            grants: grants(['storage.read']),
+            createWorker: fake.factory,
+            services: { storage: { get: () => ({ value: 1 }) } },
+            budgets: {
+                maxCallsPerActivation: 1,
+                maxMessageBytes: 256 * 1024,
+                maxActivationMs: 60_000,
+            },
+            onCrash: (report) => crashes.push(report.reason),
+        });
+        await runtime.start();
+
+        fake.emit(
+            serializeRpcEnvelope(
+                createRpcRequest({ id: 'call-1', method: 'storage.get', params: {} })
+            )
+        );
+        await vi.waitFor(() => {
+            expect(inbox.some((e) => e.kind === 'response' && e.id === 'call-1')).toBe(true);
+        });
+        expect(runtime.budgetSnapshot.calls).toBe(1);
+
+        // The second call exceeds the activation call budget and stops the plugin.
+        fake.emit(
+            serializeRpcEnvelope(
+                createRpcRequest({ id: 'call-2', method: 'storage.get', params: {} })
+            )
+        );
+        await vi.waitFor(() => {
+            expect(
+                inbox.some(
+                    (e) => e.kind === 'error' && e.id === 'call-2' && e.code === 'budget-exceeded'
+                )
+            ).toBe(true);
+        });
+        expect(runtime.active).toBe(false);
+        expect(runtime.budgetTerminationReason).toContain('calls');
+        expect(crashes.some((reason) => reason.startsWith('budget-exceeded'))).toBe(true);
+    });
+
+    it('refuses an oversized inbound object before it reaches a handler (finding 3)', async () => {
+        const inbox: RpcEnvelope[] = [];
+        const fake = createFakeWorkerFactory(inbox);
+        const handler = vi.fn(() => ({ value: 1 }));
+        const runtime = new WorkerIsolationRuntime({
+            pluginId: 'iso.worker',
+            workspaceId: 'ws-1',
+            generation: 1,
+            moduleUrl: 'https://plugins.local/worker.mjs',
+            grants: grants(['storage.read']),
+            createWorker: fake.factory,
+            services: { storage: { get: handler } },
+            budgets: { maxMessageBytes: 512, maxActivationMs: 60_000 },
+        });
+        await runtime.start();
+
+        // A structured-clone object, not a pre-serialized string: the size check
+        // must measure the object itself.
+        fake.emit(
+            createRpcRequest({
+                id: 'huge-1',
+                method: 'storage.get',
+                params: { key: 'x'.repeat(4096) },
+            })
+        );
+        await vi.waitFor(() => {
+            expect(runtime.active).toBe(false);
+        });
+        expect(handler).not.toHaveBeenCalled();
+        expect(runtime.budgetTerminationReason).toContain('message-bytes');
+    });
+
+    it('stops a quiet sandbox when the activation wall-clock budget is spent', async () => {
+        const fake = createFakeWorkerFactory([]);
+        const crashes: string[] = [];
+        const runtime = new WorkerIsolationRuntime({
+            pluginId: 'iso.worker',
+            workspaceId: 'ws-1',
+            generation: 1,
+            moduleUrl: 'https://plugins.local/worker.mjs',
+            grants: grants(),
+            createWorker: fake.factory,
+            services: {},
+            budgets: { maxActivationMs: 30 },
+            onCrash: (report) => crashes.push(report.reason),
+        });
+        await runtime.start();
+        await vi.waitFor(() => {
+            expect(runtime.active).toBe(false);
+        });
+        expect(runtime.budgetTerminationReason).toContain('activation-ms');
+        expect(crashes).toEqual(['budget-exceeded:activation-ms']);
+        expect(fake.terminated()).toBe(true);
+    });
+
+    it('enforces slot grants on raw ui.contribute events and prunes on revocation', async () => {
+        const inbox: RpcEnvelope[] = [];
+        const fake = createFakeWorkerFactory(inbox);
+        const events: Array<{ status: string; name: string; reason?: string; contributionIds?: readonly string[] }> = [];
+        const runtime = new WorkerIsolationRuntime({
+            pluginId: 'iso.worker',
+            workspaceId: 'ws-1',
+            generation: 1,
+            moduleUrl: 'https://plugins.local/worker.mjs',
+            grants: grants(['ui.dashboard.register']),
+            createWorker: fake.factory,
+            services: {},
+            onEvent: (event) => {
+                events.push(event as { status: string; name: string; reason?: string; contributionIds?: readonly string[] });
+            },
+        });
+        await runtime.start();
+
+        const contribute = (id: string, slot: string) =>
+            fake.emit(
+                serializeRpcEnvelope(
+                    createRpcEvent({
+                        id: `ev-${id}`,
+                        name: 'ui.contribute',
+                        payload: {
+                            slot,
+                            id,
+                            title: 'Widget',
+                            nodes: [{ type: 'text', text: 'hello' }],
+                        },
+                    })
+                )
+            );
+        // Bypass the SDK register() guard with a raw wire event for a slot
+        // whose grant was not approved: the host boundary must refuse it.
+        contribute('palette-1', 'command-palette');
+        await vi.waitFor(() => {
+            expect(events.some((event) => event.status === 'invalid')).toBe(true);
+        });
+        expect(runtime.contributions).toHaveLength(0);
+        expect(events.at(-1)?.reason).toContain('ui.command-palette.register');
+
+        // The approved slot is accepted.
+        contribute('dash-1', 'dashboard');
+        await vi.waitFor(() => {
+            expect(runtime.contributions).toHaveLength(1);
+        });
+        expect(runtime.contributions[0]).toMatchObject({
+            contributionId: 'dash-1',
+            slot: 'dashboard',
+        });
+
+        // Revoking the grant removes the accepted registration.
+        events.length = 0;
+        runtime.setGrants(grants([]));
+        expect(runtime.contributions).toHaveLength(0);
+        expect(events).toContainEqual(
+            expect.objectContaining({ status: 'withdrawn', contributionIds: ['dash-1'] })
+        );
         runtime.dispose();
     });
 

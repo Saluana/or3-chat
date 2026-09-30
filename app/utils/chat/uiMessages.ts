@@ -54,6 +54,7 @@ export interface ToolCallInfo {
     args?: string;
     result?: string;
     error?: string;
+    runtime?: 'client' | 'server' | 'hybrid';
     fingerprint?: string;
     completedAt?: number;
 }

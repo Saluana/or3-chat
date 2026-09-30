@@ -1,0 +1,24 @@
+{
+  "connections": [],
+  "fields": [
+    {
+      "default": "Hello from OR3",
+      "key": "greeting",
+      "kind": "text",
+      "label": "Greeting",
+      "order": 1,
+      "required": false
+    }
+  ],
+  "firstAction": {
+    "label": "Save greeting",
+    "operationId": "settings.write",
+    "usesSampleContext": true
+  },
+  "settingsSchemaPath": "settings.schema.json",
+  "setupVersion": 1,
+  "testAction": {
+    "deadlineMs": 5000,
+    "operationId": "settings.read"
+  }
+}

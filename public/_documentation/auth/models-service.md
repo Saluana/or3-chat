@@ -132,7 +132,7 @@ const selected = resolveDefaultModel(
   {
     isAvailable: (id) => models.some(m => m.id === id),
     lastSelectedModelId: () => localStorage.getItem('last_model'),
-    recommendedDefault: () => 'openai/gpt-oss-120b'
+    recommendedDefault: () => '~openai/gpt-luna-latest'
   }
 );
 

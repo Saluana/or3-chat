@@ -115,7 +115,7 @@ function createPriorityAls(): PriorityAls | null {
             .AsyncLocalStorage as new () => PriorityAls;
         if (typeof globalCtor === 'function') return new globalCtor();
     } catch {
-        // Async isolation unavailable; callers fall back to the shared stack.
+        // Async isolation unavailable; synchronous callback frames still support introspection.
     }
     return null;
 }
@@ -161,6 +161,16 @@ export function createHookEngineV2(
     const currentPriorityStack: number[] = [];
     const priorityAls = createPriorityAls();
     const definitions = new Map<string, HookDefinition>();
+
+    function invokeWithFallbackPriority<T>(priority: number, callback: () => T): T {
+        if (priorityAls) return callback();
+        currentPriorityStack.push(priority);
+        try {
+            return callback();
+        } finally {
+            currentPriorityStack.pop();
+        }
+    }
 
     function readCurrentPriority(): number | false {
         const store = priorityAls?.getStore();
@@ -304,30 +314,30 @@ export function createHookEngineV2(
         const errors: unknown[] = [];
         let value = initialValue;
         for (const { fn, priority, acceptedArgs } of callbacks) {
-            setRunningPriority(priority);
+            if (priorityAls) setRunningPriority(priority);
             const start = performance.now();
             try {
                 if (isFilter) {
                     value = await invokeWithTimeout(
                         name,
                         definition.policy.timeoutMs,
-                        () =>
+                        () => invokeWithFallbackPriority(priority, () =>
                             (fn as (...a: unknown[]) => unknown)(
                                 ...sliceFilterCallArgs(
                                     value,
                                     args,
                                     acceptedArgs
                                 )
-                            ),
+                            )),
                     );
                 } else {
                     await invokeWithTimeout(
                         name,
                         definition.policy.timeoutMs,
-                        () =>
+                        () => invokeWithFallbackPriority(priority, () =>
                             (fn as (...a: unknown[]) => unknown)(
                                 ...sliceActionArgs(args, acceptedArgs)
-                            ),
+                            )),
                     );
                 }
             } catch (error) {
@@ -373,19 +383,7 @@ export function createHookEngineV2(
                 )
             );
         }
-        currentPriorityStack.push(firstPriority);
-        try {
-            return await runPolicySerialBody(
-                callbacks,
-                name,
-                args,
-                isFilter,
-                initialValue,
-                definition
-            );
-        } finally {
-            currentPriorityStack.pop();
-        }
+        return runPolicySerialBody(callbacks, name, args, isFilter, initialValue, definition);
     }
 
     async function callPolicyParallelAction(
@@ -418,14 +416,13 @@ export function createHookEngineV2(
                                     )
                             );
                         }
-                        setRunningPriority(priority);
                         return invokeWithTimeout(
                             name,
                             definition.policy.timeoutMs,
-                            () =>
+                            () => invokeWithFallbackPriority(priority, () =>
                                 (fn as (...a: unknown[]) => unknown)(
                                     ...sliceActionArgs(args, acceptedArgs)
-                                )
+                                ))
                         );
                     };
                     try {
@@ -457,12 +454,7 @@ export function createHookEngineV2(
         if (priorityAls) {
             return priorityAls.run(alsSeed(firstPriority), runParallel);
         }
-        currentPriorityStack.push(firstPriority);
-        try {
-            return await runParallel();
-        } finally {
-            currentPriorityStack.pop();
-        }
+        return runParallel();
     }
 
     function runPolicySyncBody(
@@ -568,16 +560,22 @@ export function createHookEngineV2(
     ): Promise<unknown> {
         let value = initialValue;
         for (const { fn, priority, acceptedArgs } of callbacks) {
-            setRunningPriority(priority);
+            if (priorityAls) setRunningPriority(priority);
             const start = performance.now();
             try {
                 if (isFilter) {
-                    value = await (fn as (...a: unknown[]) => unknown)(
-                        ...sliceFilterCallArgs(value, args, acceptedArgs)
+                    value = await invokeWithFallbackPriority(
+                        priority,
+                        () => (fn as (...a: unknown[]) => unknown)(
+                            ...sliceFilterCallArgs(value, args, acceptedArgs)
+                        )
                     );
                 } else {
-                    await (fn as (...a: unknown[]) => unknown)(
-                        ...sliceActionArgs(args, acceptedArgs)
+                    await invokeWithFallbackPriority(
+                        priority,
+                        () => (fn as (...a: unknown[]) => unknown)(
+                            ...sliceActionArgs(args, acceptedArgs)
+                        )
                     );
                 }
             } catch (error) {
@@ -604,18 +602,7 @@ export function createHookEngineV2(
                 runAsyncBody(callbacks, name, args, isFilter, initialValue)
             );
         }
-        currentPriorityStack.push(firstPriority);
-        try {
-            return await runAsyncBody(
-                callbacks,
-                name,
-                args,
-                isFilter,
-                initialValue
-            );
-        } finally {
-            currentPriorityStack.pop();
-        }
+        return runAsyncBody(callbacks, name, args, isFilter, initialValue);
     }
 
     function runSyncBody(

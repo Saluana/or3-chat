@@ -4,6 +4,7 @@
  * Purpose:
  * Updates workspace metadata.
  */
+import { requireCloudMutation } from '../../utils/security/cloud-mutation';
 import { defineEventHandler, readBody, createError, getRouterParam } from 'h3';
 import {
     requireWorkspaceSession,
@@ -18,6 +19,7 @@ type UpdateWorkspaceBody = {
 };
 
 export default defineEventHandler(async (event) => {
+    requireCloudMutation(event);
     const session = await requireWorkspaceSession(event);
     const store = resolveWorkspaceStore(event);
 

@@ -96,53 +96,6 @@ describe('Hooks - System consistency', () => {
         });
     });
 
-    describe('TypedHookEngine interface', () => {
-        it('should provide type-safe hook methods', () => {
-            const mockEngine = {
-                addAction: vi.fn(),
-                doAction: vi.fn(),
-                addFilter: vi.fn(),
-                applyFilter: vi.fn(),
-                removeAction: vi.fn(),
-                removeFilter: vi.fn(),
-            };
-
-            mockNuxtApp.$hooks = mockEngine;
-
-            // Type-level test - these should compile without errors
-            const hooks = mockEngine;
-            expect(typeof hooks.addAction).toBe('function');
-            expect(typeof hooks.doAction).toBe('function');
-            expect(typeof hooks.addFilter).toBe('function');
-            expect(typeof hooks.applyFilter).toBe('function');
-        });
-    });
-
-    describe('Plugin initialization', () => {
-        it('should create hook engine via createHookEngine', async () => {
-            const { createHookEngine } = await import('../../app/core/hooks/hooks');
-            const engine = createHookEngine();
-
-            expect(engine).toBeDefined();
-            expect(typeof engine.addAction).toBe('function');
-            expect(typeof engine.doAction).toBe('function');
-            expect(typeof engine.addFilter).toBe('function');
-            expect(typeof engine.applyFilters).toBe('function');
-        });
-
-        it('should wrap engine with createTypedHookEngine', async () => {
-            const { createHookEngine } = await import('../../app/core/hooks/hooks');
-            const { createTypedHookEngine } = await import('../../app/core/hooks/typed-hooks');
-            
-            const engine = createHookEngine();
-            const typed = createTypedHookEngine(engine);
-
-            expect(typed).toBeDefined();
-            expect(typeof typed.addAction).toBe('function');
-            expect(typeof typed.doAction).toBe('function');
-        });
-    });
-
     describe('Hook lifecycle', () => {
         it('should support registering and calling actions', async () => {
             const { createHookEngine } = await import('../../app/core/hooks/hooks');

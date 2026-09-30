@@ -12,7 +12,7 @@ export function workspaceTabTitle(tab: WorkspaceTab): string {
 export function workspaceTabKindLabel(tab: WorkspaceTab): string {
     if (tab.resource.kind === 'chat') return 'Chat';
     if (tab.resource.kind === 'document') return 'Document';
-    return `App · ${tab.resource.appId}`;
+    return 'App';
 }
 
 export function workspaceTabFallbackIcon(tab: WorkspaceTab): string {

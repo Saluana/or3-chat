@@ -85,17 +85,22 @@
 }
 
 [data-theme="blank"] .page-link-accent-chats .page-link-icon-container {
-  background: color-mix(in srgb, #2a8fd6 14%, var(--md-surface));
-  color: #2a8fd6;
+  background: color-mix(in srgb, var(--blank-brand-accent) 14%, var(--md-surface));
+  color: var(--blank-brand-accent);
 }
 
 [data-theme="blank"] #nav-top-section .iconify {
-  font-size: 20px !important;
-  width: 20px;
-  height: 20px;
+  font-size: 22px;
+  width: 22px;
+  height: 22px;
 }
 
-[data-theme="blank"] #nav-collapsed-container .iconify {
+[data-theme="blank"] #nav-top-section .app-icon:has(> .iconify) {
+  width: 22px;
+  height: 22px;
+}
+
+[data-theme="blank"] .bottomnav-root .iconify {
   font-size: 20px !important;
   width: 20px;
   height: 20px;
@@ -110,6 +115,7 @@
   flex-direction: column;
   align-items: center;
   box-sizing: border-box;
+  backdrop-filter: none;
 }
 
 [data-theme="blank"] #sidebar-content-collapsed {
@@ -121,19 +127,35 @@
 [data-theme="blank"] .bottomnav-root {
   width: 64px !important;
   border-top: none;
-  padding-bottom: 8px;
-  padding-top: 4px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  padding-top: 12px;
+  gap: 8px;
 }
 
 [data-theme="blank"] #nav-pages-section {
   border-top: none;
   align-items: center;
+  position: relative;
+  margin-top: 12px;
+  padding-top: 16px;
+}
+
+[data-theme="blank"] #nav-pages-section::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 8px;
+  right: 8px;
+  height: 1px;
+  background: color-mix(in srgb, var(--md-on-surface) 12%, transparent);
 }
 
 [data-theme="blank"] #nav-top-section {
   align-items: center;
   padding-left: 0;
   padding-right: 0;
+  width: 100%;
+  scrollbar-width: none;
 }
 
 [data-theme="blank"] #nav-top-section .new-chat-wrapper {
@@ -148,8 +170,31 @@
   text-overflow: ellipsis;
 }
 
-[data-theme="blank"] .bottomnav-root [data-connection-state] .uppercase {
-  letter-spacing: normal;
+[data-theme="blank"] .bottomnav-root .sidebar-rail-caption {
+  display: none;
+}
+
+[data-theme="blank"] .bottomnav-root .sb-bottom-border {
+  display: none;
+}
+
+[data-theme="blank"] .bottomnav-root [data-connection-state] {
+  position: relative;
+}
+
+[data-theme="blank"] .bottomnav-root .sidebar-connection-status-bar {
+  display: none;
+}
+
+[data-theme="blank"] .bottomnav-root [data-connection-state="connected"] .sidebar-connection-status-bar {
+  display: block;
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--md-surface);
 }
 
 [data-theme="blank"] #nav-footer-section {

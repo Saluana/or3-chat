@@ -9,7 +9,14 @@ export default defineAppConfig({
             slots: {
                 // Make base styles clearly different so it's obvious when applied
                 base: [
-                    'rounded-full font-bold inline-flex items-center disabled:cursor-not-allowed aria-disabled:cursor-not-allowed disabled:opacity-75 aria-disabled:opacity-75',
+                    'rounded-full font-bold inline-flex items-center',
+                    // A disabled button must never keep the enabled fill: at 75%
+                    // opacity a filled primary button still reads as clickable.
+                    'disabled:cursor-not-allowed aria-disabled:cursor-not-allowed',
+                    'disabled:bg-[var(--md-surface-active)]! aria-disabled:bg-[var(--md-surface-active)]!',
+                    'disabled:text-[var(--md-on-surface-variant)]! aria-disabled:text-[var(--md-on-surface-variant)]!',
+                    'disabled:border-[var(--md-border-color)]! aria-disabled:border-[var(--md-border-color)]!',
+                    'disabled:opacity-100 aria-disabled:opacity-100',
                     'transition-[color,background-color,border-color,box-shadow,transform] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)]',
                     'border border-black',
                 ],

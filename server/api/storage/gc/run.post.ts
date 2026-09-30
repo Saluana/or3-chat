@@ -9,6 +9,7 @@
  * - Enforces retention policies (default 30 days).
  * - Rate limits execution to prevent abuse (runtime-configurable cooldown per workspace).
  */
+import { requireCloudMutation } from '../../../utils/security/cloud-mutation';
 import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
 import { useRuntimeConfig } from '#imports';
@@ -74,6 +75,8 @@ export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event) || !isStorageEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });
     }
+
+    requireCloudMutation(event);
 
     const body = BodySchema.safeParse(await readBody(event));
     if (!body.success) {

@@ -368,12 +368,15 @@ export default defineEventHandler(async (event) => {
             }
             if (
                 err instanceof Error &&
-                err.name === 'BackgroundHistoryUnsupportedError'
+                (err.name === 'BackgroundHistoryUnsupportedError' ||
+                    err.name === 'BackgroundClientToolUnsupportedError')
             ) {
                 setResponseStatus(event, 503);
                 return {
                     error: err.message,
-                    code: 'background_history_unsupported',
+                    code: err.name === 'BackgroundClientToolUnsupportedError'
+                        ? 'background_client_tool_unsupported'
+                        : 'background_history_unsupported',
                 };
             }
             if (

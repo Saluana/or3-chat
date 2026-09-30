@@ -13,7 +13,8 @@ export interface WorkspaceResourceNavigationApi {
     canOpenInNewPane(): boolean;
     openResource(
         resource: WorkspaceResource,
-        destination: WorkspaceResourceDestination
+        destination: WorkspaceResourceDestination,
+        options?: { reuseExisting?: boolean }
     ): Promise<boolean>;
 }
 

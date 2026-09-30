@@ -13,7 +13,7 @@
  * - Rich-text editor state management
  * - Server-side document synchronization
  */
-import { getDb } from './client';
+import { getDb, type Or3DB } from './client';
 import { dbTry } from './dbTry';
 import { newId, nowSec, nextClock, getWriteTxTableNames } from './util';
 import { useHooks } from '../core/hooks/useHooks';
@@ -93,8 +93,11 @@ export interface DocumentRecord {
 
 const DOCUMENT_TABLE = 'documents';
 
-async function putDocumentPostRow(row: Post, includeTombstones = false): Promise<void> {
-    const db = getDb();
+async function putDocumentPostRow(
+    db: Or3DB,
+    row: Post,
+    includeTombstones = false
+): Promise<void> {
     if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
         await db.posts.put(row);
         return;
@@ -108,8 +111,7 @@ async function putDocumentPostRow(row: Post, includeTombstones = false): Promise
     );
 }
 
-async function deleteDocumentPostRow(id: string): Promise<void> {
-    const db = getDb();
+async function deleteDocumentPostRow(db: Or3DB, id: string): Promise<void> {
     if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
         await db.posts.delete(id);
         return;
@@ -294,6 +296,19 @@ export interface CreateDocumentInput {
 export async function createDocument(
     input: CreateDocumentInput = {}
 ): Promise<DocumentRecord> {
+    return createDocumentInDb(getDb(), input);
+}
+
+/**
+ * Create a document in an explicitly captured workspace database.
+ *
+ * Long-running request flows (plugin host actions, admitted background work)
+ * must use this variant so a workspace switch cannot redirect the write.
+ */
+export async function createDocumentInDb(
+    db: Or3DB,
+    input: CreateDocumentInput = {}
+): Promise<DocumentRecord> {
     const hooks = useHooks();
     const id = newId();
     const baseRow: DocumentRow = {
@@ -336,7 +351,7 @@ export async function createDocument(
         file_hashes: persistedRow.file_hashes,
     };
     await dbTry(
-        () => putDocumentPostRow(postRow),
+        () => putDocumentPostRow(db, postRow),
         { op: 'write', entity: 'posts', action: 'createDocument' },
         { rethrow: true }
     );
@@ -364,8 +379,16 @@ export async function createDocument(
 export async function getDocument(
     id: string
 ): Promise<DocumentRecord | undefined> {
+    return getDocumentInDb(getDb(), id);
+}
+
+/** Fetch a document from an explicitly captured workspace database. */
+export async function getDocumentInDb(
+    db: Or3DB,
+    id: string
+): Promise<DocumentRecord | undefined> {
     const hooks = useHooks();
-    const row = await dbTry(() => getDb().posts.get(id), {
+    const row = await dbTry(() => db.posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'getDocument',
@@ -501,8 +524,17 @@ export async function updateDocument(
     id: string,
     patch: UpdateDocumentPatch
 ): Promise<DocumentRecord | undefined> {
+    return updateDocumentInDb(getDb(), id, patch);
+}
+
+/** Update a document in an explicitly captured workspace database. */
+export async function updateDocumentInDb(
+    db: Or3DB,
+    id: string,
+    patch: UpdateDocumentPatch
+): Promise<DocumentRecord | undefined> {
     const hooks = useHooks();
-    const existing = await dbTry(() => getDb().posts.get(id), {
+    const existing = await dbTry(() => db.posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'getDocument',
@@ -576,7 +608,7 @@ export async function updateDocument(
         file_hashes: persistedRow.file_hashes,
     };
     await dbTry(
-        () => putDocumentPostRow(postRow),
+        () => putDocumentPostRow(db, postRow),
         { op: 'write', entity: 'posts', action: 'updateDocument' },
         { rethrow: true }
     );
@@ -603,8 +635,13 @@ export async function updateDocument(
  * - Does not permanently remove the row.
  */
 export async function softDeleteDocument(id: string): Promise<void> {
+    return softDeleteDocumentInDb(getDb(), id);
+}
+
+/** Soft delete in an explicitly captured workspace database. */
+export async function softDeleteDocumentInDb(db: Or3DB, id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await dbTry(() => getDb().posts.get(id), {
+    const existing = await dbTry(() => db.posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'getDocument',
@@ -648,7 +685,7 @@ export async function softDeleteDocument(id: string): Promise<void> {
         file_hashes: updatedRow.file_hashes,
     };
     await dbTry(
-        () => putDocumentPostRow(postRow, true),
+        () => putDocumentPostRow(db, postRow, true),
         { op: 'write', entity: 'posts', action: 'softDeleteDocument' },
         { rethrow: true }
     );
@@ -669,8 +706,13 @@ export async function softDeleteDocument(id: string): Promise<void> {
  * - Does not clean up external resources.
  */
 export async function hardDeleteDocument(id: string): Promise<void> {
+    return hardDeleteDocumentInDb(getDb(), id);
+}
+
+/** Hard delete in an explicitly captured workspace database. */
+export async function hardDeleteDocumentInDb(db: Or3DB, id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await dbTry(() => getDb().posts.get(id), {
+    const existing = await dbTry(() => db.posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'getDocument',
@@ -694,7 +736,7 @@ export async function hardDeleteDocument(id: string): Promise<void> {
     };
     await hooks.doAction('db.documents.delete:action:hard:before', payload);
     await dbTry(
-        () => deleteDocumentPostRow(id),
+        () => deleteDocumentPostRow(db, id),
         { op: 'write', entity: 'posts', action: 'hardDeleteDocument' },
         { rethrow: true }
     );

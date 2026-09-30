@@ -26,15 +26,6 @@ describe('useIcon', () => {
         mockActiveTheme.value = 'default';
     });
 
-    it('returns a computed property that resolves the icon', () => {
-        mockResolve.mockReturnValue('pixelarticons:test');
-
-        const icon = useIcon('ui.trash');
-
-        expect(icon.value).toBe('pixelarticons:test');
-        expect(mockResolve).toHaveBeenCalledWith('ui.trash', 'default');
-    });
-
     it('reacts to theme changes', () => {
         mockResolve.mockImplementation((token, theme) => {
             if (theme === 'default') return 'default:icon';

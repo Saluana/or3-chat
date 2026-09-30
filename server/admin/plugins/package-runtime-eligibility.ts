@@ -1,12 +1,14 @@
 import type { H3Event } from 'h3';
 import type { PluginGateDecision } from '../../../shared/plugins/access-policy';
+import type { PluginGrantReviewSnapshot } from '../../../shared/plugins/grant-review';
 import type { ModuleV2RuntimeDecision } from '../../../shared/plugins/module-v2-runtime-policy';
 import type { PluginRuntimeManifestBlockCode } from '../../../shared/plugins/runtime-manifest';
-import { resolvePluginV2DependencyGraph } from '../../../shared/plugins/v2-dependency-graph';
-import { verifyPluginV2Compatibility } from '../../../shared/plugins/v2-compatibility';
+import { resolvePluginV2DependencyGraph } from '~~/shared/plugins/v2-dependency-graph';
+import { verifyPluginV2Compatibility } from '~~/shared/plugins/v2-compatibility';
 import { checkPluginAccess } from '../../utils/plugins/access/require-plugin-access';
 import type { WorkspaceSettingsStore } from '../stores/types';
 import { getPluginGrantReview } from './workspace-plugin-store';
+import { packageGrantCandidate } from './package-operation-support';
 import type { SelectedPackageRouteCatalog } from './package-route-catalog';
 import { OR3_PLUGIN_V2_HOST_CAPABILITIES } from './v2-host-capabilities';
 
@@ -20,6 +22,7 @@ export interface SelectedPackageRuntimeEligibility {
     readonly status: 'ready' | 'blocked';
     readonly blockCode?: PluginRuntimeManifestBlockCode;
     readonly access: PluginGateDecision;
+    readonly grants: PluginGrantReviewSnapshot;
     readonly grantsRevision: string;
     readonly resolvedDependencyIds: readonly string[];
 }
@@ -30,11 +33,18 @@ export interface EvaluateSelectedPackageRuntimeEligibilityInput {
     readonly settingsStore: WorkspaceSettingsStore;
     readonly selectedPackages: readonly ReadySelectedPackageRouteCatalog[];
     readonly packageRuntimeDecision: ModuleV2RuntimeDecision;
+    /**
+     * Plugins enabled for this workspace. A package that is not enabled here is
+     * never ready, whatever its own policy says, so a disabled plugin cannot
+     * stay executable through a manifest or asset route.
+     */
+    readonly enabledPluginIds?: readonly string[];
 }
 
 type BaseEligibility = {
     readonly catalog: ReadySelectedPackageRouteCatalog;
     readonly access: PluginGateDecision;
+    readonly grants: PluginGrantReviewSnapshot;
     readonly grantsRevision: string;
     readonly blockCode?: PluginRuntimeManifestBlockCode;
     readonly dependencies: readonly string[];
@@ -75,23 +85,38 @@ export async function evaluateSelectedPackageRuntimeEligibility(
 
     const evaluated = await Promise.all(
         input.selectedPackages.map(async (catalog) => {
-            const [access, review] = await Promise.all([
+            const [access, candidate] = await Promise.all([
                 checkPluginAccess(input.event, {
                     pluginId: catalog.pluginId,
                     action: 'runtime.load',
                     extension: { access: catalog.manifest.access ?? null },
                 }),
-                getPluginGrantReview(
-                    input.settingsStore,
-                    input.workspaceId,
-                    catalog.pluginId,
-                    catalog.manifest.requestedGrants
-                ),
+                packageGrantCandidate({
+                    packagePath: catalog.packagePath,
+                    packageDigest: catalog.packageDigest,
+                }).catch(() => ({
+                    requestedGrants: catalog.manifest.requestedGrants,
+                    releaseId: null,
+                    packageDigest: catalog.packageDigest,
+                    authoritySha256: null,
+                    authority: null,
+                })),
             ]);
+            const review = await getPluginGrantReview(
+                input.settingsStore,
+                input.workspaceId,
+                catalog.pluginId,
+                candidate
+            );
             const dependencyResolution = dependencyGraph.resolutions[catalog.pluginId];
             let blockCode: PluginRuntimeManifestBlockCode | undefined;
             if (!input.packageRuntimeDecision.allowed) {
                 blockCode = input.packageRuntimeDecision.code;
+            } else if (
+                input.enabledPluginIds !== undefined &&
+                !input.enabledPluginIds.includes(catalog.pluginId)
+            ) {
+                blockCode = 'package-disabled';
             } else if (!access.decision.allowed) {
                 blockCode = 'package-policy-denied';
             } else if (!dependencyResolution || dependencyGraph.blocked[catalog.pluginId]) {
@@ -109,15 +134,24 @@ export async function evaluateSelectedPackageRuntimeEligibility(
                 if (compatibility.status === 'blocked') {
                     blockCode = compatibilityBlockCode(compatibility);
                 } else if (catalog.manifest.runtime.client) {
-                    // The production host currently supports server-only V2
-                    // packages. No client package is executable or asset-readable
-                    // until the separate client ABI release lands.
-                    blockCode = 'trusted-host-ui-abi-unproven';
+                    // Trust, features, and grants were checked above. Keep the
+                    // reviewed trust mode aligned with its execution boundary.
+                    const client = catalog.manifest.runtime.client;
+                    const contained =
+                        catalog.manifest.trust === 'isolated-client' &&
+                        (client.isolation === 'worker' || client.isolation === 'iframe');
+                    const trusted =
+                        catalog.manifest.trust === 'trusted-host' &&
+                        client.isolation === 'host';
+                    if (!contained && !trusted) {
+                        blockCode = 'trusted-host-ui-abi-unproven';
+                    }
                 }
             }
             return {
                 catalog,
                 access: access.decision,
+                grants: review,
                 grantsRevision: review.revision,
                 blockCode,
                 dependencies: dependencyResolution?.required ?? [],
@@ -174,6 +208,7 @@ export async function evaluateSelectedPackageRuntimeEligibility(
                 status: ready ? 'ready' : 'blocked',
                 ...(blockCode ? { blockCode } : {}),
                 access: entry.access,
+                grants: entry.grants,
                 grantsRevision: entry.grantsRevision,
                 resolvedDependencyIds,
             });

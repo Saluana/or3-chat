@@ -1,6 +1,8 @@
 <template>
     <PageShell v-if="ready" :initial-document-id="routeId" validate-initial />
-    <div v-else style="display: none" />
+    <div v-else class="flex min-h-dvh items-center justify-center bg-[var(--md-surface)] text-[var(--md-on-surface-variant)]" role="status">
+        Opening document…
+    </div>
 </template>
 <script setup lang="ts">
 import PageShell from '~/components/PageShell.vue';

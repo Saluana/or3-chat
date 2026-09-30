@@ -30,6 +30,7 @@ import {
 registerDashboardPlugin({
     id: 'notes',
     icon: 'i-ph-note-pencil',
+    image: importedAppIconUrl,
     label: 'Notes',
     order: 120,
     capabilities: ['canWriteDocs'],
@@ -64,7 +65,16 @@ registerDashboardPlugin({
 });
 ```
 
+`image` is optional and is rendered with `object-fit: contain`. Keep `icon` as
+the accessible visual fallback. Installable V2 plugins do not provide a URL
+directly: they declare the validated package path in `or3.manifest.json`, and
+the host resolves its authorized digest-addressed URL.
+
 `access` is optional. If omitted, behavior remains unchanged.
+
+The dashboard launcher displays each item's optional `description` beneath its
+label in a fully clickable card. Its medium AppModal shell fits the registered
+cards; opening a page switches to a larger, bounded scrolling area.
 
 ---
 

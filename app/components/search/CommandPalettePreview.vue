@@ -47,7 +47,11 @@
                     <span
                         class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] bg-[color:var(--md-surface-variant)]/40 text-[color:var(--md-on-surface-variant)]"
                     >
-                        <UIcon :name="iconForResult(result)" class="h-3.5 w-3.5" />
+                        <AppIcon
+                            :image="result.image"
+                            :icon="iconForResult(result)"
+                            class="h-3.5 w-3.5"
+                        />
                     </span>
                     <div class="min-w-0 flex-1">
                         <h3
@@ -115,6 +119,7 @@ import type {
 } from '~/core/search/command-palette/types';
 import { paletteMetaRows, paletteTimeLabel } from './palette-dom';
 import { usePaletteIcons } from './usePaletteIcons';
+import AppIcon from '~/components/ui/AppIcon.vue';
 
 const props = defineProps<{
     result: PaletteResult | null;

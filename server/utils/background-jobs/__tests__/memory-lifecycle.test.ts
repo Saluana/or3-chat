@@ -122,6 +122,92 @@ describe('memory background job admission and lifecycle', () => {
         expect(await memoryJobProvider.getActiveJobCount?.()).toBe(1);
     });
 
+    it('claims one browser tool executor and makes the settled job runnable', async () => {
+        const pendingExecution = {
+            ...execution(),
+            pendingToolCalls: [
+                {
+                    id: 'call-1',
+                    type: 'function' as const,
+                    function: { name: 'client_tool', arguments: '{}' },
+                },
+            ],
+            clientToolCall: {
+                callId: 'call-1',
+                name: 'client_tool',
+                arguments: '{}',
+                argumentFingerprint: 'fingerprint',
+                definition: {
+                    type: 'function' as const,
+                    function: {
+                        name: 'client_tool',
+                        description: 'Client tool',
+                        parameters: {
+                            type: 'object' as const,
+                            properties: {},
+                        },
+                    },
+                    runtime: 'client' as const,
+                },
+            },
+        };
+        const jobId = await memoryJobProvider.createJob({
+            userId: 'user-1',
+            threadId: 'thread-1',
+            messageId: 'message-1',
+            model: 'test-model',
+            execution: pendingExecution,
+            tool_calls: [
+                { id: 'call-1', name: 'client_tool', status: 'pending' },
+            ],
+        });
+
+        await expect(
+            memoryJobProvider.claimJob?.(jobId, 'worker', Date.now(), Date.now() + 30_000)
+        ).resolves.toBeNull();
+        const claimed = await memoryJobProvider.claimClientToolCall?.(
+            jobId,
+            'user-1',
+            'call-1',
+            'token-1',
+            Date.now() + 30_000
+        );
+        expect(claimed?.execution?.clientToolCall?.claimToken).toBe('token-1');
+        await expect(
+            memoryJobProvider.claimClientToolCall?.(
+                jobId,
+                'user-1',
+                'call-1',
+                'token-2',
+                Date.now() + 30_000
+            )
+        ).resolves.toBeNull();
+
+        const settledExecution = {
+            ...pendingExecution,
+            pendingToolCalls: undefined,
+            clientToolCall: undefined,
+        };
+        await expect(
+            memoryJobProvider.settleClientToolCall?.(
+                jobId,
+                'user-1',
+                'call-1',
+                'token-1',
+                settledExecution,
+                [{ id: 'call-1', name: 'client_tool', status: 'complete', result: 'ok' }]
+            )
+        ).resolves.toBe(true);
+        await expect(
+            memoryJobProvider.claimJob?.(
+                jobId,
+                'worker',
+                Date.now(),
+                Date.now() + 30_000
+            )
+        ).resolves.toMatchObject({ execution: settledExecution });
+    });
+
     it('uses timeout as an inactivity watchdog rather than a runtime cap', async () => {
         vi.useFakeTimers();
         try {

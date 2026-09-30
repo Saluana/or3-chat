@@ -40,6 +40,8 @@ function packageIdentity(
         pluginApiVersion: '2',
         source: 'package',
         trust: 'isolated-server',
+        name: 'Package Example',
+        effectiveGrants: [],
         workspaceId: 'workspace-1',
         policyRevision: 'policy-1',
         grantsRevision: 'grants-1',

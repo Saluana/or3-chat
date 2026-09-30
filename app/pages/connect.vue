@@ -289,7 +289,6 @@
 </template>
 
 <script setup lang="ts">
-import { getExternalAgentCloudHostRefresh } from '~/core/external-agents/runtime';
 import {
     waitForConnectOnline,
     type ConnectSetupStatus,
@@ -590,9 +589,7 @@ async function monitorComputer() {
 }
 
 async function refreshCloudComputers() {
-    const refresh = getExternalAgentCloudHostRefresh();
-    if (!refresh) return;
-    await refresh().catch(() => undefined);
+    window.dispatchEvent(new CustomEvent('or3:external-agents:refresh-cloud-hosts'));
 }
 
 function safeError(cause: unknown, fallback: string): string {

@@ -68,7 +68,7 @@ function createPriorityAls(): PriorityAls | null {
             .AsyncLocalStorage as new () => PriorityAls;
         if (typeof globalCtor === 'function') return new globalCtor();
     } catch {
-        // Async isolation unavailable; callers fall back to the shared stack.
+        // Async isolation unavailable; synchronous callback frames still support introspection.
     }
     return null;
 }
@@ -194,6 +194,16 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
     let counter = 0;
     const currentPriorityStack: number[] = [];
     const priorityAls = createPriorityAls();
+
+    function invokeWithFallbackPriority<T>(priority: number, callback: () => T): T {
+        if (priorityAls) return callback();
+        currentPriorityStack.push(priority);
+        try {
+            return callback();
+        } finally {
+            currentPriorityStack.pop();
+        }
+    }
 
     const actions = new Map<string, CallbackEntry[]>();
     const filters = new Map<string, CallbackEntry[]>();
@@ -468,9 +478,6 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
                 if (store && store.length > 0) {
                     store[store.length - 1] = priority;
                 }
-            } else {
-                currentPriorityStack[currentPriorityStack.length - 1] =
-                    priority;
             }
             const start = performance.now();
             try {
@@ -480,12 +487,16 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
                         args,
                         acceptedArgs
                     );
-                    value = await (fn as (...a: unknown[]) => unknown)(
-                        ...callArgs
+                    value = await invokeWithFallbackPriority(
+                        priority,
+                        () => (fn as (...a: unknown[]) => unknown)(...callArgs)
                     );
                 } else {
-                    await (fn as (...a: unknown[]) => unknown)(
-                        ...sliceActionArgs(args, acceptedArgs)
+                    await invokeWithFallbackPriority(
+                        priority,
+                        () => (fn as (...a: unknown[]) => unknown)(
+                            ...sliceActionArgs(args, acceptedArgs)
+                        )
                     );
                 }
             } catch (error) {
@@ -517,19 +528,7 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
                 runAsyncBody(callbacks, name, args, isFilter, initialValue)
             );
         }
-        currentPriorityStack.push(firstPriority);
-
-        try {
-            return await runAsyncBody(
-                callbacks,
-                name,
-                args,
-                isFilter,
-                initialValue
-            );
-        } finally {
-            currentPriorityStack.pop();
-        }
+        return runAsyncBody(callbacks, name, args, isFilter, initialValue);
     }
 
     function runSyncBody(

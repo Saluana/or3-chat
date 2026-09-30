@@ -21,13 +21,13 @@
         @submit="emit('saveRenameProject')"
     />
 
-    <UModal
+    <AppModal
         v-bind="deleteThreadModalProps"
         :open="showDeleteModal"
         title="Delete thread"
         @update:open="emit('update:showDeleteModal', $event)"
     >
-        <template #body>
+        <template #default>
             <p class="text-sm opacity-70">
                 This will permanently remove the thread and its messages.
             </p>
@@ -35,24 +35,24 @@
         <template #footer>
             <UButton
                 variant="ghost"
-                class="theme-btn"
+                size="modal"
                 @click="emit('update:showDeleteModal', false)"
             >
                 Cancel
             </UButton>
-            <UButton color="error" class="theme-btn" @click="emit('deleteThread')">
+            <UButton color="error" size="modal" @click="emit('deleteThread')">
                 Delete
             </UButton>
         </template>
-    </UModal>
+    </AppModal>
 
-    <UModal
+    <AppModal
         v-bind="deleteDocumentModalProps"
         :open="showDeleteDocumentModal"
         title="Delete document"
         @update:open="emit('update:showDeleteDocumentModal', $event)"
     >
-        <template #body>
+        <template #default>
             <p class="text-sm opacity-70">
                 This will permanently remove the document.
             </p>
@@ -60,24 +60,24 @@
         <template #footer>
             <UButton
                 variant="ghost"
-                class="theme-btn"
+                size="modal"
                 @click="emit('update:showDeleteDocumentModal', false)"
             >
                 Cancel
             </UButton>
-            <UButton color="error" class="theme-btn" @click="emit('deleteDocument')">
+            <UButton color="error" size="modal" @click="emit('deleteDocument')">
                 Delete
             </UButton>
         </template>
-    </UModal>
+    </AppModal>
 
-    <UModal
+    <AppModal
         v-bind="deleteProjectModalProps"
         :open="showDeleteProjectModal"
         title="Delete project"
         @update:open="emit('update:showDeleteProjectModal', $event)"
     >
-        <template #body>
+        <template #default>
             <p class="text-sm opacity-70">
                 This will remove the project from the sidebar. Project data will
                 be soft-deleted and can be recovered.
@@ -86,19 +86,20 @@
         <template #footer>
             <UButton
                 variant="ghost"
-                class="theme-btn"
+                size="modal"
                 @click="emit('update:showDeleteProjectModal', false)"
             >
                 Cancel
             </UButton>
-            <UButton color="error" class="theme-btn" @click="emit('deleteProject')">
+            <UButton color="error" size="modal" @click="emit('deleteProject')">
                 Delete
             </UButton>
         </template>
-    </UModal>
+    </AppModal>
 </template>
 
 <script setup lang="ts">
+import AppModal from '~/components/ui/AppModal.vue';
 import SidebarRenameEntityModal from './SidebarRenameEntityModal.vue';
 import SidebarRenameProjectModal from './SidebarRenameProjectModal.vue';
 

@@ -1,5 +1,19 @@
 import type { PluginGrant, PluginManifestV2, PluginTrustMode } from './manifest';
-import type { PluginHttpClient, PluginSettingsClient, PluginStorageClient } from './clients';
+import type { PluginSettingsClient, PluginStorageClient } from './clients';
+import type {
+    PluginActivityClient,
+    PluginAiClient,
+    PluginChatClient,
+    PluginCommandsClient,
+    PluginEventsClient,
+    PluginFilesClient,
+    PluginHttpClient,
+    PluginNetworkClient,
+    PluginPanesClient,
+    PluginSecretsClient,
+    PluginUiClient,
+    PluginWorkspaceClient,
+} from './capabilities';
 
 export interface PluginRegistrationHandle {
     readonly dispose: () => void;
@@ -26,6 +40,7 @@ export type PluginContributionKind =
     | 'ui.command-palette.post-source'
     | 'ui.command-palette.command'
     | 'chat.action'
+    | 'chat.message.renderer'
     | 'chat.tool.client'
     | 'chat.tool.server'
     | 'editor.extension'
@@ -70,6 +85,19 @@ export interface PluginContribution<TDefinition = unknown> {
     readonly priority?: number;
 }
 
+/** Reviewed Vue renderer for a host-provided message. Trusted-host only. */
+export interface PluginMessageRendererDefinition<TMessage = unknown> {
+    readonly match: (message: TMessage) => boolean;
+    readonly component: unknown;
+}
+
+/** Reviewed chat-composer extension. The package owns the extension object. */
+export interface PluginEditorExtensionDefinition {
+    readonly extension: object;
+    readonly suggestion?: { readonly char: string };
+    readonly onSlashCommand?: (command: string) => boolean | Promise<boolean>;
+}
+
 export interface PluginContributions {
     register<TDefinition>(
         contribution: PluginContribution<TDefinition>
@@ -111,7 +139,18 @@ export interface PluginContext {
     readonly contributions: PluginContributions;
     readonly settings: PluginSettingsClient;
     readonly storage: PluginStorageClient;
+    readonly ai: PluginAiClient;
+    readonly ui: PluginUiClient;
+    readonly panes: PluginPanesClient;
+    readonly commands: PluginCommandsClient;
+    readonly chat: PluginChatClient;
+    readonly workspace: PluginWorkspaceClient;
+    readonly events: PluginEventsClient;
+    readonly secrets: PluginSecretsClient;
+    readonly files: PluginFilesClient;
     readonly http: PluginHttpClient;
+    readonly network: PluginNetworkClient;
+    readonly activity: PluginActivityClient;
     onCleanup(callback: () => void | Promise<void>): void;
     onActivate(callback: () => void | Promise<void>): void;
 }

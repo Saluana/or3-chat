@@ -1,8 +1,7 @@
 <template>
-    <UModal v-model:open="open">
-        <template #content>
-            <div class="p-6 space-y-4">
-                <h3 class="text-lg font-semibold">Import {{ label }} from URL</h3>
+    <AppModal v-model:open="open" :title="`Import ${label} from URL`">
+        <template #default>
+            <div class="space-y-4">
                 <p class="text-sm opacity-70">
                     Paste a direct link to a .zip archive. GitHub archive URLs work — e.g.:
                     <code class="text-xs break-all">https://github.com/user/repo/archive/refs/heads/main.zip</code>
@@ -22,29 +21,31 @@
                     placeholder="https://github.com/user/repo/archive/refs/heads/main.zip"
                     icon="i-heroicons-link"
                     size="md"
+                    variant="modal"
                     autofocus
                     :disabled="loading"
                 />
-                <div class="flex items-center justify-end gap-2 pt-2">
-                    <UButton variant="ghost" size="sm" :disabled="loading" @click="open = false">
-                        Cancel
-                    </UButton>
-                    <UButton
-                        size="sm"
-                        color="primary"
-                        :loading="loading"
-                        :disabled="!url.trim() || loading"
-                        @click="submit"
-                    >
-                        Install
-                    </UButton>
-                </div>
             </div>
         </template>
-    </UModal>
+        <template #footer>
+            <UButton variant="ghost" size="modal" :disabled="loading" @click="open = false">
+                Cancel
+            </UButton>
+            <UButton
+                size="modal"
+                color="primary"
+                :loading="loading"
+                :disabled="!url.trim() || loading"
+                @click="submit"
+            >
+                Install
+            </UButton>
+        </template>
+    </AppModal>
 </template>
 
 <script setup lang="ts">
+import AppModal from '~/components/ui/AppModal.vue';
 const open = defineModel<boolean>({ required: true });
 
 const props = defineProps<{

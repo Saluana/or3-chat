@@ -87,6 +87,7 @@ function pluginToResource(
             .join(' '),
         keywords: plugin.capabilities,
         icon: plugin.icon,
+        image: plugin.image,
         updatedAt: 0,
         primaryAction: {
             id: `dashboard:open:${plugin.id}`,
@@ -116,6 +117,7 @@ function pageToResource(
             .filter(Boolean)
             .join(' '),
         icon: page.icon ?? plugin.icon,
+        image: page.image ?? plugin.image,
         updatedAt: 0,
         primaryAction: {
             id: `dashboard:open:${plugin.id}:${page.id}`,

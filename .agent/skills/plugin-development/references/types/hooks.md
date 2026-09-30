@@ -641,6 +641,7 @@ export interface KvEntry {
     id: string;
     name: string;
     value?: string | null;
+    deleted?: boolean;
     created_at: number;
     updated_at: number;
     clock: number;

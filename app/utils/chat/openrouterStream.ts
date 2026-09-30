@@ -39,6 +39,7 @@ import {
     readResponseTextWithIdleDeadline,
     withIdleWatchdog,
 } from '~~/shared/openrouter/deadlines';
+import { getDeviceId } from '~/core/sync/hlc';
 
 function parseRetryAfterSeconds(value: string): number {
     const seconds = Number(value);
@@ -104,6 +105,7 @@ type OpenRouterRequestBody = {
     _threadId?: string;
     _messageId?: string;
     _toolRuntime?: Record<string, string>;
+    _clientDeviceId?: string;
     _streamedFieldMode?: StreamedFieldMode;
 };
 
@@ -562,6 +564,7 @@ export interface BackgroundJobStatus {
         args?: string;
         result?: string;
         error?: string;
+        runtime?: 'client' | 'server' | 'hybrid';
     }>;
     workflow_state?: WorkflowMessageData;
 }
@@ -719,6 +722,7 @@ export async function startBackgroundStream(params: {
                 ? params.admissionId
                 : crypto.randomUUID(),
         _history: params.history,
+        _clientDeviceId: getDeviceId(),
     };
 
     if (params.reasoning) {
@@ -770,7 +774,8 @@ export async function startBackgroundStream(params: {
                     payload.error ?? `Background stream failed: ${resp.status}`;
                 if (
                     payload.code === 'background_streaming_disabled' ||
-                    payload.code === 'background_history_unsupported'
+                    payload.code === 'background_history_unsupported' ||
+                    payload.code === 'background_client_tool_unsupported'
                 ) {
                     // Server explicitly rejected durable execution. Refresh the
                     // capability cache; do not retry and do not fall through to
@@ -997,6 +1002,76 @@ export async function abortBackgroundJob(jobId: string): Promise<boolean> {
 
     const result = await resp.json() as { aborted: boolean };
     return result.aborted;
+}
+
+export type BackgroundClientToolClaim = {
+    claimToken: string;
+    call: {
+        id: string;
+        name: string;
+        arguments: string;
+        definition: ToolDefinition;
+    };
+    context: { workspaceId: string; threadId: string; messageId: string };
+};
+
+export async function claimBackgroundClientTool(
+    jobId: string,
+    callId: string
+): Promise<BackgroundClientToolClaim | null> {
+    const response = await fetch(`/api/jobs/${jobId}/client-tool/claim`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-OR3-Tool-Intent': 'claim',
+        },
+        body: JSON.stringify({ callId, deviceId: getDeviceId() }),
+    });
+    if (response.status === 409) return null;
+    if (!response.ok) throw new Error(`Client tool claim failed: ${response.status}`);
+    return (await response.json()) as BackgroundClientToolClaim;
+}
+
+export async function isBackgroundClientToolBridgeAvailable(): Promise<boolean> {
+    try {
+        const response = await fetchWithResponseDeadline(
+            '/api/jobs/client-tool/capability',
+            { credentials: 'include', cache: 'no-store' },
+            { timeoutMs: 3_000 }
+        );
+        if (!response.ok) return false;
+        const body = (await response.json()) as { available?: unknown };
+        return body.available === true;
+    } catch {
+        return false;
+    }
+}
+
+export async function submitBackgroundClientToolResult(params: {
+    jobId: string;
+    callId: string;
+    claimToken: string;
+    result?: string;
+    error?: string;
+}): Promise<void> {
+    const response = await fetch(`/api/jobs/${params.jobId}/client-tool/result`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-OR3-Tool-Intent': 'result',
+        },
+        body: JSON.stringify({
+            callId: params.callId,
+            claimToken: params.claimToken,
+            result: params.result,
+            error: params.error,
+        }),
+    });
+    if (!response.ok) {
+        throw new Error(`Client tool result failed: ${response.status}`);
+    }
 }
 
 /**

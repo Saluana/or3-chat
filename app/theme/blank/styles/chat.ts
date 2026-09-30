@@ -35,9 +35,6 @@ export const chatOverrides = {
     'div#chat.editor': {
         class: 'text-[16px]',
     },
-    'div#chat.input-main-container': {
-        class: 'rounded-[var(--md-border-radius-large,var(--md-border-radius))] shadow-[0_4px_8px_rgba(0,0,0,0.04)] border-0 hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-within:shadow-[0_4px_16px_rgba(0,0,0,0.1)]',
-    },
     'button#chat.attach': chatInputButtonConfig,
     'button#chat.settings': chatInputButtonConfig,
     'selectmenu#chat.model-select': {

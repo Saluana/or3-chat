@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Example Plugin Settings",
+  "type": "object",
+  "properties": {
+    "greeting": {
+      "type": "string",
+      "title": "Greeting",
+      "description": "Message logged when the plugin activates.",
+      "default": "Hello from OR3"
+    }
+  },
+  "additionalProperties": false
+}

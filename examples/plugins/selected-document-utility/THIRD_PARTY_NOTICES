@@ -1,0 +1,19 @@
+# Third-Party Notices
+
+Selected Document Utility bundles no third-party runtime code.
+
+- `client.mjs` imports only `@or3/plugin-sdk` and the local `./lib/digest.mjs`.
+- `lib/digest.mjs` is a first-party implementation that uses only built-in
+  JavaScript string APIs. It performs no network, filesystem, or native calls.
+- The sample document under `fixtures/workspace/` and the first-action fixture
+  under `fixtures/` are first-party text written for this example.
+- `@or3/plugin-sdk` is a runtime dependency (see `package.json`) and is licensed
+  GPL-3.0 by the OR3 project. Its own `THIRD_PARTY_NOTICES` covers its bundled
+  code.
+- `.authoring/` contains Node-only authoring tools that import the
+  `@or3/plugin-sdk/profile` subpath. They are not shipped in the package and are
+  not loaded by the plugin.
+
+This utility adds no runtime dependencies of its own. If that changes, replace
+this notice with the dependency's license text and keep `LICENSE` (GPL-3.0) in
+sync.

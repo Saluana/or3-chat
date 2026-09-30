@@ -13,9 +13,13 @@ watermark across the complete page chain. The client applies the complete
 snapshot transactionally, then begins incremental replay strictly after the
 watermark.
 
-SQLite and Convex implement provider-side materialized snapshot page generators,
-and the client atomically installs their page chains before replaying strictly
-after the watermark. Cross-provider coverage verifies deterministic rows,
+SQLite and Convex implement provider-side materialized snapshot page generators.
+The client stages each validated page in a local IndexedDB table, then installs
+the completed chain and cursor in one transaction before replaying strictly
+after the watermark. Interrupted staging leaves materialized data untouched;
+the next attempt discards the incomplete staging rows. Pending local operations
+are read and merged in the install transaction, including writes made while
+pages were fetched. Cross-provider coverage verifies deterministic rows,
 tombstones, intervening writes, duplicate boundaries, and fresh-device recovery
 after the original log entries have been pruned. Change-log and tombstone
 retention is enabled for adapters that declare the `snapshot-v1` retention
@@ -24,8 +28,10 @@ contract; adapters that do not fail closed with `503`.
 When an existing device's cursor expires, snapshot-capable providers use the
 same canonical replacement path instead of attempting cursor-zero replay.
 Materialized rows and tombstones for the requested tables are replaced
-atomically, changes after the snapshot watermark are replayed, and pending local
-puts/deletes are re-applied before the live subscription resumes.
+atomically, except device-local KV keys excluded by the sync capture policy
+(including plugin extensions). Pending local puts and deletes are normalized,
+merged by revision in the same transaction, and then changes after the
+snapshot watermark are replayed before the live subscription resumes.
 
 ## Pull retention and snapshot recovery
 
@@ -53,12 +59,23 @@ skipped on pull/watch without failing the request.
 
 LWW compares `clock`, then `hlc`, then `op_id`. Equal clock/hlc ties are
 deterministic. Tombstones use the same revision tuple. A push that loses LWW
-returns `{ success: true, applied: false, payload: <winner> }`; the client
-applies the winner locally and drops the outbox row.
+returns `success: true, applied: false` and a `winner` with its revision:
+`{ kind: 'put', payload, revision }` or
+`{ kind: 'delete', revision, serverDeletedAt? }`. Providers may still return
+the older live-only `payload` field. A replay of a previously committed
+`op_id` sets `replayed: true`; when its current winner differs, that winner
+is required. The client applies the winner only if it beats the local revision,
+then acknowledges the outbox row.
 
 Gateway `/api/sync/push` validates each operation independently and returns
 HTTP 200 mixed results. Request bodies are bounded; rate limits are recorded on
 admission, including when the adapter later fails.
+
+Browser writes to `/api/sync/push`, `/api/sync/update-cursor`, and sync GC routes
+send JSON with `x-or3-cloud-intent: mutation`. The server checks the exact
+browser origin against its effective origin or `OR3_ALLOWED_ORIGINS` before
+reading the body. Originless API requests require bearer authorization and no
+cookie in addition to the intent header and JSON body.
 
 ---
 

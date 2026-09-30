@@ -54,6 +54,62 @@ textarea::-webkit-scrollbar-thumb:hover {
     width: 100%;
 }
 
+/* Drafts and attachments scroll independently on short screens and narrow panes. */
+.chat-input-editor-container {
+    max-height: min(16rem, 30cqh);
+    min-width: 0;
+    overscroll-behavior: contain;
+}
+
+.chat-input-attachments {
+    grid-template-columns: repeat(auto-fill, minmax(min(5rem, 100%), 1fr));
+    max-height: min(12rem, 24cqh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.chat-input-main:has(.chat-input-attachments) .chat-input-editor-container {
+    max-height: min(16rem, 20cqh);
+}
+
+@container chat-pane (height <= 500px) {
+    .chat-input-main:has(.chat-input-attachments) .chat-input-editor-container {
+        max-height: 12cqh;
+    }
+
+    .chat-input-attachments {
+        max-height: 16cqh;
+    }
+}
+
+.chat-input-attachment-remove-btn:focus-visible,
+.chat-input-attachment-image-container:focus-within .chat-input-attachment-image-name {
+    opacity: 1;
+}
+
+@media (width < 768px), (pointer: coarse) {
+    .chat-input-attachment-btn :deep(button),
+    .chat-input-settings-btn :deep(button),
+    .chat-input-send-btn,
+    .chat-input-stop-btn {
+        min-width: 44px !important;
+        min-height: 44px !important;
+        width: 44px !important;
+        height: 44px !important;
+        padding: 0 !important;
+    }
+
+    .chat-input-attachment-remove-btn {
+        opacity: 1;
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    .chat-input-attachment-image-name {
+        opacity: 1;
+    }
+}
+
 /* Placeholder (needs :deep due to scoped styles) */
 .prosemirror-host :deep(p.is-editor-empty:first-child) {
     position: relative;
@@ -104,4 +160,53 @@ textarea::-webkit-scrollbar-thumb:hover {
     content: '⚡';
     margin-right: 0.25rem;
     font-size: 0.875em;
+}
+
+/* Keep a text line and three touch actions usable in Safari's smallest
+   landscape keyboard viewport, rather than spending it on optional chrome. */
+@container app-viewport (height < 140px) {
+    .chat-input-main.chat-composer-shell .chat-input-inner-container {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        margin: 2px !important;
+        padding: 0 !important;
+        gap: 4px !important;
+    }
+
+    .chat-input-main .chat-input-inner-container .chat-input-editor-container {
+        min-height: 0 !important;
+        max-height: 44px !important;
+        padding: 0 4px !important;
+    }
+
+    .chat-input-main.chat-composer-shell .chat-input-bottom-controls {
+        position: static !important;
+        inset: auto !important;
+        width: auto !important;
+        height: 44px !important;
+        flex-wrap: nowrap !important;
+        gap: 4px !important;
+    }
+
+    .chat-input-main .chat-input-bottom-controls .chat-input-bottom-controls-left,
+    .chat-input-main .chat-input-bottom-controls .chat-input-bottom-controls-right {
+        position: static !important;
+        inset: auto !important;
+        flex: none !important;
+    }
+
+    .chat-input-main .chat-input-bottom-controls .chat-input-model-select,
+    .chat-input-main .chat-input-bottom-controls .chat-input-composer-actions,
+    .chat-input-main .chat-input-bottom-controls-left > span,
+    .chat-input-main .chat-input-attachments {
+        display: none !important;
+    }
+
+    .chat-input-main .chat-input-bottom-controls button {
+        width: 44px !important;
+        height: 44px !important;
+        min-width: 44px !important;
+        min-height: 44px !important;
+    }
 }

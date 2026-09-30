@@ -5,6 +5,7 @@
  * Updates the "last seen" version for a specific device.
  * Used for calculating change log retention (don't GC data a device hasn't seen yet).
  */
+import { requireCloudMutation } from '../../utils/security/cloud-mutation';
 import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
 import { z } from 'zod';
 import { SyncScopeSchema } from '~~/shared/sync/schemas';
@@ -40,6 +41,8 @@ export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event) || !isSyncEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });
     }
+
+    requireCloudMutation(event);
 
     const body: unknown = await readBody(event);
     const parsed = UpdateCursorSchema.safeParse(body);

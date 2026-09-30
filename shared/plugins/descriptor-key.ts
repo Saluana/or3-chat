@@ -31,7 +31,7 @@ function canonicalize(value: unknown, ancestors: Set<object>): string {
             return `[${value.map((entry) => canonicalize(entry, ancestors)).join(',')}]`;
         }
 
-        const prototype = Object.getPrototypeOf(value);
+        const prototype = Reflect.getPrototypeOf(value);
         if (prototype !== Object.prototype && prototype !== null) {
             throw new TypeError('Canonical JSON only allows plain objects');
         }
@@ -97,6 +97,18 @@ export function descriptorIdentityPayload(identity: PluginDescriptorIdentity): C
         workspaceId: identity.workspaceId,
         policyRevision: identity.policyRevision,
         grantsRevision: identity.grantsRevision,
+        ...(identity.manifestVersion === 2
+            ? {
+                  name: identity.name,
+                  ...(identity.description === undefined
+                      ? {}
+                      : { description: identity.description }),
+                  ...(identity.authoritySha256 === undefined
+                      ? {}
+                      : { authoritySha256: identity.authoritySha256 }),
+                  effectiveGrants: [...identity.effectiveGrants].sort(),
+              }
+            : {}),
         resolvedDependencyKeys: [...identity.resolvedDependencyKeys],
         artifact: artifactPayload(identity.artifact),
     };

@@ -20,7 +20,7 @@ export function useChatInputModelSelection(
 ): void {
     const persistedModel = useLocalStorage<string>(
         LAST_MODEL_KEY,
-        'openai/gpt-oss-120b'
+        '~openai/gpt-luna-latest'
     );
     const suppressPersist = ref(false);
 

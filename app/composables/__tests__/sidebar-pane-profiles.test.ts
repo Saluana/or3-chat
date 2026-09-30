@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { isReactive } from 'vue';
 import { usePaneApps } from '../core/usePaneApps';
@@ -49,7 +47,7 @@ describe('V1 sidebar page profile', () => {
         expect(isReactive(getSidebarPage('z-page')?.component)).toBe(false);
     });
 
-    it('wraps async components, retries twice, uses the frozen timeout, and then fails', async () => {
+    it('wraps async components, retries twice, and then fails', async () => {
         const { registerSidebarPage, getSidebarPage } = useSidebarPages();
         const eventual = { name: 'Eventual' };
         const succeedsOnThird = vi.fn()
@@ -68,10 +66,6 @@ describe('V1 sidebar page profile', () => {
         await expect(failed.__asyncLoader?.()).rejects.toThrow('still broken');
         expect(alwaysFails).toHaveBeenCalledTimes(3);
 
-        const source = readFileSync(resolve(process.cwd(), 'app/composables/sidebar/useSidebarPages.ts'), 'utf8');
-        expect(source).toContain('timeout: 15000');
-        expect(source).toContain('suspensible: false');
-        expect(source).toContain('if (attempts <= 2) retry()');
     });
 
     it('filters denied pages and stale disposers cannot remove replacements', () => {

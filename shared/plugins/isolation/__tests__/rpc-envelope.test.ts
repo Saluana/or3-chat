@@ -103,11 +103,87 @@ describe('rpc-envelope (8.1)', () => {
             method: 'storage.set',
             params: { key: 'a', value: 'y'.repeat(1000) },
         });
-        const serialized = serializeRpcEnvelope(envelope);
+        expect(parseRpcEnvelope(envelope, { maxBytes: 100 })).toMatchObject({
+            ok: false,
+            code: 'oversized',
+        });
+    });
+
+    it('measures structured-clone objects, not just serialized strings (finding 3)', () => {
+        // The form postMessage actually delivers: an object with a large params
+        // value. It must be refused without a caller-supplied serialized size.
+        const envelope = createRpcRequest({
+            id: 'req-big',
+            method: 'storage.set',
+            params: { key: 'a', value: 'y'.repeat(4096) },
+        });
+        expect(parseRpcEnvelope(envelope, { maxBytes: 1024 })).toMatchObject({
+            ok: false,
+            code: 'oversized',
+        });
+        expect(parseRpcEnvelope(envelope, { maxBytes: 64 * 1024 }).ok).toBe(true);
+
+        // The measurement is conservative for non-ASCII and escapes.
+        const wide = createRpcRequest({
+            id: 'req-wide',
+            method: 'storage.set',
+            params: { value: '😀'.repeat(64) },
+        });
+        expect(parseRpcEnvelope(wide, { maxBytes: 64 }).ok).toBe(false);
+    });
+
+    it('rejects unsupported values, circular references and excessive nesting', () => {
         expect(
-            parseRpcEnvelope(envelope, {
-                serialized,
-                maxBytes: 100,
+            parseRpcEnvelope({
+                v: 1,
+                kind: 'request',
+                id: 'req-fn',
+                method: 'storage.get',
+                params: { fn: () => 1 },
+            })
+        ).toMatchObject({ ok: false, code: 'invalid-envelope' });
+
+        expect(
+            parseRpcEnvelope({
+                v: 1,
+                kind: 'request',
+                id: 'req-bigint',
+                method: 'storage.get',
+                params: { big: 10n },
+            })
+        ).toMatchObject({ ok: false, code: 'invalid-envelope' });
+
+        expect(
+            parseRpcEnvelope({
+                v: 1,
+                kind: 'request',
+                id: 'req-nan',
+                method: 'storage.get',
+                params: { n: Number.NaN },
+            })
+        ).toMatchObject({ ok: false, code: 'invalid-envelope' });
+
+        const circular: Record<string, unknown> = { value: 1 };
+        circular.self = circular;
+        expect(
+            parseRpcEnvelope({
+                v: 1,
+                kind: 'request',
+                id: 'req-circular',
+                method: 'storage.get',
+                params: circular,
+            })
+        ).toMatchObject({ ok: false, code: 'invalid-envelope' });
+
+        let deep: unknown = 1;
+        for (let index = 0; index < 64; index += 1) deep = { nested: deep };
+        expect(
+            parseRpcEnvelope({
+                v: 1,
+                kind: 'request',
+                id: 'req-deep',
+                method: 'storage.get',
+                params: { deep },
             })
         ).toMatchObject({ ok: false, code: 'oversized' });
     });

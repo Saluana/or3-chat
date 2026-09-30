@@ -156,7 +156,8 @@ describe('derived index maintenance', () => {
         const db = new Or3DB(name);
         databases.push(db);
         await db.open();
-        expect(db.verno).toBe(17);
+        expect(db.verno).toBe(18);
+        expect(await db.snapshot_staging.count()).toBe(0);
 
         const storedActive = await db.posts.get('doc-active');
         expect(storedActive?.document_reference_key).toEqual([
@@ -623,7 +624,7 @@ describe('derived index maintenance', () => {
         const db = new Or3DB(name);
         databases.push(db);
         await db.open();
-        expect(db.verno).toBe(17);
+        expect(db.verno).toBe(18);
 
         // IDs, revisions, attempts, statuses, and payloads are preserved.
         expect(await db.pending_ops.get('legacy-missing-time')).toMatchObject({

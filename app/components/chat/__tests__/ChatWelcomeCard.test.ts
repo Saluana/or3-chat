@@ -145,8 +145,7 @@ describe('ChatWelcomeCard a11y', () => {
 
         const root = wrapper.get('[data-welcome-card]');
         const buttons = wrapper.findAll('button');
-        const input = wrapper.get('input');
-        const lastFocusable = [...buttons, input].at(-1)!;
+        const lastFocusable = wrapper.get<HTMLAnchorElement>('a[href]');
         lastFocusable.element.focus();
 
         await root.trigger('keydown', { key: 'Tab' });

@@ -1,0 +1,49 @@
+{
+  "manifestVersion": 2,
+  "kind": "plugin",
+  "id": "or3.selected-document-utility",
+  "name": "Selected Document Utility",
+  "version": "1.0.0",
+  "description": "Free, offline selected-document summarizer that turns the current selection into a compact digest.",
+  "engines": {
+    "or3": "^0.3.0",
+    "pluginApi": "^2.0.0"
+  },
+  "runtime": {
+    "client": {
+      "entry": "client.mjs",
+      "format": "esm",
+      "isolation": "worker"
+    }
+  },
+  "requestedGrants": [
+    "documents.read",
+    "documents.write",
+    "settings.read",
+    "settings.write",
+    "ui.command-palette.register"
+  ],
+  "features": {
+    "required": [
+      "or3-portable-client-v1"
+    ],
+    "optional": []
+  },
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "trust": "isolated-client",
+  "settings": {
+    "version": 1,
+    "schema": "settings.schema.json"
+  },
+  "stateCompatibility": {
+    "version": 1,
+    "reads": {
+      "minimum": 1,
+      "maximum": 1
+    },
+    "rollback": "safe"
+  }
+}

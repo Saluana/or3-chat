@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
 import { createInviteToken, hashInviteToken } from '../invite-token';
 import { registerAuthProvider } from '../registry';
+import type { ProviderSession } from '../types';
 import {
     resolveSessionContext,
     _resetSharedSessionCache,
@@ -13,7 +14,7 @@ const adminCheckerMock = vi.hoisted(() => ({
     checkDeploymentAdmin: vi.fn().mockResolvedValue(false),
 }));
 
-const providerGetSessionMock = vi.hoisted(() => vi.fn(async () => ({
+const providerGetSessionMock = vi.hoisted(() => vi.fn(async (): Promise<ProviderSession | null> => ({
     provider: 'test-provider',
     user: { id: 'user-1', email: 'user@test.com', displayName: 'User' },
     expiresAt: new Date(Date.now() + 60_000),
@@ -182,6 +183,23 @@ describe('resolveSessionContext provisioning and caching', () => {
         authWorkspaceStoreMock.getOrCreateDefaultWorkspace.mockRejectedValueOnce(new Error('boom'));
 
         await expect(resolveSessionContext(makeEvent())).rejects.toMatchObject({ statusCode: 503 });
+    });
+
+    it('reports a provider outage as retryable without caching a signed-out result', async () => {
+        providerGetSessionMock.mockRejectedValueOnce(new Error('identity service unavailable'));
+        await expect(resolveSessionContext(makeEvent())).rejects.toMatchObject({
+            statusCode: 503,
+        });
+        const recovered = await resolveSessionContext(makeEvent());
+        expect(recovered.authenticated).toBe(true);
+        expect(providerGetSessionMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps an absent provider session unauthenticated', async () => {
+        providerGetSessionMock.mockResolvedValueOnce(null);
+        await expect(resolveSessionContext(makeEvent())).resolves.toEqual({
+            authenticated: false,
+        });
     });
 
     it('throws original error when sessionProvisioningFailure=throw', async () => {

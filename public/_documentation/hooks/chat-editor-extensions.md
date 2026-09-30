@@ -10,6 +10,10 @@ Enable plugins to add TipTap extensions to the chat composer without touching th
 
 The component: `app/components/chat/ChatInputDropper.vue`
 
+The base chat composer disables TipTap's Link mark so pasted URLs remain plain,
+editable text. Plugins that add link behavior should keep clicks inside the
+editor from navigating away.
+
 ```ts
 // Inside ChatInputDropper.vue (simplified)
 await hooks.doAction('editor:request-extensions');

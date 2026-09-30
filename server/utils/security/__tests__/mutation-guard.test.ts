@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { H3Event } from 'h3';
 import { testRuntimeConfig } from '../../../../tests/setup';
 import { requireSameOriginMutation } from '../mutation-guard';
+import { requireCloudMutation } from '../cloud-mutation';
 
 const connectOptions = {
     intentHeader: 'x-or3-connect-intent',
@@ -118,5 +119,49 @@ describe('same-origin mutation guard', () => {
         expect(() => requireSameOriginMutation(event, connectOptions)).toThrow(
             expect.objectContaining({ statusCode })
         );
+    });
+});
+
+describe('cloud mutation guard', () => {
+    beforeEach(() => {
+        testRuntimeConfig.value = {
+            ...testRuntimeConfig.value,
+            security: {
+                ...testRuntimeConfig.value.security,
+                allowedOrigins: ['https://client.example.com'],
+                proxy: {
+                    trustProxy: true,
+                    forwardedForHeader: 'x-forwarded-for',
+                    forwardedHostHeader: 'x-forwarded-host',
+                },
+            },
+        };
+    });
+
+    function cloudEvent(headers: Record<string, string | undefined>): H3Event {
+        return makeEvent({
+            host: 'internal.local',
+            'x-forwarded-host': 'chat.example.com',
+            'x-forwarded-proto': 'https',
+            'content-type': 'application/json',
+            'x-or3-cloud-intent': 'mutation',
+            ...headers,
+        });
+    }
+
+    it('allows exact origin and an explicitly configured credentialed client origin', () => {
+        expect(() => requireCloudMutation(cloudEvent({ origin: 'https://chat.example.com' }))).not.toThrow();
+        expect(() => requireCloudMutation(cloudEvent({ origin: 'https://client.example.com' }))).not.toThrow();
+    });
+
+    it('rejects sibling origins, form bodies, and missing intent before mutation', () => {
+        expect(() => requireCloudMutation(cloudEvent({ origin: 'https://evil.example.com' }))).toThrow(expect.objectContaining({ statusCode: 403 }));
+        expect(() => requireCloudMutation(cloudEvent({ origin: 'https://chat.example.com', 'content-type': 'text/plain' }))).toThrow(expect.objectContaining({ statusCode: 415 }));
+        expect(() => requireCloudMutation(cloudEvent({ origin: 'https://chat.example.com', 'x-or3-cloud-intent': undefined }))).toThrow(expect.objectContaining({ statusCode: 403 }));
+    });
+
+    it('accepts only originless bearer requests without cookies', () => {
+        expect(() => requireCloudMutation(cloudEvent({ authorization: 'Bearer api-token' }))).not.toThrow();
+        expect(() => requireCloudMutation(cloudEvent({ authorization: 'Bearer api-token', cookie: 'session=victim' }))).toThrow(expect.objectContaining({ statusCode: 403 }));
     });
 });

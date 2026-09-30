@@ -42,7 +42,7 @@ Lightweight hook engine that powers OR3’s action/filter system with priority s
 | `onceAction`            | `(name, fn, priority?) => disposer`    | Auto-removes listener after first fire.                |
 | `hasAction / hasFilter` | `(name?, fn?)`                         | Returns `false`/priority/boolean for existence checks. |
 | `removeAllCallbacks`    | `(priority?)`                          | Drops all callbacks, optionally by priority.           |
-| `currentPriority`       | `() => number \| false`                | Reports the priority currently executing.              |
+| `currentPriority`       | `() => number \| false`                | Reports priority inside a callback. In browsers without async context isolation, returns `false` after an `await`; concurrent hooks remain independent. |
 
 Diagnostics live under `_diagnostics` with per-hook timing arrays and error counts. Timing arrays retain the latest 128 samples, and both timing and error maps accept at most 2,048 distinct hook names. Runtime V2 snapshots preserve lifetime aggregates while bounding retained samples.
 
@@ -84,7 +84,7 @@ Diagnostics live under `_diagnostics` with per-hook timing arrays and error coun
 
 ## Plugin Runtime V2
 
-Hook Runtime V2 is selected only when `OR3_HOOK_ENGINE_V2_ENABLED` is set at process start. The public `useHooks()` / `HookEngine` surface above remains the V1-compatible API. V2 packages register through `@or3/plugin-sdk` `context.hooks` instead of app-private imports. See [Plugin Runtime V2](/plugins/runtime-v2-overview) and [Plugin SDK](/plugins/plugin-sdk).
+Hook Runtime V2 is selected only when `OR3_HOOK_ENGINE_V2_ENABLED` is set at process start. The public `useHooks()` / `HookEngine` surface above remains the V1-compatible API. V2 packages register through `@or3/plugin-sdk` `context.hooks` instead of app-private imports. See [Plugins overview](/documentation/plugins/overview) and [Plugin SDK](/documentation/plugins/plugin-sdk).
 
 ## Sync hook keys
 

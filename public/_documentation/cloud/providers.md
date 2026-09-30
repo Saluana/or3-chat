@@ -14,9 +14,9 @@ specific installation and operational details.
 
 OR3 core is local-first and can run with zero cloud providers installed.
 
-- No providers installed: local-only mode (no SSR auth, sync, or cloud storage).
+- `SSR_AUTH_ENABLED=false`: intentional local-only mode; no cloud provider packages are required.
 - Providers installed: cloud surfaces are enabled by `config.or3cloud.ts` provider IDs.
-- Module loading is config-driven: Nuxt maps provider IDs to `or3-provider-<id>/nuxt` and only loads installed packages.
+- Module loading is config-driven: provider IDs map to `or3-provider-<id>/nuxt`. Nuxt resolves the actual import entry, including scoped package names and exports. Missing required server providers stop configuration instead of disabling authentication.
 
 Example mapping:
 
@@ -47,16 +47,26 @@ bun add or3-provider-fs
 bun add or3-provider-s3
 ```
 
-Or local sibling packages during development:
+### Local provider development
 
-```bash
-bun add or3-provider-clerk@link:../or3-provider-clerk
-bun add or3-provider-convex@link:../or3-provider-convex
-bun add or3-provider-basic-auth@link:../or3-provider-basic-auth
-bun add or3-provider-sqlite@link:../or3-provider-sqlite
-bun add or3-provider-fs@link:../or3-provider-fs
-bun add or3-provider-s3@link:../or3-provider-s3
-```
+`bun run dev` and `bun run dev:ssr` automatically rebuild available sibling
+`or3-provider-*` repositories and use their built Nuxt modules for that dev
+process. Each provider prints its version and resolved local path. Restart the
+dev command after editing provider source to rebuild it.
+
+A missing sibling or failed build prints a warning and uses the installed
+package instead. A failed local build is never selected merely because an old
+`dist/` exists. Keep provider dependencies installed in each sibling repository
+(`bun install`) so its build can run.
+
+Set `OR3_LOCAL_PROVIDERS=false` to test installed packages only. CI defaults to
+installed packages; `OR3_LOCAL_PROVIDERS=true` explicitly enables local builds
+there. Direct `nuxt dev` invocations do not perform this preparation: use the
+wrapper commands above. Production builds always resolve installed packages.
+
+The wrapper passes `OR3_DEV_PROVIDER_MODULES` internally to its Nuxt child; do
+not persist that generated map in `.env`. No dependency pins, lockfiles or
+installed packages are rewritten by local provider selection.
 
 ## Configure Providers
 
@@ -66,16 +76,20 @@ bun add or3-provider-s3@link:../or3-provider-s3
 SSR_AUTH_ENABLED=false
 ```
 
-### Clerk auth only
+### Clerk auth with sync transfer disabled
 
 ```bash
 SSR_AUTH_ENABLED=true
 AUTH_PROVIDER=clerk
+OR3_SYNC_PROVIDER=sqlite
 OR3_SYNC_ENABLED=false
 OR3_STORAGE_ENABLED=false
 NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_...
 NUXT_CLERK_SECRET_KEY=sk_...
 ```
+
+SQLite still provides the authentication workspace store in this example;
+disabling sync transfer does not remove that dependency.
 
 ### Clerk + Convex (full cloud path)
 
@@ -136,30 +150,42 @@ The bridge is token-broker based and split across provider packages:
 
 Result: Convex direct-mode clients and server gateway flows get provider tokens without hardcoding Clerk calls in core.
 
-## Optional Manual Module List
+## Optional Provider Module List
 
-`or3.providers.generated.ts` is still supported and can be used to force specific Nuxt modules.
+The wizard writes data-only `or3.providers.generated.json`:
 
-- Default can be empty.
-- Config-driven discovery still auto-adds installed providers based on selected IDs.
+```json
+{
+  "schemaVersion": 1,
+  "modules": ["or3-provider-basic-auth/nuxt", "or3-provider-sqlite/nuxt"]
+}
+```
+
+The file can be absent or have an empty list: selected provider IDs still add their required modules. Scoped modules such as `@vendor/provider/nuxt` are supported. Put custom cloud modules in this list so static/offline mode can skip them without importing them. Ordinary extensions stay in the extension module list.
+
+### Migrating the generated TypeScript file
+
+Regenerate the list with the cloud source wizard, or copy the literal module IDs from `or3.providers.generated.ts` into the JSON shape above, preserving custom entries. Review the JSON before removing the old file. TypeScript metadata is never executed. An active cloud configuration with only the old file stops with migration instructions; if both exist, JSON wins and the old file is ignored with a warning. Invalid JSON is an error, not an empty provider list.
 
 ## Static Generation Boundary
 
 `bun run generate:static` disables SSR auth and cloud provider module loading.
-During that build, Nuxt does not read `or3.providers.generated.ts`, resolve installed
-`or3-provider-*` packages, or add those provider modules to the build. This keeps
+During that build, Nuxt does not read either generated-provider format, resolve
+cloud providers, or add those modules to the build. Intentional offline mode also
+skips provider discovery. Static generation with server authentication enabled
+is rejected; use `bun run generate:static` for static output. This keeps
 local-only static output independent from optional auth, database, and storage
 runtime dependencies. Ordinary non-provider extension modules remain available.
 
 ## Troubleshooting
 
-### Warning: provider package not installed
+### Error: required provider entry cannot resolve
 
-If config selects a provider but the package is missing, Nuxt logs a warning like:
+A requested server capability requires its actual module entry. A scope directory, sibling package, or package with a missing/unexported Nuxt entry does not count. Install or build the named provider and rebuild, or explicitly choose local-only operation with `bun run dev:offline`. Required module failures stop development and production configuration. Optional extension failures remain warnings.
 
-`Configured provider "clerk" expects package "or3-provider-clerk", but it is not installed.`
+Authentication also needs the selected sync backend's `AuthWorkspaceStore`, even when `OR3_CLOUD_SYNC_ENABLED=false` disables sync transfer. Install/configure that backend (including its connection URL when applicable). Strict server startup checks actual provider registrations independently of whether their module files resolved.
 
-Install the package or change provider IDs in cloud config/env.
+Configuration is normalized once for modules, feature decisions, and private/public runtime values. Public output includes only selected browser-safe fields; credentials and resolved local module paths stay private.
 
 ### Auth enabled but no auth provider package
 

@@ -26,6 +26,7 @@ describe('useSidebarPages', () => {
             id: 'todo-page',
             label: 'Todo Page',
             icon: 'pixelarticons:list',
+            image: '/icons/todo.webp',
             component: { name: 'TodoPage', template: '<div>todo page</div>' },
         };
 
@@ -36,6 +37,7 @@ describe('useSidebarPages', () => {
         expect(page?.id).toBe('todo-page');
         expect(page?.label).toBe('Todo Page');
         expect(page?.icon).toBe('pixelarticons:list');
+        expect(page?.image).toBe('/icons/todo.webp');
     });
 
     it('overwrites existing page with same id', () => {

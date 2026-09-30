@@ -17,7 +17,7 @@
                     "name": "development-setup.md",
                     "path": "/start/development-setup",
                     "category": "Tutorial",
-                    "summary": "One command gets a source checkout running locally. No API key or .env file is required for the local-first app."
+                    "summary": "One command gets a source checkout running locally. No API key or .env file is required for the local-first app. The Scroll checkout can be aliased in development; Workflows and External Agents are built and installed as separate V2 packages."
                 },
                 {
                     "name": "mini-app-tutorial.md",
@@ -35,7 +35,7 @@
                     "name": "plugin-quickstart.md",
                     "path": "/start/plugin-quickstart",
                     "category": "Tutorial",
-                    "summary": "This guide shows you how to extend the dashboard, chat messages, and sidebar through either source-level Nuxt plugins or installable V1 workspace packages. Both use the same reactive registries, but their module exports are different. Includes active-pane editor layouts, transient edit previews, terrain presentation controls, bundled seam correction and anchored height previews, scoped tool shortcuts, Nuxt UI tooltips, pitch-corrected modifier-drag panning and host theme integration."
+                    "summary": "Start a portable plugin with the guided greeting tutorial, then add features and publish an exact tested package."
                 },
                 {
                     "name": "snake-game-tutorial.md",
@@ -143,7 +143,7 @@
                     "name": "useChat.md",
                     "path": "/composables/useChat",
                     "category": "Chat",
-                    "summary": "The main composable for managing AI chat conversations in OR3. Handles sending messages, streaming responses, retrying failed messages, and managing conversation state. Think of useChat as your chat conversation manager — it keeps track of all messages, tal..."
+                    "summary": "Manages AI chat messages, streaming, retries, and mixed-runtime tools. Chat context follows the selected model's advertised window, reserving response space and refreshing missing model metadata. Background turns execute server tools in the worker and delegate browser tools through a durable claim/result bridge. Chat settings selects a saved system prompt, the current default, or Disabled per chat; the choice applies to future messages."
                 },
                 {
                     "name": "useChatAttachmentDisplay.md",
@@ -215,7 +215,7 @@
                     "name": "useDashboardPlugins.md",
                     "path": "/composables/useDashboardPlugins",
                     "category": "Dashboard",
-                    "summary": "Dashboard extension hub that lets first- and third-party features register launcher tiles, lazy-loaded pages, and capability flags for the retro dashboard. It centralises plugin discovery, page resolution, and in-app navigation state."
+                    "summary": "Dashboard extension hub for launcher tiles, optional app images with Iconify fallbacks, lazy-loaded pages, capability flags, discovery, and navigation state."
                 },
                 {
                     "name": "useDefaultPrompt.md",
@@ -233,7 +233,7 @@
                     "name": "useDocumentAiAgent.md",
                     "path": "/composables/useDocumentAiAgent",
                     "category": "Documents",
-                    "summary": "The Document AI agent turns a prompt into a bounded, reviewable TipTap edit proposal. Its composer supports saved and plugin-contributed / prompt commands, file attachments, and @ references to another document or chat."
+                    "summary": "The Document AI agent turns a prompt into a bounded, reviewable TipTap edit proposal. Its live editor session also exposes the same native tools to chat."
                 },
                 {
                     "name": "useDocumentAiSettings.md",
@@ -263,7 +263,7 @@
                     "name": "useDocumentEditorSessions.md",
                     "path": "/composables/useDocumentEditorSessions",
                     "category": "Core",
-                    "summary": "Registry of active document editor sessions. Editors register themselves per document and workspace, and other code can find them, wait for them, or ask them to capture content."
+                    "summary": "Registry of active document editor sessions. Callers can find an exact tab session, capture live content, or use its chat context and document tool bridge."
                 },
                 {
                     "name": "useDocumentEditorToolbar.md",
@@ -527,7 +527,7 @@
                     "name": "useSidebarPages.md",
                     "path": "/composables/useSidebarPages",
                     "category": "Sidebar",
-                    "summary": "Registry and discovery system for sidebar pages. Manages page registration, provides listing functionality, and handles HMR cleanup for dynamic page management. Think of useSidebarPages as the sidebar's page directory — it tracks all available pages, handle..."
+                    "summary": "Registry and discovery system for sidebar pages, including optional app images with Iconify fallbacks, validation, ordering, and HMR cleanup."
                 },
                 {
                     "name": "useSidebarProjectActionButtonProps.md",
@@ -833,7 +833,7 @@
                     "name": "messages.md",
                     "path": "/database/messages",
                     "category": "Messages",
-                    "summary": "Thread message CRUD utilities with hook integration, sparse indexing, and attachment support."
+                    "summary": "Thread message CRUD utilities with hook integration, sparse indexing, attachment support, and atomic guarded patches for generation ownership."
                 },
                 {
                     "name": "posts.md",
@@ -920,6 +920,18 @@
                     "summary": "UI-level permission checks for actions exposed to plugins. Guards verify that the active plugin holds the required capability before an operation runs, and show a permission-denied toast when it does not."
                 },
                 {
+                    "name": "document-chat-tools.md",
+                    "path": "/utils/document-chat-tools",
+                    "category": "Tools",
+                    "summary": "Chat can create and duplicate documents, search them, read bounded open-tab context, and use the document agent's native tools to stage reviewable edits in a visible editor."
+                },
+                {
+                    "name": "thread-chat-tools.md",
+                    "path": "/utils/thread-chat-tools",
+                    "category": "Tools",
+                    "summary": "Chat can search other conversation threads, read their recent messages, and post a message into another thread, all scoped to the active workspace."
+                },
+                {
                     "name": "errors.md",
                     "path": "/utils/errors",
                     "category": "Error Handling",
@@ -959,7 +971,7 @@
                     "name": "server-tool-registry.md",
                     "path": "/utils/server-tool-registry",
                     "category": "Tools",
-                    "summary": "server/utils/chat/tool-registry.ts provides the server-side tool registry used by background chat and background workflow execution. It is intentionally separate from the client Vue registry."
+                    "summary": "Server tool registration and execution for background chat and workflows, with request-scoped execution context, admitted definitions, validation, cancellation and per-tool timeouts."
                 },
                 {
                     "name": "sidebar-layout-api.md",
@@ -977,7 +989,7 @@
                     "name": "tool-runtime.md",
                     "path": "/utils/tool-runtime",
                     "category": "Tools",
-                    "summary": "OR3 tools use a shared runtime flag to control where a tool may execute: ts type ToolRuntime = 'hybrid' 'client' 'server' Defined in app/utils/chat/types.ts."
+                    "summary": "Client, server and hybrid tool placement. Native background chat orchestrates server handlers and delegates browser-only calls through the client-tool bridge; runtime placement does not grant data access."
                 },
                 {
                     "name": "tools-public.md",
@@ -1031,7 +1043,7 @@
                     "name": "plugins.md",
                     "path": "/types/plugins",
                     "category": "Plugins",
-                    "summary": "Reference for the TypeScript types that plugins use to talk to the OR3 host. Covers the client-side pane plugin API, the access gate policy used by every plugin contribution, and the ambient declaration files in types/ that wire plugin-facing modules into t..."
+                    "summary": "Reference for plugin-facing TypeScript types, including the pane plugin API, access gate policy, theme declarations, and the bundled plugin catalog declaration in shared/plugins/."
                 }
             ]
         },
@@ -1044,6 +1056,12 @@
                     "path": "/themes/api-reference",
                     "category": "Reference",
                     "summary": "Reference for the current OR3 theme system API, types, and tooling."
+                },
+                {
+                    "name": "app-modal.md",
+                    "path": "/themes/app-modal",
+                    "category": "Reference",
+                    "summary": "Shared dialog shell with three sizes, consistent headers and footers, theme-owned surface tokens, and compact Dashboard launcher cards."
                 },
                 {
                     "name": "architecture.md",
@@ -1109,7 +1127,7 @@
                     "name": "editor.md",
                     "path": "/workflows/editor",
                     "category": "Guide",
-                    "summary": "Browse, build, validate, and run workflows with explicit agent dataflow and tool selection, cache-efficient prompt routing, generated-image persistence and foreground routing, quick connected-node insertion, and opt-in local package hot reload behavior."
+                    "summary": "Browse, build, validate, and run workflows with explicit agent dataflow, tool selection, generated-image persistence, stop, interrupted-run recovery, and checkpoint resume. The editor is supplied by the separately installed Workflows package."
                 }
             ]
         },
@@ -1133,7 +1151,7 @@
                     "name": "background-execution.md",
                     "path": "/cloud/background-execution",
                     "category": "Architecture",
-                    "summary": "OR3 supports SSR background jobs for chat streaming, tool execution, and workflows so work can continue when the user detaches or navigates away. This document covers the implementation currently wired in:"
+                    "summary": "OR3 supports SSR background jobs for chat streaming, mixed server/browser tool execution, and workflows so work can continue when the user detaches or navigates away."
                 },
                 {
                     "name": "capability-matrix.md",
@@ -1229,7 +1247,7 @@
                     "name": "provider-convex.md",
                     "path": "/cloud/provider-convex",
                     "category": "Guide",
-                    "summary": "Dedicated install and wiring guide for the Convex sync/storage/backend provider package, including the typed generic-file compatibility boundary."
+                    "summary": "Dedicated install and wiring guide for the Convex sync/storage/backend provider package, including the typed generic-file compatibility boundary and private host-settings storage with legacy migration."
                 },
                 {
                     "name": "provider-fs.md",
@@ -1253,13 +1271,13 @@
                     "name": "providers.md",
                     "path": "/cloud/providers",
                     "category": "Guide",
-                    "summary": "This guide covers how OR3 discovers provider packages, how to install them, and how the Clerk to Convex token bridge works. For normal local or VPS operation, use the managed @or3/cloud operator. For editable source or custom providers, use the"
+                    "summary": "Provider entry resolution, data-only JSON metadata migration, required server capabilities, and intentional static/offline operation."
                 },
                 {
                     "name": "release-checklist.md",
                     "path": "/cloud/release-checklist",
                     "category": "Operations",
-                    "summary": "This is the authoritative promotion gate for OR3 Cloud. It separates reproducible code checks from deployment-specific checks that must be performed against the exact production candidate."
+                    "summary": "The authoritative OR3 Cloud promotion gate separates reproducible code checks from exact-artifact staging and scale checks. Marketplace launch also requires published provider fixes, signed installation and recovery, paid Library and administrator-request journeys, and retained acceptance evidence."
                 },
                 {
                     "name": "release-notes-production-readiness.md",
@@ -1301,7 +1319,7 @@
                     "name": "activity-external-agents.md",
                     "path": "/architecture/activity-external-agents",
                     "category": "Architecture",
-                    "summary": "# Activity and External Agents"
+                    "summary": "Activity projects canonical run state. The separately installed External Agents package owns browser sessions and UI, with host-mediated HTTP and SSE for approved hosts; OR3 Connect remains a host service."
                 },
                 {
                     "name": "workspace-profiles.md",
@@ -1316,46 +1334,112 @@
             "path": "/plugins",
             "files": [
                 {
-                    "name": "admin-plugins.md",
-                    "path": "/plugins/admin-plugins",
-                    "category": "Reference",
-                    "summary": "Admin plugins add trusted client-side pages and overview widgets to the global admin dashboard. They are a separate V1 extension kind from workspace plugins and only load when SSR authentication is enabled."
+                    "name": "overview.md",
+                    "path": "/plugins/overview",
+                    "title": "Plugins overview",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 0,
+                    "summary": "Choose a plugin development path, understand current host support, and find the guide or example you need."
                 },
                 {
-                    "name": "command-palette.md",
-                    "path": "/plugins/command-palette",
-                    "category": "Reference",
-                    "summary": "Plugins can contribute local searchable records and commands to OR3's global command palette. The Cmd/Ctrl+K overlay consumes these registrations immediately and removes them with the owning plugin scope."
+                    "name": "install-and-manage.md",
+                    "path": "/plugins/install-and-manage",
+                    "title": "Install and manage plugins",
+                    "category": "Using plugins",
+                    "categoryOrder": 1,
+                    "order": 0,
+                    "summary": "Find, configure, enable, update, restore, and remove plugins, with recovery steps for interrupted installations."
                 },
                 {
-                    "name": "manifest-v2.md",
-                    "path": "/plugins/manifest-v2",
+                    "name": "library.md",
+                    "path": "/plugins/library",
+                    "title": "Your Library",
+                    "category": "Using plugins",
+                    "categoryOrder": 1,
+                    "order": 1,
+                    "summary": "Connect a marketplace account, use acquired releases, request administrator installation, and manage the account link."
+                },
+                {
+                    "name": "first-plugin.md",
+                    "path": "/plugins/first-plugin",
+                    "title": "Build your first plugin",
+                    "category": "Building plugins",
+                    "categoryOrder": 2,
+                    "order": 0,
+                    "summary": "Build a portable greeting app with a form and saved value, then verify reload and disable/re-enable behavior in OR3."
+                },
+                {
+                    "name": "add-features.md",
+                    "path": "/plugins/add-features",
+                    "title": "Add features to your plugin",
+                    "category": "Building plugins",
+                    "categoryOrder": 2,
+                    "order": 1,
+                    "summary": "Recipes for workspace UI, storage, chat tools, document context, approved model calls, and trusted-host commands."
+                },
+                {
+                    "name": "publish.md",
+                    "path": "/plugins/publish",
+                    "title": "Publish your plugin",
+                    "category": "Building plugins",
+                    "categoryOrder": 2,
+                    "order": 2,
+                    "summary": "Freeze and qualify an exact candidate, test its files, prepare a marketplace draft, and follow review and publication."
+                },
+                {
+                    "name": "manifest.md",
+                    "path": "/plugins/manifest",
+                    "title": "Manifest",
                     "category": "Reference",
-                    "summary": "V2 packages ship or3.manifest.json with manifestVersion: 2. The owner-only standard extension install endpoint dispatches a V2 ZIP to the immutable candidate store. After a canary and explicit promotion, an enabled"
+                    "categoryOrder": 3,
+                    "order": 0,
+                    "summary": "Complete package manifest, field contracts, generated policy/setup descriptors, runtime restrictions, icons, and server routes."
                 },
                 {
                     "name": "plugin-sdk.md",
                     "path": "/plugins/plugin-sdk",
+                    "title": "SDK",
                     "category": "Reference",
-                    "summary": "Stable Plugin Runtime V2 authoring surface. Import only this package (or documented subpaths: /manifest, /host, /testing). The package is currently an authoring and compatibility-test surface. OR3's"
+                    "categoryOrder": 3,
+                    "order": 1,
+                    "summary": "Supported methods, required permissions, runtime availability, results, storage, UI actions, contributions, and SDK exports."
                 },
                 {
-                    "name": "runtime-v2-overview.md",
-                    "path": "/plugins/runtime-v2-overview",
-                    "category": "Guide",
-                    "summary": "Plugin Runtime V2 adds digest-addressed packages, a frozen V1 compatibility line, @or3/plugin-sdk authoring, and optional isolation. The generation-safe manager is promoted by default, but it currently manages bundled V1"
+                    "name": "plugin-sdk-cli.md",
+                    "path": "/plugins/plugin-sdk-cli",
+                    "title": "CLI",
+                    "category": "Reference",
+                    "categoryOrder": 3,
+                    "order": 2,
+                    "summary": "SDK installation and command reference for scaffolding, validation, tests, deterministic builds, packing, inspection, and frozen candidates."
                 },
                 {
-                    "name": "trust-and-safe-mode.md",
-                    "path": "/plugins/trust-and-safe-mode",
-                    "category": "Operations",
-                    "summary": "# Trust Model and Safe Mode"
+                    "name": "connections.md",
+                    "path": "/plugins/connections",
+                    "title": "Connections",
+                    "category": "Reference",
+                    "categoryOrder": 3,
+                    "order": 3,
+                    "summary": "Declare supported connection slots, configure and test credentials, and understand ownership, custody, dispatch policy, and refusals."
                 },
                 {
-                    "name": "v1-support-and-migration.md",
-                    "path": "/plugins/v1-support-and-migration",
-                    "category": "Guide",
-                    "summary": "# V1 Support Policy and V2 Migration"
+                    "name": "runtime-and-security.md",
+                    "path": "/plugins/runtime-and-security",
+                    "title": "Runtime and security",
+                    "category": "Advanced",
+                    "categoryOrder": 4,
+                    "order": 0,
+                    "summary": "Operator configuration, package verification, permission review, browser checks, containment, budgets, safe mode, and recovery."
+                },
+                {
+                    "name": "admin-plugins.md",
+                    "path": "/plugins/admin-plugins",
+                    "title": "Admin plugins",
+                    "category": "Advanced",
+                    "categoryOrder": 4,
+                    "order": 1,
+                    "summary": "Separate trusted extension API for administrator pages and overview widgets, with install, rebuild, and lifecycle limitations."
                 }
             ]
         }

@@ -1,0 +1,17 @@
+{
+  "title": "Portable plugin runtime",
+  "style": "bullets",
+  "outline": [
+    "The portable client profile keeps plugin code inside an isolated worker.",
+    "Selected-document utilities only need two host operations.",
+    "This utility is deliberately small."
+  ],
+  "statistics": {
+    "characters": 666,
+    "words": 96,
+    "sentences": 9,
+    "paragraphs": 3,
+    "readingMinutes": 1
+  },
+  "markdown": "# Selection digest: Portable plugin runtime\n\n_3 paragraph(s) - 96 word(s) - ~1 min read_\n\n## Outline\n\n- The portable client profile keeps plugin code inside an isolated worker.\n- Selected-document utilities only need two host operations.\n- This utility is deliberately small.\n\n_Generated locally by Selected Document Utility._\n"
+}

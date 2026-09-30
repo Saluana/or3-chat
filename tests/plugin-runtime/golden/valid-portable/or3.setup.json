@@ -1,0 +1,23 @@
+{
+  "connections": [],
+  "fields": [
+    {
+      "key": "apiKey",
+      "kind": "text",
+      "label": "API key",
+      "order": 0,
+      "required": true
+    }
+  ],
+  "firstAction": {
+    "label": "Fetch forecast",
+    "operationId": "example.api",
+    "usesSampleContext": true
+  },
+  "settingsSchemaPath": "settings.schema.json",
+  "setupVersion": 1,
+  "testAction": {
+    "deadlineMs": 5000,
+    "operationId": "example.api"
+  }
+}

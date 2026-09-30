@@ -10,6 +10,54 @@ afterEach(() => {
 });
 
 describe('Hook Runtime V2 explicit policies', () => {
+    it('keeps browser priority introspection scoped to each explicit-policy callback frame', async () => {
+        vi.stubGlobal('process', undefined);
+        vi.stubGlobal('AsyncLocalStorage', undefined);
+        const engine = createHookEngineV2();
+        vi.unstubAllGlobals();
+
+        engine._runtimeV2.defineHook({
+            kind: 'action', name: 'policy.parallel',
+            policy: { actionMode: 'parallel' },
+        });
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        const observed: Array<number | false> = [];
+        engine.addAction('policy.parallel', async () => {
+            observed.push(engine.currentPriority());
+            await gate;
+            observed.push(engine.currentPriority());
+        }, 3);
+        engine.addAction('policy.parallel', async () => {
+            observed.push(engine.currentPriority());
+            await gate;
+            observed.push(engine.currentPriority());
+        }, 7);
+
+        const running = engine.doAction('policy.parallel');
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(observed).toEqual([3, 7]);
+        expect(engine.currentPriority()).toBe(false);
+        release();
+        await running;
+        expect(observed).toEqual([3, 7, false, false]);
+    });
+
+    it('reports each callback priority for synchronous explicit policies without async context isolation', () => {
+        vi.stubGlobal('process', undefined);
+        vi.stubGlobal('AsyncLocalStorage', undefined);
+        const engine = createHookEngineV2();
+        vi.unstubAllGlobals();
+        engine._runtimeV2.defineHook({ kind: 'action', name: 'policy.sync' });
+        const observed: Array<number | false> = [];
+        engine.addAction('policy.sync', () => observed.push(engine.currentPriority()), 3);
+        engine.addAction('policy.sync', () => observed.push(engine.currentPriority()), 7);
+        engine.doActionSync('policy.sync');
+        expect(observed).toEqual([3, 7]);
+        expect(engine.currentPriority()).toBe(false);
+    });
+
     it('keeps unknown hooks on the legacy serial/continue/no-timeout policy', async () => {
         const engine = createHookEngineV2();
         const calls: string[] = [];

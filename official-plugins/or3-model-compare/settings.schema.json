@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Model Compare Settings",
+  "description": "Defaults for the comparison: which approved models to preselect, the per-answer output ceiling and an optional extra instruction.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "defaultModels": {
+      "type": "string",
+      "title": "Default models to compare",
+      "description": "Comma-separated model ids from the host allowlist; ids this host does not approve are ignored.",
+      "maxLength": 600,
+      "default": ""
+    },
+    "maxOutputTokens": {
+      "type": "integer",
+      "title": "Maximum output tokens per answer",
+      "minimum": 64,
+      "maximum": 1024,
+      "default": 512
+    },
+    "systemPrompt": {
+      "type": "string",
+      "title": "Extra instruction",
+      "description": "Prepended to every prompt so each model receives the same instruction.",
+      "maxLength": 2000,
+      "default": ""
+    }
+  }
+}

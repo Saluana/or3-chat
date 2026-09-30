@@ -11,7 +11,7 @@ test('detects the OR3 Chat checkout and supported surfaces', async () => {
   expect(checks.filter(({ level }) => level === 'error')).toEqual([])
   expect(context).toMatchObject({
     product: 'or3-chat',
-    pluginRuntime: { v1Workspace: true, v2Sdk: true, cli: true },
+    pluginRuntime: { v2Sdk: true, cli: true },
     setup: { init: true, doctor: true, validate: true },
     theme: { create: true, validate: true, buildCss: true },
   })

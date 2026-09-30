@@ -115,4 +115,51 @@ describe('ToolCallIndicator', () => {
         expect(wrapper.text()).not.toContain('Agent activity');
         expect(wrapper.text()).not.toContain('COMPLETE');
     });
+
+    it('does not describe task-list calls as file or workspace operations', () => {
+        const wrapper = mount(ToolCallIndicator, {
+            props: {
+                toolCalls: [
+                    {
+                        id: 'create',
+                        name: 'or3sal_tasks_create_list',
+                        status: 'error',
+                        error: 'Tool is client-only',
+                    },
+                    {
+                        id: 'search',
+                        name: 'or3sal_tasks_search_lists',
+                        status: 'error',
+                        error: 'Tool is client-only',
+                    },
+                ],
+            },
+            global,
+        });
+
+        expect(wrapper.find('summary').text()).toContain('or3sal_tasks_create_list');
+        expect(wrapper.find('summary').text()).toContain('or3sal_tasks_search_lists');
+        expect(wrapper.find('summary').text()).not.toContain('files');
+        expect(wrapper.find('summary').text()).not.toContain('workspace');
+    });
+
+    it('shows when a background call is waiting for its browser executor', () => {
+        const wrapper = mount(ToolCallIndicator, {
+            props: {
+                toolCalls: [
+                    {
+                        id: 'search',
+                        name: 'search lists',
+                        status: 'pending',
+                        runtime: 'client',
+                    },
+                ],
+            },
+            global,
+        });
+
+        expect(wrapper.text()).toContain(
+            'Waiting for this browser · search lists'
+        );
+    });
 });

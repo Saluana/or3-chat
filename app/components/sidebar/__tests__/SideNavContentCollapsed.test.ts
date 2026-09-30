@@ -174,9 +174,7 @@ describe('SideNavContentCollapsed', () => {
         });
 
         // Find the test page button by its icon attribute
-        const testPageButton = wrapper.find(
-            'button[icon="pixelarticons:test"]'
-        );
+        const testPageButton = wrapper.find('#btn-page-test-page-1');
         expect(testPageButton.exists()).toBe(true);
 
         await testPageButton.trigger('click');
@@ -202,9 +200,7 @@ describe('SideNavContentCollapsed', () => {
             },
         });
 
-        const testPageButton = wrapper.find(
-            'button[icon="pixelarticons:test"]'
-        );
+        const testPageButton = wrapper.find('#btn-page-test-page-1');
 
         await testPageButton.trigger('click');
 
@@ -230,9 +226,7 @@ describe('SideNavContentCollapsed', () => {
         });
 
         // Should render page buttons with accessibility attributes
-        const testPageButton = wrapper.find(
-            'button[icon="pixelarticons:test"]'
-        );
+        const testPageButton = wrapper.find('#btn-page-test-page-1');
         expect(testPageButton.exists()).toBe(true);
         expect(testPageButton.attributes('aria-label')).toBe('Test Page 1');
         expect(testPageButton.attributes('aria-pressed')).toBe('false');

@@ -117,7 +117,9 @@ export default defineEventHandler(async (event) => {
         ownerUserId: ownerUserId.trim(),
     });
 
-    await provisionWorkspaceDefaults(event, result.workspaceId);
+    let provisioningWarnings: string[] = [];
+    try { provisioningWarnings = (await provisionWorkspaceDefaults(event, result.workspaceId, { ownerUserId: ownerUserId.trim(), name: sanitizedName }))?.warnings ?? []; }
+    catch { provisioningWarnings = [`Plugin defaults could not be applied to workspace ${result.workspaceId}; review its plugin settings.`]; }
 
     const actorId = adminCtx.principal.kind === 'super_admin' 
         ? adminCtx.principal.username 
@@ -130,5 +132,5 @@ export default defineEventHandler(async (event) => {
         createdBy: { kind: adminCtx.principal.kind, id: actorId },
     });
 
-    return result;
+    return { ...result, ...(provisioningWarnings.length ? { provisioningWarning: provisioningWarnings.join(' ') } : {}) };
 });

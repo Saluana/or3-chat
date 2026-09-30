@@ -4,7 +4,7 @@ import {
     preflightPluginStateCompatibility,
     type PluginStateCompatibilityPolicy,
     type PluginStatePreflightResult,
-} from '../../../shared/plugins/state-compatibility';
+} from '~~/shared/plugins/state-compatibility';
 import {
     PluginPackageCandidateCanaryService,
     createCandidateStateSnapshotDigest,
@@ -20,12 +20,15 @@ import {
     type PackagePointerWriteOptions,
 } from './package-pointer-store';
 import { ImmutablePluginPackageStore } from './package-store';
+import { revokeHostActivationsForPlugin } from '../../utils/plugins/isolation/activation-registry';
 
 export type PromotePluginPackageResult =
     | {
           readonly status: 'promoted';
           readonly pointer: PluginPackagePointer;
           readonly evidence: CandidateCanaryEvidence;
+          /** True when a prior selection or installation record existed. */
+          readonly wasInstalled: boolean;
       }
     | {
           readonly status: 'blocked';
@@ -34,7 +37,9 @@ export type PromotePluginPackageResult =
               | 'canary-evidence'
               | 'state'
               | 'migration'
-              | 'pointer-write';
+              | 'workspaces'
+              | 'pointer-write'
+              | 'policy';
           readonly code: string;
           readonly currentPointerUnchanged: true;
           readonly state?: PluginStatePreflightResult;
@@ -47,16 +52,21 @@ export type RollbackPluginPackageResult =
       }
     | {
           readonly status: 'blocked';
-          readonly stage: 'pointer' | 'state' | 'migration' | 'pointer-write';
+          readonly stage: 'pointer' | 'state' | 'migration' | 'workspaces' | 'pointer-write';
           readonly code: string;
           readonly currentPointerUnchanged: true;
           readonly state?: PluginStatePreflightResult;
+          readonly blocking?: readonly { readonly workspaceId: string; readonly code: string }[];
       };
 
 export interface PromotePluginPackageInput {
     readonly pluginId: string;
     readonly workspaceId: string;
     readonly expectedCandidateDigest: Sha256;
+    /** Checked under the package operation lease immediately before promotion. */
+    readonly verifySiteApproval?: () => boolean | Promise<boolean>;
+    /** Recheck every affected workspace under the package lease just before pointer commit. */
+    readonly preflightWorkspaces?: () => Promise<{ readonly blocking: readonly { readonly workspaceId: string; readonly code: string }[] }>;
     readonly storedStateVersion: number | null;
     readonly snapshotState: () => CandidateStateValue | Promise<CandidateStateValue>;
     /** Reads the review that applies to the candidate while its pointer is locked. */
@@ -72,6 +82,11 @@ export interface PromotePluginPackageInput {
         readonly snapshot: CandidateStateValue;
     }) => void | Promise<void>;
     readonly requireCanaryEvidence?: boolean;
+    /** Transfer the operation-owned setup overlay before pointer commit. */
+    readonly prepareSetupPromotion?: (input: {
+        /** The verified running target (recovered previous included), or null. */
+        readonly running: PluginPackagePointerTarget | null;
+    }) => void | (() => void | Promise<void>) | Promise<void | (() => void | Promise<void>)>;
     readonly now?: () => number;
     readonly faultBeforePointerSwap?: () => void | Promise<void>;
     readonly pointerWriteOptions?: PackagePointerWriteOptions;
@@ -79,6 +94,15 @@ export interface PromotePluginPackageInput {
 
 export interface RollbackPluginPackageInput {
     readonly pluginId: string;
+    /** HTTP callers require all three expectations from the reviewed impact. */
+    readonly expectedCurrentDigest?: Sha256;
+    readonly expectedPreviousDigest?: Sha256;
+    readonly expectedPointerRevision?: number;
+    /** Rechecked under the package operation lock, including before pointer commit. */
+    readonly preflightWorkspaces?: (input: {
+        readonly current: PluginPackagePointerTarget;
+        readonly previous: PluginPackagePointerTarget;
+    }) => Promise<{ readonly checked: number; readonly blocking: readonly { readonly workspaceId: string; readonly code: string }[] }>;
     readonly pointerWriteOptions?: PackagePointerWriteOptions;
     readonly storedStateVersion: number | null;
     readonly snapshotState: () => CandidateStateValue | Promise<CandidateStateValue>;
@@ -167,6 +191,28 @@ export class PluginPackagePromotionService {
         )
     ) {}
 
+    /**
+     * Retain a slot reference only while its immutable bytes still verify. A
+     * corrupt current version is dropped from the new pointer instead of making
+     * the pointer write (which validates every retained slot) impossible.
+     * Callers must already hold the package operation lease.
+     */
+    async #retainVerifiedTarget(
+        pluginId: string,
+        target: PluginPackagePointerTarget | null
+    ): Promise<PluginPackagePointerTarget | null> {
+        if (!target) return null;
+        try {
+            const verification = await this.packages.verifyStoredPackage(
+                pluginId,
+                target.packageDigest
+            );
+            return verification.manifestDigest === target.manifestDigest ? target : null;
+        } catch {
+            return null;
+        }
+    }
+
     async promote(input: PromotePluginPackageInput): Promise<PromotePluginPackageResult> {
         return this.packages.runPluginOperation(input.pluginId, async () => {
             const pointer = await this.pointers.readPointer(input.pluginId);
@@ -176,12 +222,25 @@ export class PluginPackagePromotionService {
             if (pointer.candidate.packageDigest !== input.expectedCandidateDigest) {
                 return blockedPromote('pointer', 'candidate-digest-mismatch');
             }
+            if (input.verifySiteApproval) {
+                const approved = await Promise.resolve().then(input.verifySiteApproval).catch(() => false);
+                if (!approved) return blockedPromote('policy', 'site-approval-required');
+            }
+
+            // The verified running selection is the authority for compatibility,
+            // inheritance and the retained rollback target. With a corrupt
+            // current and a valid previous the runtime runs the previous, so
+            // raw slot reads would compare and retain the wrong version.
+            const startup = await this.pointers
+                .readStartupSelection(input.pluginId)
+                .catch(() => null);
+            const running = startup?.selected ?? null;
 
             const state = preflightPluginStateCompatibility({
                 operation: 'upgrade',
                 storedStateVersion: input.storedStateVersion,
                 target: pointer.candidate.stateCompatibility,
-                current: pointer.current?.stateCompatibility,
+                current: running?.stateCompatibility,
             });
             if (state.status === 'blocked') {
                 return blockedPromote('state', state.code, state);
@@ -192,6 +251,18 @@ export class PluginPackagePromotionService {
 
             let snapshot: CandidateStateValue;
             let snapshotDigest: Sha256;
+            let undoSetupPromotion: (() => void | Promise<void>) | undefined;
+            const rollbackSetupPromotion = async (): Promise<boolean> => {
+                try {
+                    await undoSetupPromotion?.();
+                    return true;
+                } catch {
+                    // The pointer is still unchanged; keep the original
+                    // promotion failure visible and let the next lifecycle
+                    // attempt revalidate the digest-scoped record.
+                    return false;
+                }
+            };
             try {
                 snapshot = structuredClone(await input.snapshotState()) as CandidateStateValue;
                 snapshotDigest = createCandidateStateSnapshotDigest(snapshot);
@@ -268,14 +339,19 @@ export class PluginPackagePromotionService {
             try {
                 if (state.status === 'migration-required') {
                     await input.migrateState?.({
-                        from: pointer.current,
+                        from: running ?? pointer.current,
                         to: pointer.candidate,
                         snapshot,
                     });
                 }
+                undoSetupPromotion =
+                    (await input.prepareSetupPromotion?.({ running })) ?? undefined;
                 await input.faultBeforePointerSwap?.();
             } catch (error) {
-                await input.restoreState(snapshot);
+                if (!(await rollbackSetupPromotion())) {
+                    return blockedPromote('migration', 'setup-promotion-rollback-failed', state);
+                }
+                if (state.status === 'migration-required') await input.restoreState(snapshot);
                 return blockedPromote(
                     'migration',
                     error instanceof Error ? error.message : 'migration-failed',
@@ -283,6 +359,30 @@ export class PluginPackagePromotionService {
                 );
             }
 
+            if (input.preflightWorkspaces) {
+                let blocker: string | null = null;
+                try {
+                    const review = await input.preflightWorkspaces();
+                    if (review.blocking.length > 0) blocker = 'workspace-preflight-blocked';
+                } catch { blocker = 'workspace-preflight-unavailable'; }
+                if (blocker) {
+                    if (!(await rollbackSetupPromotion())) return blockedPromote('workspaces', 'setup-promotion-rollback-failed', state);
+                    if (state.status === 'migration-required') await input.restoreState(snapshot);
+                    return blockedPromote('workspaces', blocker, state);
+                }
+            }
+
+            // Setup configuration is stored per package digest, so swapping the
+            // pointer is the commit: the promoted digest already owns the
+            // settings prepared for it, and a failure before this point leaves
+            // the running version's document untouched. The pointer write itself
+            // is revision-checked and atomic. A recovered previous is the
+            // verified running version, so it becomes the rollback target
+            // instead of the unreadable current slot.
+            const retainedPrevious = await this.#retainVerifiedTarget(
+                input.pluginId,
+                running ?? pointer.current
+            );
             const next: PluginPackagePointer = {
                 schemaVersion: 1,
                 pluginId: input.pluginId,
@@ -292,7 +392,7 @@ export class PluginPackagePromotionService {
                     recordedAt: (input.now ?? Date.now)(),
                 },
                 candidate: null,
-                previous: pointer.current,
+                previous: retainedPrevious,
             };
             const promotionEvidence =
                 evidence ??
@@ -310,12 +410,20 @@ export class PluginPackagePromotionService {
                     client: { status: 'skipped' },
                     completedAt: (input.now ?? Date.now)(),
                 } satisfies CandidateCanaryEvidence);
-            const promoted = (): PromotePluginPackageResult =>
-                Object.freeze({
+            const wasInstalled = pointer.current !== null || pointer.previous !== null;
+            const promoted = (): PromotePluginPackageResult => {
+                // Lifecycle commit hook: the selected package changed, so live
+                // handles sealed to the old digest are revoked here — at the
+                // commit point every caller shares — and their in-flight calls
+                // are aborted instead of finishing on superseded bytes.
+                revokeHostActivationsForPlugin(input.pluginId, 'selected-package-changed');
+                return Object.freeze({
                     status: 'promoted',
                     pointer: next,
                     evidence: promotionEvidence,
+                    wasInstalled,
                 });
+            };
             try {
                 await this.pointers.writePointerWithinOperation(
                     input.pluginId,
@@ -327,7 +435,10 @@ export class PluginPackagePromotionService {
                 // rename(2) is the pointer commit point. A later fsync/fault
                 // must not restore old settings while the new package is live.
                 if (pointerWasCommitted(persisted, next)) return promoted();
-                await input.restoreState(snapshot);
+                if (!(await rollbackSetupPromotion())) {
+                    return blockedPromote('pointer-write', 'setup-promotion-rollback-failed', state);
+                }
+                if (state.status === 'migration-required') await input.restoreState(snapshot);
                 return blockedPromote(
                     'pointer-write',
                     error instanceof Error ? error.message : 'pointer-write-failed',
@@ -345,23 +456,65 @@ export class PluginPackagePromotionService {
             if (!pointer?.current || !pointer.previous) {
                 return blockedRollback('pointer', 'previous-missing');
             }
+            if ((input.expectedCurrentDigest && pointer.current.packageDigest !== input.expectedCurrentDigest) ||
+                (input.expectedPreviousDigest && pointer.previous.packageDigest !== input.expectedPreviousDigest) ||
+                (input.expectedPointerRevision !== undefined && pointer.revision !== input.expectedPointerRevision)) {
+                return blockedRollback('pointer', 'pointer-changed');
+            }
 
-            const state = preflightPluginStateCompatibility({
+            // The rollback target must still verify before it can be committed;
+            // otherwise the pointer write would fail after the state preflight.
+            try {
+                const verification = await this.packages.verifyStoredPackage(
+                    input.pluginId,
+                    pointer.previous.packageDigest
+                );
+                if (verification.manifestDigest !== pointer.previous.manifestDigest) {
+                    return blockedRollback('pointer', 'previous-unavailable');
+                }
+            } catch {
+                return blockedRollback('pointer', 'previous-unavailable');
+            }
+
+            if (input.preflightWorkspaces && pointer.current.stateCompatibility.rollback !== 'safe') {
+                return blockedRollback('state', pointer.current.stateCompatibility.rollback === 'unsupported'
+                    ? 'rollback-unsupported' : 'rollback-migration-required');
+            }
+
+            const preflight = async (): Promise<RollbackPluginPackageResult | null> => {
+                if (!input.preflightWorkspaces) return null;
+                try {
+                    const result = await input.preflightWorkspaces({ current: pointer.current!, previous: pointer.previous! });
+                    return result.blocking.length
+                        ? { status: 'blocked', stage: 'workspaces', code: 'workspace-preflight-blocked',
+                            currentPointerUnchanged: true, blocking: result.blocking }
+                        : null;
+                } catch {
+                    return blockedRollback('workspaces', 'workspace-preflight-unavailable');
+                }
+            };
+            const initialPreflight = await preflight();
+            if (initialPreflight) return initialPreflight;
+
+            // The HTTP rollback path validates every enabled workspace inside
+            // preflightWorkspaces. Its initiating admin workspace may be disabled
+            // and must not become an unrelated state gate or mutation target.
+            const state = input.preflightWorkspaces ? null : preflightPluginStateCompatibility({
                 operation: 'rollback',
                 storedStateVersion: input.storedStateVersion,
                 target: pointer.previous.stateCompatibility,
                 current: pointer.current.stateCompatibility,
             });
-            if (state.status === 'blocked') {
+            if (state?.status === 'blocked') {
                 return blockedRollback('state', state.code, state);
             }
-            if (state.status === 'migration-required' && !input.migrateState) {
+            if (state?.status === 'migration-required' && !input.migrateState) {
                 return blockedRollback('state', 'rollback-migration-required', state);
             }
 
-            const snapshot = structuredClone(await input.snapshotState()) as CandidateStateValue;
+            const snapshot = state ? structuredClone(await input.snapshotState()) as CandidateStateValue : null;
             try {
-                if (state.status === 'migration-required') {
+                if (state?.status === 'migration-required' && snapshot !== null) {
                     await input.migrateState?.({
                         from: pointer.current,
                         to: pointer.previous,
@@ -369,14 +522,21 @@ export class PluginPackagePromotionService {
                     });
                 }
             } catch (error) {
-                await input.restoreState(snapshot);
+                if (snapshot !== null) await input.restoreState(snapshot);
                 return blockedRollback(
                     'migration',
                     error instanceof Error ? error.message : 'migration-failed',
-                    state
+                    state ?? undefined
                 );
             }
 
+            // Recovery commits the verified previous target and removes a
+            // broken current reference instead of retaining it as previous
+            // (which the pointer write validates and would reject).
+            const retainedPrevious = await this.#retainVerifiedTarget(
+                input.pluginId,
+                pointer.current
+            );
             const next: PluginPackagePointer = {
                 schemaVersion: 1,
                 pluginId: input.pluginId,
@@ -386,10 +546,20 @@ export class PluginPackagePromotionService {
                     recordedAt: (input.now ?? Date.now)(),
                 },
                 candidate: null,
-                previous: pointer.current,
+                previous: retainedPrevious,
             };
-            const rolledBack = (): RollbackPluginPackageResult =>
-                Object.freeze({ status: 'rolled-back', pointer: next });
+            const finalPreflight = await preflight();
+            if (finalPreflight) {
+                if (state?.status === 'migration-required' && snapshot !== null) await input.restoreState(snapshot);
+                return finalPreflight;
+            }
+            const rolledBack = (): RollbackPluginPackageResult => {
+                // Same lifecycle commit hook as promotion: a rollback also
+                // swaps the live bytes and state, so stale handles must fail
+                // closed instead of finishing on the superseded selection.
+                revokeHostActivationsForPlugin(input.pluginId, 'selected-package-rolled-back');
+                return Object.freeze({ status: 'rolled-back', pointer: next });
+            };
             try {
                 await this.pointers.writePointerWithinOperation(
                     input.pluginId,
@@ -399,11 +569,11 @@ export class PluginPackagePromotionService {
             } catch (error) {
                 const persisted = await this.pointers.readPointer(input.pluginId).catch(() => null);
                 if (pointerWasCommitted(persisted, next)) return rolledBack();
-                await input.restoreState(snapshot);
+                if (state?.status === 'migration-required' && snapshot !== null) await input.restoreState(snapshot);
                 return blockedRollback(
                     'pointer-write',
                     error instanceof Error ? error.message : 'pointer-write-failed',
-                    state
+                    state ?? undefined
                 );
             }
 

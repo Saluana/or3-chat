@@ -11,6 +11,7 @@
  * - Validates each operation independently and returns mixed HTTP 200 results.
  * - Dispatches valid ops to the registered SyncGatewayAdapter.
  */
+import { requireCloudMutation } from '../../utils/security/cloud-mutation';
 import { defineEventHandler, createError, setResponseHeader } from 'h3';
 import { z } from 'zod';
 import {
@@ -144,6 +145,8 @@ export default defineEventHandler(async (event) => {
     }
 
     setNoCacheHeaders(event);
+
+    requireCloudMutation(event);
 
     const body: unknown = await readLimitedJsonBody(
         event,

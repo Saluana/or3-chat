@@ -18,11 +18,10 @@ const allGrants = [
 ] as const;
 
 describe('first-party Dashboard Insights V2 package', () => {
-    it('passes SDK-only package conformance', () => {
-        expect(checkV2PackageConformance(packageRoot, { repoRoot })).toEqual({
-            status: 'conformant',
-            issues: [],
-        });
+    it('passes SDK-only package conformance', async () => {
+        const result = await checkV2PackageConformance(packageRoot, { repoRoot });
+        expect(result.status).toBe('conformant');
+        expect(result.issues).toEqual([]);
     });
 
     it('publishes atomically and cleans up through the SDK test host', async () => {

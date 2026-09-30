@@ -90,6 +90,17 @@ function hasFileHashesArray(obj: unknown): obj is { file_hashes: string[] } {
  * - Does not update thread metadata.
  */
 export async function createMessage(input: MessageCreate): Promise<Message> {
+    return createMessageInDb(getDb(), input);
+}
+
+/**
+ * Create a message in an explicitly captured workspace database.
+ *
+ * Long-running request flows must use this variant so a workspace switch cannot
+ * split related records (a thread in one workspace, its first message in
+ * another).
+ */
+export async function createMessageInDb(db: Or3DB, input: MessageCreate): Promise<Message> {
     const hooks = useHooks();
     const filtered: unknown = await hooks.applyFilters(
         'db.messages.create:filter:input',
@@ -111,7 +122,6 @@ export async function createMessage(input: MessageCreate): Promise<Message> {
         entity: toMessageEntity(value),
         tableName: 'messages',
     });
-    const db = getDb();
     await db.transaction('rw', getWriteTxTableNames(db, 'messages'), async () => {
         await dbTry(
             () => db.messages.put(value),
@@ -232,6 +242,8 @@ function jsonEqual(left: unknown, right: unknown): boolean {
  *
  * Constraints:
  * - No-op when the row does not exist and no fallback is supplied.
+ * - An optional synchronous `ifCurrent` guard checks the stored row inside
+ *   the write transaction; false skips the write, including fallback creation.
  *
  * Non-Goals:
  * - Does not replace `upsertMessageInDb` for full-row replaces.
@@ -242,7 +254,8 @@ export async function patchMessageInDb(
     patch: Partial<Message> & {
         data?: Record<string, unknown> | null;
     },
-    fallback?: Message | null
+    fallback?: Message | null,
+    ifCurrent?: (message: Message | undefined) => boolean
 ): Promise<void> {
     const hooks = useHooks();
     // Preparation hooks run outside the write transaction (see upsertMessageInDb:
@@ -323,6 +336,7 @@ export async function patchMessageInDb(
                 entity: 'messages',
                 action: 'get',
             });
+            if (ifCurrent && !ifCurrent(stored)) return undefined;
             const base = stored ?? fallback;
             if (!base) return undefined;
             const baseData = dataRecord(base.data);

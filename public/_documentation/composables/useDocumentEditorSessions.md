@@ -12,6 +12,7 @@ The module exports:
 -   `captureDocumentEditor(documentId)` — call `captureContent` on every session for a document (for legacy pane hosts).
 -   `ensureDocumentEditorLocalDurability(documentId)` — flush every session's local durability for a document.
 -   `hasActiveDocumentEditor(documentId)` — whether any session is registered.
+-   `getActiveDocumentEditorSession(documentId, tabId?)` — find a mounted editor for a document, optionally matching an exact tab.
 
 ## Usage
 
@@ -26,6 +27,7 @@ session?.captureContent();
 
 -   Modern sessions are keyed by `paneId:tabId`, so a tab in a split resolves the right editor.
 -   Duplicate registrations for the same key replace the entry.
+-   A mounted editor may expose chat context and native document tool execution. The chat bridge only uses sessions whose tab is still open in the active workspace.
 
 ## Related
 

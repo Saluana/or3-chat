@@ -22,7 +22,15 @@
  * - Abort always finalizes stream accumulator state
  */
 
-import { ref, computed, watch, onScopeDispose, getCurrentScope } from 'vue';
+import {
+    ref,
+    shallowRef,
+    shallowReactive,
+    computed,
+    watch,
+    onScopeDispose,
+    getCurrentScope,
+} from 'vue';
 import { useToast, useAppConfig, useRuntimeConfig } from '#imports';
 import { nowSec, newId, getWriteTxTableNames } from '~/db/util';
 import { type Message } from '~/db';
@@ -45,7 +53,16 @@ import type {
 import { ToolIterationLimitError } from '~~/shared/chat/stream-errors';
 import { MAX_CANONICAL_MESSAGE_OUTPUT_BYTES } from '~~/shared/chat/tool-limits';
 import { redactDiagnosticDetails } from '~~/shared/logging/sensitive-metadata';
-import type { ToolLedgerEntry } from '~~/shared/chat/tool-ledger';
+import {
+    createChatRequest,
+    cancelRequest,
+    finalizeRequest,
+    publishRequest,
+    projectTerminalMessages,
+    settleRequest,
+    type ChatRequest as ChatRequestScope,
+    type RequestFinalization,
+} from '~/utils/chat/useAi-internal/requestController';
 import {
     isStaleForegroundGeneration,
     remainingForegroundLeaseMs,
@@ -68,10 +85,12 @@ import {
     abortBackgroundAdmission,
     pollJobStatus,
     isBackgroundStreamingEnabled,
+    isBackgroundClientToolBridgeAvailable,
     type BackgroundJobStatus,
     type OpenRouterReasoningConfig,
 } from '../../utils/chat/openrouterStream';
 import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
+import type { OpenRouterModel } from '~~/shared/openrouter/types';
 import {
     appendModelVariant,
     stripModelVariantSuffix,
@@ -87,9 +106,9 @@ import { state } from '~/state/global';
 // Import paths aligned with tests' vi.mock targets
 import { useUserApiKey } from '#imports';
 import { useActivePrompt } from '#imports';
-import { getDefaultPromptId } from '#imports';
 import { useHooks } from '#imports';
 import { consumeChatSendHandled } from '~/utils/chat/send-interception';
+import { DEFAULT_PROMPT_SELECTION } from '~/utils/chat/prompt-utils';
 import { resolveNotificationUserId } from '~/core/notifications/notification-user';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
@@ -128,7 +147,7 @@ import {
     userTranscriptData,
 } from '~/utils/chat/transcript';
 
-const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
+const DEFAULT_AI_MODEL = '~openai/gpt-luna-latest';
 
 const THINKING_SUFFIX = ':thinking';
 
@@ -199,8 +218,24 @@ export function useChat(
     // Messages and basic state
     const messages = ref<UiChatMessage[]>(msgs.map((m) => ensureUiMessage(m)));
     const rawMessages = ref<ChatMessage[]>([...msgs]);
-    const loading = ref(false);
-    const requestState = ref<ChatRequestState>({ status: 'idle' });
+    const visibleRequest = shallowRef<ChatRequestScope | null>(null);
+    const backgroundRequestScopes = shallowReactive(
+        new Map<string, ChatRequestScope>()
+    );
+    const loading = computed(
+        () =>
+            Boolean(
+                visibleRequest.value?.attached.value &&
+                visibleRequest.value.phase.value !== 'terminal'
+            ) ||
+            Array.from(backgroundRequestScopes.values()).some(
+                (request) =>
+                    request.phase.value !== 'terminal' && request.ownsView()
+            )
+    );
+    const requestState = computed<ChatRequestState>(
+        () => visibleRequest.value?.publicState.value ?? { status: 'idle' }
+    );
     let activeRequestId: string | null = null;
     const abortController = ref<AbortController | null>(null);
     const aborted = ref<boolean>(false);
@@ -211,6 +246,44 @@ export function useChat(
     // from an async send handler triggers Vue's "inject() can only be used
     // inside setup()" warning.
     const toast = useToast();
+    const unresolvedModelIds = new Set<string>();
+    async function resolveModelMetadata(
+        selectedModelId: string
+    ): Promise<OpenRouterModel | undefined> {
+        const modelId = stripModelVariantSuffix(
+            stripThinkingSuffix(selectedModelId)
+        );
+        const { catalog, favoriteModels, fetchModels } = useModelStore();
+        const matches = (candidate: OpenRouterModel) =>
+            candidate.id === modelId || candidate.canonical_slug === modelId;
+        const lookup = () =>
+            catalog.value.find(matches) ?? favoriteModels.value.find(matches);
+        const hasContext = (candidate: OpenRouterModel | undefined) =>
+            [
+                candidate?.top_provider?.context_length,
+                candidate?.context_length,
+            ].some(
+                (value) =>
+                    typeof value === 'number' &&
+                    Number.isFinite(value) &&
+                    value > 0
+            );
+
+        let metadata = lookup();
+        if (hasContext(metadata) || unresolvedModelIds.has(modelId)) return metadata;
+        try {
+            await fetchModels();
+            metadata = lookup();
+            if (!hasContext(metadata)) {
+                await fetchModels({ force: true });
+                metadata = lookup();
+            }
+            if (!hasContext(metadata)) unresolvedModelIds.add(modelId);
+        } catch {
+            // Keep the conservative fallback if catalog metadata is unavailable.
+        }
+        return metadata;
+    }
     const appConfig = useAppConfig() as {
         errors?: { showAbortInfo?: boolean };
     };
@@ -321,29 +394,105 @@ export function useChat(
     const streamAcc = createStreamAccumulator();
     const streamState = streamAcc.state;
     const streamId = ref<string | undefined>(undefined);
-    type ChatRequestScope = {
-        requestId: string;
-        originDb: Or3DB;
-        workspaceId: string;
-        accumulator: typeof streamAcc;
-        /** Thread selected when the request was admitted (or created for it). */
-        threadId?: string;
-        /** Assistant row this request owns (for cancellation before job ID). */
-        assistantMessageId?: string;
-        /** Stable admission identity persisted before the start request. */
-        backgroundAdmissionId?: string;
-        /** Set when navigation supersedes an admission before it can stream. */
-        cancelled: boolean;
-        settled: Promise<void>;
-        resolveSettled: () => void;
-        streamId?: string;
-        /** Assistant row whose detached workflow may finish after sendMessage. */
-        workflowMessageId?: string;
-        abortController: AbortController | null;
-        toolLedger: Map<string, ToolLedgerEntry>;
-        persistAssistant?: ReturnType<typeof makeAssistantPersister>;
-    };
     let activeRequestScope: ChatRequestScope | null = null;
+    function admitRequest(
+        kind: ChatRequestScope['kind'],
+        threadId = threadIdRef.value,
+        originDb = getDb(),
+        workspaceId = getActiveWorkspaceId() ?? 'local'
+    ): ChatRequestScope {
+        const scope = createChatRequest({
+            requestId: newId(),
+            kind,
+            threadId,
+            originDb,
+            workspaceId,
+            accumulator:
+                kind === 'reattach' ? createStreamAccumulator() : streamAcc,
+        });
+        scope.ownsView = () =>
+            visibleRequest.value === scope &&
+            scope.attached.value &&
+            !detached.value &&
+            getDb() === scope.originDb &&
+            threadIdRef.value === scope.threadId;
+        scope.projectTerminal = (result) =>
+            projectRequestTerminal(scope, result);
+        visibleRequest.value = scope;
+        return scope;
+    }
+    function projectRequestTerminal(
+        scope: ChatRequestScope,
+        result: RequestFinalization
+    ): void {
+        projectTerminalMessages(scope, result, {
+            messages,
+            rawMessages,
+            tailAssistant,
+        });
+        if (
+            scope.accumulator !== streamAcc &&
+            tailAssistant.value?.id === scope.assistantMessageId
+        ) {
+            streamAcc.finalize({
+                aborted: result.terminal.outcome === 'aborted',
+                error:
+                    result.terminal.outcome === 'failed' ||
+                    result.persistenceError
+                        ? (result.terminal.error ??
+                          new Error(
+                              String(
+                                  result.persistenceError ??
+                                      result.terminal.messageError ??
+                                      'Chat request failed'
+                              )
+                          ))
+                        : undefined,
+            });
+        }
+        releaseBackgroundControls(scope);
+    }
+    function releaseBackgroundControls(scope: ChatRequestScope): void {
+        if (!scope.jobId || backgroundJobId.value === scope.jobId) {
+            const next = Array.from(backgroundRequestScopes.values()).find(
+                (request) =>
+                    request !== scope &&
+                    request.phase.value === 'streaming' &&
+                    request.ownsView()
+            );
+            if (next?.jobId && next.threadId && next.assistantMessageId) {
+                visibleRequest.value = next;
+                backgroundJobId.value = next.jobId;
+                backgroundJobMode.value = 'background';
+                backgroundJobInfo.value = {
+                    jobId: next.jobId,
+                    threadId: next.threadId,
+                    messageId: next.assistantMessageId,
+                };
+                return;
+            }
+            backgroundJobId.value = null;
+            backgroundJobMode.value = 'none';
+            backgroundJobInfo.value = null;
+        }
+    }
+    function reportFinalization(result: RequestFinalization): void {
+        const failure = result.persistenceError ?? result.effectError;
+        if (failure)
+            reportError(
+                err(
+                    result.persistenceError
+                        ? 'ERR_DB_WRITE_FAILED'
+                        : 'ERR_HOOK_FAILURE',
+                    'Failed to finalize the chat request.',
+                    {
+                        cause: failure,
+                        tags: { domain: 'chat', stage: 'finalize' },
+                    }
+                ),
+                { silent: true }
+            );
+    }
     /**
      * Monotonic navigation counter. Long-running async work (reattachment,
      * recovery) snapshots this before awaiting and validates it afterwards so
@@ -361,7 +510,7 @@ export function useChat(
     function ownsCurrentView(scope: ChatRequestScope): boolean {
         return (
             !scope.cancelled &&
-            activeRequestScope === scope &&
+            scope.ownsView() &&
             Boolean(scope.threadId) &&
             threadIdRef.value === scope.threadId
         );
@@ -680,14 +829,14 @@ export function useChat(
     cleanupFns.push(
         hooks.on(
             'workflow.execution:action:state_update',
-            (payload: {
-                messageId: string;
-                state?: { executionState?: string; finalOutput?: string };
-            }) => {
-                const state = payload.state || {};
+            (payload: { messageId: string; state: unknown }) => {
+                const state =
+                    payload.state !== null && typeof payload.state === 'object'
+                        ? (payload.state as Record<string, unknown>)
+                        : {};
                 const executionState = state.executionState;
                 const isDone =
-                    executionState &&
+                    typeof executionState === 'string' &&
                     executionState !== 'running' &&
                     executionState !== 'idle';
                 const finalOutput =
@@ -879,6 +1028,7 @@ export function useChat(
             return {
                 id: call.id,
                 name: call.name,
+                runtime: call.runtime,
                 status: mappedStatus,
                 args: call.args,
                 result: call.result,
@@ -917,6 +1067,8 @@ export function useChat(
             attachedJobs: [...attachedBackgroundJobs],
         });
         for (const jobId of attachedBackgroundJobs) {
+            const request = backgroundRequestScopes.get(jobId);
+            if (request) request.attached.value = false;
             const tracker = backgroundJobTrackers.get(jobId);
             if (tracker && !options?.keepTracking) {
                 stopBackgroundJobTracking(tracker);
@@ -966,6 +1118,7 @@ export function useChat(
         initialAttempt?: number;
         isReattach?: boolean;
         useSse?: boolean;
+        request?: ChatRequestScope;
     }): BackgroundJobTracker {
         logBgStream('attach-bg-job-start', {
             jobId: params.jobId,
@@ -999,6 +1152,37 @@ export function useChat(
             initialAttempt: params.initialAttempt,
             useSse: params.useSse,
         });
+        const request =
+            params.request ??
+            (backgroundRequestScopes.get(params.jobId)?.ownsView()
+                ? backgroundRequestScopes.get(params.jobId)
+                : null) ??
+            (visibleRequest.value?.assistantMessageId === params.messageId &&
+            visibleRequest.value.originDb === (params.originDb ?? getDb()) &&
+            visibleRequest.value.attached.value &&
+            !visibleRequest.value.finalization
+                ? visibleRequest.value
+                : null) ??
+            admitRequest(
+                'reattach',
+                params.threadId,
+                params.originDb ?? getDb(),
+                params.workspaceId ?? getActiveWorkspaceId() ?? 'local'
+            );
+        request.assistantMessageId = params.messageId;
+        request.streamId = params.generationId ?? request.streamId;
+        request.jobId = params.jobId;
+        request.lastAttempt = tracker.lastAttempt ?? params.initialAttempt;
+        if (!request.finalization) request.phase.value = 'streaming';
+        backgroundRequestScopes.set(params.jobId, request);
+        const attachmentRevision = navigationRevision;
+        request.ownsView = () =>
+            backgroundRequestScopes.get(params.jobId) === request &&
+            navigationRevision === attachmentRevision &&
+            request.attached.value &&
+            !detached.value &&
+            getDb() === request.originDb &&
+            threadIdRef.value === request.threadId;
         if (params.isReattach && typeof params.initialContent === 'string') {
             tracker.lastPersistAt = 0;
             const target = resolveUiMessage(params.messageId);
@@ -1060,6 +1244,50 @@ export function useChat(
                 });
             }
         }
+        const finalizeBackground = async (
+            outcome: 'completed' | 'failed' | 'aborted',
+            update: Parameters<
+                NonNullable<BackgroundJobSubscriber['onComplete']>
+            >[0]
+        ) => {
+            if (
+                typeof update.status.attempt === 'number' &&
+                typeof request.lastAttempt === 'number' &&
+                update.status.attempt < request.lastAttempt
+            )
+                return;
+            if (request.ownsView() && !request.finalization) {
+                request.message = resolveUiMessage(params.messageId);
+                syncTailAccumulator(
+                    params.messageId,
+                    update.content,
+                    update.content
+                );
+            }
+            const messageError =
+                outcome === 'aborted'
+                    ? 'stopped'
+                    : outcome === 'failed'
+                      ? update.status.error || 'Background response failed'
+                      : null;
+            reportFinalization(
+                await finalizeRequest(request, {
+                    outcome,
+                    content: update.content,
+                    reasoning: update.reasoning,
+                    toolCalls: normalizeBackgroundToolCalls(
+                        update.status.tool_calls
+                    ),
+                    messageError,
+                    error:
+                        outcome === 'failed'
+                            ? new Error(messageError!)
+                            : undefined,
+                    attempt: update.status.attempt,
+                    persistence: 'tracker',
+                })
+            );
+        };
         const shouldBindUiSubscriber = !detached.value;
         if (
             shouldBindUiSubscriber &&
@@ -1074,11 +1302,20 @@ export function useChat(
             });
             const subscriber: BackgroundJobSubscriber = {
                 onUpdate: ({ content, delta, replace, reasoning, status }) => {
-                    if (detached.value) {
+                    if (
+                        request.finalization ||
+                        !request.ownsView() ||
+                        (typeof status.attempt === 'number' &&
+                            typeof request.lastAttempt === 'number' &&
+                            status.attempt < request.lastAttempt)
+                    ) {
                         return;
                     }
+                    if (typeof status.attempt === 'number')
+                        request.lastAttempt = status.attempt;
                     const target = resolveUiMessage(params.messageId);
                     if (!target) return;
+                    request.message = target;
                     const previousText = target.text;
 
                     if (
@@ -1128,141 +1365,17 @@ export function useChat(
                         messages.value = [...messages.value];
                     }
                 },
-                onComplete: ({ content, reasoning, status }) => {
-                    if (detached.value) {
-                        logBgStream(
-                            'attach-bg-job-on-complete-skipped-detached',
-                            {
-                                jobId: params.jobId,
-                                messageId: params.messageId,
-                            }
-                        );
-                        return;
-                    }
-                    const target = resolveUiMessage(params.messageId);
-                    if (!target) return;
-                    logBgStream('attach-bg-job-on-complete', {
-                        jobId: params.jobId,
-                        messageId: params.messageId,
-                        status: status.status,
-                        contentLength: content.length,
-                        toolCalls: Array.isArray(status.tool_calls)
-                            ? status.tool_calls.length
-                            : 0,
-                    });
-                    target.text = content;
-                    if (typeof reasoning === 'string' && reasoning.length > 0) {
-                        target.reasoning_text = reasoning;
-                    }
-                    const nextToolCalls = normalizeBackgroundToolCalls(
-                        status.tool_calls
-                    );
-                    if (nextToolCalls) {
-                        target.toolCalls = nextToolCalls;
-                    }
-                    target.pending = false;
-                    if (
-                        syncTailAccumulator(params.messageId, content, content)
-                    ) {
-                        streamAcc.finalize();
-                    } else {
-                        messages.value = [...messages.value];
-                    }
-                    if (backgroundJobId.value === params.jobId) {
-                        loading.value = false;
-                        backgroundJobId.value = null;
-                        backgroundJobMode.value = 'none';
-                        backgroundJobInfo.value = null;
-                    }
+                onComplete: (update) => {
+                    void finalizeBackground('completed', update);
                 },
-                onError: ({ reasoning, status }) => {
-                    if (detached.value) {
-                        logBgStream('attach-bg-job-on-error-skipped-detached', {
-                            jobId: params.jobId,
-                            messageId: params.messageId,
-                        });
-                        return;
-                    }
-                    const target = resolveUiMessage(params.messageId);
-                    if (!target) return;
-                    if (typeof reasoning === 'string' && reasoning.length > 0) {
-                        target.reasoning_text = reasoning;
-                    }
-                    logBgStream('attach-bg-job-on-error', {
-                        jobId: params.jobId,
-                        messageId: params.messageId,
-                        status: status.status,
-                        error: status.error || null,
-                    });
-                    const nextToolCalls = normalizeBackgroundToolCalls(
-                        status.tool_calls
-                    );
-                    if (nextToolCalls) {
-                        target.toolCalls = nextToolCalls;
-                    }
-                    target.pending = false;
-                    target.error = status.error || 'Background response failed';
-                    if (tailAssistant.value?.id !== params.messageId) {
-                        messages.value = [...messages.value];
-                    }
-                    streamAcc.finalize({
-                        error: new Error(
-                            target.error || 'Background response failed'
-                        ),
-                    });
-                    if (backgroundJobId.value === params.jobId) {
-                        loading.value = false;
-                        backgroundJobId.value = null;
-                        backgroundJobMode.value = 'none';
-                        backgroundJobInfo.value = null;
-                    }
+                onError: (update) => {
+                    void finalizeBackground('failed', update);
                 },
-                onAbort: ({ reasoning, status }) => {
-                    if (detached.value) {
-                        logBgStream('attach-bg-job-on-abort-skipped-detached', {
-                            jobId: params.jobId,
-                            messageId: params.messageId,
-                        });
-                        return;
-                    }
-                    const target = resolveUiMessage(params.messageId);
-                    if (!target) return;
-                    if (typeof reasoning === 'string' && reasoning.length > 0) {
-                        target.reasoning_text = reasoning;
-                    }
-                    logBgStream('attach-bg-job-on-abort', {
-                        jobId: params.jobId,
-                        messageId: params.messageId,
-                        status: status.status,
-                    });
-                    const nextToolCalls = normalizeBackgroundToolCalls(
-                        status.tool_calls
-                    );
-                    if (nextToolCalls) {
-                        target.toolCalls = nextToolCalls;
-                    }
-                    target.pending = false;
-                    target.error = 'stopped';
-                    if (tailAssistant.value?.id !== params.messageId) {
-                        messages.value = [...messages.value];
-                    }
-                    streamAcc.finalize({ aborted: true });
-                    void updateMessageRecord(
-                        tracker.originDb ?? getDb(),
-                        params.messageId,
-                        {
-                            pending: false,
-                            error: 'stopped',
-                        }
-                    );
-                    if (backgroundJobId.value === params.jobId) {
-                        loading.value = false;
-                        backgroundJobId.value = null;
-                        backgroundJobMode.value = 'none';
-                        backgroundJobInfo.value = null;
-                    }
+                onAbort: (update) => {
+                    void finalizeBackground('aborted', update);
                 },
                 onTransportError: ({ status }) => {
+                    if (request.finalization) return;
                     logBgStream('attach-bg-job-on-transport-error', {
                         jobId: params.jobId,
                         messageId: params.messageId,
@@ -1274,7 +1387,7 @@ export function useChat(
                     // the server job was confirmed missing; otherwise leave the
                     // row pending so reattachment can retry.
                     if (
-                        !detached.value &&
+                        request.ownsView() &&
                         status.trackingInterruptedKind === 'missing'
                     ) {
                         const target = resolveUiMessage(params.messageId);
@@ -1284,11 +1397,9 @@ export function useChat(
                             messages.value = [...messages.value];
                         }
                     }
-                    if (backgroundJobId.value === params.jobId) {
-                        loading.value = false;
-                        backgroundJobId.value = null;
-                        backgroundJobMode.value = 'none';
-                        backgroundJobInfo.value = null;
+                    if (request.ownsView()) {
+                        request.attached.value = false;
+                        releaseBackgroundControls(request);
                     }
                 },
             };
@@ -1320,6 +1431,41 @@ export function useChat(
                 detached: detached.value,
             });
         }
+        // Completion also covers cached terminal trackers, whose subscribers
+        // have already received their one terminal notification.
+        void tracker.completion
+            .then(async (status) => {
+                if (status.trackingInterrupted) {
+                    if (!request.finalization && request.ownsView()) {
+                        request.attached.value = false;
+                        releaseBackgroundControls(request);
+                    }
+                    return;
+                }
+                await finalizeBackground(
+                    status.status === 'complete'
+                        ? 'completed'
+                        : status.status === 'aborted'
+                          ? 'aborted'
+                          : 'failed',
+                    {
+                        status,
+                        content: tracker.terminalContent ?? tracker.lastContent,
+                        reasoning: tracker.lastReasoning,
+                        delta: '',
+                    }
+                );
+            })
+            .catch((error) => {
+                reportError(error, {
+                    code: 'ERR_INTERNAL',
+                    tags: { domain: 'chat', stage: 'background_finalize' },
+                });
+            })
+            .finally(() => {
+                if (backgroundRequestScopes.get(params.jobId) === request)
+                    backgroundRequestScopes.delete(params.jobId);
+            });
         return tracker;
     }
 
@@ -1341,11 +1487,18 @@ export function useChat(
         // Capture the workspace at admission: recovery must finalize rows in
         // the thread's own database even if the user navigates mid-reconcile.
         const reconcileDb = getDb();
+        const reconcileWorkspaceId = getActiveWorkspaceId() ?? 'local';
+        const reconcileRevision = navigationRevision;
         const persisted = (await messagesByThread(reconcileThreadId)) as
             | StoredMessage[]
             | undefined;
         // Stale query results must never touch a newer thread's view.
-        if (threadIdRef.value !== reconcileThreadId) return;
+        if (
+            navigationRevision !== reconcileRevision ||
+            getDb() !== reconcileDb ||
+            threadIdRef.value !== reconcileThreadId
+        )
+            return;
         for (const row of persisted ?? []) {
             const rowData = row.data as Record<string, unknown> | null;
             if (
@@ -1363,23 +1516,55 @@ export function useChat(
                 if (!latest) return;
                 let finalizedHere = false;
                 if (isStaleForegroundGeneration(latest)) {
-                    await updateMessageRecord(
-                        reconcileDb,
-                        row.id,
-                        {
-                            pending: false,
-                            error: 'stream_interrupted',
-                            data: { generation_state: 'interrupted' },
-                        },
-                        latest
-                    );
-                    finalizedHere = true;
+                    const recovery = createChatRequest({
+                        requestId: newId(),
+                        originDb: reconcileDb,
+                        workspaceId: reconcileWorkspaceId,
+                        threadId: reconcileThreadId,
+                        kind: 'recovery',
+                        accumulator: createStreamAccumulator(),
+                    });
+                    recovery.assistantMessageId = row.id;
+                    recovery.assistantRecord = latest;
+                    recovery.streamId =
+                        typeof latest.data?.generation_id === 'string'
+                            ? latest.data.generation_id
+                            : undefined;
+                    recovery.ownsView = () =>
+                        navigationRevision === reconcileRevision &&
+                        threadIdRef.value === reconcileThreadId &&
+                        getDb() === reconcileDb;
+                    recovery.projectTerminal = (result) =>
+                        projectTerminalMessages(recovery, result, {
+                            messages,
+                            rawMessages,
+                            tailAssistant,
+                        });
+                    const result = await finalizeRequest(recovery, {
+                        outcome: 'failed',
+                        messageError: 'stream_interrupted',
+                        generationState: 'interrupted',
+                        content: deriveMessageContent(latest),
+                        reasoning:
+                            latest.data?.reasoning_text ??
+                            latest.reasoning_text ??
+                            null,
+                        toolCalls: latest.data?.tool_calls ?? null,
+                    });
+                    reportFinalization(result);
+                    finalizedHere =
+                        !result.persistenceError && !result.superseded;
                 }
                 // Only mutate the live view while it still shows this thread.
                 // Project the durable terminal state even when a concurrent
                 // recovery already finalized the row, so an older pending
                 // projection (e.g. seeded history) never strands the UI.
-                if (threadIdRef.value !== reconcileThreadId) return;
+                if (
+                    navigationRevision !== reconcileRevision ||
+                    getDb() !== reconcileDb ||
+                    threadIdRef.value !== reconcileThreadId
+                )
+                    return;
                 const terminalError =
                     latest.error ??
                     (finalizedHere ? 'stream_interrupted' : undefined);
@@ -1521,14 +1706,12 @@ export function useChat(
                 });
 
                 if (!ownsReattach()) return;
-                if (!backgroundJobId.value) {
-                    backgroundJobId.value = jobId;
-                    backgroundJobInfo.value = {
-                        jobId,
-                        threadId: reattachThreadId,
-                        messageId: msg.id,
-                    };
-                }
+                backgroundJobId.value = jobId;
+                backgroundJobInfo.value = {
+                    jobId,
+                    threadId: reattachThreadId,
+                    messageId: msg.id,
+                };
                 if (backgroundJobMode.value === 'none') {
                     backgroundJobMode.value = 'background';
                 }
@@ -1565,28 +1748,13 @@ export function useChat(
         contentOrParams: string | (SendMessageParams & { content: string }),
         maybeParams?: SendMessageParams
     ): Promise<SendResult> {
-        if (activeRequestId) return { status: 'rejected', reason: 'busy' };
-        const requestId = newId();
-        let resolveSettled!: () => void;
-        const requestScope: ChatRequestScope = {
-            requestId,
-            originDb: getDb(),
-            workspaceId: getActiveWorkspaceId() ?? 'local',
-            accumulator: streamAcc,
-            threadId: threadIdRef.value,
-            cancelled: false,
-            settled: new Promise<void>((resolve) => {
-                resolveSettled = resolve;
-            }),
-            resolveSettled,
-            abortController: null,
-            toolLedger: new Map(),
-        };
+        if (activeRequestId || loading.value)
+            return { status: 'rejected', reason: 'busy' };
+        const requestScope = admitRequest('send');
+        const requestId = requestScope.requestId;
         activeRequestId = requestId;
         activeRequestScope = requestScope;
         requestScope.accumulator.reset();
-        loading.value = true;
-        requestState.value = { status: 'admitted', requestId };
         let result: SendResult = {
             status: 'failed',
             requestId,
@@ -1622,14 +1790,34 @@ export function useChat(
                 { toast: true }
             );
         } finally {
+            if (!requestScope.finalization && result.status !== 'detached') {
+                const finalization = await finalizeRequest(requestScope, {
+                    outcome:
+                        result.status === 'aborted'
+                            ? 'aborted'
+                            : result.status === 'complete'
+                              ? 'completed'
+                              : 'failed',
+                    error:
+                        'error' in result && result.error
+                            ? new Error(result.error)
+                            : undefined,
+                    messageError:
+                        result.status === 'aborted'
+                            ? 'stopped'
+                            : 'error' in result
+                              ? result.error
+                              : undefined,
+                    persistence: requestScope.jobId ? 'tracker' : 'request',
+                });
+                reportFinalization(finalization);
+            }
             if (activeRequestId === requestId) activeRequestId = null;
             if (activeRequestScope === requestScope) {
                 activeRequestScope = null;
                 abortController.value = null;
-                loading.value = false;
-                requestState.value = { status: 'terminal', requestId, result };
             }
-            requestScope.resolveSettled();
+            settleRequest(requestScope, result);
             if (
                 result.status !== 'detached' &&
                 requestScope.workflowMessageId
@@ -1749,15 +1937,8 @@ export function useChat(
             return { status: 'rejected', requestId, reason: 'client_limit' };
 
         if (!requestScope.threadId) {
-            let effectivePromptId: string | null =
-                pendingPromptIdRef.value || null;
-            if (!effectivePromptId) {
-                try {
-                    effectivePromptId = await getDefaultPromptId();
-                } catch {
-                    /* intentionally empty */
-                }
-            }
+            const effectivePromptId =
+                pendingPromptIdRef.value || DEFAULT_PROMPT_SELECTION;
             try {
                 const { settings } = useAiSettings();
                 const settingsValue = settings.value as
@@ -1985,11 +2166,26 @@ export function useChat(
                 ? serializeFileHashes(file_hashes)
                 : undefined,
         });
-        requestState.value = {
+        requestScope.userMessageId = userDbMsg.id;
+        publishRequest(requestScope, {
             status: 'persisted',
             requestId,
             userMessageId: userDbMsg.id,
-        };
+        });
+        if (sendMessagesParams.onUserPersisted) {
+            try {
+                await sendMessagesParams.onUserPersisted(userDbMsg.id);
+            } catch (error) {
+                reportError(
+                    err('ERR_INTERNAL', 'Failed to finalize retried turn', {
+                        severity: 'error',
+                        tags: { domain: 'chat', stage: 'retry-persisted' },
+                    }),
+                    { toast: true }
+                );
+                if (import.meta.dev) console.warn('[useChat] retry persistence callback failed', error);
+            }
+        }
         const rawUser: ChatMessage = {
             role: 'user',
             content: parts,
@@ -2019,7 +2215,6 @@ export function useChat(
             }
         }
 
-        loading.value = true;
         requestScope.streamId = undefined;
         streamId.value = undefined;
         backgroundJobId.value = null;
@@ -2085,17 +2280,7 @@ export function useChat(
                 Array.isArray(effectiveMessages) ? effectiveMessages : []
             ).filter(shouldKeepAssistantMessage);
 
-            const budgetModelId = stripModelVariantSuffix(
-                stripThinkingSuffix(modelId)
-            );
-            const budgetModelMeta =
-                catalog.value.find(
-                    (candidate: ModelInfo) => candidate.id === budgetModelId
-                ) ||
-                favoriteModels.value.find(
-                    (candidate: ModelInfo) => candidate.id === budgetModelId
-                ) ||
-                modelMeta;
+            const budgetModelMeta = await resolveModelMetadata(modelId);
             const maxInputTokens = resolveChatInputTokenBudget(budgetModelMeta);
 
             let orMessages = await buildOpenRouterMessagesForSend({
@@ -2160,12 +2345,13 @@ export function useChat(
                 }
             )) as StoredMessage;
             requestScope.assistantMessageId = assistantDbMsg.id;
-            requestState.value = {
+            requestScope.assistantRecord = assistantDbMsg;
+            publishRequest(requestScope, {
                 status: 'streaming',
                 requestId,
                 userMessageId: userDbMsg.id,
                 assistantMessageId: assistantDbMsg.id,
-            };
+            });
             // Track file hashes across loop iterations
             const assistantFileHashes: string[] = [];
             const persistAssistant = makeAssistantPersister(
@@ -2197,10 +2383,15 @@ export function useChat(
             });
 
             const toolRegistry = useToolRegistry();
-            const enabledToolDefs = toolRegistry.getEnabledDefinitions({
+            const modelSupportsTools = !budgetModelMeta?.supported_parameters
+                || budgetModelMeta.supported_parameters.includes('tools');
+            const enabledToolDefs = modelSupportsTools ? toolRegistry.getEnabledDefinitions({
                 workspaceId: requestScope.workspaceId,
                 threadId: requestThreadId,
-            });
+            }) : [];
+            const foregroundToolDefs = enabledToolDefs.filter(
+                (tool) => tool.runtime !== 'server'
+            );
 
             // Track tool calls across all loop iterations (persists state)
             const activeToolCalls = new Map<string, ToolCallInfo>();
@@ -2216,6 +2407,8 @@ export function useChat(
                 'ai.chat.messages:filter:before_send',
                 { messages: orMessages }
             );
+            if (requestScope.cancelled || !requestScope.ownsView())
+                throw new DOMException('Chat request cancelled', 'AbortError');
 
             if (
                 typeof filteredMessages === 'object' &&
@@ -2249,7 +2442,7 @@ export function useChat(
                 const uiAssistant = ensureUiMessage(workflowAssistant);
                 uiAssistant.pending = true;
                 messages.value.push(uiAssistant);
-                loading.value = false;
+
                 requestScope.abortController = null;
                 abortController.value = null;
                 return {
@@ -2269,71 +2462,15 @@ export function useChat(
             if (orMessages.length === 0) {
                 const emptyContextError =
                     'No model input remained after request filters.';
-                const failedAssistant = resolveUiMessage(assistantDbMsg.id);
-                if (failedAssistant) {
-                    failedAssistant.pending = false;
-                    failedAssistant.error = 'empty_context';
-                    messages.value = [...messages.value];
-                }
-
-                // The assistant placeholder was persisted before the final
-                // before_send hook ran. Finalize it here so a filter that
-                // removes every provider message cannot strand a pending row.
-                // Keep the user message and the failed assistant record in
-                // history; this makes the terminal outcome visible after a
-                // reload and preserves retry/branching invariants.
-                let finalizationError: unknown = null;
-                try {
-                    await persistAssistant({
-                        content: failedAssistant?.text ?? '',
-                        reasoning: failedAssistant?.reasoning_text ?? null,
-                        toolCalls: failedAssistant?.toolCalls ?? null,
-                        finalize: true,
-                    });
-                } catch (error) {
-                    finalizationError = error;
-                }
-                try {
-                    await updateMessageRecord(
-                        requestScope.originDb,
-                        assistantDbMsg.id,
-                        {
-                            pending: false,
-                            error: 'empty_context',
-                            data: {
-                                content: failedAssistant?.text ?? '',
-                                reasoning_text:
-                                    failedAssistant?.reasoning_text ?? null,
-                                generation_state: 'error',
-                                error: 'empty_context',
-                            },
-                        },
-                        assistantDbMsg
-                    );
-                } catch (error) {
-                    finalizationError ??= error;
-                }
-                if (finalizationError) {
-                    reportError(
-                        err(
-                            'ERR_DB_WRITE_FAILED',
-                            'Failed to finalize the filtered assistant message.',
-                            {
-                                cause: finalizationError,
-                                tags: {
-                                    domain: 'chat',
-                                    threadId: requestThreadId,
-                                    messageId: assistantDbMsg.id,
-                                    stage: 'before_send_filter',
-                                },
-                            }
-                        ),
-                        { silent: true }
-                    );
-                }
-                requestScope.accumulator.finalize({
-                    error: new Error(emptyContextError),
-                });
+                requestScope.message = resolveUiMessage(assistantDbMsg.id);
+                reportFinalization(
+                    await finalizeRequest(requestScope, {
+                        outcome: 'failed',
+                        error: new Error(emptyContextError),
+                        messageError: 'empty_context',
+                        generationState: 'error',
+                    })
+                );
                 toast.add({
                     title: 'Message not sent',
                     description:
@@ -2353,7 +2490,6 @@ export function useChat(
                     }),
                     { toast: false }
                 );
-                loading.value = false;
                 return {
                     status: 'failed',
                     requestId,
@@ -2364,10 +2500,24 @@ export function useChat(
                 };
             }
 
+            const hasBrowserTools = enabledToolDefs.some(
+                (tool) => tool.runtime === 'client'
+            );
+            const browserToolBridgeAvailable =
+                !hasBrowserTools ||
+                !backgroundStreamingAllowed.value ||
+                await isBackgroundClientToolBridgeAvailable();
             const allowBackgroundStreaming =
                 backgroundStreamingAllowed.value &&
+                browserToolBridgeAvailable &&
                 modalities.length === 1 &&
                 modalities[0] === 'text';
+            if (requestScope.cancelled || !ownsCurrentView(requestScope)) {
+                reportFinalization(await finalizeRequest(requestScope, {
+                    outcome: 'aborted', messageError: 'stopped', deleteEmpty: true,
+                }));
+                return { status: 'aborted', requestId, reason: 'aborted', userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id };
+            }
             logBgStream('send-message-stream-mode-decision', {
                 threadId: requestThreadId,
                 allowBackgroundStreaming,
@@ -2396,6 +2546,7 @@ export function useChat(
                 const uiAssistant = ensureUiMessage(rawAssistant);
                 uiAssistant.pending = true;
                 tailAssistant.value = uiAssistant;
+                requestScope.message = uiAssistant;
 
                 // Background admission can block before a job ID exists. Keep it
                 // cancellable through the same request-scoped controller as foreground.
@@ -2483,6 +2634,10 @@ export function useChat(
                         toolRuntime,
                         signal: requestScope.abortController.signal,
                     });
+                    requestScope.jobId = result.jobId;
+                    if (requestScope.cancelled && requestScope.stopConfirmation) {
+                        throw new DOMException('Admission cancelled', 'AbortError');
+                    }
 
                     logBgStream('send-message-background-job-created', {
                         threadId: requestThreadId,
@@ -2520,6 +2675,7 @@ export function useChat(
                         }
                     );
 
+                    requestScope.jobId = result.jobId;
                     const ownsCurrentThread = ownsCurrentView(requestScope);
                     if (ownsCurrentThread) {
                         backgroundJobId.value = result.jobId;
@@ -2541,6 +2697,7 @@ export function useChat(
                               generationId: newStreamId,
                               initialContent: '',
                               useSse: backgroundStreamingAllowed.value,
+                              request: requestScope,
                           })
                         : ensureBackgroundJobTracker({
                               jobId: result.jobId,
@@ -2563,6 +2720,40 @@ export function useChat(
                         messageId: assistantDbMsg.id,
                     });
                     const completion = await tracker.completion;
+                    if (completion.trackingInterrupted) {
+                        requestScope.attached.value = false;
+                        return {
+                            status: 'detached',
+                            requestId,
+                            reason: 'detached',
+                            userMessageId: userDbMsg.id,
+                            assistantMessageId: assistantDbMsg.id,
+                        };
+                    }
+                    reportFinalization(
+                        await finalizeRequest(requestScope, {
+                            outcome:
+                                completion.status === 'complete'
+                                    ? 'completed'
+                                    : completion.status === 'aborted'
+                                      ? 'aborted'
+                                      : 'failed',
+                            content: completion.content ?? tracker.lastContent,
+                            reasoning: completion.reasoning_text,
+                            toolCalls: normalizeBackgroundToolCalls(
+                                completion.tool_calls
+                            ),
+                            messageError:
+                                completion.status === 'complete'
+                                    ? null
+                                    : completion.status === 'aborted'
+                                      ? 'stopped'
+                                      : (completion.error ??
+                                        'Background stream failed'),
+                            persistence: 'tracker',
+                            attempt: completion.attempt,
+                        })
+                    );
                     logBgStream('send-message-background-completed', {
                         jobId: tracker.jobId,
                         threadId: requestThreadId,
@@ -2590,7 +2781,7 @@ export function useChat(
                     }
                 } catch (error) {
                     if (
-                        aborted.value ||
+                        requestScope.cancelled ||
                         requestScope.abortController?.signal.aborted ||
                         (error instanceof Error && error.name === 'AbortError')
                     ) {
@@ -2614,54 +2805,16 @@ export function useChat(
                         error: errMessage,
                         ownsCurrentView: ownsView,
                     });
-                    const target = ownsView
+                    requestScope.message = ownsView
                         ? resolveUiMessage(assistantDbMsg.id)
-                        : undefined;
-                    if (ownsView && target) {
-                        target.pending = false;
-                        target.error = errMessage;
-                        messages.value = [...messages.value];
-                    }
-                    try {
-                        await persistAssistant({
-                            content: target?.text ?? '',
-                            reasoning: target?.reasoning_text ?? null,
-                            toolCalls: target?.toolCalls ?? null,
-                            finalize: true,
-                            terminalState: 'failed',
-                        });
-                        await updateMessageRecord(
-                            requestScope.originDb,
-                            assistantDbMsg.id,
-                            {
-                                pending: false,
-                                error: errMessage,
-                                data: {
-                                    background_job_status: 'error',
-                                    background_job_error: errMessage,
-                                    error: errMessage,
-                                },
-                            }
-                        );
-                    } catch (persistError) {
-                        warnBgStream('background-start-finalize-failed', {
-                            threadId: requestThreadId,
-                            messageId: assistantDbMsg.id,
-                            error:
-                                persistError instanceof Error
-                                    ? persistError.message
-                                    : String(persistError),
-                        });
-                    }
-                    if (ownsView) {
-                        requestScope.accumulator.finalize({
+                        : requestScope.message;
+                    reportFinalization(
+                        await finalizeRequest(requestScope, {
+                            outcome: 'failed',
                             error: new Error(errMessage),
-                        });
-                        loading.value = false;
-                        backgroundJobId.value = null;
-                        backgroundJobMode.value = 'none';
-                        backgroundJobInfo.value = null;
-                    }
+                            messageError: errMessage,
+                        })
+                    );
                     return {
                         status: 'failed',
                         requestId,
@@ -2689,7 +2842,10 @@ export function useChat(
                 orMessages,
                 modalities,
                 reasoning,
-                tools: enabledToolDefs.length > 0 ? enabledToolDefs : undefined,
+                tools:
+                    foregroundToolDefs.length > 0
+                        ? foregroundToolDefs
+                        : undefined,
                 abortSignal: requestScope.abortController.signal,
                 assistantId: assistantDbMsg.id,
                 parentTurnId: userDbMsg.id,
@@ -2722,85 +2878,98 @@ export function useChat(
             if (errorsAfter > errorsBefore) {
                 throw new Error('Incoming filter threw an exception');
             }
-            if (current.pending) current.pending = false;
-            current.text = incoming;
-            await persistAssistant({
+            requestScope.message = current;
+            const finalization = await finalizeRequest(requestScope, {
+                outcome: 'completed',
                 content: incoming,
                 reasoning: current.reasoning_text ?? null,
                 toolCalls: current.toolCalls ?? null,
-                finalize: true, // Clear pending flag to trigger sync
-            });
-            // Write the finished turn (assistant + tool rows) back into the
-            // canonical history. Without this, rawMessages keeps the empty
-            // placeholder and the next request loses the answer and tools.
-            try {
-                await reloadTurnIntoRawMessages(
-                    requestScope.originDb,
-                    requestThreadId,
-                    assistantDbMsg.id,
-                    rawMessages,
-                    threadIdRef
-                );
-            } catch (writebackError) {
-                if (import.meta.dev) {
-                    console.warn(
-                        '[useChat] turn writeback failed',
-                        writebackError
-                    );
-                }
-            }
-            const finalized: StoredMessage = {
-                ...assistantDbMsg,
-                file_hashes: assistantFileHashes.length
-                    ? serializeFileHashes(assistantFileHashes)
-                    : assistantDbMsg.file_hashes,
-            };
-            await hooks.doAction('ai.chat.stream:action:complete', {
-                threadId: requestThreadId,
-                assistantId: assistantDbMsg.id,
-                streamId: newStreamId,
-                totalLength: incoming.length,
-                reasoningLength: (current.reasoning_text || '').length,
-                fileHashes: finalized.file_hashes || null,
-            });
-            try {
-                const ctx = getActivePaneContext();
-                if (ctx) {
-                    void hooks.doAction('ui.pane.msg:action:received', {
-                        pane: ctx.pane,
-                        paneIndex: ctx.paneIndex,
-                        message: {
-                            id: finalized.id,
-                            threadId: requestThreadId,
-                            length: incoming.length,
-                            fileHashes: finalized.file_hashes || null,
-                            reasoningLength: (current.reasoning_text || '')
-                                .length,
-                        },
+                afterPersist: async () => {
+                    // Write the finished turn (assistant + tool rows) back into the
+                    // canonical history. Without this, rawMessages keeps the empty
+                    // placeholder and the next request loses the answer and tools.
+                    try {
+                        if (requestScope.ownsView())
+                            await reloadTurnIntoRawMessages(
+                                requestScope.originDb,
+                                requestThreadId,
+                                assistantDbMsg.id,
+                                rawMessages,
+                                threadIdRef
+                            );
+                    } catch (writebackError) {
+                        if (import.meta.dev) {
+                            console.warn(
+                                '[useChat] turn writeback failed',
+                                writebackError
+                            );
+                        }
+                    }
+                    const finalized: StoredMessage = {
+                        ...assistantDbMsg,
+                        file_hashes: assistantFileHashes.length
+                            ? serializeFileHashes(assistantFileHashes)
+                            : assistantDbMsg.file_hashes,
+                    };
+                    await hooks.doAction('ai.chat.stream:action:complete', {
+                        threadId: requestThreadId,
+                        assistantId: assistantDbMsg.id,
+                        streamId: newStreamId,
+                        totalLength: incoming.length,
+                        reasoningLength: (current.reasoning_text || '').length,
+                        fileHashes: finalized.file_hashes || null,
                     });
-                }
-            } catch {
-                /* intentionally empty */
-            }
-            const endedAt = Date.now();
-            await hooks.doAction('ai.chat.send:action:after', {
-                threadId: requestThreadId,
-                request: { modelId, userId: userDbMsg.id },
-                response: {
-                    assistantId: assistantDbMsg.id,
-                    length: incoming.length,
+                    try {
+                        const ctx = getActivePaneContext();
+                        if (ctx) {
+                            void hooks.doAction('ui.pane.msg:action:received', {
+                                pane: ctx.pane,
+                                paneIndex: ctx.paneIndex,
+                                message: {
+                                    id: finalized.id,
+                                    threadId: requestThreadId,
+                                    length: incoming.length,
+                                    fileHashes: finalized.file_hashes || null,
+                                    reasoningLength: (
+                                        current.reasoning_text || ''
+                                    ).length,
+                                },
+                            });
+                        }
+                    } catch {
+                        /* intentionally empty */
+                    }
+                    const endedAt = Date.now();
+                    await hooks.doAction('ai.chat.send:action:after', {
+                        threadId: requestThreadId,
+                        request: { modelId, userId: userDbMsg.id },
+                        response: {
+                            assistantId: assistantDbMsg.id,
+                            length: incoming.length,
+                        },
+                        timings: {
+                            startedAt,
+                            endedAt,
+                            durationMs: endedAt - startedAt,
+                        },
+                        aborted: false,
+                    });
                 },
-                timings: {
-                    startedAt,
-                    endedAt,
-                    durationMs: endedAt - startedAt,
-                },
-                aborted: false,
             });
-            requestScope.accumulator.finalize();
-            backgroundJobId.value = null;
-            backgroundJobMode.value = 'none';
-            backgroundJobInfo.value = null;
+            reportFinalization(finalization);
+            if (finalization.persistenceError) {
+                return {
+                    status: 'failed',
+                    requestId,
+                    reason: 'stream_error',
+                    error:
+                        finalization.persistenceError instanceof Error
+                            ? finalization.persistenceError.message
+                            : String(finalization.persistenceError),
+                    userMessageId: userDbMsg.id,
+                    assistantMessageId: assistantDbMsg.id,
+                };
+            }
             terminalResult = {
                 status: 'complete',
                 requestId,
@@ -2819,135 +2988,59 @@ export function useChat(
                 }
             }
             if (
-                aborted.value ||
-                requestScope.abortController?.signal.aborted === true
+                visibleRequest.value === requestScope &&
+                tailAssistant.value?.id === requestScope.assistantMessageId
+            )
+                requestScope.message = tailAssistant.value;
+            const stopped =
+                requestScope.cancelled ||
+                requestScope.abortController?.signal.aborted === true;
+            if (
+                stopped &&
+                requestScope.stopConfirmation &&
+                !(await requestScope.stopConfirmation)
             ) {
+                requestScope.attached.value = false;
+                return {
+                    status: 'detached',
+                    requestId,
+                    reason: 'detached',
+                    userMessageId: userDbMsg.id,
+                    assistantMessageId: requestScope.assistantMessageId,
+                };
+            }
+            const visibleError = isStaleDevModuleError(err)
+                ? new Error(
+                      'The development server reloaded while this message was starting. Reload OR3, then resend the message.'
+                  )
+                : err instanceof Error
+                  ? err
+                  : new Error(String(err));
+            if (stopped) {
                 terminalResult = {
                     status: 'aborted',
                     requestId,
                     reason: 'aborted',
                     userMessageId: userDbMsg.id,
-                    assistantMessageId: tailAssistant.value?.id,
+                    assistantMessageId: requestScope.assistantMessageId,
                 };
-                if (tailAssistant.value?.pending)
-                    tailAssistant.value.pending = false;
-                try {
-                    await hooks.doAction('ai.chat.send:action:after', {
-                        threadId: requestThreadId,
-                        aborted: true,
-                    });
-                } catch (e) {
-                    if (import.meta.dev) {
-                        console.warn('[useChat] abort hook failed', e);
-                    }
-                }
-                // Only delete if there's no text; otherwise preserve with 'stopped' status
-                if (tailAssistant.value?.id && !tailAssistant.value.text) {
-                    try {
-                        const db = getDb();
-                        await db.transaction(
-                            'rw',
-                            getWriteTxTableNames(db, 'messages', {
-                                includeTombstones: true,
-                            }),
-                            async () => {
-                                await db.messages.delete(
-                                    tailAssistant.value!.id
-                                );
-                            }
-                        );
-                        const idx = rawMessages.value.findIndex(
-                            (m) => m.id === tailAssistant.value!.id
-                        );
-                        if (idx >= 0) rawMessages.value.splice(idx, 1);
-                    } catch (e) {
-                        if (import.meta.dev) {
-                            console.warn(
-                                '[useChat] failed to delete empty assistant',
-                                e
-                            );
-                        }
-                    }
-                    tailAssistant.value = null;
-                } else if (
-                    tailAssistant.value?.id &&
-                    tailAssistant.value.text
-                ) {
-                    // Preserve partial message with 'stopped' status for continue functionality
-                    tailAssistant.value.pending = false;
-                    tailAssistant.value.error = 'stopped';
-
-                    // Add to messages array if not already there (flush before nulling)
-                    if (
-                        !messages.value.find(
-                            (m) => m.id === tailAssistant.value!.id
-                        )
-                    ) {
-                        messages.value.push(tailAssistant.value);
-                    } else {
-                        // Update existing message in array
-                        const msgIdx = messages.value.findIndex(
-                            (m) => m.id === tailAssistant.value!.id
-                        );
-                        if (msgIdx >= 0) {
-                            messages.value[msgIdx] = { ...tailAssistant.value };
-                        }
-                    }
-
-                    const rawIdx = rawMessages.value.findIndex(
-                        (m) => m.id === tailAssistant.value!.id
-                    );
-                    if (rawIdx >= 0) {
-                        const existingRaw = rawMessages.value[rawIdx];
-                        if (existingRaw) {
-                            rawMessages.value[rawIdx] = {
-                                ...existingRaw,
-                                content: tailAssistant.value.text,
-                                error: 'stopped',
-                            };
-                        }
-                    }
-                    try {
-                        const existing =
-                            (await requestScope.originDb.messages.get(
-                                tailAssistant.value.id
-                            )) as StoredMessage | undefined;
-                        const baseData =
-                            existing?.data && typeof existing.data === 'object'
-                                ? (existing.data as Record<string, unknown>)
-                                : {};
-                        await updateMessageRecord(
-                            requestScope.originDb,
-                            tailAssistant.value.id,
-                            {
-                                pending: false, // Clear pending so sync captures this
-                                data: {
-                                    ...baseData,
-                                    content: tailAssistant.value.text,
-                                    reasoning_text:
-                                        tailAssistant.value.reasoning_text ??
-                                        null,
-                                    error: 'stopped', // Store in data for reliable sync
-                                },
-                                error: 'stopped', // Also at top-level for local reads
-                            },
-                            existing
-                        );
-                    } catch {
-                        /* intentionally empty */
-                    }
-                    tailAssistant.value = null;
-                }
+                reportFinalization(
+                    await finalizeRequest(requestScope, {
+                        outcome: 'aborted',
+                        messageError: 'stopped',
+                        deleteEmpty: true,
+                        persistence: requestScope.backgroundAdmissionId
+                            ? 'tracker'
+                            : 'request',
+                        beforePersist: async () => {
+                            await hooks.doAction('ai.chat.send:action:after', {
+                                threadId: requestThreadId,
+                                aborted: true,
+                            });
+                        },
+                    })
+                );
             } else {
-                const visibleError = isStaleDevModuleError(err)
-                    ? new Error(
-                          'The development server reloaded while this message was starting. Reload OR3, then resend the message.'
-                      )
-                    : err;
-                const terminalError =
-                    visibleError instanceof Error
-                        ? visibleError.message
-                        : String(visibleError);
                 terminalResult = {
                     status: 'failed',
                     requestId,
@@ -2955,19 +3048,10 @@ export function useChat(
                         err instanceof ToolIterationLimitError
                             ? 'tool_iteration_limit'
                             : 'stream_error',
-                    error: terminalError,
+                    error: visibleError.message,
                     userMessageId: userDbMsg.id,
-                    assistantMessageId: tailAssistant.value?.id,
+                    assistantMessageId: requestScope.assistantMessageId,
                 };
-                const lastUser = [...messages.value]
-                    .reverse()
-                    .find((m) => m.role === 'user');
-                const retryFn = lastUser
-                    ? () => {
-                          void retryMessage(lastUser.id);
-                      }
-                    : undefined;
-                // Inline tag object (Req 18.1) for clarity & tree-shaking
                 reportError(visibleError, {
                     code: 'ERR_STREAM_FAILURE',
                     tags: {
@@ -2977,101 +3061,36 @@ export function useChat(
                         modelId: currentModelId || '',
                         stage: 'stream',
                     },
-                    retry: retryFn,
                     toast: true,
-                    retryable: !!retryFn,
                 });
-                const e =
-                    visibleError instanceof Error
-                        ? visibleError
-                        : new Error(String(visibleError));
-                requestScope.accumulator.finalize({ error: e });
-                await hooks.doAction('ai.chat.stream:action:error', {
-                    threadId: requestThreadId,
-                    streamId: requestScope.streamId,
-                    error: e,
-                    aborted: false,
-                });
-                if (!tailAssistant.value?.text && tailAssistant.value?.id) {
-                    try {
-                        await requestScope.originDb.transaction(
-                            'rw',
-                            getWriteTxTableNames(
-                                requestScope.originDb,
-                                'messages',
+                reportFinalization(
+                    await finalizeRequest(requestScope, {
+                        outcome: 'failed',
+                        error: visibleError,
+                        messageError: 'stream_interrupted',
+                        generationState: 'interrupted',
+                        deleteEmpty: true,
+                        beforePersist: async () => {
+                            if (requestScope.ownsView())
+                                requestScope.accumulator.finalize({
+                                    error: visibleError,
+                                });
+                            await hooks.doAction(
+                                'ai.chat.stream:action:error',
                                 {
-                                    includeTombstones: true,
+                                    threadId: requestThreadId,
+                                    streamId: requestScope.streamId,
+                                    error: visibleError,
+                                    aborted: false,
                                 }
-                            ),
-                            async () => {
-                                await requestScope.originDb.messages.delete(
-                                    tailAssistant.value!.id
-                                );
-                            }
-                        );
-                        const idx = rawMessages.value.findIndex(
-                            (m) => m.id === tailAssistant.value!.id
-                        );
-                        if (idx >= 0) rawMessages.value.splice(idx, 1);
-                    } catch {
-                        /* intentionally empty */
-                    }
-                    tailAssistant.value = null;
-                } else if (
-                    tailAssistant.value?.id &&
-                    tailAssistant.value.text
-                ) {
-                    tailAssistant.value.pending = false;
-                    tailAssistant.value.error = 'stream_interrupted';
-                    const rawIdx = rawMessages.value.findIndex(
-                        (m) => m.id === tailAssistant.value!.id
-                    );
-                    if (rawIdx >= 0) {
-                        const existingRaw = rawMessages.value[rawIdx];
-                        if (existingRaw) {
-                            rawMessages.value[rawIdx] = {
-                                ...existingRaw,
-                                error: 'stream_interrupted',
-                            };
-                        }
-                    }
-                    try {
-                        const existing =
-                            (await requestScope.originDb.messages.get(
-                                tailAssistant.value.id
-                            )) as StoredMessage | undefined;
-                        const baseData =
-                            existing?.data && typeof existing.data === 'object'
-                                ? (existing.data as Record<string, unknown>)
-                                : {};
-                        await updateMessageRecord(
-                            requestScope.originDb,
-                            tailAssistant.value.id,
-                            {
-                                pending: false, // Clear pending so sync captures this
-                                data: {
-                                    ...baseData,
-                                    content: tailAssistant.value.text,
-                                    reasoning_text:
-                                        tailAssistant.value.reasoning_text ??
-                                        null,
-                                    error: 'stream_interrupted', // Store in data for reliable sync
-                                },
-                                error: 'stream_interrupted', // Also at top-level for local reads
-                            },
-                            existing
-                        );
-                    } catch {
-                        /* intentionally empty */
-                    }
-                } else if (tailAssistant.value?.pending) {
-                    tailAssistant.value.pending = false;
-                }
+                            );
+                        },
+                    })
+                );
             }
         } finally {
             // CRITICAL: Ensure abort controller is cleaned up to prevent memory leak
             if (activeRequestScope === requestScope) {
-                loading.value = false;
                 if (abortController.value) {
                     abortController.value = null;
                 }
@@ -3101,7 +3120,7 @@ export function useChat(
 
     /**
      * Purpose:
-     * Retries a prior user message by removing its assistant response and resending.
+     * Retries a prior turn by moving its user/assistant pair to the bottom.
      *
      * Behavior:
      * - Rebuilds message context from local state
@@ -3141,23 +3160,16 @@ export function useChat(
      * Constraints:
      * - Requires an existing assistant message id
      */
-    let activeContinuationScope: {
-        requestId: string;
-        backgroundAdmissionId?: string;
-        messageId?: string;
-        settled: Promise<void>;
-        resolveSettled: () => void;
-    } | null = null;
+    let activeContinuationScope: ChatRequestScope | null = null;
     async function continueMessage(messageId: string, modelOverride?: string) {
-        const requestId = newId();
-        let resolveSettled!: () => void;
-        const settled = new Promise<void>((resolve) => {
-            resolveSettled = resolve;
-        });
-        activeContinuationScope = { requestId, settled, resolveSettled };
+        if (loading.value || activeRequestId) return;
+        const request = admitRequest('continue');
+        const requestId = request.requestId;
+        activeContinuationScope = request;
         try {
             await continueMessageImpl(
                 {
+                    request,
                     loading,
                     aborted,
                     abortController,
@@ -3174,38 +3186,25 @@ export function useChat(
                     defaultModelId: DEFAULT_AI_MODEL,
                     getSystemPromptContent,
                     useAiSettings,
-                    resolveInputTokenBudget: (selectedModelId: string) => {
-                        const normalizedId = stripModelVariantSuffix(
-                            stripThinkingSuffix(selectedModelId)
-                        );
-                        const { catalog, favoriteModels } = useModelStore();
-                        const metadata =
-                            catalog.value.find(
-                                (candidate: ModelInfo) =>
-                                    candidate.id === normalizedId
-                            ) ||
-                            favoriteModels.value.find(
-                                (candidate: ModelInfo) =>
-                                    candidate.id === normalizedId
-                            );
-                        return resolveChatInputTokenBudget(metadata);
-                    },
+                    resolveInputTokenBudget: async (selectedModelId: string) =>
+                        resolveChatInputTokenBudget(
+                            await resolveModelMetadata(selectedModelId)
+                        ),
                     backgroundStreamingAllowed:
                         backgroundStreamingAllowed.value,
-                    workspaceId: getActiveWorkspaceId() ?? 'local',
+                    workspaceId: request.workspaceId,
                     userId: notificationUserId.value,
                     beginBackgroundAdmission: (admissionId, assistantId) => {
                         backgroundJobMode.value = 'background';
                         if (activeContinuationScope?.requestId === requestId) {
                             activeContinuationScope.backgroundAdmissionId =
                                 admissionId;
-                            activeContinuationScope.messageId = assistantId;
+                            activeContinuationScope.assistantMessageId =
+                                assistantId;
                         }
                     },
                     attachBackgroundJob: (params) => {
-                        const ownsVisibleThread =
-                            threadIdRef.value === params.threadId &&
-                            !detached.value;
+                        const ownsVisibleThread = request.ownsView();
                         if (ownsVisibleThread) {
                             backgroundJobId.value = params.jobId;
                             backgroundJobInfo.value = {
@@ -3219,6 +3218,7 @@ export function useChat(
                                 workspaceId: params.workspaceId,
                                 canonicalHistory: true,
                                 useSse: backgroundStreamingAllowed.value,
+                                request,
                             });
                         }
                         return ensureBackgroundJobTracker({
@@ -3237,10 +3237,31 @@ export function useChat(
                 modelOverride
             );
         } finally {
+            if (!request.finalization && request.attached.value)
+                reportFinalization(
+                    await finalizeRequest(request, {
+                        outcome: request.cancelled ? 'aborted' : 'failed',
+                        messageError: request.cancelled
+                            ? 'stopped'
+                            : 'stream_interrupted',
+                    })
+                );
+            if (request.finalization) await request.finalization;
+            const finalState = request.publicState.value;
+            settleRequest(
+                request,
+                finalState.status === 'terminal'
+                    ? finalState.result
+                    : {
+                          status: 'detached',
+                          requestId,
+                          reason: 'detached',
+                          assistantMessageId: request.assistantMessageId,
+                      }
+            );
             if (activeContinuationScope?.requestId === requestId) {
                 activeContinuationScope = null;
             }
-            resolveSettled();
         }
     }
 
@@ -3280,6 +3301,7 @@ export function useChat(
             (loading.value && abortController.value)
         );
         if (keepTracking) detached.value = true;
+        if (visibleRequest.value) visibleRequest.value.attached.value = false;
         clearBackgroundJobSubscriptions({ keepTracking });
         disposeHooks();
     }
@@ -3340,6 +3362,8 @@ export function useChat(
         if (isBackgroundActive) {
             // Background jobs are durable, so detach only their UI bindings.
             detached.value = true;
+            if (visibleRequest.value)
+                visibleRequest.value.attached.value = false;
             clearBackgroundJobSubscriptions({ keepTracking: true });
         } else if (isForegroundStreamActive) {
             // Abort and fully settle a foreground stream before changing the
@@ -3350,7 +3374,8 @@ export function useChat(
             const foregroundScope = activeRequestScope;
             const continuationScope = activeContinuationScope;
             try {
-                abortController.value?.abort();
+                if (foregroundScope) cancelRequest(foregroundScope);
+                if (continuationScope) cancelRequest(continuationScope);
             } catch {
                 /* intentionally empty */
             }
@@ -3374,6 +3399,7 @@ export function useChat(
             // checks stop it, but await settlement before swapping refs.
             if (activeRequestScope) activeRequestScope.cancelled = true;
             const continuationScope = activeContinuationScope;
+            if (continuationScope) cancelRequest(continuationScope);
             if (continuationScope) await continuationScope.settled;
             clearBackgroundJobSubscriptions({ keepTracking: false });
         }
@@ -3388,8 +3414,8 @@ export function useChat(
                 : null;
         backgroundJobId.value = null;
         backgroundJobMode.value = 'none';
-        loading.value = false;
-        requestState.value = { status: 'idle' };
+
+        visibleRequest.value = null;
         if (!isForegroundStreamActive) {
             activeRequestId = null;
             activeRequestScope = null;
@@ -3549,66 +3575,25 @@ export function useChat(
      * state is only touched while the stopped job/admission still owns the
      * visible view, so a late confirmation cannot abort a newer request.
      */
-    function markBackgroundStopped(
-        messageId: string | undefined,
-        jobId?: string,
-        admissionId?: string
-    ): void {
-        const ownsView =
-            (jobId !== undefined && backgroundJobId.value === jobId) ||
-            (admissionId !== undefined &&
-                (activeRequestScope?.backgroundAdmissionId === admissionId ||
-                    activeContinuationScope?.backgroundAdmissionId ===
-                        admissionId));
-        if (ownsView) {
+    async function markBackgroundStopped(
+        request: ChatRequestScope | undefined
+    ): Promise<void> {
+        if (!request) return;
+        if (request.ownsView()) {
+            request.message = request.assistantMessageId
+                ? (resolveUiMessage(request.assistantMessageId) ??
+                  request.message)
+                : request.message;
             aborted.value = true;
-            backgroundJobId.value = null;
-            backgroundJobMode.value = 'none';
-            backgroundJobInfo.value = null;
-            if (abortController.value) {
-                try {
-                    abortController.value.abort();
-                } catch {
-                    /* intentionally empty */
-                }
-                abortController.value = null;
-            }
-            streamAcc.finalize({ aborted: true });
-            if (tailAssistant.value?.pending) {
-                tailAssistant.value.pending = false;
-            }
         }
-        if (!messageId) return;
-        if (ownsView) {
-            const target = resolveUiMessage(messageId);
-            if (target) {
-                target.pending = false;
-                target.error = 'stopped';
-                messages.value = [...messages.value];
-            }
-        }
-        const trackerDb =
-            (jobId ? backgroundJobTrackers.get(jobId)?.originDb : null) ??
-            getDb();
-        const canonicalHistory =
-            admissionId !== undefined ||
-            (jobId
-                ? backgroundJobTrackers.get(jobId)?.canonicalHistory === true
-                : false);
-        const persistStop = canonicalHistory
-            ? projectCanonicalBackgroundMessage
-            : updateMessageRecord;
-        void persistStop(trackerDb, messageId, {
-            pending: false,
-            error: 'stopped',
-            data: {
-                background_job_status: 'aborted',
-                generation_state: 'aborted',
-                error: 'stopped',
-            },
-        }).catch(() => {
-            /* durable projection is best-effort here; tracker also persists */
-        });
+        cancelRequest(request);
+        reportFinalization(
+            await finalizeRequest(request, {
+                outcome: 'aborted',
+                messageError: 'stopped',
+                persistence: 'canonical',
+            })
+        );
     }
 
     async function confirmBackgroundStop(
@@ -3617,6 +3602,7 @@ export function useChat(
     ): Promise<void> {
         if (backgroundStopsInFlight.has(jobId)) return;
         backgroundStopsInFlight.add(jobId);
+        const request = backgroundRequestScopes.get(jobId);
         logBgStream('abort-background-request', {
             jobId,
             messageId: info?.messageId ?? null,
@@ -3625,7 +3611,7 @@ export function useChat(
             const aborted = await abortBackgroundJob(jobId);
             if (aborted) {
                 logBgStream('abort-background-confirmed', { jobId });
-                markBackgroundStopped(info?.messageId, jobId);
+                await markBackgroundStopped(request);
                 return;
             }
             // The server did not confirm cancellation. Never label the row
@@ -3663,15 +3649,19 @@ export function useChat(
         }
     }
 
-    async function confirmAdmissionStop(admissionId: string): Promise<void> {
-        if (backgroundStopsInFlight.has(admissionId)) return;
+    async function confirmAdmissionStop(admissionId: string): Promise<boolean> {
+        if (backgroundStopsInFlight.has(admissionId)) return false;
         backgroundStopsInFlight.add(admissionId);
-        const scope = activeRequestScope;
+        const scope =
+            activeRequestScope?.backgroundAdmissionId === admissionId
+                ? activeRequestScope
+                : null;
         const continuation =
             activeContinuationScope?.backgroundAdmissionId === admissionId
                 ? activeContinuationScope
                 : null;
-        const messageId = scope?.assistantMessageId ?? continuation?.messageId;
+        const messageId =
+            scope?.assistantMessageId ?? continuation?.assistantMessageId;
         logBgStream('abort-admission-request', {
             admissionId,
             messageId: messageId ?? null,
@@ -3679,7 +3669,8 @@ export function useChat(
         // Cancel our own in-flight admission request immediately; the server
         // request below ensures a job that committed anyway gets cancelled.
         try {
-            (scope?.abortController ?? abortController.value)?.abort();
+            const request = scope ?? continuation;
+            if (request) cancelRequest(request);
         } catch {
             /* intentionally empty */
         }
@@ -3688,16 +3679,14 @@ export function useChat(
             if (result.aborted || result.pending) {
                 // `pending` means the server recorded a cancellation marker that
                 // the admission commit must honor, so projecting stopped is safe.
-                if (scope) scope.cancelled = true;
-                aborted.value = true;
-                markBackgroundStopped(messageId, result.jobId, admissionId);
+                await markBackgroundStopped(scope ?? continuation ?? undefined);
                 logBgStream('abort-admission-confirmed', {
                     admissionId,
                     aborted: result.aborted,
                     pending: result.pending,
                     jobId: result.jobId ?? null,
                 });
-                return;
+                return true;
             }
             logBgStream('abort-admission-unconfirmed', { admissionId });
             toast.add({
@@ -3722,6 +3711,7 @@ export function useChat(
         } finally {
             backgroundStopsInFlight.delete(admissionId);
         }
+        return false;
     }
 
     function abortChat() {
@@ -3738,14 +3728,18 @@ export function useChat(
             activeRequestScope?.backgroundAdmissionId ??
             activeContinuationScope?.backgroundAdmissionId;
         if (backgroundJobMode.value === 'background' && pendingAdmissionId) {
-            void confirmAdmissionStop(pendingAdmissionId);
+            const request = activeRequestScope ?? activeContinuationScope;
+            if (request && !request.stopConfirmation)
+                request.stopConfirmation =
+                    confirmAdmissionStop(pendingAdmissionId);
             return;
         }
 
-        const requestScope = activeRequestScope;
-        const requestAbortController =
-            requestScope?.abortController ?? abortController.value;
-        if (!loading.value || !requestAbortController) {
+        const requestScope =
+            activeRequestScope ??
+            activeContinuationScope ??
+            visibleRequest.value;
+        if (!loading.value || !requestScope) {
             logBgStream('abort-ignored-no-active-foreground', {
                 loading: loading.value,
                 hasAbortController: Boolean(abortController.value),
@@ -3759,7 +3753,7 @@ export function useChat(
         });
         aborted.value = true;
         try {
-            requestAbortController.abort();
+            cancelRequest(requestScope);
         } catch {
             /* intentionally empty */
         }

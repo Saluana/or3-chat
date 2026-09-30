@@ -25,7 +25,7 @@ import type {
     Post,
     Notification,
 } from './schema';
-import type { PendingOp, Tombstone, SyncState, SyncRun } from '~~/shared/sync/types';
+import type { PendingOp, Tombstone, SyncState, SyncRun, SnapshotItem } from '~~/shared/sync/types';
 import type { FileTransfer } from '~~/shared/storage/types';
 import { cleanupCursorManager } from '~/core/sync/cursor-manager';
 import { cleanupHookBridge } from '~/core/sync/hook-bridge';
@@ -61,6 +61,15 @@ export interface FileBlobRow {
     blob: Blob; // actual binary Blob
 }
 
+/** Temporary snapshot rows; never part of the synchronized data model. */
+export interface SnapshotStageRow {
+    id: string;
+    generation: string;
+    sequence: number;
+    /** Null only for the active-generation sentinel at sequence -1. */
+    item: SnapshotItem | null;
+}
+
 // Dexie database versioning & schema
 /**
  * Purpose:
@@ -92,6 +101,7 @@ export class Or3DB extends Dexie {
     tombstones!: Table<Tombstone, string>;
     sync_state!: Table<SyncState, string>;
     sync_runs!: Table<SyncRun, string>;
+    snapshot_staging!: Table<SnapshotStageRow, string>;
 
     constructor(name = 'or3-db') {
         super(name);
@@ -292,6 +302,13 @@ export class Or3DB extends Dexie {
                         applyReadyAt(op);
                     })
             );
+
+        // Version 18: Persist bounded snapshot pages until one transaction can
+        // install the validated chain and its cursor together. Interrupted
+        // attempts are discarded on the next snapshot start.
+        this.version(18).stores({
+            snapshot_staging: 'id, generation, [generation+sequence]',
+        });
 
         // Derived-key maintenance must run on every instance, including
         // workspace DBs, and independently of sync capture suppression.

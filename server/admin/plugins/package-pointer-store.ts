@@ -50,6 +50,8 @@ export interface PackagePointerStartupSelection {
     readonly pointer: PluginPackagePointer | null;
     readonly selectedSlot: 'current' | 'previous' | null;
     readonly selected: PluginPackagePointerTarget | null;
+    /** Per-slot verification outcome, so a caller can select a candidate without re-verifying. */
+    readonly availability: Readonly<Record<PackagePointerSlot, boolean>>;
     readonly issues: readonly {
         readonly code: PackagePointerStartupIssueCode;
         readonly message: string;
@@ -345,6 +347,7 @@ export class PluginPackagePointerStore {
                     pointer: null,
                     selectedSlot: null,
                     selected: null,
+                    availability: Object.freeze({ current: false, candidate: false, previous: false }),
                     issues: Object.freeze([issue('pointer-missing', 'No active package pointer exists')]),
                 });
             }
@@ -354,6 +357,7 @@ export class PluginPackagePointerStore {
                 pointer: null,
                 selectedSlot: null,
                 selected: null,
+                availability: Object.freeze({ current: false, candidate: false, previous: false }),
                 issues: Object.freeze([issue('pointer-invalid', 'Package pointer is unreadable or invalid')]),
             });
         }
@@ -365,6 +369,7 @@ export class PluginPackagePointerStore {
                 pointer: null,
                 selectedSlot: null,
                 selected: null,
+                availability: Object.freeze({ current: false, candidate: false, previous: false }),
                 issues: Object.freeze([issue('pointer-invalid', 'Package pointer schema or identity is invalid')]),
             });
         }
@@ -385,23 +390,30 @@ export class PluginPackagePointerStore {
                 issues.push(issue(`${slot}-unavailable`, `${slot} immutable package is unavailable`));
             }
         }
-        if (pointer.current && availability.get('current')) {
+        const slotAvailability = Object.freeze({
+            current: availability.get('current') ?? false,
+            candidate: availability.get('candidate') ?? false,
+            previous: availability.get('previous') ?? false,
+        });
+        if (pointer.current && slotAvailability.current) {
             return Object.freeze({
                 status: 'ready',
                 pluginId,
                 pointer,
                 selectedSlot: 'current',
                 selected: pointer.current,
+                availability: slotAvailability,
                 issues: Object.freeze(issues),
             });
         }
-        if (pointer.current && pointer.previous && availability.get('previous')) {
+        if (pointer.current && pointer.previous && slotAvailability.previous) {
             return Object.freeze({
                 status: 'recovered',
                 pluginId,
                 pointer,
                 selectedSlot: 'previous',
                 selected: pointer.previous,
+                availability: slotAvailability,
                 issues: Object.freeze(issues),
             });
         }
@@ -411,6 +423,7 @@ export class PluginPackagePointerStore {
             pointer,
             selectedSlot: null,
             selected: null,
+            availability: slotAvailability,
             issues: Object.freeze(issues),
         });
     }

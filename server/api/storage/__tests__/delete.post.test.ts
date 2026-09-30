@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
+import { requireCloudMutation } from '../../../utils/security/cloud-mutation';
 
 const readBodyMock = vi.fn();
+vi.mock('../../../utils/security/cloud-mutation', () => ({ requireCloudMutation: vi.fn() }));
+
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
     readBody: readBodyMock,
@@ -41,6 +44,7 @@ async function handler() {
 
 describe('POST /api/storage/delete', () => {
     beforeEach(() => {
+        vi.mocked(requireCloudMutation).mockReset();
         vi.resetModules();
         readBodyMock.mockReset().mockResolvedValue({
             workspace_id: 'ws-1',
@@ -60,6 +64,16 @@ describe('POST /api/storage/delete', () => {
             id: 'test',
             deleteObject: deleteObjectMock,
         });
+    });
+
+    it('rejects a mutation guard failure before parsing or deleting an object', async () => {
+        vi.mocked(requireCloudMutation).mockImplementationOnce(() => {
+            throw Object.assign(new Error('Origin mismatch'), { statusCode: 403 });
+        });
+        const route = await handler();
+        await expect(route(event)).rejects.toMatchObject({ statusCode: 403 });
+        expect(readBodyMock).not.toHaveBeenCalled();
+        expect(deleteObjectMock).not.toHaveBeenCalled();
     });
 
     it('requires workspace.write for the requested workspace before dispatch', async () => {

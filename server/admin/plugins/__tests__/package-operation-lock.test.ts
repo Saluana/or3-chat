@@ -67,4 +67,24 @@ describe('advisory plugin operation lock', () => {
             code: 'lock-aborted',
         });
     });
+
+    it('requires a quiet remote owner and its exact token for operator recovery', async () => {
+        const root = mkdtempSync(resolve(tmpdir(), 'or3-package-lock-'));
+        const lockPath = resolve(root, '.locks', 'alpha.lock');
+        const fs = await import('node:fs/promises');
+        await fs.mkdir(lockPath, { recursive: true });
+        const owner = {
+            schemaVersion: 1, pluginId: 'alpha', ownerId: 'remote-owner', pid: 123,
+            hostname: 'other-host', acquiredAt: 1, heartbeatAt: Date.now(),
+        };
+        const ownerPath = resolve(lockPath, 'owner.json');
+        await fs.writeFile(ownerPath, JSON.stringify(owner));
+        const lock = new AdvisoryPluginOperationLock(root);
+        expect(await lock.recoverConfirmedStoppedRemote('alpha', 'remote-owner')).toBe(false);
+        await fs.writeFile(ownerPath, JSON.stringify({ ...owner, heartbeatAt: Date.now() - 90_000 }));
+        expect(await lock.recoverConfirmedStoppedRemote('alpha', 'wrong-owner')).toBe(false);
+        expect(await lock.recoverConfirmedStoppedRemote('alpha', 'remote-owner')).toBe(true);
+        const lease = await lock.acquire('alpha', { timeoutMs: 0, requireDeadOwner: true });
+        expect(await lease.release()).toBe(true);
+    });
 });

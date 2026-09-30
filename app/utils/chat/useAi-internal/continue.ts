@@ -65,6 +65,7 @@ import {
 } from '~~/shared/chat/continuation';
 import type { BackgroundJobTracker } from './types';
 import { projectCanonicalBackgroundMessage } from './backgroundJobPersistence';
+import { finalizeRequest, type ChatRequest } from './requestController';
 
 /** Chat settings from useAiSettings */
 type ChatSettings = {
@@ -94,7 +95,8 @@ type StreamAccumulatorLike = {
  * Context object required for continue operations.
  */
 export type ContinueMessageContext = {
-    loading: Ref<boolean>;
+    request: ChatRequest;
+    loading: Readonly<Ref<boolean>>;
     aborted: Ref<boolean>;
     abortController: Ref<AbortController | null>;
     threadIdRef: Ref<string | undefined>;
@@ -110,7 +112,7 @@ export type ContinueMessageContext = {
     defaultModelId: string;
     getSystemPromptContent: () => Promise<string | null>;
     useAiSettings: () => { settings: Ref<ChatSettings | undefined> };
-    resolveInputTokenBudget?: (modelId: string) => number;
+    resolveInputTokenBudget?: (modelId: string) => number | Promise<number>;
     resetStream: () => void;
     backgroundStreamingAllowed?: boolean;
     workspaceId?: string;
@@ -213,20 +215,19 @@ export async function continueMessageImpl(
     messageId: string,
     modelOverride?: string
 ): Promise<void> {
-    if (ctx.loading.value || !ctx.threadIdRef.value) return;
+    if (ctx.request.phase.value !== 'admitted' || !ctx.threadIdRef.value)
+        return;
     const hasKey = Boolean(ctx.effectiveApiKey.value) || ctx.hasInstanceKey.value;
     if (!hasKey) return;
     // Request scoping: capture ownership before the first await. Every later
     // stage re-verifies it so a thread switch during setup cannot resume the
     // continuation in the wrong chat.
-    const originDb = getDb();
-    const originThreadId = ctx.threadIdRef.value;
-    const ownsThread = () => ctx.threadIdRef.value === originThreadId;
-    let activeTarget: StoredMessage | undefined;
+    const request = ctx.request;
+    const originDb = request.originDb;
+    const originThreadId = request.threadId!;
+    const ownsThread = () => !request.cancelled && request.ownsView();
     let activeCurrent: UiChatMessage | null = null;
-    let activePersister: ReturnType<typeof makeAssistantPersister> | null = null;
     let targetMarkedPending = false;
-    let continuationSetLoading = false;
     let continuationAbortController: AbortController | null = null;
     let innerStreamLifecycleStarted = false;
     let backgroundAdmissionStarted = false;
@@ -241,7 +242,6 @@ export async function continueMessageImpl(
         ) {
             return;
         }
-        activeTarget = target;
 
         const inMemoryText =
             ctx.tailAssistant.value?.id === target.id ? ctx.tailAssistant.value.text : '';
@@ -408,11 +408,15 @@ export async function continueMessageImpl(
         if (!ownsThread()) return;
         orMessages = await enforceOpenRouterMessageTokenBudget(
             orMessages,
-            ctx.resolveInputTokenBudget?.(modelId) ??
+            (await ctx.resolveInputTokenBudget?.(modelId)) ??
                 DEFAULT_MAX_INPUT_TOKENS
         );
         // Last setup gate: never publish stream state into a new chat.
         if (!ownsThread()) return;
+        if (orMessages.length === 0)
+            throw new Error(
+                'No model input remained after continuation filters.'
+            );
         // modalities controls OUTPUT format, not input capability
         const modalities = getChatModalities(modelId);
         const useBackground =
@@ -424,10 +428,10 @@ export async function continueMessageImpl(
         ctx.streamAcc.reset();
         const newStreamId = newId();
         ctx.streamId.value = newStreamId;
-        ctx.loading.value = true;
-        continuationSetLoading = true;
+        request.phase.value = 'streaming';
         ctx.aborted.value = false;
         continuationAbortController = new AbortController();
+        request.abortController = continuationAbortController;
         ctx.abortController.value = continuationAbortController;
 
         const existingReasoning = normalizedTarget.reasoningText;
@@ -458,6 +462,9 @@ export async function continueMessageImpl(
         if (existingHashes.length) current.file_hashes = existingHashes;
         ctx.tailAssistant.value = current;
         activeCurrent = current;
+        request.message = current;
+        request.assistantMessageId = messageId;
+        request.assistantRecord = target;
 
         if (ctx.streamAcc.hydrate) {
             ctx.streamAcc.hydrate({
@@ -480,7 +487,8 @@ export async function continueMessageImpl(
             assistantFileHashes,
             newStreamId
         );
-        activePersister = persistAssistant;
+        request.persistAssistant = persistAssistant;
+        request.streamId = newStreamId;
 
         // Durable generation identity must precede the first continuation byte,
         // so reload can distinguish an active continuation from a stale row.
@@ -498,6 +506,7 @@ export async function continueMessageImpl(
                 : undefined;
         const backgroundAdmissionId = useBackground ? newId() : undefined;
         if (useBackground && backgroundAdmissionId) {
+            request.backgroundAdmissionId = backgroundAdmissionId;
             backgroundAdmissionStarted = true;
             ctx.beginBackgroundAdmission?.(backgroundAdmissionId, messageId);
         }
@@ -551,6 +560,10 @@ export async function continueMessageImpl(
                 },
                 signal: continuationAbortController.signal,
             });
+            request.jobId = result.jobId;
+            if (request.cancelled && request.stopConfirmation) {
+                throw new DOMException('Admission cancelled', 'AbortError');
+            }
             await projectCanonicalBackgroundMessage(originDb, messageId, {
                 data: {
                     background_job_id: result.jobId,
@@ -567,22 +580,39 @@ export async function continueMessageImpl(
                 initialContent: existingText,
                 initialReasoning: existingReasoning ?? '',
             });
+            request.jobId = result.jobId;
             innerStreamLifecycleStarted = true;
             try {
                 const completion = await tracker.completion;
-                if (ownsThread()) {
-                    if (completion.status === 'complete') ctx.streamAcc.finalize();
-                    else ctx.streamAcc.finalize({
-                        error: new Error(
-                            completion.error ?? `Background continuation ${completion.status}`
-                        ),
-                    });
+                if (completion.trackingInterrupted) {
+                    request.attached.value = false;
+                    return;
                 }
+                await finalizeRequest(request, {
+                    outcome:
+                        completion.status === 'complete'
+                            ? 'completed'
+                            : completion.status === 'aborted'
+                              ? 'aborted'
+                              : 'failed',
+                    content: completion.content,
+                    reasoning: completion.reasoning_text,
+                    toolCalls: completion.tool_calls?.map((call) => ({
+                        ...call,
+                        status:
+                            call.status === 'skipped' ? 'error' : call.status,
+                    })),
+                    messageError:
+                        completion.status === 'complete'
+                            ? null
+                            : completion.status === 'aborted'
+                              ? 'stopped'
+                              : (completion.error ??
+                                'Background continuation failed'),
+                    persistence: 'tracker',
+                    attempt: completion.attempt,
+                });
             } finally {
-                if (ownsThread()) {
-                    ctx.loading.value = false;
-                    current.pending = false;
-                }
                 if (ctx.abortController.value === continuationAbortController) {
                     ctx.abortController.value = null;
                 }
@@ -683,252 +713,116 @@ export async function continueMessageImpl(
             appendTextDelta(continuationNormalizer.finish());
             await flushProgress();
 
-            if (current.pending) current.pending = false;
-            await persistAssistant({
+            const stopped =
+                request.cancelled || continuationAbortController.signal.aborted;
+            const finalization = await finalizeRequest(request, {
+                outcome: stopped ? 'aborted' : 'completed',
                 content: current.text,
                 reasoning: current.reasoning_text ?? null,
                 toolCalls: current.toolCalls ?? null,
-                finalize: true, // Clear pending so sync captures this
+                messageError: stopped ? 'stopped' : null,
             });
-            await updateMessageRecord(originDb, messageId, { error: null });
-            current.error = null;
-            // Never publish this request's results into another thread's view.
-            if (ownsThread()) {
-                const rawIdx = ctx.rawMessages.value.findIndex((m) => m.id === messageId);
-                if (rawIdx >= 0) {
-                    const existingRaw = ctx.rawMessages.value[rawIdx];
-                    if (existingRaw) {
-                        ctx.rawMessages.value[rawIdx] = {
-                            ...existingRaw,
-                            role: existingRaw.role,
-                            content: current.text,
-                            reasoning_text: current.reasoning_text ?? null,
-                            error: null,
-                        };
+            if (finalization.persistenceError || finalization.effectError)
+                reportError(
+                    finalization.persistenceError ?? finalization.effectError,
+                    {
+                        code: 'ERR_DB_WRITE_FAILED',
+                        tags: { domain: 'chat', stage: 'continue_finalize' },
                     }
-                }
-            }
-            ctx.streamAcc.finalize();
+                );
         } catch (streamError) {
             const ownershipLost = streamError instanceof ContinuationOwnershipLost;
-            const e = ownershipLost
-                ? streamError
-                : streamError instanceof Error
-                  ? streamError
-                  : new Error(String(streamError));
-            if (!ownershipLost) ctx.streamAcc.finalize({ error: e });
-
-            // Stream interrupted - aborted.value would be true for user stops but those don't throw
-            const errorType = 'stream_interrupted';
-
-            // Durable content always comes from the request-local object. The
-            // shared tail may already belong to another thread — only touch
-            // shared UI refs while this request still owns its thread.
-            const tailText = current.text;
-            const tailReasoning = current.reasoning_text ?? null;
-            const tailToolCalls = current.toolCalls ?? null;
-            if (ownsThread()) {
-                const tail = ctx.tailAssistant.value;
-                if (tail) tail.error = errorType;
-            }
-            await persistAssistant({
-                content: tailText,
-                reasoning: tailReasoning,
-                toolCalls: tailToolCalls,
-                finalize: true, // Clear pending so sync captures this
+            const e =
+                streamError instanceof Error
+                    ? streamError
+                    : new Error(String(streamError));
+            const stopped =
+                request.cancelled || continuationAbortController.signal.aborted;
+            const finalization = await finalizeRequest(request, {
+                outcome: stopped ? 'aborted' : 'failed',
+                error: stopped ? undefined : e,
+                messageError: stopped ? 'stopped' : 'stream_interrupted',
+                generationState: stopped ? 'aborted' : 'interrupted',
             });
-            if (ownsThread()) {
-                const rawIdx = ctx.rawMessages.value.findIndex((m) => m.id === messageId);
-                if (rawIdx >= 0) {
-                    const existingRaw = ctx.rawMessages.value[rawIdx];
-                    if (existingRaw) {
-                        ctx.rawMessages.value[rawIdx] = {
-                            ...existingRaw,
-                            role: existingRaw.role,
-                            content: tailText || existingRaw.content,
-                            reasoning_text: tailReasoning ?? existingRaw.reasoning_text,
-                            error: errorType,
-                        };
-                    }
-                }
-            }
-            await updateMessageRecord(originDb, messageId, { error: errorType });
-            if (ownershipLost) return;
-
-            // Show error toast for stream interruptions
-            reportError(e, {
-                code: 'ERR_STREAM_FAILURE',
-                tags: {
-                    domain: 'chat',
-                    threadId: ctx.threadIdRef.value || '',
-                    streamId: ctx.streamId.value || '',
-                    modelId,
-                    stage: 'continue',
-                },
-                toast: true,
-            });
+            if (finalization.persistenceError)
+                reportError(finalization.persistenceError, {
+                    code: 'ERR_DB_WRITE_FAILED',
+                    tags: { domain: 'chat', stage: 'continue_finalize' },
+                });
+            if (!ownershipLost && !stopped)
+                reportError(e, {
+                    code: 'ERR_STREAM_FAILURE',
+                    tags: {
+                        domain: 'chat',
+                        threadId: originThreadId,
+                        streamId: newStreamId,
+                        modelId,
+                        stage: 'continue',
+                    },
+                    toast: true,
+                });
         } finally {
-            ctx.loading.value = false;
-            // Only settle shared refs this request still owns; a navigation
-            // may have rebound them to another thread already.
-            if (ownsThread()) {
-                const tailRef = ctx.tailAssistant.value;
-                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- tailRef may be null if stream setup failed
-                if (tailRef) tailRef.pending = false;
-            }
             if (ctx.abortController.value === continuationAbortController) {
                 ctx.abortController.value = null;
             }
             setTimeout(() => {
-                if (!ctx.loading.value && ctx.streamState.finalized) ctx.resetStream();
+                if (
+                    request.ownsView() &&
+                    !ctx.loading.value &&
+                    ctx.streamState.finalized
+                )
+                    ctx.resetStream();
             }, 0);
         }
     } catch (e) {
         const setupError =
             e instanceof Error ? e : new Error(String(e));
-        const errorType = 'stream_interrupted';
-
-        if (backgroundAdmissionStarted && ctx.aborted.value) {
-            if (ownsThread()) ctx.loading.value = false;
-            if (ctx.abortController.value === continuationAbortController) {
-                ctx.abortController.value = null;
-            }
+        const stopped =
+            request.cancelled ||
+            continuationAbortController?.signal.aborted === true;
+        if (
+            stopped &&
+            request.stopConfirmation &&
+            !(await request.stopConfirmation)
+        ) {
+            request.attached.value = false;
             return;
         }
-
-        // The inner lifecycle owns stream errors and its own finally block.
-        // Do not run setup cleanup a second time if its finalization happens
-        // to throw; surface that failure without rewriting the row again.
-        if (innerStreamLifecycleStarted) {
-            reportError(setupError, {
-                code: 'ERR_INTERNAL',
-                tags: {
-                    domain: 'chat',
-                    op: 'continueMessage',
-                    stage: 'continue_finalize',
-                },
-            });
-            return;
-        }
-
-        // The inner stream try/finally starts after the provider stream is
-        // created. Failures before that point still need to release the
-        // request state and finalize the row that was marked pending above.
-        const current = activeCurrent;
-        if (current) {
-            current.pending = false;
-            current.error = errorType;
-            if (
-                ownsThread() &&
-                ctx.tailAssistant.value?.id !== current.id
-            ) {
-                ctx.messages.value = [...ctx.messages.value];
-            }
-        }
-
-        let persistenceError: unknown = null;
-        if (activeTarget && (targetMarkedPending || current)) {
-            const content = current?.text ?? '';
-            const reasoning = current?.reasoning_text ?? null;
-            if (activePersister) {
-                try {
-                    await activePersister({
-                        content,
-                        reasoning,
-                        toolCalls: current?.toolCalls ?? null,
-                        finalize: true,
-                    });
-                } catch (error) {
-                    persistenceError = error;
-                }
-            }
-            try {
-                await updateMessageRecord(
-                    originDb,
-                    activeTarget.id,
-                    {
-                        pending: false,
-                        error: errorType,
-                        data: {
-                            content,
-                            reasoning_text: reasoning,
-                            generation_state: 'interrupted',
-                            error: errorType,
-                        },
-                    },
-                    activeTarget
-                );
-            } catch (error) {
-                persistenceError ??= error;
-            }
-
-            if (ownsThread()) {
-                const rawIdx = ctx.rawMessages.value.findIndex(
-                    (message) => message.id === activeTarget?.id
-                );
-                if (rawIdx >= 0) {
-                    const existingRaw = ctx.rawMessages.value[rawIdx];
-                    if (existingRaw) {
-                        ctx.rawMessages.value[rawIdx] = {
-                            ...existingRaw,
-                            content: content || existingRaw.content,
-                            reasoning_text: reasoning ?? existingRaw.reasoning_text,
-                            error: errorType,
-                        };
-                    }
-                }
-            }
-        }
-
-        if (persistenceError) {
+        const finalization = await finalizeRequest(request, {
+            outcome: stopped ? 'aborted' : 'failed',
+            error: stopped ? undefined : setupError,
+            messageError: stopped ? 'stopped' : 'stream_interrupted',
+            generationState: stopped ? 'aborted' : 'interrupted',
+            persistence:
+                backgroundAdmissionStarted && stopped ? 'tracker' : 'request',
+        });
+        if (finalization.persistenceError)
             reportError(
                 err(
                     'ERR_DB_WRITE_FAILED',
                     'Failed to finalize the continued assistant message.',
-                    {
-                        cause: persistenceError,
-                        tags: {
-                            domain: 'chat',
-                            threadId: ctx.threadIdRef.value || '',
-                            messageId,
-                            stage: 'continue_setup',
-                        },
-                    }
+                    { cause: finalization.persistenceError }
                 ),
                 { silent: true }
             );
-        }
-
-        try {
-            ctx.streamAcc.finalize({ error: setupError });
-        } catch (finalizeError) {
-            // Keep the cleanup below authoritative even if an accumulator
-            // implementation is already finalized or throws during teardown.
-            reportError(
-                err(
-                    'ERR_INTERNAL',
-                    'Failed to finalize the continued stream accumulator.',
-                    { cause: finalizeError }
-                ),
-                { silent: true }
-            );
-        }
-        reportError(
-            setupError,
-            {
+        if (!stopped)
+            reportError(setupError, {
                 code: 'ERR_INTERNAL',
                 tags: { domain: 'chat', op: 'continueMessage' },
-            }
-        );
+            });
     } finally {
         // Covers setup failures that happen before the inner stream finally.
-        if (continuationSetLoading) ctx.loading.value = false;
+
         if (ctx.abortController.value === continuationAbortController) {
             ctx.abortController.value = null;
         }
         if (!innerStreamLifecycleStarted && (activeCurrent || targetMarkedPending)) {
             setTimeout(() => {
-                if (!ctx.loading.value && ctx.streamState.finalized) {
+                if (
+                    request.ownsView() &&
+                    !ctx.loading.value &&
+                    ctx.streamState.finalized
+                ) {
                     ctx.resetStream();
                 }
             }, 0);

@@ -68,7 +68,6 @@ describe('blank theme mobile control sizing', () => {
         expect(blankStyles).toContain('border: 1px solid rgba(0, 0, 0, 0.1)');
         expect(blankStyles).toContain('[aria-label="Account menu"]');
         expect(blankStyles).toContain('.sidebar-rail-caption');
-        expect(blankStyles).toContain('.sidebar-mode-badge');
     });
 
     it('keeps tokenized desktop fallbacks and 44px mobile variants', () => {

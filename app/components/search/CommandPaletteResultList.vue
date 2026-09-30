@@ -79,7 +79,11 @@
                         v-else
                         class="or3-palette-option-icon flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] bg-[color:var(--md-surface-variant)]/40 text-[color:var(--md-on-surface-variant)]"
                     >
-                        <UIcon :name="iconForResult(result)" class="h-3.5 w-3.5" />
+                        <AppIcon
+                            :image="result.image"
+                            :icon="iconForResult(result)"
+                            class="h-3.5 w-3.5"
+                        />
                     </span>
 
                     <span class="min-w-0 flex-1">
@@ -180,6 +184,7 @@ import {
     paletteTimeLabel,
 } from './palette-dom';
 import PaletteImageThumb from './PaletteImageThumb.vue';
+import AppIcon from '~/components/ui/AppIcon.vue';
 import { usePaletteIcons } from './usePaletteIcons';
 
 const props = defineProps<{

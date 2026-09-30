@@ -2,18 +2,22 @@ import { computed } from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
 import { CORE_APP_COMPONENT_DEFAULTS } from '~/theme/_shared/theme-components-registry';
+import SidebarDefault from '~/components/sidebar/SideBar.vue';
+import SidebarCollapsedDefault from '~/components/sidebar/SideNavContentCollapsed.vue';
 
 export function usePageShellTheme(themePlugin: ThemePlugin | undefined) {
-    const sidebarExpandedComponent = computed(
-        () =>
-            themePlugin?.activeComponents.value.sidebar ??
-            CORE_APP_COMPONENT_DEFAULTS.sidebar
-    );
-    const sidebarCollapsedComponent = computed(
-        () =>
-            themePlugin?.activeComponents.value['sidebar-collapsed'] ??
-            CORE_APP_COMPONENT_DEFAULTS['sidebar-collapsed']
-    );
+    const sidebarExpandedComponent = computed(() => {
+        const active = themePlugin?.activeComponents.value.sidebar;
+        return !active || active === CORE_APP_COMPONENT_DEFAULTS.sidebar
+            ? SidebarDefault
+            : active;
+    });
+    const sidebarCollapsedComponent = computed(() => {
+        const active = themePlugin?.activeComponents.value['sidebar-collapsed'];
+        return !active || active === CORE_APP_COMPONENT_DEFAULTS['sidebar-collapsed']
+            ? SidebarCollapsedDefault
+            : active;
+    });
     const dashboardModalComponent = computed(
         () =>
             themePlugin?.activeComponents.value['dashboard-modal'] ??

@@ -1,11 +1,11 @@
 <template>
-    <UModal
+    <AppModal
         v-bind="modalProps"
         :open="open"
         :title="title"
         @update:open="emit('update:open', $event)"
     >
-        <template #body>
+        <template #default>
             <div class="space-y-4">
                 <div class="flex gap-2 text-xs font-mono">
                     <button
@@ -52,6 +52,7 @@
                         name="newProjectName"
                     >
                         <UInput
+                            variant="modal"
                             :model-value="newProjectName"
                             placeholder="Project name"
                             :icon="iconFolder"
@@ -67,6 +68,7 @@
                         name="newProjectDescription"
                     >
                         <UTextarea
+                            variant="modal"
                             :model-value="newProjectDescription"
                             :rows="3"
                             placeholder="Optional description"
@@ -85,13 +87,14 @@
         <template #footer>
             <UButton
                 variant="ghost"
-                class="theme-btn"
+                size="modal"
                 @click="emit('close')"
             >
                 Cancel
             </UButton>
             <UButton
                 color="primary"
+                size="modal"
                 :disabled="
                     loading ||
                     (mode === 'select' ? !selectedProjectId : !newProjectName.trim())
@@ -105,10 +108,11 @@
                 </span>
             </UButton>
         </template>
-    </UModal>
+    </AppModal>
 </template>
 
 <script setup lang="ts">
+import AppModal from '~/components/ui/AppModal.vue';
 defineProps<{
     modalProps: Record<string, unknown>;
     open: boolean;

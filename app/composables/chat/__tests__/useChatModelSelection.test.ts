@@ -99,7 +99,7 @@ describe('useChatModelSelection', () => {
     it('recognizes reasoning models without an explicit effort list', async () => {
         modelStore.favoriteModels!.value = [
             model({
-                id: 'openai/gpt-oss-120b',
+                id: '~openai/gpt-luna-latest',
                 reasoning: {
                     supports_max_tokens: true,
                 },
@@ -111,6 +111,59 @@ describe('useChatModelSelection', () => {
 
         expect(selection.modelSupportsThinking.value).toBe(true);
         expect(selection.modelReasoningEfforts.value).toEqual([]);
+        expect(selection.thinkingEnabled.value).toBe(true);
+    });
+
+    it('defaults to medium reasoning even when the model advertises a different default', async () => {
+        modelStore.favoriteModels!.value = [
+            model({
+                id: '~openai/gpt-luna-latest',
+                reasoning: {
+                    default_effort: 'low',
+                    supported_efforts: ['low', 'medium', 'high'],
+                },
+            }),
+        ];
+
+        const { selection } = mountModelSelection();
+        await nextTick();
+
+        expect(selection.thinkingEnabled.value).toBe(true);
+        expect(selection.reasoningEffort.value).toBe('medium');
+    });
+
+    it('keeps the default enabled across a model without reasoning support', async () => {
+        modelStore.favoriteModels!.value = [
+            model({ id: '~openai/gpt-luna-latest' }),
+            model({
+                id: 'provider/reasoning-model',
+                supported_parameters: ['reasoning'],
+            }),
+        ];
+
+        const { selection } = mountModelSelection();
+        selection.selectedModel.value = 'provider/reasoning-model';
+        await nextTick();
+
+        expect(selection.thinkingEnabled.value).toBe(true);
+        expect(selection.reasoningEffort.value).toBe('medium');
+    });
+
+    it('chooses the middle supported level when medium is unavailable', async () => {
+        modelStore.favoriteModels!.value = [
+            model({
+                id: '~openai/gpt-luna-latest',
+                reasoning: {
+                    default_effort: 'low',
+                    supported_efforts: ['xhigh', 'low', 'high'],
+                },
+            }),
+        ];
+
+        const { selection } = mountModelSelection();
+        await nextTick();
+
+        expect(selection.reasoningEffort.value).toBe('high');
     });
 
     it('matches capability metadata by canonical model slug', async () => {

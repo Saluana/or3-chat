@@ -37,13 +37,13 @@
         </div>
 
         <!-- Reset confirmation modal -->
-        <UModal
+        <AppModal
             v-model:open="showResetModal"
             :title="modalTitle"
             :description="modalDescription"
             :ui="{ content: 'z-[20]' }"
         >
-            <template #body>
+            <template #default>
                 <p class="text-sm">
                     Reset <strong>{{ modalTargetLabel }}</strong> theme settings
                     to defaults?
@@ -51,10 +51,11 @@
                 <p class="text-xs opacity-70 mt-2">This cannot be undone.</p>
             </template>
             <template #footer>
-                <div class="flex justify-end gap-2">
+                <div class="flex justify-end gap-2.5">
                     <UButton
                         variant="ghost"
                         color="neutral"
+                        size="modal"
                         @click="showResetModal = false"
                     >
                         Cancel
@@ -62,17 +63,19 @@
                     <UButton
                         variant="solid"
                         color="error"
+                        size="modal"
                         @click="confirmReset"
                     >
                         Reset {{ modalActionLabel }}
                     </UButton>
                 </div>
             </template>
-        </UModal>
+        </AppModal>
     </section>
 </template>
 
 <script setup lang="ts">
+import AppModal from '~/components/ui/AppModal.vue';
 import { ref, computed } from 'vue';
 import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 import { useThemeOverrides } from '~/composables/useThemeResolver';

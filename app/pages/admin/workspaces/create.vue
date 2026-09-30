@@ -184,7 +184,7 @@ async function handleSubmit() {
 
     isSubmitting.value = true;
     try {
-        const result = await $fetch<{ workspaceId: string }>('/api/admin/workspaces', {
+        const result = await $fetch<{ workspaceId: string; provisioningWarning?: string }>('/api/admin/workspaces', {
             method: 'POST',
             credentials: 'include',
             headers: ADMIN_HEADERS,
@@ -196,8 +196,9 @@ async function handleSubmit() {
         });
 
         toast.add({
-            title: 'Workspace created',
-            color: 'success',
+            title: result.provisioningWarning ? 'Workspace created; plugin setup needs attention' : 'Workspace created',
+            description: result.provisioningWarning,
+            color: result.provisioningWarning ? 'warning' : 'success',
         });
 
         router.push(`/admin/workspaces/${result.workspaceId}`);

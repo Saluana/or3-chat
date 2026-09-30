@@ -19,6 +19,24 @@
 import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
 import type { CanonicalToolResult } from '~~/shared/chat/canonical-tool-transcript';
 import type { ChatGenerationAdmissionEnvelope } from '~~/shared/chat/background-history';
+import type { ToolDefinition } from '~/utils/chat/types';
+import type { NormalizedStreamState } from '~~/shared/chat/normalized-stream-reducer';
+
+export type BackgroundClientToolCall = {
+    callId: string;
+    name: string;
+    arguments: string;
+    argumentFingerprint: string;
+    definition: ToolDefinition;
+    claimToken?: string;
+    claimExpiresAt?: number;
+};
+
+export type BackgroundPendingToolCall = {
+    id: string;
+    type: 'function';
+    function: { name: string; arguments: string };
+};
 
 /**
  * Durable history phase for a generation. The model finishing, the job being
@@ -114,6 +132,7 @@ export interface BackgroundJob {
         error?: string;
         argument_fingerprint?: string;
         transcript?: CanonicalToolResult;
+        runtime?: 'client' | 'server' | 'hybrid';
     }>;
     /** Workflow execution state snapshot */
     workflow_state?: WorkflowMessageData;
@@ -151,6 +170,12 @@ export interface BackgroundJobExecution {
     };
     /** Tool calls whose results are included in the checkpointed request body. */
     checkpointedToolCallIds?: string[];
+    /** Cumulative tool loop and output budget across browser handoffs. */
+    normalizedToolState?: NormalizedStreamState;
+    /** Remaining calls from the current assistant tool-call batch. */
+    pendingToolCalls?: BackgroundPendingToolCall[];
+    /** Present while execution is parked for the originating browser. */
+    clientToolCall?: BackgroundClientToolCall;
 }
 
 /**
@@ -339,6 +364,25 @@ export interface BackgroundJobProvider {
         leaseOwner: string
     ): Promise<boolean>;
 
+    /** Atomically grant one browser a short-lived claim on a parked call. */
+    claimClientToolCall?(
+        jobId: string,
+        userId: string,
+        callId: string,
+        claimToken: string,
+        claimExpiresAt: number
+    ): Promise<BackgroundJob | null>;
+
+    /** Atomically accept one claimed result and make the job runnable again. */
+    settleClientToolCall?(
+        jobId: string,
+        userId: string,
+        callId: string,
+        claimToken: string,
+        execution: BackgroundJobExecution,
+        toolCalls: BackgroundJob['tool_calls']
+    ): Promise<boolean>;
+
     /**
      * Optional lookup by admission idempotency key. Enables cancellation of an
      * admission before the client has received its job ID.
@@ -401,7 +445,7 @@ export interface BackgroundJobProvider {
  * Configuration values for background job storage providers.
  */
 export interface BackgroundJobConfig {
-    /** Maximum concurrent streaming jobs */
+    /** Maximum concurrent worker-active jobs (and separate parked-job cap). */
     maxConcurrentJobs: number;
     /** Maximum concurrent streaming jobs per user */
     maxConcurrentJobsPerUser: number;

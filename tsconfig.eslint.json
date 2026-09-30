@@ -25,8 +25,7 @@
     "extensions/**/*.ts",
     "packages/**/*.ts",
     "config.or3.ts",
-    "config.or3cloud.ts",
-    "or3.providers.generated.ts"
+    "config.or3cloud.ts"
   ],
   "exclude": [
     ".nuxt/**",

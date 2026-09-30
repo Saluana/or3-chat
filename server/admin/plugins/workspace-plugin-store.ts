@@ -28,9 +28,15 @@ import {
     type PluginGatePolicy,
     type PluginGatePolicyNormalized,
 } from '~~/shared/plugins/access-policy';
+import {
+    compareAuthority,
+    type EffectiveAuthority,
+} from '~~/shared/plugins/authority/effective-authority';
 import type { PluginGrantReviewSnapshot } from '~~/shared/plugins/grant-review';
+import type { Sha256 } from '~~/shared/plugins/runtime-descriptor';
 import {
     createPluginPolicyRevision,
+    createReviewedPluginAuthorityRevision,
     createReviewedPluginGrantsRevision,
 } from './plugin-revisions';
 
@@ -91,18 +97,36 @@ export async function setPluginEnabled(
     store: WorkspaceSettingsStore,
     workspaceId: string,
     pluginId: string,
-    enabled: boolean
+    enabled: boolean,
+    options: { readonly requireCas?: boolean; readonly expectedPluginState?: boolean } = {}
 ): Promise<string[]> {
-    const current = await getEnabledPlugins(store, workspaceId);
-    const next = new Set(current);
-    if (enabled) {
-        next.add(pluginId);
-    } else {
-        next.delete(pluginId);
+    if (options.requireCas && !store.compareAndSet) {
+        throw Object.assign(new Error('This provider cannot safely apply bulk plugin changes.'), { code: 'bulk-settings-cas-unavailable' });
     }
-    const list = Array.from(next);
-    await store.set(workspaceId, 'plugins.enabled', JSON.stringify(list));
-    return list;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+        const raw = await store.get(workspaceId, 'plugins.enabled');
+        const parsed = raw === null ? { success: true as const, data: [] as string[] }
+            : PluginsEnabledSchema.safeParse(safeJsonParse(raw));
+        if (!parsed.success) {
+            throw Object.assign(new Error('The workspace plugin list is invalid; repair it before changing enablement.'), { code: 'plugin-enablement-invalid' });
+        }
+        const current = parsed.data;
+        const currentlyEnabled = current.includes(pluginId);
+        if (options.expectedPluginState !== undefined && currentlyEnabled !== options.expectedPluginState) {
+            throw Object.assign(new Error('This workspace’s plugin choice changed after review.'), { code: 'rollout-conflict' });
+        }
+        if (currentlyEnabled === enabled) return current;
+        const next = new Set(current);
+        if (enabled) next.add(pluginId);
+        else next.delete(pluginId);
+        const list = Array.from(next);
+        if (!store.compareAndSet) {
+            await store.set(workspaceId, 'plugins.enabled', JSON.stringify(list));
+            return list;
+        }
+        if (await store.compareAndSet(workspaceId, 'plugins.enabled', raw, JSON.stringify(list))) return list;
+    }
+    throw Object.assign(new Error('Workspace enablement changed repeatedly; retry after refreshing.'), { code: 'rollout-conflict' });
 }
 
 /**
@@ -121,7 +145,13 @@ export async function bootstrapDefaultEnabledPlugins(
     const normalized = Array.from(
         new Set(defaultPluginIds.filter((id) => typeof id === 'string' && id.trim().length > 0))
     );
-    await store.set(workspaceId, 'plugins.enabled', JSON.stringify(normalized));
+    if (store.compareAndSet) {
+        if (!await store.compareAndSet(workspaceId, 'plugins.enabled', null, JSON.stringify(normalized))) {
+            return getEnabledPlugins(store, workspaceId);
+        }
+    } else {
+        await store.set(workspaceId, 'plugins.enabled', JSON.stringify(normalized));
+    }
     return normalized;
 }
 
@@ -136,16 +166,73 @@ const PluginGrantIdSchema = z
     .min(1)
     .regex(/^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)+$/);
 
-const PersistedPluginGrantReviewSchema = z
+const Sha256Schema = z.string().regex(/^sha256-[a-f0-9]{64}$/);
+
+const AuthorityDestinationSchema = z
     .object({
-        schemaVersion: z.literal(1),
+        host: z.string().min(1).max(253),
+        methods: z.array(z.string().min(1).max(16)).max(16),
+        pathPrefixes: z.array(z.string().min(1).max(256)).max(64),
+        connection: z.string().min(1).max(128).optional(),
+    })
+    .strict();
+
+/**
+ * Persisted form of the authority a release declared. Consent binds to this
+ * descriptor so an update that adds a destination, method, path, scope, write,
+ * hook, feature or dependency needs fresh approval even when every
+ * grant string is unchanged.
+ */
+const EffectiveAuthoritySchema = z
+    .object({
+        trust: z.string().min(1).max(64),
+        grants: z.array(z.string().min(1).max(64)).max(64),
+        features: z.array(z.string().min(1).max(64)).max(64),
+        engines: z.array(z.string().min(1).max(64)).max(16),
+        destinations: z.array(AuthorityDestinationSchema).max(64),
+        connectionScopes: z.array(z.string().min(1).max(128)).max(256),
+        dataScopes: z.array(z.string().min(1).max(64)).max(64),
+        writes: z.array(z.string().min(1).max(64)).max(64),
+        setupHooks: z.array(z.string().min(1).max(64)).max(32),
+        dependencies: z.array(z.string().min(1).max(128)).max(64),
+    })
+    .strict();
+
+const StoredPluginGrantReviewSchema = z
+    .object({
+        schemaVersion: z.literal(2),
         requestedGrants: z.array(PluginGrantIdSchema),
         approvedGrants: z.array(PluginGrantIdSchema),
+        releaseId: z.string().min(1).max(128).nullable(),
+        packageDigest: Sha256Schema.nullable(),
+        authoritySha256: Sha256Schema.nullable(),
+        /**
+         * Declared authority when the package descriptors were readable at
+         * approval time. A registry-only approval records the signed hash
+         * without the descriptor and carries over only to the exact same hash.
+         */
+        authority: EffectiveAuthoritySchema.nullable(),
         revision: z.string().regex(/^sha256-[a-f0-9]{64}$/),
         reviewedAt: z.number().int().min(0),
         reviewedBy: z.string().min(1).optional(),
     })
     .strict();
+const PersistedPluginGrantReviewSchema = StoredPluginGrantReviewSchema.extend({
+    // Keep selected-release consent in the same CAS value as candidate consent.
+    // A second settings write could fail after replacing the primary review.
+    priorReviews: z.array(StoredPluginGrantReviewSchema).max(16).optional(),
+}).strict();
+
+/** What a candidate release declares, as far as the host can verify it. */
+export interface PluginGrantCandidate {
+    readonly requestedGrants: readonly string[];
+    readonly releaseId: string | null;
+    readonly packageDigest: Sha256 | null;
+    /** Signed policy revision when the registry metadata was resolvable. */
+    readonly authoritySha256: Sha256 | null;
+    /** Complete declared authority; null only when descriptors are unreadable. */
+    readonly authority: EffectiveAuthority | null;
+}
 
 function normalizeGrantIds(grants: readonly string[]): string[] {
     return Array.from(new Set(grants)).sort();
@@ -287,18 +374,97 @@ function emptyGrantReview(
             approvedGrants: approved,
         }),
         status,
+        authoritySha256: null,
+        packageDigest: null,
     };
 }
 
-/** Reads the separately persisted reviewed-grant decision for one V2 plugin. */
+/**
+ * Reads the persisted authority consent for one V2 plugin candidate.
+ *
+ * A review is current only when the complete declared authority of the
+ * candidate is covered by what the workspace approved: an unchanged grant list
+ * with a wider destination, scope, write or hook set is stale. Narrowing still
+ * passes, so an update that removes authority does not demand fresh consent.
+ */
+function reviewStorageKey(pluginId: string): string {
+    return `plugins.grants.${pluginId}`;
+}
+
+function priorReviewStorageKey(pluginId: string, digest: Sha256): string {
+    return `${reviewStorageKey(pluginId)}.by-digest.${digest}`;
+}
+
+function evaluateStoredGrantReview(
+    raw: string | null,
+    candidate: PluginGrantCandidate
+): PluginGrantReviewSnapshot {
+    const requested = normalizeGrantIds(candidate.requestedGrants);
+    if (!raw) return emptyGrantReview(requested, 'unreviewed');
+    const json = safeJsonParse(raw);
+    const parsed = PersistedPluginGrantReviewSchema.safeParse(json);
+    if (!parsed.success) {
+        const legacy =
+            json !== null &&
+            typeof json === 'object' &&
+            (json as { schemaVersion?: unknown }).schemaVersion === 1;
+        return emptyGrantReview(requested, legacy ? 'stale' : 'unreviewed');
+    }
+    const stored = parsed.data;
+    const storedRequested = normalizeGrantIds(stored.requestedGrants);
+    const storedApproved = normalizeGrantIds(stored.approvedGrants);
+    const expectedRevision = createReviewedPluginAuthorityRevision({
+        requestedGrants: storedRequested,
+        approvedGrants: storedApproved,
+        releaseId: stored.releaseId,
+        packageDigest: stored.packageDigest,
+        authoritySha256: stored.authoritySha256,
+        authority: stored.authority,
+    });
+    const approvedIsSubset = storedApproved.every((grant) => storedRequested.includes(grant));
+    if (!approvedIsSubset || stored.revision !== expectedRevision) {
+        return emptyGrantReview(requested, 'unreviewed');
+    }
+    if (!candidate.authority || !stored.authority) {
+        const sameAuthority =
+            candidate.authoritySha256 !== null &&
+            candidate.authoritySha256 === stored.authoritySha256;
+        const sameBytes =
+            stored.packageDigest === null ||
+            (candidate.packageDigest !== null &&
+                candidate.packageDigest === stored.packageDigest);
+        if (!sameAuthority || !sameBytes) return emptyGrantReview(requested, 'stale');
+    } else {
+        const comparison = compareAuthority(stored.authority, candidate.authority);
+        if (comparison.expanded) return emptyGrantReview(requested, 'stale');
+    }
+    if (!requested.every((grant) => storedRequested.includes(grant))) {
+        return emptyGrantReview(requested, 'stale');
+    }
+    return {
+        requestedGrants: Object.freeze(requested),
+        approvedGrants: Object.freeze(
+            storedApproved.filter((grant) => requested.includes(grant))
+        ),
+        revision: stored.revision,
+        status: 'current',
+        authoritySha256: stored.authoritySha256,
+        packageDigest: stored.packageDigest,
+    };
+}
+
 export async function getPluginGrantReview(
     store: WorkspaceSettingsStore,
     workspaceId: string,
     pluginId: string,
-    requestedGrants: readonly string[]
+    candidate: PluginGrantCandidate
 ): Promise<PluginGrantReviewSnapshot> {
-    const requested = normalizeGrantIds(requestedGrants);
-    if (requested.length === 0) {
+    const requested = normalizeGrantIds(candidate.requestedGrants);
+    // A descriptor-bearing release still needs explicit review even when it
+    // requests no grant strings: destinations, scopes, writes, hooks, trust
+    // and dependencies are part of the authority a consent record covers.
+    const requiresAuthorityReview = requested.length > 0 || candidate.authority !== null;
+    if (!requiresAuthorityReview) {
         return {
             requestedGrants: Object.freeze([]),
             approvedGrants: Object.freeze([]),
@@ -307,46 +473,57 @@ export async function getPluginGrantReview(
                 approvedGrants: [],
             }),
             status: 'current',
+            authoritySha256: candidate.authoritySha256,
+            packageDigest: candidate.packageDigest,
         };
     }
-    const raw = await store.get(workspaceId, `plugins.grants.${pluginId}`);
-    if (!raw) return emptyGrantReview(requested, 'unreviewed');
-    const parsed = PersistedPluginGrantReviewSchema.safeParse(safeJsonParse(raw));
-    if (!parsed.success) return emptyGrantReview(requested, 'unreviewed');
-    const storedRequested = normalizeGrantIds(parsed.data.requestedGrants);
-    const storedApproved = normalizeGrantIds(parsed.data.approvedGrants);
-    const expectedRevision = createReviewedPluginGrantsRevision({
-        requestedGrants: storedRequested,
-        approvedGrants: storedApproved,
-    });
-    const approvedIsSubset = storedApproved.every((grant) => storedRequested.includes(grant));
-    if (!approvedIsSubset || parsed.data.revision !== expectedRevision) {
-        return emptyGrantReview(requested, 'unreviewed');
+    const key = reviewStorageKey(pluginId);
+    const primaryRaw = await store.get(workspaceId, key);
+    const primary = evaluateStoredGrantReview(primaryRaw, candidate);
+    if (primary.status === 'current' || !candidate.packageDigest) return primary;
+
+    const parsedPrimary = PersistedPluginGrantReviewSchema.safeParse(safeJsonParse(primaryRaw ?? ''));
+    if (parsedPrimary.success) {
+        // A new review of the same digest is authoritative, even if it narrows
+        // access. Never revive an older approval from history for that digest.
+        if (parsedPrimary.data.packageDigest === candidate.packageDigest) return primary;
+        const embedded = parsedPrimary.data.priorReviews?.find((item) => item.packageDigest === candidate.packageDigest);
+        if (embedded) {
+            const recovered = evaluateStoredGrantReview(JSON.stringify(embedded), candidate);
+            if (recovered.status === 'current') return recovered;
+        }
     }
-    if (!sameStrings(storedRequested, requested)) {
-        return emptyGrantReview(requested, 'stale');
-    }
-    return {
-        requestedGrants: Object.freeze(storedRequested),
-        approvedGrants: Object.freeze(storedApproved),
-        revision: expectedRevision,
-        status: 'current',
-    };
+
+    // A candidate's approval must not revoke the still-selected package when
+    // an update pauses or fails. Keep the prior exact-package review available
+    // until that package is no longer selected.
+    const prior = await store.get(
+        workspaceId,
+        priorReviewStorageKey(pluginId, candidate.packageDigest)
+    );
+    if (!prior) return primary;
+    const recovered = evaluateStoredGrantReview(prior, candidate);
+    return recovered.status === 'current' ? recovered : primary;
 }
 
-/** Replaces only the reviewed-grant record; access policy and plugin settings are untouched. */
+/** Replaces only the reviewed-authority record; settings and policy are untouched. */
 export async function setPluginGrantReview(
     store: WorkspaceSettingsStore,
     workspaceId: string,
     pluginId: string,
     input: {
-        requestedGrants: readonly string[];
-        approvedGrants: readonly string[];
+        readonly candidate: PluginGrantCandidate;
+        readonly approvedGrants: readonly string[];
         reviewedBy?: string;
         reviewedAt?: number;
+        /** Frozen review value from a bulk preview; commit only if it is unchanged. */
+        expectedCurrentRaw?: string | null;
+        requireCas?: boolean;
+        /** Digests still needed by the selected, rollback, or staged package. */
+        retainPackageDigests?: readonly Sha256[];
     }
 ): Promise<PluginGrantReviewSnapshot> {
-    const requestedGrants = normalizeGrantIds(input.requestedGrants);
+    const requestedGrants = normalizeGrantIds(input.candidate.requestedGrants);
     const approvedGrants = normalizeGrantIds(input.approvedGrants);
     if (
         !requestedGrants.every((grant) => PluginGrantIdSchema.safeParse(grant).success) ||
@@ -355,27 +532,71 @@ export async function setPluginGrantReview(
     ) {
         throw new Error('Invalid reviewed grants');
     }
-    const revision = createReviewedPluginGrantsRevision({
+    const authority = input.candidate.authority;
+    if (!input.candidate.authoritySha256) {
+        throw new Error('Reviewed authority must be verifiable');
+    }
+    const releaseId = input.candidate.releaseId;
+    const packageDigest = input.candidate.packageDigest;
+    const authoritySha256 = input.candidate.authoritySha256;
+    const revision = createReviewedPluginAuthorityRevision({
         requestedGrants,
         approvedGrants,
+        releaseId,
+        packageDigest,
+        authoritySha256,
+        authority,
     });
+    const key = reviewStorageKey(pluginId);
+    const current = await store.get(workspaceId, key);
+    if (input.expectedCurrentRaw !== undefined && current !== input.expectedCurrentRaw) {
+        throw Object.assign(new Error('Workspace permission review changed.'), { code: 'grant-review-conflict' });
+    }
+    if (input.requireCas && !store.compareAndSet) {
+        throw Object.assign(new Error('This provider cannot safely compare permission reviews.'), { code: 'bulk-settings-cas-unavailable' });
+    }
+    const previous = PersistedPluginGrantReviewSchema.safeParse(safeJsonParse(current ?? ''));
+    const priorReviews = previous.success
+        ? (previous.data.priorReviews ?? []).filter((item) => item.packageDigest !== packageDigest)
+        : [];
+    if (previous.success && previous.data.packageDigest && previous.data.packageDigest !== packageDigest) {
+        const { priorReviews: _history, ...prior } = previous.data;
+        const existing = priorReviews.findIndex((item) => item.packageDigest === prior.packageDigest);
+        if (existing >= 0) priorReviews.splice(existing, 1);
+        priorReviews.push(prior);
+    }
+    const retained = new Set<string>(input.retainPackageDigests ?? []);
+    while (priorReviews.length > 16) {
+        const removable = priorReviews.findIndex((item) => !item.packageDigest || !retained.has(item.packageDigest));
+        if (removable < 0) throw new Error('Too many active plugin permission reviews; finish or cancel obsolete package operations before continuing.');
+        priorReviews.splice(removable, 1);
+    }
     const persisted = PersistedPluginGrantReviewSchema.parse({
-        schemaVersion: 1,
+        schemaVersion: 2,
         requestedGrants,
         approvedGrants,
+        releaseId,
+        packageDigest,
+        authoritySha256,
+        authority,
         revision,
         reviewedAt: input.reviewedAt ?? Date.now(),
         reviewedBy: input.reviewedBy,
+        ...(priorReviews.length ? { priorReviews } : {}),
     });
-    await store.set(
-        workspaceId,
-        `plugins.grants.${pluginId}`,
-        JSON.stringify(persisted)
-    );
+    if (store.compareAndSet) {
+        if (!await store.compareAndSet(workspaceId, key, current, JSON.stringify(persisted))) {
+            throw Object.assign(new Error('Workspace permission review changed.'), { code: 'grant-review-conflict' });
+        }
+    } else {
+        await store.set(workspaceId, key, JSON.stringify(persisted));
+    }
     return {
         requestedGrants: Object.freeze(requestedGrants),
         approvedGrants: Object.freeze(approvedGrants),
         revision,
         status: 'current',
+        authoritySha256,
+        packageDigest,
     };
 }

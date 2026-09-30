@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
+import { requireCloudMutation } from '../../../utils/security/cloud-mutation';
 
 const readBodyMock = vi.fn();
 const setResponseHeaderMock = vi.fn();
 const setHeaderMock = vi.fn();
+
+vi.mock('../../../utils/security/cloud-mutation', () => ({ requireCloudMutation: vi.fn() }));
 
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
@@ -111,6 +114,7 @@ function successfulPushResult(opId: string) {
 
 describe('POST /api/sync/push', () => {
     beforeEach(() => {
+        vi.mocked(requireCloudMutation).mockReset();
         readBodyMock.mockReset();
         setResponseHeaderMock.mockReset();
         setHeaderMock.mockReset();
@@ -142,6 +146,16 @@ describe('POST /api/sync/push', () => {
             id: 'adapter-1',
             push: pushMock as any,
         });
+    });
+
+    it('rejects a mutation guard failure before reading or dispatching the batch', async () => {
+        vi.mocked(requireCloudMutation).mockImplementationOnce(() => {
+            throw Object.assign(new Error('Origin mismatch'), { statusCode: 403 });
+        });
+        const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 403 });
+        expect(readBodyMock).not.toHaveBeenCalled();
+        expect(pushMock).not.toHaveBeenCalled();
     });
 
     it('returns 404 when SSR auth is disabled', async () => {

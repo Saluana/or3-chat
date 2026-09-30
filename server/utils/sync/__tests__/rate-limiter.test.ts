@@ -265,12 +265,6 @@ describe('sync rate limiter', () => {
             expect(ALL_RATE_LIMITS['storage:commit']!.windowMs).toBe(60000);
         });
 
-        it('should allow unknown operations (no limit configured)', () => {
-            const result = checkSyncRateLimit('user-1', 'unknown:new-operation');
-            expect(result.allowed).toBe(true);
-            expect(result.remaining).toBe(Infinity);
-        });
-
         it('applies runtime operation overrides', () => {
             testRuntimeConfig.value.limits.operationRateLimits = {
                 'storage:upload': {

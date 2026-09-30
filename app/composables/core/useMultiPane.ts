@@ -15,12 +15,14 @@ import {
 import { useLocalStorage } from '@vueuse/core';
 import Dexie from 'dexie';
 import { getDb } from '~/db/client';
+import { compareMessageOrder } from '~/db/messages';
 import { useHooks } from '~/core/hooks/useHooks';
 import {
     getGlobalMultiPaneApi,
     setGlobalMultiPaneApi,
 } from '~/utils/multiPaneApi';
 import { deriveMessageContent } from '~/utils/chat/messages';
+import { isSupersededMessage } from '~/utils/chat/transcript';
 import { usePaneApps } from './usePaneApps';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 
@@ -39,6 +41,7 @@ export type MultiPaneMessage = {
     data?: Record<string, unknown> | null;
     reasoning_text?: string | null;
     index?: number | null;
+    order_key?: string | null;
     created_at?: number | null;
 };
 
@@ -72,6 +75,7 @@ export interface UseMultiPaneApi {
     newWindowTooltip: ComputedRef<string>;
     addPane: () => string | null;
     closePane: (index: number) => Promise<void> | void;
+    swapAdjacentPanes: (leftIndex: number) => void;
     setActive: (index: number) => void;
     focusPrev: (current: number) => void;
     focusNext: (current: number) => void;
@@ -123,6 +127,7 @@ interface DbMessageRow {
     stream_id?: string | null;
     data?: { content?: string; reasoning_text?: string | null } | null;
     index?: number | null;
+    order_key?: string | null;
     created_at?: number | null;
     deleted?: boolean;
 }
@@ -154,7 +159,7 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
             .filter((m) => !m.deleted)
             .toArray();
         
-        const result: MultiPaneMessage[] = [];
+        const validRows: DbMessageRow[] = [];
         let skippedCount = 0;
         
         for (const msg of msgs) {
@@ -170,12 +175,20 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
                 continue;
             }
             
-            // Skip deleted messages (double check after filter)
-            if (msg.deleted) {
-                continue;
-            }
-            
-            const row = msg as DbMessageRow;
+            // Superseded retry turns remain in Dexie for sync/audit, but
+            // must not reappear when a pane reloads its conversation.
+            if (msg.deleted || isSupersededMessage(msg)) continue;
+            validRows.push(msg);
+        }
+
+        validRows.sort((left, right) =>
+            compareMessageOrder(
+                { id: left.id, index: left.index ?? 0, order_key: left.order_key ?? '' },
+                { id: right.id, index: right.index ?? 0, order_key: right.order_key ?? '' }
+            )
+        );
+        const result: MultiPaneMessage[] = [];
+        for (const row of validRows) {
             const data = row.data;
             const content = deriveMessageContent({
                 content: row.content,
@@ -191,6 +204,7 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
                 data: data ?? undefined,
                 reasoning_text: data?.reasoning_text || null,
                 index: typeof row.index === 'number' ? row.index : null,
+                order_key: row.order_key ?? null,
                 created_at:
                     typeof row.created_at === 'number' ? row.created_at : null,
             } as MultiPaneMessage);
@@ -710,6 +724,26 @@ export function useMultiPane(
         });
     }
 
+    /** Swap the pane identities and content at two adjacent positions. */
+    function swapAdjacentPanes(leftIndex: number): void {
+        if (
+            !Number.isInteger(leftIndex) ||
+            leftIndex < 0 ||
+            leftIndex >= panes.value.length - 1
+        ) return;
+
+        const left = panes.value[leftIndex];
+        const right = panes.value[leftIndex + 1];
+        if (!left || !right) return;
+
+        const activeId = activePaneId.value;
+        panes.value.splice(leftIndex, 2, right, left);
+        // Active state follows the pane, so swapping does not trigger a focus
+        // change or a resource activation in the workspace tab host.
+        if (activeId === left.id) activePaneIndex.value = leftIndex + 1;
+        else if (activeId === right.id) activePaneIndex.value = leftIndex;
+    }
+
     function addPane(): string | null {
         if (!canAddPane.value) return null;
         const pane = createEmptyPane();
@@ -1088,6 +1122,7 @@ export function useMultiPane(
         newWindowTooltip,
         addPane,
         closePane,
+        swapAdjacentPanes,
         setActive,
         focusPrev,
         focusNext,

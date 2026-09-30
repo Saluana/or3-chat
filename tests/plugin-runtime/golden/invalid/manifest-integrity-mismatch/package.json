@@ -1,0 +1,8 @@
+{
+  "name": "or3-golden-portable",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@or3/plugin-sdk": "^2.0.0"
+  }
+}

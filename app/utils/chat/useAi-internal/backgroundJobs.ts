@@ -33,17 +33,21 @@
  */
 
 import { nowSec } from '~/db/util';
-import { getDb } from '~/db/client';
+import { getActiveWorkspaceId, getDb } from '~/db/client';
 import { redactDiagnosticDetails } from '~~/shared/logging/sensitive-metadata';
 import {
     pollJobStatus,
     subscribeBackgroundJobStream,
     abortBackgroundJob,
+    claimBackgroundClientTool,
+    submitBackgroundClientToolResult,
     BackgroundJobPollError,
     type BackgroundJobStatus,
 } from '~/utils/chat/openrouterStream';
+import { useToolRegistry } from '~/utils/chat/tool-registry';
 import {
     refreshCachedSessionContext,
+    getCachedSessionContext,
 } from '~/composables/auth/useSessionContext';
 import type {
     BackgroundJobTracker,
@@ -67,6 +71,253 @@ import {
 
 export { BACKGROUND_JOB_MUTED_KEY } from './backgroundJobNotifications';
 export { BACKGROUND_JOB_PERSIST_INTERVAL_MS } from './backgroundJobPersistence';
+
+const clientToolDispatches = new Map<
+    string,
+    { promise: Promise<void>; abortController: AbortController }
+>();
+const clientToolRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const clientToolRetryAttempts = new Map<string, number>();
+const CLIENT_TOOL_JOURNAL_PREFIX = 'or3:bg-client-tool:';
+const CLIENT_TOOL_JOURNAL_TTL_MS = 24 * 60 * 60 * 1000;
+let lastClientToolJournalPruneAt = 0;
+
+type ClientToolJournal =
+    | { state: 'running'; createdAt?: number }
+    | { state: 'settled'; result?: string; error?: string; createdAt?: number };
+
+function clientToolJournalKey(jobId: string, callId: string): string {
+    return `${CLIENT_TOOL_JOURNAL_PREFIX}${jobId}:${callId}`;
+}
+
+function clearClientToolJournalsForJob(jobId: string): void {
+    if (typeof localStorage === 'undefined') return;
+    const prefix = `${CLIENT_TOOL_JOURNAL_PREFIX}${jobId}:`;
+    try {
+        for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+            const key = localStorage.key(index);
+            if (key?.startsWith(prefix)) clearClientToolJournal(key);
+        }
+    } catch {
+        // Storage access can be blocked while a session is closing.
+    }
+}
+
+function pruneClientToolJournals(): void {
+    if (typeof localStorage === 'undefined') return;
+    try {
+        for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+            const key = localStorage.key(index);
+            if (!key?.startsWith(CLIENT_TOOL_JOURNAL_PREFIX)) continue;
+            const journal = readClientToolJournal(key);
+            if (!journal || (journal.createdAt && Date.now() - journal.createdAt > CLIENT_TOOL_JOURNAL_TTL_MS)) {
+                clearClientToolJournal(key);
+            }
+        }
+    } catch {
+        // Journals are also removed at settlement and logout.
+    }
+}
+
+function clearClientToolRetriesForJob(jobId: string): void {
+    for (const [key, timer] of clientToolRetryTimers) {
+        if (!key.startsWith(`${jobId}:`)) continue;
+        clearTimeout(timer);
+        clientToolRetryTimers.delete(key);
+        clientToolRetryAttempts.delete(key);
+    }
+    for (const key of clientToolRetryAttempts.keys()) {
+        if (key.startsWith(`${jobId}:`)) clientToolRetryAttempts.delete(key);
+    }
+}
+
+export function abortBackgroundClientToolDispatchesForWorkspace(workspaceId: string): void {
+    for (const [key, active] of clientToolDispatches) {
+        const jobId = key.slice(0, key.indexOf(':'));
+        if (backgroundJobTrackers.get(jobId)?.workspaceId === workspaceId) {
+            active.abortController.abort();
+            clearClientToolRetriesForJob(jobId);
+        }
+    }
+}
+
+export function refreshPendingClientToolsForWorkspace(workspaceId: string): void {
+    for (const tracker of backgroundJobTrackers.values()) {
+        if (!tracker.active || tracker.workspaceId !== workspaceId) continue;
+        void pollJobStatus(tracker.jobId).then(
+            (status) => dispatchPendingClientTools(tracker, status),
+            () => undefined
+        );
+    }
+}
+
+function readClientToolJournal(key: string): ClientToolJournal | null {
+    if (typeof localStorage === 'undefined') return null;
+    try {
+        const value = localStorage.getItem(key);
+        return value ? (JSON.parse(value) as ClientToolJournal) : null;
+    } catch {
+        return null;
+    }
+}
+
+function writeClientToolJournal(
+    key: string,
+    value: ClientToolJournal
+): boolean {
+    if (typeof localStorage === 'undefined') return false;
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function clearClientToolJournal(key: string): void {
+    if (typeof localStorage === 'undefined') return;
+    try {
+        localStorage.removeItem(key);
+    } catch {
+        // A stale journal is safe: accepted server results are no longer claimable.
+    }
+}
+
+async function executePendingClientTool(
+    tracker: BackgroundJobTracker,
+    callId: string,
+    toolName: string
+): Promise<void> {
+    const dispatchKey = `${tracker.jobId}:${callId}`;
+    if (clientToolDispatches.has(dispatchKey)) return;
+    if (Date.now() - lastClientToolJournalPruneAt > 60 * 60 * 1000) {
+        pruneClientToolJournals();
+        lastClientToolJournalPruneAt = Date.now();
+    }
+    if ((getActiveWorkspaceId() ?? 'local') !== tracker.workspaceId) return;
+    if (getCachedSessionContext()?.user?.id !== tracker.userId) return;
+    // Portable tools register after their sandbox activates. Leave the server
+    // call unclaimed until its exact browser handler exists so startup order
+    // cannot turn a recoverable reconnect into a false tool failure.
+    if (!useToolRegistry().getTool(toolName)) return;
+    const abortController = new AbortController();
+    const dispatch = (async () => {
+        const claim = await claimBackgroundClientTool(tracker.jobId, callId);
+        if (!claim) return;
+        if (
+            !tracker.active ||
+            abortController.signal.aborted ||
+            (getActiveWorkspaceId() ?? 'local') !== tracker.workspaceId ||
+            getCachedSessionContext()?.user?.id !== tracker.userId ||
+            claim.context.workspaceId !== tracker.workspaceId
+        ) return;
+        const journalKey = clientToolJournalKey(tracker.jobId, callId);
+        let settled = readClientToolJournal(journalKey);
+        if (settled?.state === 'running') {
+            settled = {
+                state: 'settled',
+                error: 'The browser closed while this tool was running, so its outcome is unknown. Retry explicitly if needed.',
+            };
+            writeClientToolJournal(journalKey, { ...settled, createdAt: Date.now() });
+        }
+        if (!settled) {
+            if (!writeClientToolJournal(journalKey, { state: 'running', createdAt: Date.now() })) {
+                settled = {
+                    state: 'settled',
+                    error: 'The browser could not create a durable tool execution journal.',
+                };
+            } else {
+                const registry = useToolRegistry();
+                const execution = await registry.executeTool(
+                    claim.call.name,
+                    claim.call.arguments,
+                    {
+                        subject: tracker.userId || null,
+                        workspaceId: claim.context.workspaceId,
+                        threadId: claim.context.threadId,
+                        messageId: claim.context.messageId,
+                        callId: claim.call.id,
+                        requestId: tracker.jobId,
+                        abortSignal: abortController.signal,
+                    },
+                    { definition: claim.call.definition }
+                );
+                settled = {
+                    state: 'settled',
+                    result: execution.error ? undefined : execution.result ?? '',
+                    error: execution.error,
+                };
+                writeClientToolJournal(journalKey, { ...settled, createdAt: Date.now() });
+            }
+        }
+        if (
+            !tracker.active ||
+            abortController.signal.aborted ||
+            (getActiveWorkspaceId() ?? 'local') !== tracker.workspaceId ||
+            getCachedSessionContext()?.user?.id !== tracker.userId
+        ) return;
+        await submitBackgroundClientToolResult({
+            jobId: tracker.jobId,
+            callId,
+            claimToken: claim.claimToken,
+            result: settled.result,
+            error: settled.error,
+        });
+        clearClientToolJournal(journalKey);
+    })().finally(() => {
+        clientToolDispatches.delete(dispatchKey);
+    });
+    clientToolDispatches.set(dispatchKey, { promise: dispatch, abortController });
+    await dispatch;
+}
+
+function dispatchPendingClientTools(
+    tracker: BackgroundJobTracker,
+    status: BackgroundJobStatus
+): void {
+    if (status.status !== 'streaming') {
+        clearClientToolRetriesForJob(tracker.jobId);
+        clearClientToolJournalsForJob(tracker.jobId);
+        for (const [key, active] of clientToolDispatches) {
+            if (key.startsWith(`${tracker.jobId}:`)) {
+                active.abortController.abort();
+            }
+        }
+        return;
+    }
+    for (const call of status.tool_calls ?? []) {
+        if (call.id && call.runtime === 'client' && call.status === 'pending') {
+            const dispatchKey = `${tracker.jobId}:${call.id}`;
+            if (!clientToolRetryTimers.has(dispatchKey)) {
+                const attempts = clientToolRetryAttempts.get(dispatchKey) ?? 0;
+                clientToolRetryAttempts.set(dispatchKey, attempts + 1);
+                const timer = setTimeout(() => {
+                    clientToolRetryTimers.delete(dispatchKey);
+                    if (!tracker.active || (getActiveWorkspaceId() ?? 'local') !== tracker.workspaceId) return;
+                    void pollJobStatus(tracker.jobId).then(
+                        (fresh) => dispatchPendingClientTools(tracker, fresh),
+                        () => dispatchPendingClientTools(tracker, status)
+                    );
+                }, Math.min(30_000, 3_000 * 2 ** Math.min(attempts, 4)));
+                clientToolRetryTimers.set(dispatchKey, timer);
+            }
+            void executePendingClientTool(tracker, call.id, call.name).catch((error) => {
+                bgStreamWarn('client-tool-dispatch-failed', {
+                    jobId: tracker.jobId,
+                    callId: call.id,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            });
+        } else if (call.id && call.runtime === 'client') {
+            const key = `${tracker.jobId}:${call.id}`;
+            const timer = clientToolRetryTimers.get(key);
+            if (timer) clearTimeout(timer);
+            clientToolRetryTimers.delete(key);
+            clientToolRetryAttempts.delete(key);
+            clearClientToolJournal(clientToolJournalKey(tracker.jobId, call.id));
+        }
+    }
+}
 
 /**
  * Polling interval when no active subscribers (user navigated away). Detached
@@ -364,6 +615,7 @@ async function handleBackgroundStatus(
         });
         return true;
     }
+    dispatchPendingClientTools(tracker, status);
     let nextStatus = status;
     if (nextStatus.status !== 'streaming') {
         nextStatus = await ensureFullBackgroundStatus(tracker, nextStatus);
@@ -543,6 +795,8 @@ async function handleBackgroundStatus(
  * the row no longer exists).
  */
 function finalizeTrackerCleanup(tracker: BackgroundJobTracker): void {
+    clearClientToolRetriesForJob(tracker.jobId);
+    clearClientToolJournalsForJob(tracker.jobId);
     if (tracker.terminalPersistTimer) {
         clearTimeout(tracker.terminalPersistTimer);
         tracker.terminalPersistTimer = undefined;
@@ -695,6 +949,7 @@ async function interruptBackgroundTracking(
     options: { interrupt: boolean; kind: 'missing' | 'auth' | 'protocol' }
 ): Promise<void> {
     if (tracker.transportInterrupted) return;
+    clearClientToolRetriesForJob(tracker.jobId);
     tracker.transportInterrupted = true;
     tracker.active = false;
     tracker.pollRunId = (tracker.pollRunId ?? 0) + 1;
@@ -932,6 +1187,7 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
 export function stopBackgroundJobTracking(
     tracker: BackgroundJobTracker
 ): void {
+    clearClientToolRetriesForJob(tracker.jobId);
     bgStreamLog('stop-tracking', {
         jobId: tracker.jobId,
         status: tracker.status,

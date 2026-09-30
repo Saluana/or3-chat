@@ -149,6 +149,10 @@ function mountComponent() {
                         '<button @click="$emit(\'click\')"><slot /></button>',
                     emits: ['click'],
                 },
+                UModal: {
+                    props: ['open'],
+                    template: '<div v-if="open"><slot name="content" /></div>',
+                },
                 UPopover: {
                     template:
                         '<div class="u-popover-stub"><slot /><slot name="content" /></div>',

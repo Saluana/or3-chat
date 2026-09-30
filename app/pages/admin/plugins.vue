@@ -14,10 +14,71 @@
                 </UBadge>
             </div>
             <p class="text-sm opacity-70">
-                Activate plugins for the selected workspace. Installation and
-                diagnostics are available under advanced controls.
+                Install marketplace packages on this site, then activate them for
+                a workspace. Runtime diagnostics are available below.
             </p>
         </div>
+
+        <nav class="flex flex-wrap gap-2" aria-label="Plugin management sections">
+            <UButton v-if="canManageSitePlugins" size="sm" color="neutral" variant="soft" to="#site-plugin-catalog">Site catalog</UButton>
+            <UButton v-if="canManageSitePlugins && v2Packages.length" size="sm" color="neutral" variant="soft" to="#managed-v2">Installed packages</UButton>
+            <UButton size="sm" color="neutral" variant="soft" to="/chat?dashboard=marketplace&page=updates">Updates</UButton>
+        </nav>
+
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)] p-4">
+            <div>
+                <h3 class="text-base font-medium">Marketplace</h3>
+                <p class="text-sm opacity-70">
+                    Browse and install reviewed plugins in Chat’s Dashboard.
+                    Sign in with your Chat account; the admin login is separate.
+                </p>
+            </div>
+            <UButton to="/chat?dashboard=marketplace" icon="i-lucide-store">
+                Browse Marketplace
+            </UButton>
+        </div>
+
+        <section v-if="canManageSitePlugins" id="site-plugin-catalog" class="min-w-0 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)] p-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h3 class="text-lg font-medium">Site catalog approvals</h3>
+                    <p class="text-sm opacity-70">Only approved releases appear in Dashboard &gt; Marketplace. Removing approval stops new discovery and enablement; it does not disable workspaces already using the plugin.</p>
+                </div>
+                <UButton size="sm" color="neutral" variant="soft" :loading="siteCatalogLoading" @click="loadSiteCatalog">Refresh catalog</UButton>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+                <UInput v-model="siteCatalogSearch" class="min-w-0 flex-1" placeholder="Search the registry" aria-label="Search registry plugins" @keyup.enter="searchSiteCatalog" />
+                <UButton size="sm" @click="searchSiteCatalog">Search</UButton>
+            </div>
+            <p v-if="siteCatalogError" class="mt-3 text-sm text-[var(--md-sys-color-error,#b91c1c)] break-words" role="alert">{{ siteCatalogError }}</p>
+            <p v-else-if="siteCatalogLoaded && !siteCatalogConfigured" class="mt-3 text-sm opacity-70">Configure the trusted marketplace registry and release keys to review plugins.</p>
+            <p v-else-if="siteCatalogLoaded && siteCatalogCards.length === 0" class="mt-3 text-sm opacity-70">No registry plugins match this search.</p>
+            <ul v-else class="mt-3 space-y-2">
+                <li v-for="card in siteCatalogCards" :key="card.pluginId" class="min-w-0 rounded border border-[var(--md-outline-variant)] p-3">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <div class="font-medium break-words">{{ card.name || card.pluginId }}</div>
+                            <div class="text-xs opacity-70 break-words">{{ card.summary }}</div>
+                            <div class="mt-1 text-xs">Published: {{ card.latestRelease?.version ?? 'none' }} · Approved: {{ sitePolicyFor(card.pluginId)?.catalogVisible ? sitePolicyFor(card.pluginId)?.approvedRelease.version : 'none' }} · New workspaces: {{ sitePolicyFor(card.pluginId)?.futureDefaultEnabled ? 'enabled by default' : 'no default' }}</div>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <UButton size="xs" :disabled="!card.latestRelease?.version || siteCatalogBusy === card.pluginId" :loading="siteCatalogBusy === card.pluginId" @click="reviewSiteRelease(card.pluginId, card.latestRelease?.version)">Review &amp; approve</UButton>
+                            <UButton v-if="sitePolicyFor(card.pluginId)?.catalogVisible" size="xs" color="neutral" variant="soft" :disabled="siteCatalogBusy === card.pluginId" @click="hideSiteRelease(card.pluginId)">Remove from catalog</UButton>
+                        </div>
+                    </div>
+                </li>
+            </ul>
+            <div v-if="siteCatalogTotal > siteCatalogCards.length" class="mt-3 flex items-center gap-3">
+                <UButton size="xs" color="neutral" variant="soft" :disabled="siteCatalogPage <= 1 || siteCatalogLoading" @click="changeSiteCatalogPage(-1)">Previous</UButton>
+                <span class="text-xs">Page {{ siteCatalogPage }} of {{ Math.max(1, Math.ceil(siteCatalogTotal / 24)) }}</span>
+                <UButton size="xs" color="neutral" variant="soft" :disabled="siteCatalogPage >= Math.ceil(siteCatalogTotal / 24) || siteCatalogLoading" @click="changeSiteCatalogPage(1)">Next</UButton>
+            </div>
+        </section>
+
+        <details class="min-w-0 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
+            <summary class="cursor-pointer px-4 py-3 text-sm font-medium">Advanced source plugins and development admission</summary>
+            <div class="space-y-4 border-t border-[var(--md-outline-variant)] p-4">
+        <PluginDevelopmentAdmission />
 
         <div
             v-if="rebuildRequired && rebuildAvailable"
@@ -25,7 +86,7 @@
         >
             <div class="font-semibold text-sm">Rebuild + Restart Required</div>
             <div class="text-xs opacity-80 mt-1">
-                Newly installed client plugins are bundled at build time. In production, run
+                Newly installed source plugins are bundled at build time. In production, run
                 Rebuild + Restart from Admin &gt; System before enabling them. In development,
                 restart the dev server to pick up new client modules.
             </div>
@@ -36,19 +97,19 @@
             class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)]"
         >
             <div class="text-sm">
-                Custom plugin upload and install are disabled on this managed deployment.
-                This image is immutable and cannot rebuild installed source extensions.
+                Direct source plugin upload and install are disabled on this managed deployment.
+                This image is immutable and cannot rebuild source extensions.
             </div>
             <div class="text-xs opacity-70 mt-1">
-                Bundled plugins remain available above. To install custom plugins, deploy OR3
-                from source and restart the process after installing.
+                Reviewed packages can still be installed from the Marketplace. To install
+                source extensions, deploy OR3 from source and restart after installing.
             </div>
         </div>
 
         <div class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
             <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h3 class="text-lg font-medium">Available on this site</h3>
+                    <h3 class="text-lg font-medium">Source plugins</h3>
                     <p class="text-xs opacity-70">
                         Add or uninstall site-wide; activate per workspace.
                     </p>
@@ -90,7 +151,7 @@
             </div>
 
             <div v-else-if="plugins.length === 0" class="text-sm opacity-70 py-8 text-center bg-[var(--md-surface-container-low)] rounded">
-                No plugins installed.
+                No source plugins installed. Use Dashboard &gt; Marketplace for reviewed packages.
             </div>
 
             <div v-else class="space-y-4">
@@ -217,40 +278,72 @@
             </div>
         </div>
 
-        <div
+            </div>
+        </details>
+
+        <div id="managed-v2"
             v-if="canManageSitePlugins && v2Packages.length > 0"
             class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]"
         >
             <div class="mb-4">
-                <h3 class="text-lg font-medium">Managed V2 packages</h3>
+                <h3 class="text-lg font-medium">Installed packages</h3>
                 <p class="text-xs opacity-70">
-                    Deployment-wide candidate, promotion, rollback, and removal controls. Activation remains per workspace.
+                    The selected version is shared by the site. Enablement and setup are managed per workspace.
                 </p>
             </div>
             <div class="space-y-3">
                 <div
                     v-for="packagePlugin in v2Packages"
                     :key="packagePlugin.pluginId"
-                    class="p-3 rounded border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)]"
+                    class="min-w-0 p-3 rounded border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)]"
                 >
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                            <div class="font-semibold">{{ packagePlugin.pluginId }}</div>
-                            <div class="mt-1 text-xs font-mono opacity-70">
-                                current: {{ packagePlugin.pointer?.current?.packageDigest ?? 'none' }}
+                        <div class="min-w-0">
+                            <div class="font-semibold break-words">{{ packagePlugin.pluginId }}</div>
+                            <div class="mt-1 text-sm">Selected version: {{ packagePlugin.display?.version ?? 'Unavailable' }}</div>
+                            <div v-if="packagePlugin.pointer?.candidate" class="text-sm">Update being checked: {{ packagePlugin.display?.candidateVersion ?? 'Version unavailable' }}</div>
+                            <div v-if="packagePlugin.localAdmission || packagePlugin.adminUpload" class="mt-1">
+                                <UBadge color="warning" variant="subtle">{{ packagePlugin.localAdmission ? 'Development candidate' : 'Admin ZIP upload' }}</UBadge>
                             </div>
-                            <div v-if="packagePlugin.pointer?.candidate" class="text-xs font-mono opacity-70">
-                                candidate: {{ packagePlugin.pointer.candidate.packageDigest }}
-                            </div>
-                            <div v-if="packagePlugin.startup.issueCodes.length" class="mt-1 text-xs text-[var(--md-sys-color-error,#b91c1c)]">
-                                {{ packagePlugin.startup.issueCodes.join(', ') }}
-                            </div>
+                            <p class="mt-2 text-xs opacity-70 break-words">{{ statusFor(packagePlugin).reason }}</p>
                         </div>
-                        <UBadge :color="enabledSet.has(packagePlugin.pluginId) ? 'success' : 'neutral'" variant="subtle">
-                            {{ enabledSet.has(packagePlugin.pluginId) ? 'Active in workspace' : packagePlugin.startup.status }}
+                        <UBadge :color="statusFor(packagePlugin).state === 'active' ? 'success' : statusFor(packagePlugin).state === 'needs-attention' ? 'warning' : 'neutral'" variant="subtle">
+                            {{ statusFor(packagePlugin).label }}
                         </UBadge>
                     </div>
+                    <details class="mt-2 text-xs opacity-75">
+                        <summary class="cursor-pointer">Technical details</summary>
+                        <dl class="mt-2 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
+                            <dt>Selected digest</dt><dd class="break-all">{{ packagePlugin.pointer?.current?.packageDigest ?? 'none' }}</dd>
+                            <dt>Update digest</dt><dd class="break-all">{{ packagePlugin.pointer?.candidate?.packageDigest ?? 'none' }}</dd>
+                            <dt>Package issues</dt><dd class="break-words">{{ packagePlugin.startup.issueCodes.join(', ') || 'none' }}</dd>
+                        </dl>
+                    </details>
                     <div class="mt-3 flex flex-wrap gap-2 border-t border-[var(--md-outline-variant)]/50 pt-3">
+                        <UButton v-if="!packagePlugin.localAdmission && !packagePlugin.adminUpload && packagePlugin.display?.version && (!sitePolicyFor(packagePlugin.pluginId)?.catalogVisible || sitePolicyFor(packagePlugin.pluginId)?.approvedRelease.version !== packagePlugin.display.version)" size="xs" color="primary" :loading="siteCatalogBusy === packagePlugin.pluginId" @click="reviewSiteRelease(packagePlugin.pluginId, packagePlugin.display.version)">Review installed {{ packagePlugin.display.version }} for site catalog</UButton>
+                        <UButton v-if="statusFor(packagePlugin).action === 'approve-site'" size="xs" color="primary" @click="focusSiteCatalog">Review site approval</UButton>
+                        <UButton v-if="statusFor(packagePlugin).action === 'retry-check' && selectedWorkspaceId && chatWorkspaceId === selectedWorkspaceId" size="xs" color="neutral" variant="soft" :to="`/chat?dashboard=marketplace&page=installed&plugin=${encodeURIComponent(packagePlugin.pluginId)}&workspace=${encodeURIComponent(selectedWorkspaceId ?? '')}`">Open browser check</UButton>
+                        <p v-else-if="statusFor(packagePlugin).action === 'retry-check'" class="w-full text-xs opacity-70">Select {{ workspaceContextName || selectedWorkspaceId }} in Chat, then run its browser check in Marketplace → Installed.</p>
+                        <UButton v-if="statusFor(packagePlugin).action === 'configure' && selectedWorkspaceId && chatWorkspaceId === selectedWorkspaceId" size="xs" color="neutral" variant="soft" :to="`/chat?dashboard=marketplace&plugin=${encodeURIComponent(packagePlugin.pluginId)}&workspace=${encodeURIComponent(selectedWorkspaceId ?? '')}&setup=1`">Open workspace setup</UButton>
+                        <p v-else-if="statusFor(packagePlugin).action === 'configure'" class="w-full text-xs opacity-70">Select {{ workspaceContextName || selectedWorkspaceId }} in Chat, then open this plugin’s Configure page.</p>
+                        <UButton
+                            v-if="packagePlugin.pointer?.current"
+                            size="xs"
+                            color="neutral"
+                            :loading="v2ActionLoading[packagePlugin.pluginId]"
+                            @click="reviewV2Permissions(packagePlugin.pluginId, 'current')"
+                        >
+                            Review selected permissions
+                        </UButton>
+                        <UButton
+                            v-if="packagePlugin.pointer?.candidate"
+                            size="xs"
+                            color="neutral"
+                            :loading="v2ActionLoading[packagePlugin.pluginId]"
+                            @click="reviewV2Permissions(packagePlugin.pluginId, 'candidate')"
+                        >
+                            Review candidate permissions
+                        </UButton>
                         <UButton
                             size="xs"
                             :disabled="!packagePlugin.pointer?.candidate || v2ActionLoading[packagePlugin.pluginId]"
@@ -258,6 +351,27 @@
                             @click="runV2Canary(packagePlugin.pluginId)"
                         >
                             Run canary
+                        </UButton>
+                        <UButton
+                            v-if="packagePlugin.pointer?.candidate"
+                            size="xs"
+                            color="neutral"
+                            :loading="developmentCanary.busyPluginId.value === packagePlugin.pluginId"
+                            @click="developmentCanary.runBrowserCheck(packagePlugin.pluginId, selectedWorkspaceId || undefined).then(() => refreshPage())"
+                        >
+                            Run browser check
+                        </UButton>
+                        <p v-if="developmentCanary.notes.value[packagePlugin.pluginId]" class="w-full text-xs opacity-70">
+                            {{ developmentCanary.notes.value[packagePlugin.pluginId] }}
+                        </p>
+                        <UButton
+                            v-if="packagePlugin.localAdmission && packagePlugin.pointer?.candidate"
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            @click="developmentCanary.exportCanaryReceipt(packagePlugin.pluginId, packagePlugin.pointer.candidate.packageDigest)"
+                        >
+                            Export verification receipt
                         </UButton>
                         <UButton
                             size="xs"
@@ -285,6 +399,9 @@
                         >
                             {{ enabledSet.has(packagePlugin.pluginId) ? 'Deactivate workspace' : 'Activate workspace' }}
                         </UButton>
+                        <UButton size="xs" color="neutral" variant="soft" :disabled="!packagePlugin.pointer?.current" @click="rolloutPluginId = rolloutPluginId === packagePlugin.pluginId ? null : packagePlugin.pluginId">
+                            Enable or disable workspaces
+                        </UButton>
                         <UButton
                             size="xs"
                             color="error"
@@ -295,6 +412,7 @@
                             Uninstall package
                         </UButton>
                     </div>
+                    <AdminPluginWorkspaceRollout v-if="rolloutPluginId === packagePlugin.pluginId" :plugin-id="packagePlugin.pluginId" :version="packagePlugin.display?.version ?? null" />
                 </div>
             </div>
         </div>
@@ -304,11 +422,11 @@
                 Advanced runtime diagnostics
             </summary>
             <div class="border-t border-[var(--md-outline-variant)] p-4">
-                <PluginRuntimeInspector />
+                <AdminPluginRuntimeInspector />
             </div>
         </details>
 
-        <ConfirmDialog
+        <AdminConfirmDialog
             v-model="showInstallTrustConfirm"
             title="Install plugin from source?"
             message="This plugin zip is application code. It will execute with OR3 server privileges once activated and is not sandboxed."
@@ -335,7 +453,14 @@ import {
 } from '~/utils/admin/plugin-access-policy';
 import { useAdminWorkspaceGate } from '~/composables/admin/useAdminWorkspaceGate';
 import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
+import PluginDevelopmentAdmission from '~/components/admin/PluginDevelopmentAdmission.vue';
+import { useDevelopmentCanary } from '~/composables/admin/useDevelopmentCanary';
 import { useRuntimeConfig } from '#imports';
+import { usePortableActivations } from '~/composables/plugins/portable-client-runtime';
+import { useTrustedV2Activations } from '~/composables/plugins/trusted-v2-manager';
+import { pluginLifecycleView } from '~/composables/plugins/plugin-lifecycle-view';
+import { describePluginStatus } from '~~/shared/plugins/lifecycle/lifecycle-view';
+import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 
 definePageMeta({
     layout: 'admin',
@@ -350,12 +475,27 @@ type ManagedV2Package = {
         previous: { packageDigest: string } | null;
     } | null;
     workspaceEnabled: boolean;
+    siteApproval?: 'approved' | 'required' | 'unknown';
+    grantReview?: 'current' | 'required' | 'unknown';
+    setup?: 'ready' | 'required' | 'blocked' | 'unknown';
+    display?: {
+        version: string | null;
+        selectedDigest: string | null;
+        candidateVersion: string | null;
+        candidateDigest: string | null;
+    };
     startup: {
         status: string;
         selectedSlot: string | null;
         selectedDigest: string | null;
         issueCodes: string[];
     };
+    localAdmission?: {
+        provenance: 'local-development';
+        receiptSha256: string;
+        admittedAt: string;
+    } | null;
+    adminUpload?: boolean;
 };
 
 const { selectedWorkspaceId, showWorkspaceSelector, onWorkspaceSelected } =
@@ -387,6 +527,99 @@ const {
 });
 const isOwner = computed(() => pageData.value?.role === 'owner');
 const canManageSitePlugins = computed(() => pageData.value?.canManageSitePlugins === true);
+type SiteCatalogCard = { pluginId: string; name?: string; summary?: string; latestRelease?: { version?: string } | null };
+type SiteCatalogPolicy = { pluginId: string; revision: number; catalogVisible: boolean; futureDefaultEnabled: boolean; approvedRelease: { version: string } };
+const siteCatalogCards = ref<SiteCatalogCard[]>([]);
+const siteCatalogPolicies = ref<SiteCatalogPolicy[]>([]);
+const siteCatalogSearch = ref('');
+const siteCatalogPage = ref(1);
+const siteCatalogTotal = ref(0);
+const siteCatalogLoaded = ref(false);
+const siteCatalogConfigured = ref(false);
+const siteCatalogLoading = ref(false);
+const siteCatalogBusy = ref<string | null>(null);
+const siteCatalogError = ref<string | null>(null);
+const sitePolicyFor = (pluginId: string) => siteCatalogPolicies.value.find((policy) => policy.pluginId === pluginId);
+async function loadSiteCatalog() {
+    if (!canManageSitePlugins.value || siteCatalogLoading.value) return;
+    siteCatalogLoading.value = true;
+    siteCatalogError.value = null;
+    try {
+        const result = await $fetch<{ configured: boolean; catalog: { items?: SiteCatalogCard[]; total?: number } | null; policies: SiteCatalogPolicy[] }>('/api/admin/plugins/site-catalog', {
+            query: { search: siteCatalogSearch.value.trim(), page: siteCatalogPage.value, pageSize: 24 },
+        });
+        siteCatalogConfigured.value = result.configured;
+        siteCatalogCards.value = result.catalog?.items ?? [];
+        siteCatalogTotal.value = result.catalog?.total ?? 0;
+        siteCatalogPolicies.value = result.policies;
+        siteCatalogLoaded.value = true;
+    } catch (error) {
+        siteCatalogError.value = parseErrorMessage(error, 'Could not load site catalog');
+    } finally {
+        siteCatalogLoading.value = false;
+    }
+}
+function searchSiteCatalog() { siteCatalogPage.value = 1; void loadSiteCatalog(); }
+function changeSiteCatalogPage(delta: number) { siteCatalogPage.value += delta; void loadSiteCatalog(); }
+watch(canManageSitePlugins, (allowed) => { if (allowed) void loadSiteCatalog(); }, { immediate: true });
+async function reviewSiteRelease(pluginId: string, version?: string) {
+    if (!version || siteCatalogBusy.value) return;
+    siteCatalogBusy.value = pluginId;
+    try {
+        const preview = await $fetch<{
+            releaseId: string; packageTreeSha256: string; authoritySha256: string;
+            requestedGrants: string[]; authority: { trust?: string; destinations?: unknown[]; dataScopes?: string[]; connectionScopes?: string[]; writes?: string[] } | null;
+            current: { revision: number } | null;
+        }>(`/api/admin/plugins/site-catalog/${encodeURIComponent(pluginId)}`, { query: { version } });
+        const access = [
+            `Trust: ${preview.authority?.trust ?? 'unknown'}`,
+            `Grants: ${preview.requestedGrants.join(', ') || 'none'}`,
+            `Destinations: ${preview.authority?.destinations?.length ?? 0}`,
+            `Data scopes: ${preview.authority?.dataScopes?.join(', ') || 'none'}`,
+            `Connection scopes: ${preview.authority?.connectionScopes?.join(', ') || 'none'}`,
+            `Writes: ${preview.authority?.writes?.join(', ') || 'none'}`,
+        ].join('\n');
+        const clearsFutureDefault = sitePolicyFor(pluginId)?.futureDefaultEnabled &&
+            sitePolicyFor(pluginId)?.approvedRelease.version !== version;
+        const accepted = await confirm({
+            title: `Approve ${pluginId} ${version} for this site?`,
+            message: `${access}\n\nThis makes the release visible to workspace users. Workspace permission review and setup remain required.${clearsFutureDefault ? '\n\nThe current new-workspace default will pause until you review this version and enable the default again.' : ''}`,
+            importantNote: `Exact package: ${preview.packageTreeSha256}`,
+            confirmText: 'Approve for site',
+        });
+        if (!accepted) return;
+        await $fetch('/api/admin/plugins/site-catalog', {
+            method: 'POST', headers: ADMIN_HEADERS,
+            body: { pluginId, action: 'approve', expectedRevision: preview.current?.revision ?? 0, version,
+                expectedReleaseId: preview.releaseId, expectedPackageTreeSha256: preview.packageTreeSha256, expectedAuthoritySha256: preview.authoritySha256 },
+        });
+        await Promise.all([loadSiteCatalog(), refreshPage()]);
+    } catch (error) {
+        toast.add({ title: 'Site approval failed', description: parseErrorMessage(error, 'Review the release again.'), color: 'error' });
+    } finally {
+        siteCatalogBusy.value = null;
+    }
+}
+async function hideSiteRelease(pluginId: string) {
+    const policy = sitePolicyFor(pluginId);
+    if (!policy || siteCatalogBusy.value) return;
+    const accepted = await confirm({
+        title: `Remove ${pluginId} from the site catalog?`,
+        message: 'New discovery and enablement will stop. Workspaces already using the plugin keep running until you disable them separately.',
+        confirmText: 'Remove from catalog',
+    });
+    if (!accepted) return;
+    siteCatalogBusy.value = pluginId;
+    try {
+        await $fetch('/api/admin/plugins/site-catalog', { method: 'POST', headers: ADMIN_HEADERS,
+            body: { pluginId, action: 'hide', expectedRevision: policy.revision } });
+        await Promise.all([loadSiteCatalog(), refreshPage()]);
+    } catch (error) {
+        toast.add({ title: 'Could not change site approval', description: parseErrorMessage(error, 'Refresh and try again.'), color: 'error' });
+    } finally {
+        siteCatalogBusy.value = null;
+    }
+}
 const { selectedWorkspace } = useAdminWorkspaceContext();
 const workspaceContextName = computed(
     () => selectedWorkspace.value?.name || pageData.value?.workspaceName
@@ -446,7 +679,7 @@ async function installPluginFromUrl(url: string) {
         if ('kind' in installed && installed.kind === 'v2-candidate') {
             toast.add({
                 title: 'V2 candidate prepared',
-                description: `Digest ${installed.packageDigest} is inactive. Run its canary, promote it, then activate it for this workspace.`,
+                description: `Digest ${installed.packageDigest} is inactive. ${installed.grantReviewRequired ? 'Review permissions, then run' : 'Run'} its canary, promote it, then activate it for this workspace.`,
                 color: 'info',
             });
             return;
@@ -476,6 +709,31 @@ const plugins = computed(
     () => pageData.value?.plugins ?? []
 );
 const v2Packages = computed(() => pageData.value?.packagePlugins ?? []);
+const chatWorkspaceId = computed(() => getCachedSessionContext()?.workspace?.id ?? null);
+function focusSiteCatalog() {
+    document.getElementById('site-plugin-catalog')?.scrollIntoView({ behavior: 'smooth' });
+    (document.querySelector('#site-plugin-catalog input') as HTMLInputElement | null)?.focus();
+}
+const rolloutPluginId = ref<string | null>(null);
+const route = useRoute();
+watch([v2Packages, () => route.query.plugin], ([packages, plugin]) => {
+    if (typeof plugin === 'string' && packages.some((entry) => entry.pluginId === plugin)) rolloutPluginId.value = plugin;
+}, { immediate: true });
+const portableActivations = usePortableActivations();
+const trustedV2Activations = useTrustedV2Activations();
+function statusFor(entry: ManagedV2Package) {
+    return describePluginStatus(
+        pluginLifecycleView(entry, selectedWorkspaceId.value || null, portableActivations, trustedV2Activations),
+        {
+            enabled: enabledSet.value.has(entry.pluginId),
+            siteApproval: entry.siteApproval ?? 'unknown',
+            grantReview: entry.grantReview ?? 'unknown',
+            setup: entry.setup ?? 'unknown',
+            packageReady: entry.startup.status === 'ready',
+        }
+    );
+}
+const developmentCanary = useDevelopmentCanary();
 
 const enabledSet = ref<Set<string>>(new Set());
 const settingsByPlugin = reactive<Record<string, string>>({});
@@ -557,7 +815,7 @@ async function installPlugin() {
         if ('kind' in installed && installed.kind === 'v2-candidate') {
             toast.add({
                 title: 'V2 candidate prepared',
-                description: `Digest ${installed.packageDigest} is inactive. Run its canary, promote it, then activate it for this workspace.`,
+                description: `Digest ${installed.packageDigest} is inactive. ${installed.grantReviewRequired ? 'Review permissions, then run' : 'Run'} its canary, promote it, then activate it for this workspace.`,
                 color: 'info',
             });
             return;
@@ -626,13 +884,93 @@ async function runV2Canary(pluginId: string) {
     await runV2PackageAction(pluginId, 'canary');
 }
 
+async function reviewV2Permissions(pluginId: string, target: 'current' | 'candidate') {
+    if (!canManageSitePlugins.value || v2ActionLoading[pluginId]) return;
+    v2ActionLoading[pluginId] = true;
+    try {
+        const review = await $fetch<{
+            packageDigest: string;
+            authoritySha256: string;
+            requestedGrants: string[];
+            reviewStatus: string;
+            version: string;
+        }>(`/api/admin/plugins/packages/${encodeURIComponent(pluginId)}/review`, {
+            query: { workspaceId: selectedWorkspaceId.value, target },
+        });
+        if (review.reviewStatus === 'current') {
+            toast.add({ title: 'Permissions already reviewed', color: 'info' });
+            return;
+        }
+        const approved = await confirm({
+            title: `Review ${pluginId} ${target === 'current' ? 'selected release' : 'candidate'} permissions`,
+            message: review.requestedGrants.length
+                ? `Approve these requested permissions for this workspace: ${review.requestedGrants.join(', ')}?`
+                : 'Approve this package authority for this workspace?',
+            importantNote: `Package: ${review.packageDigest}. Authority: ${review.authoritySha256}. Trusted-host code runs in the host page.`,
+            noteTone: 'warning',
+            confirmText: 'Approve permissions',
+        });
+        if (!approved) return;
+        await $fetch(`/api/admin/plugins/packages/${encodeURIComponent(pluginId)}/grants`, {
+            method: 'POST',
+            headers: ADMIN_HEADERS,
+            body: {
+                workspaceId: selectedWorkspaceId.value,
+                approvedGrants: review.requestedGrants,
+                expectedPackageDigest: review.packageDigest,
+                expectedAuthoritySha256: review.authoritySha256,
+                version: review.version,
+                target,
+            },
+        });
+        await refreshPage();
+        toast.add({ title: 'Package permissions approved', color: 'success' });
+    } catch (error: unknown) {
+        toast.add({
+            title: 'Permission review failed',
+            description: parseErrorMessage(error, 'Could not review package permissions'),
+            color: 'error',
+        });
+    } finally {
+        v2ActionLoading[pluginId] = false;
+    }
+}
+
 async function promoteV2Candidate(pluginId: string, candidateDigest?: string) {
     if (!candidateDigest) return;
     await runV2PackageAction(pluginId, 'promote', { candidateDigest });
 }
 
 async function rollbackV2Package(pluginId: string) {
-    await runV2PackageAction(pluginId, 'rollback');
+    if (!canManageSitePlugins.value || v2ActionLoading[pluginId]) return;
+    v2ActionLoading[pluginId] = true;
+    try {
+        const review = await $fetch<{
+            ok: boolean; currentVersion: string; previousVersion: string;
+            currentDigest: string; previousDigest: string; pointerRevision: number;
+            enabledWorkspaces: number; enabledWorkspaceSha256: string;
+            blocking: { workspaceId: string; code: string }[];
+        }>(`/api/admin/plugins/packages/${encodeURIComponent(pluginId)}/rollback-review`);
+        if (!review.ok) throw new Error(`Rollback is blocked in ${review.blocking.length} workspace(s): ${review.blocking.slice(0, 3).map((item) => `${item.workspaceId} (${item.code})`).join(', ')}.`);
+        const approved = await confirm({
+            title: `Restore ${pluginId} ${review.previousVersion}?`,
+            message: `This restores the shared selected code from ${review.currentVersion} to ${review.previousVersion} for ${review.enabledWorkspaces} enabled workspace(s). Saved data and workspace choices remain.`,
+            importantNote: `Previous package: ${review.previousDigest}. The server rechecks every enabled workspace before changing selection.`,
+            noteTone: 'warning', confirmText: 'Restore previous version',
+        });
+        if (!approved) return;
+        await $fetch(`/api/admin/plugins/packages/${encodeURIComponent(pluginId)}/rollback`, {
+            method: 'POST', headers: ADMIN_HEADERS,
+            body: { workspaceId: selectedWorkspaceId.value, expectedCurrentDigest: review.currentDigest,
+                expectedPreviousDigest: review.previousDigest, expectedPointerRevision: review.pointerRevision,
+                expectedEnabledWorkspaceSha256: review.enabledWorkspaceSha256 },
+        });
+        await refresh();
+        requestWorkspacePluginReconcile('manifest-revision-change');
+        toast.add({ title: 'Previous version restored', color: 'success' });
+    } catch (error) {
+        toast.add({ title: 'Rollback was refused', description: parseErrorMessage(error, 'Review rollback again.'), color: 'error' });
+    } finally { v2ActionLoading[pluginId] = false; }
 }
 
 async function uninstallV2Package(pluginId: string) {

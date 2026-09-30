@@ -115,7 +115,7 @@ export function deriveProviderModules(answers: WizardAnswers): string[] {
  *
  * - `env`: key/value pairs for the OR3 `.env` file
  * - `convexEnv`: key/value pairs to set via `bunx convex env set` (Clerk + Convex only)
- * - `providerModules`: Nuxt module IDs for `or3.providers.generated.ts`
+ * - `providerModules`: Nuxt module IDs for `or3.providers.generated.json`
  *
  * Constraints:
  * - Only non-empty values are included (`setEnv` skips undefined/empty).

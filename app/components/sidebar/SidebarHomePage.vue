@@ -179,6 +179,13 @@
                     </div>
                 </div>
             </div>
+            <template #fallback>
+                <div class="flex-1 min-h-0 p-3 space-y-3" aria-hidden="true">
+                    <div class="h-9 w-full bg-[var(--md-surface-variant)] animate-pulse" />
+                    <div class="h-9 w-4/5 bg-[var(--md-surface-variant)] animate-pulse" />
+                    <div class="h-9 w-full bg-[var(--md-surface-variant)] animate-pulse" />
+                </div>
+            </template>
         </ClientOnly>
 
         <!-- Footer Actions -->

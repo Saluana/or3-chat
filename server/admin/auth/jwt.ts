@@ -11,7 +11,9 @@ import {
     resolveAdminJwtSecretPath,
 } from './data-paths';
 
-const COOKIE_NAME = 'or3_admin';
+const COOKIE_NAME = process.env.OR3_PLUGIN_DEV_COOKIE_SCOPE
+    ? `or3_admin_${process.env.OR3_PLUGIN_DEV_COOKIE_SCOPE}`
+    : 'or3_admin';
 const COOKIE_PATH = '/';
 
 /**

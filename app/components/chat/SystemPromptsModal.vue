@@ -1,107 +1,40 @@
 <template>
-    <UModal
-        v-bind="systemPromptsModalProps"
+    <AppModal
+        v-bind="systemPromptsModalOverrides"
         v-model:open="open"
-        :fullscreen="!isWideRow"
+        size="workspace"
+        close-label="Close system prompts"
         title="System Prompts"
         description="Browse, organize, edit, and apply system prompts."
     >
-        <template #header>
-            <div
-                class="flex w-full items-center justify-between gap-3 px-1"
-                data-test="system-prompts-header"
+        <template #actions>
+            <UButton
+                v-bind="headerActionButtonProps"
+                class="sm:hidden"
+                data-test="system-prompts-new"
+                :icon="plusIcon"
+                aria-label="New prompt"
+                @click="createNewPrompt"
             >
-                <div class="min-w-0">
-                    <!-- VT323 keeps modal titles readable; Press Start at text-lg overflows the header. -->
-                    <DialogTitle
-                        class="m-0 truncate font-vt323 text-base font-semibold leading-tight"
-                    >
-                        System Prompts
-                    </DialogTitle>
-                    <DialogDescription
-                        class="m-0 hidden text-xs leading-snug opacity-80 sm:block"
-                    >
-                        Browse, organize, edit, and apply system prompts.
-                    </DialogDescription>
-                </div>
-                <div class="flex shrink-0 items-center gap-2">
-                    <UButton
-                        v-bind="headerActionButtonProps"
-                        class="sm:hidden"
-                        data-test="system-prompts-new"
-                        :icon="plusIcon"
-                        aria-label="New prompt"
-                        @click="createNewPrompt"
-                    >
-                        New
-                    </UButton>
-                    <UButton
-                        v-bind="headerActionButtonProps"
-                        class="hidden sm:inline-flex"
-                        data-test="system-prompts-new-desktop"
-                        :icon="plusIcon"
-                        @click="createNewPrompt"
-                    >
-                        New Prompt
-                    </UButton>
-                    <UButton
-                        v-bind="headerActionButtonProps"
-                        :icon="closeIcon"
-                        square
-                        aria-label="Close system prompts"
-                        @click="open = false"
-                    />
-                </div>
-            </div>
+                New
+            </UButton>
+            <UButton
+                v-bind="headerActionButtonProps"
+                class="hidden sm:inline-flex"
+                data-test="system-prompts-new-desktop"
+                :icon="plusIcon"
+                @click="createNewPrompt"
+            >
+                New Prompt
+            </UButton>
         </template>
 
-        <template #body>
+        <template #default>
             <div
                 class="system-prompts-shell relative flex h-full min-h-0 flex-col bg-[var(--md-surface)] text-[var(--md-on-surface)]"
                 data-test="system-prompts-modal"
                 @keydown="handleKeydown"
             >
-                <div
-                    v-if="deleteConfirmPrompt"
-                    class="absolute inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-[2px]"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="delete-prompt-title"
-                >
-                    <div
-                        class="w-full max-w-md rounded-[var(--md-border-radius-large,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[var(--md-border-color)] bg-[var(--md-surface)] p-5 shadow-xl"
-                    >
-                        <h3
-                            id="delete-prompt-title"
-                            class="m-0 text-base font-semibold"
-                        >
-                            Delete system prompt?
-                        </h3>
-                        <p
-                            class="mb-5 mt-2 text-sm text-[var(--md-on-surface-variant)]"
-                        >
-                            “{{ deleteConfirmPrompt.title || 'Untitled Prompt' }}”
-                            will be removed from your prompt library.
-                        </p>
-                        <div class="flex justify-end gap-2">
-                            <UButton
-                                color="neutral"
-                                variant="outline"
-                                @click="deleteConfirmId = null"
-                            >
-                                Cancel
-                            </UButton>
-                            <UButton
-                                color="error"
-                                data-test="system-prompts-confirm-delete"
-                                @click="confirmDeletePrompt"
-                            >
-                                Delete prompt
-                            </UButton>
-                        </div>
-                    </div>
-                </div>
-
                 <div
                     v-if="errorMessage"
                     class="shrink-0 border-b-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)] bg-error/10 px-4 py-2 text-sm text-error"
@@ -199,6 +132,7 @@
                                     ref="searchInputRef"
                                     v-model="searchQuery"
                                     v-bind="searchInputProps"
+                                    variant="modal"
                                     class="min-w-0 flex-1"
                                     data-test="system-prompts-search"
                                     autofocus
@@ -447,7 +381,7 @@
                                                     class="h-[18px] w-[18px]"
                                                 />
                                             </button>
-                                            <UPopover>
+                                            <UPopover :open="promptActionsId === prompt.id" @update:open="promptActionsId = $event ? prompt.id : null">
                                                 <button
                                                     type="button"
                                                     class="rounded p-1.5 text-[var(--md-on-surface-variant)] opacity-50 transition hover:opacity-100"
@@ -781,13 +715,25 @@
                 </div>
             </div>
         </template>
-    </UModal>
+    </AppModal>
+    <AppModal
+        :open="!!deleteConfirmPrompt"
+        title="Delete system prompt?"
+        description="Remove this prompt from your library."
+        @update:open="!$event && (deleteConfirmId = null)"
+    >
+        <p class="text-sm text-[var(--md-on-surface-variant)]">
+            “{{ deleteConfirmPrompt?.title || 'Untitled Prompt' }}” will be removed from your prompt library.
+        </p>
+        <template #footer>
+            <UButton variant="ghost" size="modal" @click="deleteConfirmId = null">Cancel</UButton>
+            <UButton color="error" size="modal" data-test="system-prompts-confirm-delete" @click="confirmDeletePrompt">Delete prompt</UButton>
+        </template>
+    </AppModal>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import { useMediaQuery } from '@vueuse/core';
-import { DialogDescription, DialogTitle } from 'reka-ui';
 import {
     createPrompt,
     listPrompts,
@@ -808,6 +754,7 @@ import { useActivePrompt } from '~/composables/chat/useActivePrompt';
 import { useDefaultPrompt } from '~/composables/chat/useDefaultPrompt';
 import { useTokenizer } from '~/composables/core/useTokenizer';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import AppModal from '~/components/ui/AppModal.vue';
 import { useIcon } from '~/composables/useIcon';
 import type { SystemPromptsModalMode } from '~/composables/chat/useSystemPromptsModal';
 
@@ -849,6 +796,7 @@ const editingPromptId = ref<string | null>(null);
 const view = ref<ModalView>('library');
 const tagDraft = ref('');
 const deleteConfirmId = ref<string | null>(null);
+const promptActionsId = ref<string | null>(null);
 const threadPromptId = ref<string | null>(null);
 const pendingPromptId = ref<string | null>(null);
 const searchInputRef = ref<{ inputRef?: HTMLInputElement } | null>(null);
@@ -971,8 +919,6 @@ const activeSortLabel = computed(() =>
     sort.value === 'title' ? 'Title A–Z' : 'Updated'
 );
 
-const isWideRow = useMediaQuery('(min-width: 640px)');
-
 const systemPromptsModalOverrides = useThemeOverrides({
     component: 'modal',
     context: 'modal',
@@ -980,45 +926,15 @@ const systemPromptsModalOverrides = useThemeOverrides({
     isNuxtUI: true,
 });
 
-const systemPromptsModalProps = computed(() => {
-    const overrideValue =
-        (systemPromptsModalOverrides.value as Record<string, unknown>) || {};
-    const overrideUi =
-        (overrideValue.ui as Record<string, unknown> | undefined) || {};
-    const overrideClass =
-        typeof overrideValue.class === 'string' ? overrideValue.class : '';
-    const rest = Object.fromEntries(
-        Object.entries(overrideValue).filter(
-            ([key]) => key !== 'class' && key !== 'ui'
-        )
-    );
-    return {
-        ...rest,
-        class: [
-            'sp-modal max-sm:w-[100dvw] max-sm:h-[100dvh] max-sm:max-w-none max-sm:max-h-none max-sm:rounded-none max-sm:border-0 max-sm:shadow-none max-sm:pt-[env(safe-area-inset-top)] sm:w-[96dvw] sm:h-[92dvh] sm:max-w-[1450px] sm:max-h-[900px] overflow-hidden',
-            overrideClass,
-        ]
-            .filter(Boolean)
-            .join(' '),
-        ui: {
-            body: 'p-0! min-h-0 flex-1 overflow-hidden',
-            header: 'border-b-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)]',
-            content: 'flex flex-col min-h-0',
-            ...overrideUi,
-        },
-    };
-});
-
 const newPromptButtonProps = computed(() => ({
     size: 'sm' as const,
     color: 'primary' as const,
 }));
 
-/** Surface/solid actions read on the primary modal header (avoids primary-on-primary). */
 const headerActionButtonProps = computed(() => ({
-    size: 'sm' as const,
-    color: 'on-surface' as const,
-    variant: 'solid' as const,
+    size: 'modal' as const,
+    color: 'neutral' as const,
+    variant: 'ghost' as const,
 }));
 
 const iconButtonProps = computed(() => ({
@@ -1284,6 +1200,7 @@ async function useSelectedPrompt(): Promise<void> {
 }
 
 function requestDeletePrompt(id: string): void {
+    promptActionsId.value = null;
     deleteConfirmId.value = id;
 }
 
@@ -1374,17 +1291,3 @@ onBeforeUnmount(() => {
     tokenCountGeneration += 1;
 });
 </script>
-
-<style scoped>
-@media (max-width: 640px) {
-    .sp-modal {
-        width: 100dvw !important;
-        max-width: 100dvw !important;
-        height: 100dvh !important;
-        max-height: 100dvh !important;
-        margin: 0 !important;
-        border-radius: 0 !important;
-        border-width: 0 !important;
-    }
-}
-</style>

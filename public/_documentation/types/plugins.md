@@ -1,8 +1,8 @@
 # Plugin types
 
-Reference for the TypeScript types that plugins use to talk to the OR3 host. Covers the client-side pane plugin API, the access gate policy used by every plugin contribution, and the ambient declaration files in `types/**` that wire plugin-facing modules into the app.
+Reference for the TypeScript types that plugins use to talk to the OR3 host. Covers the client-side pane plugin API, the access gate policy used by every plugin contribution, and ambient declarations that wire plugin-facing modules into the app.
 
-These types come from `app/plugins/pane-plugin-api.client.ts` and `shared/plugins/access-policy.ts`. The `types/**` folder re-exports the pane plugin API and adds ambient module declarations for the bundled plugin catalog and theme plugin.
+These types come from `app/plugins/pane-plugin-api.client.ts` and `shared/plugins/access-policy.ts`. The `types/**` folder re-exports the pane plugin API and declares the theme plugin. The bundled plugin catalog declaration lives in `shared/plugins/or3-bundled-plugin-catalog.d.ts` so Nuxt includes it in app and server type checks.
 
 ---
 
@@ -145,7 +145,6 @@ Several small declaration files in `types/**` exist only to type ambient modules
 | File                          | Purpose                                                                                    |
 | ----------------------------- | ------------------------------------------------------------------------------------------ |
 | `pane-plugin-api.d.ts`        | Declares `window.__or3PanePluginApi` and re-exports every pane plugin API type.            |
-| `plugin-runtime-catalog.d.ts` | Types the `#or3-bundled-plugin-catalog` module (exposes `bundledPluginCatalog`).           |
 | `theme-plugin.d.ts`           | Adds `$theme` to `NuxtApp` and Vue's `ComponentCustomProperties`.                          |
 | `orama.d.ts`                  | Fallback typings for the `orama` and `@orama/orama` module shims.                          |
 | `database.d.ts`               | TipTap content types (`TipTapDocument`, `TipTapNode`) and post type guards.                |

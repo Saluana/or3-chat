@@ -97,6 +97,8 @@ vi.mock('~/composables/useIcon', () => ({
 }));
 
 const stubs = {
+    DialogTitle: { template: '<h2><slot /></h2>' },
+    DialogDescription: { template: '<p><slot /></p>' },
     UModal: {
         props: ['open'],
         template:
@@ -128,6 +130,9 @@ const stubs = {
     },
     UPopover: {
         template: '<div><slot /><slot name="content" /></div>',
+    },
+    UDropdownMenu: {
+        template: '<div><slot /></div>',
     },
     UIcon: {
         template: '<i />',

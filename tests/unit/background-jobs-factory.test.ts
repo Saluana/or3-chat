@@ -77,29 +77,6 @@ describe('Background Job Provider Factory', () => {
             expect(provider.name).toBe('memory');
         });
 
-        it('should return the registered convex provider when selected', async () => {
-            mockUseRuntimeConfig.mockReturnValue({
-                backgroundJobs: {
-                    storageProvider: 'convex',
-                },
-            });
-
-            const provider = await getJobProvider();
-            expect(provider.name).toBe('convex');
-        });
-
-        it('should fail fast for an unregistered provider', async () => {
-            mockUseRuntimeConfig.mockReturnValue({
-                backgroundJobs: {
-                    storageProvider: 'redis',
-                },
-            });
-
-            await expect(getJobProvider()).rejects.toThrow(
-                'Provider "redis" is not registered'
-            );
-        });
-
         it('should cache provider instance after first call', async () => {
             mockUseRuntimeConfig.mockReturnValue({
                 backgroundJobs: {

@@ -175,4 +175,6 @@ export type AssistantPersister = (params: {
     finalize?: boolean;
     /** Terminal generation state applied when finalizing; defaults to complete. */
     terminalState?: 'complete' | 'failed' | 'aborted' | 'interrupted';
+    /** Synchronous ownership check against the row in the write transaction. */
+    ifCurrent?: (message: Message | undefined) => boolean;
 }) => Promise<string | null>;

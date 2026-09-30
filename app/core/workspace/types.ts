@@ -55,6 +55,7 @@ export interface CreateWorkspaceRequest {
  */
 export interface CreateWorkspaceResponse {
     id: string;
+    provisioningWarning?: string;
 }
 
 /**

@@ -28,6 +28,27 @@ Policies come from two sources and are merged together:
 
 `mergePluginGatePolicy(...)` handles the merge so you never need to manage this manually.
 
+### Where enforcement state is stored
+
+Access policy, enablement, and consent are security-authoritative. They are
+stored in provider-private, workspace-scoped settings with atomic
+compare-and-set — SQLite `admin_workspace_settings` and Convex
+`host_settings` — never in the client-syncable `kv` table. Convex writes go
+through the host server with the deployment admin key; ordinary workspace
+owners and editors do not need deployment-admin membership, and a client token
+cannot mutate this state directly. Convex sync additionally rejects reserved
+`kv` writes (`plugins.*`, `admin.guest_access.enabled`, and
+`plugin:<id>:setup-values*`) so migration can never copy a client-seeded setup
+document.
+
+When upgrading a host that previously stored these keys in Convex `kv`, the
+old values are not trusted: enablement, consent reviews, `plugins.settings.*`
+documents (which carry the access override), migration state, and guest access
+must be re-established through trusted host paths (fresh approval where
+required). Saved setup values and the AI spend ledger migrate explicitly, with
+the ledger copied byte-for-byte so an active budget window cannot reset.
+Unknown keys are never copied.
+
 ---
 
 ## What the gate actually evaluates

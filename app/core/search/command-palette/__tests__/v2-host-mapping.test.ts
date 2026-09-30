@@ -23,6 +23,7 @@ describe('V2 command-palette contribution host', () => {
             generation: 7,
             requestId: 'request-1',
             signal: controller.signal,
+            deadlineMs: Date.now() + 5000,
         };
 
         await host.contribute(
@@ -61,6 +62,7 @@ describe('V2 command-palette contribution host', () => {
             generation: 1,
             requestId: 'request-1',
             signal: new AbortController().signal,
+            deadlineMs: Date.now() + 5000,
         };
         expect(() =>
             host.contribute(

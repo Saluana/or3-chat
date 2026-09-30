@@ -1,0 +1,18 @@
+{
+  "name": "@or3/plugin-document-utilities",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "license": "GPL-3.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@or3/plugin-sdk": "^2.0.0"
+  },
+  "scripts": {
+    "test": "bun test",
+    "profile:generate": "bun .authoring/generate.mjs",
+    "profile:check": "bun .authoring/generate.mjs --check"
+  }
+}

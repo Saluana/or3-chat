@@ -18,7 +18,7 @@
             <!-- Main Input Area -->
             <div class="relative">
                 <div
-                    class="chat-input-editor-container max-h-40 md:max-h-96 w-full overflow-y-auto wrap-break-word min-h-4 md:min-h-12"
+                    class="chat-input-editor-container w-full overflow-y-auto wrap-anywhere min-h-4 md:min-h-12"
                     :class="editorProps?.class || ''"
                     :data-theme-target="editorProps?.['data-theme-target']"
                     :data-theme-matches="editorProps?.['data-theme-matches']"
@@ -72,6 +72,11 @@
                             <UPopover
                                 v-model:open="settingsPopoverOpen"
                                 class="chat-input-settings-popover"
+                                :content="{ side: 'top', collisionPadding: 16 }"
+                                :ui="{
+                                    content:
+                                        'data-[state=open]:animate-[scale-in_170ms_ease-out] data-[state=closed]:animate-[scale-out_120ms_ease-in] motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none',
+                                }"
                             >
                                 <UButton
                                     v-bind="settingsButtonProps"
@@ -97,6 +102,9 @@
                                         :reasoning-default-effort="
                                             modelDefaultReasoningEffort
                                         "
+                                        :thread-id="props.threadId"
+                                        :pane-id="promptOwnerId"
+                                        :prompt-selection-revision="promptSelectionRevision"
                                         v-model:model="selectedModel"
                                         v-model:model-variant="modelVariant"
                                         v-model:thinking-enabled="
@@ -112,15 +120,27 @@
                                         @open-model-catalog="
                                             openModelCatalogFromSettings
                                         "
+                                        @pending-prompt-selected="
+                                            (id: string) => emit('pending-prompt-selected', id)
+                                        "
+                                        @prompt-selected="promptSelectionRevision++"
                                     />
                                 </template>
                             </UPopover>
                         </ClientOnly>
                     </div>
+                    <span
+                        v-if="promptBadge"
+                        class="hidden max-w-40 truncate rounded-full border border-[var(--md-border-color)] px-2 py-1 text-xs text-[var(--md-on-surface-variant)] sm:inline-block"
+                        :title="promptBadge"
+                        :aria-label="`System prompt: ${promptBadge}`"
+                    >
+                        {{ promptBadge }}
+                    </span>
                 </div>
 
                 <div
-                    class="chat-input-composer-actions flex items-center gap-1 shrink-0"
+                    class="chat-input-composer-actions order-first flex w-full min-w-0 flex-wrap items-center gap-1"
                     v-if="composerActions.length"
                 >
                     <UTooltip
@@ -131,6 +151,7 @@
                     >
                         <UButton
                             v-bind="composerActionButtonProps"
+                            :aria-label="entry.action.tooltip || entry.action.label || entry.action.id"
                             :disabled="entry.disabled"
                             @click="handleComposerAction(entry)"
                         >
@@ -193,7 +214,7 @@
         <!-- Attachment Thumbnails (Images + Large Text Blocks) -->
         <div
             v-if="uploadedImages.length > 0 || largeTextBlocks.length > 0"
-            class="chat-input-attachments mx-3.5 mb-3.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
+            class="chat-input-attachments mx-3.5 mb-3.5 grid gap-3"
         >
             <!-- Images -->
             <div
@@ -317,10 +338,11 @@
         </div>
         <ClientOnly>
             <component
+                v-if="modelCatalogActivated"
                 :is="$theme.activeComponents.value['model-catalog-modal']"
                 v-model:showModal="showModelCatalog"
             />
-            <OpenRouterKeyModal v-model:open="showKeyModal" />
+            <OpenRouterKeyModal v-if="keyModalActivated" v-model:open="showKeyModal" />
         </ClientOnly>
     </ChatComposerShell>
 </template>
@@ -338,10 +360,17 @@ import {
 } from 'vue';
 import { useOr3Config } from '~/composables/useOr3Config';
 import { useSystemPromptsModal } from '~/composables/chat/useSystemPromptsModal';
+import { getPrompt } from '~/db/prompts';
+import { getThreadSystemPrompt } from '~/db/threads';
+import { usePanePendingPrompt } from '~/composables/core/usePanePrompt';
+import {
+    DEFAULT_PROMPT_SELECTION,
+    DISABLED_PROMPT_SELECTION,
+} from '~/utils/chat/prompt-utils';
 import { resolveOpenRouterKeyAvailability } from '~/core/auth/openRouterKeyAvailability';
 import { guardPendingAttachmentSend } from '~/composables/chat/pendingAttachmentGuard';
 import { Editor, EditorContent } from '@tiptap/vue-3';
-import { Extension, Node } from '@tiptap/core';
+import { Extension, Node, type JSONContent } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions/placeholder';
 import { isMobile } from '~/state/global';
@@ -357,6 +386,7 @@ import {
     type ComposerActionContext,
 } from '#imports';
 import { useHooks } from '~/core/hooks/useHooks';
+import { trustedEditorRevision } from '~/composables/plugins/trusted-editor';
 import { useIcon } from '~/composables/useIcon';
 import {
     registerPaneInput,
@@ -387,6 +417,40 @@ import {
 const OpenRouterKeyModal = defineAsyncComponent(
     () => import('~/components/chat/OpenRouterKeyModal.vue')
 );
+
+function isEditorExtension(value: unknown): value is Extension | Node {
+    if (value instanceof Extension || value instanceof Node) return true;
+    if (!value || typeof value !== 'object') return false;
+    const candidate = value as {
+        type?: unknown;
+        name?: unknown;
+        config?: unknown;
+        configure?: unknown;
+    };
+    // Installed trusted packages may bundle a second TipTap constructor. Its
+    // extension instances still follow the shape consumed by Editor.
+    return (candidate.type === 'extension' || candidate.type === 'node') &&
+        typeof candidate.name === 'string' && candidate.name.length > 0 &&
+        candidate.config !== null && typeof candidate.config === 'object' &&
+        typeof candidate.configure === 'function';
+}
+
+function contentForEditor(doc: JSONContent, editor: Editor): JSONContent {
+    const convert = (node: JSONContent, parent?: string): JSONContent => {
+        if (node.type && !editor.schema.nodes[node.type]) {
+            const label = [node.attrs?.label, node.attrs?.name, node.attrs?.id]
+                .find((value): value is string => typeof value === 'string') ?? '';
+            const text = node.type === 'workflow' ? `/${label}` : label;
+            return parent === 'paragraph'
+                ? { type: 'text', text }
+                : { type: 'paragraph', content: text ? [{ type: 'text', text }] : [] };
+        }
+        return node.content
+            ? { ...node, content: node.content.map((child) => convert(child, node.type)) }
+            : node;
+    };
+    return convert(doc);
+}
 
 const props = defineProps<{
     loading?: boolean;
@@ -423,9 +487,11 @@ const hasInstanceKey = computed(
     () => openRouterAvailability.value.hasInstanceKey
 );
 let componentDisposed = false;
+let editorBuild = 0;
 
-onMounted(async () => {
+async function initializeEditor(replaceExisting = false) {
     if (!process.client) return;
+    const build = ++editorBuild;
     try {
         // Minimal shortcut: Enter sends, Shift+Enter = newline
         const enterToSend = Extension.create({
@@ -454,6 +520,9 @@ onMounted(async () => {
                 placeholder: 'Write something …',
             }),
             StarterKit.configure({
+                // The composer sends plain text. Keep pasted URLs editable
+                // instead of turning them into links that navigate on click.
+                link: false,
                 bold: false,
                 italic: false,
                 strike: false,
@@ -471,7 +540,7 @@ onMounted(async () => {
 
         // Request mentions extension (lazy loads if plugin is installed)
         await hooks.doAction('editor:request-extensions');
-        if (componentDisposed) return;
+        if (componentDisposed || build !== editorBuild) return;
 
         // Allow plugins to add editor extensions via filter
         try {
@@ -482,14 +551,12 @@ onMounted(async () => {
             if (Array.isArray(filtered)) {
                 const next: Array<Extension | Node> = [];
                 for (const item of filtered) {
-                    // Accept both Extension and Node types (WorkflowNode is a Node)
-                    if (item instanceof Extension || item instanceof Node)
-                        next.push(item);
+                    if (isEditorExtension(item)) next.push(item);
                 }
                 if (next.length) extensions = next;
             }
         } catch {}
-        if (componentDisposed) return;
+        if (componentDisposed || build !== editorBuild) return;
 
         const nextEditor = new Editor({
             extensions,
@@ -509,19 +576,48 @@ onMounted(async () => {
             },
             content: '',
         });
-        if (componentDisposed) {
+        if (componentDisposed || build !== editorBuild) {
             nextEditor.destroy();
             return;
         }
+        const previous = editor.value;
+        const previousJson = replaceExisting ? previous?.getJSON() : undefined;
+        const text = replaceExisting ? previous?.getText({ blockSeparator: '\n' }) ?? promptText.value : '';
+        const selection = previous?.state.selection.from ?? 1;
+        const wasFocused = previous?.isFocused ?? false;
+        previous?.destroy();
         editor.value = nextEditor;
-        await restoreDraft(props.tabId);
+        if (replaceExisting && previous) {
+            nextEditor.commands.setContent(
+                previousJson ? contentForEditor(previousJson, nextEditor) : text,
+                { emitUpdate: false }
+            );
+            promptText.value = nextEditor.getText();
+            nextEditor.commands.setTextSelection(
+                Math.min(selection, nextEditor.state.doc.content.size)
+            );
+            if (wasFocused) nextEditor.commands.focus();
+        } else {
+            await restoreDraft(props.tabId);
+        }
     } catch (err) {
         // Silently handle TipTap init failure
     }
+}
+
+onMounted(async () => {
+    await initializeEditor();
+    if (props.paneId && !componentDisposed) {
+        registerPaneInput(props.paneId, { setText, focus, triggerSend });
+    }
+});
+watch(trustedEditorRevision, () => {
+    if (!componentDisposed) void initializeEditor(true);
 });
 
 onBeforeUnmount(() => {
     componentDisposed = true;
+    editorBuild++;
     clearDraftCaptureTimer();
     if (props.tabId) captureDraft(props.tabId);
     else releaseAll();
@@ -536,14 +632,57 @@ onBeforeUnmount(() => {
 
 const showModelCatalog = ref(false);
 const showKeyModal = ref(false);
+const modelCatalogActivated = ref(false);
+const keyModalActivated = ref(false);
+watch(showModelCatalog, (open) => {
+    if (open) modelCatalogActivated.value = true;
+});
+watch(showKeyModal, (open) => {
+    if (open) keyModalActivated.value = true;
+});
 const settingsPopoverOpen = ref(false);
+const promptOwnerId = computed(() => props.tabId ?? props.paneId);
+const stagedPromptId = usePanePendingPrompt(promptOwnerId);
+const promptSelectionRevision = ref(0);
+const promptBadge = ref('');
+watch(settingsPopoverOpen, (open) => {
+    if (open) promptSelectionRevision.value++;
+});
+watch(
+    () => [props.threadId, stagedPromptId.value, promptSelectionRevision.value],
+    async (_value, _oldValue, onCleanup) => {
+        let cancelled = false;
+        onCleanup(() => {
+            cancelled = true;
+        });
+        try {
+            const selection = props.threadId
+                ? await getThreadSystemPrompt(props.threadId)
+                : stagedPromptId.value;
+            let label = '';
+            if (selection === DISABLED_PROMPT_SELECTION)
+                label = 'Prompt disabled';
+            else if (selection && selection !== DEFAULT_PROMPT_SELECTION) {
+                const prompt = await getPrompt(selection);
+                label = prompt?.title ?? 'Unavailable prompt';
+            }
+            if (!cancelled) promptBadge.value = label;
+        } catch {
+            if (!cancelled) promptBadge.value = '';
+        }
+    },
+    { immediate: true }
+);
 const systemPromptsModal = useSystemPromptsModal();
+watch(systemPromptsModal.isOpen, (open) => {
+    if (!open) promptSelectionRevision.value++;
+});
 
 function openSystemPrompts() {
     systemPromptsModal.open({
         mode: 'home',
         threadId: props.threadId,
-        paneId: props.paneId,
+        paneId: promptOwnerId.value,
         onSelected: handlePromptSelected,
     });
 }
@@ -996,16 +1135,12 @@ function triggerSend(): Promise<SendResult> {
 }
 defineExpose({ setText, focus, triggerSend });
 
-onMounted(() => {
-    if (props.paneId) {
-        registerPaneInput(props.paneId, { setText, focus, triggerSend });
-    }
-});
 onBeforeUnmount(() => {
     if (props.paneId) unregisterPaneInput(props.paneId);
 });
 
 const handlePromptSelected = (id: string) => {
+    promptSelectionRevision.value++;
     if (!props.threadId) emit('pending-prompt-selected', id);
 };
 

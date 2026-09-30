@@ -48,6 +48,8 @@ const currentReview: PluginGrantReviewSnapshot = {
     approvedGrants: ['documents.read'],
     revision: `sha256-${'a'.repeat(64)}`,
     status: 'current',
+    authoritySha256: null,
+    packageDigest: null,
 };
 
 async function setup() {
@@ -95,6 +97,15 @@ function baseInput(candidateSource: string): PreparePluginPackageCandidateInput 
 }
 
 describe('V2 package candidate preparation', () => {
+    it('refuses restaging the current package without changing its pointer', async () => {
+        const { service, pointers, pointer } = await setup();
+        const result = await service.prepare(baseInput(source('1.0.0')));
+        expect(result).toMatchObject({
+            status: 'blocked', stage: 'pointer', codes: ['already-installed'], pointerUnchanged: true,
+        });
+        expect(await pointers.readPointer('alpha')).toEqual(pointer);
+    });
+
     it('prepares a first install as an inactive candidate and is idempotent', async () => {
         const root = mkdtempSync(resolve(tmpdir(), 'or3-candidate-store-'));
         const packages = new ImmutablePluginPackageStore(root);
@@ -119,6 +130,23 @@ describe('V2 package candidate preparation', () => {
         expect(await pointers.readStartupSelection('alpha')).toMatchObject({
             status: 'inactive',
             selected: null,
+        });
+    });
+
+    it('can stage an unreviewed raw ZIP as an inactive candidate for later consent', async () => {
+        const root = mkdtempSync(resolve(tmpdir(), 'or3-candidate-store-'));
+        const packages = new ImmutablePluginPackageStore(root);
+        const pointers = new PluginPackagePointerStore(root, packages);
+        const service = new PluginPackageCandidateService(packages, pointers);
+        const result = await service.prepare({
+            ...baseInput(source('1.0.0')),
+            storedStateVersion: null,
+            grantReview: { ...currentReview, approvedGrants: [], status: 'unreviewed' },
+            allowPendingGrantReview: true,
+        });
+        expect(result).toMatchObject({ status: 'candidate-stored', grantReviewRequired: true });
+        expect(await pointers.readStartupSelection('alpha')).toMatchObject({
+            status: 'inactive', selected: null, pointer: { candidate: {} },
         });
     });
 

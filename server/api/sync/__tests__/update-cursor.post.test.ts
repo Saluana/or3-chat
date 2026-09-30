@@ -5,6 +5,8 @@ const readBodyMock = vi.fn();
 const setResponseHeaderMock = vi.fn();
 const setHeaderMock = vi.fn();
 
+vi.mock('../../../utils/security/cloud-mutation', () => ({ requireCloudMutation: vi.fn() }));
+
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
     readBody: readBodyMock,

@@ -4,6 +4,8 @@ import type { H3Event } from 'h3';
 const readBodyMock = vi.fn();
 const useRuntimeConfigMock = vi.fn();
 
+vi.mock('../../../utils/security/cloud-mutation', () => ({ requireCloudMutation: vi.fn() }));
+
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
     readBody: readBodyMock,

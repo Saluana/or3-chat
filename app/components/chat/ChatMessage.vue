@@ -10,11 +10,28 @@
         :data-theme-matches="messageContainerProps?.['data-theme-matches']"
         class="p-2 min-w-[140px] max-w-full rounded-[var(--md-border-radius)] first:mt-3 first:mb-6 not-first:my-6 relative"
     >
-        <!-- Workflow Message Handling -->
-        <WorkflowChatMessage
-            v-if="props.message.isWorkflow"
+        <component
+            :is="customMessageRenderer"
+            v-if="customMessageRenderer"
             :message="props.message"
         />
+
+        <section v-else-if="props.message.isWorkflow" class="space-y-2" aria-label="Workflow run">
+            <div class="font-medium">{{ props.message.workflowState?.workflowName || 'Workflow' }}</div>
+            <p class="text-sm opacity-70">
+                Status: {{ props.message.workflowState?.executionState || 'unavailable' }}
+            </p>
+            <p v-if="props.message.workflowState?.prompt" class="text-sm whitespace-pre-wrap break-words">
+                Prompt: {{ props.message.workflowState.prompt }}
+            </p>
+            <p v-if="workflowFallbackError" class="text-sm text-red-600 whitespace-pre-wrap break-words" role="alert">
+                {{ workflowFallbackError }}
+            </p>
+            <p v-if="props.message.workflowState?.finalOutput" class="whitespace-pre-wrap break-words">
+                {{ props.message.workflowState.finalOutput }}
+            </p>
+            <p v-else class="text-sm opacity-70">Open Workflows to view run details.</p>
+        </section>
 
         <!-- Regular Chat Message Handling -->
         <template v-else>
@@ -169,9 +186,8 @@
                         props.message.reasoning_text
                     "
                 >
-                    <LazyChatReasoningAccordion
+                    <ReasoningAccordion
                         class="reasoning-accordion"
-                        hydrate-on-visible
                         :content="props.message.reasoning_text"
                         :streaming="isStreamingReasoning as boolean"
                         :pending="props.message.pending === true"
@@ -338,6 +354,7 @@
                         <UButton
                             v-bind="retryButtonProps"
                             aria-label="Retry message"
+                            :disabled="props.retryDisabled"
                             @click="onRetry"
                         ></UButton>
                     </UTooltip>
@@ -406,7 +423,6 @@ import {
     onMounted,
 } from 'vue';
 import LoadingGenerating from './LoadingGenerating.vue';
-import WorkflowChatMessage from './WorkflowChatMessage.vue';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
 import { shallowRef } from 'vue';
 import { useToast } from '#imports';
@@ -417,6 +433,7 @@ import type {
 } from '~/utils/chat/uiMessages';
 import type { ChatMessageAction } from '~/composables/chat/useMessageActions';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
+import ReasoningAccordion from './ReasoningAccordion.vue';
 import { useRafFn, useClipboard } from '@vueuse/core';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
@@ -427,6 +444,7 @@ import {
 } from '~/composables/chat/useMessageMarkdown';
 import { useMessageEditing } from '~/composables/chat/useMessageEditing';
 import { useMessageActions } from '~/composables/chat/useMessageActions';
+import { resolveMessageRenderer } from '~/composables/chat/message-renderers';
 
 // UI message now exposed as UiChatMessage with .text field
 type UIMessage = UiChatMessage & { pre_html?: string };
@@ -436,8 +454,16 @@ const props = withDefaults(
         message: MessageWithUiState;
         threadId?: string;
         interactive?: boolean;
+        retryDisabled?: boolean;
     }>(),
     { interactive: true },
+);
+const customMessageRenderer = computed(
+    () => resolveMessageRenderer(props.message)?.component ?? null
+);
+const workflowFallbackError = computed(() =>
+    Object.values(props.message.workflowState?.nodeStates ?? {})
+        .find((node) => node.status === 'error' && node.error)?.error ?? null
 );
 const emit = defineEmits<{
     (e: 'retry', id: string): void;
@@ -952,6 +978,7 @@ function copyMessage() {
 }
 
 function onRetry() {
+    if (props.retryDisabled) return;
     const id = props.message.id;
     if (!id) return;
     emit('retry', id);
@@ -1084,5 +1111,31 @@ const streamMdClasses = [
 
 .attachment-more {
     min-height: 44px;
+}
+
+/* Touch users need visible actions, and wrapped rows keep short bubbles and
+   plugin actions inside the pane instead of hanging past its right edge. */
+@media (width < 768px), (pointer: coarse) {
+    .cm-actions-user,
+    .cm-actions-assistant {
+        position: static;
+        transform: none;
+        translate: none;
+        margin-top: 0.75rem;
+        max-width: 100%;
+    }
+
+    .cm-action-group {
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        max-width: 100%;
+        opacity: 1 !important;
+    }
+
+    .cm-action-group :deep(button) {
+        min-width: 44px;
+        min-height: 44px;
+        margin-inline-start: 0;
+    }
 }
 </style>

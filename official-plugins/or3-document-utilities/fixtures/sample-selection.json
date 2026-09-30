@@ -1,0 +1,4 @@
+{
+  "title": "Release checklist",
+  "content": "The release candidate is frozen.\nOwners must confirm their section before the window opens.\nSecurity review: confirm the dependency audit has no open high findings.\nOperations: confirm the rollback snapshot exists and its checksum verifies.\nSupport: confirm the escalation contact list is current.\nIf any owner cannot confirm, the window moves to the next business day and the decision is recorded in the release log."
+}

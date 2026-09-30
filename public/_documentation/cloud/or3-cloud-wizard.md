@@ -56,7 +56,7 @@ based upgrades. It remains available through the application repository's
 9. Applies config by:
    - updating target env file (`.env` by default) with non-destructive merge
    - creating timestamped backup files before write (unless disabled)
-   - generating `or3.providers.generated.ts` from selected providers only
+   - generating `or3.providers.generated.json` from selected providers only
 10. Optionally sets Convex backend env vars for Clerk + Convex stacks.
 11. Optionally runs deploy commands (`bun install`, `bun run dev:ssr` or `bun run build`).
 

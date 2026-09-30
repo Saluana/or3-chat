@@ -50,3 +50,7 @@ test-theme-cyberpunk.zip
 
 # Large repomix audit packs (local-only; do not commit)
 or3-*-audit.md
+
+# Plugin development instance (isolated candidate data, never commit)
+.or3-plugin-dev
+.nuxt-plugin-dev

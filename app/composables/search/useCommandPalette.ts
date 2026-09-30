@@ -74,7 +74,7 @@ export interface CommandPaletteController {
         sourceId?: string,
         expectedPluginGeneration?: number
     ): Promise<void>;
-    openActionTray(): boolean;
+    openActionTray(includePrimary?: boolean): boolean;
     closeActionTray(): void;
     setCategoryFilter(categoryId: string | null): void;
     retrySource(sourceId: string): Promise<void>;
@@ -513,10 +513,10 @@ async function activateByPointer(key: string): Promise<void> {
     setActiveKey(key);
 }
 
-function openActionTray(): boolean {
+function openActionTray(includePrimary = false): boolean {
     const actions = secondaryActions.value;
     const hasEnabled = actions.some((action) => !action.disabled);
-    if (!hasEnabled) {
+    if (!hasEnabled && !(includePrimary && activeResult.value?.primaryAction)) {
         announcement.value = 'No additional actions available';
         actionTrayOpen.value = false;
         return false;

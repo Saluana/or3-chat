@@ -1,85 +1,87 @@
 <template>
     <div
         ref="cardRoot"
+        :style="visibleCardStyle"
         role="dialog"
         aria-modal="true"
         :aria-labelledby="titleId"
         :aria-describedby="descriptionId"
         tabindex="-1"
-        class="pointer-events-auto relative w-full max-w-md rounded-[var(--md-border-radius-large,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] p-6 shadow-lg outline-none"
+        class="pointer-events-auto relative flex min-h-0 max-h-[calc(100dvh-32px)] w-[calc(100dvw-32px)] max-w-md flex-col overflow-hidden rounded-[var(--md-border-radius-large,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] shadow-lg outline-none"
         data-welcome-card
         @keydown="onCardKeydown"
     >
-        <UButton
-            variant="ghost"
-            color="neutral"
-            size="xs"
-            :icon="iconClose"
-            aria-label="Dismiss welcome"
-            class="absolute top-2 right-2"
-            @click="onDismiss"
-        />
-        <h2
-            :id="titleId"
-            class="font-heading text-lg text-[var(--md-on-surface)] pr-6"
-        >
-            Welcome to {{ siteName }}
-        </h2>
-        <p
-            :id="descriptionId"
-            class="mt-2 text-sm text-[var(--md-on-surface-variant)]"
-        >
-            {{ welcomeDescription }}
-        </p>
-        <UButton
-            block
-            color="primary"
-            class="mt-4"
-            :loading="isConnecting"
-            @click="onConnect"
-        >
-            Connect with OpenRouter
-        </UButton>
-        <div
-            class="my-4 flex items-center gap-3 text-xs uppercase tracking-wider text-[var(--md-secondary)]"
-            role="separator"
-            aria-label="Or paste a key"
-        >
-            <span class="h-px flex-1 bg-[var(--md-border-color)]" aria-hidden="true" />
-            or paste a key
-            <span class="h-px flex-1 bg-[var(--md-border-color)]" aria-hidden="true" />
-        </div>
-        <div class="flex gap-2">
-            <UInput
-                v-model="pasteValue"
-                type="password"
-                placeholder="sk-or-..."
-                aria-label="OpenRouter API key"
-                :aria-invalid="Boolean(pasteError)"
-                :aria-describedby="pasteError ? pasteErrorId : undefined"
-                class="flex-1"
-                @update:model-value="pasteError = ''"
-                @keyup.enter="onSavePaste"
-            />
+        <div class="flex shrink-0 items-center gap-3 px-4 pt-4 pb-2 sm:px-6 sm:pt-6">
+            <h2 :id="titleId" class="min-w-0 flex-1 font-heading text-lg leading-6 text-[var(--md-on-surface)] wrap-anywhere line-clamp-2">
+                Welcome to {{ siteName }}
+            </h2>
             <UButton
-                color="primary"
-                variant="soft"
-                :disabled="!pasteValue.trim() || isSavingPaste"
-                :loading="isSavingPaste"
-                @click="onSavePaste"
-            >
-                Save
-            </UButton>
+                variant="ghost"
+                color="neutral"
+                size="xs"
+                :icon="iconClose"
+                aria-label="Dismiss welcome"
+                class="shrink-0"
+                @click="onDismiss"
+            />
         </div>
-        <p
-            v-if="pasteError"
-            :id="pasteErrorId"
-            class="mt-2 text-xs text-[var(--md-error)]"
-            role="alert"
-        >
-            {{ pasteError }}
-        </p>
-        <p class="mt-4 text-xs text-[var(--md-secondary)]">
+        <div class="welcome-card-body min-h-0 overflow-y-auto overscroll-contain px-4 pb-4 sm:px-6 sm:pb-6">
+            <p
+                :id="descriptionId"
+                class="text-sm text-[var(--md-on-surface-variant)]"
+            >
+                {{ welcomeDescription }}
+            </p>
+            <UButton
+                block
+                color="primary"
+                class="mt-4"
+                :loading="isConnecting"
+                @click="onConnect"
+            >
+                Connect with OpenRouter
+            </UButton>
+            <div
+                class="my-3 flex items-center gap-3 text-xs uppercase tracking-wider text-[var(--md-secondary)]"
+                role="separator"
+                aria-label="Or paste a key"
+            >
+                <span class="h-px flex-1 bg-[var(--md-border-color)]" aria-hidden="true" />
+                or paste a key
+                <span class="h-px flex-1 bg-[var(--md-border-color)]" aria-hidden="true" />
+            </div>
+            <div class="flex gap-2">
+                <UInput
+                    v-model="pasteValue"
+                    type="password"
+                    placeholder="sk-or-..."
+                    aria-label="OpenRouter API key"
+                    :aria-invalid="Boolean(pasteError)"
+                    :aria-describedby="pasteError ? pasteErrorId : undefined"
+                    class="flex-1 min-w-0"
+                    @update:model-value="pasteError = ''"
+                    @keyup.enter="onSavePaste"
+                />
+                <UButton
+                    color="primary"
+                    variant="soft"
+                    :disabled="!pasteValue.trim() || isSavingPaste"
+                    :loading="isSavingPaste"
+                    @click="onSavePaste"
+                >
+                    Save
+                </UButton>
+            </div>
+            <p
+                v-if="pasteError"
+                :id="pasteErrorId"
+                class="mt-2 text-xs text-[var(--md-error)]"
+                role="alert"
+            >
+                {{ pasteError }}
+            </p>
+        </div>
+        <p class="shrink-0 border-t border-[color:var(--md-border-color)] px-4 py-3 text-xs text-[var(--md-secondary)] sm:px-6">
             <a
                 href="https://openrouter.ai/keys"
                 target="_blank"
@@ -93,9 +95,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRuntimeConfig, useToast } from '#imports';
 import { useIcon } from '~/composables/useIcon';
+import { useDialogViewport } from '~/composables/ui/useDialogViewport';
 import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
 import { persistUserApiKey } from '~/core/auth/useUserApiKey';
 
@@ -104,6 +107,10 @@ const emit = defineEmits<{
 }>();
 
 const iconClose = useIcon('ui.close');
+const visibleFrame = useDialogViewport(() => 'center');
+const visibleCardStyle = computed(() => visibleFrame.value.style
+    ? { ...visibleFrame.value.style, position: 'fixed' as const, translate: '0 -50%' }
+    : undefined);
 
 const runtimeConfig = useRuntimeConfig();
 const siteName = computed(
@@ -167,24 +174,12 @@ function onCardKeydown(event: KeyboardEvent): void {
         return;
     }
 
-    const first = focusable[0]!;
-    const last = focusable[focusable.length - 1]!;
-    const active = import.meta.client
-        ? (document.activeElement as HTMLElement | null)
-        : null;
-
-    if (event.shiftKey) {
-        if (!active || active === first || !cardRoot.value?.contains(active)) {
-            event.preventDefault();
-            last.focus();
-        }
-        return;
-    }
-
-    if (!active || active === last || !cardRoot.value?.contains(active)) {
-        event.preventDefault();
-        first.focus();
-    }
+    const index = focusable.indexOf(document.activeElement as HTMLElement);
+    const current = index < 0 && event.shiftKey ? 0 : index;
+    const next = (current + (event.shiftKey ? -1 : 1) + focusable.length) % focusable.length;
+    event.preventDefault();
+    focusable[next]?.focus();
+    focusable[next]?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
 }
 
 function onConnect(): void {
@@ -213,10 +208,21 @@ async function onSavePaste(): Promise<void> {
             error instanceof Error
                 ? error.message
                 : 'Could not save that key. Please try again.';
+        await nextTick();
+        cardRoot.value?.querySelector<HTMLElement>('[role="alert"]')?.scrollIntoView?.({ block: 'nearest' });
+        cardRoot.value?.querySelector<HTMLInputElement>('input')?.focus();
     } finally {
         isSavingPaste.value = false;
     }
 }
+
+watch(visibleCardStyle, async () => {
+    await nextTick();
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && cardRoot.value?.contains(active)) {
+        active.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    }
+});
 
 onMounted(() => {
     if (!import.meta.client) return;
@@ -231,3 +237,12 @@ onBeforeUnmount(() => {
     previouslyFocusedEl.value = null;
 });
 </script>
+
+<style>
+@layer utilities {
+    @media (max-width: 767px), (pointer: coarse) {
+        [data-welcome-card] button { min-height: 44px !important; }
+        [data-welcome-card] button[aria-label='Dismiss welcome'] { width: 44px !important; padding: 0 !important; }
+    }
+}
+</style>

@@ -13,8 +13,9 @@ export const TRANSCRIPT_VERSION = 1 as const;
 /**
  * Data key marking a row as replaced by a retry. Rows carrying a
  * `superseded_by` message id are excluded from provider context, history
- * reloads, and future sends — the durable branch boundary for in-thread
- * retries. The rows themselves are preserved for audit and reload stability.
+ * reloads, and future sends. Only the selected turn is superseded by an
+ * in-thread retry; unrelated later turns remain visible. The old rows are
+ * preserved for audit and reload stability.
  */
 export const SUPERSEDED_BY_KEY = 'superseded_by' as const;
 

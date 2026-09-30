@@ -96,6 +96,7 @@ interface ToolCall {
     args?: string;
     result?: string;
     error?: string;
+    runtime?: 'client' | 'server' | 'hybrid';
 }
 
 type ToolKind = 'edit' | 'read' | 'command' | 'search' | 'tests' | 'other';
@@ -116,13 +117,17 @@ function hasDetails(call: ToolCall): boolean {
 }
 
 function toolKind(call: ToolCall): ToolKind {
-    const hint = `${call.name} ${call.label ?? ''}`.toLowerCase();
-    if (/edit|write|patch|created?|deleted?|file change/.test(hint))
+    const hint = `${call.name} ${call.label ?? ''}`
+        .toLowerCase()
+        .replace(/[_.-]+/g, ' ');
+    if (/\b(?:apply patch|file changes?|(?:edit\w*|writ\w*|patch\w*|creat\w*|delet\w*) files?)\b/.test(hint))
         return 'edit';
-    if (/read|open|inspect/.test(hint)) return 'read';
-    if (/command|shell|terminal|exec|bash/.test(hint)) return 'command';
-    if (/search|find|grep|glob/.test(hint)) return 'search';
-    if (/test|vitest|jest|pytest|xcodebuild/.test(hint)) return 'tests';
+    if (/\b(?:read\w*|open\w*|inspect\w*) files?\b/.test(hint)) return 'read';
+    if (/\b(?:command|shell|terminal|exec|bash)\b/.test(hint)) return 'command';
+    if (/\b(?:search\w*|find\w*) (?:the )?(?:workspace|codebase|files?)\b|\b(?:grep|glob)\b/.test(hint))
+        return 'search';
+    if (/\b(?:run tests?|running tests?|ran tests?|vitest|jest|pytest|xcodebuild)\b/.test(hint))
+        return 'tests';
     return 'other';
 }
 
@@ -142,6 +147,15 @@ const kinds = computed(() => {
     return groups;
 });
 const groupLabel = computed(() => {
+    const waitingForBrowser = props.toolCalls.filter(
+        (call) => call.runtime === 'client' && call.status === 'pending'
+    );
+    if (waitingForBrowser.length > 0) {
+        const names = waitingForBrowser
+            .map((call) => call.label || call.name)
+            .filter((label, index, all) => all.indexOf(label) === index);
+        return `Waiting for this browser · ${names.join(', ')}`;
+    }
     const labels: string[] = [];
     const running = isRunning.value;
     const count = (kind: ToolKind) => kinds.value.get(kind)?.length ?? 0;

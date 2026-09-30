@@ -711,7 +711,11 @@ describe('OutboxManager', () => {
             tombstones: createMemoryTable('id'),
         });
         const provider = new SpyProvider();
-        const winner = { id: 'm1', text: 'remote-winner', clock: 9 };
+        const winner = {
+            id: 'm1', thread_id: 'thread-1', role: 'user', index: 0,
+            order_key: '0000000000009:0000:node', text: 'remote-winner',
+            deleted: false, created_at: 1, updated_at: 9, clock: 9,
+        };
         provider.push = vi.fn(async () => ({
             results: [{
                 opId: 'op-local',
@@ -758,6 +762,135 @@ describe('OutboxManager', () => {
 
         expect(pendingOps.__rows.has('pending-missing-winner')).toBe(true);
         expect(pendingOps.__rows.get('pending-missing-winner')?.status).toBe('retry_wait');
+    });
+
+    it('does not invent a tombstone winner for a losing delete with no winner state', async () => {
+        const pending = createPendingOp({
+            id: 'missing-delete-winner',
+            pk: 'm-delete',
+            operation: 'delete',
+            stamp: { deviceId: 'device-1', opId: 'op-delete', hlc: '1000-a', clock: 1 },
+        });
+        const pendingOps = createPendingOpsTable([pending]);
+        const messages = createMemoryTable('id', [{
+            id: 'm-delete', text: 'local-newer', clock: 2, hlc: '2000-b', op_id: 'local-put',
+        }]);
+        const tombstones = createMemoryTable('id');
+        const db = createMockDb({ pending_ops: pendingOps, messages, tombstones });
+        const provider = new SpyProvider();
+        provider.push = vi.fn(async () => ({
+            results: [{ opId: 'op-delete', success: true, applied: false }],
+            serverVersion: 3,
+        }));
+        const outbox = new OutboxManager(db as any, provider, { workspaceId: 'workspace-1' });
+
+        await outbox.flush();
+
+        expect(pendingOps.__rows.get(pending.id)?.status).toBe('retry_wait');
+        expect(messages.__rows.get('m-delete')).toMatchObject({
+            text: 'local-newer', clock: 2, op_id: 'local-put',
+        });
+        expect(tombstones.__rows.size).toBe(0);
+    });
+
+    it('acknowledges a replay superseded by a newer live winner', async () => {
+        const pending = createPendingOp({
+            id: 'lost-ack', pk: 'm-replay', payload: { id: 'm-replay', text: 'old' },
+            stamp: { deviceId: 'a', opId: 'old-op', hlc: '1000-a', clock: 1 },
+        });
+        const pendingOps = createPendingOpsTable([pending]);
+        const messages = createMemoryTable('id', [{ id: 'm-replay', text: 'old', clock: 1, hlc: '1000-a', op_id: 'old-op' }]);
+        const db = createMockDb({ pending_ops: pendingOps, messages, tombstones: createMemoryTable('id') });
+        const provider = new SpyProvider();
+        provider.push = vi.fn(async () => ({
+            results: [{
+                opId: 'old-op', success: true, replayed: true, applied: false, serverVersion: 1,
+                winner: {
+                    kind: 'put' as const,
+                    payload: {
+                        id: 'm-replay', thread_id: 'thread-1', role: 'user',
+                        index: 0, order_key: '2000-b', text: 'newer',
+                        deleted: false, created_at: 1, updated_at: 2, clock: 2,
+                    },
+                    revision: { clock: 2, hlc: '2000-b', opId: 'new-op' },
+                },
+            }],
+            serverVersion: 2,
+        }));
+        const outbox = new OutboxManager(db as any, provider, { workspaceId: 'workspace-1' });
+
+        await outbox.flush();
+
+        expect(pendingOps.__rows.size).toBe(0);
+        expect(messages.__rows.get('m-replay')).toMatchObject({
+            text: 'newer', clock: 2, hlc: '2000-b', op_id: 'new-op',
+        });
+        expect(provider.push).toHaveBeenCalledTimes(1);
+    });
+
+    it('acknowledges a replay superseded by a tombstone with its own revision', async () => {
+        const pending = createPendingOp({
+            id: 'lost-ack-delete', pk: 'm-deleted',
+            stamp: { deviceId: 'a', opId: 'old-put', hlc: '1000-a', clock: 1 },
+        });
+        const pendingOps = createPendingOpsTable([pending]);
+        const messages = createMemoryTable('id', [{ id: 'm-deleted', clock: 1, hlc: '1000-a', op_id: 'old-put' }]);
+        const tombstones = createMemoryTable('id');
+        const db = createMockDb({ pending_ops: pendingOps, messages, tombstones });
+        const provider = new SpyProvider();
+        provider.push = vi.fn(async () => ({
+            results: [{
+                opId: 'old-put', success: true, replayed: true, applied: false, serverVersion: 1,
+                winner: {
+                    kind: 'delete' as const,
+                    revision: { clock: 3, hlc: '3000-b', opId: 'new-delete' },
+                    serverDeletedAt: 123,
+                },
+            }],
+            serverVersion: 3,
+        }));
+        const outbox = new OutboxManager(db as any, provider, { workspaceId: 'workspace-1' });
+
+        await outbox.flush();
+
+        expect(pendingOps.__rows.size).toBe(0);
+        expect(messages.__rows.has('m-deleted')).toBe(false);
+        expect(tombstones.__rows.get('messages:m-deleted')).toMatchObject({
+            clock: 3, hlc: '3000-b', opId: 'new-delete', deletedAt: 123,
+        });
+    });
+
+    it('keeps a newer local put when an older push returns a tombstone winner', async () => {
+        const pending = createPendingOp({
+            id: 'older-due', pk: 'm-newer',
+            stamp: { deviceId: 'a', opId: 'old-put', hlc: '1000-a', clock: 1 },
+        });
+        const pendingOps = createPendingOpsTable([pending]);
+        const messages = createMemoryTable('id', [{
+            id: 'm-newer', text: 'local-newer', clock: 4, hlc: '4000-a', op_id: 'local-new',
+        }]);
+        const tombstones = createMemoryTable('id');
+        const db = createMockDb({ pending_ops: pendingOps, messages, tombstones });
+        const provider = new SpyProvider();
+        provider.push = vi.fn(async () => ({
+            results: [{
+                opId: 'old-put', success: true, replayed: true, applied: false,
+                winner: {
+                    kind: 'delete' as const,
+                    revision: { clock: 3, hlc: '3000-b', opId: 'server-delete' },
+                },
+            }],
+            serverVersion: 3,
+        }));
+        const outbox = new OutboxManager(db as any, provider, { workspaceId: 'workspace-1' });
+
+        await outbox.flush();
+
+        expect(pendingOps.__rows.size).toBe(0);
+        expect(messages.__rows.get('m-newer')).toMatchObject({
+            text: 'local-newer', clock: 4, op_id: 'local-new',
+        });
+        expect(tombstones.__rows.size).toBe(0);
     });
 
     it('packs batches under the byte ceiling across multiple flushes', async () => {

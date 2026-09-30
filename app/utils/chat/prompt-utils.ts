@@ -5,6 +5,10 @@
  * Utilities for transforming and composing system prompts.
  */
 
+/** Stored in a thread (or staged for a new chat) to distinguish inheritance from opt-out. */
+export const DEFAULT_PROMPT_SELECTION = '__or3_default_prompt__';
+export const DISABLED_PROMPT_SELECTION = '__or3_disabled_prompt__';
+
 /** TipTap node types */
 interface TipTapTextNode {
     type: 'text';

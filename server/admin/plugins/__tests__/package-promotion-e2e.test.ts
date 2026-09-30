@@ -78,6 +78,8 @@ const grantReview: PluginGrantReviewSnapshot = {
     approvedGrants: ['documents.read'],
     revision: `sha256-${'a'.repeat(64)}`,
     status: 'current',
+    authoritySha256: null,
+    packageDigest: null,
 };
 
 describe('package install→promote→disable→rollback E2E', () => {
@@ -174,6 +176,8 @@ describe('package install→promote→disable→rollback E2E', () => {
             manifestVersion: 2,
             source: 'package',
             trust: 'trusted-host',
+            name: 'Alpha',
+            effectiveGrants: [],
             artifact: {
                 kind: 'package-v2',
                 packageDigest: prepared.stored.digest,

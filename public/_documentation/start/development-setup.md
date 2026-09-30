@@ -50,6 +50,11 @@ before starting. If another OR3 or Nuxt server is already running there, it
 explains the conflict and offers the next free port instead of silently
 starting a second broken server.
 
+Available sibling provider repositories are rebuilt and selected automatically
+by the dev wrapper. Build failures or missing siblings fall back to installed
+packages with a warning. Use `OR3_LOCAL_PROVIDERS=false bun run dev` to test
+installed packages only. See [local provider development](../cloud/providers#local-provider-development).
+
 Local-first mode needs no account or `.env` file. It stores data in the
 browser. Connect OpenRouter from the in-app onboarding when you are ready.
 
@@ -101,17 +106,26 @@ changing environment files so Nuxt picks them up.
 
 ### Developing sibling OR3 packages
 
-OR3 Chat normally uses the versioned packages installed in `node_modules` so
-long-running Vite sessions keep a bounded module graph. When working across a
-multi-repository checkout, opt into sibling source packages explicitly:
+`bun run dev` aliases the adjacent `or3-vsc` checkout to `or3-scroll` when
+its manifest and source are valid. Provider packages (`or3-provider-*`) are
+built from their sibling checkouts separately. The dev banner prints which
+local sources were selected.
+
+Workflows and External Agents are separate V2 plugin checkouts. Build and pack
+each plugin, then install its archive through the admin package flow. The host
+does not alias their feature dependencies from sibling source directories.
+The scroll package is checked separately. Rejected groups use installed packages.
+Production builds never alias sibling sources, even when the environment inherits
+`OR3_USE_LOCAL_PACKAGES=true`.
+
+To test installed packages during development:
 
 ```bash
-OR3_USE_LOCAL_PACKAGES=true bun run dev
+OR3_USE_LOCAL_PACKAGES=false bun run dev   # always use installed packages
 ```
 
-This aliases adjacent `or3-vsc` and `or3-workflows` source trees into both the
-client and server builds. Enable it only while editing those packages because
-their larger source graphs make each HMR invalidation more expensive.
+Local source graphs make each HMR invalidation more expensive, so turn them off
+when you are not editing those packages.
 
 ---
 

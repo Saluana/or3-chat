@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { EffectiveAuthority } from '~~/shared/plugins/authority/effective-authority';
 import type { WorkspaceSettingsStore } from '../../stores/types';
 import {
     bootstrapDefaultEnabledPlugins,
@@ -12,7 +13,50 @@ import {
     setPluginEnabled,
     setPluginGrantReview,
     setPluginSettings,
+    type PluginGrantCandidate,
 } from '../workspace-plugin-store';
+
+const DIGEST_A = `sha256-${'1'.repeat(64)}` as const;
+const DIGEST_B = `sha256-${'2'.repeat(64)}` as const;
+const DIGEST_C = `sha256-${'3'.repeat(64)}` as const;
+
+function authorityDescriptor(
+    overrides: Partial<EffectiveAuthority> = {}
+): EffectiveAuthority {
+    return {
+        trust: 'isolated-client',
+        grants: ['documents.read', 'tools.register.client'],
+        features: [],
+        engines: ['or3:>=1.0.0'],
+        destinations: [
+            {
+                host: 'api.example.com',
+                methods: ['GET'],
+                pathPrefixes: ['/v1/'],
+                connection: 'example',
+            },
+        ],
+        connectionScopes: [],
+        dataScopes: ['documents.read'],
+        writes: [],
+        setupHooks: [],
+        dependencies: [],
+        ...overrides,
+    };
+}
+
+function candidate(
+    overrides: Partial<PluginGrantCandidate> = {}
+): PluginGrantCandidate {
+    return {
+        requestedGrants: ['documents.read', 'tools.register.client'],
+        releaseId: 'rel_1',
+        packageDigest: DIGEST_A,
+        authoritySha256: DIGEST_A,
+        authority: authorityDescriptor(),
+        ...overrides,
+    };
+}
 
 function createStore() {
     const map = new Map<string, string>();
@@ -28,6 +72,19 @@ function createStore() {
 }
 
 describe('workspace plugin store', () => {
+    it('allows ongoing reviews after the retained history reaches its limit', async () => {
+        const { store } = createStore();
+        for (let index = 1; index <= 18; index++) {
+            const digest = `sha256-${index.toString(16).padStart(64, '0')}` as const;
+            await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+                candidate: candidate({ packageDigest: digest, authoritySha256: digest, releaseId: `rel_${index}` }),
+                approvedGrants: ['documents.read'],
+            });
+        }
+        const digest = `sha256-${(18).toString(16).padStart(64, '0')}` as const;
+        expect((await getPluginGrantReview(store, 'ws-1', 'plugin.a',
+            candidate({ packageDigest: digest, authoritySha256: digest, releaseId: 'rel_18' }))).status).toBe('current');
+    });
     it('returns empty enabled list when unset', async () => {
         const { store } = createStore();
         const enabled = await getEnabledPlugins(store, 'ws-1');
@@ -46,6 +103,35 @@ describe('workspace plugin store', () => {
 
         const removed = await setPluginEnabled(store, 'ws-1', 'plugin.a', false);
         expect(removed).toEqual([]);
+    });
+
+    it('retries a CAS collision without losing another plugin choice', async () => {
+        const { map, store } = createStore();
+        map.set('ws-1:plugins.enabled', JSON.stringify(['plugin.b']));
+        let collided = false;
+        store.compareAndSet = vi.fn(async (workspaceId, key, expected, next) => {
+            const storageKey = `${workspaceId}:${key}`;
+            if (!collided) {
+                collided = true;
+                map.set(storageKey, JSON.stringify(['plugin.b', 'plugin.c']));
+            }
+            if ((map.get(storageKey) ?? null) !== expected) return false;
+            map.set(storageKey, next);
+            return true;
+        });
+        expect(await setPluginEnabled(store, 'ws-1', 'plugin.a', true, { requireCas: true, expectedPluginState: false }))
+            .toEqual(['plugin.b', 'plugin.c', 'plugin.a']);
+        expect(JSON.parse(map.get('ws-1:plugins.enabled')!)).toEqual(['plugin.b', 'plugin.c', 'plugin.a']);
+    });
+
+    it('refuses bulk writes without provider CAS and changed target state', async () => {
+        const { store } = createStore();
+        await expect(setPluginEnabled(store, 'ws-1', 'plugin.a', true, { requireCas: true }))
+            .rejects.toMatchObject({ code: 'bulk-settings-cas-unavailable' });
+        await setPluginEnabled(store, 'ws-1', 'plugin.a', true);
+        store.compareAndSet = vi.fn(async () => true);
+        await expect(setPluginEnabled(store, 'ws-1', 'plugin.a', false, { requireCas: true, expectedPluginState: false }))
+            .rejects.toMatchObject({ code: 'rollout-conflict' });
     });
 
     it('stores and loads plugin settings', async () => {
@@ -116,12 +202,12 @@ describe('workspace plugin store', () => {
         ).rejects.toThrow('Invalid access policy');
     });
 
-    it('persists reviewed grants under a separate key with a content revision', async () => {
+    it('persists authority-bound consent under a separate key with a content revision', async () => {
         const { map, store } = createStore();
         await setPluginSettings(store, 'ws-1', 'plugin.a', { theme: 'dark' });
 
         const review = await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
-            requestedGrants: ['tools.register.client', 'documents.read'],
+            candidate: candidate(),
             approvedGrants: ['documents.read'],
             reviewedAt: 123,
             reviewedBy: 'user-1',
@@ -131,27 +217,29 @@ describe('workspace plugin store', () => {
             status: 'current',
             requestedGrants: ['documents.read', 'tools.register.client'],
             approvedGrants: ['documents.read'],
+            packageDigest: DIGEST_A,
+            authoritySha256: DIGEST_A,
         });
         expect(review.revision).toMatch(/^sha256-[a-f0-9]{64}$/);
         expect(map.get('ws-1:plugins.settings.plugin.a')).toBe(
             JSON.stringify({ theme: 'dark' })
         );
         expect(JSON.parse(map.get('ws-1:plugins.grants.plugin.a')!)).toMatchObject({
-            schemaVersion: 1,
+            schemaVersion: 2,
+            releaseId: 'rel_1',
+            packageDigest: DIGEST_A,
+            authoritySha256: DIGEST_A,
             revision: review.revision,
             reviewedAt: 123,
             reviewedBy: 'user-1',
         });
 
         await expect(
-            getPluginGrantReview(store, 'ws-1', 'plugin.a', [
-                'documents.read',
-                'tools.register.client',
-            ])
+            getPluginGrantReview(store, 'ws-1', 'plugin.a', candidate())
         ).resolves.toEqual(review);
     });
 
-    it('revisions access policy and reviewed grants independently', async () => {
+    it('revisions access policy and reviewed authority independently', async () => {
         const { store } = createStore();
         const initialPolicy = await getPluginAccessPolicySnapshot(
             store,
@@ -159,7 +247,7 @@ describe('workspace plugin store', () => {
             'plugin.a'
         );
         const initialGrants = await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
-            requestedGrants: ['documents.read'],
+            candidate: candidate({ requestedGrants: ['documents.read'] }),
             approvedGrants: [],
             reviewedAt: 1,
         });
@@ -176,13 +264,13 @@ describe('workspace plugin store', () => {
             store,
             'ws-1',
             'plugin.a',
-            ['documents.read']
+            candidate({ requestedGrants: ['documents.read'] })
         );
         expect(changedPolicy.revision).not.toBe(initialPolicy.revision);
         expect(unchangedGrants.revision).toBe(initialGrants.revision);
 
         const changedGrants = await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
-            requestedGrants: ['documents.read'],
+            candidate: candidate({ requestedGrants: ['documents.read'] }),
             approvedGrants: ['documents.read'],
             reviewedAt: 2,
         });
@@ -195,19 +283,230 @@ describe('workspace plugin store', () => {
         expect(stillSamePolicy.revision).toBe(changedPolicy.revision);
     });
 
-    it('fails closed when requested grants change or persisted review data is invalid', async () => {
-        const { map, store } = createStore();
+    it('fails closed when authority expands even though the grant strings are unchanged', async () => {
+        const { store } = createStore();
         await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+            candidate: candidate(),
+            approvedGrants: ['documents.read', 'tools.register.client'],
+            reviewedAt: 1,
+        });
+
+        const expanded = candidate({
+            packageDigest: DIGEST_B,
+            authoritySha256: DIGEST_B,
+            authority: authorityDescriptor({
+                destinations: [
+                    {
+                        host: 'api.example.com',
+                        methods: ['GET', 'POST'],
+                        pathPrefixes: ['/v1/', '/v2/'],
+                        connection: 'example',
+                    },
+                    { host: 'files.example.com', methods: ['GET'], pathPrefixes: ['/'] },
+                ],
+                writes: ['notes.append'],
+            }),
+        });
+        await expect(
+            getPluginGrantReview(store, 'ws-1', 'plugin.a', expanded)
+        ).resolves.toMatchObject({
+            status: 'stale',
+            approvedGrants: [],
+        });
+    });
+
+    it('carries consent across a narrowing update without fresh approval', async () => {
+        const { store } = createStore();
+        await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+            candidate: candidate(),
+            approvedGrants: ['documents.read', 'tools.register.client'],
+            reviewedAt: 1,
+        });
+
+        const narrowed = candidate({
             requestedGrants: ['documents.read'],
+            packageDigest: DIGEST_B,
+            authoritySha256: DIGEST_B,
+            authority: authorityDescriptor({ grants: ['documents.read'] }),
+        });
+        await expect(
+            getPluginGrantReview(store, 'ws-1', 'plugin.a', narrowed)
+        ).resolves.toMatchObject({
+            status: 'current',
+            requestedGrants: ['documents.read'],
+            approvedGrants: ['documents.read'],
+        });
+    });
+
+    it('keeps the selected package approved while a different candidate is staged', async () => {
+        const { store } = createStore();
+        const selected = candidate();
+        await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+            candidate: selected,
+            approvedGrants: [...selected.requestedGrants],
+            reviewedAt: 1,
+        });
+        const staged = candidate({
+            releaseId: 'rel_2',
+            packageDigest: DIGEST_B,
+            authoritySha256: DIGEST_B,
+            authority: authorityDescriptor({
+                destinations: [
+                    { host: 'new.example.com', methods: ['GET'], pathPrefixes: ['/'] },
+                ],
+            }),
+        });
+        await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+            candidate: staged,
+            approvedGrants: [...staged.requestedGrants],
+            reviewedAt: 2,
+        });
+
+        await expect(getPluginGrantReview(store, 'ws-1', 'plugin.a', staged))
+            .resolves.toMatchObject({ status: 'current', packageDigest: DIGEST_B });
+        await expect(getPluginGrantReview(store, 'ws-1', 'plugin.a', selected))
+            .resolves.toMatchObject({ status: 'current', packageDigest: DIGEST_A });
+    });
+
+    it('preserves the selected release review when a separate backup write is unavailable', async () => {
+        const { store } = createStore();
+        const selected = candidate();
+        const staged = candidate({ releaseId: 'rel_2', packageDigest: DIGEST_B, authoritySha256: DIGEST_B });
+        await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+            candidate: selected, approvedGrants: [...selected.requestedGrants], reviewedAt: 1,
+        });
+        const originalSet = store.set;
+        store.set = async (workspaceId, key, value) => {
+            if (key.includes('.by-digest.')) throw new Error('backup write unavailable');
+            return originalSet(workspaceId, key, value);
+        };
+        await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+            candidate: staged, approvedGrants: [...staged.requestedGrants], reviewedAt: 2,
+        });
+        expect(await getPluginGrantReview(store, 'ws-1', 'plugin.a', staged)).toMatchObject({ status: 'current' });
+        expect(await getPluginGrantReview(store, 'ws-1', 'plugin.a', selected)).toMatchObject({ status: 'current' });
+    });
+
+    it('carries access approval across a signed engine-only update', async () => {
+        const { store } = createStore();
+        await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+            candidate: candidate(),
+            approvedGrants: ['documents.read', 'tools.register.client'],
+        });
+        const next = candidate({
+            releaseId: 'rel_2',
+            packageDigest: DIGEST_B,
+            authoritySha256: DIGEST_B,
+            authority: authorityDescriptor({ engines: ['or3:>=2.0.0'] }),
+        });
+        await expect(getPluginGrantReview(store, 'ws-1', 'plugin.a', next))
+            .resolves.toMatchObject({ status: 'current' });
+    });
+
+    it('requires review for zero-grant authority and catches a destination expansion', async () => {
+        const { store } = createStore();
+        const initial = candidate({
+            requestedGrants: [],
+            authoritySha256: DIGEST_A,
+            authority: authorityDescriptor({ grants: [] }),
+        });
+        await expect(
+            getPluginGrantReview(store, 'ws-1', 'plugin.a', initial)
+        ).resolves.toMatchObject({ status: 'unreviewed', approvedGrants: [] });
+        await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+            candidate: initial,
+            approvedGrants: [],
+            reviewedAt: 1,
+        });
+        const expanded = {
+            ...initial,
+            packageDigest: DIGEST_B,
+            authoritySha256: DIGEST_B,
+            authority: authorityDescriptor({
+                grants: [],
+                destinations: [
+                    ...authorityDescriptor().destinations,
+                    { host: 'files.example.com', methods: ['GET'], pathPrefixes: ['/'] },
+                ],
+            }),
+        };
+        await expect(
+            getPluginGrantReview(store, 'ws-1', 'plugin.a', expanded)
+        ).resolves.toMatchObject({ status: 'stale', approvedGrants: [] });
+    });
+
+    it('carries registry-only consent only to the exact signed authority and bytes', async () => {
+        const { store } = createStore();
+        const registryOnly = candidate({
+            packageDigest: DIGEST_A,
+            authoritySha256: DIGEST_A,
+            authority: null,
+        });
+        await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+            candidate: registryOnly,
             approvedGrants: ['documents.read'],
             reviewedAt: 1,
         });
 
         await expect(
-            getPluginGrantReview(store, 'ws-1', 'plugin.a', [
-                'documents.read',
-                'documents.write',
-            ])
+            getPluginGrantReview(store, 'ws-1', 'plugin.a', registryOnly)
+        ).resolves.toMatchObject({ status: 'current' });
+        await expect(
+            getPluginGrantReview(store, 'ws-1', 'plugin.a', {
+                ...registryOnly,
+                packageDigest: DIGEST_B,
+            })
+        ).resolves.toMatchObject({ status: 'stale' });
+        await expect(
+            getPluginGrantReview(store, 'ws-1', 'plugin.a', {
+                ...registryOnly,
+                authoritySha256: DIGEST_B,
+            })
+        ).resolves.toMatchObject({ status: 'stale' });
+    });
+
+    it('treats a schema-1 grant-only review as stale', async () => {
+        const { map, store } = createStore();
+        map.set(
+            'ws-1:plugins.grants.plugin.a',
+            JSON.stringify({
+                schemaVersion: 1,
+                requestedGrants: ['documents.read'],
+                approvedGrants: ['documents.read'],
+                revision: DIGEST_C,
+                reviewedAt: 1,
+            })
+        );
+        await expect(
+            getPluginGrantReview(
+                store,
+                'ws-1',
+                'plugin.a',
+                candidate({ requestedGrants: ['documents.read'] })
+            )
+        ).resolves.toMatchObject({ status: 'stale', approvedGrants: [] });
+    });
+
+    it('fails closed when requested grants change or persisted review data is invalid', async () => {
+        const { map, store } = createStore();
+        await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+            candidate: candidate({ requestedGrants: ['documents.read'] }),
+            approvedGrants: ['documents.read'],
+            reviewedAt: 1,
+        });
+
+        await expect(
+            getPluginGrantReview(
+                store,
+                'ws-1',
+                'plugin.a',
+                candidate({
+                    requestedGrants: ['documents.read', 'documents.write'],
+                    authority: authorityDescriptor({
+                        grants: ['documents.read', 'documents.write'],
+                    }),
+                })
+            )
         ).resolves.toMatchObject({
             status: 'stale',
             approvedGrants: [],
@@ -217,7 +516,12 @@ describe('workspace plugin store', () => {
         persisted.approvedGrants = ['documents.write'];
         map.set('ws-1:plugins.grants.plugin.a', JSON.stringify(persisted));
         await expect(
-            getPluginGrantReview(store, 'ws-1', 'plugin.a', ['documents.read'])
+            getPluginGrantReview(
+                store,
+                'ws-1',
+                'plugin.a',
+                candidate({ requestedGrants: ['documents.read'] })
+            )
         ).resolves.toMatchObject({
             status: 'unreviewed',
             approvedGrants: [],
@@ -228,10 +532,20 @@ describe('workspace plugin store', () => {
         const { store } = createStore();
         await expect(
             setPluginGrantReview(store, 'ws-1', 'plugin.a', {
-                requestedGrants: ['documents.read'],
+                candidate: candidate({ requestedGrants: ['documents.read'] }),
                 approvedGrants: ['documents.write'],
             })
         ).rejects.toThrow('Invalid reviewed grants');
+    });
+
+    it('rejects approval without a verifiable authority hash', async () => {
+        const { store } = createStore();
+        await expect(
+            setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+                candidate: candidate({ authoritySha256: null, authority: null }),
+                approvedGrants: ['documents.read'],
+            })
+        ).rejects.toThrow('Reviewed authority must be verifiable');
     });
 
     it('rejects invalid plugin settings payloads', async () => {

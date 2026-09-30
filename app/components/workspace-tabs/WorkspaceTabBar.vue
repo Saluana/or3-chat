@@ -51,7 +51,11 @@
                     @auxclick="onAuxClick($event, tab.id)"
                     @contextmenu.prevent="openContextMenu($event, tab.id)"
                 >
-                    <UIcon :name="resourceIcon(tab)" class="workspace-tab-icon" />
+                    <AppIcon
+                        :image="props.imageByTabId?.get(tab.id)"
+                        :icon="resourceIcon(tab)"
+                        class="workspace-tab-icon"
+                    />
                     <span class="workspace-tab-title">{{ workspaceTabTitle(tab) }}</span>
                     <span
                         v-if="statusFor(tab.id) !== 'idle'"
@@ -84,8 +88,7 @@
         </div>
         <WorkspaceNewTabControl
             :can-create-document="canCreateDocument"
-            :can-create-workflow="canCreateWorkflow"
-            :can-create-agent="canCreateAgent"
+            :plugin-items="pluginItems"
             @new-tab="emit('new-tab')"
             @create="emit('create-tab', $event)"
         />
@@ -132,7 +135,9 @@ import {
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import WorkspaceNewTabControl, {
     type WorkspaceNewTabCreateKind,
+    type WorkspaceNewTabItem,
 } from './WorkspaceNewTabControl.vue';
+import AppIcon from '~/components/ui/AppIcon.vue';
 
 const props = withDefaults(
     defineProps<{
@@ -141,24 +146,24 @@ const props = withDefaults(
         visibleTabIds: ReadonlySet<string>;
         statusByTabId?: ReadonlyMap<string, WorkspaceTabStatus>;
         iconByTabId?: ReadonlyMap<string, string | undefined>;
+        imageByTabId?: ReadonlyMap<string, string | undefined>;
         mobile?: boolean;
         canOpenSplit?: boolean;
         canReopenClosed?: boolean;
         copyableTabIds?: ReadonlySet<string>;
         canCreateDocument?: boolean;
-        canCreateWorkflow?: boolean;
-        canCreateAgent?: boolean;
+        pluginItems?: readonly WorkspaceNewTabItem[];
     }>(),
     {
         mobile: false,
         statusByTabId: undefined,
         iconByTabId: undefined,
+        imageByTabId: undefined,
         canOpenSplit: true,
         canReopenClosed: false,
         copyableTabIds: () => new Set<string>(),
         canCreateDocument: false,
-        canCreateWorkflow: false,
-        canCreateAgent: false,
+        pluginItems: () => [],
     }
 );
 

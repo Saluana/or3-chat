@@ -18,14 +18,22 @@ OR3 Chat never starts provider CLIs. A trusted `or3-intern` host owns runner
 discovery, authentication, roots, flags, permission policy, sessions,
 approvals, artifacts, and cancellation.
 
-The browser plugin and the server-side OR3 Connect device probe both use the
-framework-free `@or3/intern-client`. Credentials stay in headers, errors are
-redacted, requests time out, and SSE reconnects with a stable cursor and
-replay deduplication. Established streams also enforce a 60-second inactivity
-deadline that resets on every byte (including heartbeat comments); callers can
-override or explicitly disable it with `inactivityTimeoutMs`. Host switches
-abort old requests and reject events from the prior host generation. Remote
-action failures preserve the canonical prior state.
+The installed `or3-plugin-external-agents` package owns the browser session
+client, UI, and `@or3/intern-client` dependency. Credentials stay in headers,
+errors are redacted, requests time out, and SSE reconnects with a stable
+cursor and replay deduplication. Established streams also enforce a 60-second
+inactivity deadline that resets on every byte (including heartbeat comments);
+callers can override or explicitly disable it with `inactivityTimeoutMs`.
+The host mediates HTTP and SSE requests to the selected host's saved URL.
+Adding a host temporarily permits its URL during verification. Requests to
+other destinations and redirects are rejected; HTTP responses are bounded.
+Host switches abort old requests and reject events from the prior host
+generation. Remote action failures preserve the canonical prior state.
+
+The OR3 Connect server remains in the host. Its device status check uses
+bounded authenticated HTTP health, readiness, and runner probes without a
+browser client dependency. Disabling the External Agents package removes its
+navigation and session UI while keeping Connect and saved workspace data.
 
 ### Enrollment and storage boundary
 

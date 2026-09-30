@@ -4,22 +4,6 @@ import type {
     CanonicalStorageRecord,
 } from '../types';
 
-export interface CanonicalUploadExpectation {
-    hash: string;
-    checksumSha256: string;
-    sizeBytes: number;
-    mimeType: string;
-    reservedBytes: number;
-    expiresAt: number;
-}
-
-export interface CanonicalMarkerPair {
-    hash: string;
-    blobPage: number;
-    markerPage: number;
-    updatedAt: number;
-}
-
 export interface CanonicalStorageFixtureOptions {
     workspaceId?: string;
     now?: number;
@@ -30,8 +14,7 @@ export interface CanonicalStorageFixtureOptions {
 /**
  * Shared canonical-storage contract fixture used by provider suites.
  *
- * One builder describes materialized metadata/reference edges, upload checksum
- * and quota expectations, split-page marker pairs, pagination, and retention.
+ * The builder describes canonical reference edges, pagination, and retention.
  * Providers can consume `query()` directly or adapt it to their gateway API.
  */
 export class CanonicalStorageContractFixture {
@@ -40,8 +23,6 @@ export class CanonicalStorageContractFixture {
     readonly retentionSeconds: number;
     readonly pageSize: number;
     readonly records: CanonicalStorageRecord[] = [];
-    readonly uploads: CanonicalUploadExpectation[] = [];
-    readonly markerPairs: CanonicalMarkerPair[] = [];
 
     constructor(options: CanonicalStorageFixtureOptions = {}) {
         this.workspaceId = options.workspaceId ?? 'workspace-contract';
@@ -51,17 +32,6 @@ export class CanonicalStorageContractFixture {
         if (!Number.isSafeInteger(this.pageSize) || this.pageSize <= 0) {
             throw new Error('Canonical fixture pageSize must be a positive integer');
         }
-    }
-
-    liveMetadata(hash: string, options: { sizeBytes?: number; storageId?: string; updatedAt?: number } = {}): this {
-        this.records.push({
-            kind: 'metadata',
-            hash,
-            sizeBytes: options.sizeBytes ?? 1,
-            ...(options.storageId ? { storageId: options.storageId } : {}),
-            updatedAt: options.updatedAt ?? this.now,
-        });
-        return this;
     }
 
     reference(
@@ -74,30 +44,6 @@ export class CanonicalStorageContractFixture {
             sourceTable: options.sourceTable ?? 'messages',
             sourceId: options.sourceId ?? `source-${this.records.length + 1}`,
         });
-        return this;
-    }
-
-    reservation(
-        hash: string,
-        options: { reservationId?: string; sizeBytes?: number; expiresAt?: number } = {}
-    ): this {
-        this.records.push({
-            kind: 'reservation',
-            reservationId: options.reservationId ?? `reservation-${this.records.length + 1}`,
-            hash,
-            sizeBytes: options.sizeBytes ?? 1,
-            expiresAt: options.expiresAt ?? this.now + 300,
-        });
-        return this;
-    }
-
-    upload(expectation: CanonicalUploadExpectation): this {
-        this.uploads.push(expectation);
-        return this;
-    }
-
-    markerPair(hash: string, options: Omit<CanonicalMarkerPair, 'hash'>): this {
-        this.markerPairs.push({ hash, ...options });
         return this;
     }
 

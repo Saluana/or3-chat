@@ -101,6 +101,18 @@ const WHITELIST_KEYS = [
 ];
 
 describe('config metadata', () => {
+    it('describes the workflow flags as a plugin switch and plugin options', () => {
+        expect(getConfigMetadata('OR3_WORKFLOWS_ENABLED')?.description)
+            .toContain('Workflows plugin');
+        for (const key of [
+            'OR3_WORKFLOWS_EDITOR',
+            'OR3_WORKFLOWS_SLASH_COMMANDS',
+            'OR3_WORKFLOWS_EXECUTION',
+        ]) {
+            expect(getConfigMetadata(key)?.description).toContain('Workflows plugin');
+        }
+    });
+
     it('all whitelisted keys have metadata', () => {
         const missingMetadata: string[] = [];
         

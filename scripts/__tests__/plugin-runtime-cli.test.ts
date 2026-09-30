@@ -9,6 +9,24 @@ import { buildV2Package } from '../plugin-runtime/cli/build';
 import { validateV2Package } from '../plugin-runtime/cli/validate';
 
 const repoRoot = resolve(import.meta.dirname, '../..');
+
+/** Stand-in for Bun's bundler: deterministic output with the import inlined. */
+function deterministicBundler() {
+    return {
+        async build() {
+            return {
+                success: true,
+                outputs: [
+                    {
+                        text: async () =>
+                            'const ready = true;\nexport { ready };\nexport default ready;\n',
+                    },
+                ],
+                logs: [],
+            };
+        },
+    };
+}
 const tempRoots: string[] = [];
 
 afterEach(() => {
@@ -45,14 +63,14 @@ describe('plugin-runtime CLI', () => {
         );
     });
 
-    it('validate reports stable conformance codes', () => {
+    it('validate reports stable conformance codes', async () => {
         const directory = resolve(tempDir('or3-cli-validate-'), 'plugin');
         createV2Package({
             pluginId: 'or3.validate-me',
             directory,
             repoRoot,
         });
-        const ok = validateV2Package(directory, { repoRoot });
+        const ok = await validateV2Package(directory, { repoRoot });
         expect(ok.result.status).toBe('conformant');
         expect(ok.exitCode).toBe(0);
 
@@ -60,7 +78,7 @@ describe('plugin-runtime CLI', () => {
             resolve(directory, 'client.mjs'),
             "import x from '~/private'; export default x;\n"
         );
-        const bad = validateV2Package(directory, { repoRoot });
+        const bad = await validateV2Package(directory, { repoRoot });
         expect(bad.result.status).toBe('nonconformant');
         expect(bad.exitCode).toBe(1);
         if (bad.result.status === 'nonconformant') {
@@ -86,6 +104,13 @@ describe('plugin-runtime CLI', () => {
             version: 1,
             rollback: 'safe',
         });
+        expect(report.statePreflight).toMatchObject({
+            status: 'eligible',
+            code: 'state-initialization',
+            operation: 'install',
+            storedStateVersion: null,
+            mutatesState: false,
+        });
         expect(report.moduleGraph.some((entry) => entry.file === 'client.mjs')).toBe(
             true
         );
@@ -98,6 +123,9 @@ describe('plugin-runtime CLI', () => {
             directory,
             repoRoot,
         });
+        // Bundling inlines the SDK import, which needs Bun. These assertions are
+        // about digest stability, so the bundler is injected and stands in for it.
+        const bundler = deterministicBundler();
         const first = await packV2Package(directory, {
             outputDirectory: resolve(directory, 'pack-a'),
         });
@@ -109,14 +137,39 @@ describe('plugin-runtime CLI', () => {
         const buildOne = await buildV2Package(directory, {
             buildDirectory: resolve(directory, 'dist-a'),
             packDirectory: resolve(directory, 'pack-build-a'),
+            bundler,
         });
         const buildTwo = await buildV2Package(directory, {
             buildDirectory: resolve(directory, 'dist-b'),
             packDirectory: resolve(directory, 'pack-build-b'),
+            bundler,
         });
         expect(buildOne.pack.verification.digest).toBe(
             buildTwo.pack.verification.digest
         );
-        expect(buildOne.pack.verification.digest).toBe(first.verification.digest);
+        // The build tree is bundled, so it legitimately differs from the source
+        // pack; what must hold is that the entry it packs is self-contained.
+        const bundled = readFileSync(
+            resolve(directory, 'dist-a', 'client.mjs'),
+            'utf8'
+        );
+        expect(bundled).not.toContain("from '@or3/plugin-sdk'");
+    });
+
+    it('refuses to build a bare entry when no bundler is available', async () => {
+        const directory = resolve(tempDir('or3-cli-nobundler-'), 'plugin');
+        createV2Package({
+            pluginId: 'or3.pack-me',
+            directory,
+            repoRoot,
+        });
+        // Node (no Bun) and no injected bundler: the package would be packed with
+        // an import the sandbox cannot resolve, so the build fails with the reason.
+        await expect(
+            buildV2Package(directory, {
+                buildDirectory: resolve(directory, 'dist-none'),
+                packDirectory: resolve(directory, 'pack-none'),
+            })
+        ).rejects.toThrow(/Bun/);
     });
 });

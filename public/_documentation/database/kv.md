@@ -36,7 +36,9 @@ Key-value helpers for storing small preference or credential blobs in the Dexie 
 | `hardDeleteKv(id)`         | Removes a row by primary key.                                                    |
 | `getKv(id)`                | Fetches by primary key and applies output filters.                               |
 | `getKvByName(name)`        | Finds first row matching `name`. Accepts an optional target DB.             |
-| `setKvByName(name, value)` | Creates or updates a row using `kv:${name}` ids, increments `clock`, runs hooks. Accepts an optional target DB. |
+| `getKvRecordByName(name)` | Reads the filtered row and its CAS `revision` from one database snapshot, including sync tombstone history. Accepts an optional target DB. |
+| `setKvByName(name, value)` | Creates or updates a row using `kv:${name}` ids, increments `clock`, runs hooks. Accepts an optional target DB, CAS revision, revocation signal, and `StorageQuota`. |
+| `tombstoneKvByName(name)`  | Soft-deletes by `name` (tombstone with bumped `clock`, value null) so the revision chain survives. Accepts an optional target DB and revocation guard. |
 | `hardDeleteKvByName(name)` | Deletes by `name` with before/after hooks. Accepts an optional target DB.   |
 
 ---
@@ -55,4 +57,7 @@ Key-value helpers for storing small preference or credential blobs in the Dexie 
 
 -   Store encrypted or user-provided tokens by name; `setKvByName` will generate IDs automatically.
 -   Use hooks to redact values before logging or to enforce naming conventions.
--   Keep payloads tiny (<10 KB) to avoid IndexedDB quota pressure.
+-   Keep payloads tiny (<10 KB) to avoid IndexedDB quota pressure.
+-   Revision allocation and CAS span sync tombstone history, so a key recreated after snapshot recovery continues past the deletion clock instead of restarting (no ABA).
+-   `StorageQuota` accounting is derived from the live rows under its `prefix` inside the write transaction; it is never stored as a synchronized counter row, so multi-device merges cannot undercount.
+-   `StorageQuota.maxRetainedKeys` optionally caps distinct live/deleted names across KV and sync tombstones. At the cap, existing names remain writable but new names are refused. Portable storage uses 10,000 retained names, 1000 live keys and 1 MiB of serialized live values. These limits govern local writes; they do not reserve capacity globally across offline clients.

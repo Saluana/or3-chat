@@ -2,6 +2,7 @@
     <UModal
         v-bind="modalProps"
         :open="isOpen"
+        :content="dialogContent"
         title="Command palette"
         description="Search chats, documents, projects, images, and commands"
         @update:open="onUpdateOpen"
@@ -9,7 +10,7 @@
         <template #content>
             <div
                 class="or3-palette flex h-full min-h-0 flex-col bg-[color:var(--md-surface)] text-[color:var(--md-on-surface)]"
-                :class="shellClass"
+                :class="[shellClass, { 'or3-palette-short': shortViewport, 'or3-palette-very-short': tinyViewport }]"
                 data-context="global"
                 data-test="command-palette"
             >
@@ -29,7 +30,7 @@
                     </button>
                     <UIcon
                         :name="searchIcon"
-                        class="hidden h-4 w-4 shrink-0 text-[color:var(--md-on-surface-variant)] sm:block"
+                        class="or3-palette-query-icon hidden h-4 w-4 shrink-0 text-[color:var(--md-on-surface-variant)] sm:block"
                         aria-hidden="true"
                     />
                     <input
@@ -52,6 +53,15 @@
                         @keydown="onKeydown"
                         @focus="closeActionTray"
                     />
+                    <UButton
+                        color="neutral"
+                        variant="ghost"
+                        class="or3-palette-query-actions hidden h-11! min-h-11! shrink-0"
+                        :disabled="!activeResult"
+                        :aria-label="actionTrayOpen ? 'Return to search results' : 'Show result actions'"
+                        :aria-expanded="actionTrayOpen"
+                        @click="toggleResultActions"
+                    >{{ actionTrayOpen ? 'Results' : 'Actions' }}</UButton>
                     <UIcon
                         v-if="loading"
                         :name="loadingIcon"
@@ -83,7 +93,7 @@
                 />
 
                 <!-- Results + preview -->
-                <div class="flex min-h-0 flex-1 flex-col lg:flex-row">
+                <div class="or3-palette-results-layout flex min-h-0 flex-1 flex-col lg:flex-row">
                     <CommandPaletteResultList
                         :groups="groups"
                         :statuses="statuses"
@@ -100,6 +110,7 @@
 
                     <div
                         class="or3-palette-aside flex min-h-0 shrink-0 flex-col border-t border-[color:var(--md-border-color)] lg:w-[330px] lg:border-l lg:border-t-0"
+                        :data-expanded="actionTrayOpen || undefined"
                         :class="
                             activeResult
                                 ? 'max-h-[40dvh] lg:max-h-none'
@@ -120,6 +131,7 @@
                             :secondary-actions="secondaryActions"
                             :tray-open="actionTrayOpen"
                             @run="onRunAction"
+                            @expand="enterActionTray"
                         />
                     </div>
                 </div>
@@ -161,6 +173,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
+import { useMediaQuery } from '@vueuse/core';
 import { buildThemeOverrideProps } from '~/composables/ui/themeOverrideProps';
 import { useCommandPalette } from '~/composables/search/useCommandPalette';
 import { useCommandPaletteShortcut } from '~/composables/search/useCommandPaletteShortcut';
@@ -236,6 +249,12 @@ const shellOverrides = useThemeOverrides({
     identifier: 'command-palette.shell',
     isNuxtUI: true,
 });
+
+const dialogContent = useDialogFocus(undefined, () => 'palette');
+const shortLayoutViewport = useMediaQuery('(max-height: 500px)');
+const shortViewport = computed(() => shortLayoutViewport.value || dialogContent.value?.['data-compact-viewport'] !== undefined);
+const tinyLayoutViewport = useMediaQuery('(max-height: 240px)');
+const tinyViewport = computed(() => tinyLayoutViewport.value || dialogContent.value?.['data-compact-viewport'] === 'tiny');
 
 const modalProps = computed(() =>
     buildThemeOverrideProps(modalOverrides.value, {
@@ -313,8 +332,17 @@ function focusInput(select = false): void {
     if (select) input.select();
 }
 
-async function enterActionTray(): Promise<void> {
-    if (!openActionTray()) return;
+function toggleResultActions(): void {
+    if (actionTrayOpen.value) {
+        closeActionTray();
+        focusInput();
+    } else {
+        void enterActionTray(true);
+    }
+}
+
+async function enterActionTray(includePrimary = false): Promise<void> {
+    if (!openActionTray(includePrimary)) return;
     await nextTick();
     if (!actionTrayRef.value?.focusFirstAction()) closeActionTray();
 }
@@ -391,3 +419,29 @@ watch(activeKey, async (key) => {
         ?.scrollIntoView({ block: 'nearest' });
 });
 </script>
+
+<style>
+.or3-palette-short .or3-palette-preview,
+.or3-palette-short .or3-palette-footer,
+.or3-palette-short .or3-palette-action-empty,
+.or3-palette-short .or3-palette-actions:not([data-expanded]) .or3-palette-action-heading,
+.or3-palette-short .or3-palette-actions:not([data-expanded]) .or3-palette-secondary {
+    display: none;
+}
+.or3-palette-short .or3-palette-expand { display: flex; }
+.or3-palette-short .or3-palette-query { padding-block: 8px; }
+.or3-palette-short .or3-palette-filters { padding-block: 4px; }
+.or3-palette-short .or3-palette-actions { padding-block: 8px; }
+.or3-palette-short .or3-palette-aside {
+    max-height: max(60px, 50%);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.or3-palette-short [data-test='command-palette-close'] { display: flex; }
+.or3-palette-short .or3-palette-query-icon { display: none; }
+.or3-palette-short .or3-palette-input { font-size: 16px; }
+.or3-palette-very-short .or3-palette-query-actions { display: flex; }
+.or3-palette-very-short .or3-palette-aside:not([data-expanded]) { display: none; }
+.or3-palette-very-short .or3-palette-aside[data-expanded] { max-height: 100%; }
+.or3-palette-very-short .or3-palette-listbox > [role='presentation'] { padding-top: 4px; }
+</style>

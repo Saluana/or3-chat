@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Selected Document Utility Settings",
+  "description": "Options that control how the selected-document digest is rendered.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "summaryStyle": {
+      "type": "string",
+      "title": "Summary style",
+      "description": "Render the outline as a bullet list or as a single prose paragraph.",
+      "enum": ["bullets", "prose"],
+      "default": "bullets"
+    },
+    "maxOutlineSentences": {
+      "type": "integer",
+      "title": "Max outline sentences",
+      "description": "Maximum number of paragraph-leading sentences to include in the outline.",
+      "minimum": 1,
+      "maximum": 20,
+      "default": 5
+    },
+    "includeStatistics": {
+      "type": "boolean",
+      "title": "Include statistics",
+      "description": "Include character, word, sentence, paragraph and reading-time counts.",
+      "default": true
+    }
+  }
+}

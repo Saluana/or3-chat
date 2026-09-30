@@ -149,29 +149,29 @@ Feature toggles. All default to enabled.
 - Type: `boolean`
 - Default: `true`
 - Env: `OR3_WORKFLOWS_ENABLED`
-- Purpose: Master switch for workflows.
-- How it’s used: disables editor, slash commands, and execution when off.
+- Purpose: Enable the Workflows plugin. When off, its client registrations are skipped.
+- How it’s used: disables editor, slash commands, model registry syncing, and execution when off. The other `OR3_WORKFLOWS_*` values remain plugin options.
 
 #### `features.workflows.editor`
 
 - Type: `boolean`
 - Default: `true`
 - Env: `OR3_WORKFLOWS_EDITOR`
-- Purpose: Enables the workflow editor UI.
+- Purpose: Enables the Workflows plugin editor UI when the plugin is enabled.
 
 #### `features.workflows.slashCommands`
 
 - Type: `boolean`
 - Default: `true`
 - Env: `OR3_WORKFLOWS_SLASH_COMMANDS`
-- Purpose: Enables workflow-related slash commands.
+- Purpose: Enables the Workflows plugin slash commands when the plugin is enabled.
 
 #### `features.workflows.execution`
 
 - Type: `boolean`
 - Default: `true`
 - Env: `OR3_WORKFLOWS_EXECUTION`
-- Purpose: Enables the workflow execution engine.
+- Purpose: Enables the Workflows plugin execution engine when the plugin is enabled.
 
 #### `features.documents.enabled`
 

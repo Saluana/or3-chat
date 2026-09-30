@@ -23,6 +23,7 @@ import type { NuxtApp } from 'nuxt/app';
 import { kv } from '~/db';
 import { state } from '~/state/global';
 import { clearWorkspaceDbsOnLogout } from '~/utils/workspace-db-logout';
+import { stopAllPortableClientsAndAwait } from '~/composables/plugins/portable-client-runtime';
 
 type SyncEngine = { stop?: () => Promise<void> | void };
 
@@ -59,6 +60,14 @@ export async function logoutCleanup(
     options: LogoutCleanupOptions = {}
 ) {
     try {
+        // Revoke portable activation handles before clearing the session. The
+        // server TTL remains the fallback if the browser is already offline.
+        await stopAllPortableClientsAndAwait();
+    } catch {
+        // Best-effort; logout must still clear local state.
+    }
+
+    try {
         await nuxtApp?.$syncEngine?.stop?.();
     } catch {
         // Best-effort; sync engine may already be stopped.
@@ -92,6 +101,10 @@ export async function logoutCleanup(
         }
         if (!options.preserveExternalAgentCredentials) {
             keys.push('or3.external-agents.credentials.v1');
+        }
+        for (let index = 0; index < localStorage.length; index += 1) {
+            const key = localStorage.key(index);
+            if (key?.startsWith('or3:bg-client-tool:')) keys.push(key);
         }
         keys.forEach((key) => localStorage.removeItem(key));
     }

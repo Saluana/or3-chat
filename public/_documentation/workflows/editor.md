@@ -1,6 +1,11 @@
 # Workflow editor
 
 The workflow editor is a node canvas for building and testing saved workflows.
+It is supplied by the separately installed `or3-plugin-workflows` package.
+When that package is disabled, Workflows navigation and editor controls are
+absent. Existing `workflow-entry` posts and execution messages stay in the
+workspace. Saved execution messages show a read-only status and output summary
+until the package is enabled again, when the full workflow card returns.
 
 ## Toolbar
 
@@ -26,6 +31,11 @@ the latest persisted workflow state. The timeout is an inactivity safeguard:
 model output, thinking progress, node changes, and tool updates keep the job
 alive; a workflow is only stopped after it has been silent for the configured
 timeout.
+
+The chat **Stop** control cancels its active run. If the page reloads during
+a foreground run, the saved card becomes interrupted and can be resumed from
+its last checkpoint. Workflow feature settings control whether the package,
+slash commands, and execution are available.
 
 If a run stops or fails, its card changes to a terminal state instead of
 continuing to spin. Use **Resume from last checkpoint** on the card to retry
@@ -94,4 +104,8 @@ section; leaving it blank uses the provider's model limit.
 
 ## Local package development
 
-When `OR3_USE_LOCAL_PACKAGES=true` and a sibling `or3-workflows` checkout exists, `nuxt.config.ts` aliases `or3-workflow-core`, `or3-workflow-vue`, and the workflow stylesheet to package source. Nuxt therefore hot-reloads workflow component and style changes without publishing or rebuilding the registry package. Installed package versions remain the fallback for generated projects and deployments without the sibling checkout.
+Work on the sibling `or3-plugin-workflows` checkout as a separate plugin.
+Build and pack it with `or3-plugin`, then use the admin package flow to review,
+canary, promote, and enable the exact archive. The workflow engine, Vue Flow
+editor, and styles are dependencies of that package; the host app does not
+alias or require them.

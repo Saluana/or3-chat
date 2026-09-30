@@ -5,7 +5,7 @@
  * System prompt resolution and OpenRouter message build glue for useAi.
  *
  * Responsibilities:
- * - Resolve thread and active prompt content into a final system prompt
+ * - Resolve the thread's saved prompt selection into a final system prompt
  * - Prepend system message to raw message history when applicable
  * - Build OpenRouter-compatible messages from model input
  * - Inject context hashes into the most recent user message
@@ -24,7 +24,13 @@ import { newId } from '~/db/util';
 import { getThreadSystemPrompt } from '~/db/threads';
 import { getPrompt } from '~/db/prompts';
 import { getMaxMessageFileHashes } from '~/db/files-util';
-import { promptJsonToString, composeSystemPrompt } from '~/utils/chat/prompt-utils';
+import {
+    promptJsonToString,
+    composeSystemPrompt,
+    DEFAULT_PROMPT_SELECTION,
+    DISABLED_PROMPT_SELECTION,
+} from '~/utils/chat/prompt-utils';
+import { getDefaultPromptId } from '~/composables/chat/useDefaultPrompt';
 import { trimOrMessagesByTokenBudget } from '~/utils/chat/messages';
 import { countTokensApprox } from '~/utils/chat/tokens';
 import type { ChatMessage, ContentPart } from '~/utils/chat/types';
@@ -57,28 +63,39 @@ export type ResolveSystemPromptParams = {
  * `resolveSystemPromptText`
  *
  * Purpose:
- * Resolves thread-specific system prompt text with fallback to active prompt.
+ * Resolves the thread's selected or default system prompt text.
  */
 export async function resolveSystemPromptText(
     params: ResolveSystemPromptParams
 ): Promise<string | null> {
-    if (!params.threadId) return null;
+    return (await resolveThreadPrompt(params.threadId)).text;
+}
+
+async function resolveThreadPrompt(threadId: string | null | undefined): Promise<{
+    disabled: boolean;
+    text: string | null;
+}> {
+    if (!threadId) return { disabled: false, text: null };
     try {
-        const promptId = await getThreadSystemPrompt(params.threadId);
+        const selection = await getThreadSystemPrompt(threadId);
+        if (selection === DISABLED_PROMPT_SELECTION)
+            return { disabled: true, text: null };
+        const promptId =
+            !selection || selection === DEFAULT_PROMPT_SELECTION
+                ? await getDefaultPromptId()
+                : selection;
         if (promptId) {
             const prompt = await getPrompt(promptId);
-            if (prompt) return promptJsonToString(prompt.content);
+            if (prompt)
+                return {
+                    disabled: false,
+                    text: promptJsonToString(prompt.content),
+                };
         }
     } catch (e) {
         console.warn('Failed to load thread system prompt', e);
     }
-    return params.activePromptContent
-        ? promptJsonToString(
-              params.activePromptContent as Parameters<
-                  typeof promptJsonToString
-              >[0]
-          )
-        : null;
+    return { disabled: false, text: null };
 }
 
 /**
@@ -100,7 +117,9 @@ export type BuildSystemPromptParams = ResolveSystemPromptParams & {
 export async function buildSystemPromptMessage(
     params: BuildSystemPromptParams
 ): Promise<ChatMessage | null> {
-    const threadSystemText = await resolveSystemPromptText(params);
+    const resolved = await resolveThreadPrompt(params.threadId);
+    if (resolved.disabled) return null;
+    const threadSystemText = resolved.text;
     let finalSystem: string | null = null;
     try {
         finalSystem = composeSystemPrompt(

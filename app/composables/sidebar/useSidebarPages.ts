@@ -49,8 +49,12 @@ export interface SidebarPageDef {
     id: string;
     /** Display label shown in UI (e.g., tooltips) */
     label: string;
+    /** Optional description in mobile navigation. */
+    description?: string;
     /** Iconify icon name */
     icon: string;
+    /** Optional validated app image URL. The Iconify icon remains the fallback. */
+    image?: string;
     /** Optional ordering (lower = earlier in sorted lists). Defaults to 200 */
     order?: number;
     /** Vue component or async component factory */
@@ -167,7 +171,9 @@ const SidebarPageDefSchema = z.object({
         .string()
         .min(1, 'Label is required')
         .max(100, 'Label must be 100 characters or less'),
+    description: z.string().max(200).optional(),
     icon: z.string().min(1, 'Icon is required'),
+    image: z.string().min(1).optional(),
     order: z
         .number()
         .int()
@@ -255,7 +261,7 @@ function normalizeSidebarPageDef(def: SidebarPageDef): RegisteredSidebarPage {
                 ? defineAsyncComponent({
                       loader: def.component,
                       timeout: 15000,
-                      suspensible: false,
+                      suspensible: true,
                       onError(error, retry, fail, attempts) {
                           if (attempts <= 2) retry();
                           else fail();

@@ -222,11 +222,11 @@ export class PluginPackageCandidateCanaryService {
             }
             const selection = await this.pointers.readStartupSelection(input.pluginId);
             const pointer = selection.pointer;
-            if (
-                (selection.status !== 'ready' && selection.status !== 'inactive') ||
-                !pointer?.candidate ||
-                pointer.candidate.packageDigest !== input.packageDigest
-            ) {
+            // The candidate is the recovery path even when the current slot is
+            // unavailable: qualification only needs the recorded candidate to
+            // match the requested digest. A pointer that is unreadable has no
+            // candidate at all and stays blocked.
+            if (!pointer?.candidate || pointer.candidate.packageDigest !== input.packageDigest) {
                 return blocked('pointer', 'candidate-pointer-mismatch');
             }
             let verification;

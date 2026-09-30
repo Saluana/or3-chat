@@ -124,6 +124,16 @@ describe('BundledV1PluginManager', () => {
         ]);
     });
 
+    it('blocks workspace cutover when a bundled teardown times out', async () => {
+        const manager = new BundledV1PluginManager({
+            fetchDesired: async () => ({ descriptors: [descriptor('alpha')], revision: 'one' }),
+            load: async () => instance({ stop: async () => report(true) }),
+        });
+        await manager.schedule('boot');
+        await expect(manager.stopAll('workspace-session-change')).rejects.toThrow('teardown');
+        expect(manager.listActivePluginIds()).toEqual(['alpha']);
+    });
+
     it('refuses unsafe hot replacement when conservative V1 cleanup times out', async () => {
         let desired: BundledV1ManagerDesiredState = {
             descriptors: [descriptor('alpha')],

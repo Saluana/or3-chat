@@ -1,0 +1,16 @@
+# Third-Party Notices
+
+Prompt Workbench bundles no third-party runtime code.
+
+- `client.mjs` imports only `@or3/plugin-sdk` (including its portable-runtime and
+  host-capability helpers) and the local `./lib/prompt.mjs`.
+- `lib/prompt.mjs` is a first-party implementation that uses only built-in
+  JavaScript APIs. It performs no network, filesystem, or native calls; model
+  calls go through the host's governed `ai.complete` capability.
+- `fixtures/sample-selection.txt` is first-party text written for this package.
+- `@or3/plugin-sdk` is a runtime dependency (see `package.json`) and is licensed
+  GPL-3.0 by the OR3 project. Its own `THIRD_PARTY_NOTICES` covers its bundled
+  code.
+- `.authoring/` contains Node-only authoring tools that import the
+  `@or3/plugin-sdk/profile` subpath. They are not shipped and never loaded by the
+  plugin.

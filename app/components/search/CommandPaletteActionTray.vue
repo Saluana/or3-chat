@@ -7,11 +7,12 @@
                 ? 'bg-[color-mix(in_srgb,var(--md-primary)_6%,transparent)]'
                 : ''
         "
+        :data-expanded="trayOpen || undefined"
         role="group"
         :aria-label="trayOpen ? 'Result actions (active)' : 'Result actions'"
         @keydown="onKeydown"
     >
-        <div class="mb-1.5 flex items-center justify-between gap-2">
+        <div class="or3-palette-action-heading mb-1.5 flex items-center justify-between gap-2">
             <span
                 class="text-[10.5px] font-semibold uppercase tracking-[0.09em] text-[color:var(--md-on-surface-variant)]/85"
             >
@@ -25,32 +26,43 @@
             </span>
         </div>
 
-        <UButton
-            v-if="primaryAction"
-            v-bind="primaryButtonProps"
-            :disabled="primaryAction.disabled"
-            :title="primaryAction.disabledReason"
-            @click="emit('run', primaryAction)"
-        >
-            <UIcon
-                v-if="primaryAction.icon"
-                :name="primaryAction.icon"
-                class="h-3.5 w-3.5 shrink-0"
-            />
-            <span class="min-w-0 flex-1 truncate text-left">{{
-                primaryAction.label
-            }}</span>
-            <span
-                class="hidden shrink-0 rounded border border-current/25 px-1 text-[10px] leading-none opacity-80 sm:inline-block"
-                aria-hidden="true"
-                >↵</span
+        <div class="or3-palette-primary-row flex items-center gap-2">
+            <UButton
+                v-if="primaryAction"
+                v-bind="primaryButtonProps"
+                :disabled="primaryAction.disabled"
+                :title="primaryAction.disabledReason"
+                @click="emit('run', primaryAction)"
             >
-        </UButton>
+                <UIcon
+                    v-if="primaryAction.icon"
+                    :name="primaryAction.icon"
+                    class="h-3.5 w-3.5 shrink-0"
+                />
+                <span class="min-w-0 flex-1 truncate text-left">{{
+                    primaryAction.label
+                }}</span>
+                <span
+                    class="hidden shrink-0 rounded border border-current/25 px-1 text-[10px] leading-none opacity-80 sm:inline-block"
+                    aria-hidden="true"
+                    >↵</span
+                >
+            </UButton>
+
+            <UButton
+                v-if="secondaryActions.length && !trayOpen"
+                color="neutral"
+                variant="ghost"
+                class="or3-palette-expand hidden shrink-0"
+                aria-label="Show more actions"
+                @click="emit('expand')"
+            >More</UButton>
+        </div>
 
         <div
             v-if="secondaryActions.length"
             ref="secondaryRef"
-            class="mt-1.5 space-y-1"
+            class="or3-palette-secondary mt-1.5 space-y-1"
         >
             <UButton
                 v-for="action in secondaryActions"
@@ -86,7 +98,7 @@
 
         <p
             v-else-if="primaryAction"
-            class="mt-1.5 text-[10.5px] text-[color:var(--md-on-surface-variant)]/80"
+            class="or3-palette-action-empty mt-1.5 text-[10.5px] text-[color:var(--md-on-surface-variant)]/80"
         >
             No additional actions for this result.
         </p>
@@ -107,6 +119,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: 'run', action: PaletteAction): void;
+    (e: 'expand'): void;
 }>();
 
 const containerRef = ref<HTMLElement | null>(null);
@@ -128,7 +141,7 @@ const secondaryOverrides = useThemeOverrides({
 
 const primaryButtonProps = computed(() =>
     buildThemeOverrideProps(primaryOverrides.value, {
-        baseClass: 'w-full justify-start gap-2',
+        baseClass: 'w-full min-w-0 flex-1 justify-start gap-2',
         baseUi: { base: 'w-full flex items-center gap-2 text-[12.5px]' },
     })
 );

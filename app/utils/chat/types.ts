@@ -63,12 +63,10 @@ export interface SendMessageParams {
     reasoningEffort?: string | null;
     // Optional hashes to include for model context without reattaching to the new UI message.
     context_hashes?: string[];
-    /**
-     * Canonical transcript prefix used for branch-preserving retry. The new
-     * user message is appended to this prefix for provider input while the
-     * original persisted branch remains untouched.
-     */
+    /** Visible transcript used for retry; the new user turn is appended to it. */
     historyOverride?: ChatMessage[];
+    /** Runs after the new user row is durable, before response generation. */
+    onUserPersisted?: (userMessageId: string) => void | Promise<void>;
 }
 
 export function hasDurableSendAcceptance(result: SendResult): boolean {

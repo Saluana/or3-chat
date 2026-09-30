@@ -8,7 +8,16 @@ const SidebarPopoverButtonConfig = {
 };
 
 const SidebarCollapsedTopButtonConfig = {
-    class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] max-md:min-h-[44px]! max-md:min-w-[44px]!',
+    variant: 'ghost',
+    square: true,
+    class: 'h-[40px] w-[40px] shrink-0 flex items-center justify-center p-0! bg-transparent! border-0! rounded-full text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
+    ui: { leadingIcon: 'size-[22px]' },
+};
+
+const SidebarRailUtilityButtonConfig = {
+    ...SidebarCollapsedTopButtonConfig,
+    class: `${SidebarCollapsedTopButtonConfig.class} text-[var(--md-on-surface-variant)]! hover:text-[var(--md-on-surface)]!`,
+    ui: { leadingIcon: 'size-5' },
 };
 
 export const sidebarOverrides = {
@@ -42,17 +51,10 @@ export const sidebarOverrides = {
     },
 
     // Sidebar item buttons: ChatGPT style - clean, minimal, rounded
-    'button#ui.glass-button': {
-        activeClass: 'bg-[var(--md-surface-active)]',
-        class: 'text-[14px] font-normal border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-transparent text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
-    },
     'div#sidebar.project-group-container': {
         class: 'text-[14px] font-normal border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-transparent text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
     },
-    'button#sidebar.new-chat': {
-        variant: 'ghost',
-        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! border-0! rounded-[var(--md-border-radius-small,var(--md-border-radius))] max-md:min-h-[44px]! max-md:min-w-[44px]!',
-    },
+    'button#sidebar.new-chat': SidebarCollapsedTopButtonConfig,
     'button#sidebar.collapsed-search': SidebarCollapsedTopButtonConfig,
     'button#sidebar.new-document': SidebarCollapsedTopButtonConfig,
     'button#sidebar.new-project': SidebarCollapsedTopButtonConfig,
@@ -70,27 +72,11 @@ export const sidebarOverrides = {
     'button#sidebar.project-extra-action': SidebarPopoverButtonConfig,
 
     /* --- Bottom nav buttons: clean, borderless --- */
-    'button#sidebar.bottom-nav.info': {
-        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
-    },
-    'button#sidebar.bottom-nav.connect': {
-        variant: 'ghost',
-        class: 'h-[48px]! w-[48px]! flex items-center justify-center p-0 border-0! rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface-variant)]! hover:bg-[var(--md-surface-hover)]! hover:text-[var(--md-on-surface)]! active:bg-[var(--md-surface-active)]! transition-colors duration-150',
-    },
-    'button#sidebar.bottom-nav.connect:connected': {
-        class: 'bg-[var(--md-surface-hover)] text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-active)]! hover:text-[var(--md-on-surface)]!',
-    },
-    'button#sidebar.bottom-nav.connect:disconnected': {
-        class: 'hover:bg-[var(--md-surface-hover)]! hover:text-[var(--md-on-surface)]!',
-    },
-
-    'button#sidebar.bottom-nav.auth': {
-        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
-    },
-
-    'button#sidebar.bottom-nav.dashboard': {
-        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
-    },
+    'button#sidebar.bottom-nav.info': SidebarRailUtilityButtonConfig,
+    'button#sidebar.bottom-nav.connect': SidebarRailUtilityButtonConfig,
+    'button#sidebar.bottom-nav.auth': SidebarRailUtilityButtonConfig,
+    'button#sidebar.bottom-nav.dashboard': SidebarRailUtilityButtonConfig,
+    'button#sidebar.toggle': SidebarRailUtilityButtonConfig,
 
     'button#sidebar.bottom-nav.activity': SidebarPopoverButtonConfig,
     'button#sidebar.bottom-nav.credits': SidebarPopoverButtonConfig,
@@ -132,16 +118,14 @@ export const sidebarOverrides = {
 
     /* --- Collapsed sidebar --- */
     'button#sidebar.collapsed-page': {
+        ...SidebarCollapsedTopButtonConfig,
         ui: {
-            base: 'h-[40px] w-[40px] flex items-center justify-center bg-transparent hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 text-[var(--md-on-surface)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] p-0! max-md:min-h-[44px]! max-md:min-w-[44px]!',
-            leadingIcon: 'w-5 h-5',
+            base: 'ring-0! shadow-none!',
+            leadingIcon: 'size-[22px]',
         },
     },
     'button#sidebar.collapsed-page:active': {
-        ui: {
-            base: 'h-[40px] w-[40px] flex items-center justify-center bg-[var(--md-surface-hover)] hover:bg-[var(--md-surface-active)] border-0 text-[var(--md-on-surface)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] p-0! max-md:min-h-[44px]! max-md:min-w-[44px]!',
-            leadingIcon: 'w-5 h-5',
-        },
+        class: 'bg-[var(--md-surface-hover)]!',
     },
 };
 
@@ -257,18 +241,21 @@ export const sidebarCssSelectors = {
     '.page-link-accent-chats .page-link-icon-container': {
         style: {
             background:
-                'color-mix(in srgb, #2a8fd6 14%, var(--md-surface))',
-            color: '#2a8fd6',
+                'color-mix(in srgb, var(--blank-brand-accent) 14%, var(--md-surface))',
+            color: 'var(--blank-brand-accent)',
         },
     },
     '#nav-top-section .iconify': {
         style: {
-            fontSize: '20px !important',
-            width: '20px',
-            height: '20px',
+            fontSize: '22px',
+            width: '22px',
+            height: '22px',
         },
     },
-    '#nav-collapsed-container .iconify': {
+    '#nav-top-section .app-icon:has(> .iconify)': {
+        style: { width: '22px', height: '22px' },
+    },
+    '.bottomnav-root .iconify': {
         style: {
             fontSize: '20px !important',
             width: '20px',
@@ -287,6 +274,7 @@ export const sidebarCssSelectors = {
             flexDirection: 'column',
             alignItems: 'center',
             boxSizing: 'border-box',
+            backdropFilter: 'none',
         },
     },
     '#sidebar-content-collapsed': {
@@ -300,14 +288,29 @@ export const sidebarCssSelectors = {
         style: {
             width: '64px !important',
             borderTop: 'none',
-            paddingBottom: '8px',
-            paddingTop: '4px',
+            paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',
+            paddingTop: '12px',
+            gap: '8px',
         },
     },
     '#nav-pages-section': {
         style: {
             borderTop: 'none',
             alignItems: 'center',
+            position: 'relative',
+            marginTop: '12px',
+            paddingTop: '16px',
+        },
+    },
+    '#nav-pages-section::before': {
+        style: {
+            content: '""',
+            position: 'absolute',
+            top: '0',
+            left: '8px',
+            right: '8px',
+            height: '1px',
+            background: 'color-mix(in srgb, var(--md-on-surface) 12%, transparent)',
         },
     },
     '#nav-top-section': {
@@ -315,6 +318,8 @@ export const sidebarCssSelectors = {
             alignItems: 'center',
             paddingLeft: '0',
             paddingRight: '0',
+            width: '100%',
+            scrollbarWidth: 'none',
         },
     },
     '#nav-top-section .new-chat-wrapper': {
@@ -331,9 +336,30 @@ export const sidebarCssSelectors = {
             textOverflow: 'ellipsis',
         },
     },
-    '.bottomnav-root [data-connection-state] .uppercase': {
+    '.bottomnav-root .sidebar-rail-caption': {
+        style: { display: 'none' },
+    },
+    '.bottomnav-root .sb-bottom-border': {
+        style: { display: 'none' },
+    },
+    '.bottomnav-root [data-connection-state]': {
         style: {
-            letterSpacing: 'normal',
+            position: 'relative',
+        },
+    },
+    '.bottomnav-root .sidebar-connection-status-bar': {
+        style: { display: 'none' },
+    },
+    '.bottomnav-root [data-connection-state="connected"] .sidebar-connection-status-bar': {
+        style: {
+            display: 'block',
+            position: 'absolute',
+            right: '7px',
+            bottom: '7px',
+            width: '5px',
+            height: '5px',
+            borderRadius: '50%',
+            boxShadow: '0 0 0 2px var(--md-surface)',
         },
     },
     '#nav-footer-section': {

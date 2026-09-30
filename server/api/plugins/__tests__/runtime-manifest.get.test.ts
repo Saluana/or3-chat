@@ -42,6 +42,12 @@ vi.mock('../../../admin/plugins/package-route-catalog', () => ({
     },
 }));
 
+const readPackageClientEntryMock = vi.fn();
+vi.mock('../../../admin/plugins/package-client-entry', () => ({
+    readPackageClientEntry: readPackageClientEntryMock as any,
+    PluginPackageClientEntryError: class extends Error {},
+}));
+
 const checkPluginAccessMock = vi.fn();
 vi.mock('../../../utils/plugins/access/require-plugin-access', () => ({
     checkPluginAccess: checkPluginAccessMock as any,
@@ -91,6 +97,11 @@ describe('GET /api/plugins/runtime-manifest', () => {
             status: 'current',
         });
         listSelectedPackagesMock.mockReset().mockResolvedValue([]);
+        readPackageClientEntryMock.mockReset().mockResolvedValue({
+            entry: 'client.mjs',
+            isolation: 'host',
+            digest: 'sha256-' + 'c'.repeat(64),
+        });
         checkPluginAccessMock.mockReset().mockResolvedValue({
             session: { authenticated: true },
             decision: { allowed: true, reasons: [], effectivePolicy: defaultEffectivePolicy },
@@ -285,6 +296,7 @@ describe('GET /api/plugins/runtime-manifest', () => {
                     kind: 'plugin',
                     id: 'package-alpha',
                     name: 'Package Alpha',
+                    icon: 'assets/app-icon.webp',
                     version: '1.0.0',
                     capabilities: [],
                     manifestVersion: 2,
@@ -322,9 +334,57 @@ describe('GET /api/plugins/runtime-manifest', () => {
             descriptor: {
                 manifestVersion: 2,
                 source: 'package',
+                icon: {
+                    path: 'assets/app-icon.webp',
+                    mediaType: 'image/webp',
+                },
                 artifact: {
                     kind: 'package-v2',
                     packageDigest: `sha256-${'a'.repeat(64)}`,
+                },
+            },
+        });
+    });
+
+    it('publishes a selected trusted-host client entry for the proved host loader', async () => {
+        useRuntimeConfigMock.mockReturnValue({
+            admin: {
+                pluginRuntimeLoaderEnabled: true,
+                pluginModuleLoaderV2Enabled: true,
+                pluginModuleLoaderV2WorkspaceIds: ['ws-1'],
+                disableNonCorePlugins: false,
+            },
+        } as any);
+        listSelectedPackagesMock.mockResolvedValue([{
+            status: 'ready',
+            pluginId: 'host-plugin',
+            packageDigest: 'sha256-' + 'a'.repeat(64),
+            routes: [],
+            manifest: {
+                kind: 'plugin', id: 'host-plugin', name: 'Host Plugin', version: '1.0.0',
+                capabilities: [], manifestVersion: 2,
+                engines: { or3: '^0.3.0', pluginApi: '^2.0.0' },
+                runtime: { client: { entry: 'client.mjs', format: 'esm', isolation: 'host' } },
+                requestedGrants: [], features: { required: [], optional: [] },
+                dependencies: { required: [], optional: [] },
+                trust: 'trusted-host', settings: { version: 1 },
+                stateCompatibility: { version: 1, reads: { minimum: 1, maximum: 1 }, rollback: 'safe' },
+            },
+        }]);
+        getEnabledPluginsMock.mockResolvedValue(['host-plugin']);
+
+        const handler = (await import('../runtime-manifest.get')).default as (
+            event: H3Event
+        ) => Promise<any>;
+        const result = await handler(makeEvent());
+        expect(result.runtime['host-plugin']).toMatchObject({
+            descriptorStatus: 'ready',
+            descriptor: {
+                trust: 'trusted-host',
+                artifact: {
+                    kind: 'package-v2',
+                    clientEntry: 'client.mjs',
+                    client: { entry: 'client.mjs', isolation: 'host' },
                 },
             },
         });
@@ -549,6 +609,39 @@ describe('GET /api/plugins/runtime-manifest', () => {
         expect(result.runtime['corrupt-package']).toMatchObject({
             descriptorStatus: 'blocked',
             blockCode: 'package-pointer-unavailable',
+        });
+    });
+
+    it('never serves a legacy directory for an inactive V2-owned identity', async () => {
+        listSelectedPackagesMock.mockResolvedValue([
+            { status: 'inactive', pluginId: 'alpha' },
+        ]);
+        listInstalledExtensionsMock.mockResolvedValue([
+            {
+                kind: 'plugin',
+                id: 'alpha',
+                name: 'Alpha Legacy',
+                version: '9.9.9',
+                capabilities: [],
+                path: '/tmp/alpha-legacy',
+                runtime: { client: { entry: 'plugin.client.ts' } },
+            },
+        ]);
+        getEnabledPluginsMock.mockResolvedValue(['alpha']);
+
+        const handler = (await import('../runtime-manifest.get')).default as (
+            event: H3Event
+        ) => Promise<any>;
+        const result = await handler(makeEvent());
+
+        // The id is installed but V2-owned and selects nothing: it must be
+        // reported unavailable, never loaded from the same-id legacy directory.
+        expect(result.installedPluginIds).toContain('alpha');
+        expect(result.enabledPluginIds).toEqual([]);
+        expect(result.runtime.alpha).toMatchObject({
+            loadAllowed: false,
+            descriptorStatus: 'blocked',
+            blockCode: 'package-inactive',
         });
     });
 

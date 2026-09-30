@@ -1,10 +1,10 @@
 <template>
-    <UModal
+    <AppModal
         :open="open"
         title="Paste your OpenRouter API key"
         @update:open="emit('update:open', $event)"
     >
-        <template #body>
+        <template #default>
             <div class="space-y-4">
                 <p class="text-sm text-[var(--md-on-surface-variant)]">
                     Your key is stored locally in this browser (IndexedDB) and
@@ -18,6 +18,7 @@
                 >
                     <UInput
                         v-model="keyValue"
+                        variant="modal"
                         type="password"
                         placeholder="sk-or-..."
                         :icon="iconKey"
@@ -40,12 +41,12 @@
             </div>
         </template>
         <template #footer>
-            <UButton variant="ghost" class="theme-btn" @click="onCancel">
+            <UButton variant="ghost" size="modal" @click="onCancel">
                 Cancel
             </UButton>
             <UButton
                 color="primary"
-                class="theme-btn"
+                size="modal"
                 :disabled="!keyValue.trim() || isSaving"
                 :loading="isSaving"
                 @click="onSave"
@@ -53,10 +54,11 @@
                 Save key
             </UButton>
         </template>
-    </UModal>
+    </AppModal>
 </template>
 
 <script setup lang="ts">
+import AppModal from '~/components/ui/AppModal.vue';
 import { ref } from 'vue';
 import { useToast } from '#imports';
 import { useIcon } from '~/composables/useIcon';

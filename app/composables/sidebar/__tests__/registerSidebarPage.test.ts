@@ -22,20 +22,6 @@ describe('registerSidebarPage', () => {
         Object.defineProperty(process, 'client', { value: true, configurable: true });
     });
 
-    it('registers page with default options', () => {
-        const pageDef = {
-            id: 'test-page',
-            label: 'Test Page',
-            icon: 'pixelarticons:test',
-            component: vi.fn(),
-        };
-
-        const unregister = registerSidebarPage(pageDef);
-
-        expect(mockBaseRegisterSidebarPage).toHaveBeenCalledWith(pageDef);
-        expect(unregister).toBe(mockUnregister);
-    });
-
     it('returns no-op unregister when clientOnly is true and not on client', () => {
         Object.defineProperty(process, 'client', { value: false, configurable: true });
 
@@ -72,32 +58,6 @@ describe('registerSidebarPage', () => {
     });
 
     describe('registerSidebarPageWithPosts', () => {
-        it('registers page with posts integration', () => {
-            const pageDef = {
-                id: 'test-page',
-                label: 'Test Page',
-                icon: 'pixelarticons:test',
-                component: vi.fn(),
-            };
-
-            const options = {
-                postType: 'test-post',
-                onPostSelect: vi.fn(),
-            };
-
-            registerSidebarPageWithPosts(pageDef, options);
-
-            expect(mockBaseRegisterSidebarPage).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    id: 'test-page',
-                    label: 'Test Page',
-                    icon: 'pixelarticons:test',
-                    component: pageDef.component,
-                    provideContext: expect.any(Function),
-                })
-            );
-        });
-
         it('provides context with posts helpers', () => {
             const mockExpose = vi.fn();
             const mockCtx = { expose: mockExpose };

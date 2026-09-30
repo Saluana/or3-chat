@@ -1,13 +1,13 @@
 <template>
-    <UModal v-model:open="isOpen" :title="title" :description="message">
-        <template #body>
+    <AppModal v-model:open="isOpen" :title="title" :description="message">
+        <template #default>
             <p class="text-sm text-[var(--md-on-surface-variant)]">
                 {{ message }}
             </p>
 
             <div
                 v-if="importantNote"
-                class="mt-3 rounded-[var(--md-border-radius-small,0.375rem)] border-[length:var(--md-border-width)] px-3 py-2 text-xs"
+                class="mt-3 break-words rounded-[var(--md-border-radius-small,0.375rem)] border-[length:var(--md-border-width)] px-3 py-2 text-xs"
                 :class="
                     noteTone === 'warning'
                         ? 'border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] text-[var(--md-sys-color-on-warning-container,#92400e)]'
@@ -16,32 +16,36 @@
             >
                 {{ importantNote }}
             </div>
+            <slot name="details" />
         </template>
 
         <template #footer>
-            <div class="flex gap-2 justify-end">
-                <UButton 
-                    color="neutral" 
-                    variant="soft" 
+            <div class="flex gap-2.5 justify-end">
+                <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="modal"
                     @click="cancel"
                 >
                     Cancel
                 </UButton>
-                <UButton 
-                    :color="danger ? 'error' : 'primary'" 
+                <UButton
+                    :color="danger ? 'error' : 'primary'"
+                    size="modal"
                     @click="confirmAction"
                 >
                     {{ confirmText || 'Confirm' }}
                 </UButton>
             </div>
         </template>
-    </UModal>
+    </AppModal>
 </template>
 
 <script setup lang="ts">
+import AppModal from '~/components/ui/AppModal.vue';
 /**
  * Reusable confirmation dialog component.
- * Uses Nuxt UI v3 UModal with v-model:open for proper overlay behavior.
+ * Uses the shared AppModal shell with v-model:open for overlay behavior.
  */
 
 const isOpen = defineModel<boolean>({ required: true });

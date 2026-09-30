@@ -16,6 +16,8 @@ function descriptor(
         ('sha256-' + 'a'.repeat(64) as `sha256-${string}`);
     return {
         id: 'sample.plugin',
+        name: 'Sample Plugin',
+        effectiveGrants: [],
         version: '1.0.0',
         pluginApiVersion: '2.0.0',
         workspaceId: 'ws-1',

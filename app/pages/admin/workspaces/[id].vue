@@ -48,6 +48,18 @@
                 </div>
             </div>
 
+            <section v-if="workspace.pluginProvisioningRepairs?.length" class="min-w-0 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-amber-500 p-4" aria-label="Plugin setup at workspace creation">
+                <h2 class="font-medium">Plugin setup needs attention</h2>
+                <p class="mt-1 text-sm">These results were recorded when this workspace was created. Open the rollout to check its current result.</p>
+                <ul class="mt-3 space-y-2">
+                    <li v-for="(repair, index) in workspace.pluginProvisioningRepairs" :key="index" class="min-w-0 break-words text-sm">
+                        {{ repair.message }}
+                        <NuxtLink v-if="repair.pluginId && repair.operationId" class="ml-2 text-[var(--md-primary)] underline" :to="{ path: '/admin/plugins', query: { plugin: repair.pluginId, rollout: repair.operationId } }">Open rollout</NuxtLink>
+                        <NuxtLink v-else class="ml-2 text-[var(--md-primary)] underline" to="/admin/plugins">Review plugins</NuxtLink>
+                    </li>
+                </ul>
+            </section>
+
             <!-- Info Card -->
             <div class="p-6 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
                 <h2 class="text-lg font-medium mb-4">Workspace Information</h2>
@@ -238,6 +250,7 @@ import type { WorkspaceSummary, WorkspaceMemberInfo } from '~/types/global';
 interface Workspace extends WorkspaceSummary {
     members?: WorkspaceMemberInfo[];
     guestAccessEnabled: boolean;
+    pluginProvisioningRepairs?: Array<{ pluginId: string | null; operationId: string | null; message: string }>;
 }
 
 definePageMeta({

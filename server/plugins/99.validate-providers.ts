@@ -1,5 +1,5 @@
 /**
- * @module server/plugins/01.validate-providers.ts
+ * @module server/plugins/99.validate-providers.ts
  *
  * Purpose:
  * Strict-mode validation for provider registrations.
@@ -38,6 +38,13 @@ export default defineNitroPlugin(() => {
                     `Install the provider package that registers it (e.g. or3-provider-${authProviderId}).`
             );
         }
+        const workspaceStores = listAuthWorkspaceStoreIds();
+        if (!workspaceStores.includes(config.sync.provider)) {
+            errors.push(
+                `AuthWorkspaceStore for "${config.sync.provider}" is not registered. ` +
+                    `Install the provider package that registers it (e.g. or3-provider-${config.sync.provider}).`
+            );
+        }
     }
 
     if (config.sync.enabled) {
@@ -46,13 +53,6 @@ export default defineNitroPlugin(() => {
         if (!syncAdapters.includes(syncProviderId)) {
             errors.push(
                 `sync.provider "${syncProviderId}" is not registered. ` +
-                    `Install the provider package that registers it (e.g. or3-provider-${syncProviderId}).`
-            );
-        }
-        const workspaceStores = listAuthWorkspaceStoreIds();
-        if (!workspaceStores.includes(syncProviderId)) {
-            errors.push(
-                `AuthWorkspaceStore for "${syncProviderId}" is not registered. ` +
                     `Install the provider package that registers it (e.g. or3-provider-${syncProviderId}).`
             );
         }

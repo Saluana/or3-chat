@@ -6,32 +6,27 @@
         fullscreen
         title="Open tabs"
         description="Switch, close, or open another workspace tab."
+        :content="dialogContent"
         data-testid="workspace-tab-switcher"
     >
-        <template #header="{ close }">
-            <div class="workspace-tab-switcher-header">
-                <div class="workspace-tab-switcher-heading">
-                    <h2 class="workspace-tab-switcher-title">Open tabs</h2>
-                    <UBadge
-                        color="neutral"
-                        variant="soft"
-                        size="sm"
-                        class="workspace-tab-switcher-count"
-                    >
-                        {{ tabs.length }}
-                    </UBadge>
-                </div>
-                <UButton
-                    v-theme="'shell.tab-close'"
-                    v-bind="closeHeaderButtonProps"
-                    class="theme-btn"
-                    square
-                    :icon="closeIcon"
-                    aria-label="Close"
-                    title="Close"
-                    @click="close()"
-                />
-            </div>
+        <template #title>
+            <span class="workspace-tab-switcher-heading">
+                <span class="workspace-tab-switcher-title">Open tabs</span>
+                <UBadge color="neutral" variant="soft" size="sm" class="workspace-tab-switcher-count" aria-hidden="true">
+                    {{ tabs.length }}
+                </UBadge>
+            </span>
+        </template>
+        <template #close>
+            <UButton
+                v-theme="'shell.tab-close'"
+                v-bind="closeHeaderButtonProps"
+                class="theme-btn"
+                square
+                :icon="closeIcon"
+                aria-label="Close"
+                title="Close"
+            />
         </template>
 
         <template #body>
@@ -95,8 +90,9 @@
                         @click="activate(tab.id)"
                     >
                         <span class="workspace-tab-switcher-icon-wrap">
-                            <UIcon
-                                :name="iconFor(tab)"
+                            <AppIcon
+                                :image="props.imageByTabId?.get(tab.id)"
+                                :icon="iconFor(tab)"
                                 class="workspace-tab-switcher-icon"
                             />
                         </span>
@@ -163,6 +159,7 @@
 </template>
 
 <script setup lang="ts">
+import { useDialogFocus } from '~/composables/ui/useDialogFocus';
 import { computed, ref, watch } from 'vue';
 import type { WorkspaceTab, WorkspaceTabStatus } from '~/core/workspace-tabs/types';
 import {
@@ -177,6 +174,7 @@ import {
 } from '~/core/workspace-tabs/display';
 import { useIcon } from '~/composables/useIcon';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import AppIcon from '~/components/ui/AppIcon.vue';
 
 const props = withDefaults(
     defineProps<{
@@ -184,11 +182,13 @@ const props = withDefaults(
         activeTabId: string;
         statusByTabId?: ReadonlyMap<string, WorkspaceTabStatus>;
         iconByTabId?: ReadonlyMap<string, string | undefined>;
+        imageByTabId?: ReadonlyMap<string, string | undefined>;
         canReopenClosed?: boolean;
     }>(),
     {
         statusByTabId: undefined,
         iconByTabId: undefined,
+        imageByTabId: undefined,
         canReopenClosed: false,
     }
 );
@@ -216,18 +216,20 @@ const modalProps = useThemeOverrides({
     identifier: 'shell.tab-switcher',
     isNuxtUI: true,
 });
+const dialogContent = useDialogFocus(undefined, () => 'fullscreen');
 
 /** Keep surface chrome even when a theme paints default modal headers primary. */
 const switcherModalUi = {
     content:
         'workspace-tab-switcher !bg-[var(--md-surface)] !text-[var(--md-on-surface)] !divide-[color:var(--md-border-color)]',
     header:
-        'workspace-tab-switcher-header-slot relative flex w-full items-center justify-between gap-2 !border-b !border-[color:var(--md-border-color)] !bg-[var(--md-surface)] !text-[var(--md-on-surface)] px-4 sm:px-5 pt-[max(0.55rem,env(safe-area-inset-top))] min-h-[2.75rem]',
+        'workspace-tab-switcher-header-slot relative flex shrink-0 w-full items-center justify-between gap-2 !border-b !border-[color:var(--md-border-color)] !bg-[var(--md-surface)] !text-[var(--md-on-surface)] px-4 sm:px-5 pt-[max(0.55rem,env(safe-area-inset-top))] min-h-[2.75rem]',
     title: '!text-[var(--md-on-surface)]',
-    description: '!text-[var(--md-on-surface-variant)]',
-    body: 'workspace-tab-switcher-body !bg-[var(--md-surface)] !text-[var(--md-on-surface)] px-4 sm:px-5',
+    description: 'sr-only!',
+    wrapper: 'min-w-0 flex-1',
+    body: 'workspace-tab-switcher-body min-h-0 !bg-[var(--md-surface)] !text-[var(--md-on-surface)] px-4 sm:px-5',
     footer:
-        'workspace-tab-switcher-footer !border-t !border-[color:var(--md-border-color)] !bg-[var(--md-surface)] px-4 sm:px-5 pt-2.5 pb-[max(0.7rem,env(safe-area-inset-bottom))]',
+        'workspace-tab-switcher-footer shrink-0 !border-t !border-[color:var(--md-border-color)] !bg-[var(--md-surface)] px-4 sm:px-5 pt-2.5 pb-[max(0.7rem,env(safe-area-inset-bottom))]',
     close: '!text-[var(--md-on-surface)]',
 };
 
@@ -476,13 +478,6 @@ function onNewTab(): void {
     background: var(--md-surface) !important;
     color: var(--md-on-surface) !important;
 }
-.workspace-tab-switcher-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    width: 100%;
-}
 .workspace-tab-switcher-heading {
     display: flex;
     align-items: center;
@@ -662,5 +657,14 @@ function onNewTab(): void {
     color: var(--md-on-primary);
     background: var(--md-primary);
     border: var(--md-border-width, 1px) solid var(--md-primary);
+}
+</style>
+<style>
+@layer utilities {
+@media (max-width: 767px), (pointer: coarse) {
+    .workspace-tab-switcher[role=dialog] button { min-height: 44px !important; }
+    .workspace-tab-switcher[role=dialog] [data-slot=header] button,
+    .workspace-tab-switcher-card > button:last-child { min-width: 44px !important; }
+}
 }
 </style>

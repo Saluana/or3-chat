@@ -1,7 +1,7 @@
 # Dependency Cleanup and Upgrade Checklist
 
 **Scope:** `or3-chat` root package only  
-**Status:** Phases 1–4 implemented; phases 5–8 are now tracked by `planning/nuxt-vue-vite-upgrade/`
+**Status:** Phases 1–4 implemented; phases 5–8 are now tracked by `planning/complete/nuxt-vue-vite-upgrade/`
 **Prepared:** 2026-07-21
 
 Implementation notes for phases 1–4:

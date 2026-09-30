@@ -48,8 +48,8 @@ export async function ensureThreadHistoryLoaded(
 
         all.sort(compareMessageOrder);
 
-        // Retry-superseded turns stay in storage but leave the branch: later
-        // sends and reloads reconstruct only the selected branch.
+        // Retry-superseded turns stay in storage but leave the visible
+        // transcript; unrelated later turns remain in their original order.
         const visible = withoutSupersededMessages(all);
 
         const nextMessages = projectTranscriptForOpenRouter(

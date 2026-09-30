@@ -1,0 +1,31 @@
+{
+  "connections": [],
+  "fields": [
+    {
+      "choices": [
+        "action-items",
+        "key-points",
+        "outline",
+        "rewrite-clear",
+        "summary"
+      ],
+      "default": "outline",
+      "key": "defaultTransform",
+      "kind": "select",
+      "label": "Default transformation",
+      "order": 1,
+      "required": false
+    }
+  ],
+  "firstAction": {
+    "label": "Transform the selected document",
+    "operationId": "documents.write",
+    "usesSampleContext": false
+  },
+  "settingsSchemaPath": "settings.schema.json",
+  "setupVersion": 1,
+  "testAction": {
+    "deadlineMs": 5000,
+    "operationId": "documents.read"
+  }
+}

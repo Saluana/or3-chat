@@ -219,6 +219,24 @@ describe('HookBridge', () => {
         expect(second.pendingOps).toHaveLength(0);
     });
 
+    it('does not let a plugin filter remove built-in local-only keys', () => {
+        hookState.applyFiltersSync.mockReturnValue([]);
+        const { db } = makeDbWithHookableTable(['kv', 'pending_ops', 'tombstones']);
+        const bridge = new HookBridge(db as any);
+        const { tx, pendingOps } = makeTx(['kv', 'pending_ops']);
+
+        (bridge as any).captureWrite(tx, 'kv', 'put', 'kv:openrouter_api_key', {
+            id: 'kv:openrouter_api_key',
+            name: 'openrouter_api_key',
+            value: 'secret',
+            created_at: 1,
+            updated_at: 1,
+            clock: 1,
+        });
+
+        expect(pendingOps).toHaveLength(0);
+    });
+
     it('skips pending/corrupt message payloads and auto-generates order_key', () => {
         const { db } = makeDbWithHookableTable(['messages', 'pending_ops', 'tombstones']);
         const bridge = new HookBridge(db as any);

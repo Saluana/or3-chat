@@ -58,6 +58,7 @@ export interface PaletteCoordinator {
         sourceId: string,
         resourceKey: string
     ): PaletteResource | undefined;
+    searchSource(sourceId: string, term: string, limit: number): Promise<PaletteResult[]>;
     hydratePreview(
         result: PaletteResult,
         options?: { signal?: AbortSignal }
@@ -325,6 +326,22 @@ export function createPaletteCoordinator(options?: {
         if (warmPromise) return warmPromise;
         requestedWarmVersion += 1;
         return startWarm();
+    }
+
+    async function searchSource(sourceId: string, term: string, limit: number): Promise<PaletteResult[]> {
+        const generation = workspaceGeneration;
+        if (warmPromise) await warmPromise;
+        else if (!bound.get(sourceId)?.ready) await ensureWarm();
+        if (disposed || generation !== workspaceGeneration) {
+            throw new Error('The workspace changed during search.');
+        }
+        const entry = bound.get(sourceId);
+        if (!entry?.ready) throw new Error('Document search is unavailable right now.');
+        const search = await entry.index.search({ term, limit });
+        if (disposed || generation !== workspaceGeneration) {
+            throw new Error('The workspace changed during search.');
+        }
+        return search.results.slice(0, limit);
     }
 
     function setQuery(raw: string): void {
@@ -628,6 +645,7 @@ export function createPaletteCoordinator(options?: {
             return () => listeners.delete(listener);
         },
         ensureWarm,
+        searchSource,
         refreshSources,
         retrySource,
         getResource,

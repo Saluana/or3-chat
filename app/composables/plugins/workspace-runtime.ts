@@ -22,6 +22,9 @@ import type {
     PaletteCommandHandler,
     PalettePostSourceDefinition,
 } from '~/core/search/command-palette/types';
+import { getActivityRegistry } from '~/core/activity/registry';
+import { registerPluginActivitySource } from '~/core/activity/adapters/plugin-sdk';
+import type { PluginActivitySource } from '@or3/plugin-sdk';
 
 export type WorkspacePluginSource = 'builtin' | 'extension';
 
@@ -43,6 +46,7 @@ export interface Or3WorkspacePluginApi {
         definition: PaletteCommandDefinition,
         handler: PaletteCommandHandler
     ) => RegistrationHandle;
+    registerActivitySource: (source: PluginActivitySource) => RegistrationHandle;
     onCleanup: (fn: () => void | Promise<void>) => void;
 }
 
@@ -92,7 +96,14 @@ export interface ManagedWorkspacePluginRuntime {
     dispose: (reason?: unknown) => Promise<LegacyCleanupReport>;
 }
 
-/** Internal manager adapter. The public V1 factory below intentionally hides its report. */
+/**
+ * Internal registry adapter for the unified trusted host runtime.
+ *
+ * `createTrustedHostContext` is the host entry. Bundled V1 modules and
+ * tactics-style `register(api)` plugins receive `workspaceApi` from that
+ * context; this factory is not a second authoring surface. The V1 factory
+ * below hides the cleanup report for existing callers.
+ */
 export function createManagedWorkspacePluginRuntime(options?: {
     pluginId?: string;
 }): ManagedWorkspacePluginRuntime {
@@ -105,6 +116,7 @@ export function createManagedWorkspacePluginRuntime(options?: {
             }
         },
     });
+    const activityOwner = { namespace: `plugin.${crypto.randomUUID()}`, signal: scope.signal };
     const { registerPaneApp } = usePaneApps();
     const tools = useToolRegistry();
 
@@ -179,6 +191,17 @@ export function createManagedWorkspacePluginRuntime(options?: {
             const handle = registerPaletteCommand(definition, handler, {
                 pluginId: palettePluginId,
             });
+            scope.onCleanup(() => {
+                handle.dispose();
+            });
+            return handle;
+        },
+        registerActivitySource(source) {
+            const handle = registerPluginActivitySource(
+                getActivityRegistry(),
+                source,
+                activityOwner
+            );
             scope.onCleanup(() => {
                 handle.dispose();
             });

@@ -394,6 +394,19 @@ export const PushBatchSchema = z
         }
     });
 
+export const PushWinnerSchema = z.discriminatedUnion('kind', [
+    z.object({
+        kind: z.literal('put'),
+        payload: z.record(z.string(), z.unknown()),
+        revision: z.object({ clock: z.number().int().nonnegative(), hlc: z.string().min(1), opId: z.string().min(1) }),
+    }),
+    z.object({
+        kind: z.literal('delete'),
+        revision: z.object({ clock: z.number().int().nonnegative(), hlc: z.string().min(1), opId: z.string().min(1) }),
+        serverDeletedAt: z.number().nonnegative().optional(),
+    }),
+]);
+
 export const PushResultItemSchema = z.object({
     opId: z.string().min(1),
     success: z.boolean(),
@@ -404,6 +417,8 @@ export const PushResultItemSchema = z.object({
     payload: z.unknown().optional(),
     wasExisting: z.boolean().optional(),
     applied: z.boolean().optional(),
+    replayed: z.boolean().optional(),
+    winner: PushWinnerSchema.optional(),
     errorCode: z
         .enum([
             'VALIDATION_ERROR',
@@ -417,6 +432,21 @@ export const PushResultItemSchema = z.object({
             'UNKNOWN',
         ])
         .optional(),
+}).superRefine((result, ctx) => {
+    if (result.replayed && !result.success) {
+        ctx.addIssue({
+            code: 'custom',
+            path: ['replayed'],
+            message: 'A replayed operation must be successful',
+        });
+    }
+    if (result.replayed && result.applied === false && !result.winner) {
+        ctx.addIssue({
+            code: 'custom',
+            path: ['winner'],
+            message: 'A superseded replay requires the current winner',
+        });
+    }
 });
 
 export const PushResultSchema = z

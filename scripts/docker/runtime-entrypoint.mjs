@@ -97,6 +97,33 @@ setDefault(
     'NUXT_BACKGROUND_JOBS_ENCRYPTION_KEY',
     firstDefined(env.OR3_BACKGROUND_ENCRYPTION_KEY)
 );
+// Plugin connection credential key. It is a runtime secret, never a build
+// default: a prebuilt image must receive it here, and rotating it makes existing
+// ciphertexts undecryptable, so credentials must be re-entered after a change.
+setDefault(
+    'NUXT_ADMIN_PLUGIN_CONNECTION_SECRET',
+    firstDefined(env.OR3_PLUGIN_CONNECTION_SECRET)
+);
+// Library link credential key. Runtime secret like the connection key: a
+// prebuilt image must receive it here, and rotating it invalidates existing
+// links so the user reconnects.
+setDefault(
+    'NUXT_ADMIN_LIBRARY_LINK_SECRET',
+    firstDefined(env.OR3_LIBRARY_LINK_SECRET)
+);
+// Plugin model allowlist and trusted prices. These are operator configuration
+// for prebuilt images: without the translation the server resolver would read
+// an empty runtime config even though the operator set the documented OR3_
+// variables. The shared parsers accept the comma-separated list and the JSON
+// price table as strings.
+setDefault(
+    'NUXT_ADMIN_PLUGIN_ALLOWED_MODELS',
+    firstDefined(env.OR3_PLUGIN_ALLOWED_MODELS)
+);
+setDefault(
+    'NUXT_ADMIN_PLUGIN_MODEL_PRICES',
+    firstDefined(env.OR3_PLUGIN_MODEL_PRICES)
+);
 
 const [command, ...args] = process.argv.slice(2);
 if (!command) throw new Error('A server command is required.');

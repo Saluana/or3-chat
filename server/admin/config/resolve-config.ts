@@ -251,6 +251,7 @@ export function buildOr3CloudConfigFromEnv(
         strictEnv: env.OR3_STRICT_CONFIG ?? process.env.OR3_STRICT_CONFIG,
     });
     if (
+        authEnabled && env.OR3_WIZARD_UI_ENABLED !== 'true' &&
         env.OR3_BACKGROUND_STREAMING_ENABLED === 'true' &&
         (env.OR3_BACKGROUND_ENCRYPTION_KEY?.trim().length ?? 0) < 32
     ) {

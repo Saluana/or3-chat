@@ -76,6 +76,13 @@ a snippet or description, key metadata, and a thumbnail for images. Previews are
 read-only and never navigate on their own. If a preview cannot be loaded the
 palette says so and still lets you open the result.
 
+On short screens, including the visible area above a phone keyboard, the preview
+is hidden so search results and actions retain space. Secondary actions collapse
+behind **More** and scroll when expanded. With very little vertical space, use
+**Actions** and **Results** beside the query to switch between the two panels.
+The close control remains visible in landscape. The dialog follows Safari’s
+visible viewport when its keyboard opens or pans the page.
+
 ## Actions
 
 Every result has a primary action — usually *Open* — plus optional secondary
@@ -112,4 +119,4 @@ restyle the palette along with the rest of the app.
 ## Extending it
 
 Plugins can contribute their own searchable records and commands. See
-[Command palette plugin contracts](/plugins/command-palette).
+[Command palette plugin contracts](/documentation/plugins/plugin-sdk).

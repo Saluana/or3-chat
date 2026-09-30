@@ -1,11 +1,13 @@
 import { defineNuxtPlugin } from '#app';
+import { nextTick, watch } from 'vue';
 import { getActivityRegistry } from '~/core/activity/registry';
 import {
     createBackgroundChatActivitySource,
     type BackgroundChatActivityRecord,
     type BackgroundChatActivityUpdate,
 } from '~/core/activity/adapters/background-chat';
-import { getDb } from '~/db/client';
+import { getActiveWorkspaceId, getDb } from '~/db/client';
+import { getCachedSessionContext, useSessionContext } from '~/composables/auth/useSessionContext';
 import type { Message } from '~/db';
 import {
     abortBackgroundJob,
@@ -13,6 +15,8 @@ import {
 } from '~/utils/chat/openrouterStream';
 import {
     backgroundJobTrackers,
+    ensureBackgroundJobTracker,
+    refreshPendingClientToolsForWorkspace,
     subscribeBackgroundJob,
     subscribeBackgroundJobTrackerLifecycle,
 } from '~/utils/chat/useAi-internal/backgroundJobs';
@@ -22,6 +26,62 @@ import type {
 } from '~/utils/chat/useAi-internal/types';
 
 const MAX_RECENT_BACKGROUND_MESSAGES = 250;
+
+async function restoreDetachedBackgroundTrackers(): Promise<void> {
+    const db = getDb();
+    const workspaceId = getActiveWorkspaceId() ?? 'local';
+    const userId = getCachedSessionContext()?.user?.id ?? '';
+    const rows = await db.messages
+        .orderBy('updated_at')
+        .reverse()
+        .filter((message) => {
+            if (message.role !== 'assistant' || message.pending !== true) return false;
+            const data = dataRecord(message);
+            return typeof data?.background_job_id === 'string' && data.background_job_status === 'streaming';
+        })
+        .limit(MAX_RECENT_BACKGROUND_MESSAGES)
+        .toArray();
+    if (
+        getDb() !== db ||
+        (getActiveWorkspaceId() ?? 'local') !== workspaceId ||
+        (getCachedSessionContext()?.user?.id ?? '') !== userId
+    ) return;
+    for (const message of rows) {
+        if (message.role !== 'assistant' || message.pending !== true) continue;
+        const data = dataRecord(message);
+        const jobId = data?.background_job_id;
+        if (
+            typeof jobId !== 'string' ||
+            data?.background_job_status !== 'streaming'
+        ) continue;
+        ensureBackgroundJobTracker({
+            jobId,
+            userId,
+            threadId: message.thread_id,
+            messageId: message.id,
+            originDb: db,
+            workspaceId,
+            canonicalHistory: data.background_history_version === 1,
+            generationId:
+                typeof data.generation_id === 'string'
+                    ? data.generation_id
+                    : undefined,
+            initialContent:
+                typeof data.content === 'string'
+                    ? data.content
+                    : '',
+            initialReasoning:
+                typeof data.reasoning_text === 'string'
+                    ? data.reasoning_text
+                    : '',
+            initialAttempt:
+                typeof data.background_job_attempt === 'number'
+                    ? data.background_job_attempt
+                    : undefined,
+            useSse: false,
+        });
+    }
+}
 
 function dataRecord(message: Message): Record<string, unknown> | undefined {
     return message.data &&
@@ -202,6 +262,22 @@ function subscribeToBackgroundActivity(
 }
 
 export default defineNuxtPlugin(() => {
+    const { data: sessionData } = useSessionContext();
+    watch(
+        [
+            () => sessionData.value?.session?.workspace?.id,
+            () => sessionData.value?.session?.user?.id,
+        ],
+        () => {
+            void nextTick().then(async () => {
+                await restoreDetachedBackgroundTrackers();
+                refreshPendingClientToolsForWorkspace(getActiveWorkspaceId() ?? 'local');
+            }).catch(() => {
+                // The next session/workspace refresh retries durable discovery.
+            });
+        },
+        { immediate: true }
+    );
     const source = createBackgroundChatActivitySource({
         store: {
             list: recentBackgroundRecords,

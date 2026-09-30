@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import { basename, resolve, sep } from 'node:path';
-import { PerPluginLifecycleMutex } from '../../../shared/plugins/lifecycle-coordinator';
+import { PerPluginLifecycleMutex } from '~~/shared/plugins/lifecycle-coordinator';
 import type { Sha256 } from '../../../shared/plugins/runtime-descriptor';
 import { EXTENSIONS_BASE_DIR } from '../extensions/paths';
 import { AdvisoryPluginOperationLock } from './package-operation-lock';
@@ -134,7 +134,9 @@ export class ImmutablePluginPackageStore {
     ): Promise<T> {
         assertPluginId(pluginId);
         return this.#mutex.runExclusive(pluginId, async () => {
-            const lease = await this.#processLock.acquire(pluginId);
+            // A remote owner's stale heartbeat is not proof it stopped: a paused
+            // runner could otherwise resume after takeover and commit out of order.
+            const lease = await this.#processLock.acquire(pluginId, { requireDeadOwner: true });
             try {
                 return await operation();
             } finally {

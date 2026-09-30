@@ -48,8 +48,10 @@ describe('WorkspaceNewTabControl', () => {
     it('opens a create menu on right-click with available kinds', async () => {
         const wrapper = mountControl({
             canCreateDocument: true,
-            canCreateWorkflow: true,
-            canCreateAgent: true,
+            pluginItems: [
+                { id: 'or3-workflows', label: 'New workflow' },
+                { id: 'or3-external-agent', label: 'New agent session' },
+            ],
         });
         await wrapper.get('.workspace-tab-new').trigger('contextmenu', {
             clientX: 40,
@@ -70,7 +72,7 @@ describe('WorkspaceNewTabControl', () => {
 
         items[2]!.click();
         await wrapper.vm.$nextTick();
-        expect(wrapper.emitted('create')).toEqual([['workflow']]);
+        expect(wrapper.emitted('create')).toEqual([['or3-workflows']]);
         expect(
             document.body.querySelector('.workspace-new-tab-menu')
         ).toBeNull();
@@ -80,8 +82,7 @@ describe('WorkspaceNewTabControl', () => {
     it('hides unavailable create kinds', async () => {
         const wrapper = mountControl({
             canCreateDocument: true,
-            canCreateWorkflow: false,
-            canCreateAgent: false,
+            pluginItems: [],
         });
         await wrapper.get('.workspace-tab-new').trigger('contextmenu');
         expect(menuItems().map((item) => item.textContent?.trim())).toEqual([

@@ -68,6 +68,27 @@ function resourceEqual(a: WorkspaceResource, b: WorkspaceResource): boolean {
     return false;
 }
 
+/**
+ * Whether a pane's current tab already shows the resource the pane reports.
+ * A record-less app pane describes itself by the runtime pane id, while the same
+ * app opened as a tab is keyed by its own instance, so the two identities never
+ * compare equal. An existing binding to the same record-less app is the same
+ * view and must be kept, or every focus of that pane opens a second tab.
+ */
+function boundResourceMatches(
+    bound: WorkspaceResource,
+    reported: WorkspaceResource
+): boolean {
+    if (resourceEqual(bound, reported)) return true;
+    if (bound.kind !== 'app' || reported.kind !== 'app') return false;
+    if (bound.recordId || reported.recordId) return false;
+    return (
+        bound.appId === reported.appId &&
+        Boolean(bound.instanceKey) &&
+        Boolean(reported.instanceKey)
+    );
+}
+
 export interface WorkspaceTabsOptions {
     host: WorkspaceTabHost;
     paneLimit: Ref<number> | ComputedRef<number>;
@@ -529,7 +550,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
     ): string | null {
         const currentTabId = state.value.paneBindings.get(paneId);
         const current = currentTabId ? tabById(currentTabId) : undefined;
-        if (current && resourceEqual(current.resource, resource)) return current.id;
+        if (current && boundResourceMatches(current.resource, resource)) return current.id;
         if (
             current?.ephemeral &&
             current.resource.kind === 'chat' &&

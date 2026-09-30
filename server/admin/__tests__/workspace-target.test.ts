@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AdminRequestContext } from '../context';
-import { resolveAdminWorkspaceTarget } from '../workspace-target';
+import { assertExpectedAdminWorkspace, resolveAdminWorkspaceTarget } from '../workspace-target';
 
 const workspaceAdmin: AdminRequestContext = {
     principal: {
@@ -41,5 +41,12 @@ describe('resolveAdminWorkspaceTarget', () => {
         expect(() =>
             resolveAdminWorkspaceTarget(workspaceAdmin, 'workspace-b')
         ).toThrow(/does not match session/i);
+    });
+});
+
+describe('assertExpectedAdminWorkspace', () => {
+    it('refuses a mutation prepared for a previous session workspace', () => {
+        expect(() => assertExpectedAdminWorkspace(workspaceAdmin, 'workspace-b')).toThrow(/Active workspace changed/);
+        expect(() => assertExpectedAdminWorkspace(workspaceAdmin, 'workspace-a')).not.toThrow();
     });
 });

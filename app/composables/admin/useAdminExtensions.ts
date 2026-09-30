@@ -48,6 +48,7 @@ export type ExtensionInstallResult =
           readonly workspaceId: string;
           readonly status: 'candidate-stored';
           readonly packageDigest: string;
+          readonly grantReviewRequired?: boolean;
           readonly restartRequired: false;
       };
 

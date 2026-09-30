@@ -4,6 +4,7 @@
  * Purpose:
  * Removes a workspace.
  */
+import { requireCloudMutation } from '../../utils/security/cloud-mutation';
 import { defineEventHandler, createError, getRouterParam } from 'h3';
 import {
     requireWorkspaceSession,
@@ -15,6 +16,7 @@ import { invalidateSharedSessionCacheForIdentity } from '../../auth/session';
 import { useRuntimeConfig } from '#imports';
 
 export default defineEventHandler(async (event) => {
+    requireCloudMutation(event);
     const session = await requireWorkspaceSession(event);
     const store = resolveWorkspaceStore(event);
 

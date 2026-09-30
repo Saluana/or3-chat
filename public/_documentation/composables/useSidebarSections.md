@@ -104,7 +104,7 @@ Each `SidebarFooterActionEntry` contains the original action and `disabled` bool
 ## Edge cases & tips
 
 -   **Async components**: When `component` is a lazy import, Nuxt handles suspense; consider showing an internal loading indicator for better UX.
--   **Collapsed sidebar**: Use the `isCollapsed` flag inside footer action predicates to hide text-heavy buttons.
+-   **Collapsed sidebar**: Footer actions render as square icon buttons; labels remain available to screen readers and in tooltips. Use the `isCollapsed` flag inside predicates when an action needs a different presentation. Navigation scrolls independently above the pinned footer on short windows.
 -   **Multiple registrations**: Re-registering with the same `id` replaces the previous entry—handy for overrides.
 -   **Testing**: Mock `createRegistry` for deterministic unit tests.
 

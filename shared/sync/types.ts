@@ -196,6 +196,11 @@ export type SyncErrorCode =
     | 'SERVER_ERROR'          // Internal server error
     | 'UNKNOWN';              // Unclassified error
 
+/** Current materialized winner when a pushed revision did not win LWW. */
+export type PushWinner =
+    | { kind: 'put'; payload: Record<string, unknown>; revision: SnapshotRevision }
+    | { kind: 'delete'; revision: SnapshotRevision; serverDeletedAt?: number };
+
 /**
  * Result of a push operation
  */
@@ -211,6 +216,10 @@ export interface PushResult {
         payload?: unknown;
         wasExisting?: boolean;
         applied?: boolean;
+        /** The op_id was already committed; no new server version was allocated. */
+        replayed?: boolean;
+        /** Authoritative current record (or tombstone) when applied is false. */
+        winner?: PushWinner;
     }>;
     serverVersion: number;
 }

@@ -1,79 +1,83 @@
 <template>
-    <div class="document-lazy-editor-host flex flex-col h-full w-full min-h-0">
-        <Suspense @resolve="handleEditorResolved">
-            <template #default>
-                <DocumentEditorRoot
-                    :key="renderKey"
-                    :document-id="documentId"
-                    :pane-id="paneId"
-                    :tab-id="tabId"
-                />
-            </template>
-            <template #fallback>
+    <div class="document-lazy-editor-host relative flex flex-col h-full w-full min-h-0">
+        <DocumentEditorRoot
+            :key="renderKey"
+            :document-id="documentId"
+            :pane-id="paneId"
+            :tab-id="tabId"
+            :class="{ 'invisible pointer-events-none': !editorReady }"
+            :aria-hidden="!editorReady"
+            @ready="handleEditorReady"
+        />
+        <div
+            v-if="!editorReady"
+            class="absolute inset-0"
+            role="status"
+            aria-label="Loading document editor"
+        >
+            <div
+                class="document-editor-skeleton flex flex-col h-full w-full bg-[var(--md-surface)]"
+            >
+                <!-- Skeleton Header -->
                 <div
-                    class="document-editor-skeleton flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
+                    class="document-editor-skeleton-header flex items-center justify-between sm:justify-center px-3 pt-2 pb-2 gap-2"
                 >
-                    <!-- Skeleton Header -->
                     <div
-                        class="document-editor-skeleton-header flex items-center justify-between sm:justify-center px-3 pt-2 pb-2 gap-2"
-                    >
-                        <div
-                            class="document-editor-skeleton-title retro-document-skeleton-item flex-1 max-w-[60%] h-8 bg-neutral-300/30 dark:bg-neutral-700/30 animate-pulse"
-                        ></div>
-                        <div
-                            class="document-editor-skeleton-status retro-document-skeleton-item flex-1 max-w-[60%] h-8 bg-neutral-300/30 dark:bg-neutral-700/30 animate-pulse"
-                        ></div>
-                    </div>
-
-                    <!-- Skeleton Toolbar -->
+                        class="document-editor-skeleton-title retro-document-skeleton-item flex-1 max-w-[60%] h-8 bg-[var(--md-surface-variant)] animate-pulse"
+                    ></div>
                     <div
-                        class="document-editor-skeleton-toolbar retro-document-skeleton-toolbar flex gap-2 px-3 py-2"
-                    >
-                        <div
-                            v-for="i in 8"
-                            :key="i"
-                            class="document-editor-skeleton-toolbar-item retro-document-skeleton-item--sm w-8 h-8 bg-neutral-300/30 dark:bg-neutral-700/30 animate-pulse"
-                        ></div>
-                    </div>
+                        class="document-editor-skeleton-status retro-document-skeleton-item flex-1 max-w-[60%] h-8 bg-[var(--md-surface-variant)] animate-pulse"
+                    ></div>
+                </div>
 
-                    <!-- Skeleton Content -->
-                    <div class="document-editor-skeleton-content flex-1 overflow-hidden px-8 py-4">
-                        <div class="space-y-3 max-w-[820px] mx-auto">
-                            <div
-                                v-for="i in 5"
-                                :key="`line-${i}`"
-                                class="document-editor-skeleton-line retro-document-skeleton-item h-4 bg-neutral-300/30 dark:bg-neutral-700/30"
-                                :style="{
-                                    width: `${85 + Math.random() * 15}%`,
-                                }"
-                            ></div>
-                        </div>
-                    </div>
-
-                    <!-- Error & Retry (shown after timeout) -->
+                <!-- Skeleton Toolbar -->
+                <div
+                    class="document-editor-skeleton-toolbar retro-document-skeleton-toolbar flex gap-2 px-3 py-2"
+                >
                     <div
-                        v-if="showErrorMessage"
-                        class="document-editor-error-overlay absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-                    >
+                        v-for="i in 8"
+                        :key="i"
+                        class="document-editor-skeleton-toolbar-item retro-document-skeleton-item--sm w-8 h-8 bg-[var(--md-surface-variant)] animate-pulse"
+                    ></div>
+                </div>
+
+                <!-- Skeleton Content -->
+                <div class="document-editor-skeleton-content flex-1 overflow-hidden px-8 py-4">
+                    <div class="space-y-3 max-w-[820px] mx-auto">
                         <div
-                            class="document-editor-error-card retro-document-error-card bg-white dark:bg-neutral-900 p-6 max-w-md text-center"
-                        >
-                            <p
-                                class="document-editor-error-text text-red-600 dark:text-red-400 mb-4"
-                            >
-                                Failed to load editor. Please try again.
-                            </p>
-                            <UButton
-                                v-bind="retryButtonProps"
-                                @click="retryLoad"
-                            >
-                                Retry
-                            </UButton>
-                        </div>
+                            v-for="i in 5"
+                            :key="`line-${i}`"
+                            class="document-editor-skeleton-line retro-document-skeleton-item h-4 bg-[var(--md-surface-variant)]"
+                            :style="{
+                                width: `${90 - (i % 3) * 10}%`,
+                            }"
+                        ></div>
                     </div>
                 </div>
-            </template>
-        </Suspense>
+
+                <!-- Error & Retry (shown after timeout) -->
+                <div
+                    v-if="showErrorMessage"
+                    class="document-editor-error-overlay absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+                >
+                    <div
+                        class="document-editor-error-card retro-document-error-card bg-white dark:bg-neutral-900 p-6 max-w-md text-center"
+                    >
+                        <p
+                            class="document-editor-error-text text-red-600 dark:text-red-400 mb-4"
+                        >
+                            Failed to load editor. Please try again.
+                        </p>
+                        <UButton
+                            v-bind="retryButtonProps"
+                            @click="retryLoad"
+                        >
+                            Retry
+                        </UButton>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -97,6 +101,7 @@ const props = defineProps<{
 const emit = defineEmits<{ error: [error: Error] }>();
 
 const showErrorMessage = ref(false);
+const editorReady = ref(false);
 let timeoutId: ReturnType<typeof setTimeout> | null = null;
 let isMounted = false;
 const renderKey = ref(0);
@@ -140,12 +145,15 @@ function clearErrorTimeout() {
 
 function retryLoad() {
     showErrorMessage.value = false;
+    editorReady.value = false;
     clearErrorTimeout();
     startErrorTimeout();
     renderKey.value += 1;
 }
 
-function handleEditorResolved() {
+function handleEditorReady(documentId: string) {
+    if (documentId !== props.documentId) return;
+    editorReady.value = true;
     clearErrorTimeout();
     showErrorMessage.value = false;
 }
@@ -167,6 +175,7 @@ onBeforeUnmount(() => {
 watch(
     () => props.documentId,
     () => {
+        editorReady.value = false;
         showErrorMessage.value = false;
         clearErrorTimeout();
         startErrorTimeout();

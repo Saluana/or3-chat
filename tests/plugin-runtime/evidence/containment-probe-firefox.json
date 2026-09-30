@@ -1,0 +1,144 @@
+{
+  "recordedAt": "2026-09-17T16:43:56.735Z",
+  "project": "firefox",
+  "targets": {
+    "hostOrigin": "http://127.0.0.1:3121",
+    "http": "http://127.0.0.1:3121/or3-containment/target",
+    "script": "http://127.0.0.1:3121/or3-containment/target.js",
+    "socket": "ws://127.0.0.1:59968/"
+  },
+  "control": [
+    {
+      "channel": "struct.document",
+      "outcome": "blocked",
+      "note": "self.document"
+    },
+    {
+      "channel": "struct.frameElement",
+      "outcome": "blocked",
+      "note": "self.frameElement"
+    },
+    {
+      "channel": "struct.cookie",
+      "outcome": "blocked",
+      "note": "self.cookie"
+    },
+    {
+      "channel": "struct.localStorage",
+      "outcome": "blocked",
+      "note": "self.localStorage"
+    },
+    {
+      "channel": "struct.sessionStorage",
+      "outcome": "blocked",
+      "note": "self.sessionStorage"
+    },
+    {
+      "channel": "storage.indexedDB",
+      "outcome": "reachable",
+      "note": "opened"
+    },
+    {
+      "channel": "network.fetch",
+      "outcome": "reachable",
+      "note": "status 200"
+    },
+    {
+      "channel": "network.fetch-same-origin",
+      "outcome": "reachable",
+      "note": "status 200"
+    },
+    {
+      "channel": "network.xmlHttpRequest",
+      "outcome": "reachable",
+      "note": "status 200"
+    },
+    {
+      "channel": "network.webSocket",
+      "outcome": "inconclusive",
+      "note": "the harness did not supply a socket target for this run"
+    },
+    {
+      "channel": "imports.importScripts",
+      "outcome": "reachable",
+      "note": "imported"
+    },
+    {
+      "channel": "imports.dynamicRemote",
+      "outcome": "reachable",
+      "note": "imported:0"
+    },
+    {
+      "channel": "workers.nested",
+      "outcome": "reachable",
+      "note": "{\"settled\":2,\"expected\":2,\"fetch\":\"denied:TypeError\",\"indexedDbOpen\":\"opened\"}"
+    }
+  ],
+  "sandbox": [
+    {
+      "channel": "struct.document",
+      "outcome": "blocked",
+      "note": "self.document"
+    },
+    {
+      "channel": "struct.frameElement",
+      "outcome": "blocked",
+      "note": "self.frameElement"
+    },
+    {
+      "channel": "struct.cookie",
+      "outcome": "blocked",
+      "note": "self.cookie"
+    },
+    {
+      "channel": "struct.localStorage",
+      "outcome": "blocked",
+      "note": "self.localStorage"
+    },
+    {
+      "channel": "struct.sessionStorage",
+      "outcome": "blocked",
+      "note": "self.sessionStorage"
+    },
+    {
+      "channel": "storage.indexedDB",
+      "outcome": "blocked",
+      "note": "IDBFactory.open: The operation is insecure"
+    },
+    {
+      "channel": "network.fetch",
+      "outcome": "blocked",
+      "note": "NetworkError when attempting to fetch resource."
+    },
+    {
+      "channel": "network.fetch-same-origin",
+      "outcome": "blocked",
+      "note": "NetworkError when attempting to fetch resource."
+    },
+    {
+      "channel": "network.xmlHttpRequest",
+      "outcome": "blocked",
+      "note": "xhr error"
+    },
+    {
+      "channel": "network.webSocket",
+      "outcome": "blocked",
+      "note": "[Exception... \"The load for this content was blocked.\"  nsresult: \"0x805e0006 (NS_ERROR_CONTENT_BLOCKED)\"  location: \"JS frame :: blob:null/e58572e9-b2be-408f-8b5d-7130b46b0b49 :: probe/</< :: line 10"
+    },
+    {
+      "channel": "imports.importScripts",
+      "outcome": "blocked",
+      "note": "A network error occurred."
+    },
+    {
+      "channel": "imports.dynamicRemote",
+      "outcome": "blocked",
+      "note": "error loading dynamically imported module: http://127.0.0.1:3121/or3-containment/target.js"
+    },
+    {
+      "channel": "workers.nested",
+      "outcome": "blocked",
+      "note": "{\"settled\":2,\"expected\":2,\"indexedDbOpen\":\"denied:SecurityError\",\"fetch\":\"denied:TypeError\"}"
+    }
+  ]
+}

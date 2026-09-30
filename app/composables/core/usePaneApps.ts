@@ -30,6 +30,9 @@ export interface PaneAppDef {
     /** Optional Iconify icon name. */
     icon?: string;
 
+    /** Optional validated app image URL. */
+    image?: string;
+
     /** Vue component or async component factory. */
     component: Component | (() => Promise<Component>);
 
@@ -46,6 +49,14 @@ export interface PaneAppDef {
     createInitialRecord?: (ctx: {
         app: PaneAppDef;
     }) => Promise<{ id: string } | null>;
+
+    /** Optional new-tab menu contribution. A null result cancels creation. */
+    newTab?: {
+        label: string;
+        icon?: string;
+        isAvailable?: () => boolean;
+        createRecordId: () => Promise<string | null>;
+    };
 
     /**
      * Optional ordering (lower = earlier in sorted lists). Defaults to 200.
@@ -79,6 +90,7 @@ const PaneAppDefSchema = z.object({
         .min(1, 'Label is required')
         .max(100, 'Label must be 100 characters or less'),
     icon: z.string().optional(),
+    image: z.string().min(1).optional(),
     component: z.any(), // Cannot strictly validate Vue component shape at runtime
     order: z
         .number()
@@ -88,6 +100,12 @@ const PaneAppDefSchema = z.object({
         .optional(),
     postType: z.string().optional(),
     createInitialRecord: z.function().optional(),
+    newTab: z.object({
+        label: z.string().min(1),
+        icon: z.string().optional(),
+        isAvailable: z.function().optional(),
+        createRecordId: z.function(),
+    }).optional(),
     pluginId: z.string().optional(),
     access: z.unknown().optional(),
     replaceRecordInCurrentTab: z.boolean().optional(),

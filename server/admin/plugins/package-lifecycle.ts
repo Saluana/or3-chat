@@ -75,13 +75,21 @@ export class PluginPackageLifecycleService {
      * Removes package selection (pointer) but retains immutable trees and data
      * until a distinct confirmed data/GC call.
      */
-    async uninstallPackage(pluginId: string): Promise<{
+    async uninstallPackage(pluginId: string, confirmed: { expectedPackageDigest: string; workspaceIds: readonly string[] }): Promise<{
         readonly pluginId: string;
         readonly pointerCleared: true;
         readonly retainedPackageDigests: readonly Sha256[];
     }> {
         return this.packages.runPluginOperation(pluginId, async () => {
             const pointer = await this.pointers.readPointer(pluginId);
+            if (pointer?.current?.packageDigest !== confirmed.expectedPackageDigest) {
+                throw new Error('Selected package changed; refresh before uninstalling.');
+            }
+            // The pointer is instance-wide. Fail closed if any workspace write
+            // fails: already-disabled workspaces stay safe and a retry can finish.
+            for (const workspaceId of new Set(confirmed.workspaceIds)) {
+                await setPluginEnabled(this.settings, workspaceId, pluginId, false);
+            }
             const digests = collectPointerDigests(pointer);
             const cleared: PluginPackagePointer = {
                 schemaVersion: 1,

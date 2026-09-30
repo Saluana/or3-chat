@@ -13,7 +13,9 @@ import {
 } from '~~/shared/cloud/provider-ids';
 
 const root = resolve(import.meta.dirname, '../..');
-const rootManifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as {
+const rootManifest = JSON.parse(
+    readFileSync(resolve(root, 'package.json'), 'utf8'),
+) as {
     dependencies?: Record<string, string>;
     devDependencies?: Record<string, string>;
 };
@@ -43,9 +45,10 @@ describe('installed provider package contract', () => {
             const { path, manifest } = readProviderManifest(packageName);
             expect(manifest.name).toBe(packageName);
             const nuxtExport = manifest.exports?.['./nuxt'];
-            const target = typeof nuxtExport === 'string'
-                ? nuxtExport
-                : nuxtExport?.import;
+            const target =
+                typeof nuxtExport === 'string'
+                    ? nuxtExport
+                    : nuxtExport?.import;
             expect(target).toBeTruthy();
             expect(existsSync(resolve(path, '..', target!))).toBe(true);
 
@@ -58,7 +61,9 @@ describe('installed provider package contract', () => {
 
 describe('provider stack contract parity', () => {
     it('keeps canonical provider ID lists aligned with shipped contracts', () => {
-        for (const [id, contract] of Object.entries(PROVIDER_PACKAGE_CONTRACTS)) {
+        for (const [id, contract] of Object.entries(
+            PROVIDER_PACKAGE_CONTRACTS,
+        )) {
             if (contract.roles.includes('auth')) {
                 expect(AUTH_PROVIDER_ID_LIST).toContain(id);
             }
@@ -82,7 +87,10 @@ describe('provider stack contract parity', () => {
             for (const [role, id] of selections) {
                 if (!id) continue;
                 const contract = PROVIDER_PACKAGE_CONTRACTS[id];
-                expect(contract, `${stack.id} has unknown ${role} provider ${id}`).toBeDefined();
+                expect(
+                    contract,
+                    `${stack.id} has unknown ${role} provider ${id}`,
+                ).toBeDefined();
                 expect(contract!.roles).toContain(role);
                 readProviderManifest(contract!.packageName);
             }
@@ -94,4 +102,71 @@ describe('provider stack contract parity', () => {
             }
         },
     );
+});
+
+// Real package layouts protect resolution semantics, not a mock implementation.
+describe('configured module entry resolution', () => {
+    it('resolves import exports, linked packages and local entries without evaluating them', async () => {
+        const { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } =
+            await import('node:fs');
+        const { tmpdir } = await import('node:os');
+        const { resolveModuleEntry } =
+            await import('../../shared/config/module-resolution');
+        const fixture = mkdtempSync(resolve(tmpdir(), 'or3-modules-'));
+        try {
+            const source = resolve(fixture, 'source');
+            mkdirSync(source);
+            writeFileSync(
+                resolve(source, 'module.mjs'),
+                'throw new Error("must not execute during resolution");',
+            );
+            writeFileSync(
+                resolve(source, 'package.json'),
+                JSON.stringify({
+                    name: '@vendor/provider',
+                    type: 'module',
+                    exports: {
+                        '.': { import: './module.mjs' },
+                        './nuxt': { import: './module.mjs' },
+                        './missing': './absent.mjs',
+                    },
+                }),
+            );
+            mkdirSync(resolve(fixture, 'node_modules/@vendor'), {
+                recursive: true,
+            });
+            symlinkSync(
+                source,
+                resolve(fixture, 'node_modules/@vendor/provider'),
+            );
+            symlinkSync(source, resolve(fixture, 'node_modules/provider'));
+            for (const id of [
+                '@vendor/provider',
+                '@vendor/provider/nuxt',
+                'provider',
+                'provider/nuxt',
+                './source/module.mjs',
+                resolve(source, 'module.mjs'),
+            ]) {
+                const result = resolveModuleEntry(id, fixture);
+                expect(result.ok, id).toBe(true);
+                if (result.ok)
+                    expect(readFileSync(result.entry, 'utf8')).toContain(
+                        'must not execute',
+                    );
+            }
+            for (const id of [
+                '@vendor/absent/nuxt',
+                '@vendor/provider/private',
+                '@vendor/provider/missing',
+                '@vendor',
+                'node:fs',
+                '../absent.ts',
+            ]) {
+                expect(resolveModuleEntry(id, fixture).ok, id).toBe(false);
+            }
+        } finally {
+            rmSync(fixture, { recursive: true, force: true });
+        }
+    });
 });

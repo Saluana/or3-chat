@@ -1,5 +1,11 @@
 # Object Storage Layer
 
+Authenticated storage writes (presign upload, commit, delete, and GC) require
+JSON plus `x-or3-cloud-intent: mutation` from browser callers. The server
+checks the exact origin against its effective request origin or
+`OR3_ALLOWED_ORIGINS` before parsing the body. Originless API requests require
+bearer authorization and no cookie.
+
 The OR3 Storage Layer handles large binary assets (images, PDFs) separately from the main database sync. It uses a **local-first, hash-addressed** architecture to ensure assets are always available offline once downloaded.
 
 ---
