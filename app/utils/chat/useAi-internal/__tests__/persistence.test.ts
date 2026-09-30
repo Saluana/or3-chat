@@ -45,6 +45,7 @@ describe('latest-row assistant persistence', () => {
                 updated_at: 999,
             }),
             initial,
+            undefined,
         );
         const patch = patchMessage.mock.calls[0]![2] as Record<string, unknown>;
         expect(patch).not.toHaveProperty('content');
@@ -70,6 +71,7 @@ describe('latest-row assistant persistence', () => {
                 data: expect.objectContaining({ reasoning_text: null }),
             }),
             initial,
+            undefined,
         );
 
         patchMessage.mockClear();
@@ -81,6 +83,7 @@ describe('latest-row assistant persistence', () => {
                 data: expect.objectContaining({ tool_calls: [] }),
             }),
             initial,
+            undefined,
         );
     });
 
@@ -98,6 +101,7 @@ describe('latest-row assistant persistence', () => {
                 updated_at: 999,
             }),
             null,
+            undefined,
         );
     });
 });

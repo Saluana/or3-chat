@@ -494,7 +494,8 @@ describe('continue/retry regressions', () => {
                     generation_state: 'interrupted',
                 }),
             }),
-            target
+            target,
+            expect.any(Function)
         );
         expect(reportErrorSpy).toHaveBeenCalled();
     });

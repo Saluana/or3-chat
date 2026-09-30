@@ -17,7 +17,10 @@ vi.mock('#imports', () => ({
 }));
 vi.mock('~/db/files', () => ({ getFileBlob: factory.getFileBlob }));
 vi.mock('~/utils/errors', () => ({ reportError: factory.reportError }));
-vi.mock('@vueuse/core', () => ({ onKeyStroke: factory.onKeyStroke }));
+vi.mock('@vueuse/core', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@vueuse/core')>()),
+    onKeyStroke: factory.onKeyStroke,
+}));
 
 function stubObjectUrl(
     createObjectURL: ReturnType<typeof vi.fn>,

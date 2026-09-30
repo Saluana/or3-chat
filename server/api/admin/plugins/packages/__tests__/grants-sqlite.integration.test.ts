@@ -5,10 +5,10 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createApp, createRouter, toNodeListener } from 'h3';
-import { initializeSqliteDb, destroySqliteDb, _resetForTest } from '../../../../../../../or3-provider-sqlite/src/runtime/server/db/kysely';
-import { runMigrations } from '../../../../../../../or3-provider-sqlite/src/runtime/server/db/migrate';
-import { SqliteAuthWorkspaceStore } from '../../../../../../../or3-provider-sqlite/src/runtime/server/auth/sqlite-auth-workspace-store';
-import { createSqliteWorkspaceAccessStore, createSqliteWorkspaceSettingsStore } from '../../../../../../../or3-provider-sqlite/src/runtime/server/admin/stores/sqlite-store';
+import { initializeSqliteDb, destroySqliteDb, _resetForTest } from '~~/node_modules/or3-provider-sqlite-tests/src/runtime/server/db/kysely.ts';
+import { runMigrations } from '~~/node_modules/or3-provider-sqlite-tests/src/runtime/server/db/migrate.ts';
+import { SqliteAuthWorkspaceStore } from '~~/node_modules/or3-provider-sqlite-tests/src/runtime/server/auth/sqlite-auth-workspace-store.ts';
+import { createSqliteWorkspaceAccessStore, createSqliteWorkspaceSettingsStore } from '~~/node_modules/or3-provider-sqlite-tests/src/runtime/server/admin/stores/sqlite-store.ts';
 import { ImmutablePluginPackageStore } from '../../../../../admin/plugins/package-store';
 import { getPluginGrantReview, setPluginEnabled } from '../../../../../admin/plugins/workspace-plugin-store';
 import type { WorkspaceSettingsStore } from '../../../../../admin/stores/types';
@@ -25,7 +25,6 @@ const candidate = { requestedGrants: ['settings.read'], releaseId: 'rel_bulk', p
 vi.mock('../../../../../admin/api', () => ({ requireAdminApiContext: async () => ({
     principal: { kind: 'super_admin', username: 'test-admin' }, session: { workspace: { id: testState.workspaceIds[0] }, user: { id: 'test-admin' } },
 }) }));
-vi.mock('../../../../../admin/workspace-target', () => ({ resolveAdminWorkspaceTarget: (context: { session: { workspace: { id: string } } }) => context.session.workspace.id }));
 vi.mock('../../../../../admin/stores/registry', () => ({ getWorkspaceSettingsStore: () => testState.settings }));
 vi.mock('../../../../../admin/plugins/package-operation-support', () => ({ pluginPackageServices: () => ({
     settings: testState.settings, packages: new ImmutablePluginPackageStore(testState.root), pointers: { readPointer: async () => null },

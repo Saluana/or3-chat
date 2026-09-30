@@ -207,6 +207,7 @@
         "eslint": "^9.39.5",
         "fake-indexeddb": "^5.0.2",
         "jsdom": "^25.0.1",
+        "or3-provider-sqlite-tests": "git+https://github.com/Saluana/or3-provider-sqlite.git#92f1262369029ad514904b236d3a94dee782c7f3",
         "tailwindcss": "4.3.3",
         "tsx": "^4.23.15",
         "typescript": "^5.9.3",

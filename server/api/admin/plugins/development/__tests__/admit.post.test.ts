@@ -55,7 +55,7 @@ const setGrantReviewMock = vi.fn(async () => ({ status: 'current', requestedGran
 vi.mock('../../../../../admin/plugins/package-operation-support', () => ({
     pluginPackageServices: () => ({
         packages: {},
-        pointers: {},
+        pointers: { readPointer: async () => null },
         migration: { getStateVersion: async () => 1 },
         candidates: { prepare: () => prepareMock() },
     }),

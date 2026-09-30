@@ -11,7 +11,7 @@ vi.mock('../../stores/registry', () => ({
 }));
 vi.mock('../package-store', () => ({
     ImmutablePluginPackageStore: class {
-        packagePath() { return resolve(import.meta.dirname, '../../../../../or3-plugin-workflows'); }
+        packagePath() { return resolve(import.meta.dirname, '../../../../examples/plugins/dashboard-insights-v2'); }
         runPluginOperation(_id: string, fn: () => unknown) { return fn(); }
         verifyStoredPackage() { throw new Error('damaged package'); }
     },
@@ -38,7 +38,7 @@ describe('real package setup classification', () => {
         accessGet.mockReset();
         accessGet.mockResolvedValue({ ownerUserId: 'owner', deleted: false });
     });
-    it('allows a trusted Workflows package with no setup descriptors', async () => {
+    it('allows a trusted host package with no setup descriptors', async () => {
         const coordinator = rolloutCoordinatorFor({ context: {} } as never);
         expect(await coordinator.deps.checkSetup('ws-1', 'or3-workflows', digest)).toBe('ready');
     });

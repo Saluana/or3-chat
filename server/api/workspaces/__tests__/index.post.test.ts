@@ -82,7 +82,8 @@ describe('POST /api/workspaces', () => {
         });
         expect(provisionWorkspaceDefaultsMock).toHaveBeenCalledWith(
             expect.any(Object),
-            'ws-created'
+            'ws-created',
+            { name: 'New Workspace', ownerUserId: 'user-1' }
         );
     });
 
