@@ -53,22 +53,21 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useIcon } from '~/composables/useIcon';
 
-export type WorkspaceNewTabCreateKind =
-    | 'chat'
-    | 'document'
-    | 'workflow'
-    | 'agent';
+export type WorkspaceNewTabCreateKind = string;
+export interface WorkspaceNewTabItem {
+    id: string;
+    label: string;
+    icon?: string;
+}
 
 const props = withDefaults(
     defineProps<{
         canCreateDocument?: boolean;
-        canCreateWorkflow?: boolean;
-        canCreateAgent?: boolean;
+        pluginItems?: readonly WorkspaceNewTabItem[];
     }>(),
     {
         canCreateDocument: false,
-        canCreateWorkflow: false,
-        canCreateAgent: false,
+        pluginItems: () => [],
     }
 );
 
@@ -83,17 +82,13 @@ const menuElement = ref<HTMLElement | null>(null);
 const trigger = ref<HTMLButtonElement | null>(null);
 
 const tooltip = computed(() =>
-    props.canCreateDocument || props.canCreateWorkflow || props.canCreateAgent
+    props.canCreateDocument || props.pluginItems.length > 0
         ? 'New chat · right-click or press ↓ for more'
         : 'New chat'
 );
 
 const items = computed(() => {
-    const next: Array<{
-        id: WorkspaceNewTabCreateKind;
-        label: string;
-        icon?: string;
-    }> = [
+    const next: WorkspaceNewTabItem[] = [
         { id: 'chat', label: 'New chat', icon: 'i-lucide-message-square' },
     ];
     if (props.canCreateDocument) {
@@ -103,20 +98,7 @@ const items = computed(() => {
             icon: 'i-lucide-file-plus',
         });
     }
-    if (props.canCreateWorkflow) {
-        next.push({
-            id: 'workflow',
-            label: 'New workflow',
-            icon: 'i-lucide-git-branch',
-        });
-    }
-    if (props.canCreateAgent) {
-        next.push({
-            id: 'agent',
-            label: 'New agent session',
-            icon: 'i-lucide-bot',
-        });
-    }
+    next.push(...props.pluginItems);
     return next;
 });
 

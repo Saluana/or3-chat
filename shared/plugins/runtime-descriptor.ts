@@ -25,13 +25,13 @@ export interface BundledV1ArtifactIdentity {
 }
 
 /**
- * The digest-addressed client entry a contained sandbox will run. The digest is
+ * The digest-addressed client entry selected for a contained or trusted host runtime. The digest is
  * the host's own hash of the immutable stored bytes, so the browser can verify
  * what it was served instead of trusting the package or the network.
  */
 export interface PackageV2ClientEntry {
     readonly entry: string;
-    readonly isolation: 'iframe' | 'worker';
+    readonly isolation: 'iframe' | 'worker' | 'host';
     readonly digest: Sha256;
 }
 

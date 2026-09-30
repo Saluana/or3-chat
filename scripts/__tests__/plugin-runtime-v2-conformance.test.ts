@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { checkV2PackageConformance } from '../plugin-runtime/check-v2-package-conformance';
+import { checkV2PackageConformance as checkSdkConformance } from '../../packages/plugin-sdk/src/cli/conformance';
+import { moduleSpecifiers } from '../../packages/plugin-sdk/src/conformance-engine';
 
 const repoRoot = resolve(import.meta.dirname, '../..');
 const fixtures = resolve(repoRoot, 'tests/plugin-runtime/v2-conformance');
@@ -72,12 +74,53 @@ describe('Plugin V2 package conformance', () => {
         expect(await issueCodes(root)).not.toContain('nuxt-auto-import');
     });
 
+    it('accepts minified host imports in the packed artifact without hiding real bare imports', async () => {
+        const root = copyValidFixture();
+        writeFileSync(resolve(root, 'client.mjs'),
+            'import{computed as c,onMounted as m,ref as r}from"vue";const value=c(()=>r(1));export default {value,m};\n');
+        const valid = await checkSdkConformance(root, { mode: 'artifact' });
+        expect(valid.status).toBe('conformant');
+
+        writeFileSync(resolve(root, 'client.mjs'),
+            'import{computed as c}from"vue";import missing from"undeclared-package";export default c(missing);\n');
+        const invalid = await checkSdkConformance(root, { mode: 'artifact' });
+        expect(invalid.issues.map((entry) => entry.code)).toContain('unresolved-bare-import');
+    });
+
+    it('only treats from as a module specifier when it belongs to an import or export', () => {
+        expect(moduleSpecifiers('Review the output from "${G}" before continuing.')).toEqual([]);
+        expect(moduleSpecifiers('import{value}from"vue";export{value}from"module";')).toEqual([
+            'vue',
+            'module',
+        ]);
+    });
+
     it('rejects unresolved bare imports outside the host external allowlist', async () => {
         const root = copyValidFixture();
         writeFileSync(
             resolve(root, 'client.mjs'),
             "import leftPad from 'left-pad'; export default leftPad;\n"
         );
+        expect(await issueCodes(root)).toContain('unresolved-bare-import');
+    });
+
+    it('accepts declared build dependencies for a trusted host source package', async () => {
+        const root = copyValidFixture();
+        const manifestPath = resolve(root, 'or3.manifest.json');
+        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+        manifest.trust = 'trusted-host';
+        manifest.runtime.client.isolation = 'host';
+        writeFileSync(manifestPath, JSON.stringify(manifest));
+        const packagePath = resolve(root, 'package.json');
+        const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
+        packageJson.dependencies['or3-workflow-core'] = '0.1.4';
+        writeFileSync(packagePath, JSON.stringify(packageJson));
+        writeFileSync(resolve(root, 'client.mjs'),
+            "import { compile } from 'or3-workflow-core'; export default compile;\n");
+
+        expect(await issueCodes(root)).not.toContain('unresolved-bare-import');
+        writeFileSync(resolve(root, 'client.mjs'),
+            "import missing from 'undeclared-package'; export default missing;\n");
         expect(await issueCodes(root)).toContain('unresolved-bare-import');
     });
 
@@ -122,5 +165,17 @@ describe('Plugin V2 package conformance', () => {
         expect(await issueCodes(root)).toEqual(
             expect.arrayContaining(['sdk-range-mismatch', 'plugin-api-range-mismatch'])
         );
+    });
+
+    it('rejects a server route path the host installer cannot accept', async () => {
+        const root = copyValidFixture();
+        const manifestPath = resolve(root, 'or3.manifest.json');
+        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+        manifest.runtime.server = {
+            routes: [{ method: 'POST', path: '/workflows/background', handler: 'server/background.mjs' }],
+        };
+        writeFileSync(manifestPath, JSON.stringify(manifest));
+
+        expect(await issueCodes(root)).toContain('server-route-path-invalid');
     });
 });

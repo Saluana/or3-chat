@@ -87,6 +87,62 @@ async function setup(stateCompatibility: {
 }
 
 describe('PluginPackagePromotionService', () => {
+    it('refuses promotion when site approval was removed before the pointer commit', async () => {
+        const { service, pointers, current, candidate } = await setup();
+        const migrateState = vi.fn();
+        const result = await service.promote({
+            pluginId: 'alpha', workspaceId: 'workspace-1',
+            expectedCandidateDigest: candidate.digest,
+            storedStateVersion: 1,
+            verifySiteApproval: async () => false,
+            snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: currentGrantReview,
+            restoreState: vi.fn(),
+            migrateState,
+        });
+        expect(result).toMatchObject({ status: 'blocked', stage: 'policy', code: 'site-approval-required' });
+        expect((await pointers.readPointer('alpha'))?.current?.packageDigest).toBe(current.digest);
+        expect(migrateState).not.toHaveBeenCalled();
+    });
+
+    it('rechecks affected workspaces inside the commit lock before changing the shared version', async () => {
+        const { service, pointers, current, candidate } = await setup();
+        const preflightWorkspaces = vi.fn().mockResolvedValue({
+            blocking: [{ workspaceId: 'workspace-2', code: 'setup-required' }],
+        });
+        const result = await service.promote({
+            pluginId: 'alpha', workspaceId: 'workspace-1',
+            expectedCandidateDigest: candidate.digest,
+            storedStateVersion: 1,
+            snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: currentGrantReview,
+            restoreState: vi.fn(),
+            preflightWorkspaces,
+        });
+        expect(preflightWorkspaces).toHaveBeenCalledOnce();
+        expect(result).toMatchObject({ status: 'blocked', stage: 'workspaces', code: 'workspace-preflight-blocked' });
+        expect((await pointers.readPointer('alpha'))?.current?.packageDigest).toBe(current.digest);
+    });
+
+    it('preserves a live settings edit when an eligible promotion is blocked by workspace preflight', async () => {
+        const { service, candidate } = await setup();
+        let liveSettings = { count: 1 };
+        const result = await service.promote({
+            pluginId: 'alpha', workspaceId: 'workspace-1',
+            expectedCandidateDigest: candidate.digest,
+            storedStateVersion: 1,
+            snapshotState: () => ({ settings: { ...liveSettings } }),
+            readGrantReview: currentGrantReview,
+            restoreState: async (snapshot) => { liveSettings = { ...(snapshot as { settings: { count: number } }).settings }; },
+            preflightWorkspaces: async () => {
+                liveSettings = { count: 2 };
+                return { blocking: [{ workspaceId: 'workspace-2', code: 'setup-required' }] };
+            },
+        });
+        expect(result).toMatchObject({ status: 'blocked', stage: 'workspaces' });
+        expect(liveSettings).toEqual({ count: 2 });
+    });
+
     it('promotes a canary-backed candidate and keeps previous for rollback', async () => {
         const { service, pointers, current, candidate } = await setup();
         const result = await service.promote({
@@ -203,7 +259,7 @@ describe('PluginPackagePromotionService', () => {
         clearHostActivationsForTests();
     });
 
-    it('restores state and leaves current unchanged when promotion fails before pointer swap', async () => {
+    it('leaves untouched state and current selection unchanged when promotion fails before pointer swap', async () => {
         const { service, pointers, current, candidate } = await setup();
         const restoreState = vi.fn(async () => undefined);
         const result = await service.promote({
@@ -223,7 +279,7 @@ describe('PluginPackagePromotionService', () => {
             stage: 'migration',
             currentPointerUnchanged: true,
         });
-        expect(restoreState).toHaveBeenCalledOnce();
+        expect(restoreState).not.toHaveBeenCalled();
         const pointer = await pointers.readPointer('alpha');
         expect(pointer?.current?.packageDigest).toBe(current.digest);
         expect(pointer?.candidate?.packageDigest).toBe(candidate.digest);
@@ -383,6 +439,30 @@ describe('PluginPackagePromotionService', () => {
         expect(result).toMatchObject({ status: 'promoted' });
         expect(restoreState).not.toHaveBeenCalled();
         expect((await pointers.readPointer('alpha'))?.current?.packageDigest).toBe(candidate.digest);
+    });
+
+    it('preserves a live settings edit when a safe rollback pointer write fails', async () => {
+        const { service, candidate } = await setup();
+        await service.promote({
+            pluginId: 'alpha', workspaceId: 'workspace-1',
+            expectedCandidateDigest: candidate.digest, storedStateVersion: 1,
+            snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: currentGrantReview, restoreState: vi.fn(),
+        });
+        let liveSettings = { count: 1 };
+        const result = await service.rollback({
+            pluginId: 'alpha', storedStateVersion: 1,
+            snapshotState: () => ({ settings: { ...liveSettings } }),
+            restoreState: async (snapshot) => { liveSettings = { ...(snapshot as { settings: { count: number } }).settings }; },
+            pointerWriteOptions: { fault: (step) => {
+                if (step === 'before-temp-write') {
+                    liveSettings = { count: 2 };
+                    throw new Error('forced-pointer-write-failure');
+                }
+            } },
+        });
+        expect(result).toMatchObject({ status: 'blocked', stage: 'pointer-write' });
+        expect(liveSettings).toEqual({ count: 2 });
     });
 
     it('recovers from a corrupt current by committing the verified previous target', async () => {
@@ -625,6 +705,68 @@ describe('PluginPackagePromotionService', () => {
             code: 'rollback-unsupported',
             currentPointerUnchanged: true,
         });
+        const globallyReviewed = await service.rollback({
+            pluginId: 'alpha', preflightWorkspaces: async () => ({ checked: 0, blocking: [] }),
+            storedStateVersion: null, snapshotState: () => ({ settings: {} }), restoreState: vi.fn(),
+        });
+        expect(globallyReviewed).toMatchObject({ status: 'blocked', stage: 'state', code: 'rollback-unsupported' });
+        expect(await pointers.readPointer('alpha')).toEqual(before);
+    });
+
+    it('refuses rollback when another enabled workspace cannot read the previous release', async () => {
+        const { service, pointers, current, candidate } = await setup();
+        await service.promote({
+            pluginId: 'alpha', workspaceId: 'workspace-1', expectedCandidateDigest: candidate.digest,
+            storedStateVersion: 1, snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: currentGrantReview, restoreState: vi.fn(), now: () => 200,
+        });
+        const before = await pointers.readPointer('alpha');
+        const preflightWorkspaces = vi.fn(async () => ({ checked: 2, blocking: [{ workspaceId: 'workspace-2', code: 'state-incompatible' }] }));
+        const rolled = await service.rollback({
+            pluginId: 'alpha', expectedCurrentDigest: candidate.digest, expectedPreviousDigest: current.digest,
+            expectedPointerRevision: before!.revision, preflightWorkspaces,
+            storedStateVersion: 1, snapshotState: () => ({ settings: {} }), restoreState: vi.fn(),
+        });
+        expect(rolled).toMatchObject({ status: 'blocked', stage: 'workspaces', code: 'workspace-preflight-blocked' });
+        expect(preflightWorkspaces).toHaveBeenCalled();
+        expect(await pointers.readPointer('alpha')).toEqual(before);
+    });
+
+    it('uses the reviewed enabled-workspace preflight instead of disabled admin workspace state', async () => {
+        const { service, pointers, current, candidate } = await setup();
+        await service.promote({
+            pluginId: 'alpha', workspaceId: 'workspace-1', expectedCandidateDigest: candidate.digest,
+            storedStateVersion: 1, snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: currentGrantReview, restoreState: vi.fn(), now: () => 200,
+        });
+        const before = await pointers.readPointer('alpha');
+        const snapshotState = vi.fn(() => ({ settings: {} }));
+        const rolled = await service.rollback({
+            pluginId: 'alpha', expectedCurrentDigest: candidate.digest, expectedPreviousDigest: current.digest,
+            expectedPointerRevision: before!.revision,
+            preflightWorkspaces: async () => ({ checked: 1, blocking: [] }),
+            storedStateVersion: 999, snapshotState, restoreState: vi.fn(),
+        });
+        expect(rolled.status).toBe('rolled-back');
+        expect(snapshotState).not.toHaveBeenCalled();
+    });
+
+    it('refuses a stale expected current version before changing workspace state', async () => {
+        const { service, pointers, current, candidate } = await setup();
+        await service.promote({
+            pluginId: 'alpha', workspaceId: 'workspace-1', expectedCandidateDigest: candidate.digest,
+            storedStateVersion: 1, snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: currentGrantReview, restoreState: vi.fn(), now: () => 200,
+        });
+        const before = await pointers.readPointer('alpha');
+        const snapshotState = vi.fn(() => ({ settings: {} }));
+        const rolled = await service.rollback({
+            pluginId: 'alpha', expectedCurrentDigest: current.digest, expectedPreviousDigest: candidate.digest,
+            expectedPointerRevision: before!.revision, storedStateVersion: 1,
+            snapshotState, restoreState: vi.fn(),
+        });
+        expect(rolled).toMatchObject({ status: 'blocked', stage: 'pointer', code: 'pointer-changed' });
+        expect(snapshotState).not.toHaveBeenCalled();
         expect(await pointers.readPointer('alpha')).toEqual(before);
     });
 });

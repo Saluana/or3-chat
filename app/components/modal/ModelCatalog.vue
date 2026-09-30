@@ -291,101 +291,30 @@
                     </div>
                 </aside>
 
-                <!-- Mobile filters overlay -->
-                <Transition name="mc-overlay-left">
-                    <div
-                        v-if="filtersOpen"
-                        class="absolute inset-0 z-20 lg:hidden"
-                        role="dialog"
-                        aria-label="Filters"
-                    >
-                        <div
-                            class="absolute inset-0 bg-black/45"
-                            @click="filtersOpen = false"
-                        />
-                        <div
-                            class="mc-panel absolute inset-y-0 left-0 w-[278px] max-w-[85vw] bg-[var(--md-surface)] border-r border-[var(--md-border-color)] flex flex-col"
-                        >
-                            <div
-                                class="flex items-center justify-between px-4 py-3 border-b border-[var(--md-border-color)]"
-                            >
-                                <span
-                                    class="text-sm font-semibold text-[var(--md-on-surface)]"
-                                    >Filters</span
-                                >
-                                <UButton
-                                    :icon="closeIcon"
-                                    variant="ghost"
-                                    color="neutral"
-                                    size="xs"
-                                    square
-                                    aria-label="Close filters"
-                                    @click="filtersOpen = false"
-                                />
-                            </div>
-                            <div
-                                class="flex-1 overflow-y-auto p-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]"
-                            >
-                                <ModelCatalogSidebar
-                                    v-model:scope="scope"
-                                    :total-count="baseModels.length"
-                                    :favorites-count="favoriteModels.length"
-                                    :providers="providerCounts"
-                                    :selected-provider="selectedProvider"
-                                    :categories="categoryEntries"
-                                    :selected-capability="capability"
-                                    @select-provider="onSelectProviderMobile"
-                                    @select-capability="
-                                        capability = $event;
-                                        filtersOpen = false;
-                                    "
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </Transition>
-
-                <!-- Mobile detail overlay -->
-                <Transition name="mc-overlay-right">
-                    <div
-                        v-if="detailSheetOpen && selectedModel"
-                        class="absolute inset-0 z-30 lg:hidden bg-[var(--md-surface)] flex flex-col"
-                        role="dialog"
-                        aria-label="Model details"
-                    >
-                        <div
-                            class="flex items-center gap-2 px-3 py-2.5 border-b border-[var(--md-border-color)]"
-                        >
-                            <UButton
-                                :icon="backIcon"
-                                variant="ghost"
-                                color="neutral"
-                                size="xs"
-                                square
-                                aria-label="Back to list"
-                                @click="detailSheetOpen = false"
-                            />
-                            <span
-                                class="text-sm font-semibold text-[var(--md-on-surface)]"
-                                >Model details</span
-                            >
-                        </div>
-                        <div
-                            class="flex-1 overflow-y-auto p-4 sm:p-5 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]"
-                        >
-                            <ModelCatalogDetail
-                                :model="selectedModel"
-                                :favorite="isFavorite(selectedModel)"
-                                @toggle-favorite="
-                                    toggleFavorite(selectedModel)
-                                "
-                                @use="useSelectedModel(selectedModel)"
-                            />
-                        </div>
-                    </div>
-                </Transition>
             </div>
         </template>
+    </AppModal>
+    <AppModal v-model:open="filtersOpen" title="Filters" close-label="Close filters">
+        <ModelCatalogSidebar
+            v-model:scope="scope"
+            :total-count="baseModels.length"
+            :favorites-count="favoriteModels.length"
+            :providers="providerCounts"
+            :selected-provider="selectedProvider"
+            :categories="categoryEntries"
+            :selected-capability="capability"
+            @select-provider="onSelectProviderMobile"
+            @select-capability="capability = $event; filtersOpen = false"
+        />
+    </AppModal>
+    <AppModal v-model:open="detailSheetOpen" size="md" title="Model details" close-label="Back to list">
+        <ModelCatalogDetail
+            v-if="selectedModel"
+            :model="selectedModel"
+            :favorite="isFavorite(selectedModel)"
+            @toggle-favorite="toggleFavorite(selectedModel)"
+            @use="useSelectedModel(selectedModel)"
+        />
     </AppModal>
 </template>
 
@@ -545,7 +474,6 @@ const closeIcon = useIcon('ui.close').value;
 const refreshIcon = useIcon('ui.refresh').value;
 const checkIcon = useIcon('ui.check').value;
 const chevronDownIcon = useIcon('ui.chevron.down').value;
-const backIcon = useIcon('catalog.back').value;
 const sparklesIcon = useIcon('catalog.sparkles').value;
 const searchIconUi = useIcon('ui.search').value;
 
@@ -597,6 +525,9 @@ const detailSheetOpen = ref(false);
 const selectedId = ref<string | null>(null);
 
 const isDesktop = useMediaQuery('(min-width: 1024px)');
+watch(isDesktop, (desktop) => {
+    if (desktop) { filtersOpen.value = false; detailSheetOpen.value = false; }
+});
 const isWideRow = useMediaQuery('(min-width: 640px)');
 const rowEstimateHeight = computed(() => (isWideRow.value ? 72 : 88));
 
@@ -832,7 +763,7 @@ watch(open, (value) => {
 const searchInputRef = ref<any>(null);
 
 function onGlobalKeydown(e: KeyboardEvent) {
-    if (e.key !== '/') return;
+    if (e.key !== '/' || filtersOpen.value || detailSheetOpen.value) return;
     const target = e.target as HTMLElement | null;
     if (
         target &&

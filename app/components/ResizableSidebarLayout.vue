@@ -1,7 +1,8 @@
 <template>
     <div
         id="page-container"
-        class="resizable-sidebar-layout relative w-full h-dvh overflow-hidden bg-(--md-surface) text-(--md-on-surface) flex overflow-x-hidden"
+        :style="visualViewportStyle"
+        class="resizable-sidebar-layout relative w-full h-dvh [container:app-viewport/size] overflow-hidden bg-(--md-surface) text-(--md-on-surface) flex overflow-x-hidden"
     >
         <!-- Backdrop (mobile) -->
         <Transition
@@ -21,7 +22,12 @@
         <!-- Sidebar -->
         <aside
             id="sidebar"
+            ref="sidebarElement"
             data-testid="sidebar"
+            :inert="hydrated && !isDesktop && !open"
+            :role="mobileDrawerOpen ? 'dialog' : undefined"
+            :aria-modal="mobileDrawerOpen ? true : undefined"
+            aria-label="Navigation"
             :class="[
                 // z-[70] on mobile so the drawer sits above workspace chrome (z-50).
                 'resizable-sidebar flex z-40 max-md:z-[70] bg-(--md-surface) text-(--md-on-surface) border-(--md-inverse-surface) flex-col overflow-x-hidden',
@@ -43,7 +49,7 @@
                     : '',
             ]"
             :style="sidebarStyle"
-            @keydown.esc.stop.prevent="close()"
+            @keydown="onSidebarKeydown"
         >
             <div
                 id="sidebar-container-outer"
@@ -129,6 +135,8 @@
         <!-- Main content -->
         <div
             id="main-content"
+            ref="mainElement"
+            :inert="mobileDrawerOpen"
             class="resizable-main-content relative z-10 flex-1 h-full min-w-0 flex flex-col"
         >
             <div
@@ -157,13 +165,51 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick, provide } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick, provide, type CSSProperties } from 'vue';
 import { useResizeObserver, useEventListener, useMediaQuery } from '@vueuse/core';
 import SidebarHeader from './sidebar/SidebarHeader.vue';
 import ResizeHandle from './sidebar/ResizeHandle.vue';
 import { useIcon } from '~/composables/useIcon';
 
 type Side = 'left' | 'right';
+
+// Safari's software keyboard changes the visual viewport without resizing dvh.
+// Keep the application frame inside the visible area, including Safari's pan.
+const visualViewportStyle = ref<CSSProperties>({});
+let viewportFrame: number | undefined;
+onMounted(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const touchScreen = window.matchMedia('(pointer: coarse)');
+    const update = () => {
+        viewportFrame = undefined;
+        // Let browser pinch zoom pan the normal page instead of reflowing it.
+        if (Math.abs(viewport.scale - 1) > 0.01 ||
+            (!touchScreen.matches && window.innerWidth >= 768 &&
+                Math.abs(viewport.height - window.innerHeight) < 1)) {
+            visualViewportStyle.value = {};
+            return;
+        }
+        visualViewportStyle.value = {
+            position: 'fixed',
+            top: `${viewport.offsetTop}px`,
+            insetInline: '0',
+            paddingInlineStart: 'env(safe-area-inset-left)',
+            paddingInlineEnd: 'env(safe-area-inset-right)',
+            height: `${viewport.height}px`,
+        };
+    };
+    const queueUpdate = () => {
+        if (viewportFrame === undefined) viewportFrame = requestAnimationFrame(update);
+    };
+    useEventListener(viewport, ['resize', 'scroll'], queueUpdate, { passive: true });
+    useEventListener(window, 'resize', queueUpdate, { passive: true });
+    useEventListener(touchScreen, 'change', queueUpdate);
+    update();
+});
+onBeforeUnmount(() => {
+    if (viewportFrame !== undefined) cancelAnimationFrame(viewportFrame);
+});
 
 const sidebarHeaderRef = ref<ComponentPublicInstance | null>(null);
 const topHeaderHeight = ref(48);
@@ -255,6 +301,70 @@ const isDesktop = useMediaQuery('(min-width: 768px)');
 // After first paint, enable transitions for smooth user interactions
 const initialized = ref(false);
 const hydrated = ref(false);
+const sidebarElement = ref<HTMLElement | null>(null);
+const mainElement = ref<HTMLElement | null>(null);
+const mobileDrawerOpen = computed(() => hydrated.value && !isDesktop.value && open.value);
+let drawerTrigger: HTMLElement | null = null;
+
+function drawerFocusableElements(): HTMLElement[] {
+    return Array.from(sidebarElement.value?.querySelectorAll<HTMLElement>(
+        'a[href], button, input, textarea, select, [tabindex]'
+    ) ?? []).filter((element) =>
+        element.tabIndex >= 0 && !element.matches(':disabled') &&
+        element.getClientRects().length > 0 && !element.closest('[inert]')
+    );
+}
+
+function onSidebarKeydown(event: KeyboardEvent): void {
+    if (!mobileDrawerOpen.value) return;
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        close();
+    } else if (event.key === 'Tab' && !event.defaultPrevented) {
+        const focusable = drawerFocusableElements();
+        event.preventDefault();
+        if (focusable.length) {
+            // Safari can omit buttons from its native Tab order. Advance
+            // explicitly so every drawer control is reachable in all browsers.
+            const current = focusable.findIndex((element) => element === document.activeElement);
+            const next = current < 0
+                ? event.shiftKey ? focusable.length - 1 : 0
+                : (current + (event.shiftKey ? -1 : 1) + focusable.length) % focusable.length;
+            focusable[next]?.focus();
+        }
+    }
+}
+
+watch(mobileDrawerOpen, async (isOpen) => {
+    if (isOpen) {
+        // Safari does not focus a button on pointer activation. Prefer the
+        // navigation trigger so dismissal still returns to a usable control.
+        drawerTrigger = mainElement.value?.querySelector<HTMLElement>(
+            'button[aria-label="Open sidebar"]'
+        ) ?? document.activeElement as HTMLElement | null;
+    }
+    await nextTick();
+    if (isOpen && mobileDrawerOpen.value) {
+        drawerFocusableElements()[0]?.focus({ preventScroll: true });
+    } else if (!isOpen && !mobileDrawerOpen.value) {
+        if (drawerTrigger?.isConnected && drawerTrigger.getClientRects().length) {
+            drawerTrigger.focus({ preventScroll: true });
+        }
+        drawerTrigger = null;
+    }
+});
+
+watch(isDesktop, async (desktop, wasDesktop) => {
+    if (desktop || !wasDesktop) return;
+    const sidebarHadFocus = sidebarElement.value?.contains(document.activeElement);
+    close();
+    await nextTick();
+    if (sidebarHadFocus) {
+        mainElement.value?.querySelector<HTMLElement>('button[aria-label="Open sidebar"]')
+            ?.focus({ preventScroll: true });
+    }
+});
 
 onMounted(() => {
     hydrated.value = true;
@@ -445,6 +555,30 @@ const toggleAria = computed(() =>
 </script>
 
 <style scoped>
+/* Expanded landscape Safari chrome and its keyboard can leave a tiny viewport.
+   Give that space to text entry; normal navigation returns when it grows. */
+@container app-viewport (height < 140px) {
+    #page-container :deep(.workspace-chrome),
+    #page-container :deep(.workspace-chrome-placeholder),
+    #page-container :deep(#top-header) {
+        display: none !important;
+    }
+
+    #page-container :deep(.pane-container) {
+        padding-top: 0 !important;
+    }
+
+    #page-container :deep(.chat-input-wrapper),
+    #page-container :deep(.chat-inner-input-container) {
+        min-height: 0 !important;
+        padding-bottom: 0 !important;
+    }
+
+    #page-container :deep(.chat-input) {
+        margin-bottom: 0 !important;
+    }
+}
+
 /* Optional: could add extra visual flair for the resize handle here */
 .content-bg {
     position: relative;

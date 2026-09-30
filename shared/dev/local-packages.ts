@@ -8,10 +8,8 @@ import ts from 'typescript';
  * Sibling source checkouts that OR3 Chat aliases into Vite during
  * multi-repository development.
  *
- * Coupled workflow candidates are resolved together and only when the sibling checkout
- * really is the expected package and still ships the aliased source file, so a
- * missing, renamed or half-checked-out repository degrades to the installed
- * registry package for that one import instead of breaking the whole build.
+ * A sibling checkout is aliased only when it declares the expected package and
+ * ships its source entry; otherwise the installed package remains in use.
  */
 export interface LocalPackageCandidate {
     /** Package name the sibling `package.json` must declare. */
@@ -57,24 +55,6 @@ export const LOCAL_PACKAGE_CANDIDATES: readonly LocalPackageCandidate[] = [
         find: /^or3-scroll$/,
         sibling: 'or3-vsc',
         entry: 'src/lib/index.ts',
-    },
-    {
-        packageName: 'or3-workflow-vue',
-        find: /^or3-workflow-vue\/style\.css$/,
-        sibling: 'or3-workflows/packages/workflow-vue',
-        entry: 'src/styles/variables.css',
-    },
-    {
-        packageName: 'or3-workflow-vue',
-        find: /^or3-workflow-vue$/,
-        sibling: 'or3-workflows/packages/workflow-vue',
-        entry: 'src/index.ts',
-    },
-    {
-        packageName: 'or3-workflow-core',
-        find: /^or3-workflow-core$/,
-        sibling: 'or3-workflows/packages/workflow-core',
-        entry: 'src/index.ts',
     },
 ];
 
@@ -184,8 +164,7 @@ function validateSource(projectRoot: string, candidate: LocalPackageCandidate): 
 }
 
 /**
- * Resolve the sibling-source aliases for one workspace. Candidates are
- * grouped for workflows: an unusable core or UI rejects the entire pair.
+ * Resolve the sibling-source aliases for one workspace.
  */
 export function resolveLocalPackageAliases(
     projectRoot: string,
@@ -199,19 +178,9 @@ export function resolveLocalPackageAliases(
     const selected: string[] = [];
     const skipped: string[] = [];
     const results = LOCAL_PACKAGE_CANDIDATES.map((candidate) => ({ candidate, result: resolveCandidate(projectRoot, candidate) }));
-    const workflows = results.filter(({ candidate }) => candidate.packageName.startsWith('or3-workflow-'));
-    const groupFailure = workflows.find(({ result }) => 'reason' in result);
-    let workflowReason = groupFailure && 'reason' in groupFailure.result ? groupFailure.result.reason : null;
-    if (!workflowReason) {
-        for (const { candidate } of workflows) {
-            workflowReason = validateSource(projectRoot, candidate);
-            if (workflowReason) break;
-        }
-    }
     for (const { candidate, result } of results) {
-        const reason = candidate.packageName.startsWith('or3-workflow-') ? workflowReason :
-            ('alias' in result ? validateSource(projectRoot, candidate) : null);
-        const resolved = reason ? { reason: 'Local package group rejected: ' + reason } : result;
+        const reason = 'alias' in result ? validateSource(projectRoot, candidate) : null;
+        const resolved = reason ? { reason } : result;
         if ('alias' in resolved) {
             aliases.push(resolved.alias);
             selected.push(`${candidate.packageName} -> ${resolved.alias.replacement}`);

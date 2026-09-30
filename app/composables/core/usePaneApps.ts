@@ -50,6 +50,14 @@ export interface PaneAppDef {
         app: PaneAppDef;
     }) => Promise<{ id: string } | null>;
 
+    /** Optional new-tab menu contribution. A null result cancels creation. */
+    newTab?: {
+        label: string;
+        icon?: string;
+        isAvailable?: () => boolean;
+        createRecordId: () => Promise<string | null>;
+    };
+
     /**
      * Optional ordering (lower = earlier in sorted lists). Defaults to 200.
      */
@@ -92,6 +100,12 @@ const PaneAppDefSchema = z.object({
         .optional(),
     postType: z.string().optional(),
     createInitialRecord: z.function().optional(),
+    newTab: z.object({
+        label: z.string().min(1),
+        icon: z.string().optional(),
+        isAvailable: z.function().optional(),
+        createRecordId: z.function(),
+    }).optional(),
     pluginId: z.string().optional(),
     access: z.unknown().optional(),
     replaceRecordInCurrentTab: z.boolean().optional(),

@@ -573,6 +573,8 @@ describe('recovery and cancellation (5.3)', () => {
         expect(attempted.operation.status).toBe('blocked');
         expect(attempted.operation.failure?.code).toBe('workspace-preflight-blocked');
         expect(attempted.operation.failure?.message).toContain('ws-2');
+        expect(attempted.operation.failure?.workspaceBlocks).toMatchObject({ total: 1,
+            items: [{ workspaceId: 'ws-2', code: 'setup-required' }] });
         expect(
             (await makeHarness({ fixture: update, root, settings }).services.pointers.readPointer(
                 'alpha'

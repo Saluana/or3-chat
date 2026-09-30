@@ -97,18 +97,36 @@ export async function setPluginEnabled(
     store: WorkspaceSettingsStore,
     workspaceId: string,
     pluginId: string,
-    enabled: boolean
+    enabled: boolean,
+    options: { readonly requireCas?: boolean; readonly expectedPluginState?: boolean } = {}
 ): Promise<string[]> {
-    const current = await getEnabledPlugins(store, workspaceId);
-    const next = new Set(current);
-    if (enabled) {
-        next.add(pluginId);
-    } else {
-        next.delete(pluginId);
+    if (options.requireCas && !store.compareAndSet) {
+        throw Object.assign(new Error('This provider cannot safely apply bulk plugin changes.'), { code: 'bulk-settings-cas-unavailable' });
     }
-    const list = Array.from(next);
-    await store.set(workspaceId, 'plugins.enabled', JSON.stringify(list));
-    return list;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+        const raw = await store.get(workspaceId, 'plugins.enabled');
+        const parsed = raw === null ? { success: true as const, data: [] as string[] }
+            : PluginsEnabledSchema.safeParse(safeJsonParse(raw));
+        if (!parsed.success) {
+            throw Object.assign(new Error('The workspace plugin list is invalid; repair it before changing enablement.'), { code: 'plugin-enablement-invalid' });
+        }
+        const current = parsed.data;
+        const currentlyEnabled = current.includes(pluginId);
+        if (options.expectedPluginState !== undefined && currentlyEnabled !== options.expectedPluginState) {
+            throw Object.assign(new Error('This workspace’s plugin choice changed after review.'), { code: 'rollout-conflict' });
+        }
+        if (currentlyEnabled === enabled) return current;
+        const next = new Set(current);
+        if (enabled) next.add(pluginId);
+        else next.delete(pluginId);
+        const list = Array.from(next);
+        if (!store.compareAndSet) {
+            await store.set(workspaceId, 'plugins.enabled', JSON.stringify(list));
+            return list;
+        }
+        if (await store.compareAndSet(workspaceId, 'plugins.enabled', raw, JSON.stringify(list))) return list;
+    }
+    throw Object.assign(new Error('Workspace enablement changed repeatedly; retry after refreshing.'), { code: 'rollout-conflict' });
 }
 
 /**
@@ -127,7 +145,13 @@ export async function bootstrapDefaultEnabledPlugins(
     const normalized = Array.from(
         new Set(defaultPluginIds.filter((id) => typeof id === 'string' && id.trim().length > 0))
     );
-    await store.set(workspaceId, 'plugins.enabled', JSON.stringify(normalized));
+    if (store.compareAndSet) {
+        if (!await store.compareAndSet(workspaceId, 'plugins.enabled', null, JSON.stringify(normalized))) {
+            return getEnabledPlugins(store, workspaceId);
+        }
+    } else {
+        await store.set(workspaceId, 'plugins.enabled', JSON.stringify(normalized));
+    }
     return normalized;
 }
 
@@ -174,7 +198,7 @@ const EffectiveAuthoritySchema = z
     })
     .strict();
 
-const PersistedPluginGrantReviewSchema = z
+const StoredPluginGrantReviewSchema = z
     .object({
         schemaVersion: z.literal(2),
         requestedGrants: z.array(PluginGrantIdSchema),
@@ -193,6 +217,11 @@ const PersistedPluginGrantReviewSchema = z
         reviewedBy: z.string().min(1).optional(),
     })
     .strict();
+const PersistedPluginGrantReviewSchema = StoredPluginGrantReviewSchema.extend({
+    // Keep selected-release consent in the same CAS value as candidate consent.
+    // A second settings write could fail after replacing the primary review.
+    priorReviews: z.array(StoredPluginGrantReviewSchema).max(16).optional(),
+}).strict();
 
 /** What a candidate release declares, as far as the host can verify it. */
 export interface PluginGrantCandidate {
@@ -449,8 +478,21 @@ export async function getPluginGrantReview(
         };
     }
     const key = reviewStorageKey(pluginId);
-    const primary = evaluateStoredGrantReview(await store.get(workspaceId, key), candidate);
+    const primaryRaw = await store.get(workspaceId, key);
+    const primary = evaluateStoredGrantReview(primaryRaw, candidate);
     if (primary.status === 'current' || !candidate.packageDigest) return primary;
+
+    const parsedPrimary = PersistedPluginGrantReviewSchema.safeParse(safeJsonParse(primaryRaw ?? ''));
+    if (parsedPrimary.success) {
+        // A new review of the same digest is authoritative, even if it narrows
+        // access. Never revive an older approval from history for that digest.
+        if (parsedPrimary.data.packageDigest === candidate.packageDigest) return primary;
+        const embedded = parsedPrimary.data.priorReviews?.find((item) => item.packageDigest === candidate.packageDigest);
+        if (embedded) {
+            const recovered = evaluateStoredGrantReview(JSON.stringify(embedded), candidate);
+            if (recovered.status === 'current') return recovered;
+        }
+    }
 
     // A candidate's approval must not revoke the still-selected package when
     // an update pauses or fails. Keep the prior exact-package review available
@@ -474,6 +516,11 @@ export async function setPluginGrantReview(
         readonly approvedGrants: readonly string[];
         reviewedBy?: string;
         reviewedAt?: number;
+        /** Frozen review value from a bulk preview; commit only if it is unchanged. */
+        expectedCurrentRaw?: string | null;
+        requireCas?: boolean;
+        /** Digests still needed by the selected, rollback, or staged package. */
+        retainPackageDigests?: readonly Sha256[];
     }
 ): Promise<PluginGrantReviewSnapshot> {
     const requestedGrants = normalizeGrantIds(input.candidate.requestedGrants);
@@ -500,6 +547,30 @@ export async function setPluginGrantReview(
         authoritySha256,
         authority,
     });
+    const key = reviewStorageKey(pluginId);
+    const current = await store.get(workspaceId, key);
+    if (input.expectedCurrentRaw !== undefined && current !== input.expectedCurrentRaw) {
+        throw Object.assign(new Error('Workspace permission review changed.'), { code: 'grant-review-conflict' });
+    }
+    if (input.requireCas && !store.compareAndSet) {
+        throw Object.assign(new Error('This provider cannot safely compare permission reviews.'), { code: 'bulk-settings-cas-unavailable' });
+    }
+    const previous = PersistedPluginGrantReviewSchema.safeParse(safeJsonParse(current ?? ''));
+    const priorReviews = previous.success
+        ? (previous.data.priorReviews ?? []).filter((item) => item.packageDigest !== packageDigest)
+        : [];
+    if (previous.success && previous.data.packageDigest && previous.data.packageDigest !== packageDigest) {
+        const { priorReviews: _history, ...prior } = previous.data;
+        const existing = priorReviews.findIndex((item) => item.packageDigest === prior.packageDigest);
+        if (existing >= 0) priorReviews.splice(existing, 1);
+        priorReviews.push(prior);
+    }
+    const retained = new Set<string>(input.retainPackageDigests ?? []);
+    while (priorReviews.length > 16) {
+        const removable = priorReviews.findIndex((item) => !item.packageDigest || !retained.has(item.packageDigest));
+        if (removable < 0) throw new Error('Too many active plugin permission reviews; finish or cancel obsolete package operations before continuing.');
+        priorReviews.splice(removable, 1);
+    }
     const persisted = PersistedPluginGrantReviewSchema.parse({
         schemaVersion: 2,
         requestedGrants,
@@ -511,23 +582,15 @@ export async function setPluginGrantReview(
         revision,
         reviewedAt: input.reviewedAt ?? Date.now(),
         reviewedBy: input.reviewedBy,
+        ...(priorReviews.length ? { priorReviews } : {}),
     });
-    const key = reviewStorageKey(pluginId);
-    const current = await store.get(workspaceId, key);
-    const previous = PersistedPluginGrantReviewSchema.safeParse(safeJsonParse(current ?? ''));
-    if (
-        current &&
-        previous.success &&
-        previous.data.packageDigest &&
-        previous.data.packageDigest !== packageDigest
-    ) {
-        await store.set(
-            workspaceId,
-            priorReviewStorageKey(pluginId, previous.data.packageDigest as Sha256),
-            current
-        );
+    if (store.compareAndSet) {
+        if (!await store.compareAndSet(workspaceId, key, current, JSON.stringify(persisted))) {
+            throw Object.assign(new Error('Workspace permission review changed.'), { code: 'grant-review-conflict' });
+        }
+    } else {
+        await store.set(workspaceId, key, JSON.stringify(persisted));
     }
-    await store.set(workspaceId, key, JSON.stringify(persisted));
     return {
         requestedGrants: Object.freeze(requestedGrants),
         approvedGrants: Object.freeze(approvedGrants),

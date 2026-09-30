@@ -40,6 +40,7 @@ export type PluginContributionKind =
     | 'ui.command-palette.post-source'
     | 'ui.command-palette.command'
     | 'chat.action'
+    | 'chat.message.renderer'
     | 'chat.tool.client'
     | 'chat.tool.server'
     | 'editor.extension'
@@ -82,6 +83,19 @@ export interface PluginContribution<TDefinition = unknown> {
     readonly id: string;
     readonly definition: TDefinition;
     readonly priority?: number;
+}
+
+/** Reviewed Vue renderer for a host-provided message. Trusted-host only. */
+export interface PluginMessageRendererDefinition<TMessage = unknown> {
+    readonly match: (message: TMessage) => boolean;
+    readonly component: unknown;
+}
+
+/** Reviewed chat-composer extension. The package owns the extension object. */
+export interface PluginEditorExtensionDefinition {
+    readonly extension: object;
+    readonly suggestion?: { readonly char: string };
+    readonly onSlashCommand?: (command: string) => boolean | Promise<boolean>;
 }
 
 export interface PluginContributions {

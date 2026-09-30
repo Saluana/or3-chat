@@ -78,240 +78,230 @@
             </div>
         </template>
 
-        <Teleport to="body">
-            <Transition name="ai-settings">
-                <div
-                    v-if="customizeOpen && !proposal"
-                    v-theme="'document.ai'"
-                    class="settings-overlay"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="document-ai-settings-title"
-                    @click.self="customizeOpen = false"
-                >
-                    <div class="settings-panel-shell">
-                        <div class="settings-panel">
-                    <div class="settings-intro">
-                        <div>
-                            <strong id="document-ai-settings-title">Document AI settings</strong>
-                            <span>If you select text, the AI focuses on it. Otherwise, it starts near your cursor and can read the surrounding document.</span>
-                            <span class="settings-context-summary">{{ contextSummary }}</span>
-                        </div>
-                        <UButton :icon="icons.close" color="neutral" variant="ghost" size="xs" square aria-label="Close Document AI settings" @click="customizeOpen = false" />
+        <AppModal
+            v-model:open="customizeOpen"
+            size="lg"
+            title="Document AI settings"
+            close-label="Close Document AI settings"
+            description="Customize models, context and quick actions for document edits."
+        >
+            <div v-theme="'document.ai'" class="document-ai-dialog-settings">
+                <div class="settings-intro">
+                    <div>
+                        <span>If you select text, the AI focuses on it. Otherwise, it starts near your cursor and can read the surrounding document.</span>
+                        <span class="settings-context-summary">{{ contextSummary }}</span>
                     </div>
+                </div>
 
-                    <div class="settings-grid">
-                        <section class="setting-card">
-                            <div class="setting-card-copy">
-                                <strong>Model</strong>
-                                <span>Choose the AI used for document edits.</span>
-                            </div>
-                            <USelectMenu
-                                :model-value="selectedModelValue"
-                                :items="modelItems"
-                                value-key="value"
-                                label-key="label"
-                                :search-input="!isMobile"
-                                class="w-full model-select"
-                                :content="{ align: 'start', side: 'bottom', sideOffset: 6 }"
-                                :ui="{
-                                    content: 'z-[1100]! w-max! min-w-[var(--reka-combobox-trigger-width)] max-w-[min(28rem,calc(100vw-2rem))]!',
-                                    item: 'min-h-9 px-3',
-                                    itemLabel: 'whitespace-nowrap overflow-visible! text-clip!',
-                                }"
-                                aria-label="Document AI model"
-                                @update:model-value="setModel"
-                            />
-                            <p v-if="!favoriteToolModels.length" class="model-select-hint">
-                                Favorite a tool-capable model in chat to choose one here.
-                            </p>
-                        </section>
-
-                        <section class="setting-card instruction-card">
-                            <div class="setting-card-copy">
-                                <strong>System instruction</strong>
-                                <span>Guide how the AI changes your writing.</span>
-                            </div>
-                            <UTextarea :model-value="settings.systemInstruction" :rows="2" :maxrows="5" autoresize aria-label="Document AI system instruction" @change="setInstruction" />
-                        </section>
-
-                        <section class="setting-card autocomplete-card">
-                            <div class="setting-card-copy">
-                                <strong>Autocomplete</strong>
-                                <span>{{ autocomplete.error || 'Suggest completions while you type.' }}</span>
-                            </div>
-                            <USwitch :model-value="autocomplete.enabled" :label="autocompleteLabel" :disabled="autocomplete.loading" @update:model-value="setAutocomplete" />
-                        </section>
-
-                        <section class="setting-card">
-                            <div class="setting-card-copy">
-                                <strong>Max steps</strong>
-                                <span>How many steps the AI can take for one request ({{ MIN_DOCUMENT_AI_MAX_ITERATIONS }}–{{ MAX_DOCUMENT_AI_MAX_ITERATIONS }}).</span>
-                            </div>
-                            <UInput
-                                type="number"
-                                :model-value="settings.maxIterations"
-                                :min="MIN_DOCUMENT_AI_MAX_ITERATIONS"
-                                :max="MAX_DOCUMENT_AI_MAX_ITERATIONS"
-                                class="w-full"
-                                aria-label="Document AI maximum steps"
-                                @change="setMaxIterations"
-                            />
-                        </section>
-
-                        <section class="setting-card">
-                            <div class="setting-card-copy">
-                                <strong>Words per read</strong>
-                                <span>About how much of the document the AI reads at once (default 5,000 words).</span>
-                            </div>
-                            <UInput
-                                type="number"
-                                :model-value="settings.chunkWordLimit"
-                                :min="MIN_DOCUMENT_AI_CHUNK_WORDS"
-                                :max="MAX_DOCUMENT_AI_CHUNK_WORDS"
-                                step="500"
-                                class="w-full"
-                                aria-label="Document AI words per read"
-                                @change="setChunkWordLimit"
-                            />
-                        </section>
-                    </div>
-
-                    <section class="tool-settings">
-                        <div class="settings-heading">
-                            <div>
-                                <strong>Tools</strong>
-                                <span>Choose what the document AI can do. You can also enable tools you use in chat.</span>
-                            </div>
+                <div class="settings-grid">
+                    <section class="setting-card">
+                        <div class="setting-card-copy">
+                            <strong>Model</strong>
+                            <span>Choose the AI used for document edits.</span>
                         </div>
-
-                        <div
-                            v-for="group in toolToggleGroups"
-                            :key="group.key"
-                            class="tool-group"
-                        >
-                            <UButton
-                                color="neutral"
-                                variant="ghost"
-                                class="tool-group-header"
-                                :aria-expanded="!isToolGroupCollapsed(group.key)"
-                                @click="toggleToolGroup(group.key)"
-                            >
-                                <div class="tool-group-copy">
-                                    <strong>{{ group.label }}</strong>
-                                    <span>{{ group.hint }}</span>
-                                </div>
-                                <span class="tool-group-count">{{ group.tools.length }}</span>
-                            </UButton>
-                            <div v-show="!isToolGroupCollapsed(group.key)" class="tool-group-list">
-                                <div
-                                    v-for="tool in group.tools"
-                                    :key="tool.name"
-                                    class="tool-row"
-                                >
-                                    <div class="tool-row-main">
-                                        <USwitch
-                                            :model-value="tool.enabled"
-                                            :label="tool.label"
-                                            :disabled="status === 'streaming'"
-                                            @update:model-value="(value: boolean) => setToolEnabled(tool.name, value)"
-                                        />
-                                        <UIcon
-                                            v-if="tool.icon"
-                                            :name="tool.icon"
-                                            class="tool-row-icon"
-                                        />
-                                    </div>
-                                    <p v-if="tool.description" class="tool-row-desc">{{ tool.description }}</p>
-                                </div>
-                                <p v-if="!group.tools.length" class="tool-group-empty">{{ group.empty }}</p>
-                            </div>
-                        </div>
+                        <USelectMenu
+                            :model-value="selectedModelValue"
+                            :items="modelItems"
+                            value-key="value"
+                            label-key="label"
+                            :search-input="!isMobile"
+                            class="w-full model-select"
+                            :content="{ align: 'start', side: 'bottom', sideOffset: 6 }"
+                            :ui="{
+                                content: 'z-[1100]! w-max! min-w-[var(--reka-combobox-trigger-width)] max-w-[min(28rem,calc(100vw-2rem))]!',
+                                item: 'min-h-9 px-3',
+                                itemLabel: 'whitespace-nowrap overflow-visible! text-clip!',
+                            }"
+                            aria-label="Document AI model"
+                            @update:model-value="setModel"
+                        />
+                        <p v-if="!favoriteToolModels.length" class="model-select-hint">
+                            Favorite a tool-capable model in chat to choose one here.
+                        </p>
                     </section>
 
-                    <section class="quick-action-settings">
-                        <div class="settings-heading">
-                            <div>
-                                <strong>Quick actions</strong>
-                                <span>Create and edit reusable document prompts.</span>
-                            </div>
-                            <UButton :icon="icons.plus" label="Add action" color="neutral" variant="outline" size="sm" :disabled="settings.quickActions.length >= 12" @click="addQuickAction" />
+                    <section class="setting-card instruction-card">
+                        <div class="setting-card-copy">
+                            <strong>System instruction</strong>
+                            <span>Guide how the AI changes your writing.</span>
                         </div>
+                        <UTextarea :model-value="settings.systemInstruction" :rows="2" :maxrows="5" autoresize aria-label="Document AI system instruction" @change="setInstruction" />
+                    </section>
 
-                        <div v-if="settings.quickActions.length" class="action-list" role="list">
+                    <section class="setting-card autocomplete-card">
+                        <div class="setting-card-copy">
+                            <strong>Autocomplete</strong>
+                            <span>{{ autocomplete.error || 'Suggest completions while you type.' }}</span>
+                        </div>
+                        <USwitch :model-value="autocomplete.enabled" :label="autocompleteLabel" :disabled="autocomplete.loading" @update:model-value="setAutocomplete" />
+                    </section>
+
+                    <section class="setting-card">
+                        <div class="setting-card-copy">
+                            <strong>Max steps</strong>
+                            <span>How many steps the AI can take for one request ({{ MIN_DOCUMENT_AI_MAX_ITERATIONS }}–{{ MAX_DOCUMENT_AI_MAX_ITERATIONS }}).</span>
+                        </div>
+                        <UInput
+                            type="number"
+                            :model-value="settings.maxIterations"
+                            :min="MIN_DOCUMENT_AI_MAX_ITERATIONS"
+                            :max="MAX_DOCUMENT_AI_MAX_ITERATIONS"
+                            class="w-full"
+                            aria-label="Document AI maximum steps"
+                            @change="setMaxIterations"
+                        />
+                    </section>
+
+                    <section class="setting-card">
+                        <div class="setting-card-copy">
+                            <strong>Words per read</strong>
+                            <span>About how much of the document the AI reads at once (default 5,000 words).</span>
+                        </div>
+                        <UInput
+                            type="number"
+                            :model-value="settings.chunkWordLimit"
+                            :min="MIN_DOCUMENT_AI_CHUNK_WORDS"
+                            :max="MAX_DOCUMENT_AI_CHUNK_WORDS"
+                            step="500"
+                            class="w-full"
+                            aria-label="Document AI words per read"
+                            @change="setChunkWordLimit"
+                        />
+                    </section>
+                </div>
+
+                <section class="tool-settings">
+                    <div class="settings-heading">
+                        <div>
+                            <strong>Tools</strong>
+                            <span>Choose what the document AI can do. You can also enable tools you use in chat.</span>
+                        </div>
+                    </div>
+
+                    <div
+                        v-for="group in toolToggleGroups"
+                        :key="group.key"
+                        class="tool-group"
+                    >
+                        <UButton
+                            color="neutral"
+                            variant="ghost"
+                            class="tool-group-header"
+                            :aria-expanded="!isToolGroupCollapsed(group.key)"
+                            @click="toggleToolGroup(group.key)"
+                        >
+                            <div class="tool-group-copy">
+                                <strong>{{ group.label }}</strong>
+                                <span>{{ group.hint }}</span>
+                            </div>
+                            <span class="tool-group-count">{{ group.tools.length }}</span>
+                        </UButton>
+                        <div v-show="!isToolGroupCollapsed(group.key)" class="tool-group-list">
                             <div
-                                v-for="(action, index) in settings.quickActions"
-                                :key="action.id"
-                                class="quick-action-row"
-                                :class="{ 'is-editing': editingActionId === action.id }"
-                                role="listitem"
+                                v-for="tool in group.tools"
+                                :key="tool.name"
+                                class="tool-row"
                             >
-                                <template v-if="editingActionId === action.id">
-                                    <div class="quick-action-edit">
-                                        <div class="quick-action-edit-header">
-                                            <div class="quick-action-edit-heading">
-                                                <span>Editing action {{ index + 1 }}</span>
-                                                <strong>{{ action.label || 'Untitled action' }}</strong>
-                                            </div>
-                                            <div class="action-buttons">
-                                                <UButton :icon="icons.copy" color="neutral" variant="ghost" size="xs" square :aria-label="`Duplicate ${action.label}`" @click="duplicateQuickAction(index)" />
-                                                <UButton :icon="icons.trash" color="error" variant="ghost" size="xs" square :aria-label="`Remove ${action.label}`" @click="removeQuickAction(index)" />
-                                            </div>
-                                        </div>
+                                <div class="tool-row-main">
+                                    <USwitch
+                                        :model-value="tool.enabled"
+                                        :label="tool.label"
+                                        :disabled="status === 'streaming'"
+                                        @update:model-value="(value: boolean) => setToolEnabled(tool.name, value)"
+                                    />
+                                    <UIcon
+                                        v-if="tool.icon"
+                                        :name="tool.icon"
+                                        class="tool-row-icon"
+                                    />
+                                </div>
+                                <p v-if="tool.description" class="tool-row-desc">{{ tool.description }}</p>
+                            </div>
+                            <p v-if="!group.tools.length" class="tool-group-empty">{{ group.empty }}</p>
+                        </div>
+                    </div>
+                </section>
 
-                                        <div class="quick-action-fields">
-                                            <UFormField label="Button label" class="quick-action-label-field">
-                                                <UInput class="w-full" :model-value="action.label" aria-label="Quick action label" @change="updateQuickActionFromEvent(index, 'label', $event)" />
-                                            </UFormField>
-                                            <UFormField label="Prompt" description="The instruction sent when this action is used." class="quick-action-prompt-field">
-                                                <UTextarea class="w-full" :model-value="action.prompt" :rows="2" :maxrows="6" autoresize aria-label="Quick action prompt" @change="updateQuickActionFromEvent(index, 'prompt', $event)" />
-                                            </UFormField>
-                                        </div>
+                <section class="quick-action-settings">
+                    <div class="settings-heading">
+                        <div>
+                            <strong>Quick actions</strong>
+                            <span>Create and edit reusable document prompts.</span>
+                        </div>
+                        <UButton :icon="icons.plus" label="Add action" color="neutral" variant="outline" size="sm" :disabled="settings.quickActions.length >= 12" @click="addQuickAction" />
+                    </div>
 
-                                        <div class="quick-action-edit-footer">
-                                            <span>Changes save automatically.</span>
-                                            <UButton label="Done" color="primary" size="sm" @click="editingActionId = null" />
-                                        </div>
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <div class="quick-action-summary">
-                                        <span class="quick-action-number" aria-hidden="true">{{ index + 1 }}</span>
-                                        <div class="action-copy">
-                                            <strong>{{ action.label }}</strong>
-                                            <span>{{ action.prompt }}</span>
+                    <div v-if="settings.quickActions.length" class="action-list" role="list">
+                        <div
+                            v-for="(action, index) in settings.quickActions"
+                            :key="action.id"
+                            class="quick-action-row"
+                            :class="{ 'is-editing': editingActionId === action.id }"
+                            role="listitem"
+                        >
+                            <template v-if="editingActionId === action.id">
+                                <div class="quick-action-edit">
+                                    <div class="quick-action-edit-header">
+                                        <div class="quick-action-edit-heading">
+                                            <span>Editing action {{ index + 1 }}</span>
+                                            <strong>{{ action.label || 'Untitled action' }}</strong>
                                         </div>
                                         <div class="action-buttons">
-                                            <UButton label="Use" color="primary" variant="soft" size="xs" @click="runAction(action)" />
-                                            <UButton :icon="icons.edit" color="neutral" variant="ghost" size="xs" square :aria-label="`Edit ${action.label}`" @click="editingActionId = action.id" />
                                             <UButton :icon="icons.copy" color="neutral" variant="ghost" size="xs" square :aria-label="`Duplicate ${action.label}`" @click="duplicateQuickAction(index)" />
                                             <UButton :icon="icons.trash" color="error" variant="ghost" size="xs" square :aria-label="`Remove ${action.label}`" @click="removeQuickAction(index)" />
                                         </div>
                                     </div>
-                                </template>
-                            </div>
-                        </div>
 
-                        <div v-else class="quick-action-empty">
-                            <div>
-                                <strong>No quick actions yet</strong>
-                                <span>Add a reusable prompt for edits you make often.</span>
-                            </div>
-                            <UButton :icon="icons.plus" label="Add first action" color="primary" variant="soft" size="sm" @click="addQuickAction" />
-                        </div>
+                                    <div class="quick-action-fields">
+                                        <UFormField label="Button label" class="quick-action-label-field">
+                                            <UInput class="w-full" :model-value="action.label" aria-label="Quick action label" @change="updateQuickActionFromEvent(index, 'label', $event)" />
+                                        </UFormField>
+                                        <UFormField label="Prompt" description="The instruction sent when this action is used." class="quick-action-prompt-field">
+                                            <UTextarea class="w-full" :model-value="action.prompt" :rows="2" :maxrows="6" autoresize aria-label="Quick action prompt" @change="updateQuickActionFromEvent(index, 'prompt', $event)" />
+                                        </UFormField>
+                                    </div>
 
-                        <div v-if="pluginActions.length" class="plugin-actions">
-                            <span>Plugin actions</span>
-                            <UButton v-for="action in pluginActions" :key="action.id" :label="action.label" color="neutral" variant="soft" size="xs" @click="runAction(action)" />
-                        </div>
-                    </section>
-
-                    <p class="settings-note">Document AI preferences sync with this workspace.</p>
+                                    <div class="quick-action-edit-footer">
+                                        <span>Changes save automatically.</span>
+                                        <UButton label="Done" color="primary" size="sm" @click="editingActionId = null" />
+                                    </div>
+                                </div>
+                            </template>
+                            <template v-else>
+                                <div class="quick-action-summary">
+                                    <span class="quick-action-number" aria-hidden="true">{{ index + 1 }}</span>
+                                    <div class="action-copy">
+                                        <strong>{{ action.label }}</strong>
+                                        <span>{{ action.prompt }}</span>
+                                    </div>
+                                    <div class="action-buttons">
+                                        <UButton label="Use" color="primary" variant="soft" size="xs" @click="runAction(action)" />
+                                        <UButton :icon="icons.edit" color="neutral" variant="ghost" size="xs" square :aria-label="`Edit ${action.label}`" @click="editingActionId = action.id" />
+                                        <UButton :icon="icons.copy" color="neutral" variant="ghost" size="xs" square :aria-label="`Duplicate ${action.label}`" @click="duplicateQuickAction(index)" />
+                                        <UButton :icon="icons.trash" color="error" variant="ghost" size="xs" square :aria-label="`Remove ${action.label}`" @click="removeQuickAction(index)" />
+                                    </div>
+                                </div>
+                            </template>
                         </div>
                     </div>
-                </div>
-            </Transition>
-        </Teleport>
+
+                    <div v-else class="quick-action-empty">
+                        <div>
+                            <strong>No quick actions yet</strong>
+                            <span>Add a reusable prompt for edits you make often.</span>
+                        </div>
+                        <UButton :icon="icons.plus" label="Add first action" color="primary" variant="soft" size="sm" @click="addQuickAction" />
+                    </div>
+
+                    <div v-if="pluginActions.length" class="plugin-actions">
+                        <span>Plugin actions</span>
+                        <UButton v-for="action in pluginActions" :key="action.id" :label="action.label" color="neutral" variant="soft" size="xs" @click="runAction(action)" />
+                    </div>
+                </section>
+
+                <p class="settings-note">Document AI preferences sync with this workspace.</p>
+            </div>
+        </AppModal>
 
         <p v-if="error" class="error-message" role="alert">{{ error }}</p>
         <div v-if="status === 'streaming'" class="stream-status" aria-live="polite">
@@ -324,10 +314,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useToast } from '#imports';
+import AppModal from '~/components/ui/AppModal.vue';
 import ChatComposerShell from '~/components/chat/ChatComposerShell.vue';
 import type { DocumentAiAction, DocumentAiScope } from '~/composables/editor/useDocumentAiActions';
 import { useIcon } from '~/composables/useIcon';
-import { useScrollLock } from '~/composables/core/useScrollLock';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import {
     MAX_DOCUMENT_AI_MAX_ITERATIONS,
@@ -431,7 +421,6 @@ const { isMobile } = useResponsiveState();
 const automaticScope = computed<DocumentAiScope>(() =>
     props.selectionAvailable ? 'selection' : 'document'
 );
-useScrollLock({ controlledState: customizeOpen });
 const INHERIT_MODEL_VALUE = 'inherit';
 const { settings, update } = useDocumentAiSettings();
 const toolRegistry = useToolRegistry();
@@ -552,23 +541,15 @@ watch(automaticScope, scheduleEstimate);
 watch(prompt, scheduleEstimate);
 watch(references, scheduleEstimate, { deep: true });
 onMounted(() => {
-    window.addEventListener('keydown', onWindowKeydown);
     void Promise.all([
         fetchModels().catch(() => []),
         getFavoriteModels().catch(() => []),
     ]);
 });
 onBeforeUnmount(() => {
-    window.removeEventListener('keydown', onWindowKeydown);
     if (estimateTimer) clearTimeout(estimateTimer);
 });
 
-function onWindowKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && customizeOpen.value) {
-        event.preventDefault();
-        customizeOpen.value = false;
-    }
-}
 function goPrevHunk() {
     emit('focus-prev-hunk');
 }

@@ -17,7 +17,6 @@ import type { Or3DB } from '~/db/client';
 import { patchMessageInDb } from '~/db/messages';
 import { serializeFileHashes } from '~/db/files-util';
 import type { StoredMessage, AssistantPersister } from './types';
-import type { ToolCallInfo } from '~/utils/chat/uiMessages';
 import { createForegroundGenerationLease } from '~/utils/chat/generation-lease';
 
 /**
@@ -41,13 +40,8 @@ export function makeAssistantPersister(
         toolCalls,
         finalize = false, // When true, clears pending flag to trigger sync
         terminalState,
-    }: {
-        content?: string;
-        reasoning?: string | null;
-        toolCalls?: ToolCallInfo[] | null;
-        finalize?: boolean;
-        terminalState?: 'complete' | 'failed' | 'aborted' | 'interrupted';
-    }): Promise<string | null> {
+        ifCurrent,
+    }: Parameters<AssistantPersister>[0]): Promise<string | null> {
         // Build only the owned delta. The merge against the latest row happens
         // atomically inside patchMessageInDb's write transaction, so concurrent
         // plugin metadata, synced edits, or file references cannot be
@@ -96,7 +90,8 @@ export function makeAssistantPersister(
             db,
             assistantDbMsg.id,
             patch as Partial<StoredMessage>,
-            assistantDbMsg
+            assistantDbMsg,
+            ifCurrent
         );
         if (ownedSerialized !== undefined) {
             lastSerialized = ownedSerialized ?? null;
@@ -125,7 +120,8 @@ export async function updateMessageRecord(
     db: Or3DB,
     id: string,
     patch: Partial<StoredMessage>,
-    existing?: StoredMessage | null
+    existing?: StoredMessage | null,
+    ifCurrent?: Parameters<typeof patchMessageInDb>[4]
 ): Promise<void> {
     // Merge the caller's delta against the latest row inside a single write
     // transaction (see patchMessageInDb). Never read-then-write across two
@@ -141,6 +137,7 @@ export async function updateMessageRecord(
             ...patch,
             updated_at: patch.updated_at ?? nowSec(),
         } as Partial<StoredMessage>,
-        existing ?? null
+        existing ?? null,
+        ifCurrent
     );
 }

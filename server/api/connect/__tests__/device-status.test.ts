@@ -60,20 +60,17 @@ vi.mock('../../../utils/rate-limit/store', () => ({
     }),
 }));
 
-const healthMock = vi.fn();
-const readinessMock = vi.fn();
-const listRunnersMock = vi.fn();
-const createInternClientMock = vi.fn();
-vi.mock('@or3/intern-client', () => ({
-    createInternClient: (...args: unknown[]) => {
-        createInternClientMock(...args);
-        return {
-            health: healthMock,
-            readiness: readinessMock,
-            listRunners: listRunnersMock,
-        };
-    },
-}));
+const fetchMock = vi.fn();
+vi.stubGlobal('fetch', fetchMock);
+const health = {
+    status: 'ok', runtimeAvailable: true, jobRegistryAvailable: true,
+    approvalBrokerAvailable: true, processId: 1, startedAt: '2026-09-26T00:00:00Z',
+};
+const readiness = { status: 'ready', ready: true };
+const runners = { runners: [{
+    id: 'runner-a', display_name: 'Runner A', status: 'available',
+    auth_status: 'ready', supports: {},
+}] };
 
 const event = { context: {} } as H3Event;
 const environmentId = 'env-abcdefgh';
@@ -133,20 +130,13 @@ describe('Connect device online status', () => {
             return { controlToken: 'paired-device-token' };
         });
         checkAndRecordMock.mockReset().mockResolvedValue({ allowed: true });
-        healthMock
-            .mockReset()
-            .mockResolvedValue({ status: 'ok', runtimeAvailable: true });
-        readinessMock.mockReset().mockResolvedValue({ ready: true });
-        listRunnersMock.mockReset().mockResolvedValue({
-            runners: [
-                {
-                    id: 'runner-a',
-                    status: 'available',
-                    auth_status: 'ready',
-                },
-            ],
+        fetchMock.mockReset().mockImplementation(async (input: string | URL) => {
+            const path = new URL(String(input)).pathname;
+            if (path === '/internal/v1/health') return Response.json(health);
+            if (path === '/internal/v1/readiness') return Response.json(readiness);
+            if (path === '/internal/v1/chat-runners') return Response.json(runners);
+            throw new Error(`Unexpected probe path: ${path}`);
         });
-        createInternClientMock.mockReset();
         probeRunsCapabilitiesMock
             .mockReset()
             .mockResolvedValue({ sessions: true, events: true });
@@ -161,7 +151,7 @@ describe('Connect device online status', () => {
 
         await expect(handler(event)).resolves.toEqual({ stage: 'approved' });
         expect(listEnvironmentsMock).not.toHaveBeenCalled();
-        expect(createInternClientMock).not.toHaveBeenCalled();
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('keeps durable relay provisioning in the honest approved stage', async () => {
@@ -174,7 +164,7 @@ describe('Connect device online status', () => {
 
         await expect(handler(event)).resolves.toEqual({ stage: 'approved' });
         expect(listEnvironmentsMock).not.toHaveBeenCalled();
-        expect(createInternClientMock).not.toHaveBeenCalled();
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('reports online only after an authenticated protected runner probe succeeds', async () => {
@@ -188,15 +178,59 @@ describe('Connect device online status', () => {
             userId: 'user-one',
             workspaceId: 'workspace-a',
         });
-        const clientOptions = createInternClientMock.mock.calls[0]?.[0] as {
-            resolveAuth: () => Promise<unknown>;
-        };
-        await expect(clientOptions.resolveAuth()).resolves.toEqual({
-            token: 'paired-device-token',
-            headers: { 'X-Or3-Auth-Method': 'paired-device' },
-        });
-        expect(listRunnersMock).toHaveBeenCalledOnce();
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+        for (const [input, init] of fetchMock.mock.calls) {
+            const url = new URL(String(input));
+            const headers = new Headers(init.headers);
+            expect(url.hostname).toBe('grandma.connect.example.test');
+            expect(url.searchParams.has('_or3_setup_probe')).toBe(true);
+            expect(headers.get('Authorization')).toBe('Bearer paired-device-token');
+            expect(headers.get('X-Or3-Auth-Method')).toBe('paired-device');
+            expect(init.cache).toBe('no-store');
+            expect(init.redirect).toBe('error');
+            expect(init.signal).toBeInstanceOf(AbortSignal);
+        }
     });
+
+    it('accepts an unavailable readiness response while requiring healthy authenticated runners', async () => {
+        fetchMock.mockImplementation(async (input: string | URL) => {
+            const path = new URL(String(input)).pathname;
+            if (path === '/internal/v1/health') return Response.json(health);
+            if (path === '/internal/v1/readiness') return Response.json({ status: 'not-ready', ready: false }, { status: 503 });
+            if (path === '/internal/v1/chat-runners') return Response.json(runners);
+            throw new Error(`Unexpected probe path: ${path}`);
+        });
+        const handler = await statusHandler();
+
+        await expect(handler(event)).resolves.toEqual({ stage: 'online', readiness: false });
+    });
+
+    it('rejects malformed runner status rather than reporting a computer online', async () => {
+        fetchMock.mockImplementation(async (input: string | URL) => {
+            const path = new URL(String(input)).pathname;
+            if (path === '/internal/v1/health') return Response.json(health);
+            if (path === '/internal/v1/readiness') return Response.json(readiness);
+            if (path === '/internal/v1/chat-runners') return Response.json({ runners: [{ ...runners.runners[0], status: 3 }] });
+            throw new Error(`Unexpected probe path: ${path}`);
+        });
+        const handler = await statusHandler();
+
+        await expect(handler(event)).resolves.toEqual({ stage: 'installing' });
+    });
+
+    it('bounds a stalled authenticated runner probe', async () => {
+        fetchMock.mockImplementation(async (input: string | URL, init: RequestInit) => {
+            const path = new URL(String(input)).pathname;
+            if (path === '/internal/v1/health') return Response.json(health);
+            if (path === '/internal/v1/readiness') return Response.json(readiness);
+            return await new Promise<Response>((_resolve, reject) => {
+                init.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+            });
+        });
+        const handler = await statusHandler();
+
+        await expect(handler(event)).resolves.toEqual({ stage: 'installing' });
+    }, 10_000);
 
     it('keeps probing after the bounded delivery ciphertext is erased', async () => {
         getAuthorizationMock.mockResolvedValue({
@@ -223,7 +257,10 @@ describe('Connect device online status', () => {
     });
 
     it('stays installing while credential redemption precedes service startup', async () => {
-        listRunnersMock.mockRejectedValue(new Error('tunnel not online'));
+        fetchMock.mockImplementation(async (input: string | URL) => {
+            if (new URL(String(input)).pathname === '/internal/v1/chat-runners') throw new Error('tunnel not online');
+            return Response.json(health);
+        });
         const handler = await statusHandler();
 
         await expect(handler(event)).resolves.toEqual({ stage: 'installing' });
@@ -259,7 +296,7 @@ describe('Connect device online status', () => {
             'https://grandma.connect.example.test/or3/',
             'paired-device-token'
         );
-        expect(createInternClientMock).not.toHaveBeenCalled();
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('returns a re-enroll reason when a Runs credential binding disagrees with its environment', async () => {
@@ -309,6 +346,6 @@ describe('Connect device online status', () => {
 
         await expect(handler(event)).rejects.toMatchObject({ statusCode: 404 });
         expect(listEnvironmentsMock).not.toHaveBeenCalled();
-        expect(createInternClientMock).not.toHaveBeenCalled();
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 });

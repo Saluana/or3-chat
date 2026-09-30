@@ -4,6 +4,27 @@
     --chat-composer-border-radius: 28px;
     --blank-brand-accent: #2a8fd6;
 
+    /* The sidebar draws its own soft edge inside the layout. */
+    #sidebar {
+        border-right-width: 0;
+    }
+
+    /* The tab bar and sidebar draw the outer seams; each divider has one owner. */
+    .pane-container--multiple > .workspace-pane {
+        border: 0;
+        border-bottom: 1px solid var(--md-border-color);
+    }
+
+    .pane-container--multiple > .workspace-pane:not(:last-child) {
+        border-right: 1px solid var(--md-border-color);
+    }
+
+    .pane-container--multiple > .workspace-pane.pane-active::before {
+        box-shadow: inset 0 0 10px
+            color-mix(in srgb, var(--md-primary) 10%, transparent);
+        z-index: 10;
+    }
+
     /* Workspace tabs: quiet chips that match blank's borderless shell. */
     --or3-workspace-chrome-size: 44px;
     --or3-workspace-chrome-mobile-size: 48px;
@@ -870,30 +891,27 @@ html[data-theme='blank']
         font-size: 24px !important;
     }
 
-    /*
-     * Keep the chat composer visually compact. The generic mobile UButton
-     * floor is 44px, so these buttons paint smaller controls and recover the
-     * touch area with their component-level pseudo-elements.
-     */
+    /* Keep separate 44px targets; expanded pseudo-elements overlap adjacent
+       controls in the narrow composer. */
     @layer utilities {
         html[data-theme="blank"] .blank2-chat-dropper.chat-input-main
             .chat-input-bottom-controls-left
             :is(.chat-input-attachment-btn, .chat-input-settings-btn)
             button {
-            width: 2rem !important;
-            height: 2rem !important;
-            min-width: 2rem !important;
-            min-height: 2rem !important;
+            width: 44px !important;
+            height: 44px !important;
+            min-width: 44px !important;
+            min-height: 44px !important;
             padding: 0 !important;
         }
 
         html[data-theme="blank"] .blank2-chat-dropper.chat-input-main
             .chat-input-bottom-controls-right
             :is(.chat-input-send-btn, .chat-input-stop-btn) {
-            width: 2.25rem !important;
-            height: 2.25rem !important;
-            min-width: 2.25rem !important;
-            min-height: 2.25rem !important;
+            width: 44px !important;
+            height: 44px !important;
+            min-width: 44px !important;
+            min-height: 44px !important;
             padding: 0 !important;
         }
     }

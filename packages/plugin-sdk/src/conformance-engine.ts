@@ -47,6 +47,7 @@ export type V2ConformanceIssueCode =
     | 'unresolved-bare-import'
     | 'nuxt-auto-import'
     | 'client-entry-missing'
+    | 'server-route-path-invalid'
     /** `firstAction.samplePath` is declared but the file is not in the package. */
     | 'portable-sample-missing'
     | PortableProfileFindingCode
@@ -346,6 +347,8 @@ function scanSource(source: string): SourceSegment[] {
  */
 export function moduleSpecifiers(source: string): string[] {
     const result: string[] = [];
+    const staticFromClause =
+        /(?<![\w$.])(?:import|export)\s*(?:type\s+)?(?:\{[^{}]*\}|\*(?:\s+as\s+[A-Za-z_$][\w$]*)?|[A-Za-z_$][\w$]*(?:\s*,\s*(?:\{[^{}]*\}|\*\s+as\s+[A-Za-z_$][\w$]*))?)\s*from\s*$/;
     // 0 = expecting nothing, 1 = expecting the specifier string, 2 = likewise.
     let expectingSpecifier = false;
     for (const segment of scanSource(source)) {
@@ -358,7 +361,7 @@ export function moduleSpecifiers(source: string): string[] {
         }
         const code = segment.text;
         if (/(?<![\w$.])(?:import|require)\s*\(\s*$/.test(code)) expectingSpecifier = true;
-        else if (/(?<![\w$.])from\s*$/.test(code)) expectingSpecifier = true;
+        else if (staticFromClause.test(code)) expectingSpecifier = true;
         else if (/(?<![\w$.])import\s*$/.test(code)) expectingSpecifier = true;
     }
     return [...new Set(result)];
@@ -370,7 +373,7 @@ function declaredNames(masked: string): Set<string> {
         for (const identifier of text.matchAll(/[A-Za-z_$][\w$]*/g)) result.add(identifier[0]!);
     };
     const patterns = [
-        /\bimport\s+(?:type\s+)?[\s\S]*?\bfrom\b/g,
+        /\bimport\s*(?:type\s+)?(?:\{[^}]*\}|\*\s+as\s+[A-Za-z_$][\w$]*|[A-Za-z_$][\w$]*(?:\s*,\s*\{[^}]*\})?)\s*from\b/g,
         /\b(?:const|let|var)\s+[A-Za-z_$][\w$]*/g,
         /\b(?:function|class)\s+[A-Za-z_$][\w$]*/g,
         // Only real parameter positions, so call arguments are not mistaken for
@@ -535,6 +538,26 @@ export function evaluateV2Conformance(input: V2ConformanceEngineInput): V2Confor
             );
         }
     }
+    const runtimeServer = isJsonObject(manifest.runtime) ? manifest.runtime.server : undefined;
+    const routes = isJsonObject(runtimeServer) ? runtimeServer.routes : undefined;
+    if (Array.isArray(routes)) {
+        for (const route of routes) {
+            const path = isJsonObject(route) ? route.path : undefined;
+            if (typeof path !== 'string' || !path || path.startsWith('/') || path.includes('..')) {
+                issues.push(issue(
+                    'server-route-path-invalid',
+                    CONFORMANCE_MANIFEST_FILE,
+                    'Server route paths must be nonempty plugin-local paths without traversal',
+                    String(path)
+                ));
+            }
+        }
+    }
+    const declaredBuildDependencies = new Set(
+        manifest.trust === 'trusted-host' && packageJson
+            ? Object.keys(isJsonObject(packageJson.dependencies) ? packageJson.dependencies : {})
+            : []
+    );
     for (const module of input.moduleGraph) {
         const fileName = module.path;
         const specifiers = module.specifiers ?? moduleSpecifiers(module.source ?? '');
@@ -552,7 +575,15 @@ export function evaluateV2Conformance(input: V2ConformanceEngineInput): V2Confor
                         specifier
                     )
                 );
-            } else if (isBareImport(specifier) && !ALLOWED_BARE_IMPORTS.has(specifier)) {
+            } else if (
+                isBareImport(specifier) &&
+                !ALLOWED_BARE_IMPORTS.has(specifier) &&
+                !declaredBuildDependencies.has(
+                    specifier.startsWith('@')
+                        ? specifier.split('/').slice(0, 2).join('/')
+                        : (specifier.split('/')[0] ?? '')
+                )
+            ) {
                 issues.push(
                     issue(
                         'unresolved-bare-import',

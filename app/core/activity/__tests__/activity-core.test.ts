@@ -3,12 +3,13 @@ import {
     activityErr,
     activityOk,
     type ActivityEvent,
+    type ActivityRunSummary,
     type ActivitySource,
 } from '../contract';
 import { ActivityRegistry } from '../registry';
 import { ActivityTimeline } from '../timeline';
 
-function summary(sourceId: string, id: string, updatedAt = '2026-07-27T10:00:00Z') {
+function summary(sourceId: string, id: string, updatedAt = '2026-07-27T10:00:00Z'): ActivityRunSummary {
     return {
         id,
         sourceId,

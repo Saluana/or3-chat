@@ -1,3 +1,4 @@
+import { eligibleWorkspacePluginDescriptors } from '~~/shared/plugins/workspace-plugin-coordinator';
 import type { PluginRuntimeManifestResponse } from '~~/shared/plugins/runtime-manifest';
 import type { BundledV1PluginDescriptor } from '~~/shared/plugins/runtime-descriptor';
 import { BundledV1Loader } from '~~/shared/plugins/bundled-v1-loader';
@@ -7,11 +8,14 @@ import {
     type ManagedBundledV1Instance,
 } from '~~/shared/plugins/bundled-v1-manager';
 import {
-    createManagedWorkspacePluginRuntime,
     registerWorkspacePluginInstance,
     unregisterWorkspacePluginInstance,
     type Or3WorkspacePlugin,
 } from './workspace-runtime';
+import {
+    createTrustedHostContext,
+    TRUSTED_HOST_GRANTS,
+} from './trusted-host-context';
 
 export const WORKSPACE_PLUGIN_RECONCILE_EVENT = 'or3:workspace-plugin-reconcile';
 
@@ -56,8 +60,6 @@ export function parseWorkspacePluginModule(
 
 export interface CreateBundledV1WorkspaceManagerOptions {
     readonly loader: BundledV1Loader;
-    readonly getWorkspaceId: () => string | null | undefined;
-    readonly fetchManifest: (signal: AbortSignal) => Promise<PluginRuntimeManifestResponse>;
 }
 
 type ManagerRuntimeGlobals = typeof globalThis & {
@@ -68,24 +70,15 @@ export function getBundledV1WorkspaceManager(): BundledV1PluginManager | null {
     return (globalThis as ManagerRuntimeGlobals).__or3BundledV1WorkspaceManager ?? null;
 }
 
-function desiredStateFromManifest(
+export function desiredStateFromManifest(
     manifest: PluginRuntimeManifestResponse,
     workspaceId: string
 ): BundledV1ManagerDesiredState {
     if (manifest.workspaceId !== workspaceId) {
         throw new Error('Runtime manifest workspace does not match the active session');
     }
-    const descriptors: BundledV1PluginDescriptor[] = [];
-    for (const pluginId of manifest.enabledPluginIds) {
-        const runtime = manifest.runtime[pluginId];
-        if (
-            runtime?.loadAllowed !== false &&
-            runtime?.descriptorStatus === 'ready' &&
-            runtime.descriptor.manifestVersion === 1
-        ) {
-            descriptors.push(runtime.descriptor);
-        }
-    }
+    const descriptors = eligibleWorkspacePluginDescriptors(manifest, workspaceId)
+        .filter((descriptor): descriptor is BundledV1PluginDescriptor => descriptor.manifestVersion === 1);
     descriptors.sort((left, right) => left.id.localeCompare(right.id));
     return { descriptors, revision: manifest.revision };
 }
@@ -94,12 +87,6 @@ export function createBundledV1WorkspaceManager(
     options: CreateBundledV1WorkspaceManagerOptions
 ): BundledV1PluginManager {
     const manager = new BundledV1PluginManager({
-        async fetchDesired(signal) {
-            const workspaceId = options.getWorkspaceId();
-            if (!workspaceId) return { descriptors: [], revision: 'no-workspace' };
-            const manifest = await options.fetchManifest(signal);
-            return desiredStateFromManifest(manifest, workspaceId);
-        },
         async load(descriptor, signal): Promise<ManagedBundledV1Instance> {
             const resolution = options.loader.resolve(descriptor.id);
             if (
@@ -113,19 +100,24 @@ export function createBundledV1WorkspaceManager(
             if (signal.aborted) throw signal.reason;
             const plugin = parseWorkspacePluginModule(mod, descriptor.id);
             if (!plugin) throw new Error('Invalid plugin module export or plugin id mismatch');
-            const runtime = createManagedWorkspacePluginRuntime({
+            // Bundled V1 plugins are trusted in-process. They always receive the
+            // full grant set; SDK grant checks are not a least-privilege gate here.
+            const trusted = createTrustedHostContext({
                 pluginId: descriptor.id,
+                version: descriptor.version,
+                workspaceId: descriptor.workspaceId,
+                grants: TRUSTED_HOST_GRANTS,
             });
             let registered = false;
             return {
                 async register() {
-                    await plugin.register(runtime.api);
+                    await plugin.register(trusted.workspaceApi);
                     if (signal.aborted) throw signal.reason;
                     const registration = registerWorkspacePluginInstance(
                         descriptor.id,
                         'extension',
                         async () => {
-                            await runtime.dispose();
+                            await trusted.dispose();
                         }
                     );
                     if (!registration.accepted) {
@@ -140,7 +132,9 @@ export function createBundledV1WorkspaceManager(
                         registered = false;
                         unregisterWorkspacePluginInstance(descriptor.id);
                     }
-                    return runtime.dispose(reason);
+                    const report = await trusted.dispose(reason);
+                    if (report.timedOut || report.errors.length) throw new Error('Bundled plugin teardown failed');
+                    return report;
                 },
             };
         },

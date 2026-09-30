@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { onUnmounted } from 'vue';
+import { computed, onUnmounted } from 'vue';
+import { useRoute, useRouter } from '#imports';
+import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import { useDashboardNavigation } from '~/composables/dashboard/useDashboardPlugins';
 import {
     setMarketplaceSetupPlugin,
@@ -8,13 +10,26 @@ import {
 import PluginSetupPage from '~/components/plugins/PluginSetupPage.vue';
 
 const navigation = useDashboardNavigation();
-const pluginId = useMarketplaceSetupPlugin();
+const route = useRoute();
+const router = useRouter();
+const selectedPluginId = useMarketplaceSetupPlugin();
+const pluginId = computed(() => {
+    const queryPlugin = typeof route.query.plugin === 'string' ? route.query.plugin : null;
+    const queryWorkspace = typeof route.query.workspace === 'string' ? route.query.workspace : null;
+    if (queryWorkspace && queryWorkspace !== getCachedSessionContext()?.workspace?.id) return null;
+    return queryPlugin && /^[a-z0-9][a-z0-9._-]{0,127}$/.test(queryPlugin)
+        ? queryPlugin : selectedPluginId.value;
+});
+const fromPage = computed(() => route.query.from === 'discover' || route.query.from === 'updates'
+    ? route.query.from : 'installed');
 
 // Do not leave a stale plugin selection behind when the dashboard page closes.
 onUnmounted(() => setMarketplaceSetupPlugin(null));
 
-function backToInstalled(): void {
-    void navigation.openPage('marketplace', 'installed');
+async function backToOrigin(): Promise<void> {
+    const page = fromPage.value;
+    await router.replace({ query: { ...route.query, dashboard: 'marketplace', page, setup: undefined, from: undefined } });
+    await navigation.openPage('marketplace', page);
 }
 </script>
 
@@ -30,9 +45,9 @@ function backToInstalled(): void {
                     color="neutral"
                     variant="soft"
                     icon="i-lucide-arrow-left"
-                    @click="backToInstalled"
+                    @click="backToOrigin"
                 >
-                    Back to Installed
+                    Back to {{ fromPage === 'discover' ? 'installation' : fromPage === 'updates' ? 'update' : 'Installed' }}
                 </UButton>
             </div>
         </div>
@@ -46,9 +61,9 @@ function backToInstalled(): void {
                     color="neutral"
                     variant="ghost"
                     icon="i-lucide-arrow-left"
-                    @click="backToInstalled"
+                    @click="backToOrigin"
                 >
-                    Back to Installed
+                    Back to {{ fromPage === 'discover' ? 'installation' : fromPage === 'updates' ? 'update' : 'Installed' }}
                 </UButton>
             </div>
             <PluginSetupPage :plugin-id="pluginId" embedded />

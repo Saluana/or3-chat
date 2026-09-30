@@ -85,6 +85,95 @@ export function __resetActiveSidebarPageForTests(): void {
     g.__or3ActiveSidebarPageState = createActiveSidebarPageState();
 }
 
+/** Activate a sidebar page from a host callback without creating component watchers. */
+export async function setActiveSidebarPage(id: string): Promise<boolean> {
+    const { getSidebarPage } = useSidebarPages();
+    const hooks = useHooks();
+    const state = g.__or3ActiveSidebarPageState!;
+    const activePageId = state.activePageId;
+    const previousPageId = state.previousPageId;
+    const activeProfilePageIds = () =>
+        isMobile.value
+            ? resolvedWorkspaceProfile.value.mobile.bottomNavigation
+            : resolvedWorkspaceProfile.value.navigation.items;
+    const activeProfileDefaultPage = () => workspaceProfileDefaultPage(isMobile.value);
+
+    if (!process.client) return false;
+    const nextPage =
+        (activeProfilePageIds().includes(id) ? getSidebarPage(id) : undefined) ||
+        getSidebarPage(activeProfileDefaultPage()) ||
+        getSidebarPage(DEFAULT_PAGE_ID);
+    if (!nextPage) {
+        if (import.meta.dev) {
+            console.warn(`[useActiveSidebarPage] Unknown page id: ${id}, falling back to default`);
+        }
+        await hooks.doAction('ui.sidebar.page:action:load-error', {
+            pageId: id,
+            error: new Error(`Unknown page id: ${id}`),
+        });
+        return false;
+    }
+
+    const currentPageId = activePageId.value ?? DEFAULT_PAGE_ID;
+    const currentPage = getSidebarPage(currentPageId);
+    const previousPageIdSnapshot = activePageId.value;
+    const ctx: SidebarActivateContext = {
+        page: nextPage,
+        previousPage: currentPage || null,
+        isCollapsed: false,
+        multiPane: null as unknown as UseMultiPaneApi,
+        panePluginApi: null as unknown as PanePluginApi,
+    };
+
+    try {
+        if (nextPage.canActivate) {
+            try {
+                if (!(await Promise.resolve(nextPage.canActivate(ctx)))) return false;
+            } catch (guardError) {
+                console.error(`[useActiveSidebarPage] canActivate hook failed for ${id}:`, guardError);
+                await hooks.doAction('ui.sidebar.page:action:load-error', {
+                    pageId: id, error: guardError, phase: 'canActivate',
+                });
+                return false;
+            }
+        }
+        if (currentPage?.onDeactivate) {
+            try {
+                await Promise.resolve(currentPage.onDeactivate(ctx));
+            } catch (deactivateError) {
+                console.error(`[useActiveSidebarPage] onDeactivate hook failed for ${currentPage.id}:`, deactivateError);
+                await hooks.doAction('ui.sidebar.page:action:load-error', {
+                    pageId: currentPage.id, error: deactivateError, phase: 'onDeactivate',
+                });
+            }
+        }
+        previousPageId.value = activePageId.value;
+        activePageId.value = nextPage.id;
+        if (nextPage.onActivate) {
+            try {
+                await Promise.resolve(nextPage.onActivate(ctx));
+            } catch (activateError) {
+                console.error(`[useActiveSidebarPage] onActivate hook failed for ${id}:`, activateError);
+                activePageId.value = previousPageIdSnapshot;
+                await hooks.doAction('ui.sidebar.page:action:load-error', {
+                    pageId: id, error: activateError, phase: 'onActivate',
+                });
+                return false;
+            }
+        }
+        storedActivePageId.value = nextPage.id;
+        await hooks.doAction('ui.sidebar.page:action:open', { id: nextPage.id, page: nextPage });
+        return true;
+    } catch (error) {
+        console.error('[useActiveSidebarPage] Unexpected error during page activation:', error);
+        activePageId.value = previousPageIdSnapshot;
+        await hooks.doAction('ui.sidebar.page:action:load-error', {
+            pageId: id, error, phase: 'general',
+        });
+        return false;
+    }
+}
+
 /**
  * `useActiveSidebarPage`
  *
@@ -136,139 +225,7 @@ export function useActiveSidebarPage() {
      * @param id - The ID of the page to activate.
      * @returns True if activation succeeded, false if it failed or was blocked.
      */
-    async function setActivePage(id: string): Promise<boolean> {
-        if (!process.client) {
-            return false;
-        }
-
-        const nextPage =
-            (activeProfilePageIds().includes(id)
-                ? getSidebarPage(id)
-                : undefined) ||
-            getSidebarPage(activeProfileDefaultPage()) ||
-            getSidebarPage(DEFAULT_PAGE_ID);
-        if (!nextPage) {
-            if (import.meta.dev) {
-                console.warn(
-                    `[useActiveSidebarPage] Unknown page id: ${id}, falling back to default`
-                );
-            }
-            await hooks.doAction('ui.sidebar.page:action:load-error', {
-                pageId: id,
-                error: new Error(`Unknown page id: ${id}`),
-            });
-            return false;
-        }
-
-        const currentPageId = activePageId.value ?? DEFAULT_PAGE_ID;
-        const currentPage = getSidebarPage(currentPageId);
-        const previousPageIdSnapshot = activePageId.value;
-
-        // Create activation context
-        const ctx: SidebarActivateContext = {
-            page: nextPage,
-            previousPage: currentPage || null,
-            isCollapsed: false, // Will be updated when we integrate with sidebar state
-            multiPane: null as unknown as UseMultiPaneApi, // Will be populated when we create the adapter
-            panePluginApi: null as unknown as PanePluginApi, // Will be populated when we create the adapter
-        };
-
-        try {
-            // Check activation guard
-            if (nextPage.canActivate) {
-                try {
-                    const canActivate = await Promise.resolve(
-                        nextPage.canActivate(ctx)
-                    );
-                    if (!canActivate) {
-                        if (import.meta.dev) {
-                            console.log(
-                                `[useActiveSidebarPage] canActivate returned false for ${id}`
-                            );
-                        }
-                        return false;
-                    }
-                } catch (guardError) {
-                    console.error(
-                        `[useActiveSidebarPage] canActivate hook failed for ${id}:`,
-                        guardError
-                    );
-                    await hooks.doAction('ui.sidebar.page:action:load-error', {
-                        pageId: id,
-                        error: guardError,
-                        phase: 'canActivate',
-                    });
-                    return false;
-                }
-            }
-
-            // Deactivate current page
-            if (currentPage?.onDeactivate) {
-                try {
-                    await Promise.resolve(currentPage.onDeactivate(ctx));
-                } catch (deactivateError) {
-                    // Log but don't block the transition
-                    console.error(
-                        `[useActiveSidebarPage] onDeactivate hook failed for ${currentPage.id}:`,
-                        deactivateError
-                    );
-                    await hooks.doAction('ui.sidebar.page:action:load-error', {
-                        pageId: currentPage.id,
-                        error: deactivateError,
-                        phase: 'onDeactivate',
-                    });
-                }
-            }
-
-            // Update state
-            previousPageId.value = activePageId.value;
-            activePageId.value = nextPage.id;
-
-            // Activate new page
-            if (nextPage.onActivate) {
-                try {
-                    await Promise.resolve(nextPage.onActivate(ctx));
-                } catch (activateError) {
-                    console.error(
-                        `[useActiveSidebarPage] onActivate hook failed for ${id}:`,
-                        activateError
-                    );
-                    // Roll back state
-                    activePageId.value = previousPageIdSnapshot;
-                    await hooks.doAction('ui.sidebar.page:action:load-error', {
-                        pageId: id,
-                        error: activateError,
-                        phase: 'onActivate',
-                    });
-                    return false;
-                }
-            }
-
-            // Persist the selection via useLocalStorage
-            storedActivePageId.value = nextPage.id;
-
-            // Emit analytics hook
-            await hooks.doAction('ui.sidebar.page:action:open', {
-                id: nextPage.id,
-                page: nextPage,
-            });
-
-            return true;
-        } catch (error) {
-            console.error(
-                '[useActiveSidebarPage] Unexpected error during page activation:',
-                error
-            );
-            // Revert to previous page on error
-            activePageId.value = previousPageIdSnapshot;
-            await hooks.doAction('ui.sidebar.page:action:load-error', {
-                pageId: id,
-                error,
-                phase: 'general',
-            });
-            return false;
-        }
-    }
+    const setActivePage = setActiveSidebarPage;
 
     /**
      * Reset to the default page (sidebar-home).
@@ -311,7 +268,6 @@ export function useActiveSidebarPage() {
                 : [];
             const followedPreviousDefault =
                 projection.mobile &&
-                previousProjection !== undefined &&
                 projection.defaultPageId !==
                     previousProjection.defaultPageId &&
                 current === previousProjection.defaultPageId;

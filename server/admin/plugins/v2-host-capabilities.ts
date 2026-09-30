@@ -4,8 +4,8 @@ import {
     QUALIFIED_BROWSER_ENGINES,
 } from '../../../shared/plugins/isolation/portable-bootstrap';
 import { REMOTE_CAPABILITY_METHODS } from '../../../shared/plugins/isolation/capability-bridge';
-import { SDK_LOGIC_RPC_METHODS } from '../../../shared/plugins/isolation/host-rpc-broker';
-import { UI_CONTRIBUTE_EVENT } from '../../../shared/plugins/isolation/worker-runtime';
+import { SDK_LOGIC_RPC_METHODS } from '~~/shared/plugins/isolation/host-rpc-broker';
+import { UI_CONTRIBUTE_EVENT } from '~~/shared/plugins/isolation/worker-runtime';
 
 export type Or3PluginV2GrantRegistration =
     | {
@@ -21,6 +21,11 @@ export type Or3PluginV2GrantRegistration =
           readonly kind: 'test';
           /** Stable test id for a host route/action qualification. */
           readonly id: string;
+      }
+    | {
+          readonly kind: 'adapter';
+          readonly module: string;
+          readonly exportName: string;
       };
 
 /**
@@ -35,6 +40,11 @@ export interface Or3PluginV2GrantQualification {
     readonly status: 'qualified' | 'unqualified';
     /** The callable method/event or qualification test that substantiates it. */
     readonly registration: Or3PluginV2GrantRegistration;
+    /**
+     * Trust modes that may request this grant. Omitted qualified grants stay
+     * available to trusted-host and isolated-client.
+     */
+    readonly trustModes?: readonly ('trusted-host' | 'isolated-client' | 'isolated-server')[];
 }
 
 function sdkMethodsForGrant(grant: string): readonly string[] {
@@ -124,37 +134,50 @@ export const OR3_PLUGIN_V2_GRANT_REGISTRY: readonly Or3PluginV2GrantQualificatio
                 id: 'usePortableHostActions.document-write',
             },
         },
+        ...Object.entries({
+            'ui.sidebar.register': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
+            'ui.pane.register': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
+            'panes.open': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
+            'workspace.read': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
+            'hooks.register': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
+            'commands.register': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
+            'activity.register': ['app/composables/plugins/trusted-host-context.ts', 'createTrustedHostContext'],
+            'chat.message.renderer': ['app/composables/chat/message-renderers.ts', 'registerMessageRenderer'],
+            'chat.editor.extension': ['app/composables/plugins/trusted-editor.ts', 'registerTrustedEditorExtension'],
+            'tools.model.register': ['app/composables/plugins/trusted-models.ts', 'registerTrustedExecutionModel'],
+            'network.stream': ['app/composables/plugins/trusted-mediation.ts', 'createTrustedMediation'],
+            'secrets.read': ['app/composables/plugins/trusted-production-stores.ts', 'createLocalStorageSecretStore'],
+            'secrets.write': ['app/composables/plugins/trusted-production-stores.ts', 'createLocalStorageSecretStore'],
+            'secrets.use': ['app/composables/plugins/trusted-production-stores.ts', 'createLocalStorageSecretStore'],
+            'files.pick': ['app/composables/plugins/trusted-production-stores.ts', 'createWorkspaceFileStore'],
+            'files.read': ['app/composables/plugins/trusted-production-stores.ts', 'createWorkspaceFileStore'],
+            'files.write': ['app/composables/plugins/trusted-production-stores.ts', 'createWorkspaceFileStore'],
+            'posts.read': ['app/composables/plugins/trusted-production-stores.ts', 'createWorkspacePostStore'],
+            'posts.write': ['app/composables/plugins/trusted-production-stores.ts', 'createWorkspacePostStore'],
+        } as const satisfies Record<string, readonly [string, string]>).map(([grant, [module, exportName]]) => ({
+            grant,
+            status: 'qualified' as const,
+            trustModes: ['trusted-host'] as const,
+            registration: { kind: 'adapter' as const, module, exportName },
+        })),
         // Contract inventory only. These grants are deliberately unqualified
         // until a production adapter and conformance fixture exist.
         ...[
-            'ui.sidebar.register',
-            'ui.pane.register',
             'ui.card.register',
             'ui.action.register',
             'ui.toast',
             'ui.confirm',
             'ui.progress',
-            'panes.open',
-            'commands.register',
             'commands.run.public',
             'chat.create',
             'chat.read',
             'chat.message.write',
-            'workspace.read',
             'workspace.switch',
             'workspace.connections.read',
             'workspace.connections.manage',
             'events.register',
             'ai.models',
             'ai.complete',
-            'secrets.read',
-            'secrets.write',
-            'secrets.use',
-            'files.pick',
-            'files.read',
-            'files.write',
-            'network.stream',
-            'activity.register',
         ].map((grant) => ({
             grant,
             status: 'unqualified' as const,
@@ -166,13 +189,23 @@ const qualifiedGrants = OR3_PLUGIN_V2_GRANT_REGISTRY
     .filter((entry) => entry.status === 'qualified')
     .map((entry) => entry.grant);
 
+const grantTrustModes = Object.fromEntries(
+    OR3_PLUGIN_V2_GRANT_REGISTRY
+        .flatMap((entry) =>
+            entry.status === 'qualified' && entry.trustModes
+                ? [[entry.grant, entry.trustModes] as const]
+                : []
+        )
+);
+
 /** The first public V2 host contract. Keep it independent from app package
  * releases so package compatibility follows the documented plugin ABI.
  *
  * `isolated-client` is declared because the host now runs contained portable
  * clients: the entry bytes are served digest-addressed, verified in the browser,
- * and executed inside the opaque-origin sandbox. `trusted-host` remains declared
- * for server-side packages. Only grants the host actually honors appear here —
+ * and executed inside the opaque-origin sandbox. Reviewed `trusted-host` client
+ * packages run in the host page when the V2 loader and browser runtime are enabled.
+ * Only grants the host actually honors appear here —
  * a package requesting anything else is refused rather than trusted.
  *
  * `documents.read` is honored by the host-mediated selection handoff: the server
@@ -189,6 +222,7 @@ export const OR3_PLUGIN_V2_HOST_CAPABILITIES: PluginV2HostCapabilities = Object.
     pluginApiVersion: '2.0.0',
     supportedTrustModes: Object.freeze(['trusted-host', 'isolated-client'] as const),
     supportedGrants: Object.freeze(qualifiedGrants),
+    grantTrustModes: Object.freeze(grantTrustModes),
     supportedFeatures: Object.freeze(['or3-portable-client-v1', 'or3-portable-workspace-v1']),
 });
 

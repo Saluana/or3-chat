@@ -177,7 +177,9 @@ describe('marketplace mutations reconcile the plugin runtime', () => {
         await installed.load();
         await installed.setEnabled('sample.plugin', false);
         await installed.uninstall('sample.plugin', 'sha256-test');
-        await installed.rollback('sample.plugin');
+        await installed.rollback({ ok: true, pluginId: 'sample.plugin', currentVersion: '2.0.0', previousVersion: '1.0.0',
+            currentDigest: 'sha256-current', previousDigest: 'sha256-previous', pointerRevision: 2, enabledWorkspaces: 1,
+            enabledWorkspaceIds: ['ws-1'], enabledWorkspaceSha256: 'sha256-review', blocking: [] });
 
         expect(reconcileReasons()).toEqual([
             'local-admin-change',
@@ -278,7 +280,7 @@ describe('durable operations are recovered', () => {
         expect(restored?.operationId).toBe('op-this-ws');
     });
 
-    it('falls back to the newest unfinished operation when no version matches', async () => {
+    it('does not resume a different release from an exact-version link', async () => {
         fetchMock.mockImplementation((url: string) => {
             if (String(url).startsWith('/api/admin/plugins/acquisitions?')) {
                 return Promise.resolve({
@@ -294,7 +296,8 @@ describe('durable operations are recovered', () => {
 
         const install = useMarketplaceInstall();
         const restored = await install.restore('sample.plugin', { version: '9.9.9' });
-        expect(restored?.operationId).toBe('op-newest');
+        expect(restored).toBeNull();
+        expect(install.operationId.value).toBeNull();
     });
 
     it('resumes a paused adopted operation instead of only watching it', async () => {
@@ -367,6 +370,7 @@ describe('grant consent', () => {
         await expect(
             consent.approve({
                 pluginId: 'sample.plugin',
+                expectedWorkspaceId: 'ws-1',
                 approvedGrants: ['settings.read', 'settings.write'],
                 expectedPackageDigest: `sha256-${'a'.repeat(64)}`,
                 expectedAuthoritySha256: `sha256-${'b'.repeat(64)}`,
@@ -379,6 +383,7 @@ describe('grant consent', () => {
                 method: 'POST',
                 body: {
                     approvedGrants: ['settings.read', 'settings.write'],
+                    expectedWorkspaceId: 'ws-1',
                     expectedPackageDigest: `sha256-${'a'.repeat(64)}`,
                     expectedAuthoritySha256: `sha256-${'b'.repeat(64)}`,
                     version: '1.0.0',
@@ -394,6 +399,7 @@ describe('grant consent', () => {
         await expect(
             consent.approve({
                 pluginId: 'sample.plugin',
+                expectedWorkspaceId: 'ws-1',
                 approvedGrants: ['settings.write'],
                 expectedPackageDigest: null,
                 expectedAuthoritySha256: `sha256-${'b'.repeat(64)}`,
@@ -555,10 +561,10 @@ describe('selection-bound detail and preflight', () => {
 describe('deep links', () => {
     it('builds a link the app shell consumes', () => {
         expect(marketplacePluginDeepLink('https://or3.test', 'sample.plugin')).toBe(
-            'https://or3.test/?dashboard=marketplace&plugin=sample.plugin'
+            'https://or3.test/chat?dashboard=marketplace&plugin=sample.plugin'
         );
         expect(marketplacePluginDeepLink('https://or3.test', 'sample.plugin', '1.2.3')).toBe(
-            'https://or3.test/?dashboard=marketplace&plugin=sample.plugin&version=1.2.3'
+            'https://or3.test/chat?dashboard=marketplace&plugin=sample.plugin&version=1.2.3'
         );
     });
 });
@@ -738,7 +744,9 @@ describe('late response ownership and refresh failures', () => {
         fetchMock.mockResolvedValueOnce({ok: true}).mockRejectedValueOnce(new Error('offline'));
         await expect(installed.setEnabled('sample.plugin', true)).rejects.toThrow('change was saved');
         expect(installed.stale.value).toBe(true);
-        await expect(installed.rollback('sample.plugin')).rejects.toThrow('Refresh');
+        await expect(installed.rollback({ ok: true, pluginId: 'sample.plugin', currentVersion: '2.0.0', previousVersion: '1.0.0',
+            currentDigest: 'sha256-current', previousDigest: 'sha256-previous', pointerRevision: 2, enabledWorkspaces: 1,
+            enabledWorkspaceIds: ['ws-1'], enabledWorkspaceSha256: 'sha256-review', blocking: [] })).rejects.toThrow('Refresh');
         fetchMock.mockResolvedValue(pageResponse);
         expect(await installed.load()).toBe(true);
         expect(installed.stale.value).toBe(false);

@@ -16,17 +16,20 @@
 import { createError, defineEventHandler, getRouterParam, readBody } from 'h3';
 import { z } from 'zod';
 import { requireAdminApiContext } from '../../../../../admin/api';
-import { resolveAdminWorkspaceTarget } from '../../../../../admin/workspace-target';
+import { assertExpectedAdminWorkspace, resolveAdminWorkspaceTarget } from '../../../../../admin/workspace-target';
 import { getWorkspaceSettingsStore } from '../../../../../admin/stores/registry';
 import {
     packageGrantCandidate,
     pluginPackageServices,
+    readPackageManifest,
 } from '../../../../../admin/plugins/package-operation-support';
 import {
     getEnabledPlugins,
     setPluginGrantReview,
     type PluginGrantCandidate,
 } from '../../../../../admin/plugins/workspace-plugin-store';
+import { enabledWorkspaceFingerprint } from '../../../../../admin/plugins/rollback-workspaces';
+import { isSiteReleaseStillApproved } from '../../../../../admin/plugins/site-policy-service';
 import {
     acquisitionServiceFor,
     registryClientFor,
@@ -35,6 +38,8 @@ import {
 import { acquisitionConfig } from '../../../../../utils/plugins/acquisition/config';
 import { RegistryStateStore } from '../../../../../utils/plugins/acquisition/registry-state';
 import { requesterIdentity } from '../../../../../utils/plugins/acquisition/route-identity';
+import { readLocalAdmission } from '../../../../../admin/plugins/local-admission';
+import { readAdminUploadProvenance } from '../../../../../admin/plugins/admin-upload-provenance';
 
 const DigestSchema = z.string().regex(/^sha256-[a-f0-9]{64}$/);
 
@@ -46,8 +51,11 @@ const BodySchema = z
         /** Signed authority hash the reviewer saw. */
         expectedAuthoritySha256: DigestSchema,
         version: z.string().min(1).max(64).optional(),
+        target: z.enum(['candidate', 'current']).optional(),
         workspaceId: z.string().min(1).optional(),
+        expectedWorkspaceId: z.string().min(1).optional(),
         deploymentWide: z.boolean().optional(),
+        expectedEnabledWorkspaceSha256: DigestSchema.optional(),
     })
     .strict();
 
@@ -62,17 +70,56 @@ export default defineEventHandler(async (event) => {
     if (!pluginId || !body.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid request' });
     }
+    assertExpectedAdminWorkspace(context, body.data.expectedWorkspaceId);
     if (body.data.deploymentWide && body.data.workspaceId) {
         throw createError({ statusCode: 400, statusMessage: 'Choose either deployment-wide or one workspace.' });
+    }
+    if (body.data.deploymentWide && !body.data.expectedEnabledWorkspaceSha256) {
+        throw createError({ statusCode: 400, statusMessage: 'Review the enabled workspace set before approving this release.' });
+    }
+    if (body.data.deploymentWide && !body.data.version) {
+        throw createError({ statusCode: 400, statusMessage: 'Review one exact site-approved version before approving enabled workspaces.' });
     }
     const workspaceId = resolveAdminWorkspaceTarget(context, body.data.workspaceId);
     const services = pluginPackageServices(getWorkspaceSettingsStore(event));
 
-    // The staged candidate is the exact bytes a promotion will check, so its
-    // digest and authority are the only ones this approval may cover.
     const pointer = await services.pointers.readPointer(pluginId).catch(() => null);
     let candidate: PluginGrantCandidate;
-    if (pointer?.candidate) {
+    if (body.data.target === 'current') {
+        const packageDigest = pointer?.current?.packageDigest;
+        if (!packageDigest || body.data.expectedPackageDigest !== packageDigest) {
+            throw createError({ statusCode: 409, statusMessage: 'The selected package changed since review.', data: { code: 'candidate-digest-mismatch' } });
+        }
+        await services.packages.verifyStoredPackage(pluginId, packageDigest);
+        const packagePath = services.packages.packagePath(pluginId, packageDigest);
+        const manifest = await readPackageManifest(packagePath);
+        if (body.data.version && body.data.version !== manifest.version) {
+            throw createError({ statusCode: 409, statusMessage: 'The selected package version changed since review.' });
+        }
+        const explicitAdmission = await readLocalAdmission(pluginId, packageDigest) ||
+            await readAdminUploadProvenance(pluginId, packageDigest);
+        if (explicitAdmission) {
+            candidate = await packageGrantCandidate({ packagePath, packageDigest });
+        } else {
+            const state = new RegistryStateStore();
+            const registryState = await state.read();
+            const client = registryClientFor(acquisitionConfig(), registryState.acceptedAdvisorySequence, state, registryState.acceptedAdvisoryCheckpoint);
+            const release = await client.resolveRelease({ expectation: { pluginId, version: manifest.version } });
+            if (!release.ok || release.value.document.packageTreeSha256 !== packageDigest ||
+                release.value.document.authoritySha256 !== body.data.expectedAuthoritySha256) {
+                throw createError({ statusCode: 409, statusMessage: 'The selected package does not match the signed release.' });
+            }
+            const document = release.value.document;
+            candidate = await packageGrantCandidate({
+                packagePath, packageDigest,
+                release: {
+                    releaseId: document.releaseId,
+                    authoritySha256: document.authoritySha256,
+                    ...(document.authority === undefined ? {} : { authority: document.authority }),
+                },
+            });
+        }
+    } else if (pointer?.candidate) {
         const packageDigest = pointer.candidate.packageDigest;
         const operations = await (
             await acquisitionServiceFor(event, requesterIdentity(context))
@@ -184,35 +231,80 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const workspaceIds = body.data.deploymentWide
-        ? new Set([workspaceId, ...await listAllWorkspaceIds(event)])
-        : new Set([workspaceId]);
-    let reviewed = 0;
-    let review: Awaited<ReturnType<typeof setPluginGrantReview>> | null = null;
-    for (const targetId of workspaceIds) {
-        if (targetId !== workspaceId &&
-            !(await getEnabledPlugins(services.settings, targetId)).includes(pluginId)) continue;
+    const saved = await services.packages.runPluginOperation(pluginId, async () => {
+        const retainedPointer = await services.pointers.readPointer(pluginId);
+        const retainPackageDigests = [
+            retainedPointer?.current?.packageDigest,
+            retainedPointer?.candidate?.packageDigest,
+            retainedPointer?.previous?.packageDigest,
+        ].filter((digest): digest is NonNullable<typeof digest> => Boolean(digest));
+        if (body.data.deploymentWide && (!candidate.releaseId || !candidate.packageDigest ||
+            !await isSiteReleaseStillApproved(pluginId, {
+                version: body.data.version!, packageTreeSha256: candidate.packageDigest as `sha256-${string}`,
+                releaseId: candidate.releaseId, authoritySha256: candidate.authoritySha256!,
+            }))) {
+            throw createError({ statusCode: 409, statusMessage: 'Site approval changed. Review this exact release again.',
+                data: { code: 'site-approval-required' } });
+        }
+        const workspaceIds = body.data.deploymentWide
+            ? [...new Set([workspaceId, ...await listAllWorkspaceIds(event)])].sort()
+            : [workspaceId];
+        const targets: string[] = [];
+        if (body.data.deploymentWide) {
+            for (let offset = 0; offset < workspaceIds.length; offset += 25) {
+                const chunk = workspaceIds.slice(offset, offset + 25);
+                const flags = await Promise.all(chunk.map(async (id) =>
+                    (await getEnabledPlugins(services.settings, id)).includes(pluginId)));
+                for (let index = 0; index < chunk.length; index++) if (flags[index]) targets.push(chunk[index]!);
+            }
+            if (enabledWorkspaceFingerprint(targets) !== body.data.expectedEnabledWorkspaceSha256) {
+                throw createError({ statusCode: 409, statusMessage: 'The enabled workspace set changed. Refresh the update review.',
+                    data: { code: 'enabled-workspace-set-changed' } });
+            }
+            // Acquisition checks its initiating workspace even if that
+            // workspace is disabled. Record consent there for the canary, but
+            // never change its enablement as part of approval.
+            if (!targets.includes(workspaceId)) targets.push(workspaceId);
+            targets.sort();
+        } else targets.push(workspaceId);
+        let reviewed = 0;
+        let review: Awaited<ReturnType<typeof setPluginGrantReview>> | null = null;
+        const notified: Array<{ targetId: string; review: Awaited<ReturnType<typeof setPluginGrantReview>> }> = [];
+        const failed: string[] = [];
+        for (let offset = 0; offset < targets.length; offset += 25) {
+            const chunk = targets.slice(offset, offset + 25);
+            const outcomes = await Promise.allSettled(chunk.map((targetId) => setPluginGrantReview(services.settings, targetId, pluginId, {
+                candidate, approvedGrants: approved, reviewedBy: requesterIdentity(context), retainPackageDigests,
+            })));
+            for (let index = 0; index < chunk.length; index++) {
+                const outcome = outcomes[index]!;
+                const targetId = chunk[index]!;
+                if (outcome.status === 'rejected') { failed.push(targetId); continue; }
+                review = outcome.value;
+                reviewed += 1;
+                notified.push({ targetId, review });
+            }
+        }
+        return { workspaceId, reviewedWorkspaces: reviewed, review, notified, failed };
+    });
+    for (const { targetId, review } of saved.notified) {
         try {
-            review = await setPluginGrantReview(services.settings, targetId, pluginId, {
-                candidate,
-                approvedGrants: approved,
-                reviewedBy: requesterIdentity(context),
+            await event.context.adminHooks?.doAction('admin.plugin:action:grants-reviewed', {
+                id: pluginId, workspaceId: targetId,
+                approvedGrants: [...review.approvedGrants],
+                packageDigest: review.packageDigest,
+                authoritySha256: review.authoritySha256,
             });
         } catch {
-            throw createError({
-                statusCode: 503,
-                statusMessage: `Approval could not be saved for workspace ${targetId}. ${reviewed} workspace approval(s) were saved; retry this release to finish.`,
-                data: { code: 'workspace-grant-write-failed', workspaceId: targetId, reviewedWorkspaces: reviewed },
-            });
+            console.warn('[plugin-grants] Post-commit admin hook failed', { pluginId, workspaceId: targetId });
         }
-        reviewed += 1;
-        await event.context.adminHooks?.doAction('admin.plugin:action:grants-reviewed', {
-            id: pluginId,
-            workspaceId: targetId,
-            approvedGrants: [...review.approvedGrants],
-            packageDigest: review.packageDigest,
-            authoritySha256: review.authoritySha256,
-        });
     }
-    return { ok: true, workspaceId, reviewedWorkspaces: reviewed, review };
+    if (saved.failed.length) throw createError({
+        statusCode: 503,
+        statusMessage: `Approval was saved for ${saved.reviewedWorkspaces} workspace(s), but failed in ${saved.failed.length}. Retry this exact release after checking the failed workspaces.`,
+        data: { code: 'workspace-grant-write-failed', workspaceId: saved.failed[0],
+            reviewedWorkspaces: saved.reviewedWorkspaces, failedCount: saved.failed.length,
+            failedWorkspaces: saved.failed.slice(0, 25) },
+    });
+    return { ok: true, workspaceId, reviewedWorkspaces: saved.reviewedWorkspaces, review: saved.review };
 });

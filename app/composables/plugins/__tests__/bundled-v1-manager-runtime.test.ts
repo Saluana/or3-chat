@@ -33,6 +33,7 @@ vi.mock('../workspace-runtime', () => ({
 
 import {
     createBundledV1WorkspaceManager,
+    desiredStateFromManifest,
     createWorkspaceManagerCanarySelector,
 } from '../bundled-v1-manager-runtime';
 
@@ -113,11 +114,9 @@ describe('bundled V1 workspace manager runtime', () => {
             loader: new BundledV1Loader(catalog(), {
                 'alpha-module': async () => ({ id: 'alpha', register }),
             }),
-            getWorkspaceId: () => 'workspace-1',
-            fetchManifest: async () => desired,
         });
 
-        await manager.schedule('boot');
+        await manager.reconcile(desiredStateFromManifest(manifest({ revision: '1' }), 'workspace-1'), 'boot');
         expect(register).toHaveBeenCalledTimes(1);
         expect(runtimeMocks.registerInstance).toHaveBeenCalledWith(
             'alpha',
@@ -126,28 +125,17 @@ describe('bundled V1 workspace manager runtime', () => {
         );
 
         desired = manifest({ revision: '2', enabled: false });
-        await manager.schedule('local-admin-change');
+        await manager.reconcile(desiredStateFromManifest(desired, 'workspace-1'), 'local-admin-change');
         expect(runtimeMocks.unregisterInstance).toHaveBeenCalledWith('alpha');
         expect(manager.listActivePluginIds()).toEqual([]);
     });
 
-    it('preserves a healthy generation on a transient or wrong-workspace manifest', async () => {
-        let shouldFail = false;
+    it('rejects a wrong-workspace snapshot without changing a healthy generation', async () => {
         const manager = createBundledV1WorkspaceManager({
-            loader: new BundledV1Loader(catalog(), {
-                'alpha-module': async () => ({ id: 'alpha', register: vi.fn() }),
-            }),
-            getWorkspaceId: () => 'workspace-1',
-            fetchManifest: async () => {
-                if (shouldFail) return manifest({ workspaceId: 'workspace-2', revision: '2' });
-                return manifest({ revision: '1' });
-            },
+            loader: new BundledV1Loader(catalog(), { 'alpha-module': async () => ({ id: 'alpha', register: vi.fn() }) }),
         });
-        await manager.schedule('boot');
-        shouldFail = true;
-
-        await manager.schedule('focus-refresh');
-
+        await manager.reconcile(desiredStateFromManifest(manifest({ revision: '1' }), 'workspace-1'), 'boot');
+        expect(() => desiredStateFromManifest(manifest({ workspaceId: 'workspace-2', revision: '2' }), 'workspace-1')).toThrow('workspace');
         expect(manager.listActivePluginIds()).toEqual(['alpha']);
         expect(runtimeMocks.unregisterInstance).not.toHaveBeenCalled();
     });
@@ -159,14 +147,12 @@ describe('bundled V1 workspace manager runtime', () => {
             loader: new BundledV1Loader(catalog(), {
                 'alpha-module': async () => ({ id: 'alpha', register }),
             }),
-            getWorkspaceId: () => workspaceId,
-            fetchManifest: async () => manifest({ workspaceId, revision: workspaceId }),
         });
-        await manager.schedule('boot');
+        await manager.reconcile(desiredStateFromManifest(manifest({ revision: '1' }), 'workspace-1'), 'boot');
         workspaceId = 'workspace-2';
 
         await manager.stopAll('workspace-session-change');
-        await manager.schedule('workspace-session-change');
+        await manager.reconcile(desiredStateFromManifest(manifest({ workspaceId, revision: workspaceId }), workspaceId), 'workspace-session-change');
 
         expect(register).toHaveBeenCalledTimes(2);
         expect(runtimeMocks.unregisterInstance).toHaveBeenCalledTimes(1);
@@ -182,11 +168,9 @@ describe('bundled V1 workspace manager runtime', () => {
             loader: new BundledV1Loader(catalog(), {
                 'alpha-module': async () => ({ id: 'alpha', register: vi.fn() }),
             }),
-            getWorkspaceId: () => 'workspace-1',
-            fetchManifest: async () => manifest({ revision: '1' }),
         });
 
-        await manager.schedule('boot');
+        await manager.reconcile(desiredStateFromManifest(manifest({ revision: '1' }), 'workspace-1'), 'boot');
 
         expect(runtimeMocks.registerInstance).toHaveBeenCalledWith(
             'alpha',

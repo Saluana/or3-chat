@@ -11,6 +11,7 @@ import {
     evaluateReleaseMetadata,
     parseReleaseMetadata,
     releaseMetadataSha256,
+    supportedAcquisitionProfiles,
     type RegistryTrustRoot,
     type ReleaseMetadataDocument,
 } from '../release-metadata';
@@ -277,5 +278,12 @@ describe('client engine qualification (finding 12)', () => {
                 qualifiedEngines: qualified,
             })
         ).toEqual({ required: false, supported: true });
+    });
+
+    it('requires the browser canary for a signed trusted-host client release', () => {
+        expect(supportedAcquisitionProfiles(['trusted-host'])).toContain('or3-trusted-host-v2');
+        expect(evaluateClientEngineSupport({
+            profile: 'or3-trusted-host-v2', engine: 'unknown', qualifiedEngines: qualified,
+        })).toEqual({ required: true, supported: false });
     });
 });

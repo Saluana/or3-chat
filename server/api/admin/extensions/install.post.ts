@@ -51,6 +51,8 @@ import { PluginPackagePointerStore } from '../../../admin/plugins/package-pointe
 import { PluginPackageCandidateService } from '../../../admin/plugins/package-candidate';
 import { PluginPackageRouteCatalog } from '../../../admin/plugins/package-route-catalog';
 import { OR3_PLUGIN_V2_HOST_CAPABILITIES } from '../../../admin/plugins/v2-host-capabilities';
+import { recordAdminUploadProvenance } from '../../../admin/plugins/admin-upload-provenance';
+import { requesterIdentity } from '../../../utils/plugins/acquisition/route-identity';
 
 const BodySchema = z.object({
     zipBase64: z.string().min(1),
@@ -219,13 +221,21 @@ export default defineEventHandler(async (event) => {
     });
     try {
         const inspected = await inspectExtensionArchive(payload.buffer);
-        if ('manifestVersion' in inspected && inspected.manifestVersion === 2) {
+        if ('manifestVersion' in inspected) {
             if (payload.expectedKind !== 'plugin') {
                 throw createError({
                     statusCode: 400,
                     statusMessage: 'Extension kind mismatch: V2 packages are plugins',
                 });
             }
+            // A V2 candidate can later select shared trusted-host code without
+            // marketplace site approval. Only a site administrator may establish
+            // that explicit upload provenance.
+            await requireAdminApiContext(event, {
+                ownerOnly: true,
+                mutation: true,
+                superAdminOnly: true,
+            });
             const workspaceId = resolveAdminWorkspaceTarget(
                 adminContext,
                 payload.workspaceId
@@ -271,6 +281,7 @@ export default defineEventHandler(async (event) => {
                             packageDigest: null,
                         })
                     ),
+                    allowPendingGrantReview: true,
                     storedStateVersion: await migration.getStateVersion(
                         workspaceId,
                         staged.manifest.id
@@ -295,10 +306,22 @@ export default defineEventHandler(async (event) => {
                                 codes: ['package-trust-unsupported'],
                             };
                         }
-                        if (manifest.runtime.client) {
+                        if (manifest.runtime.client && manifest.runtime.client.isolation !== 'host') {
                             return {
                                 status: 'blocked' as const,
                                 codes: ['trusted-host-ui-abi-unproven'],
+                            };
+                        }
+                        if (
+                            manifest.runtime.client &&
+                            ((runtimeConfig.admin as { pluginModuleLoaderV2Enabled?: boolean })
+                                .pluginModuleLoaderV2Enabled !== true ||
+                                (runtimeConfig.public.admin as { pluginRuntimeV2Enabled?: boolean })
+                                    .pluginRuntimeV2Enabled !== true)
+                        ) {
+                            return {
+                                status: 'blocked' as const,
+                                codes: ['module-loader-disabled'],
                             };
                         }
                         return { status: 'eligible' as const, codes: [] };
@@ -314,6 +337,14 @@ export default defineEventHandler(async (event) => {
                         codes: result.codes,
                     };
                 }
+                await recordAdminUploadProvenance({
+                    schemaVersion: 1,
+                    pluginId: staged.manifest.id,
+                    packageDigest: result.stored.digest,
+                    manifestDigest: result.stored.verification.manifestDigest,
+                    uploadedBy: requesterIdentity(adminContext),
+                    uploadedAt: new Date().toISOString(),
+                });
                 await event.context.adminHooks?.doAction('admin.plugin:action:candidate-prepared', {
                     id: staged.manifest.id,
                     workspaceId,
@@ -324,6 +355,7 @@ export default defineEventHandler(async (event) => {
                     kind: 'v2-candidate',
                     workspaceId,
                     status: result.status,
+                    grantReviewRequired: result.grantReviewRequired,
                     packageDigest: result.stored.digest,
                     pointer: result.pointer,
                     restartRequired: false,
@@ -385,6 +417,7 @@ export default defineEventHandler(async (event) => {
                 statusMessage: error.message,
             });
         }
+        if (error && typeof error === 'object' && 'statusCode' in error) throw error;
         throw createError({
             statusCode: 400,
             statusMessage: error instanceof Error ? error.message : 'Install failed',

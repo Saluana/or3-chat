@@ -46,6 +46,21 @@ describe('buildOr3ConfigFromEnv', () => {
         expect(config.features.documents.enabled).toBe(true);
     });
 
+    it('keeps workflow plugin options when its master enable switch is off', () => {
+        const config = buildOr3ConfigFromEnv({
+            OR3_WORKFLOWS_ENABLED: 'false',
+            OR3_WORKFLOWS_EDITOR: 'true',
+            OR3_WORKFLOWS_SLASH_COMMANDS: 'true',
+            OR3_WORKFLOWS_EXECUTION: 'true',
+        });
+        expect(config.features.workflows).toEqual({
+            enabled: false,
+            editor: true,
+            slashCommands: true,
+            execution: true,
+        });
+    });
+
     it('treats non-false strings as true for feature toggles', () => {
         const config = buildOr3ConfigFromEnv({
             OR3_WORKFLOWS_ENABLED: 'yes',

@@ -7,8 +7,8 @@
  * install authority gets a copyable administrator request instead of a
  * misleading action.
  */
-import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRuntimeConfig, useToast } from '#imports';
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter, useRuntimeConfig, useToast } from '#imports';
 import ConfirmDialog from '~/components/admin/ConfirmDialog.vue';
 import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import MarketplaceFailure from './MarketplaceFailure.vue';
@@ -40,15 +40,15 @@ import {
     useMarketplaceInstall,
     useMarketplacePreflight,
     useMarketplaceInstalled,
+    type MarketplaceRollbackReview,
 } from '~/composables/marketplace/useMarketplace';
 import { useDashboardNavigation } from '~/composables/dashboard/useDashboardPlugins';
 import { setMarketplaceSetupPlugin } from '~/composables/marketplace/useMarketplaceSetup';
-import {
-    getPortableClientSource,
-} from '~/composables/plugins/portable-client-runtime';
-import { openPortablePane } from '~/composables/plugins/portable-pane';
+import { openInstalledPluginPane } from '~/composables/plugins/portable-pane';
 
 const toast = useToast();
+const route = useRoute();
+const router = useRouter();
 const catalog = useMarketplaceCatalog();
 const catalogPage = ref(1);
 const catalogPageCount = computed(() => Math.max(1, Math.ceil(catalog.total.value / 24)));
@@ -58,8 +58,11 @@ const install = useMarketplaceInstall();
 const consent = useMarketplaceConsent();
 const account = useMarketplaceAccount();
 const installed = useMarketplaceInstalled();
+const linkWorkspaceMismatch = ref(false);
 
 const pendingUninstall = ref<{ pluginId: string; version: string; digest: string; workspaceId: string | null } | null>(null);
+const pendingRollback = ref<MarketplaceRollbackReview | null>(null);
+const rollbackOpen = computed({ get: () => pendingRollback.value !== null, set: (open: boolean) => { if (!open) pendingRollback.value = null; } });
 const uninstallOpen = computed({ get: () => pendingUninstall.value !== null, set: (open: boolean) => { if (!open) pendingUninstall.value = null; } });
 function requestUninstall(pluginId: string): void {
     if (installed.stale.value) return;
@@ -72,8 +75,23 @@ const activeWorkspaceId = computed(() => getCachedSessionContext()?.workspace?.i
 watch(activeWorkspaceId, (next, previous) => {
     if (next === previous) return;
     selectionGeneration++;
-    install.reset(); pendingUninstall.value = null;
+    install.reset(); pendingUninstall.value = null; pendingRollback.value = null;
+    rolloutOpen.value = false;
     if (previous !== null) void installed.load();
+    const params = new URLSearchParams(window.location.search);
+    if (linkWorkspaceMismatch.value && params.get('workspace') === next) {
+        linkWorkspaceMismatch.value = false;
+        const pluginId = params.get('plugin');
+        if (pluginId && /^[a-z0-9][a-z0-9._-]{0,127}$/.test(pluginId)) {
+            const version = params.get('version');
+            const requestId = params.get('installRequest');
+            void openDetail(pluginId,
+                version && /^[a-zA-Z0-9][a-zA-Z0-9._+-]{0,127}$/.test(version) ? version : undefined,
+                requestId && /^lir_[a-f0-9]{32}$/.test(requestId) ? requestId : undefined,
+                params.get('acquisition') ?? undefined)
+                .then(() => { if (params.get('setup') === '1' && selectedPluginId.value === pluginId) openConfigure(pluginId); });
+        }
+    }
 });
 onBeforeUnmount(() => {
     selectionGeneration++;
@@ -84,6 +102,7 @@ const navigation = useDashboardNavigation();
 const closeDashboard = inject<() => void>('or3:dashboard:close', () => {});
 
 const selectedPluginId = ref<string | null>(null);
+const rolloutOpen = ref(false);
 const installRequestId = ref<string | null>(null);
 const adminRequestCopied = ref(false);
 /** Confirmation the exact installed package runs in this browser/workspace. */
@@ -91,8 +110,6 @@ const confirmationBusy = ref(false);
 /** Keep the just-installed reviewed tuple available after preflight becomes blocked as installed. */
 const confirmationTarget = ref<MarketplaceInstallTarget | null>(null);
 const installedActionBusy = ref<string | null>(null);
-/** Search field keeps focus after the detail closes, so keyboard users land somewhere predictable. */
-const searchField = ref<{ $el?: unknown } | null>(null);
 /** Pending debounce for search-as-you-type, so one keystroke is not one request. */
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -140,17 +157,20 @@ function clearSearch(): void {
     applySearchNow();
 }
 
-function closeDetail(): void {
+async function closeDetail(): Promise<void> {
     selectionGeneration++;
     confirmationBusy.value = false;
     selectedPluginId.value = null;
     installRequestId.value = null;
     confirmationTarget.value = null;
     pendingUninstall.value = null;
+    pendingRollback.value = null;
     install.reset();
-    const input = searchField.value?.$el;
-    if (input instanceof HTMLInputElement) input.focus();
-    else if (input instanceof HTMLElement) input.querySelector('input')?.focus();
+    await router.replace({ query: { ...route.query, plugin: undefined, version: undefined,
+        workspace: undefined, installRequest: undefined, acquisition: undefined, rollout: undefined, setup: undefined } });
+    await nextTick();
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    document.querySelector<HTMLInputElement>('[data-testid="marketplace-search"]')?.focus();
 }
 /**
  * The exact reviewed tuple whose permissions were approved. Keyed by the full
@@ -173,13 +193,25 @@ onMounted(async () => {
     // A request link selects one plugin: open it rather than dropping the reader
     // on the catalog. The dashboard query is read from the document URL because
     // the marketplace runs inside the shell's modal, not on a route of its own.
-    const requested = new URLSearchParams(window.location.search).get('plugin');
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get('plugin');
     if (requested && /^[a-z0-9][a-z0-9._-]{0,127}$/.test(requested)) {
-        const version = new URLSearchParams(window.location.search).get('version');
-        const requestId = new URLSearchParams(window.location.search).get('installRequest');
+        const requestedWorkspace = params.get('workspace');
+        if (requestedWorkspace && requestedWorkspace !== activeWorkspaceId.value) {
+            linkWorkspaceMismatch.value = true;
+            return;
+        }
+        const version = params.get('version');
+        const requestId = params.get('installRequest');
         await openDetail(requested,
             version && /^[a-zA-Z0-9][a-zA-Z0-9._+-]{0,127}$/.test(version) ? version : undefined,
-            requestId && /^lir_[a-f0-9]{32}$/.test(requestId) ? requestId : undefined);
+            requestId && /^lir_[a-f0-9]{32}$/.test(requestId) ? requestId : undefined,
+            params.get('acquisition') ?? undefined);
+        if (params.get('setup') === '1' && selectedPluginId.value === requested &&
+            (!requestedWorkspace || requestedWorkspace === activeWorkspaceId.value)) {
+            openConfigure(requested);
+        }
+        rolloutOpen.value = Boolean(params.get('rollout') && selectedInstalledEntry.value);
     }
 });
 
@@ -193,10 +225,21 @@ onMounted(async () => {
  * superseded detail or preflight stops the flow instead of feeding the new
  * selection with the old target's evidence.
  */
-async function openDetail(pluginId: string, requestedVersion?: string, requestId?: string): Promise<void> {
-    selectionGeneration++;
+async function persistDetailLink(pluginId: string, version: string | undefined, workspaceId: string | null,
+    requestId?: string, acquisitionId?: string): Promise<void> {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('plugin') === pluginId && params.get('version') === (version ?? null) &&
+        params.get('workspace') === workspaceId && params.get('acquisition') === (acquisitionId ?? null)) return;
+    await router.replace({ query: { ...route.query, dashboard: 'marketplace', page: 'discover', plugin: pluginId,
+        version, workspace: workspaceId ?? undefined, installRequest: requestId, acquisition: acquisitionId } });
+}
+
+async function openDetail(pluginId: string, requestedVersion?: string, requestId?: string, requestedOperationId?: string): Promise<void> {
+    const generation = ++selectionGeneration;
     const workspaceId = activeWorkspaceId.value;
     pendingUninstall.value = null;
+    pendingRollback.value = null;
+    rolloutOpen.value = false;
     selectedPluginId.value = pluginId;
     installRequestId.value = requestId ?? null;
     confirmationTarget.value = null;
@@ -208,14 +251,26 @@ async function openDetail(pluginId: string, requestedVersion?: string, requestId
     const loaded = await detail.load(pluginId);
     if (loaded.superseded || selectedPluginId.value !== pluginId) return;
     const version = requestedVersion ?? resolveLatestVersion(loaded.entry);
+    if (!new URLSearchParams(window.location.search).has('setup')) {
+        await persistDetailLink(pluginId, version, workspaceId, requestId, requestedOperationId);
+        if (generation !== selectionGeneration) return;
+    }
     const answer = await preflight.run(pluginId, version, browserEngine.value ?? undefined);
     if (!answer || selectedPluginId.value !== pluginId || activeWorkspaceId.value !== workspaceId) return;
     // A durable operation outlives this page: pick it up so the operator can
     // resume or cancel it instead of losing it on reload.
     try {
-        if (workspaceId) await install.restore(pluginId, { workspaceId, ...(answer.release ? { version: answer.release.version } : {}) });
+        const restoreVersion = requestedVersion ?? answer.release?.version;
+        if (workspaceId) await install.restore(pluginId, {
+            workspaceId,
+            ...(restoreVersion ? { version: restoreVersion } : {}),
+            ...(requestedOperationId ? { operationId: requestedOperationId } : {}),
+        });
     } catch {
         // Restoring is a convenience: a refused list must not break discovery.
+    }
+    if (selectedPluginId.value === pluginId && install.status.value?.operationId && !new URLSearchParams(window.location.search).has('setup')) {
+        void persistDetailLink(pluginId, version, workspaceId, requestId, install.status.value.operationId);
     }
 }
 
@@ -301,23 +356,20 @@ const selectedBlocksForDisplay = computed(() =>
 
 function openConfigure(pluginId: string): void {
     setMarketplaceSetupPlugin(pluginId);
-    void navigation.openPage('marketplace', 'configure');
+    const activeOperation = install.status.value?.pluginId === pluginId &&
+        !['completed', 'canceled'].includes(install.status.value.status) ? install.status.value : null;
+    void router.replace({ query: { ...route.query, dashboard: 'marketplace', page: 'configure',
+        from: 'discover', setup: '1', plugin: pluginId,
+        version: activeOperation?.version ?? selectedInstalledEntry.value?.display?.version ?? selectedRelease.value?.version,
+        workspace: activeWorkspaceId.value ?? undefined,
+        acquisition: activeOperation?.operationId ?? undefined } });
 }
 
 async function openSelectedPlugin(): Promise<void> {
     const pluginId = selectedPluginId.value;
     if (!pluginId) return;
-    if (!getPortableClientSource(pluginId)) {
-        toast.add({
-            title: 'Plugin interface unavailable',
-            description:
-                'The plugin runtime is not available in this workspace. Configure it from the dashboard or check runtime diagnostics.',
-            color: 'warning',
-        });
-        return;
-    }
     try {
-        await openPortablePane(pluginId);
+        await openInstalledPluginPane(pluginId);
         closeDashboard();
     } catch (error) {
         toast.add({
@@ -366,7 +418,7 @@ async function uninstallSelectedPlugin(): Promise<void> {
             description: 'Its data is kept unless you delete it explicitly.',
             color: 'success',
         });
-        closeDetail();
+        void closeDetail();
     } catch (error) {
         toast.add({
             title: error instanceof MarketplaceRefreshError ? 'Change saved; refresh needed' : 'Could not remove the plugin',
@@ -378,13 +430,43 @@ async function uninstallSelectedPlugin(): Promise<void> {
     }
 }
 
-async function rollbackSelectedPlugin(): Promise<void> {
+async function requestRollbackSelectedPlugin(): Promise<void> {
     const pluginId = selectedPluginId.value;
     if (!pluginId || !selectedInstalledEntry.value?.pointer?.previous) return;
     installedActionBusy.value = pluginId;
     try {
-        await installed.rollback(pluginId);
-        toast.add({ title: 'Rolled back to the previous version', color: 'success' });
+        const review = await installed.rollbackReview(pluginId);
+        if (!review.ok) throw new Error(`Rollback is blocked in ${review.blocking.length} workspace(s): ${review.blocking.slice(0, 3).map((item) => `${item.workspaceId} (${item.code})`).join(', ')}.`);
+        pendingRollback.value = review;
+    } catch (error) {
+        toast.add({ title: 'Rollback review failed', description: error instanceof Error ? error.message : 'The request was refused.', color: 'error' });
+    } finally { installedActionBusy.value = null; }
+}
+
+async function rollbackSelectedPlugin(): Promise<void> {
+    const review = pendingRollback.value;
+    pendingRollback.value = null;
+    if (!review || selectedPluginId.value !== review.pluginId) return;
+    installedActionBusy.value = review.pluginId;
+    try {
+        if (selectedInstalledEntry.value?.pointer?.current?.packageDigest !== review.currentDigest) throw new Error('The selected version changed. Review rollback again.');
+        await installed.rollback(review);
+        const workspaceId = activeWorkspaceId.value;
+        if (!workspaceId || !installed.enabled.value.includes(review.pluginId)) {
+            toast.add({ title: `Restored ${review.previousVersion}`, description: 'This workspace is disabled, so no browser check was run.', color: 'success' });
+            return;
+        }
+        try {
+            const observed = await install.confirmActivation({ pluginId: review.pluginId,
+                packageTreeSha256: review.previousDigest, workspaceId });
+            if (selectedPluginId.value !== review.pluginId || activeWorkspaceId.value !== workspaceId) return;
+            toast.add({ title: observed?.confirmed ? `Restored ${review.previousVersion} and running here` : `Restored ${review.previousVersion}; browser check pending`,
+                description: observed?.confirmed ? 'The restored package was observed in this workspace.' : 'The restore stands. Retry the browser check from Installed.',
+                color: observed?.confirmed ? 'success' : 'warning' });
+        } catch {
+            toast.add({ title: `Restored ${review.previousVersion}; browser check pending`,
+                description: 'The restore stands. Retry the browser check from Installed.', color: 'warning' });
+        }
     } catch (error) {
         toast.add({
             title: error instanceof MarketplaceRefreshError ? 'Change saved; refresh needed' : 'Rollback was refused',
@@ -482,6 +564,8 @@ const showInstallStatus = computed(() => {
     if (!current) return false;
     return (
         !selectedIsInstalled.value ||
+        !['completed', 'canceled'].includes(current.status) ||
+        current.interrupted ||
         confirmationBusy.value ||
         install.activationConfirmation.value !== null ||
         install.activationTimedOut.value
@@ -555,12 +639,14 @@ async function runInstall(): Promise<void> {
     // Capture the reviewed tuple before the first await: approval, install and
     // every message act on this exact target, not on whatever is selected later.
     const target = installTarget.value;
-    if (!target) return;
+    const reviewedWorkspaceId = activeWorkspaceId.value;
+    if (!target || !reviewedWorkspaceId) return;
     // Persist the reviewed authority before anything is staged, so the pipeline
     // sees a current review instead of pausing at `grant-review-unreviewed`.
     if (consentRequired.value) {
         const recorded = await consent.approve({
             pluginId: target.pluginId,
+            expectedWorkspaceId: reviewedWorkspaceId,
             approvedGrants: target.requestedGrants,
             expectedPackageDigest: target.packageTreeSha256,
             expectedAuthoritySha256: target.authoritySha256,
@@ -577,7 +663,7 @@ async function runInstall(): Promise<void> {
     }
     // The confirmation is only valid for the tuple the operator reviewed: a
     // selection or release change while approval was in flight invalidates it.
-    if (generation !== selectionGeneration) return;
+    if (generation !== selectionGeneration || activeWorkspaceId.value !== reviewedWorkspaceId) return;
     if (!sameMarketplaceTarget(installTarget.value, target)) {
         toast.add({
             title: 'The reviewed release changed',
@@ -587,7 +673,8 @@ async function runInstall(): Promise<void> {
         return;
     }
     const result = await install.start({
-        ...(activeWorkspaceId.value ? { workspaceId: activeWorkspaceId.value } : {}),
+        workspaceId: reviewedWorkspaceId,
+        expectedWorkspaceId: reviewedWorkspaceId,
         pluginId: target.pluginId, version: target.version,
         ...(installRequestId.value ? { installRequestId: installRequestId.value } : {}),
     });
@@ -601,12 +688,17 @@ async function runInstall(): Promise<void> {
         });
         return;
     }
+    void persistDetailLink(target.pluginId, target.version, activeWorkspaceId.value,
+        installRequestId.value ?? undefined, result.operationId);
     if (result.status === 'completed') {
         approvedTargetKey.value = null;
         await preflight.run(target.pluginId, undefined, browserEngine.value ?? undefined);
         if (generation !== selectionGeneration) return;
         await installed.load();
         if (generation !== selectionGeneration) return;
+        // Keep the administrator in the same guide for the remaining
+        // workspace-scope decision after the package is selected.
+        rolloutOpen.value = installed.canManageSitePlugins.value && selectedInstalledEntry.value !== null;
         await confirmRunning(target);
         return;
     }
@@ -716,6 +808,7 @@ async function retryInstall(): Promise<void> {
         if (generation !== selectionGeneration) return;
         await installed.load();
         if (generation !== selectionGeneration) return;
+        rolloutOpen.value = installed.canManageSitePlugins.value && selectedInstalledEntry.value !== null;
         if (target) {
             await confirmRunning(target);
         } else {
@@ -753,6 +846,10 @@ function blockActionLabel(block: { action: string }): string | null {
 
 <template>
     <div class="dashboard-page-frame" data-testid="marketplace-discover">
+        <section v-if="linkWorkspaceMismatch" class="rounded-lg border border-(--ui-border) p-4 text-sm" role="alert" data-testid="marketplace-workspace-mismatch">
+            <p>This plugin link belongs to another workspace. Choose that workspace to continue the same review.</p>
+            <UButton size="sm" color="neutral" variant="soft" class="mt-2" @click="navigation.openPage('workspaces', 'manage')">Choose workspace</UButton>
+        </section>
         <section
             v-if="installed.error.value && !catalog.error.value"
             class="flex flex-col gap-4 rounded-xl border border-(--ui-border) bg-(--ui-bg-elevated)/40 p-4 sm:p-5"
@@ -778,7 +875,6 @@ function blockActionLabel(block: { action: string }): string | null {
         </UAlert>
         <div class="flex flex-wrap items-center gap-3">
             <UInput
-                ref="searchField"
                 v-model="catalog.search.value"
                 icon="i-lucide-search"
                 placeholder="Search the marketplace"
@@ -903,20 +999,19 @@ function blockActionLabel(block: { action: string }): string | null {
             >
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                        <p class="font-medium">Installed in this workspace</p>
+                        <p class="font-medium">Installed on this OR3 site</p>
                         <p class="text-sm text-(--ui-text-muted)">
                             Version {{ selectedInstalledEntry?.display?.version ?? selectedRelease?.version ?? 'unknown' }} is selected for this plugin.
                         </p>
                     </div>
-                    <UBadge color="success" variant="soft">Installed</UBadge>
+                    <UBadge color="success" variant="soft">Installed on site</UBadge>
                 </div>
                 <p class="text-sm text-(--ui-text-muted)">
                     <template v-if="selectedInstalledEntry">
-                        Manage the plugin here instead of starting another install.
+                        The package is selected for this site. Choose the workspaces that should use it below, then run a browser check from Installed.
                     </template>
                     <template v-else>
-                        This plugin is installed in the workspace. Configure it here;
-                        workspace administration controls are available to administrators.
+                        This plugin is already installed on this OR3 site. An administrator can enable it for this workspace.
                     </template>
                 </p>
                 <div class="flex flex-wrap gap-2">
@@ -962,6 +1057,15 @@ function blockActionLabel(block: { action: string }): string | null {
                         {{ installed.enabled.value.includes(selectedInstalledEntry?.pluginId ?? '') ? 'Disable' : 'Enable' }}
                     </UButton>
                     <UButton
+                        v-if="installed.canManageSitePlugins.value && selectedInstalledEntry?.pointer?.current"
+                        color="neutral"
+                        variant="soft"
+                        data-testid="marketplace-installed-workspaces"
+                        @click="rolloutOpen = !rolloutOpen"
+                    >
+                        {{ rolloutOpen ? 'Hide workspace guide' : 'Enable workspaces' }}
+                    </UButton>
+                    <UButton
                         v-if="installed.canManageSitePlugins.value && selectedInstalledEntry?.pointer?.previous"
                         color="neutral"
                         variant="ghost"
@@ -969,9 +1073,9 @@ function blockActionLabel(block: { action: string }): string | null {
                         :loading="installedActionBusy === selectedInstalledEntry?.pluginId"
                         :disabled="installed.stale.value || installed.loading.value || installed.mutating.value"
                         data-testid="marketplace-installed-rollback"
-                        @click="rollbackSelectedPlugin"
+                            @click="requestRollbackSelectedPlugin"
                     >
-                        Roll back
+                        Restore previous version
                     </UButton>
                     <UButton
                         v-if="installed.canManageSitePlugins.value && selectedInstalledEntry"
@@ -986,6 +1090,11 @@ function blockActionLabel(block: { action: string }): string | null {
                         Uninstall
                     </UButton>
                 </div>
+                <AdminPluginWorkspaceRollout
+                    v-if="rolloutOpen && selectedInstalledEntry"
+                    :plugin-id="selectedInstalledEntry.pluginId"
+                    :version="selectedInstalledEntry.display?.version ?? null"
+                />
             </section>
 
             <UAlert
@@ -1218,7 +1327,7 @@ function blockActionLabel(block: { action: string }): string | null {
             Loading plugins…
         </div>
         <div v-else-if="catalog.cards.value.length === 0 && catalog.configured.value && !catalog.error.value && !catalog.notice.value" class="text-sm text-(--ui-text-muted)">
-            No published plugins matched.
+            {{ catalog.search.value.trim() ? 'No site-approved plugins matched this search.' : 'No plugins are available for this site yet. A site administrator can approve releases in Admin > Plugins.' }}
         </div>
         <ul
             v-else
@@ -1253,7 +1362,20 @@ function blockActionLabel(block: { action: string }): string | null {
         </nav>
     </div>
 
-                        <ConfirmDialog v-model="uninstallOpen" title="Remove plugin from this instance?"
+    <ConfirmDialog v-model="uninstallOpen" title="Remove plugin from this instance?"
         :message="pendingUninstall ? pendingUninstall.pluginId + ' ' + pendingUninstall.version + ' will stop in every workspace. Its data is retained. To stop it only here, cancel and choose Disable.' : ''"
         confirm-text="Remove from every workspace" danger @confirm="uninstallSelectedPlugin" />
+    <ConfirmDialog v-model="rollbackOpen" title="Restore previous version for every enabled workspace?"
+        :message="pendingRollback ? `${pendingRollback.pluginId}: ${pendingRollback.currentVersion} → ${pendingRollback.previousVersion}. This changes the shared selected code for ${pendingRollback.enabledWorkspaces} enabled workspace(s). Saved data and workspace choices remain.` : ''"
+        :important-note="pendingRollback ? `Previous package: ${pendingRollback.previousDigest}. The server checks every enabled workspace again before changing selection.` : ''"
+        note-tone="warning" confirm-text="Restore previous version" @confirm="rollbackSelectedPlugin">
+        <template #details>
+            <details v-if="pendingRollback?.enabledWorkspaceIds?.length" class="mt-3 min-w-0 text-xs">
+                <summary>Workspaces affected ({{ pendingRollback.enabledWorkspaces }})</summary>
+                <ul class="mt-2 max-h-40 overflow-y-auto break-all pl-4 list-disc">
+                    <li v-for="id in pendingRollback.enabledWorkspaceIds" :key="id">{{ id }}</li>
+                </ul>
+            </details>
+        </template>
+    </ConfirmDialog>
 </template>

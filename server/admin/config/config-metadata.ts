@@ -415,29 +415,29 @@ export const CONFIG_METADATA: Record<string, ConfigMetadata> = {
 
     // Features
     'OR3_WORKFLOWS_ENABLED': {
-        label: 'Enable Workflows',
-        description: 'Enable workflow automation features',
+        label: 'Enable Workflows plugin',
+        description: 'Enable the installed Workflows plugin',
         group: 'Features',
         order: 1,
         valueType: 'boolean',
     },
     'OR3_WORKFLOWS_EDITOR': {
         label: 'Enable Workflow Editor',
-        description: 'Enable visual workflow editor interface',
+        description: 'Enable the visual editor in the Workflows plugin',
         group: 'Features',
         order: 2,
         valueType: 'boolean',
     },
     'OR3_WORKFLOWS_SLASH_COMMANDS': {
         label: 'Enable Workflow Slash Commands',
-        description: 'Allow workflows to be triggered via slash commands',
+        description: 'Allow slash commands in the Workflows plugin',
         group: 'Features',
         order: 3,
         valueType: 'boolean',
     },
     'OR3_WORKFLOWS_EXECUTION': {
         label: 'Enable Workflow Execution',
-        description: 'Enable execution of configured workflows',
+        description: 'Enable execution in the Workflows plugin',
         group: 'Features',
         order: 4,
         valueType: 'boolean',

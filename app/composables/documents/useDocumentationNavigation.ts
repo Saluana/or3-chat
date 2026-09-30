@@ -19,6 +19,9 @@ interface DocmapFile {
     name: string;
     path: string;
     category?: string;
+    title?: string;
+    order?: number;
+    categoryOrder?: number;
 }
 
 interface DocmapSection {
@@ -89,15 +92,23 @@ export function useDocumentationNavigation(
 
         for (const section of sortedSections) {
             const grouped = new Map<string, DocsNavItem[]>();
+            const groupOrders = new Map<string, number>();
             const sortedFiles = [...(section.files ?? [])].sort((a, b) =>
+                (a.order ?? Infinity) - (b.order ?? Infinity) ||
                 a.name.replace(/\.md$/i, '').localeCompare(b.name.replace(/\.md$/i, ''))
             );
 
             for (const file of sortedFiles) {
                 const groupLabel = file.category?.trim() || 'General';
+                if (file.categoryOrder !== undefined) {
+                    groupOrders.set(groupLabel, Math.min(
+                        groupOrders.get(groupLabel) ?? Infinity,
+                        file.categoryOrder
+                    ));
+                }
                 const list = grouped.get(groupLabel) ?? [];
                 list.push({
-                    label: file.name.replace(/\.md$/i, ''),
+                    label: file.title?.trim() || file.name.replace(/\.md$/i, ''),
                     path: `/documentation${file.path}`,
                 });
                 grouped.set(groupLabel, list);
@@ -106,9 +117,13 @@ export function useDocumentationNavigation(
             const groups = Array.from(grouped.entries())
                 .map(([label, items]) => ({
                     label,
-                    items: [...items].sort((a, b) => a.label.localeCompare(b.label)),
+                    items,
                 }))
-                .sort((a, b) => a.label.localeCompare(b.label));
+                .sort((a, b) =>
+                    (groupOrders.get(a.label) ?? Infinity) -
+                    (groupOrders.get(b.label) ?? Infinity) ||
+                    a.label.localeCompare(b.label)
+                );
 
             categories.push({
                 label: section.title,

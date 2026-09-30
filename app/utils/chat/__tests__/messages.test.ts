@@ -114,10 +114,10 @@ describe('resolveChatInputTokenBudget', () => {
         ).toBe(28_000);
     });
 
-    it('caps very large model windows to a browser-safe input budget', () => {
+    it('uses the available context for large-window models after response headroom', () => {
         expect(
-            resolveChatInputTokenBudget({ context_length: 1_000_000 })
-        ).toBe(128_000);
+            resolveChatInputTokenBudget({ context_length: 1_048_576 })
+        ).toBe(1_040_384);
     });
 
     it('never returns a budget larger than a tiny advertised context', () => {

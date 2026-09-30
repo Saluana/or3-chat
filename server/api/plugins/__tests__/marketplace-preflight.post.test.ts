@@ -1,9 +1,10 @@
 import { expect, it, vi } from 'vitest';
 
 const preflight = vi.fn(async (input: unknown) => input);
+const approvedSiteRelease = vi.fn();
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
-    createError: (options: { statusMessage: string }) => new Error(options.statusMessage),
+    createError: (options: { statusMessage: string; statusCode: number }) => Object.assign(new Error(options.statusMessage), options),
     setResponseHeader: vi.fn(),
 }));
 vi.mock('../../../auth/can', () => ({ requireSession: vi.fn(), requireCan: vi.fn() }));
@@ -37,6 +38,9 @@ vi.mock('../../../admin/plugins/package-route-catalog', () => ({
         }
     },
 }));
+vi.mock('../../../admin/plugins/site-policy-service', () => ({
+    approvedSiteRelease: (...args: unknown[]) => approvedSiteRelease(...args),
+}));
 vi.mock('../../../utils/plugins/acquisition/config', () => ({
     acquisitionConfig: () => ({ registryOrigin: 'https://registry.test', installEnabled: true, releaseKeys: [{}] }),
 }));
@@ -57,6 +61,7 @@ vi.mock('../../../utils/plugins/marketplace/service', async (importOriginal) => 
 });
 
 it('includes installed V2 packages even when disabled in the requesting workspace', async () => {
+    approvedSiteRelease.mockResolvedValue({ approvedRelease: { version: '0.2.0' } });
     const handler = (await import('../marketplace/preflight.post')).default;
     const result = await handler({} as never);
     expect(result).toMatchObject({ status: 'blocked', blocks: [{ code: 'already-installed' }] });
@@ -65,4 +70,12 @@ it('includes installed V2 packages even when disabled in the requesting workspac
         installedPluginIds: ['legacy.plugin', 'or3sal.tasks'],
         enabledPluginIds: [],
     }));
+});
+
+it('reports unavailable approval verification separately from missing approval', async () => {
+    const handler = (await import('../marketplace/preflight.post')).default;
+    approvedSiteRelease.mockRejectedValueOnce(new Error('registry unavailable'));
+    await expect(handler({} as never)).rejects.toMatchObject({ statusCode: 503 });
+    approvedSiteRelease.mockResolvedValueOnce(null);
+    await expect(handler({} as never)).rejects.toMatchObject({ statusCode: 404 });
 });

@@ -4,17 +4,17 @@
   "generator": "scripts/plugin-runtime/generate-compatibility-ledger.ts",
   "inputs": {
     "moduleManifest": "planning/complete/plugin-runtime-v2/compatibility-ledger.modules.json",
-    "moduleManifestSha256": "ab76192f1a49fd1bc625829d81d2925b56ccf930a86deb9296dea6548dd4bf4d",
+    "moduleManifestSha256": "f732887f9daed262f7fbbaccbe526cf9c4723ae18c3c82340a9ad9f1a10938f5",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
-    "nuxtImportsDeclarationSha256": "927a4a318f16d25e7c936a1a5453cf48078aaf208f99b821b5abe572d6e2a99d",
+    "nuxtImportsDeclarationSha256": "52bb256dc0cee7d0606c82cf9885260db484d5badbd032ecf39ebbeb210f70c0",
     "behaviorProfiles": "planning/complete/plugin-runtime-v2/compatibility-profiles.json",
     "behaviorProfilesSha256": "6e35c5b9392b785e5bb541580865f80f0d5f0888851c2ff68c5a3ecd75097cc1"
   },
   "coverage": {
-    "moduleCount": 38,
-    "exportCount": 582,
-    "callableExportCount": 268,
-    "nuxtAutoImportCount": 302
+    "moduleCount": 39,
+    "exportCount": 589,
+    "callableExportCount": 270,
+    "nuxtAutoImportCount": 308
   },
   "behaviorProfiles": [
     {
@@ -1018,7 +1018,7 @@
     },
     {
       "source": "app/composables/core/usePaneApps.ts",
-      "apiSha256": "760ac8766e480a487ef14cb3848a724b59eb2e3364158a78d6b57fe90eba85be",
+      "apiSha256": "0ae9ddf67a98b848ca7413dacc345505a502714d12bc5076bed3e5b0baa2a5e8",
       "runtime": "client",
       "publicPaths": [
         "~/composables/core/usePaneApps"
@@ -1041,7 +1041,7 @@
               "source": "app/composables/core/usePaneApps.ts",
               "line": 23,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface PaneAppDef {\n    /** Unique identifier for the pane app (used as the pane mode when opened). */\n    id: string;\n\n    /** Display label shown in UI (e.g., sidebar). */\n    label: string;\n\n    /** Optional Iconify icon name. */\n    icon?: string;\n\n    /** Vue component or async component factory. */\n    component: Component | (() => Promise<Component>);\n\n    /**\n     * Optional override for the postType stored in the posts table.\n     * If not provided, defaults to the app id.\n     */\n    postType?: string;\n\n    /**\n     * Optional callback to create an initial record when a new pane is opened.\n     * Return { id } to assign as the pane's documentId, or null for no record.\n     */\n    createInitialRecord?: (ctx: {\n        app: PaneAppDef;\n    }) => Promise<{ id: string } | null>;\n\n    /**\n     * Optional ordering (lower = earlier in sorted lists). Defaults to 200.\n     */\n    order?: number;\n    /** Optional owning plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this pane app. */\n    access?: PluginGatePolicy;\n    /** Replace this app's record in the current workspace tab. */\n    replaceRecordInCurrentTab?: boolean;\n}"
+              "text": "export interface PaneAppDef {\n    /** Unique identifier for the pane app (used as the pane mode when opened). */\n    id: string;\n\n    /** Display label shown in UI (e.g., sidebar). */\n    label: string;\n\n    /** Optional Iconify icon name. */\n    icon?: string;\n\n    /** Optional validated app image URL. */\n    image?: string;\n\n    /** Vue component or async component factory. */\n    component: Component | (() => Promise<Component>);\n\n    /**\n     * Optional override for the postType stored in the posts table.\n     * If not provided, defaults to the app id.\n     */\n    postType?: string;\n\n    /**\n     * Optional callback to create an initial record when a new pane is opened.\n     * Return { id } to assign as the pane's documentId, or null for no record.\n     */\n    createInitialRecord?: (ctx: {\n        app: PaneAppDef;\n    }) => Promise<{ id: string } | null>;\n\n    /** Optional new-tab menu contribution. A null result cancels creation. */\n    newTab?: {\n        label: string;\n        icon?: string;\n        isAvailable?: () => boolean;\n        createRecordId: () => Promise<string | null>;\n    };\n\n    /**\n     * Optional ordering (lower = earlier in sorted lists). Defaults to 200.\n     */\n    order?: number;\n    /** Optional owning plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this pane app. */\n    access?: PluginGatePolicy;\n    /** Replace this app's record in the current workspace tab. */\n    replaceRecordInCurrentTab?: boolean;\n}"
             }
           ]
         },
@@ -1053,7 +1053,7 @@
           "declarations": [
             {
               "source": "app/composables/core/usePaneApps.ts",
-              "line": 63,
+              "line": 74,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type RegisteredPaneApp = PaneAppDef;"
             }
@@ -1070,7 +1070,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/core/usePaneApps.ts",
-                "line": 203,
+                "line": 221,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function usePaneApps();"
               }
@@ -1079,7 +1079,7 @@
           "declarations": [
             {
               "source": "app/composables/core/usePaneApps.ts",
-              "line": 203,
+              "line": 221,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function usePaneApps();"
             }
@@ -1089,7 +1089,7 @@
     },
     {
       "source": "app/composables/dashboard/useDashboardPlugins.ts",
-      "apiSha256": "3209a539f5d3c054d243a6232d53334782e02cd0d954283e237ce069ddb78879",
+      "apiSha256": "52b089b574228f1fbf1af8c77e3a2e948adcb4af4e1843f8df211c20bee9ba59",
       "runtime": "client",
       "publicPaths": [
         "~/composables/dashboard/useDashboardPlugins"
@@ -1169,7 +1169,7 @@
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
               "line": 46,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface DashboardPlugin {\n    /** Unique id across all dashboard plugins */\n    id: string;\n    /** Icon name (Iconify) shown in the grid */\n    icon: string;\n    /** Short label shown under the icon */\n    label: string;\n    /** Optional longer description (tooltip or detail panel later) */\n    description?: string;\n    /** Optional order (lower = earlier). Defaults to 200. */\n    order?: number;\n    /** Optional click handler when user activates the icon. */\n    handler?: (ctx: { id: string }) => void | Promise<void>;\n    /** Optional pages declared inline on registration (normalized into page registry). */\n    pages?: DashboardPluginPage[];\n    /**\n     * Optional capability declarations for permission-based access control.\n     * Standard capabilities:\n     * - 'canReadMessages': Read chat messages/history\n     * - 'canWriteDocs': Create/modify documents\n     * - 'canSend': Send messages or trigger AI operations\n     * - 'canReadFiles': Access file attachments\n     * - 'canWriteFiles': Upload or modify files\n     * - 'canManageThreads': Create/delete/modify threads\n     * - 'canAccessSettings': Read or modify app settings\n     */\n    capabilities?: string[];\n    /** Optional access gate policy for this plugin. */\n    access?: PluginGatePolicy;\n    /** Owning installable plugin id used for workspace policy lookup. */\n    pluginId?: string;\n}"
+              "text": "export interface DashboardPlugin {\n    /** Unique id across all dashboard plugins */\n    id: string;\n    /** Icon name (Iconify) shown in the grid */\n    icon: string;\n    /** Optional validated app image URL. The Iconify icon remains the fallback. */\n    image?: string;\n    /** Short label shown under the icon */\n    label: string;\n    /** Optional longer description (tooltip or detail panel later) */\n    description?: string;\n    /** Optional order (lower = earlier). Defaults to 200. */\n    order?: number;\n    /** Optional click handler when user activates the icon. */\n    handler?: (ctx: { id: string }) => void | Promise<void>;\n    /** Optional pages declared inline on registration (normalized into page registry). */\n    pages?: DashboardPluginPage[];\n    /**\n     * Optional capability declarations for permission-based access control.\n     * Standard capabilities:\n     * - 'canReadMessages': Read chat messages/history\n     * - 'canWriteDocs': Create/modify documents\n     * - 'canSend': Send messages or trigger AI operations\n     * - 'canReadFiles': Access file attachments\n     * - 'canWriteFiles': Upload or modify files\n     * - 'canManageThreads': Create/delete/modify threads\n     * - 'canAccessSettings': Read or modify app settings\n     */\n    capabilities?: string[];\n    /** Optional access gate policy for this plugin. */\n    access?: PluginGatePolicy;\n    /** Owning installable plugin id used for workspace policy lookup. */\n    pluginId?: string;\n}"
             }
           ]
         },
@@ -1181,9 +1181,9 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 79,
+              "line": 81,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface DashboardPluginPage {\n    /** Unique within the plugin. */\n    id: string;\n    /** Display title. */\n    title: string;\n    /** Optional icon for page navigation lists. */\n    icon?: string;\n    /** Ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional description used in landing list. */\n    description?: string;\n    /** Component or async factory returning component (lazy loaded). */\n    component: Component | (() => Promise<{ default?: Component } | Component>);\n    /** Optional access gate policy for this page. */\n    access?: PluginGatePolicy;\n    /** Whether this page is currently available in the active client. */\n    isAvailable?: () => boolean;\n}"
+              "text": "export interface DashboardPluginPage {\n    /** Unique within the plugin. */\n    id: string;\n    /** Display title. */\n    title: string;\n    /** Optional icon for page navigation lists. */\n    icon?: string;\n    /** Optional validated app image URL. */\n    image?: string;\n    /** Ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional description used in landing list. */\n    description?: string;\n    /** Component or async factory returning component (lazy loaded). */\n    component: Component | (() => Promise<{ default?: Component } | Component>);\n    /** Optional access gate policy for this page. */\n    access?: PluginGatePolicy;\n    /** Whether this page is currently available in the active client. */\n    isAvailable?: () => boolean;\n}"
             }
           ]
         },
@@ -1198,7 +1198,7 @@
               "resolvedReturnType": "DashboardPluginPage | undefined",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 709,
+                "line": 713,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getDashboardPluginPage(\n    pluginId: string,\n    pageId: string\n): DashboardPluginPage | undefined;"
               }
@@ -1207,7 +1207,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 709,
+              "line": 713,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getDashboardPluginPage(\n    pluginId: string,\n    pageId: string\n): DashboardPluginPage | undefined;"
             }
@@ -1250,7 +1250,7 @@
               "resolvedReturnType": "DashboardPlugin | undefined",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 307,
+                "line": 311,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getRegisteredDashboardPlugin(\n    pluginId: string\n): DashboardPlugin | undefined;"
               }
@@ -1259,7 +1259,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 307,
+              "line": 311,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getRegisteredDashboardPlugin(\n    pluginId: string\n): DashboardPlugin | undefined;"
             }
@@ -1354,7 +1354,7 @@
               "resolvedReturnType": "DashboardPluginPage[]",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 678,
+                "line": 682,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listDashboardPluginPages(\n    pluginId: string\n): DashboardPluginPage[];"
               }
@@ -1363,7 +1363,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 678,
+              "line": 682,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listDashboardPluginPages(\n    pluginId: string\n): DashboardPluginPage[];"
             }
@@ -1380,7 +1380,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 509,
+                "line": 513,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredDashboardPluginIds(): string[];"
               }
@@ -1389,7 +1389,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 509,
+              "line": 513,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredDashboardPluginIds(): string[];"
             }
@@ -1406,7 +1406,7 @@
               "resolvedReturnType": "RegistrationHandle",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 369,
+                "line": 373,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHandle;"
               }
@@ -1415,7 +1415,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 369,
+              "line": 373,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHandle;"
             }
@@ -1432,7 +1432,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 540,
+                "line": 544,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDashboardPluginPage(\n    pluginId: string,\n    page: DashboardPluginPage\n);"
               }
@@ -1441,7 +1441,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 540,
+              "line": 544,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDashboardPluginPage(\n    pluginId: string,\n    page: DashboardPluginPage\n);"
             }
@@ -1458,7 +1458,7 @@
               "resolvedReturnType": "Promise<Component | undefined>",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 755,
+                "line": 759,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function resolveDashboardPluginPageComponent(\n    pluginId: string,\n    pageId: string\n): Promise<Component | undefined>;"
               }
@@ -1467,7 +1467,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 755,
+              "line": 759,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function resolveDashboardPluginPageComponent(\n    pluginId: string,\n    pageId: string\n): Promise<Component | undefined>;"
             }
@@ -1484,7 +1484,7 @@
               "resolvedReturnType": "() => void",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 153,
+                "line": 157,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function subscribeDashboardRegistry(listener: () => void): () => void;"
               }
@@ -1493,7 +1493,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 153,
+              "line": 157,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function subscribeDashboardRegistry(listener: () => void): () => void;"
             }
@@ -1510,7 +1510,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 448,
+                "line": 452,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDashboardPlugin(id: string);"
               }
@@ -1519,7 +1519,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 448,
+              "line": 452,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDashboardPlugin(id: string);"
             }
@@ -1536,7 +1536,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 580,
+                "line": 584,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDashboardPluginPage(\n    pluginId: string,\n    pageId?: string\n);"
               }
@@ -1545,7 +1545,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 580,
+              "line": 584,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDashboardPluginPage(\n    pluginId: string,\n    pageId?: string\n);"
             }
@@ -1562,7 +1562,7 @@
               "resolvedReturnType": "DashboardNavigationController",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 811,
+                "line": 815,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardNavigation(\n    options: UseDashboardNavigationOptions = {}\n): DashboardNavigationController;"
               }
@@ -1571,7 +1571,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 811,
+              "line": 815,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardNavigation(\n    options: UseDashboardNavigationOptions = {}\n): DashboardNavigationController;"
             }
@@ -1602,7 +1602,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 645,
+                "line": 649,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardPluginPages(pluginId: () => string | undefined);"
               }
@@ -1611,7 +1611,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 645,
+              "line": 649,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardPluginPages(pluginId: () => string | undefined);"
             }
@@ -1628,7 +1628,7 @@
               "resolvedReturnType": "ComputedRef<DashboardPlugin[]>",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 478,
+                "line": 482,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardPlugins(): ComputedRef<DashboardPlugin[]>;"
               }
@@ -1637,7 +1637,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 478,
+              "line": 482,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardPlugins(): ComputedRef<DashboardPlugin[]>;"
             }
@@ -2797,7 +2797,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "6dbe24bf1430f68624fc434e7e374aff6b2a6a096697588ded7742f66019f0b6",
+      "apiSha256": "a753c34c629a61babf4f01f03b1dbb0c3324ba181cccc94923ce0ab3c70d1baa",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2870,7 +2870,7 @@
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
               "line": 18,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface ActiveDocumentEditorSession {\n    readonly documentId: string;\n    readonly paneId?: string;\n    readonly tabId?: string;\n    captureContent: () => void;\n    ensureLocalDurability: () => Promise<void>;\n    captureViewState: () => DocumentEditorViewState;\n    restoreViewState: (\n        state: DocumentEditorViewState,\n        options?: { focus?: boolean }\n    ) => Promise<void>;\n}"
+              "text": "export interface ActiveDocumentEditorSession {\n    readonly documentId: string;\n    readonly paneId?: string;\n    readonly tabId?: string;\n    captureContent: () => void;\n    ensureLocalDurability: () => Promise<void>;\n    captureViewState: () => DocumentEditorViewState;\n    restoreViewState: (\n        state: DocumentEditorViewState,\n        options?: { focus?: boolean }\n    ) => Promise<void>;\n    /** Live, frozen context for a chat request; may include unsaved editor text. */\n    getChatContext?: (requestId: string) => string;\n    /** Execute one of the document agent's native tools in this editor. */\n    executeChatTool?: (name: string, argsJson: string, requestId: string) => string;\n}"
             }
           ]
         },
@@ -2967,7 +2967,7 @@
               "resolvedReturnType": "Promise<void>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 160,
+                "line": 164,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function captureDocumentEditor(documentId: string): Promise<void>;"
               }
@@ -2976,7 +2976,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 160,
+              "line": 164,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function captureDocumentEditor(documentId: string): Promise<void>;"
             }
@@ -3184,7 +3184,7 @@
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
               "line": 46,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface DashboardPlugin {\n    /** Unique id across all dashboard plugins */\n    id: string;\n    /** Icon name (Iconify) shown in the grid */\n    icon: string;\n    /** Short label shown under the icon */\n    label: string;\n    /** Optional longer description (tooltip or detail panel later) */\n    description?: string;\n    /** Optional order (lower = earlier). Defaults to 200. */\n    order?: number;\n    /** Optional click handler when user activates the icon. */\n    handler?: (ctx: { id: string }) => void | Promise<void>;\n    /** Optional pages declared inline on registration (normalized into page registry). */\n    pages?: DashboardPluginPage[];\n    /**\n     * Optional capability declarations for permission-based access control.\n     * Standard capabilities:\n     * - 'canReadMessages': Read chat messages/history\n     * - 'canWriteDocs': Create/modify documents\n     * - 'canSend': Send messages or trigger AI operations\n     * - 'canReadFiles': Access file attachments\n     * - 'canWriteFiles': Upload or modify files\n     * - 'canManageThreads': Create/delete/modify threads\n     * - 'canAccessSettings': Read or modify app settings\n     */\n    capabilities?: string[];\n    /** Optional access gate policy for this plugin. */\n    access?: PluginGatePolicy;\n    /** Owning installable plugin id used for workspace policy lookup. */\n    pluginId?: string;\n}"
+              "text": "export interface DashboardPlugin {\n    /** Unique id across all dashboard plugins */\n    id: string;\n    /** Icon name (Iconify) shown in the grid */\n    icon: string;\n    /** Optional validated app image URL. The Iconify icon remains the fallback. */\n    image?: string;\n    /** Short label shown under the icon */\n    label: string;\n    /** Optional longer description (tooltip or detail panel later) */\n    description?: string;\n    /** Optional order (lower = earlier). Defaults to 200. */\n    order?: number;\n    /** Optional click handler when user activates the icon. */\n    handler?: (ctx: { id: string }) => void | Promise<void>;\n    /** Optional pages declared inline on registration (normalized into page registry). */\n    pages?: DashboardPluginPage[];\n    /**\n     * Optional capability declarations for permission-based access control.\n     * Standard capabilities:\n     * - 'canReadMessages': Read chat messages/history\n     * - 'canWriteDocs': Create/modify documents\n     * - 'canSend': Send messages or trigger AI operations\n     * - 'canReadFiles': Access file attachments\n     * - 'canWriteFiles': Upload or modify files\n     * - 'canManageThreads': Create/delete/modify threads\n     * - 'canAccessSettings': Read or modify app settings\n     */\n    capabilities?: string[];\n    /** Optional access gate policy for this plugin. */\n    access?: PluginGatePolicy;\n    /** Owning installable plugin id used for workspace policy lookup. */\n    pluginId?: string;\n}"
             }
           ]
         },
@@ -3196,9 +3196,9 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 79,
+              "line": 81,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface DashboardPluginPage {\n    /** Unique within the plugin. */\n    id: string;\n    /** Display title. */\n    title: string;\n    /** Optional icon for page navigation lists. */\n    icon?: string;\n    /** Ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional description used in landing list. */\n    description?: string;\n    /** Component or async factory returning component (lazy loaded). */\n    component: Component | (() => Promise<{ default?: Component } | Component>);\n    /** Optional access gate policy for this page. */\n    access?: PluginGatePolicy;\n    /** Whether this page is currently available in the active client. */\n    isAvailable?: () => boolean;\n}"
+              "text": "export interface DashboardPluginPage {\n    /** Unique within the plugin. */\n    id: string;\n    /** Display title. */\n    title: string;\n    /** Optional icon for page navigation lists. */\n    icon?: string;\n    /** Optional validated app image URL. */\n    image?: string;\n    /** Ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional description used in landing list. */\n    description?: string;\n    /** Component or async factory returning component (lazy loaded). */\n    component: Component | (() => Promise<{ default?: Component } | Component>);\n    /** Optional access gate policy for this page. */\n    access?: PluginGatePolicy;\n    /** Whether this page is currently available in the active client. */\n    isAvailable?: () => boolean;\n}"
             }
           ]
         },
@@ -3336,7 +3336,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 91,
+              "line": 95,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentAiEstimateRequest {\n    prompt: string;\n    scope: DocumentAiScope;\n    references: DocumentAiContextReference[];\n}"
             }
@@ -3350,7 +3350,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 77,
+              "line": 81,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentAiProposal {\n    documentId: string;\n    candidate: JSONContent;\n    diff: DocumentAiDiffSummary;\n    operations: DocumentAiOperation[];\n    hunks: DocumentAiHunk[];\n    snapshot: DocumentAiFrozenSnapshot;\n    requestVersion: number;\n    prompt: string;\n    scope: DocumentAiScope;\n}"
             }
@@ -3406,7 +3406,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 97,
+              "line": 101,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentAiSubmission extends DocumentAiEstimateRequest {\n    attachments: DocumentAiAttachment[];\n}"
             }
@@ -3434,7 +3434,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 39,
+              "line": 43,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentEditorSessionLookup {\n    paneId: string;\n    tabId: string;\n}"
             }
@@ -3591,7 +3591,7 @@
               "resolvedReturnType": "Promise<void>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 176,
+                "line": 180,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function ensureDocumentEditorLocalDurability(\n    documentId: string\n): Promise<void>;"
               }
@@ -3600,7 +3600,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 176,
+              "line": 180,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function ensureDocumentEditorLocalDurability(\n    documentId: string\n): Promise<void>;"
             }
@@ -3633,6 +3633,32 @@
           ]
         },
         {
+          "name": "getActiveDocumentEditorSession",
+          "kind": "value",
+          "nuxtAutoImport": false,
+          "signatures": [
+            {
+              "signature": "(documentId: string, tabId?: string): ActiveDocumentEditorSession | undefined",
+              "declaredReturnType": "ActiveDocumentEditorSession | undefined",
+              "resolvedReturnType": "ActiveDocumentEditorSession | undefined",
+              "declaration": {
+                "source": "app/composables/documents/useDocumentEditorSessions.ts",
+                "line": 196,
+                "syntaxKind": "FunctionDeclaration",
+                "text": "export function getActiveDocumentEditorSession(\n    documentId: string,\n    tabId?: string,\n): ActiveDocumentEditorSession | undefined;"
+              }
+            }
+          ],
+          "declarations": [
+            {
+              "source": "app/composables/documents/useDocumentEditorSessions.ts",
+              "line": 196,
+              "syntaxKind": "FunctionDeclaration",
+              "text": "export function getActiveDocumentEditorSession(\n    documentId: string,\n    tabId?: string,\n): ActiveDocumentEditorSession | undefined;"
+            }
+          ]
+        },
+        {
           "name": "getDashboardPluginPage",
           "kind": "value",
           "nuxtAutoImport": false,
@@ -3643,7 +3669,7 @@
               "resolvedReturnType": "DashboardPluginPage | undefined",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 709,
+                "line": 713,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getDashboardPluginPage(\n    pluginId: string,\n    pageId: string\n): DashboardPluginPage | undefined;"
               }
@@ -3652,7 +3678,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 709,
+              "line": 713,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getDashboardPluginPage(\n    pluginId: string,\n    pageId: string\n): DashboardPluginPage | undefined;"
             }
@@ -3695,7 +3721,7 @@
               "resolvedReturnType": "ActiveDocumentEditorSession | undefined",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 127,
+                "line": 131,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup\n): ActiveDocumentEditorSession | undefined;"
               }
@@ -3704,7 +3730,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 127,
+              "line": 131,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup\n): ActiveDocumentEditorSession | undefined;"
             }
@@ -3747,7 +3773,7 @@
               "resolvedReturnType": "DashboardPlugin | undefined",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 307,
+                "line": 311,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getRegisteredDashboardPlugin(\n    pluginId: string\n): DashboardPlugin | undefined;"
               }
@@ -3756,7 +3782,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 307,
+              "line": 311,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getRegisteredDashboardPlugin(\n    pluginId: string\n): DashboardPlugin | undefined;"
             }
@@ -3773,7 +3799,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 188,
+                "line": 192,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function hasActiveDocumentEditor(documentId: string): boolean;"
               }
@@ -3782,7 +3808,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 188,
+              "line": 192,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function hasActiveDocumentEditor(documentId: string): boolean;"
             }
@@ -3999,7 +4025,7 @@
               "resolvedReturnType": "DashboardPluginPage[]",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 678,
+                "line": 682,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listDashboardPluginPages(\n    pluginId: string\n): DashboardPluginPage[];"
               }
@@ -4008,7 +4034,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 678,
+              "line": 682,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listDashboardPluginPages(\n    pluginId: string\n): DashboardPluginPage[];"
             }
@@ -4129,7 +4155,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 509,
+                "line": 513,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredDashboardPluginIds(): string[];"
               }
@@ -4138,7 +4164,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 509,
+              "line": 513,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredDashboardPluginIds(): string[];"
             }
@@ -4546,9 +4572,9 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 33,
+              "line": 35,
               "syntaxKind": "TypeAliasDeclaration",
-              "text": "export type MultiPaneMessage = {\n    role: 'user' | 'assistant' | 'system' | 'tool';\n    content: string;\n    file_hashes?: string | null;\n    id?: string;\n    stream_id?: string;\n    data?: Record<string, unknown> | null;\n    reasoning_text?: string | null;\n    index?: number | null;\n    created_at?: number | null;\n};"
+              "text": "export type MultiPaneMessage = {\n    role: 'user' | 'assistant' | 'system' | 'tool';\n    content: string;\n    file_hashes?: string | null;\n    id?: string;\n    stream_id?: string;\n    data?: Record<string, unknown> | null;\n    reasoning_text?: string | null;\n    index?: number | null;\n    order_key?: string | null;\n    created_at?: number | null;\n};"
             }
           ]
         },
@@ -4560,7 +4586,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 45,
+              "line": 48,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface PaneState {\n    id: string;\n    mode: PaneMode;\n    threadId: string; // '' indicates unsaved/new chat\n    /** Target thread while an async workspace-tab activation is in flight. */\n    pendingThreadId?: string;\n    documentId?: string;\n    messages: MultiPaneMessage[];\n    validating: boolean;\n}"
             }
@@ -4616,7 +4642,7 @@
               "source": "app/composables/core/usePaneApps.ts",
               "line": 23,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface PaneAppDef {\n    /** Unique identifier for the pane app (used as the pane mode when opened). */\n    id: string;\n\n    /** Display label shown in UI (e.g., sidebar). */\n    label: string;\n\n    /** Optional Iconify icon name. */\n    icon?: string;\n\n    /** Vue component or async component factory. */\n    component: Component | (() => Promise<Component>);\n\n    /**\n     * Optional override for the postType stored in the posts table.\n     * If not provided, defaults to the app id.\n     */\n    postType?: string;\n\n    /**\n     * Optional callback to create an initial record when a new pane is opened.\n     * Return { id } to assign as the pane's documentId, or null for no record.\n     */\n    createInitialRecord?: (ctx: {\n        app: PaneAppDef;\n    }) => Promise<{ id: string } | null>;\n\n    /**\n     * Optional ordering (lower = earlier in sorted lists). Defaults to 200.\n     */\n    order?: number;\n    /** Optional owning plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this pane app. */\n    access?: PluginGatePolicy;\n    /** Replace this app's record in the current workspace tab. */\n    replaceRecordInCurrentTab?: boolean;\n}"
+              "text": "export interface PaneAppDef {\n    /** Unique identifier for the pane app (used as the pane mode when opened). */\n    id: string;\n\n    /** Display label shown in UI (e.g., sidebar). */\n    label: string;\n\n    /** Optional Iconify icon name. */\n    icon?: string;\n\n    /** Optional validated app image URL. */\n    image?: string;\n\n    /** Vue component or async component factory. */\n    component: Component | (() => Promise<Component>);\n\n    /**\n     * Optional override for the postType stored in the posts table.\n     * If not provided, defaults to the app id.\n     */\n    postType?: string;\n\n    /**\n     * Optional callback to create an initial record when a new pane is opened.\n     * Return { id } to assign as the pane's documentId, or null for no record.\n     */\n    createInitialRecord?: (ctx: {\n        app: PaneAppDef;\n    }) => Promise<{ id: string } | null>;\n\n    /** Optional new-tab menu contribution. A null result cancels creation. */\n    newTab?: {\n        label: string;\n        icon?: string;\n        isAvailable?: () => boolean;\n        createRecordId: () => Promise<string | null>;\n    };\n\n    /**\n     * Optional ordering (lower = earlier in sorted lists). Defaults to 200.\n     */\n    order?: number;\n    /** Optional owning plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this pane app. */\n    access?: PluginGatePolicy;\n    /** Replace this app's record in the current workspace tab. */\n    replaceRecordInCurrentTab?: boolean;\n}"
             }
           ]
         },
@@ -4628,7 +4654,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 30,
+              "line": 32,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type PaneMode = 'chat' | 'doc' | (string & { _brand?: 'pane-mode' });"
             }
@@ -4642,7 +4668,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 45,
+              "line": 48,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface PaneState {\n    id: string;\n    mode: PaneMode;\n    threadId: string; // '' indicates unsaved/new chat\n    /** Target thread while an async workspace-tab activation is in flight. */\n    pendingThreadId?: string;\n    documentId?: string;\n    messages: MultiPaneMessage[];\n    validating: boolean;\n}"
             }
@@ -4835,7 +4861,7 @@
               "resolvedReturnType": "RegistrationHandle",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 369,
+                "line": 373,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHandle;"
               }
@@ -4844,7 +4870,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 369,
+              "line": 373,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHandle;"
             }
@@ -4861,7 +4887,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 540,
+                "line": 544,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDashboardPluginPage(\n    pluginId: string,\n    page: DashboardPluginPage\n);"
               }
@@ -4870,7 +4896,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 540,
+              "line": 544,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDashboardPluginPage(\n    pluginId: string,\n    page: DashboardPluginPage\n);"
             }
@@ -4913,7 +4939,7 @@
               "resolvedReturnType": "() => void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 71,
+                "line": 75,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDocumentEditorSession(\n    session: ActiveDocumentEditorSession\n): () => void;"
               }
@@ -4924,7 +4950,7 @@
               "resolvedReturnType": "() => void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 75,
+                "line": 79,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDocumentEditorSession(\n    documentId: string,\n    session: LegacyDocumentEditorSession\n): () => void;"
               }
@@ -4933,19 +4959,19 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 71,
+              "line": 75,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDocumentEditorSession(\n    session: ActiveDocumentEditorSession\n): () => void;"
             },
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 75,
+              "line": 79,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDocumentEditorSession(\n    documentId: string,\n    session: LegacyDocumentEditorSession\n): () => void;"
             },
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 79,
+              "line": 83,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDocumentEditorSession(\n    documentIdOrSession: string | ActiveDocumentEditorSession,\n    legacySession?: LegacyDocumentEditorSession\n): () => void;"
             }
@@ -5115,7 +5141,7 @@
           "declarations": [
             {
               "source": "app/composables/core/usePaneApps.ts",
-              "line": 63,
+              "line": 74,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type RegisteredPaneApp = PaneAppDef;"
             }
@@ -5340,7 +5366,7 @@
               "resolvedReturnType": "DocumentAiScope",
               "declaration": {
                 "source": "app/composables/documents/useDocumentAiAgent.ts",
-                "line": 108,
+                "line": 112,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function resolveAutomaticDocumentAiScope(editor: Editor): DocumentAiScope;"
               }
@@ -5349,7 +5375,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 108,
+              "line": 112,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function resolveAutomaticDocumentAiScope(editor: Editor): DocumentAiScope;"
             }
@@ -5366,7 +5392,7 @@
               "resolvedReturnType": "Promise<Component | undefined>",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 755,
+                "line": 759,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function resolveDashboardPluginPageComponent(\n    pluginId: string,\n    pageId: string\n): Promise<Component | undefined>;"
               }
@@ -5375,7 +5401,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 755,
+              "line": 759,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function resolveDashboardPluginPageComponent(\n    pluginId: string,\n    pageId: string\n): Promise<Component | undefined>;"
             }
@@ -5392,7 +5418,7 @@
               "resolvedReturnType": "number",
               "declaration": {
                 "source": "app/composables/documents/useDocumentAiAgent.ts",
-                "line": 112,
+                "line": 116,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function resolveDocumentAiCursorBlockIndex(\n    editor: Editor,\n    snapshot: DocumentAiFrozenSnapshot,\n): number;"
               }
@@ -5401,7 +5427,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 112,
+              "line": 116,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function resolveDocumentAiCursorBlockIndex(\n    editor: Editor,\n    snapshot: DocumentAiFrozenSnapshot,\n): number;"
             }
@@ -5524,7 +5550,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentAiAgent.ts",
-                "line": 153,
+                "line": 157,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function seedEditableContext(\n    editor: Editor,\n    snapshot: DocumentAiFrozenSnapshot,\n    scope: DocumentAiScope,\n    chunkWordLimit: number,\n);"
               }
@@ -5533,7 +5559,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 153,
+              "line": 157,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function seedEditableContext(\n    editor: Editor,\n    snapshot: DocumentAiFrozenSnapshot,\n    scope: DocumentAiScope,\n    chunkWordLimit: number,\n);"
             }
@@ -5754,7 +5780,7 @@
               "resolvedReturnType": "() => void",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 153,
+                "line": 157,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function subscribeDashboardRegistry(listener: () => void): () => void;"
               }
@@ -5763,7 +5789,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 153,
+              "line": 157,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function subscribeDashboardRegistry(listener: () => void): () => void;"
             }
@@ -5860,7 +5886,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 448,
+                "line": 452,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDashboardPlugin(id: string);"
               }
@@ -5869,7 +5895,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 448,
+              "line": 452,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDashboardPlugin(id: string);"
             }
@@ -5886,7 +5912,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 580,
+                "line": 584,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDashboardPluginPage(\n    pluginId: string,\n    pageId?: string\n);"
               }
@@ -5895,7 +5921,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 580,
+              "line": 584,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDashboardPluginPage(\n    pluginId: string,\n    pageId?: string\n);"
             }
@@ -6354,7 +6380,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAi.ts",
-                "line": 193,
+                "line": 195,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
               }
@@ -6363,7 +6389,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAi.ts",
-              "line": 193,
+              "line": 195,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
             }
@@ -6406,7 +6432,7 @@
               "resolvedReturnType": "DashboardNavigationController",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 811,
+                "line": 815,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardNavigation(\n    options: UseDashboardNavigationOptions = {}\n): DashboardNavigationController;"
               }
@@ -6415,7 +6441,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 811,
+              "line": 815,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardNavigation(\n    options: UseDashboardNavigationOptions = {}\n): DashboardNavigationController;"
             }
@@ -6446,7 +6472,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 645,
+                "line": 649,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardPluginPages(pluginId: () => string | undefined);"
               }
@@ -6455,7 +6481,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 645,
+              "line": 649,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardPluginPages(pluginId: () => string | undefined);"
             }
@@ -6472,7 +6498,7 @@
               "resolvedReturnType": "ComputedRef<DashboardPlugin[]>",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 478,
+                "line": 482,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardPlugins(): ComputedRef<DashboardPlugin[]>;"
               }
@@ -6481,7 +6507,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 478,
+              "line": 482,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardPlugins(): ComputedRef<DashboardPlugin[]>;"
             }
@@ -6550,7 +6576,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentAiAgent.ts",
-                "line": 285,
+                "line": 289,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDocumentAiAgent(options: {\n    editor: Ref<Editor | null>;\n    documentId: Ref<string>;\n    title: Ref<string>;\n    contentVersion: Ref<number>;\n    persistCurrent: () => Promise<void>;\n});"
               }
@@ -6559,7 +6585,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 285,
+              "line": 289,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDocumentAiAgent(options: {\n    editor: Ref<Editor | null>;\n    documentId: Ref<string>;\n    title: Ref<string>;\n    contentVersion: Ref<number>;\n    persistCurrent: () => Promise<void>;\n});"
             }
@@ -6914,7 +6940,7 @@
               "resolvedReturnType": "UseMultiPaneApi",
               "declaration": {
                 "source": "app/composables/core/useMultiPane.ts",
-                "line": 251,
+                "line": 265,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useMultiPane(\n    options: UseMultiPaneOptions = {}\n): UseMultiPaneApi;"
               }
@@ -6923,7 +6949,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 251,
+              "line": 265,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useMultiPane(\n    options: UseMultiPaneOptions = {}\n): UseMultiPaneApi;"
             }
@@ -6937,9 +6963,9 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 67,
+              "line": 70,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface UseMultiPaneApi {\n    panes: Ref<PaneState[]>;\n    activePaneIndex: Ref<number>;\n    activePaneId: ComputedRef<string | null>;\n    canAddPane: ComputedRef<boolean>;\n    newWindowTooltip: ComputedRef<string>;\n    addPane: () => string | null;\n    closePane: (index: number) => Promise<void> | void;\n    setActive: (index: number) => void;\n    focusPrev: (current: number) => void;\n    focusNext: (current: number) => void;\n    setPaneThread: (index: number, threadId: string) => Promise<void>;\n    loadMessagesFor: (id: string) => Promise<MultiPaneMessage[]>;\n    ensureAtLeastOne: () => void;\n    newPaneForApp: (\n        appId: string,\n        opts?: { initialRecordId?: string }\n    ) => Promise<void>;\n    setPaneApp: (\n        index: number,\n        appId: string,\n        opts?: { recordId?: string }\n    ) => Promise<void>;\n    updatePane: (index: number, updates: Partial<PaneState>) => void;\n    getPaneIndexById: (paneId: string) => number;\n    getPaneById: (paneId: string) => PaneState | undefined;\n    getPaneWidth: (index: number) => string;\n    handleResize: (\n        paneIndex: number,\n        deltaX: number,\n        persist?: boolean\n    ) => void;\n    persistPaneWidths: () => void;\n    recalculateWidthsForContainer: (newContainerWidth: number) => void;\n    paneWidths: Ref<number[]>;\n}"
+              "text": "export interface UseMultiPaneApi {\n    panes: Ref<PaneState[]>;\n    activePaneIndex: Ref<number>;\n    activePaneId: ComputedRef<string | null>;\n    canAddPane: ComputedRef<boolean>;\n    newWindowTooltip: ComputedRef<string>;\n    addPane: () => string | null;\n    closePane: (index: number) => Promise<void> | void;\n    swapAdjacentPanes: (leftIndex: number) => void;\n    setActive: (index: number) => void;\n    focusPrev: (current: number) => void;\n    focusNext: (current: number) => void;\n    setPaneThread: (index: number, threadId: string) => Promise<void>;\n    loadMessagesFor: (id: string) => Promise<MultiPaneMessage[]>;\n    ensureAtLeastOne: () => void;\n    newPaneForApp: (\n        appId: string,\n        opts?: { initialRecordId?: string }\n    ) => Promise<void>;\n    setPaneApp: (\n        index: number,\n        appId: string,\n        opts?: { recordId?: string }\n    ) => Promise<void>;\n    updatePane: (index: number, updates: Partial<PaneState>) => void;\n    getPaneIndexById: (paneId: string) => number;\n    getPaneById: (paneId: string) => PaneState | undefined;\n    getPaneWidth: (index: number) => string;\n    handleResize: (\n        paneIndex: number,\n        deltaX: number,\n        persist?: boolean\n    ) => void;\n    persistPaneWidths: () => void;\n    recalculateWidthsForContainer: (newContainerWidth: number) => void;\n    paneWidths: Ref<number[]>;\n}"
             }
           ]
         },
@@ -6951,7 +6977,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 56,
+              "line": 59,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UseMultiPaneOptions {\n    initialThreadId?: string;\n    maxPanes?: MaybeRefOrGetter<number>; // default 3\n    onFlushDocument?: (id: string) => void | Promise<void>;\n    loadMessagesFor?: (id: string) => Promise<MultiPaneMessage[]>; // override for tests\n    minPaneWidth?: number; // minimum width per pane in pixels (default 280)\n    maxPaneWidth?: number; // maximum width per pane in pixels (default 2000)\n    storageKey?: string; // localStorage key for persisting widths (default 'pane-widths')\n    allowMultiplePanes?: MaybeRefOrGetter<boolean>; // responsive or policy-level pane creation guard\n}"
             }
@@ -6994,7 +7020,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/core/usePaneApps.ts",
-                "line": 203,
+                "line": 221,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function usePaneApps();"
               }
@@ -7003,7 +7029,7 @@
           "declarations": [
             {
               "source": "app/composables/core/usePaneApps.ts",
-              "line": 203,
+              "line": 221,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function usePaneApps();"
             }
@@ -7426,7 +7452,7 @@
               "resolvedReturnType": "Promise<ActiveDocumentEditorSession | undefined>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 134,
+                "line": 138,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function waitForDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup,\n    timeoutMs = 1_500\n): Promise<ActiveDocumentEditorSession | undefined>;"
               }
@@ -7435,7 +7461,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 134,
+              "line": 138,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function waitForDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup,\n    timeoutMs = 1_500\n): Promise<ActiveDocumentEditorSession | undefined>;"
             }
@@ -7486,8 +7512,119 @@
       ]
     },
     {
+      "source": "app/composables/plugins/trusted-host-context.ts",
+      "apiSha256": "5faea257d3ba194bca4407097231dd4131d19922d730942289b91be18efe5d51",
+      "runtime": "client",
+      "publicPaths": [
+        "~/composables/plugins/trusted-host-context"
+      ],
+      "nuxtAutoImportModule": "#imports",
+      "docs": [
+        "public/_documentation/start/plugin-quickstart.md"
+      ],
+      "behaviorProfileIds": [],
+      "exports": [
+        {
+          "name": "createTrustedHostContext",
+          "kind": "value",
+          "nuxtAutoImport": true,
+          "signatures": [
+            {
+              "signature": "(input: CreateTrustedHostContextInput): TrustedHostContext",
+              "declaredReturnType": "TrustedHostContext",
+              "resolvedReturnType": "TrustedHostContext",
+              "declaration": {
+                "source": "app/composables/plugins/trusted-host-context.ts",
+                "line": 430,
+                "syntaxKind": "FunctionDeclaration",
+                "text": "export function createTrustedHostContext(\n    input: CreateTrustedHostContextInput\n): TrustedHostContext;"
+              }
+            }
+          ],
+          "declarations": [
+            {
+              "source": "app/composables/plugins/trusted-host-context.ts",
+              "line": 430,
+              "syntaxKind": "FunctionDeclaration",
+              "text": "export function createTrustedHostContext(\n    input: CreateTrustedHostContextInput\n): TrustedHostContext;"
+            }
+          ]
+        },
+        {
+          "name": "CreateTrustedHostContextInput",
+          "kind": "type",
+          "nuxtAutoImport": true,
+          "signatures": [],
+          "declarations": [
+            {
+              "source": "app/composables/plugins/trusted-host-context.ts",
+              "line": 139,
+              "syntaxKind": "InterfaceDeclaration",
+              "text": "export interface CreateTrustedHostContextInput {\n    readonly pluginId: string;\n    readonly version: string;\n    readonly workspaceId?: string;\n    readonly generation?: number;\n    readonly grants?: readonly PluginGrant[];\n    readonly features?: readonly string[];\n    readonly subscribeWorkspaceChanges?: (\n        listener: (change: PluginWorkspaceChange) => void | Promise<void>\n    ) => PluginRegistrationHandle;\n    readonly subscribeHook?: (\n        name: string,\n        kind: 'action' | 'filter',\n        callback: (...args: unknown[]) => unknown,\n        options?: { readonly priority?: number; readonly signal?: AbortSignal }\n    ) => () => void;\n    readonly mediation?: Pick<\n        TrustedMediationOptions,\n        'fetch' | 'approvedDestinations' | 'authorizeDestination' | 'secrets' | 'files' | 'posts'\n    >;\n}"
+            }
+          ]
+        },
+        {
+          "name": "TRUSTED_HOST_GRANTS",
+          "kind": "value",
+          "nuxtAutoImport": true,
+          "signatures": [],
+          "declarations": [
+            {
+              "source": "app/composables/plugins/trusted-host-context.ts",
+              "line": 54,
+              "syntaxKind": "VariableDeclaration",
+              "text": "TRUSTED_HOST_GRANTS = [\n    'ui.dashboard.register',\n    'ui.sidebar.register',\n    'ui.pane.register',\n    'ui.card.register',\n    'ui.action.register',\n    'ui.command-palette.register',\n    'ui.toast',\n    'ui.confirm',\n    'ui.progress',\n    'panes.open',\n    'commands.register',\n    'commands.run.public',\n    'chat.create',\n    'chat.read',\n    'chat.message.write',\n    'chat.message.renderer',\n    'chat.editor.extension',\n    'workspace.read',\n    'workspace.switch',\n    'workspace.connections.read',\n    'workspace.connections.manage',\n    'events.register',\n    'ai.models',\n    'ai.complete',\n    'secrets.read',\n    'secrets.write',\n    'secrets.use',\n    'files.pick',\n    'files.read',\n    'files.write',\n    'network.stream',\n    'activity.register',\n    'documents.read',\n    'documents.write',\n    'tools.register.client',\n    'tools.register.server',\n    'tools.model.register',\n    'posts.read',\n    'posts.write',\n    'hooks.register',\n    'network.http',\n    'storage.read',\n    'storage.write',\n    'settings.read',\n    'settings.write',\n] as const satisfies readonly PluginGrant[]"
+            }
+          ]
+        },
+        {
+          "name": "TrustedHostContext",
+          "kind": "type",
+          "nuxtAutoImport": true,
+          "signatures": [],
+          "declarations": [
+            {
+              "source": "app/composables/plugins/trusted-host-context.ts",
+              "line": 161,
+              "syntaxKind": "InterfaceDeclaration",
+              "text": "export interface TrustedHostContext {\n    readonly context: PluginContext;\n    /** Client tools. The SDK context has no tools namespace; this is that surface. */\n    readonly tools: TrustedPluginToolsClient;\n    readonly editor: TrustedPluginEditorClient;\n    readonly posts: ReturnType<typeof createTrustedMediation>['posts'];\n    readonly renderers: {\n        register(definition: MessageRendererDefinition): PluginRegistrationHandle;\n    };\n    /**\n     * V1 `{ id, register(api) }` view. Tactics-style and bundled V1 modules\n     * register through this object; it is the same runtime as `context`.\n     */\n    readonly workspaceApi: Or3WorkspacePluginApi;\n    /** Live hook listeners owned by this context. Host leak diagnostic, not a plugin API. */\n    readonly liveListenerCount: number;\n    dispose(reason?: unknown): Promise<LegacyCleanupReport>;\n}"
+            }
+          ]
+        },
+        {
+          "name": "TrustedPluginEditorClient",
+          "kind": "type",
+          "nuxtAutoImport": true,
+          "signatures": [],
+          "declarations": [
+            {
+              "source": "app/composables/plugins/trusted-host-context.ts",
+              "line": 133,
+              "syntaxKind": "InterfaceDeclaration",
+              "text": "export interface TrustedPluginEditorClient {\n    register(input: TrustedEditorExtensionInput): PluginRegistrationHandle;\n    applyExtensions(existing: readonly object[]): object[];\n    handleBeforeSend(text: string): Promise<boolean>;\n}"
+            }
+          ]
+        },
+        {
+          "name": "TrustedPluginToolsClient",
+          "kind": "type",
+          "nuxtAutoImport": true,
+          "signatures": [],
+          "declarations": [
+            {
+              "source": "app/composables/plugins/trusted-host-context.ts",
+              "line": 125,
+              "syntaxKind": "InterfaceDeclaration",
+              "text": "export interface TrustedPluginToolsClient {\n    register(\n        definition: ExtendedToolDefinition,\n        handler: ToolHandler\n    ): PluginRegistrationHandle;\n    registerModel(input: TrustedModelContribution): PluginRegistrationHandle;\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "source": "app/composables/plugins/workspace-runtime.ts",
-      "apiSha256": "c9f3603e9178180537eeebeb336458e167a5a4cb8dd0eca7061087474ce4fc7d",
+      "apiSha256": "43cc4ccaa84486f6f9babeaa5928aafe23c704800da59f24281e08f403cdc989",
       "runtime": "client",
       "publicPaths": [
         "~/composables/plugins/workspace-runtime"
@@ -7509,7 +7646,7 @@
               "resolvedReturnType": "ManagedWorkspacePluginRuntime",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 100,
+                "line": 107,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createManagedWorkspacePluginRuntime(options?: {\n    pluginId?: string;\n}): ManagedWorkspacePluginRuntime;"
               }
@@ -7518,7 +7655,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 100,
+              "line": 107,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createManagedWorkspacePluginRuntime(options?: {\n    pluginId?: string;\n}): ManagedWorkspacePluginRuntime;"
             }
@@ -7535,7 +7672,7 @@
               "resolvedReturnType": "{ api: Or3WorkspacePluginApi; dispose: () => void; }",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 212,
+                "line": 221,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createWorkspacePluginApi(pluginId?: string): {\n    api: Or3WorkspacePluginApi;\n    dispose: () => void;\n};"
               }
@@ -7544,7 +7681,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 212,
+              "line": 221,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createWorkspacePluginApi(pluginId?: string): {\n    api: Or3WorkspacePluginApi;\n    dispose: () => void;\n};"
             }
@@ -7561,7 +7698,7 @@
               "resolvedReturnType": "{ id: string; source: WorkspacePluginSource; }[]",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 275,
+                "line": 284,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listWorkspacePluginInstances(): Array<{ id: string; source: WorkspacePluginSource }>;"
               }
@@ -7570,7 +7707,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 275,
+              "line": 284,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listWorkspacePluginInstances(): Array<{ id: string; source: WorkspacePluginSource }>;"
             }
@@ -7629,7 +7766,7 @@
               "resolvedReturnType": "{ accepted: boolean; replacedSource?: WorkspacePluginSource; }",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 227,
+                "line": 236,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerWorkspacePluginInstance(\n    id: string,\n    source: WorkspacePluginSource,\n    dispose: () => void | Promise<void>\n): { accepted: boolean; replacedSource?: WorkspacePluginSource };"
               }
@@ -7638,7 +7775,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 227,
+              "line": 236,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerWorkspacePluginInstance(\n    id: string,\n    source: WorkspacePluginSource,\n    dispose: () => void | Promise<void>\n): { accepted: boolean; replacedSource?: WorkspacePluginSource };"
             }
@@ -7655,7 +7792,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 259,
+                "line": 268,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterWorkspacePluginInstance(id: string): void;"
               }
@@ -7664,7 +7801,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 259,
+              "line": 268,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterWorkspacePluginInstance(id: string): void;"
             }
@@ -8991,7 +9128,7 @@
     },
     {
       "source": "app/composables/sidebar/useSidebarPages.ts",
-      "apiSha256": "93a2ba04350f7b1008a6be0aca9ffa6c7d2bdae8662fd70f4153b9a2834606e7",
+      "apiSha256": "2d21fd3ecaccfb84960798b09caaf3e8fd88b36bf5c955b4066c8de835f86516",
       "runtime": "client",
       "publicPaths": [
         "~/composables/sidebar",
@@ -9013,7 +9150,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarPages.ts",
-              "line": 141,
+              "line": 145,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type RegisteredSidebarPage = SidebarPageDef;"
             }
@@ -9027,7 +9164,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarPages.ts",
-              "line": 113,
+              "line": 117,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarActivateContext {\n    /** The page being activated/deactivated */\n    page: SidebarPageDef;\n    /** The previously active page, or null if this is the first activation */\n    previousPage: SidebarPageDef | null;\n    /** Whether the sidebar is currently collapsed */\n    isCollapsed: boolean;\n    /** API for managing panes in the multi-pane system */\n    multiPane: UseMultiPaneApi;\n    /** API for pane plugin operations */\n    panePluginApi: PanePluginApi;\n}"
             }
@@ -9041,7 +9178,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarPages.ts",
-              "line": 91,
+              "line": 95,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarPageContext {\n    /** The page definition for this context */\n    page: SidebarPageDef;\n    /** Function to expose APIs to other parts of the application */\n    expose: (api: Record<string, unknown>) => void;\n}"
             }
@@ -9057,7 +9194,7 @@
               "source": "app/composables/sidebar/useSidebarPages.ts",
               "line": 47,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface SidebarPageDef {\n    /** Unique identifier for the sidebar page */\n    id: string;\n    /** Display label shown in UI (e.g., tooltips) */\n    label: string;\n    /** Iconify icon name */\n    icon: string;\n    /** Optional ordering (lower = earlier in sorted lists). Defaults to 200 */\n    order?: number;\n    /** Vue component or async component factory */\n    component: Component | (() => Promise<Component>);\n    /** Opt-in caching for the component */\n    keepAlive?: boolean;\n    /** Whether this page uses the default header. Defaults to true for home page */\n    usesDefaultHeader?: boolean;\n    /** Optional context provider for the page */\n    provideContext?: (ctx: SidebarPageContext) => void;\n    /** Optional activation guard - return false to prevent activation */\n    canActivate?: (ctx: SidebarActivateContext) => boolean | Promise<boolean>;\n    /** Optional activation hook called when page becomes active */\n    onActivate?: (ctx: SidebarActivateContext) => void | Promise<void>;\n    /** Optional deactivation hook called when page becomes inactive */\n    onDeactivate?: (ctx: SidebarActivateContext) => void | Promise<void>;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this page. */\n    access?: PluginGatePolicy;\n}"
+              "text": "export interface SidebarPageDef {\n    /** Unique identifier for the sidebar page */\n    id: string;\n    /** Display label shown in UI (e.g., tooltips) */\n    label: string;\n    /** Optional description in mobile navigation. */\n    description?: string;\n    /** Iconify icon name */\n    icon: string;\n    /** Optional validated app image URL. The Iconify icon remains the fallback. */\n    image?: string;\n    /** Optional ordering (lower = earlier in sorted lists). Defaults to 200 */\n    order?: number;\n    /** Vue component or async component factory */\n    component: Component | (() => Promise<Component>);\n    /** Opt-in caching for the component */\n    keepAlive?: boolean;\n    /** Whether this page uses the default header. Defaults to true for home page */\n    usesDefaultHeader?: boolean;\n    /** Optional context provider for the page */\n    provideContext?: (ctx: SidebarPageContext) => void;\n    /** Optional activation guard - return false to prevent activation */\n    canActivate?: (ctx: SidebarActivateContext) => boolean | Promise<boolean>;\n    /** Optional activation hook called when page becomes active */\n    onActivate?: (ctx: SidebarActivateContext) => void | Promise<void>;\n    /** Optional deactivation hook called when page becomes inactive */\n    onDeactivate?: (ctx: SidebarActivateContext) => void | Promise<void>;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this page. */\n    access?: PluginGatePolicy;\n}"
             }
           ]
         },
@@ -9072,7 +9209,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarPages.ts",
-                "line": 305,
+                "line": 311,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarPages();"
               }
@@ -9081,7 +9218,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarPages.ts",
-              "line": 305,
+              "line": 311,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarPages();"
             }
@@ -9689,7 +9826,7 @@
     },
     {
       "source": "app/core/hooks/hook-types.ts",
-      "apiSha256": "5430e137b077d471a652118e12bbe03771e2e74a9b44c371099a23ac3533e8ac",
+      "apiSha256": "d4a2b2d24af71e09337423b7b073838401ba200849dda7da7cdd948da50322bf",
       "runtime": "client",
       "publicPaths": [
         "~/core/hooks/hook-types"
@@ -9708,7 +9845,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 158,
+              "line": 159,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AccessDecision {\n    allowed: boolean;\n    permission: Permission;\n    reason?:\n        | 'unauthenticated'\n        | 'forbidden'\n        | 'unknown-permission'\n        | (string & {});\n    userId?: string;\n    workspaceId?: string;\n    role?: WorkspaceRole;\n    resource?: { kind: string; id?: string };\n}"
             }
@@ -9722,7 +9859,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 448,
+              "line": 446,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ActionHookName =\n    | CoreActionHookName\n    | DbActionHookName\n    | ExtensionActionHookName\n    | (string & {});"
             }
@@ -9736,7 +9873,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 205,
+              "line": 203,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiRetryAfterPayload {\n    threadId?: string;\n    originalUserId: string;\n    originalAssistantId?: string;\n    newUserId?: string;\n    newAssistantId?: string;\n}"
             }
@@ -9750,7 +9887,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 198,
+              "line": 196,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiRetryBeforePayload {\n    threadId?: string;\n    originalUserId: string;\n    originalAssistantId?: string;\n    triggeredBy: 'user' | 'assistant';\n}"
             }
@@ -9764,7 +9901,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 148,
+              "line": 146,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiSendAfterPayload {\n    threadId?: string;\n    request?: { modelId?: string; userId?: string };\n    response?: { assistantId?: string; length?: number };\n    timings?: AiSendAfterPayloadTimings;\n    aborted?: boolean;\n}"
             }
@@ -9778,7 +9915,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 139,
+              "line": 137,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiSendAfterPayloadTimings {\n    startedAt: number;\n    endedAt: number;\n    durationMs: number;\n}"
             }
@@ -9792,7 +9929,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 130,
+              "line": 128,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiSendBeforePayload {\n    threadId?: string;\n    modelId: string;\n    user: { id: string; length: number };\n    assistant: { id: string; streamId: string };\n    messagesCount?: number;\n}"
             }
@@ -9806,7 +9943,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 175,
+              "line": 173,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiStreamCompleteContext {\n    threadId?: string;\n    assistantId: string;\n    streamId: string;\n    totalLength: number;\n    reasoningLength?: number;\n    fileHashes?: string | null;\n}"
             }
@@ -9820,7 +9957,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 195,
+              "line": 193,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AiStreamCompletePayload = AiStreamCompleteContext;"
             }
@@ -9834,7 +9971,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 157,
+              "line": 155,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiStreamDeltaContext {\n    threadId?: string;\n    assistantId: string;\n    streamId: string;\n    deltaLength: number;\n    totalLength: number;\n    chunkIndex: number;\n}"
             }
@@ -9848,7 +9985,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 193,
+              "line": 191,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AiStreamDeltaPayload = AiStreamDeltaContext;"
             }
@@ -9862,7 +9999,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 185,
+              "line": 183,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiStreamErrorContext {\n    threadId?: string;\n    streamId?: string;\n    error?: unknown;\n    aborted?: boolean;\n}"
             }
@@ -9876,7 +10013,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 196,
+              "line": 194,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AiStreamErrorPayload = AiStreamErrorContext;"
             }
@@ -9890,7 +10027,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 167,
+              "line": 165,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiStreamReasoningContext {\n    threadId?: string;\n    assistantId: string;\n    streamId: string;\n    reasoningLength: number;\n}"
             }
@@ -9904,7 +10041,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 194,
+              "line": 192,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AiStreamReasoningPayload = AiStreamReasoningContext;"
             }
@@ -9918,7 +10055,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 312,
+              "line": 310,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AppInitPayload {\n    nuxtApp: unknown; // kept opaque to avoid heavy imports\n}"
             }
@@ -9946,7 +10083,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 358,
+              "line": 356,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface BranchContextAfterPayload {\n    threadId: string;\n    mode: BranchMode;\n    ancestorCount: number;\n    localCount: number;\n    finalCount: number;\n}"
             }
@@ -9960,7 +10097,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 351,
+              "line": 349,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface BranchForkBeforePayload {\n    source: ThreadEntity;\n    anchor: MessageEntity;\n    mode: BranchMode;\n    options?: { titleOverride?: string };\n}"
             }
@@ -9974,7 +10111,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 338,
+              "line": 336,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface BranchForkOptions {\n    sourceThreadId: string;\n    anchorMessageId: string;\n    mode?: BranchMode;\n    titleOverride?: string;\n}"
             }
@@ -9988,7 +10125,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 336,
+              "line": 334,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type BranchMode = 'reference' | 'copy';"
             }
@@ -10002,7 +10139,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 871,
+              "line": 869,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type CallbackMismatch<Expected, Got> =\n    `Callback signature mismatch. Expected ${TypeName<Expected>}, got ${TypeName<Got>}`;"
             }
@@ -10016,7 +10153,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 440,
+              "line": 438,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type CoreActionHookName = Extract<\n    keyof CoreHookPayloadMap,\n    `${string}:action${string}`\n>;"
             }
@@ -10030,7 +10167,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 460,
+              "line": 458,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type CoreFilterHookName = Extract<\n    keyof CoreHookPayloadMap,\n    `${string}:filter${string}`\n>;"
             }
@@ -10044,9 +10181,9 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 483,
+              "line": 481,
               "syntaxKind": "TypeAliasDeclaration",
-              "text": "export type CoreHookPayloadMap = {\n    // AI/Chat Actions\n    'ai.chat.send:action:before': [AiSendBeforePayload];\n    'ai.chat.send:action:after': [AiSendAfterPayload];\n    'ai.chat.stream:action:delta': [string, AiStreamDeltaPayload];\n    'ai.chat.stream:action:reasoning': [string, AiStreamReasoningPayload];\n    'ai.chat.stream:action:complete': [AiStreamCompletePayload];\n    'ai.chat.stream:action:error': [AiStreamErrorPayload];\n    'ai.chat.retry:action:before': [AiRetryBeforePayload];\n    'ai.chat.retry:action:after': [AiRetryAfterPayload];\n    'ai.document.edit:filter:request': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:before': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:after': [DocumentAiEditResultPayload];\n    'ai.document.edit:action:error': [DocumentAiEditResultPayload];\n\n    // Pane Actions (now use named payloads)\n    'ui.pane.active:action': [UiPaneActivePayload];\n    'ui.pane.blur:action': [UiPaneBlurPayload];\n    'ui.pane.switch:action': [UiPaneSwitchPayload];\n    'ui.pane.open:action:after': [UiPaneActivePayload];\n    'ui.pane.close:action:before': [UiPaneActivePayload];\n    'ui.pane.close:action:after': [UiPaneActivePayload];\n    'ui.pane.thread:action:changed': [UiPaneThreadChangedPayload];\n    'ui.pane.doc:action:changed': [UiPaneDocChangedPayload];\n    'ui.pane.doc:action:saved': [UiPaneDocChangedPayload];\n    'ui.pane.msg:action:sent': [UiPaneMsgSentPayload];\n    'ui.pane.msg:action:received': [UiPaneMsgReceivedPayload];\n\n    // Sidebar Actions\n    'ui.sidebar.select:action:before': [UiSidebarSelectPayload];\n    'ui.sidebar.select:action:after': [UiSidebarSelectPayload];\n    'ui.chat.new:action:after': [UiChatNewPayload];\n\n    // App Actions\n    'app.init:action:after': [AppInitPayload];\n\n    // Chat Filters\n    'ui.chat.message:filter:outgoing': [string];\n    'ui.chat.message:filter:incoming': [string, string | undefined];\n    'ai.chat.model:filter:select': [string];\n    'ai.chat.messages:filter:input': [ChatMessage[]];\n\n    // Pane Filters\n    'ui.pane.thread:filter:select': [string, PaneState, string];\n    'ui.pane.doc:filter:select': [string, PaneState, string];\n\n    // Files Filters\n    'files.attach:filter:input': [FilesAttachInputPayload | false];\n\n    // Small, well-known DB-specialized hooks kept explicit\n    'db.messages.files.validate:filter:hashes': [string[]];\n    'db.files.refchange:action:after': [\n        { before: FileEntity; after: FileEntity; delta: number }\n    ];\n    'db.threads.getSystemPrompt:filter:output': [string | null];\n\n    // Editor Lifecycle (Examples/Plugins)\n    'editor.created:action:after': [{ editor: unknown }];\n    'editor.updated:action:after': [{ editor: unknown }];\n    'editor:request-extensions': [void];\n\n    // UI/Chat Extensions\n    'ui.chat.editor:filter:extensions': [unknown[]];\n    'ui.chat.editor:action:before_send': [Record<string, unknown>]; // editor JSON\n    'ai.chat.messages:filter:before_send': [\n        { messages: OpenRouterMessage[] } | { messages: OpenRouterMessage[] }[]\n    ];\n\n    // Branching lifecycle\n    'branch.fork:filter:options': [BranchForkOptions];\n    'branch.fork:action:before': [BranchForkBeforePayload];\n    'branch.fork:action:after': [ThreadEntity];\n    'branch.retry:filter:options': [RetryBranchParams];\n    'branch.retry:action:before': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.retry:action:after': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            newThreadId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.context:filter:messages': [\n        MessageEntity[],\n        string /* threadId */,\n        BranchMode\n    ];\n    'branch.context:action:after': [BranchContextAfterPayload];\n\n    // Documents helpers\n    'db.documents.title:filter': [\n        string,\n        {\n            phase: 'create' | 'update';\n            id: string;\n            rawTitle?: string | null;\n            existing?: DocumentEntity;\n        }\n    ];\n\n    // Workflow Actions\n    'workflow.execution:action:state_update': [\n        { messageId: string; state: WorkflowStreamingState | WorkflowMessageData }\n    ];\n    'workflow.execution:action:complete': [\n        { messageId: string; workflowId: string; finalOutput?: string }\n    ];\n\n    // Auth hooks\n    'auth.access:filter:decision': [\n        AccessDecision,\n        { session: SessionContext | null }\n    ];\n    'auth.user:action:created': [{ userId: string; provider: string }];\n    'auth.workspace:action:created': [{ workspaceId: string; userId: string }];\n\n    // Storage hooks\n    'storage.files.upload:action:before': [StorageFileUploadBeforePayload];\n    'storage.files.upload:action:after': [StorageFileUploadAfterPayload];\n    'storage.files.download:action:before': [StorageFileDownloadBeforePayload];\n    'storage.files.download:action:after': [StorageFileDownloadAfterPayload];\n    'storage.files.url:filter:options': [StorageFileUrlOptionsPayload];\n    'storage.files.upload:filter:policy': [StorageFileUploadPolicyPayload | false];\n    'storage.files.gc:action:run': [StorageFileGcPayload];\n    'storage:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Sync hooks\n    'sync.op:action:captured': [{ op: SyncPendingOpPayload }];\n    'sync.push:action:before': [{ scope: SyncScopePayload; count: number }];\n    'sync.push:action:after': [\n        { scope: SyncScopePayload; successCount: number; failCount: number }\n    ];\n    'sync.bootstrap:action:start': [{ scope: SyncScopePayload }];\n    'sync.bootstrap:action:progress': [\n        {\n            scope: SyncScopePayload;\n            cursor: number;\n            pulledCount: number;\n            hasMore: boolean;\n        }\n    ];\n    'sync.bootstrap:action:complete': [\n        { scope: SyncScopePayload; cursor: number; totalPulled: number; elapsedMs?: number }\n    ];\n    'sync.pull:action:received': [\n        { scope: SyncScopePayload; changeCount: number }\n    ];\n    'sync.pull:action:applied': [\n        {\n            scope: SyncScopePayload;\n            applied: number;\n            skipped: number;\n            conflicts: number;\n        }\n    ];\n    'sync.pull:action:error': [{ scope: SyncScopePayload; error: string }];\n    'sync.pull:action:after': [\n        { scope: SyncScopePayload; count: number; cursor: number }\n    ];\n    'sync.subscription:action:statusChange': [\n        {\n            scope: SyncScopePayload;\n            previousStatus: string;\n            status: string;\n        }\n    ];\n    'sync.conflict:action:detected': [\n        {\n            tableName: string;\n            pk: string;\n            local: unknown;\n            remote: unknown;\n            winner: 'local' | 'remote';\n        }\n    ];\n    'sync.error:action': [{ op: SyncPendingOpPayload; error: unknown; permanent?: boolean }];\n    'sync.retry:action': [{ op: SyncPendingOpPayload; attempt: number }];\n    'sync.queue:action:full': [{ pendingCount: number; maxSize: number }];\n    'sync.rescan:action:starting': [{ scope: SyncScopePayload }];\n    'sync.rescan:action:progress': [{ scope: SyncScopePayload; progress: number }];\n    'sync.rescan:action:completed': [{ scope: SyncScopePayload }];\n    'sync.stats:action': [\n        { pendingCount: number; cursor: number; lastSyncAt: number }\n    ];\n    'sync:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Notification hooks\n    'notify:action:push': [NotificationCreatePayload];\n    'notify:action:read': [{ id: string; readAt: number }];\n    'notify:action:clicked': [{ notification: NotificationEntity; action?: NotificationAction }];\n    'notify:action:cleared': [{ count: number }];\n    'notify:filter:before_store': [NotificationCreatePayload | false, { source: string }];\n};"
+              "text": "export type CoreHookPayloadMap = {\n    // AI/Chat Actions\n    'ai.chat.send:action:before': [AiSendBeforePayload];\n    'ai.chat.send:action:after': [AiSendAfterPayload];\n    'ai.chat.stream:action:delta': [string, AiStreamDeltaPayload];\n    'ai.chat.stream:action:reasoning': [string, AiStreamReasoningPayload];\n    'ai.chat.stream:action:complete': [AiStreamCompletePayload];\n    'ai.chat.stream:action:error': [AiStreamErrorPayload];\n    'ai.chat.retry:action:before': [AiRetryBeforePayload];\n    'ai.chat.retry:action:after': [AiRetryAfterPayload];\n    'ai.document.edit:filter:request': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:before': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:after': [DocumentAiEditResultPayload];\n    'ai.document.edit:action:error': [DocumentAiEditResultPayload];\n\n    // Pane Actions (now use named payloads)\n    'ui.pane.active:action': [UiPaneActivePayload];\n    'ui.pane.blur:action': [UiPaneBlurPayload];\n    'ui.pane.switch:action': [UiPaneSwitchPayload];\n    'ui.pane.open:action:after': [UiPaneActivePayload];\n    'ui.pane.close:action:before': [UiPaneActivePayload];\n    'ui.pane.close:action:after': [UiPaneActivePayload];\n    'ui.pane.thread:action:changed': [UiPaneThreadChangedPayload];\n    'ui.pane.doc:action:changed': [UiPaneDocChangedPayload];\n    'ui.pane.doc:action:saved': [UiPaneDocChangedPayload];\n    'ui.pane.msg:action:sent': [UiPaneMsgSentPayload];\n    'ui.pane.msg:action:received': [UiPaneMsgReceivedPayload];\n\n    // Sidebar Actions\n    'ui.sidebar.select:action:before': [UiSidebarSelectPayload];\n    'ui.sidebar.select:action:after': [UiSidebarSelectPayload];\n    'ui.chat.new:action:after': [UiChatNewPayload];\n\n    // App Actions\n    'app.init:action:after': [AppInitPayload];\n\n    // Chat Filters\n    'ui.chat.message:filter:outgoing': [string];\n    'ui.chat.message:filter:incoming': [string, string | undefined];\n    'ai.chat.model:filter:select': [string];\n    'ai.chat.messages:filter:input': [ChatMessage[]];\n\n    // Pane Filters\n    'ui.pane.thread:filter:select': [string, PaneState, string];\n    'ui.pane.doc:filter:select': [string, PaneState, string];\n\n    // Files Filters\n    'files.attach:filter:input': [FilesAttachInputPayload | false];\n\n    // Small, well-known DB-specialized hooks kept explicit\n    'db.messages.files.validate:filter:hashes': [string[]];\n    'db.files.refchange:action:after': [\n        { before: FileEntity; after: FileEntity; delta: number }\n    ];\n    'db.threads.getSystemPrompt:filter:output': [string | null];\n\n    // Editor Lifecycle (Examples/Plugins)\n    'editor.created:action:after': [{ editor: unknown }];\n    'editor.updated:action:after': [{ editor: unknown }];\n    'editor:request-extensions': [void];\n\n    // UI/Chat Extensions\n    'ui.chat.editor:filter:extensions': [unknown[]];\n    'ui.chat.editor:action:before_send': [Record<string, unknown>]; // editor JSON\n    'ai.chat.messages:filter:before_send': [\n        { messages: OpenRouterMessage[] } | { messages: OpenRouterMessage[] }[]\n    ];\n\n    // Branching lifecycle\n    'branch.fork:filter:options': [BranchForkOptions];\n    'branch.fork:action:before': [BranchForkBeforePayload];\n    'branch.fork:action:after': [ThreadEntity];\n    'branch.retry:filter:options': [RetryBranchParams];\n    'branch.retry:action:before': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.retry:action:after': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            newThreadId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.context:filter:messages': [\n        MessageEntity[],\n        string /* threadId */,\n        BranchMode\n    ];\n    'branch.context:action:after': [BranchContextAfterPayload];\n\n    // Documents helpers\n    'db.documents.title:filter': [\n        string,\n        {\n            phase: 'create' | 'update';\n            id: string;\n            rawTitle?: string | null;\n            existing?: DocumentEntity;\n        }\n    ];\n\n    // Workflow Actions\n    'workflow.execution:action:state_update': [\n        { messageId: string; state: unknown }\n    ];\n    'workflow.execution:action:complete': [\n        { messageId: string; workflowId: string; finalOutput?: string }\n    ];\n\n    // Auth hooks\n    'auth.access:filter:decision': [\n        AccessDecision,\n        { session: SessionContext | null }\n    ];\n    'auth.user:action:created': [{ userId: string; provider: string }];\n    'auth.workspace:action:created': [{ workspaceId: string; userId: string }];\n\n    // Storage hooks\n    'storage.files.upload:action:before': [StorageFileUploadBeforePayload];\n    'storage.files.upload:action:after': [StorageFileUploadAfterPayload];\n    'storage.files.download:action:before': [StorageFileDownloadBeforePayload];\n    'storage.files.download:action:after': [StorageFileDownloadAfterPayload];\n    'storage.files.url:filter:options': [StorageFileUrlOptionsPayload];\n    'storage.files.upload:filter:policy': [StorageFileUploadPolicyPayload | false];\n    'storage.files.gc:action:run': [StorageFileGcPayload];\n    'storage:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Sync hooks\n    'sync.op:action:captured': [{ op: SyncPendingOpPayload }];\n    'sync.push:action:before': [{ scope: SyncScopePayload; count: number }];\n    'sync.push:action:after': [\n        { scope: SyncScopePayload; successCount: number; failCount: number }\n    ];\n    'sync.bootstrap:action:start': [{ scope: SyncScopePayload }];\n    'sync.bootstrap:action:progress': [\n        {\n            scope: SyncScopePayload;\n            cursor: number;\n            pulledCount: number;\n            hasMore: boolean;\n        }\n    ];\n    'sync.bootstrap:action:complete': [\n        { scope: SyncScopePayload; cursor: number; totalPulled: number; elapsedMs?: number }\n    ];\n    'sync.pull:action:received': [\n        { scope: SyncScopePayload; changeCount: number }\n    ];\n    'sync.pull:action:applied': [\n        {\n            scope: SyncScopePayload;\n            applied: number;\n            skipped: number;\n            conflicts: number;\n        }\n    ];\n    'sync.pull:action:error': [{ scope: SyncScopePayload; error: string }];\n    'sync.pull:action:after': [\n        { scope: SyncScopePayload; count: number; cursor: number }\n    ];\n    'sync.subscription:action:statusChange': [\n        {\n            scope: SyncScopePayload;\n            previousStatus: string;\n            status: string;\n        }\n    ];\n    'sync.conflict:action:detected': [\n        {\n            tableName: string;\n            pk: string;\n            local: unknown;\n            remote: unknown;\n            winner: 'local' | 'remote';\n        }\n    ];\n    'sync.error:action': [{ op: SyncPendingOpPayload; error: unknown; permanent?: boolean }];\n    'sync.retry:action': [{ op: SyncPendingOpPayload; attempt: number }];\n    'sync.queue:action:full': [{ pendingCount: number; maxSize: number }];\n    'sync.rescan:action:starting': [{ scope: SyncScopePayload }];\n    'sync.rescan:action:progress': [{ scope: SyncScopePayload; progress: number }];\n    'sync.rescan:action:completed': [{ scope: SyncScopePayload }];\n    'sync.stats:action': [\n        { pendingCount: number; cursor: number; lastSyncAt: number }\n    ];\n    'sync:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Notification hooks\n    'notify:action:push': [NotificationCreatePayload];\n    'notify:action:read': [{ id: string; readAt: number }];\n    'notify:action:clicked': [{ notification: NotificationEntity; action?: NotificationAction }];\n    'notify:action:cleared': [{ count: number }];\n    'notify:filter:before_store': [NotificationCreatePayload | false, { source: string }];\n};"
             }
           ]
         },
@@ -10058,7 +10195,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 415,
+              "line": 413,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbActionHookName =\n    | `db.${DbEntityName}.${DbOperation}:action:${DbPhase}`\n    | `db.${DbEntityName}.delete:action:${DbDeleteType}:${DbPhase}`\n    // extra specialized actions seen in docs\n    | `db.files.refchange:action:after`\n    | `db.kv.upsertByName:action:after`\n    | `db.kv.deleteByName:action:hard:${DbPhase}`;"
             }
@@ -10072,7 +10209,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 297,
+              "line": 298,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DbCreatePayload<T = unknown> {\n    entity: T;\n    tableName: string;\n}"
             }
@@ -10086,7 +10223,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 309,
+              "line": 310,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DbDeletePayload<T = unknown> {\n    entity: T;\n    id: string;\n    tableName: string;\n}"
             }
@@ -10100,7 +10237,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 412,
+              "line": 410,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbDeleteType = 'soft' | 'hard';"
             }
@@ -10114,7 +10251,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 387,
+              "line": 385,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbEntityName =\n    | 'messages'\n    | 'threads'\n    | 'documents'\n    | 'files'\n    | 'projects'\n    | 'posts'\n    | 'prompts'\n    | 'attachments'\n    | 'kv';"
             }
@@ -10128,7 +10265,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 424,
+              "line": 422,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbFilterHookName =\n    | `db.${DbEntityName}.${DbOperation}:filter:input`\n    | `db.${DbEntityName}.${DbOperation}:filter:output`\n    // extra specialized filters seen in docs\n    | `db.messages.files.validate:filter:hashes`\n    | `db.kv.getByName:filter:output`\n    | `db.kv.upsertByName:filter:input`\n    | `db.threads.searchByTitle:filter:output`\n    | `db.posts.all:filter:output`;"
             }
@@ -10142,7 +10279,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 398,
+              "line": 396,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbOperation =\n    | 'create'\n    | 'upsert'\n    | 'update'\n    | 'delete'\n    | 'get'\n    | 'search'\n    | 'byProject'\n    | 'children'\n    | 'fork'\n    | 'normalize'\n    | 'list';"
             }
@@ -10156,7 +10293,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 411,
+              "line": 409,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbPhase = 'before' | 'after';"
             }
@@ -10170,7 +10307,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 302,
+              "line": 303,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DbUpdatePayload<T = unknown> {\n    existing: T;\n    updated: T;\n    patch: Partial<T>;\n    tableName: string;\n}"
             }
@@ -10184,7 +10321,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 213,
+              "line": 211,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentAiEditRequestPayload {\n    documentId: string;\n    modelId: string;\n    prompt: string;\n    scope: 'selection' | 'section' | 'document';\n    context: string;\n    references: Array<{\n        id: string;\n        source: 'document' | 'chat';\n        label: string;\n    }>;\n    referenceContext: string;\n    tokenEstimate: number;\n    maxIterations?: number;\n    chunkWordLimit?: number;\n}"
             }
@@ -10198,7 +10335,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 230,
+              "line": 228,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentAiEditResultPayload {\n    request: DocumentAiEditRequestPayload;\n    operationCount?: number;\n    accepted?: boolean;\n    error?: unknown;\n}"
             }
@@ -10226,7 +10363,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 105,
+              "line": 103,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface EditorInstance {\n    commands: Record<string, unknown>;\n    getJSON: () => Record<string, unknown>;\n}"
             }
@@ -10240,7 +10377,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 444,
+              "line": 442,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ExtensionActionHookName = keyof Or3ActionHooks;"
             }
@@ -10254,7 +10391,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 464,
+              "line": 462,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ExtensionFilterHookName = keyof Or3FilterHooks;"
             }
@@ -10268,7 +10405,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 781,
+              "line": 779,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ExtractHookPayload<K extends HookName> =\n    K extends keyof HookPayloadMap ? HookPayloadMap[K][0] : unknown;"
             }
@@ -10296,7 +10433,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 324,
+              "line": 322,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface FilesAttachInputPayload {\n    file: File;\n    name: string;\n    mime: string;\n    size: number;\n    kind: FileKind;\n}"
             }
@@ -10310,7 +10447,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 316,
+              "line": 314,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface FilesAttachPayload extends FilesAttachInputPayload {\n    accepted: boolean;\n    url?: string;\n    hash?: string;\n}"
             }
@@ -10324,7 +10461,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 468,
+              "line": 466,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type FilterHookName =\n    | CoreFilterHookName\n    | DbFilterHookName\n    | ExtensionFilterHookName\n    | (string & {});"
             }
@@ -10338,7 +10475,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 476,
+              "line": 474,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type HookName = ActionHookName | FilterHookName;"
             }
@@ -10352,7 +10489,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 738,
+              "line": 736,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type HookPayloadMap = CoreHookPayloadMap &\n    DbActionMap &\n    DbFilterMap &\n    Or3ActionHooks &\n    Or3FilterHooks;"
             }
@@ -10366,7 +10503,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 812,
+              "line": 810,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferDbCreateEntity<K extends string> =\n    K extends `db.messages.${string}`\n        ? MessageCreateEntity\n        : K extends `db.posts.${string}`\n        ? PostCreateEntity\n        : K extends `db.threads.${string}`\n        ? ThreadCreateEntity\n        : InferDbEntity<K>;"
             }
@@ -10380,7 +10517,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 791,
+              "line": 789,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferDbEntity<K extends string> = K extends `db.messages.${string}`\n    ? MessageEntity\n    : K extends `db.threads.${string}`\n    ? ThreadEntity\n    : K extends `db.documents.${string}`\n    ? DocumentEntity\n    : K extends `db.files.${string}`\n    ? FileEntity\n    : K extends `db.projects.${string}`\n    ? ProjectEntity\n    : K extends `db.posts.${string}`\n    ? PostEntity\n    : K extends `db.prompts.${string}`\n    ? PromptEntity\n    : K extends `db.attachments.${string}`\n    ? AttachmentEntity\n    : K extends `db.kv.${string}`\n    ? KvEntry\n    : unknown;"
             }
@@ -10394,7 +10531,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 765,
+              "line": 763,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferHookCallback<K extends HookName> = (\n    ...args: InferHookParams<K>\n) => InferHookReturn<K> | Promise<InferHookReturn<K>>;"
             }
@@ -10408,7 +10545,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 750,
+              "line": 748,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferHookParams<K extends HookName> = K extends keyof HookPayloadMap\n    ? HookPayloadMap[K]\n    : unknown[];"
             }
@@ -10422,7 +10559,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 756,
+              "line": 754,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferHookReturn<K extends HookName> =\n    K extends `${string}:filter${string}`\n        ? K extends keyof HookPayloadMap\n            ? HookPayloadMap[K][0]\n            : unknown\n        : void;"
             }
@@ -10436,7 +10573,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 771,
+              "line": 769,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type IsAction<K extends HookName> = K extends ActionHookName\n    ? true\n    : false;"
             }
@@ -10450,7 +10587,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 775,
+              "line": 773,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type IsFilter<K extends HookName> = K extends FilterHookName\n    ? true\n    : false;"
             }
@@ -10466,7 +10603,7 @@
               "source": "shared/hooks/hook-domain-types.ts",
               "line": 139,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface KvEntry {\n    id: string;\n    name: string;\n    value?: string | null;\n    created_at: number;\n    updated_at: number;\n    clock: number;\n}"
+              "text": "export interface KvEntry {\n    id: string;\n    name: string;\n    value?: string | null;\n    deleted?: boolean;\n    created_at: number;\n    updated_at: number;\n    clock: number;\n}"
             }
           ]
         },
@@ -10478,7 +10615,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 367,
+              "line": 365,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface KvUpsertByNameInput {\n    name: string;\n    value: unknown;\n}"
             }
@@ -10492,7 +10629,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 785,
+              "line": 783,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type MatchingHooks<Pattern extends string> = Extract<\n    HookName,\n    `${Pattern}`\n>;"
             }
@@ -10534,7 +10671,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 218,
+              "line": 219,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface NotificationAction {\n    id: string;\n    label: string;\n    kind: 'navigate' | 'callback';\n    target?: {\n        threadId?: string;\n        documentId?: string;\n        route?: string;\n    };\n    data?: Record<string, unknown>;\n}"
             }
@@ -10548,7 +10685,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 230,
+              "line": 231,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface NotificationCreatePayload {\n    type: string;\n    title: string;\n    body?: string;\n    threadId?: string;\n    documentId?: string;\n    actions?: NotificationAction[];\n}"
             }
@@ -10562,7 +10699,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 239,
+              "line": 240,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface NotificationEntity {\n    id: string;\n    workspace_id?: string;\n    user_id: string;\n    thread_id?: string;\n    document_id?: string;\n    type: string;\n    title: string;\n    body?: string;\n    actions?: NotificationAction[];\n    read_at?: number;\n    deleted: boolean;\n    deleted_at?: number;\n    created_at: number;\n    updated_at: number;\n    clock: number;\n}"
             }
@@ -10576,7 +10713,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 110,
+              "line": 108,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type OpenRouterMessage =\n    | ORMessage\n    | {\n          role: 'tool';\n          [key: string]: unknown;\n      };"
             }
@@ -10590,7 +10727,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 148,
+              "line": 149,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type Permission =\n    | 'workspace.read'\n    | 'workspace.write'\n    | 'workspace.settings.manage'\n    | 'users.manage'\n    | 'plugins.manage'\n    | 'admin.access';"
             }
@@ -10660,7 +10797,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 345,
+              "line": 343,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RetryBranchParams {\n    assistantMessageId: string;\n    mode?: BranchMode;\n    titleOverride?: string;\n}"
             }
@@ -10674,7 +10811,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 172,
+              "line": 173,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SessionContext {\n    authenticated: boolean;\n    provider?: string;\n    providerUserId?: string;\n    user?: { id: string; email?: string; displayName?: string };\n    workspace?: { id: string; name: string };\n    role?: WorkspaceRole;\n    expiresAt?: string;\n    authorizationRevision?: number;\n    deploymentAdmin?: boolean;\n    /** Host-resolved entitlement ids used by immediate client-side plugin gating. */\n    entitlements?: string[];\n}"
             }
@@ -10688,7 +10825,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 274,
+              "line": 275,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileDownloadAfterPayload {\n    hash: string;\n    workspace_id: string;\n    size_bytes: number;\n}"
             }
@@ -10702,7 +10839,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 269,
+              "line": 270,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileDownloadBeforePayload {\n    hash: string;\n    workspace_id: string;\n}"
             }
@@ -10716,7 +10853,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 292,
+              "line": 293,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileGcPayload {\n    deleted_count: number;\n    workspace_id: string;\n}"
             }
@@ -10730,7 +10867,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 263,
+              "line": 264,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileUploadAfterPayload {\n    hash: string;\n    workspace_id: string;\n    storage_id: string;\n}"
             }
@@ -10744,7 +10881,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 257,
+              "line": 258,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileUploadBeforePayload {\n    hash: string;\n    workspace_id: string;\n    size_bytes: number;\n}"
             }
@@ -10758,7 +10895,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 286,
+              "line": 287,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileUploadPolicyPayload {\n    hash: string;\n    mime_type: string;\n    size_bytes: number;\n}"
             }
@@ -10772,7 +10909,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 280,
+              "line": 281,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileUrlOptionsPayload {\n    hash: string;\n    expiry_ms: number;\n    disposition?: string;\n}"
             }
@@ -10786,7 +10923,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 835,
+              "line": 833,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type SuggestSimilar<K> = K extends `${infer Prefix}.${string}`\n    ? Extract<HookName, `${Prefix}.${string}`>\n    : HookName;"
             }
@@ -10800,7 +10937,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 191,
+              "line": 192,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SyncPendingOpPayload {\n    id: string;\n    tableName: string;\n    operation: 'put' | 'delete';\n    pk: string;\n    payload?: unknown;\n    stamp: {\n        deviceId: string;\n        opId: string;\n        hlc: string;\n        clock: number;\n    };\n    createdAt: number;\n    attempts: number;\n    nextAttemptAt?: number;\n    status:\n        | 'pending'\n        | 'in_flight'\n        | 'retry_wait'\n        | 'failed_retryable'\n        | 'failed_permanent'\n        | 'applied'\n        | 'discarded'\n        | 'syncing'\n        | 'failed';\n}"
             }
@@ -10814,7 +10951,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 186,
+              "line": 187,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SyncScopePayload {\n    workspaceId: string;\n    projectId?: string;\n}"
             }
@@ -10828,7 +10965,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 822,
+              "line": 820,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type Tail<T extends unknown[]> = T extends [unknown, ...infer Rest]\n    ? Rest\n    : [];"
             }
@@ -10870,7 +11007,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 853,
+              "line": 851,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type TypeName<T> = T extends string\n    ? 'string'\n    : T extends number\n    ? 'number'\n    : T extends boolean\n    ? 'boolean'\n    : T extends bigint\n    ? 'bigint'\n    : T extends undefined\n    ? 'undefined'\n    : T extends null\n    ? 'null'\n    : T extends (...args: unknown[]) => unknown\n    ? 'function'\n    : T extends object\n    ? 'object'\n    : 'unknown';"
             }
@@ -10884,7 +11021,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 307,
+              "line": 305,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiChatNewPayload {\n    threadId?: string;\n    createdAt?: number;\n}"
             }
@@ -10898,7 +11035,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 253,
+              "line": 251,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneActivePayload {\n    pane: PaneState;\n    index: number;\n    previousIndex?: number;\n}"
             }
@@ -10912,7 +11049,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 259,
+              "line": 257,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneBlurPayload {\n    pane: PaneState;\n    previousIndex: number;\n}"
             }
@@ -10926,7 +11063,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 278,
+              "line": 276,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneDocChangedPayload {\n    pane: PaneState;\n    oldDocumentId: string;\n    newDocumentId: string;\n    paneIndex: number;\n    meta?: Record<string, unknown>;\n}"
             }
@@ -10940,7 +11077,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 241,
+              "line": 239,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneMsgBase {\n    id: string;\n    threadId?: string;\n    length?: number;\n    fileHashes?: string | null;\n}"
             }
@@ -10954,7 +11091,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 248,
+              "line": 246,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneMsgReceived extends UiPaneMsgBase {\n    reasoningLength?: number;\n}"
             }
@@ -10968,7 +11105,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 293,
+              "line": 291,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneMsgReceivedPayload {\n    pane: PaneState;\n    paneIndex: number;\n    message: UiPaneMsgReceived;\n    meta?: Record<string, unknown>;\n}"
             }
@@ -10982,7 +11119,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 286,
+              "line": 284,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneMsgSentPayload {\n    pane: PaneState;\n    paneIndex: number;\n    message: UiPaneMsgBase;\n    meta?: Record<string, unknown>;\n}"
             }
@@ -10996,7 +11133,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 264,
+              "line": 262,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneSwitchPayload {\n    pane: PaneState;\n    index: number;\n    previousIndex?: number;\n}"
             }
@@ -11010,7 +11147,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 270,
+              "line": 268,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneThreadChangedPayload {\n    pane: PaneState;\n    oldThreadId: string;\n    newThreadId: string;\n    paneIndex: number;\n    messageCount?: number;\n}"
             }
@@ -11024,7 +11161,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 302,
+              "line": 300,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiSidebarSelectPayload {\n    kind: 'chat' | 'doc';\n    id: string;\n}"
             }
@@ -11038,7 +11175,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 842,
+              "line": 840,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ValidateHookName<K> = K extends HookName\n    ? K\n    : `Invalid hook name: ${Extract<\n          K,\n          string\n      >}. Did you mean one of: ${SuggestSimilar<K>}`;"
             }
@@ -11052,7 +11189,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 156,
+              "line": 157,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type WorkspaceRole = 'owner' | 'editor' | 'viewer';"
             }
@@ -11479,7 +11616,7 @@
     },
     {
       "source": "app/utils/chat/tools-public.ts",
-      "apiSha256": "67ab236d9b57ee6446a8de5d5501bd52373561e58fa657fbceecc7af43fca5d6",
+      "apiSha256": "36c0a1d842662abaf5ba6e41283273b37bb0c1d40f1d1b38edc5dfd30dbd8357",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tools-public"
@@ -11552,7 +11689,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 110,
+              "line": 108,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolCall {\n    id: string;\n    type: 'function';\n    function: {\n        name: string;\n        arguments: string; // JSON string, parsed by consumer\n    };\n}"
             }
@@ -11566,7 +11703,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 148,
+              "line": 146,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolDefinition {\n    type: 'function';\n    function: {\n        name: string;\n        description: string;\n        parameters: import('~~/shared/chat/tool-schema').JsonSchemaObject;\n    };\n    ui?: {\n        label?: string;\n        icon?: string;\n        descriptionHint?: string;\n        defaultEnabled?: boolean;\n        category?: string;\n    };\n    runtime?: ToolRuntime;\n}"
             }
@@ -11580,7 +11717,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 122,
+              "line": 120,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolExecutionContext {\n    subject: string | null;\n    workspaceId: string | null;\n    threadId: string | null;\n    messageId: string | null;\n    callId: string;\n    requestId: string;\n    abortSignal: AbortSignal;\n}"
             }
@@ -11608,7 +11745,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 119,
+              "line": 117,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolRuntime = 'hybrid' | 'client' | 'server';"
             }

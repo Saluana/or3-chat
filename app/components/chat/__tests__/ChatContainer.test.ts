@@ -92,7 +92,8 @@ useChatMock.mockImplementation(() => {
     return instance;
 });
 
-vi.mock('@vueuse/core', () => ({
+vi.mock('@vueuse/core', async (importOriginal) => ({
+    ...await importOriginal<typeof import('@vueuse/core')>(),
     useElementSize: () => ({ width: { value: 1000 }, height: { value: 800 } }),
 }));
 

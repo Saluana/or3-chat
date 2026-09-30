@@ -24,7 +24,7 @@ export interface ResponsiveState {
  */
 interface ResponsiveStateRegistry {
     state: ResponsiveState | null;
-    mobileQuery: MediaQueryList | null;
+    tabletQuery: MediaQueryList | null;
     desktopQuery: MediaQueryList | null;
     updateBreakpoints: (() => void) | null;
     consumerCount: number;
@@ -34,7 +34,7 @@ interface ResponsiveStateRegistry {
 // This allows PageShell and other components to share a single breakpoint listener.
 let registry: ResponsiveStateRegistry = {
     state: null,
-    mobileQuery: null,
+    tabletQuery: null,
     desktopQuery: null,
     updateBreakpoints: null,
     consumerCount: 0,
@@ -52,11 +52,11 @@ function createResponsiveState(): ResponsiveState {
     const hydrated = ref(false);
 
     // Set up matchMedia listeners for different breakpoints
-    const mobileQuery = window.matchMedia('(max-width: 768px)');
+    const tabletQuery = window.matchMedia('(min-width: 768px)');
     const desktopQuery = window.matchMedia('(min-width: 1024px)');
 
     const updateBreakpoints = () => {
-        const mobile = mobileQuery.matches;
+        const mobile = !tabletQuery.matches;
         const desktop = desktopQuery.matches;
 
         isMobile.value = mobile;
@@ -68,11 +68,11 @@ function createResponsiveState(): ResponsiveState {
     };
 
     // Listen for changes
-    mobileQuery.addEventListener('change', updateBreakpoints);
+    tabletQuery.addEventListener('change', updateBreakpoints);
     desktopQuery.addEventListener('change', updateBreakpoints);
 
     // Store in registry for cleanup
-    registry.mobileQuery = mobileQuery;
+    registry.tabletQuery = tabletQuery;
     registry.desktopQuery = desktopQuery;
     registry.updateBreakpoints = updateBreakpoints;
 
@@ -111,11 +111,11 @@ function createResponsiveState(): ResponsiveState {
  * Cleanup media query listeners.
  */
 function cleanupListeners(): void {
-    if (registry.mobileQuery && registry.desktopQuery && registry.updateBreakpoints) {
-        registry.mobileQuery.removeEventListener('change', registry.updateBreakpoints);
+    if (registry.tabletQuery && registry.desktopQuery && registry.updateBreakpoints) {
+        registry.tabletQuery.removeEventListener('change', registry.updateBreakpoints);
         registry.desktopQuery.removeEventListener('change', registry.updateBreakpoints);
     }
-    registry.mobileQuery = null;
+    registry.tabletQuery = null;
     registry.desktopQuery = null;
     registry.updateBreakpoints = null;
     registry.state = null;

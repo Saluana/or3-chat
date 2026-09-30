@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import type { ChatMessage, SendMessageParams } from '~/utils/chat/types';
 
 const reportErrorSpy = vi.fn();
@@ -132,8 +132,42 @@ vi.mock('dexie', () => ({
     default: { minKey: -Infinity, maxKey: Infinity },
 }));
 
-import { continueMessageImpl } from '../continue';
+import {
+    continueMessageImpl as executeContinuation,
+    type ContinueMessageContext,
+} from '../continue';
+import {
+    createChatRequest,
+    projectTerminalMessages,
+} from '../requestController';
 import { retryMessageImpl } from '../retry';
+
+async function continueMessageImpl(
+    ctx: Omit<ContinueMessageContext, 'request'>,
+    messageId: string,
+    modelOverride?: string
+) {
+    const request = createChatRequest({
+        requestId: 'continue-test',
+        kind: 'continue',
+        originDb: dbState.db as any,
+        workspaceId: 'local',
+        threadId: ctx.threadIdRef.value,
+        accumulator: ctx.streamAcc,
+    });
+    request.ownsView = () => ctx.threadIdRef.value === request.threadId;
+    request.projectTerminal = (result) =>
+        projectTerminalMessages(request, result, ctx);
+    await executeContinuation(
+        {
+            ...ctx,
+            request,
+            loading: computed(() => request.phase.value !== 'terminal'),
+        },
+        messageId,
+        modelOverride
+    );
+}
 
 describe('continue/retry regressions', () => {
     beforeEach(() => {
@@ -147,6 +181,9 @@ describe('continue/retry regressions', () => {
         dbState.messagesDelete.mockReset();
         dbState.where.mockReset();
         dbState.transaction.mockReset();
+        dbState.transaction.mockImplementation(
+            async (_mode, _tables, run) => await run()
+        );
     });
 
     it('continue keeps existing assistant message in list while streaming', async () => {
@@ -337,12 +374,16 @@ describe('continue/retry regressions', () => {
         expect(updateMessageRecordSpy).toHaveBeenCalledWith(
             expect.anything(),
             'a1',
-            {
-            error: 'stream_interrupted',
-            }
+            expect.objectContaining({
+                pending: false,
+                error: 'stream_interrupted',
+            }),
+            expect.anything(),
+            expect.any(Function)
         );
         expect(reportErrorSpy).toHaveBeenCalled();
         expect(tailAssistant.value?.pending).toBe(false);
+        expect(tailAssistant.value?.error).toBe('stream_interrupted');
     });
 
     it('continue cleans up UI and persistence when setup fails before streaming', async () => {

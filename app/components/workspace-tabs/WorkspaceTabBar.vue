@@ -88,8 +88,7 @@
         </div>
         <WorkspaceNewTabControl
             :can-create-document="canCreateDocument"
-            :can-create-workflow="canCreateWorkflow"
-            :can-create-agent="canCreateAgent"
+            :plugin-items="pluginItems"
             @new-tab="emit('new-tab')"
             @create="emit('create-tab', $event)"
         />
@@ -136,6 +135,7 @@ import {
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import WorkspaceNewTabControl, {
     type WorkspaceNewTabCreateKind,
+    type WorkspaceNewTabItem,
 } from './WorkspaceNewTabControl.vue';
 import AppIcon from '~/components/ui/AppIcon.vue';
 
@@ -152,8 +152,7 @@ const props = withDefaults(
         canReopenClosed?: boolean;
         copyableTabIds?: ReadonlySet<string>;
         canCreateDocument?: boolean;
-        canCreateWorkflow?: boolean;
-        canCreateAgent?: boolean;
+        pluginItems?: readonly WorkspaceNewTabItem[];
     }>(),
     {
         mobile: false,
@@ -164,8 +163,7 @@ const props = withDefaults(
         canReopenClosed: false,
         copyableTabIds: () => new Set<string>(),
         canCreateDocument: false,
-        canCreateWorkflow: false,
-        canCreateAgent: false,
+        pluginItems: () => [],
     }
 );
 

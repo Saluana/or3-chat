@@ -45,6 +45,17 @@ const props = defineProps<{
     readonly embedded?: boolean;
 }>();
 const route = useRoute();
+const setupQuery = computed(() => {
+    const params = new URLSearchParams();
+    if (typeof route.query.version === 'string') params.set('version', route.query.version);
+    if (typeof route.query.acquisition === 'string') params.set('operationId', route.query.acquisition);
+    if (typeof route.query.workspace === 'string') params.set('workspace', route.query.workspace);
+    if (route.query.from === 'installed' && !route.query.acquisition) params.set('slot', 'current');
+    const query = params.toString();
+    return query ? `?${query}` : '';
+});
+const currentSlotQuery = computed(() => route.query.from === 'installed' && !route.query.acquisition
+    ? '?slot=current' : '');
 
 const selectedContext = computed(() => {
     const documentId =
@@ -55,8 +66,8 @@ const selectedContext = computed(() => {
 });
 
 const { data, error, refresh } = await useFetch<SetupPlanResponse>(
-    () => `/api/plugins/${encodeURIComponent(props.pluginId)}/setup-plan`,
-    { key: () => `plugin-setup-${props.pluginId}` }
+    () => `/api/plugins/${encodeURIComponent(props.pluginId)}/setup-plan${setupQuery.value}`,
+    { key: () => `plugin-setup-${props.pluginId}${setupQuery.value}` }
 );
 
 const currentSetupRevision = computed(() => data.value?.setupRevision ?? 0);
@@ -96,7 +107,7 @@ async function saveSettings(
     saveState.value = 'saving';
     fieldErrors.value = {};
     try {
-        await $fetch(`/api/plugins/${encodeURIComponent(props.pluginId)}/setup-values`, {
+        await $fetch(`/api/plugins/${encodeURIComponent(props.pluginId)}/setup-values${currentSlotQuery.value}`, {
             method: 'POST',
             headers: mutationHeaders(),
             body: {
@@ -243,7 +254,9 @@ onMounted(() => {
             class="rounded border border-[var(--md-outline-variant)] p-3 text-sm"
             role="alert"
         >
-            This plugin's setup information is unavailable.
+            {{ error.statusCode === 409
+                ? 'This setup link is stale. Return to Marketplace and reopen Configure for the current release.'
+                : "This plugin's setup information is unavailable." }}
         </div>
 
         <PluginSetupPanel

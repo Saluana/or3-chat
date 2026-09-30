@@ -270,6 +270,9 @@ export default defineEventHandler(async (event) => {
                     candidate: grantCandidate,
                     approvedGrants: approved,
                     reviewedBy,
+                    retainPackageDigests: [
+                        (await services.pointers.readPointer(receipt.pluginId))?.current?.packageDigest,
+                    ].filter((digest): digest is NonNullable<typeof digest> => Boolean(digest)),
                 });
             }
         }

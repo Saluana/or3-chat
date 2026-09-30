@@ -38,6 +38,7 @@ const SAFARI_UA =
 let userAgentSpy: ReturnType<typeof vi.spyOn>;
 
 const stubs = {
+    AdminPluginWorkspaceRollout: { props: ['pluginId', 'version'], template: '<div data-testid="rollout-guide">{{ pluginId }} {{ version }}</div>' },
     UInput: { props: ['modelValue'], template: '<input />' },
     UButton: {
         props: ['disabled', 'loading', 'to'],
@@ -542,8 +543,9 @@ describe('MarketplaceDiscover', () => {
         );
         expect(wrapper.find('[data-testid="marketplace-install"]').exists()).toBe(false);
         expect(wrapper.find('[data-testid="marketplace-block"]').exists()).toBe(false);
+        await wrapper.get('[data-testid="marketplace-installed-workspaces"]').trigger('click');
+        expect(wrapper.get('[data-testid="rollout-guide"]').text()).toContain('or3.sample-utility 1.0.0');
         await wrapper.get('[data-testid="marketplace-installed-configure"]').trigger('click');
-        expect(openPageMock).toHaveBeenCalledWith('marketplace', 'configure');
     });
 
     it('uses the preflight installed signal when the admin package projection is unavailable', async () => {
@@ -643,7 +645,7 @@ describe('MarketplaceDiscover', () => {
         window.history.replaceState(
             {},
             '',
-            '/?dashboard=marketplace&plugin=or3.sample-utility'
+            '/chat?dashboard=marketplace&plugin=or3.sample-utility'
         );
         const wrapper = mount(MarketplaceDiscover, { global: { stubs } });
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -669,6 +671,23 @@ describe('MarketplaceDiscover', () => {
             String(call[0]).startsWith('/api/plugins/marketplace/preflight')
         );
         expect(preflightCall?.[1]).toMatchObject({ body: { pluginId: 'or3.sample-utility', version: '0.9.0' } });
+        wrapper.unmount();
+    });
+
+    it('does not offer Continue for another version when an exact linked release cannot be resolved', async () => {
+        window.history.replaceState({}, '', '/chat?dashboard=marketplace&plugin=or3.sample-utility&version=0.9.0');
+        fetchMock.mockImplementation((url: string) => {
+            if (String(url).startsWith('/api/plugins/marketplace/preflight')) {
+                return Promise.resolve(preflightResponse({ release: null }));
+            }
+            if (String(url).startsWith('/api/admin/plugins/acquisitions?')) {
+                return Promise.resolve({ ok: true, operations: [acquisitionOperation()] });
+            }
+            return Promise.resolve(responseFor(url));
+        });
+        const wrapper = mount(MarketplaceDiscover, { global: { stubs } });
+        await flush(); await flush();
+        expect(wrapper.find('[data-testid="marketplace-continue"]').exists()).toBe(false);
         wrapper.unmount();
     });
 
@@ -722,7 +741,17 @@ describe('MarketplaceDiscover', () => {
     });
 
     it('requires explicit consent before installing a release that asks for grants', async () => {
+        let installedNow = false;
         fetchMock.mockImplementation((url: string, init?: { method?: string }) => {
+            if (url.startsWith('/api/admin/plugins-page') && installedNow) {
+                return Promise.resolve({ workspaceId: 'ws-1', role: 'owner', canManageSitePlugins: true,
+                    plugins: [], enabledPlugins: ['or3.sample-utility'], packagePlugins: [{
+                        pluginId: 'or3.sample-utility', workspaceEnabled: true,
+                        pointer: { current: { packageDigest: `sha256-${'b'.repeat(64)}` }, candidate: null, previous: null },
+                        startup: { status: 'ready', selectedSlot: 'current', selectedDigest: `sha256-${'b'.repeat(64)}`, issueCodes: [] },
+                        display: { version: '1.0.0', selectedDigest: `sha256-${'b'.repeat(64)}`, canOpen: true },
+                    }] });
+            }
             if (url.startsWith('/api/plugins/marketplace/preflight')) {
                 return Promise.resolve(
                     preflightResponse({
@@ -745,6 +774,7 @@ describe('MarketplaceDiscover', () => {
                 return Promise.resolve({ ok: true });
             }
             if (url.startsWith('/api/admin/plugins/acquisitions') && init?.method === 'POST') {
+                installedNow = true;
                 return Promise.resolve({ ok: true, operation: acquisitionOperation({ status: 'completed', failure: null }) });
             }
             if (url.startsWith('/api/admin/plugins/acquisitions/') && url.endsWith('/status')) {
@@ -795,6 +825,7 @@ describe('MarketplaceDiscover', () => {
         expect(
             wrapper.get('[data-testid="marketplace-activation-confirmation"]').text()
         ).toContain('Running here');
+        expect(wrapper.get('[data-testid="rollout-guide"]').text()).toContain('or3.sample-utility 1.0.0');
     });
 
     it('offers a copyable admin request when the account cannot install', async () => {

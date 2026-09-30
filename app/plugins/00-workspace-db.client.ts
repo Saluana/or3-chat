@@ -7,7 +7,7 @@ import { cleanupCursorManager } from '~/core/sync/cursor-manager';
 import { cleanupHookBridge } from '~/core/sync/hook-bridge';
 import { cleanupSubscriptionManager } from '~/core/sync/subscription-manager';
 import { logoutCleanup } from '~/utils/logout-cleanup';
-import { stopAllPortableClientsAndAwait } from '~/composables/plugins/portable-client-runtime';
+import { stopWorkspacePluginsAndAwait } from '~/composables/plugins/workspace-plugin-coordinator';
 import { abortBackgroundClientToolDispatchesForWorkspace } from '~/utils/chat/useAi-internal/backgroundJobs';
 
 async function shouldRunLogoutCleanup(
@@ -41,6 +41,7 @@ export default defineNuxtPlugin(async () => {
         if (window.location.pathname === '/openrouter-callback') {
             cleanupOptions.preserveOpenRouterPkce = true;
         }
+        await stopWorkspacePluginsAndAwait();
         await logoutCleanup(
             nuxtApp as Parameters<typeof logoutCleanup>[0],
             cleanupOptions
@@ -58,7 +59,6 @@ export default defineNuxtPlugin(async () => {
             // Clean up resources from old workspace
             if (oldWorkspaceId) {
                 abortBackgroundClientToolDispatchesForWorkspace(oldWorkspaceId);
-                await stopAllPortableClientsAndAwait();
                 const dbName = `or3-db-${oldWorkspaceId}`;
                 cleanupCursorManager(dbName);
                 cleanupHookBridge(dbName);
@@ -76,6 +76,7 @@ export default defineNuxtPlugin(async () => {
                 !newSession?.authenticated &&
                 (await shouldRunLogoutCleanup(newSession?.authenticated))
             ) {
+                await stopWorkspacePluginsAndAwait();
                 await logoutCleanup(nuxtApp as Parameters<typeof logoutCleanup>[0]);
             }
         }

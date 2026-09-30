@@ -66,20 +66,17 @@
             </div>
         </header>
 
-        <Teleport to="body">
-            <Transition
-                enter-active-class="transition-opacity duration-150 ease-out"
-                leave-active-class="transition-opacity duration-150 ease-in"
-                enter-from-class="opacity-0"
-                leave-to-class="opacity-0"
-            >
-                <div
-                    v-if="isMobile && sidebarOpen"
-                    class="fixed inset-0 z-[60] flex"
-                    role="dialog"
-                    aria-modal="true"
-                    :aria-labelledby="sidebarLabelId"
-                >
+        <UModal
+            v-model:open="mobileSidebarOpen"
+            fullscreen
+            title="Documentation navigation"
+            description="Browse documentation pages."
+            :overlay="false"
+            :content="sidebarDialogContent"
+            :ui="{ content: 'bg-transparent! border-0! ring-0! p-0! divide-y-0! z-[60]!' }"
+        >
+            <template #content>
+                <div class="fixed inset-0 flex">
                     <div
                         class="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
                         aria-hidden="true"
@@ -93,15 +90,16 @@
                     >
                         <aside
                             v-if="sidebarOpen"
-                            ref="mobileSidebarRef"
                             :id="sidebarId"
                             class="docs-mobile-sidebar relative z-[61] h-full w-[min(84vw,320px)] max-w-full transform bg-[var(--md-surface)] border-r-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[color:var(--md-border-color)] shadow-2xl overflow-y-auto scrollbars"
-                            @keydown="onSidebarKeydown"
                         >
                             <h2 :id="sidebarLabelId" class="sr-only">
                                 Documentation navigation
                             </h2>
-                            <div class="px-4 pt-5 pb-10">
+                            <div class="sticky top-0 z-10 flex justify-end bg-[var(--md-surface)] px-4 pt-4">
+                                <UButton :icon="useIcon('ui.close').value" square variant="ghost" color="neutral" class="size-11! min-h-11! min-w-11! p-0!" aria-label="Close navigation" @click="closeSidebar" />
+                            </div>
+                            <div class="px-4 pt-2 pb-10">
                                 <DocsSidebarNav
                                     :navigation="resolvedNavigation"
                                     :is-group-expanded="isGroupExpanded"
@@ -112,8 +110,8 @@
                         </aside>
                     </Transition>
                 </div>
-            </Transition>
-        </Teleport>
+            </template>
+        </UModal>
 
         <!-- Main Layout -->
         <div class="flex flex-1 min-h-0 overflow-hidden">
@@ -310,7 +308,7 @@ import {
     navigateTo,
 } from '#imports';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
-import { useScrollLock } from '~/composables/core/useScrollLock';
+import { useDialogFocus } from '~/composables/ui/useDialogFocus';
 import LazySearchPanel from '~/components/documents/LazySearchPanel.vue';
 import DocsSidebarNav from '~/components/documentation/DocsSidebarNav.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
@@ -355,6 +353,9 @@ interface DocmapFile {
     name: string;
     path: string;
     category: string;
+    title?: string;
+    order?: number;
+    categoryOrder?: number;
 }
 
 interface DocmapSection {
@@ -468,14 +469,21 @@ const route = useRoute();
 
 const { isMobile } = useResponsiveState();
 const sidebarOpen = ref(false);
-const mobileSidebarRef = ref<HTMLElement | null>(null);
 const sidebarId = 'docs-sidebar';
 const sidebarLabelId = 'docs-sidebar-heading';
 
-let lastFocusedElement: HTMLElement | null = null;
 let shouldRestoreFocus = true;
 
-const { lock: lockScroll, unlock: unlockScroll } = useScrollLock();
+const mobileSidebarOpen = computed({
+    get: () => isMobile.value && sidebarOpen.value,
+    set: (value: boolean) => { if (!value) closeSidebar(); },
+});
+const sidebarDialogContent = useDialogFocus(() => ({
+    onCloseAutoFocus(event) {
+        if (!shouldRestoreFocus) event.preventDefault();
+        shouldRestoreFocus = true;
+    },
+}), () => 'fullscreen');
 
 function useDocsButtonProps(
     identifier: string,
@@ -608,53 +616,6 @@ function closeSidebar(eventOrOptions: Event | { restoreFocus?: boolean } = {}) {
     sidebarOpen.value = false;
 }
 
-function focusFirstSidebarItem() {
-    const [firstFocusable] = getSidebarFocusableElements();
-    firstFocusable?.focus({ preventScroll: true });
-}
-
-function getSidebarFocusableElements(): HTMLElement[] {
-    if (!mobileSidebarRef.value) return [];
-    const selector =
-        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
-    return Array.from(
-        mobileSidebarRef.value.querySelectorAll<HTMLElement>(selector)
-    ).filter(
-        (el) =>
-            !el.hasAttribute('disabled') &&
-            el.tabIndex !== -1 &&
-            !el.getAttribute('aria-hidden')
-    );
-}
-
-function onSidebarKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') {
-        event.preventDefault();
-        closeSidebar();
-        return;
-    }
-
-    if (event.key !== 'Tab') return;
-
-    const focusable = getSidebarFocusableElements();
-    if (focusable.length === 0) {
-        event.preventDefault();
-        return;
-    }
-
-    const first = focusable[0]!;
-    const last = focusable[focusable.length - 1]!;
-    const active = document.activeElement as HTMLElement | null;
-
-    if (!event.shiftKey && active === last) {
-        event.preventDefault();
-        first.focus({ preventScroll: true });
-    } else if (event.shiftKey && active === first) {
-        event.preventDefault();
-        last.focus({ preventScroll: true });
-    }
-}
-
 // Use useAsyncData for docmap to enable SSR and hydration
 const { data: docmapData } = await useAsyncData(
     'docmap',
@@ -761,25 +722,6 @@ watch(
 watch(isMobile, (mobile) => {
     if (!mobile && sidebarOpen.value) {
         closeSidebar({ restoreFocus: false });
-    }
-});
-
-watch(sidebarOpen, async (open) => {
-    if (!import.meta.client) return;
-
-    if (open && isMobile.value) {
-        lastFocusedElement = document.activeElement as HTMLElement | null;
-        lockScroll();
-        await nextTick();
-        focusFirstSidebarItem();
-    } else {
-        unlockScroll();
-        await nextTick();
-        if (shouldRestoreFocus && lastFocusedElement) {
-            lastFocusedElement.focus({ preventScroll: true });
-        }
-        lastFocusedElement = null;
-        shouldRestoreFocus = true;
     }
 });
 

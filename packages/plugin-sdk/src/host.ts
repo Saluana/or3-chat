@@ -113,3 +113,5 @@ export function createHostPluginContext(input: CreateHostPluginContextInput): Pl
         onActivate: input.onActivate,
     });
 }
+
+export { createUnsupportedPluginClients };

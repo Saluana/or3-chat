@@ -472,16 +472,11 @@ export class PluginTestHost {
                 const needsPalette =
                     kind === 'ui.command-palette.post-source' ||
                     kind === 'ui.command-palette.command';
-                if (needsPalette && !approved.has('ui.command-palette.register')) {
-                    throw new Error(
-                        'Grant ui.command-palette.register was not approved'
-                    );
-                }
-                if (
-                    !needsPalette &&
-                    !approved.has('ui.dashboard.register')
-                ) {
-                    throw new Error('Grant ui.dashboard.register was not approved');
+                const requiredGrant = kind === 'chat.message.renderer' ? 'chat.message.renderer'
+                    : kind === 'editor.extension' ? 'chat.editor.extension'
+                    : needsPalette ? 'ui.command-palette.register' : 'ui.dashboard.register';
+                if (!approved.has(requiredGrant)) {
+                    throw new Error(`Grant ${requiredGrant} was not approved`);
                 }
                 stagedContributions += 1;
                 if (committed && this.#activeGeneration === generation) {

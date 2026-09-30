@@ -54,7 +54,7 @@
             <!-- Current model: shown when the composer is too narrow for its
                  own picker. Opens the favorites dropdown directly. -->
             <USelectMenu
-                v-if="containerWidth && containerWidth < 400"
+                v-if="isMobile || !containerWidth || containerWidth <= 400"
                 v-model="selectedModel"
                 :items="modelItems"
                 value-key="value"

@@ -2,6 +2,7 @@ import { createError, defineEventHandler, getQuery, getRouterParam } from 'h3';
 import { requireCan, requireSession } from '../../../auth/can';
 import { resolveSessionContext } from '../../../auth/session';
 import { getWorkspaceSettingsStore } from '../../../admin/stores/registry';
+import { readPackageManifest } from '../../../admin/plugins/package-operation-support';
 import { EXTENSIONS_BASE_DIR } from '../../../admin/extensions/paths';
 import { resolveConnectionService } from '../../../utils/plugins/connections/resolve';
 import { loadSetupState, type SetupState } from '../../../utils/plugins/setup/state';
@@ -56,6 +57,18 @@ export default defineEventHandler(async (event) => {
     // handoff receives it, so readiness and the handoff agree. A runtime settings
     // read asks for `slot=current` so it never follows an unpromoted candidate.
     const query = getQuery(event);
+    const expectedWorkspaceId = typeof query.workspace === 'string' ? query.workspace : null;
+    if (expectedWorkspaceId && expectedWorkspaceId !== workspaceId) {
+        throw createError({ statusCode: 409, statusMessage: 'The active workspace changed. Reopen Configure for this workspace.',
+            data: { code: 'setup-workspace-conflict' } });
+    }
+    const expectedVersion = typeof query.version === 'string' && query.version.length > 0 ? query.version : null;
+    const requestedOperationId = typeof query.operationId === 'string' && query.operationId.length > 0
+        ? query.operationId : null;
+    if ((expectedVersion && !/^[a-zA-Z0-9][a-zA-Z0-9._+-]{0,127}$/.test(expectedVersion)) ||
+        (requestedOperationId && !/^[a-zA-Z0-9_-]{1,128}$/.test(requestedOperationId))) {
+        throw createError({ statusCode: 400, statusMessage: 'Invalid setup link' });
+    }
     const hasSelectedContext =
         (typeof query.documentId === 'string' && query.documentId.length > 0) ||
         (typeof query.messageId === 'string' && query.messageId.length > 0);
@@ -72,6 +85,17 @@ export default defineEventHandler(async (event) => {
     let ownedOperationId: string | null = null;
     for (let attempt = 0; ; attempt += 1) {
         ownedOperationId = null;
+        if (requestedOperationId && selection?.status !== 'candidate') {
+            throw createError({ statusCode: 409, statusMessage: 'This install candidate is no longer pending. Reopen Configure from Marketplace.',
+                data: { code: 'setup-operation-conflict' } });
+        }
+        if (expectedVersion && selection?.source === 'package' && selection.path && selection.status !== 'candidate') {
+            const manifest = await readPackageManifest(selection.path);
+            if (manifest.version !== expectedVersion) {
+                throw createError({ statusCode: 409, statusMessage: 'The selected package version changed. Reopen Configure from Marketplace.',
+                    data: { code: 'setup-package-conflict' } });
+            }
+        }
         // A candidate is only usable when the acquisition that owns its exact
         // digest is live; an orphaned candidate is refused, never rendered as a
         // plan whose operation silently disappeared.
@@ -80,6 +104,8 @@ export default defineEventHandler(async (event) => {
                 pluginId,
                 workspaceId,
                 candidateDigest: selection.digest,
+                requestedOperationId,
+                expectedVersion,
                 settingsStore: getWorkspaceSettingsStore(event),
             });
             if (!binding.ok) {

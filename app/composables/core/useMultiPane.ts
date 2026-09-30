@@ -75,6 +75,7 @@ export interface UseMultiPaneApi {
     newWindowTooltip: ComputedRef<string>;
     addPane: () => string | null;
     closePane: (index: number) => Promise<void> | void;
+    swapAdjacentPanes: (leftIndex: number) => void;
     setActive: (index: number) => void;
     focusPrev: (current: number) => void;
     focusNext: (current: number) => void;
@@ -723,6 +724,26 @@ export function useMultiPane(
         });
     }
 
+    /** Swap the pane identities and content at two adjacent positions. */
+    function swapAdjacentPanes(leftIndex: number): void {
+        if (
+            !Number.isInteger(leftIndex) ||
+            leftIndex < 0 ||
+            leftIndex >= panes.value.length - 1
+        ) return;
+
+        const left = panes.value[leftIndex];
+        const right = panes.value[leftIndex + 1];
+        if (!left || !right) return;
+
+        const activeId = activePaneId.value;
+        panes.value.splice(leftIndex, 2, right, left);
+        // Active state follows the pane, so swapping does not trigger a focus
+        // change or a resource activation in the workspace tab host.
+        if (activeId === left.id) activePaneIndex.value = leftIndex + 1;
+        else if (activeId === right.id) activePaneIndex.value = leftIndex;
+    }
+
     function addPane(): string | null {
         if (!canAddPane.value) return null;
         const pane = createEmptyPane();
@@ -1101,6 +1122,7 @@ export function useMultiPane(
         newWindowTooltip,
         addPane,
         closePane,
+        swapAdjacentPanes,
         setActive,
         focusPrev,
         focusNext,

@@ -279,7 +279,7 @@ export async function stageV2PluginPackageFromZip(
                 }
             } else {
                 const base = normalizedRel.split('/').pop()?.toLowerCase() ?? '';
-                if (!['readme', 'license', 'notice', 'changelog'].includes(base)) {
+                if (!['readme', 'license', 'notice', 'changelog', 'third_party_notices'].includes(base)) {
                     throw new Error('Extension type not allowed');
                 }
             }
@@ -430,7 +430,7 @@ export async function installExtensionFromZip(
                 }
             } else {
                 const base = normalizedRel.split('/').pop()?.toLowerCase() ?? '';
-                const allowedNames = ['readme', 'license', 'notice', 'changelog'];
+                const allowedNames = ['readme', 'license', 'notice', 'changelog', 'third_party_notices'];
                 if (!allowedNames.includes(base)) {
                     throw new Error('Extension type not allowed');
                 }

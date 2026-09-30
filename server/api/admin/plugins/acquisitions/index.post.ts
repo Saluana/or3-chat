@@ -23,7 +23,7 @@
 import { createError, defineEventHandler, readBody, setResponseStatus } from 'h3';
 import { z } from 'zod';
 import { requireAdminApiContext } from '../../../../admin/api';
-import { resolveAdminWorkspaceTarget } from '../../../../admin/workspace-target';
+import { assertExpectedAdminWorkspace, resolveAdminWorkspaceTarget } from '../../../../admin/workspace-target';
 import { checkRateLimit } from '../../../../utils/rate-limit';
 import { describeAcquisitionStatus } from '~~/shared/plugins/acquisition/contracts';
 import { acquisitionInstanceId } from '../../../../utils/plugins/acquisition/config';
@@ -32,6 +32,7 @@ import { PluginAcquisitionOperationStore } from '../../../../utils/plugins/acqui
 import { LibraryInstallRequestStore } from '../../../../admin/library/install-requests';
 import { libraryLinkServiceFor } from '../../../../admin/library/route-support';
 import { getWorkspaceAccessStore } from '../../../../admin/stores/registry';
+import { approvedSiteRelease } from '../../../../admin/plugins/site-policy-service';
 import {
     acquisitionErrorStatus,
     requesterIdentity,
@@ -45,6 +46,7 @@ const BodySchema = z.object({
         .regex(/^[a-z0-9][a-z0-9._-]*$/),
     version: z.string().min(1).max(64).optional(),
     workspaceId: z.string().min(1).optional(),
+    expectedWorkspaceId: z.string().min(1).optional(),
     installRequestId: z.string().regex(/^lir_[a-f0-9]{32}$/).optional(),
 });
 
@@ -58,7 +60,12 @@ export default defineEventHandler(async (event) => {
     if (!body.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid request' });
     }
+    assertExpectedAdminWorkspace(context, body.data.expectedWorkspaceId);
     const workspaceId = resolveAdminWorkspaceTarget(context, body.data.workspaceId);
+    const policy = await approvedSiteRelease(body.data.pluginId, body.data.version).catch(() => {
+        throw createError({ statusCode: 503, statusMessage: 'Site approval could not be verified. Retry after checking the marketplace registry.' });
+    });
+    if (!policy) throw createError({ statusCode: 409, statusMessage: 'Approve this exact release in Admin > Plugins before installing it.', data: { code: 'site-approval-required' } });
     const requester = requesterIdentity(context);
     const request = body.data.installRequestId
         ? await new LibraryInstallRequestStore().read(body.data.installRequestId)
@@ -114,7 +121,7 @@ export default defineEventHandler(async (event) => {
         context.session?.user?.id ?? '');
     const started = await service.start({
         pluginId: body.data.pluginId,
-        ...(body.data.version === undefined ? {} : { version: body.data.version }),
+        version: policy.approvedRelease.version,
         workspaceId,
         requesterUserId: requester,
         ...(context.session?.user?.id ? { setupOwnerUserId: context.session.user.id } : {}),

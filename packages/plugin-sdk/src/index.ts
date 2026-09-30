@@ -82,6 +82,8 @@ export type {
     PluginContext,
     PluginContribution,
     PluginContributionKind,
+    PluginMessageRendererDefinition,
+    PluginEditorExtensionDefinition,
     PluginContributions,
     PluginFeatureNegotiation,
     PluginHookOptions,

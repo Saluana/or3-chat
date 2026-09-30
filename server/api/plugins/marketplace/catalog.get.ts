@@ -1,7 +1,9 @@
 import { createError, defineEventHandler, getRequestURL, setResponseHeader } from 'h3';
 import { requireCan, requireSession } from '../../../auth/can';
 import { resolveSessionContext } from '../../../auth/session';
-import { readCatalogPage } from '../../../utils/plugins/marketplace/service';
+import { marketplaceRegistryConfigured } from '../../../utils/plugins/marketplace/service';
+import { approvedCatalogPage, ensureSitePolicyMigrated } from '../../../admin/plugins/site-policy-service';
+import { SitePluginPolicyStore } from '../../../admin/plugins/site-policy';
 
 /**
  * Browse the configured marketplace through the authenticated local server.
@@ -23,16 +25,18 @@ export default defineEventHandler(async (event) => {
 
     const url = getRequestURL(event);
     try {
-        const catalog = await readCatalogPage(url.searchParams);
-        return { configured: catalog !== null, catalog };
+        if (!marketplaceRegistryConfigured()) return { configured: false, catalog: null };
+        const policy = new SitePluginPolicyStore();
+        await ensureSitePolicyMigrated(policy);
+        const catalog = await approvedCatalogPage(policy, url.searchParams);
+        return { configured: true, catalog };
     } catch (error) {
         return {
             configured: true,
             catalog: null,
-            notice:
-                error instanceof Error
-                    ? error.message
-                    : 'The marketplace could not be reached.',
+            notice: error instanceof Error && 'code' in error && error.code === 'policy-invalid'
+                ? 'Site plugin approval needs repair by an administrator.'
+                : 'The approved catalog could not be loaded. Try again in a moment.',
         };
     }
 });

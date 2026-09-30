@@ -53,8 +53,8 @@ describe('useResponsiveState', () => {
     const waitForFrame = () =>
         new Promise((resolve) => requestAnimationFrame(resolve));
 
-    it('returns isMobile = true when viewport ≤ 768px', async () => {
-        mockViewport(768);
+    it.each([767, 767.5])('uses mobile presentation at %fpx below the CSS md breakpoint', async (width) => {
+        mockViewport(width);
 
         const { useResponsiveState: useResponsiveState2 } = await import(
             '../useResponsiveState'
@@ -67,18 +67,19 @@ describe('useResponsiveState', () => {
         expect(isMobile.value).toBe(true);
     });
 
-    it('keeps isMobile = false when viewport exceeds 768px threshold', async () => {
-        mockViewport(769);
+    it.each([768, 769])('uses tablet presentation at %ipx, matching CSS md', async (width) => {
+        mockViewport(width);
 
         const { useResponsiveState: useResponsiveState4 } = await import(
             '../useResponsiveState'
         );
-        const { isMobile } = useResponsiveState4();
+        const { isMobile, isTablet } = useResponsiveState4();
 
         // Wait for requestAnimationFrame to update the value
         await waitForFrame();
 
         expect(isMobile.value).toBe(false);
+        expect(isTablet.value).toBe(true);
     });
 
     it('returns isDesktop = true for desktop viewport', async () => {
@@ -184,7 +185,7 @@ describe('useResponsiveState', () => {
         // Wait a tick for cleanup
         await new Promise(resolve => setTimeout(resolve, 0));
         
-        // Listeners should have been removed (2 calls: mobile and desktop queries)
+        // Listeners should have been removed (2 calls: tablet and desktop queries)
         expect(removeEventListenerSpy).toHaveBeenCalledTimes(2);
     });
 });

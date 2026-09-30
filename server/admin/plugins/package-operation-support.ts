@@ -32,6 +32,7 @@ import {
     loadPackageDescriptors,
     packageAuthorityDigest,
     toEffectiveAuthority,
+    toTrustedManifestAuthority,
 } from '../../utils/plugins/setup/load-descriptors';
 import {
     getPluginGrantReview,
@@ -162,14 +163,12 @@ export async function packageGrantCandidate(input: {
         packagePath: input.packagePath,
     });
     const releaseId = input.release?.releaseId ?? null;
-    const authority =
-        descriptors.policy && descriptors.setup
-            ? toEffectiveAuthority({
-                  manifest,
-                  policy: descriptors.policy,
-                  setup: descriptors.setup,
-              })
-            : null;
+    const authority = descriptors.policy && descriptors.setup
+        ? toEffectiveAuthority({ manifest, policy: descriptors.policy, setup: descriptors.setup })
+        : !descriptors.policy && !descriptors.setup && manifest.trust === 'trusted-host' &&
+          (manifest.requestedGrants.length > 0 || Boolean(manifest.runtime.client))
+          ? toTrustedManifestAuthority(manifest)
+          : null;
     if (input.release) {
         if (input.release.authority !== undefined) {
             const derivedDigest = authority ? await computeAuthorityHash(authority) : null;
@@ -186,9 +185,13 @@ export async function packageGrantCandidate(input: {
             if (legacyDigest !== null && legacyDigest !== input.release.authoritySha256) {
                 throw new Error('The staged package policy does not match the signed legacy authority digest.');
             }
+            if (manifest.trust === 'trusted-host' && authority &&
+                await computeAuthorityHash(authority) !== input.release.authoritySha256) {
+                throw new Error('The staged trusted package authority does not match the signed release authority.');
+            }
         }
     }
-    if (!descriptors.policy || !descriptors.setup) {
+    if (!authority) {
         return {
             requestedGrants: manifest.requestedGrants,
             releaseId,
@@ -200,7 +203,7 @@ export async function packageGrantCandidate(input: {
         };
     }
     const authoritySha256 = input.release?.authoritySha256
-        ?? (authority ? await computeAuthorityHash(authority) : packageAuthorityDigest(descriptors.policy, descriptors.setup));
+        ?? await computeAuthorityHash(authority);
     return {
         requestedGrants: manifest.requestedGrants,
         releaseId,
@@ -279,23 +282,33 @@ export function clientCanaryStepFromEvidence(
     return async (context) => {
         // The stored manifest decides whether a browser has to run this
         // candidate; the caller cannot claim a client profile it did not ship.
-        let requiresClient = false;
+        let expectedProfile: string | null = null;
+        let hasClient = false;
         try {
             const manifest = await readPackageManifest(context.packagePath);
-            requiresClient =
-                manifest.trust === 'isolated-client' && Boolean(manifest.runtime.client);
+            const client = manifest.runtime.client;
+            hasClient = Boolean(client);
+            if (client && manifest.trust === 'isolated-client' &&
+                (client.isolation === 'worker' || client.isolation === 'iframe')) {
+                expectedProfile = 'or3-portable-client-v1';
+            } else if (client && manifest.trust === 'trusted-host' && client.isolation === 'host') {
+                expectedProfile = 'or3-trusted-host-v2';
+            }
         } catch {
             return { status: 'blocked', code: 'client-profile-unknown' };
         }
-        if (!requiresClient) {
+        if (!hasClient) {
             return { status: 'skipped', code: 'server-only-profile' };
         }
+        if (!expectedProfile) return { status: 'blocked', code: 'client-profile-unknown' };
         const evidence = await store.readEvidence(
             input.pluginId,
             input.packageDigest,
             input.workspaceId
         );
-        if (!evidence) return { status: 'blocked', code: CLIENT_CANARY_PENDING_CODE };
+        if (!evidence || evidence.profile !== expectedProfile) {
+            return { status: 'blocked', code: CLIENT_CANARY_PENDING_CODE };
+        }
         if (evidence.status === 'blocked') {
             return { status: 'blocked', code: evidence.code ?? 'client-canary-blocked' };
         }

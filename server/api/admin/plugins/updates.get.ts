@@ -34,6 +34,9 @@ import { RegistryStateStore } from '../../../utils/plugins/acquisition/registry-
 import { listAllWorkspaceIds } from '../../../utils/plugins/acquisition/route-support';
 import { getEnabledPlugins, getPluginGrantReview } from '../../../admin/plugins/workspace-plugin-store';
 import { compareAuthority, type EffectiveAuthority, type AuthorityChange } from '~~/shared/plugins/authority/effective-authority';
+import { SitePluginPolicyStore } from '../../../admin/plugins/site-policy';
+import { ensureSitePolicyMigrated } from '../../../admin/plugins/site-policy-service';
+import { enabledWorkspaceFingerprint } from '../../../admin/plugins/rollback-workspaces';
 
 interface UpdateCheckPlugin {
     readonly pluginId: string;
@@ -53,6 +56,8 @@ interface UpdateCheckPlugin {
         readonly profile: string;
         /** One site administrator approval covers every enabled workspace. */
         readonly approvalRequired: boolean;
+        readonly affectedWorkspaces: number;
+        readonly enabledWorkspaceSha256: string;
         readonly addedAccess: readonly AuthorityChange[];
     };
 }
@@ -95,16 +100,28 @@ export default defineEventHandler(async (event) => {
     if (context.session?.workspace?.id) workspaceIds.add(context.session.workspace.id);
 
     let entitlements: LibraryEntitlementsView | undefined;
+    const sitePolicies = new SitePluginPolicyStore();
     for (const entry of installed) {
         try {
+            await ensureSitePolicyMigrated(sitePolicies);
+            const sitePolicy = await sitePolicies.read(entry.pluginId);
+            if (!sitePolicy?.catalogVisible) {
+                plugins.push({ pluginId: entry.pluginId, installedVersion: entry.version, latestVersion: null,
+                    status: 'blocked', reason: 'A site administrator must approve a release before it appears in Updates.' });
+                continue;
+            }
             const catalog = await readCatalogEntry(entry.pluginId) as {
                 price?: { kind?: string };
                 releases?: readonly { version: string }[];
             } | null;
             const pinnedVersion = await readUpdatePin(entry.pluginId);
-            const versions = [...new Set((catalog?.releases ?? []).map(release => release.version))]
-                .filter(version => valid(version) && (!pinnedVersion || version === pinnedVersion))
-                .sort((left, right) => compare(right, left)).slice(0, 50);
+            const approvedVersion = sitePolicy.approvedRelease.version;
+            if (pinnedVersion && pinnedVersion !== approvedVersion && valid(pinnedVersion) && compare(pinnedVersion, entry.version) <= 0) {
+                plugins.push({ pluginId: entry.pluginId, installedVersion: entry.version, latestVersion: pinnedVersion, status: 'up-to-date' });
+                continue;
+            }
+            const versions = (catalog?.releases ?? []).some((release) => release.version === approvedVersion && valid(release.version)) &&
+                (!pinnedVersion || pinnedVersion === approvedVersion) ? [approvedVersion] : [];
             const latestVersion = versions[0] ?? null;
             if (latestVersion === null) {
                 plugins.push({
@@ -112,7 +129,9 @@ export default defineEventHandler(async (event) => {
                     installedVersion: entry.version,
                     latestVersion: null,
                     status: 'unknown',
-                    reason: 'No published version of this plugin is listed in the catalog.',
+                    reason: pinnedVersion && pinnedVersion !== approvedVersion
+                        ? 'The pinned version differs from the site-approved release.'
+                        : 'The site-approved release is no longer listed in the catalog.',
                 });
                 continue;
             }
@@ -140,6 +159,12 @@ export default defineEventHandler(async (event) => {
                 const resolved = await client.resolveRelease({ expectation: { pluginId: entry.pluginId, version } });
                 if (!resolved.ok) { reason = resolved.failure.message; continue; }
                 const candidate = resolved.value.document;
+                if (candidate.releaseId !== sitePolicy.approvedRelease.releaseId ||
+                    candidate.packageTreeSha256 !== sitePolicy.approvedRelease.packageTreeSha256 ||
+                    candidate.authoritySha256 !== sitePolicy.approvedRelease.authoritySha256) {
+                    reason = 'The site-approved release identity changed. Review site approval again.';
+                    continue;
+                }
                 if (catalog?.price?.kind !== 'free') {
                     const userId = context.session?.user?.id;
                     if (!userId) { reason = 'Sign in and link your Library to check paid update coverage.'; continue; }
@@ -167,10 +192,19 @@ export default defineEventHandler(async (event) => {
                 authoritySha256: document.authoritySha256,
                 authority: document.authority ?? null,
             };
+            const enabledWorkspaceIds: string[] = [];
+            const allWorkspaceIds = [...workspaceIds].sort();
+            for (let offset = 0; offset < allWorkspaceIds.length; offset += 25) {
+                const chunk = allWorkspaceIds.slice(offset, offset + 25);
+                const enabled = await Promise.all(chunk.map((workspaceId) => getEnabledPlugins(services.settings, workspaceId)));
+                for (let index = 0; index < chunk.length; index++) {
+                    if (enabled[index]?.includes(entry.pluginId)) enabledWorkspaceIds.push(chunk[index]!);
+                }
+            }
             let approvalRequired = false;
-            for (const workspaceId of workspaceIds) {
-                if (workspaceId !== context.session?.workspace?.id &&
-                    !(await getEnabledPlugins(services.settings, workspaceId)).includes(entry.pluginId)) continue;
+            const reviewWorkspaceIds = new Set(enabledWorkspaceIds);
+            if (context.session?.workspace?.id) reviewWorkspaceIds.add(context.session.workspace.id);
+            for (const workspaceId of reviewWorkspaceIds) {
                 const review = await getPluginGrantReview(services.settings, workspaceId, entry.pluginId, candidate);
                 if (review.status !== 'current' ||
                     !document.requestedGrants.every(grant => review.approvedGrants.includes(grant))) {
@@ -200,6 +234,8 @@ export default defineEventHandler(async (event) => {
                     publishedAt: document.publishedAt,
                     profile: document.profile,
                     approvalRequired,
+                    affectedWorkspaces: enabledWorkspaceIds.length,
+                    enabledWorkspaceSha256: enabledWorkspaceFingerprint(enabledWorkspaceIds),
                     addedAccess,
                     ...(document.authority === undefined ? {} : { authority: document.authority }),
                 },

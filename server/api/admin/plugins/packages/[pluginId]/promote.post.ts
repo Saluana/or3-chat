@@ -18,6 +18,9 @@ import {
 } from '../../../../../utils/plugins/acquisition/route-support';
 import { requesterIdentity } from '../../../../../utils/plugins/acquisition/route-identity';
 import { promoteScopedSetupValues } from '../../../../../utils/plugins/setup/settings-store';
+import { readLocalAdmission } from '../../../../../admin/plugins/local-admission';
+import { readAdminUploadProvenance } from '../../../../../admin/plugins/admin-upload-provenance';
+import { isSiteReleaseStillApproved, signedRelease } from '../../../../../admin/plugins/site-policy-service';
 
 const BodySchema = z.object({
     workspaceId: z.string().min(1).optional(),
@@ -75,13 +78,6 @@ export default defineEventHandler(async (event) => {
             data: { code: 'acquisition-required', operationId: owned.operationId },
         });
     }
-    const setupOperation = operations.find(
-        (operation) =>
-            operation.candidateDigest === body.data.candidateDigest &&
-            operation.status !== 'completed' &&
-            operation.status !== 'canceled'
-    );
-
     // The instance-wide preflight protects every enabled workspace, whatever
     // created the candidate: one selected version is shared by all of them.
     const candidateManifest = await readPackageManifest(
@@ -93,28 +89,44 @@ export default defineEventHandler(async (event) => {
             statusMessage: 'The stored candidate package is unreadable.',
         });
     }
+    const localAdmission = await readLocalAdmission(pluginId, body.data.candidateDigest);
+    const adminUpload = await readAdminUploadProvenance(pluginId, body.data.candidateDigest);
+    const explicitAdmission = Boolean(localAdmission || adminUpload);
+    const signed = explicitAdmission ? null : await signedRelease(pluginId, candidateManifest.version).catch((error) => {
+        const refusal = error as { code?: string; retryable?: boolean };
+        throw createError({
+            statusCode: refusal.retryable === false && refusal.code !== 'registry-unreachable' ? 409 : 503,
+            statusMessage: 'The staged release could not be verified against the registry. Review its current trust status before promoting.',
+            data: { code: refusal.code ?? 'registry-unreachable' },
+        });
+    });
+    if (signed && signed.packageTreeSha256 !== body.data.candidateDigest) {
+        throw createError({ statusCode: 409, statusMessage: 'The staged package no longer matches the signed release.' });
+    }
+    const candidateGrant = await packageGrantCandidate({
+        packagePath: services.packages.packagePath(pluginId, body.data.candidateDigest as `sha256-${string}`),
+        packageDigest: body.data.candidateDigest as `sha256-${string}`,
+    });
+    if (signed && candidateGrant.authoritySha256 !== signed.authoritySha256) {
+        throw createError({ statusCode: 409, statusMessage: 'The staged package authority differs from the signed release.' });
+    }
     const preflight = await acquisition.preflightWorkspaces(
         pluginId,
-        await packageGrantCandidate({
-            packagePath: services.packages.packagePath(
-                pluginId,
-                body.data.candidateDigest as `sha256-${string}`
-            ),
-            packageDigest: body.data.candidateDigest as `sha256-${string}`,
-        }),
+        candidateGrant,
         {
-            operationId: setupOperation?.operationId ?? 'direct-promotion',
+            operationId: 'direct-promotion',
             includeWorkspaceId: workspaceId,
         }
     );
     if (preflight.blocking.length > 0) {
-        const detail = preflight.blocking
+        const detail = preflight.blocking.slice(0, 3)
             .map((entry) => `${entry.workspaceId} (${entry.code})`)
             .join(', ');
         throw createError({
             statusCode: 409,
-            statusMessage: `An owner must disable these workspaces before this version can be selected: ${detail}`,
-            data: { code: 'workspace-preflight-blocked' },
+            statusMessage: `Update blocked in ${preflight.blocking.length} workspace(s): ${detail}. Repair their setup or permissions, then retry.`,
+            data: { code: 'workspace-preflight-blocked', blockingCount: preflight.blocking.length,
+                blockingWorkspaces: preflight.blocking.slice(0, 25) },
         });
     }
 
@@ -122,6 +134,15 @@ export default defineEventHandler(async (event) => {
         pluginId,
         workspaceId,
         expectedCandidateDigest: body.data.candidateDigest as `sha256-${string}`,
+        preflightWorkspaces: () => acquisition.preflightWorkspaces(pluginId, candidateGrant, {
+            operationId: 'direct-promotion', includeWorkspaceId: workspaceId,
+        }),
+        verifySiteApproval: async () => explicitAdmission ||
+            isSiteReleaseStillApproved(pluginId, {
+                version: candidateManifest.version,
+                packageTreeSha256: body.data.candidateDigest as `sha256-${string}`,
+                ...(signed ? { releaseId: signed.releaseId, authoritySha256: signed.authoritySha256 } : {}),
+            }),
         storedStateVersion: await services.migration.getStateVersion(workspaceId, pluginId),
         snapshotState: () => readPluginStateSnapshot(services, workspaceId, pluginId),
         readGrantReview: (candidate) =>
@@ -167,7 +188,7 @@ export default defineEventHandler(async (event) => {
                         targetWorkspaceId,
                         pluginId,
                         body.data.candidateDigest,
-                        setupOperation?.operationId ?? 'direct-promotion',
+                        'direct-promotion',
                         // Inherit from the verified running version (the
                         // recovered previous when current is unreadable), never
                         // from an unverified pointer slot.
@@ -182,6 +203,14 @@ export default defineEventHandler(async (event) => {
             return rollback;
         },
     });
+    if (result.status === 'blocked') {
+        throw createError({
+            statusCode: 409,
+            statusMessage: `The update was not selected: ${result.code}. Refresh the release and repair the blocked workspace or review step before retrying.`,
+            data: { code: result.code, stage: result.stage },
+        });
+    }
+    let workspaceEnablement: 'enabled' | 'pending' | 'unchanged' = 'unchanged';
     if (result.status === 'promoted') {
         // A first promotion installs the plugin for this workspace, so it is
         // enabled here too: the runtime gate refuses a disabled package, and
@@ -189,15 +218,40 @@ export default defineEventHandler(async (event) => {
         // update leaves enablement as the workspace set it, even when a failed
         // current had to be dropped and the new pointer retains no previous.
         if (!result.wasInstalled) {
-            await setPluginEnabled(services.settings, workspaceId, pluginId, true);
+            try {
+                await services.packages.runPluginOperation(pluginId, async () => {
+                    if (!await readLocalAdmission(pluginId, body.data.candidateDigest) &&
+                        !await readAdminUploadProvenance(pluginId, body.data.candidateDigest) &&
+                        !await isSiteReleaseStillApproved(pluginId, {
+                            version: candidateManifest.version,
+                            packageTreeSha256: body.data.candidateDigest as `sha256-${string}`,
+                        })) {
+                        throw createError({ statusCode: 409, statusMessage: 'Site approval changed before workspace enablement.' });
+                    }
+                    await setPluginEnabled(services.settings, workspaceId, pluginId, true);
+                });
+                workspaceEnablement = 'enabled';
+            } catch {
+                // The package pointer is committed. Report the remaining step
+                // explicitly so a retry does not look like a fresh promotion.
+                workspaceEnablement = 'pending';
+                console.warn('[plugin-promotion] Workspace enablement remains pending', { pluginId, workspaceId });
+            }
         }
         // Live-handle revocation happens in the promotion service's own commit
         // hook, which every promotion caller shares.
-        await event.context.adminHooks?.doAction('admin.plugin:action:promoted', {
-            id: pluginId,
-            workspaceId,
-            packageDigest: body.data.candidateDigest,
-        });
+        try {
+            await event.context.adminHooks?.doAction('admin.plugin:action:promoted', {
+                id: pluginId,
+                workspaceId,
+                packageDigest: body.data.candidateDigest,
+            });
+        } catch {
+            console.warn('[plugin-promotion] Post-commit admin hook failed', { pluginId });
+        }
     }
-    return { ok: result.status === 'promoted', workspaceId, ...result };
+    return {
+        ok: result.status === 'promoted', workspaceId, ...result, workspaceEnablement,
+        ...(workspaceEnablement === 'pending' ? { warning: 'The selected package changed, but this workspace was not enabled. Refresh Installed and enable it there.' } : {}),
+    };
 });

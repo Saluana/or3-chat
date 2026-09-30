@@ -53,51 +53,29 @@ describe('local package sources', () => {
         ).toBe(false);
     });
 
-    it('aliases every sibling checkout that matches its package and entry', () => {
+    it('aliases a sibling checkout that matches its package and entry', () => {
         const app = workspace({
             'or3-vsc': { name: 'or3-scroll', entries: ['src/lib/index.ts'] },
-            'or3-workflows/packages/workflow-core': {
-                name: 'or3-workflow-core',
-                entries: ['src/index.ts'],
-            },
-            'or3-workflows/packages/workflow-vue': {
-                name: 'or3-workflow-vue',
-                entries: ['src/index.ts', 'src/styles/variables.css'],
-            },
         });
         const resolution = resolveLocalPackageAliases(app, { NODE_ENV: 'development' });
 
         expect(resolution.enabled).toBe(true);
         expect(resolution.aliases.map((alias) => String(alias.find))).toEqual([
             '/^or3-scroll$/',
-            '/^or3-workflow-vue\\/style\\.css$/',
-            '/^or3-workflow-vue$/',
-            '/^or3-workflow-core$/',
         ]);
         expect(resolution.skipped).toEqual([]);
     });
 
-    it('keeps the remaining aliases when one checkout is unusable', () => {
+    it('skips a checkout with the wrong package name', () => {
         const app = workspace({
-            'or3-vsc': { name: 'or3-scroll', entries: ['src/lib/index.ts'] },
-            // A renamed checkout must never be aliased as `or3-workflow-core`.
-            'or3-workflows/packages/workflow-core': {
+            'or3-vsc': {
                 name: 'something-else',
-                entries: ['src/index.ts'],
-            },
-            'or3-workflows/packages/workflow-vue': {
-                name: 'or3-workflow-vue',
-                entries: ['src/index.ts', 'src/styles/variables.css'],
+                entries: ['src/lib/index.ts'],
             },
         });
         const resolution = resolveLocalPackageAliases(app, { NODE_ENV: 'development' });
 
-        expect(resolution.aliases.map((alias) => String(alias.find))).toContain(
-            '/^or3-scroll$/',
-        );
-        expect(resolution.aliases.map((alias) => String(alias.find))).not.toContain(
-            '/^or3-workflow-core$/',
-        );
+        expect(resolution.aliases).toEqual([]);
         expect(resolution.skipped.join('\n')).toContain('declares "something-else"');
     });
 
@@ -122,24 +100,4 @@ describe('local package sources', () => {
 
         expect(resolution).toEqual({ enabled: false, aliases: [], selected: [], skipped: [] });
     });
-});
-
-it('rejects the entire workflow group when core does not meet the UI range', () => {
-    const app = workspace({
-        'or3-workflows/packages/workflow-core': { name: 'or3-workflow-core', entries: ['src/index.ts'] },
-        'or3-workflows/packages/workflow-vue': { name: 'or3-workflow-vue', entries: ['src/index.ts', 'src/styles/variables.css'], dependencies: { 'or3-workflow-core': '^9.0.0' } },
-    });
-    const result = resolveLocalPackageAliases(app, { NODE_ENV: 'development' });
-    expect(result.aliases).toEqual([]);
-    expect(result.skipped.join(' ')).toContain('requires or3-workflow-core@^9.0.0');
-});
-it('rejects missing transitive source before selecting any workflow aliases', () => {
-    const app = workspace({
-        'or3-workflows/packages/workflow-core': { name: 'or3-workflow-core', entries: ['src/index.ts'] },
-        'or3-workflows/packages/workflow-vue': { name: 'or3-workflow-vue', entries: ['src/index.ts', 'src/styles/variables.css'] },
-    });
-    writeFileSync(join(app, '../or3-workflows/packages/workflow-core/src/index.ts'), "export * from './missing';");
-    const result = resolveLocalPackageAliases(app, { NODE_ENV: 'development' });
-    expect(result.aliases).toEqual([]);
-    expect(result.skipped.join(' ')).toContain('source import is missing');
 });

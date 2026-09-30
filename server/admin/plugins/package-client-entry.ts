@@ -1,6 +1,7 @@
 import type { Sha256 } from '../../../shared/plugins/runtime-descriptor';
 import type { PackageV2ClientEntry } from '../../../shared/plugins/runtime-descriptor';
 import { sha256Identity } from '../../../shared/plugins/digest';
+import { init, parse } from 'es-module-lexer';
 import type { Or3ExtensionManifestV2 } from '../extensions/types';
 import { PluginPackageAssetError, PluginPackageAssetReader } from './package-assets';
 import { ImmutablePluginPackageStore } from './package-store';
@@ -36,7 +37,10 @@ export async function readPackageClientEntry(input: {
             ? await reader.readAsset(request)
             : await reader.readSelectedAsset(request);
     const source = new TextDecoder().decode(asset.bytes);
-    const bareImports = unresolvedBareImports(source);
+    const trustedHost = input.manifest.trust === 'trusted-host' && client.isolation === 'host';
+    const bareImports = (await unresolvedBareImports(source)).filter(
+        (specifier) => !trustedHost || (specifier !== 'vue' && specifier !== '@or3/plugin-sdk')
+    );
     if (bareImports.length > 0) {
         throw new PluginPackageClientEntryError(
             'client-entry-unresolvable',
@@ -46,9 +50,7 @@ export async function readPackageClientEntry(input: {
     const digest = await sha256Identity(asset.bytes);
     return Object.freeze({
         entry: client.entry,
-        // `host` isolation runs publisher code in the host window and is never
-        // eligible, so only the contained transports are representable here.
-        isolation: client.isolation === 'iframe' ? ('iframe' as const) : ('worker' as const),
+        isolation: client.isolation,
         digest: digest as Sha256,
     });
 }
@@ -67,22 +69,15 @@ function createPackageAssetReader(): PluginPackageAssetReader {
  * absolute specifiers are fine; a bare one means the package was packed without
  * building, so it is blocked instead of failing inside the user's browser.
  */
-export function unresolvedBareImports(source: string): readonly string[] {
+export async function unresolvedBareImports(source: string): Promise<readonly string[]> {
+    await init;
     const found = new Set<string>();
-    const patterns = [
-        /\bimport\s+[^;'"]*?\bfrom\s*['"]([^'"]+)['"]/g,
-        /\bimport\s*['"]([^'"]+)['"]/g,
-        /\bimport\s*\(\s*['"]([^'"]+)['"]/g,
-        /\bexport\s+[^;'"]*?\bfrom\s*['"]([^'"]+)['"]/g,
-    ];
-    for (const pattern of patterns) {
-        for (const match of source.matchAll(pattern)) {
-            const specifier = match[1];
-            if (!specifier) continue;
-            if (specifier.startsWith('.') || specifier.startsWith('/')) continue;
-            if (/^[a-z][a-z0-9+.-]*:/i.test(specifier)) continue;
-            found.add(specifier);
-        }
+    for (const entry of parse(source)[0]) {
+        const specifier = entry.n;
+        if (specifier === undefined) continue;
+        if (specifier.startsWith('.') || specifier.startsWith('/')) continue;
+        if (/^[a-z][a-z0-9+.-]*:/i.test(specifier)) continue;
+        found.add(specifier);
     }
     return Object.freeze([...found]);
 }

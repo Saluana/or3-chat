@@ -10,6 +10,8 @@ const preflightMock = vi.fn();
 const listForPluginMock = vi.fn();
 const readManifestMock = vi.fn();
 const setEnabledMock = vi.fn();
+const signedReleaseMock = vi.fn();
+const adminUploadAdmissionMock = vi.fn();
 
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
@@ -46,7 +48,7 @@ vi.mock('../../../../admin/plugins/package-operation-support', () => ({
         settings: {},
         promotion: { promote: promoteMock },
         migration: { getStateVersion: async () => 1 },
-        packages: { packagePath: () => '/tmp/does-not-need-to-exist' },
+        packages: { packagePath: () => '/tmp/does-not-need-to-exist', runPluginOperation: (_id: string, callback: () => Promise<unknown>) => callback() },
     }),
     readPackageGrantReview: async () => ({
         requestedGrants: [],
@@ -60,7 +62,7 @@ vi.mock('../../../../admin/plugins/package-operation-support', () => ({
         requestedGrants: [],
         releaseId: null,
         packageDigest: null,
-        authoritySha256: null,
+        authoritySha256: `sha256-${'b'.repeat(64)}`,
         authority: null,
     }),
     readPackageManifest: (...args: unknown[]) => readManifestMock(...args),
@@ -78,6 +80,14 @@ vi.mock('../../../../utils/plugins/acquisition/route-support', () => ({
 vi.mock('../../../../utils/plugins/acquisition/route-identity', () => ({
     requesterIdentity: () => 'admin',
 }));
+vi.mock('../../../../admin/plugins/local-admission', () => ({ readLocalAdmission: async () => null }));
+vi.mock('../../../../admin/plugins/admin-upload-provenance', () => ({
+    readAdminUploadProvenance: (...args: unknown[]) => adminUploadAdmissionMock(...args),
+}));
+vi.mock('../../../../admin/plugins/site-policy-service', () => ({
+    signedRelease: (...args: unknown[]) => signedReleaseMock(...args),
+    isSiteReleaseStillApproved: async () => true,
+}));
 
 describe('promote route guard', () => {
     beforeEach(() => {
@@ -90,7 +100,13 @@ describe('promote route guard', () => {
         setEnabledMock.mockReset().mockResolvedValue(['or3.sample-utility']);
         preflightMock.mockReset().mockResolvedValue({ checked: 1, blocking: [] });
         listForPluginMock.mockReset().mockResolvedValue([]);
-        readManifestMock.mockReset().mockResolvedValue({ requestedGrants: ['settings.read'] });
+        readManifestMock.mockReset().mockResolvedValue({ version: '1.0.0', requestedGrants: ['settings.read'] });
+        signedReleaseMock.mockReset().mockResolvedValue({
+            pluginId: 'or3.sample-utility', version: '1.0.0',
+            packageTreeSha256: `sha256-${'a'.repeat(64)}`,
+            authoritySha256: `sha256-${'b'.repeat(64)}`,
+        });
+        adminUploadAdmissionMock.mockReset().mockResolvedValue(null);
     });
 
     async function callRoute(): Promise<unknown> {
@@ -124,9 +140,23 @@ describe('promote route guard', () => {
         });
         await expect(callRoute()).rejects.toMatchObject({
             statusCode: 409,
-            data: { code: 'workspace-preflight-blocked' },
+            data: { code: 'workspace-preflight-blocked', blockingCount: 1,
+                blockingWorkspaces: [{ workspaceId: 'ws-2', code: 'grant-review-stale' }] },
         });
         expect(promoteMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses direct promotion when the registry quarantines the staged release', async () => {
+        signedReleaseMock.mockRejectedValueOnce(Object.assign(new Error('release quarantined'), { code: 'release-quarantined', retryable: false }));
+        await expect(callRoute()).rejects.toMatchObject({ statusCode: 409 });
+        expect(promoteMock).not.toHaveBeenCalled();
+    });
+
+    it('promotes an explicitly uploaded package without requiring a marketplace release', async () => {
+        adminUploadAdmissionMock.mockResolvedValue({ pluginId: 'or3.sample-utility', packageDigest: `sha256-${'a'.repeat(64)}` });
+        signedReleaseMock.mockRejectedValue(new Error('unpublished'));
+        await expect(callRoute()).resolves.toMatchObject({ ok: true });
+        expect(signedReleaseMock).not.toHaveBeenCalled();
     });
 
     it('enables a first install for the promoted workspace', async () => {

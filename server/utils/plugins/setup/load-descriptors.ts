@@ -195,6 +195,29 @@ function dependencyEntries(
     return entries;
 }
 
+/** Authority for a trusted-host package with no portable policy or setup files. */
+export function toTrustedManifestAuthority(manifest: PackageAuthorityManifest): EffectiveAuthority {
+    if (manifest.trust !== 'trusted-host') {
+        throw new Error('Manifest-only authority requires trusted-host trust');
+    }
+    return {
+        trust: manifest.trust,
+        grants: uniqueSorted(manifest.requestedGrants),
+        features: uniqueSorted(manifest.features?.required ?? []),
+        engines: [
+            `or3:${manifest.engines.or3}`,
+            ...(manifest.engines.pluginApi === undefined
+                ? [] : [`pluginApi:${manifest.engines.pluginApi}`]),
+        ],
+        destinations: [],
+        connectionScopes: [],
+        dataScopes: [],
+        writes: [],
+        setupHooks: [],
+        dependencies: dependencyEntries(manifest.dependencies),
+    };
+}
+
 /**
  * The complete authority a release declares, derived from its validated
  * descriptors and manifest. Consent records bind to this, so an update that

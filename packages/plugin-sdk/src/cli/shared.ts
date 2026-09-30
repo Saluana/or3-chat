@@ -37,6 +37,11 @@ export const PACK_IGNORE_NAMES = new Set([
     'coverage',
     '.turbo',
     '.output',
+    'bun.lock',
+    'bun.lockb',
+    'package-lock.json',
+    'pnpm-lock.yaml',
+    'yarn.lock',
 ]);
 
 export function posix(path: string): string {

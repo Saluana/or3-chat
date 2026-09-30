@@ -27,7 +27,8 @@ vi.mock('../../../../../admin/api', () => ({
 }));
 
 const resolveAdminWorkspaceTargetMock = vi.fn();
-vi.mock('../../../../../admin/workspace-target', () => ({
+vi.mock('../../../../../admin/workspace-target', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../../../../../admin/workspace-target')>()),
     resolveAdminWorkspaceTarget: resolveAdminWorkspaceTargetMock as never,
 }));
 
@@ -71,6 +72,8 @@ vi.mock('../../../../../admin/library/route-support', () => ({
 
 const startMock = vi.fn();
 const statusMock = vi.fn();
+const approvedSiteReleaseMock = vi.fn();
+vi.mock('../../../../../admin/plugins/site-policy-service', () => ({ approvedSiteRelease: (...args: unknown[]) => approvedSiteReleaseMock(...args) }));
 
 function makeEvent(): H3Event {
     return { context: {} } as H3Event;
@@ -125,6 +128,7 @@ describe('acquisition routes', () => {
         libraryStatusMock.mockReset();
         workspaceAccessMock.getWorkspace.mockReset().mockResolvedValue({ id: 'ws-1', deleted: false });
         workspaceAccessMock.listMembers.mockReset().mockResolvedValue([{ userId: 'buyer-local' }]);
+        approvedSiteReleaseMock.mockReset().mockResolvedValue({ approvedRelease: { version: '1.0.0' } });
     });
 
     it('rejects an invalid start body before touching the pipeline', async () => {
@@ -133,6 +137,15 @@ describe('acquisition routes', () => {
 
         await expectStatus(handler(makeEvent()), 400);
         expect(acquisitionServiceForMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses a reviewed install after the active workspace changes before starting', async () => {
+        readBodyMock.mockReset().mockResolvedValue({ pluginId: 'alpha', workspaceId: 'ws-old', expectedWorkspaceId: 'ws-old' });
+        requireAdminApiContextMock.mockResolvedValue({ principal: { kind: 'super_admin', username: 'root' },
+            session: { workspace: { id: 'ws-new' } } });
+        const handler = (await import('../index.post')).default;
+        await expectStatus(handler(makeEvent()), 409);
+        expect(startMock).not.toHaveBeenCalled();
     });
 
     it('reports a pre-record refusal with its policy status and starts nothing', async () => {
@@ -149,6 +162,23 @@ describe('acquisition routes', () => {
         const handler = (await import('../index.post')).default;
 
         await expectStatus(handler(makeEvent()), 503);
+    });
+
+    it('rejects direct acquisition of an unapproved release before an operation is created', async () => {
+        readBodyMock.mockReset().mockResolvedValue({ pluginId: 'alpha', version: '1.0.0' });
+        approvedSiteReleaseMock.mockResolvedValue(null);
+        const handler = (await import('../index.post')).default;
+        await expectStatus(handler(makeEvent()), 409);
+        expect(startMock).not.toHaveBeenCalled();
+        expect(acquisitionServiceForMock).not.toHaveBeenCalled();
+    });
+
+    it('reports approval verification as unavailable when the registry cannot be checked', async () => {
+        readBodyMock.mockReset().mockResolvedValue({ pluginId: 'alpha', version: '1.0.0' });
+        approvedSiteReleaseMock.mockRejectedValue(new Error('registry temporarily unreachable'));
+        const handler = (await import('../index.post')).default;
+        await expectStatus(handler(makeEvent()), 503);
+        expect(startMock).not.toHaveBeenCalled();
     });
 
     it('returns the pipeline status view for a recorded start', async () => {

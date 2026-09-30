@@ -1,4 +1,3 @@
-import { createInternClient } from '@or3/intern-client';
 import {
     createError,
     defineEventHandler,
@@ -23,6 +22,42 @@ import type {
 } from '../../../connect/types';
 import { getRateLimitProvider } from '../../../utils/rate-limit/store';
 import { probeRunsCapabilities } from '../../../connect/runs-probe';
+
+function record(value: unknown): Record<string, unknown> | null {
+    return value !== null && typeof value === 'object' && !Array.isArray(value)
+        ? value as Record<string, unknown> : null;
+}
+
+function validInternHealth(value: unknown): value is Record<string, unknown> & { runtimeAvailable: boolean } {
+    const data = record(value);
+    return !!data && typeof data.status === 'string' &&
+        typeof data.runtimeAvailable === 'boolean' &&
+        typeof data.jobRegistryAvailable === 'boolean' &&
+        typeof data.approvalBrokerAvailable === 'boolean' &&
+        typeof data.processId === 'number' &&
+        typeof data.startedAt === 'string';
+}
+
+function validInternReadiness(value: unknown): value is Record<string, unknown> & { ready: boolean } {
+    const data = record(value);
+    return !!data && typeof data.status === 'string' && typeof data.ready === 'boolean' &&
+        (data.summary === undefined || !!record(data.summary)) &&
+        (data.findings === undefined || Array.isArray(data.findings));
+}
+
+function validInternRunnerList(value: unknown): value is { runners: Array<{ status: string; auth_status: string }> } {
+    const data = record(value);
+    return !!data && Array.isArray(data.runners) &&
+        (data.default_runner === undefined || typeof data.default_runner === 'string') &&
+        data.runners.every((entry: unknown) => {
+            const runner = record(entry);
+            return !!runner && typeof runner.id === 'string' &&
+                typeof runner.display_name === 'string' &&
+                typeof runner.status === 'string' &&
+                typeof runner.auth_status === 'string' && !!record(runner.supports) &&
+                (runner.chat_capabilities === undefined || !!record(runner.chat_capabilities));
+        });
+}
 
 export default defineEventHandler(async (event) => {
     noStore(event);
@@ -185,53 +220,53 @@ export default defineEventHandler(async (event) => {
         return { stage: 'installing' as const };
     }
     let requestSequence = 0;
-    const fetchWithoutCache = ((
-        input: Parameters<typeof globalThis.fetch>[0],
-        init?: Parameters<typeof globalThis.fetch>[1]
-    ) => {
-        const url = new URL(String(input));
+    const probe = async (path: string): Promise<unknown> => {
+        const url = new URL(`${baseUrl.replace(/\/+$/, '')}${path}`);
         url.searchParams.set('_or3_setup_probe', `${Date.now()}-${++requestSequence}`);
-        return globalThis.fetch(url, { ...init, cache: 'no-store' });
-    }) as typeof globalThis.fetch;
-    const client = createInternClient({
-        baseUrl,
-        fetch: fetchWithoutCache,
-        resolveAuth: async () => ({
-            token: accessToken,
-            headers: { 'X-Or3-Auth-Method': 'paired-device' },
-        }),
-        defaultTimeoutMs: 4_000,
-        streamConnectTimeoutMs: 4_000,
-    });
-
-    try {
-        const [health, readiness, runners] = await Promise.allSettled([
-            client.health(),
-            client.readiness(),
-            client.listRunners(),
-        ]);
-        const hasUsableRunner =
-            runners.status === 'fulfilled' &&
-            runners.value.runners.some(
-                (runner) =>
-                    runner.status === 'available' &&
-                    runner.auth_status === 'ready'
-            );
-        if (
-            health.status === 'fulfilled' &&
-            health.value.runtimeAvailable &&
-            hasUsableRunner
-        ) {
-            return {
-                stage: 'online' as const,
-                readiness:
-                    readiness.status === 'fulfilled'
-                        ? readiness.value.ready
-                        : false,
-            };
+        const response = await globalThis.fetch(url, {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json',
+                Authorization: `Bearer ${accessToken}`,
+                'X-Or3-Auth-Method': 'paired-device',
+            },
+            cache: 'no-store',
+            redirect: 'error',
+            signal: AbortSignal.timeout(4_000),
+        });
+        if (!response.ok && !(path === '/internal/v1/readiness' && response.status === 503)) {
+            throw new Error('Connect readiness probe failed');
         }
-    } catch {
-        // Credential delivery can precede service and tunnel startup.
+        return await response.json();
+    };
+
+    const [health, readiness, runners] = await Promise.allSettled([
+        probe('/internal/v1/health'),
+        probe('/internal/v1/readiness'),
+        probe('/internal/v1/chat-runners'),
+    ]);
+    const hasUsableRunner =
+        runners.status === 'fulfilled' &&
+        validInternRunnerList(runners.value) &&
+        runners.value.runners.some(
+            (runner) =>
+                runner.status === 'available' &&
+                runner.auth_status === 'ready'
+        );
+    if (
+        health.status === 'fulfilled' &&
+        validInternHealth(health.value) &&
+        health.value.runtimeAvailable &&
+        hasUsableRunner
+    ) {
+        return {
+            stage: 'online' as const,
+            readiness:
+                readiness.status === 'fulfilled' && validInternReadiness(readiness.value)
+                    ? readiness.value.ready
+                    : false,
+        };
     }
+    // Credential delivery can precede service and tunnel startup.
     return { stage: 'installing' as const };
 });

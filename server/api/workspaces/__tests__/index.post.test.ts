@@ -102,11 +102,11 @@ describe('POST /api/workspaces', () => {
         await expect(handler(makeEvent())).rejects.toThrow('store failed');
     });
 
-    it('surfaces provisioning errors predictably', async () => {
+    it('returns the created workspace when plugin provisioning fails', async () => {
         const handler = (await import('../index.post')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue({ name: 'Valid Name' });
         provisionWorkspaceDefaultsMock.mockRejectedValue(new Error('provision failed'));
 
-        await expect(handler(makeEvent())).rejects.toThrow('provision failed');
+        await expect(handler(makeEvent())).resolves.toMatchObject({ id: 'ws-created', provisioningWarning: expect.stringContaining('ws-created') });
     });
 });

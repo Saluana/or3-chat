@@ -26,7 +26,7 @@ host once with `bun run dev --host /absolute/path/to/or3-chat`.
 
 This development loop keeps persisted settings and storage but restarts the
 worker's in-memory state on replacement. Syntax errors keep the last running
-package until a corrected build passes. See [local development](../../public/_documentation/plugins/local-development.md)
+package until a corrected build passes. See [local development](../../public/_documentation/plugins/first-plugin.md)
 for permission review and the manual candidate path. An explicit clean
 `candidate --verify` and `candidate --qualify` remain required before release.
 
@@ -147,7 +147,7 @@ host's accessible modal slide-out instead of stacking below the content.
 `field.text` and `field.select` can declare a bounded `onChange` action: text
 input is debounced and select changes dispatch immediately with the current form
 values. Host theme tokens, focus styles and touch sizing apply automatically,
-without publisher CSS or DOM access. See the host's `plugins/portable-profile`
+without publisher CSS or DOM access. See the host's `plugins/add-features`
 documentation for the complete surface and permission-gated tool contract.
 
 The package installs an `or3-plugin` binary that works with no OR3 checkout and
@@ -213,7 +213,7 @@ to submit it for independent review.
 authoring input that generates byte-identical `or3.package-policy.json` and
 `or3.setup.json` descriptors, required feature flags and revision hashes. The
 portable profile keeps a package browser-only, dependency-free and
-migration-free. See `public/_documentation/plugins/portable-profile.md` in the
+migration-free. See `public/_documentation/plugins/manifest.md` in the
 OR3 repository for the full rule set.
 
 ## Packaging notes

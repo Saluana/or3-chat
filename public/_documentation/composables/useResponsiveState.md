@@ -59,8 +59,8 @@ const { isMobile } = useResponsiveState();
 ```ts
 const { isMobile, isTablet, isDesktop, hydrated } = useResponsiveState();
 
-// isMobile: Ref<boolean> — true when viewport ≤ 768px
-// isTablet: Ref<boolean> — true when viewport 769px–1023px
+// isMobile: Ref<boolean> — true when viewport < 768px
+// isTablet: Ref<boolean> — true when viewport 768px–1023px
 // isDesktop: Ref<boolean> — true when viewport ≥ 1024px
 // hydrated: Ref<boolean> — true once the first client-side breakpoint check has run
 ```
@@ -126,8 +126,8 @@ When you call `useResponsiveState()`, you get an object with:
 
 | Property   | Type           | Description                                        |
 | ---------- | -------------- | -------------------------------------------------- |
-| `isMobile` | `Ref<boolean>` | `true` when viewport width ≤ 768px                 |
-| `isTablet` | `Ref<boolean>` | `true` when viewport width is 769px–1023px         |
+| `isMobile` | `Ref<boolean>` | `true` when viewport width < 768px                 |
+| `isTablet` | `Ref<boolean>` | `true` when viewport width is 768px–1023px         |
 | `isDesktop` | `Ref<boolean>` | `true` when viewport width ≥ 1024px               |
 | `hydrated` | `Ref<boolean>` | `true` after the first client-side breakpoint read |
 
@@ -139,8 +139,8 @@ The composable uses these fixed breakpoints:
 
 | Breakpoint | Range      | Use Case                      |
 | ---------- | ---------- | ----------------------------- |
-| Mobile     | 0–768px    | Phones, small tablets         |
-| Tablet     | 769–1023px | Large tablets, small desktops |
+| Mobile     | <768px     | Phones, small tablets         |
+| Tablet     | 768–1023px | Large tablets, small desktops |
 | Desktop    | 1024px+    | Desktops, large screens       |
 
 These map to Tailwind's `md:` breakpoint, ensuring design consistency with your CSS classes.
@@ -183,8 +183,8 @@ Most responsive libraries fail on SSR because they immediately check viewport si
 ```ts
 // ❌ WRONG: SSR renders false, client immediately renders true
 // This causes "Hydration node mismatch" warnings
-const media = window.matchMedia('(max-width: 768px)');
-const isMobile = ref(media.matches); // Server: false, Client: immediately true!
+const media = window.matchMedia('(min-width: 768px)');
+const isMobile = ref(!media.matches); // Server: false, Client: immediately true!
 ```
 
 Our approach delays the viewport check until after hydration:
