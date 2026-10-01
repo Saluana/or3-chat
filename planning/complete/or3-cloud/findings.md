@@ -14,6 +14,10 @@ The three plans are directionally aligned, but there are several conflicts and m
 
 ## Implementation updates (resolved)
 
+- Extended deployment qualification now preserves local-image binding during
+  explicit recovery. Dashboard interruption qualification requires an explicit
+  snapshot restore after target mutation and is available on demand, including
+  in the `all` suite, instead of assuming automatic rollback.
 - Public runtime config now exposes only non-sensitive values; server-only storage providers stay private.
 - Provider identifiers are centralized in shared constants to reduce string drift across adapters.
 - Convex gateway clients are cached by token to avoid per-request client creation.

@@ -22,6 +22,7 @@ on:
           - performance
           - plugin-runtime
           - deployment
+          - dashboard-recovery
 
 concurrency:
   group: extended-validation-${{ github.ref }}-${{ inputs.suite || 'scheduled' }}
@@ -234,9 +235,11 @@ jobs:
           grep -q 'NOT restored automatically' "$RUNNER_TEMP/update-failed.log"
           (cd "$managed" && node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" recover --dry-run --json | node -e '
             let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const p=JSON.parse(s);if(p.decision?.action!=="require-explicit-restore")process.exit(1)});')
-          if (cd "$managed" && node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" recover --finish >/dev/null 2>&1); then
+          if (cd "$managed" && OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" recover --finish >/dev/null 2>&1); then
             echo "finish adopted a target without completion proof" >&2; exit 1; fi
-          (cd "$managed" && node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" recover --restore --yes)
+          # The qualification images use local image IDs rather than registry
+          # manifest digests; recovery must use the same binding as update.
+          (cd "$managed" && OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" recover --restore --yes)
           for attempt in $(seq 1 60); do
             curl --fail --silent "http://127.0.0.1:3017/api/health?deep=true" && break
             sleep 1
@@ -344,7 +347,7 @@ jobs:
 
   dashboard-fault-injection:
     name: Scheduled dashboard interruption recovery
-    if: github.event_name == 'schedule'
+    if: github.event_name == 'schedule' || inputs.suite == 'all' || inputs.suite == 'dashboard-recovery'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -392,6 +395,13 @@ jobs:
           cat "$RUNNER_TEMP/dashboard-interrupted.log"
           test "$driver_status" -ne 0
           grep -Eq 'ended in failed|ended in needs_attention|continuously unavailable' "$RUNNER_TEMP/dashboard-interrupted.log"
+          # The interrupted target may have accepted writes. Require the
+          # journal to refuse finish before explicitly restoring the snapshot.
+          (cd "$managed" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$version" recover --dry-run --json | node -e '
+            let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const p=JSON.parse(s);if(p.decision?.action!=="require-explicit-restore")process.exit(1)});')
+          if (cd "$managed" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$version" recover --finish); then
+            echo "finish adopted an interrupted target without completion proof" >&2; exit 1; fi
+          (cd "$managed" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$version" recover --restore --yes)
           grep -q "^OR3_VERSION='$previous_version'$" "$managed/.env"
           (cd "$managed" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$previous_version" verify)
       - name: Clean up interruption fixture

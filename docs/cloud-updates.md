@@ -573,6 +573,8 @@ Go to **Actions → Extended validation → Run workflow** and pick a suite:
 - `performance` — strict performance budgets and production build budgets.
 - `plugin-runtime` — full plugin compatibility and static generation.
 - `deployment` — complete disposable Cloud deployment lifecycle.
+- `dashboard-recovery` — interrupt a published dashboard update, reject an
+  unproven finish, explicitly restore its snapshot, and verify the source.
 - `all` — everything above.
 
 The same suites run on the weekday schedule. They are intentionally not part of
