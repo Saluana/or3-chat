@@ -237,7 +237,18 @@ function main() {
     const serialized = `${JSON.stringify(ledger, null, 2)}\n`;
     if (checkOnly) {
         if (!existsSync(outputPath)) fail(`missing generated ledger: ${repoPath(outputPath)}`);
-        if (readFileSync(outputPath, 'utf8') !== serialized) fail('ledger is stale; run `bun run plugin-runtime:ledger`');
+        const expected = readFileSync(outputPath, 'utf8');
+        if (expected !== serialized) {
+            const expectedLines = expected.split('\n');
+            const actualLines = serialized.split('\n');
+            let reported = 0;
+            for (let index = 0; index < Math.max(expectedLines.length, actualLines.length); index++) {
+                if (expectedLines[index] === actualLines[index]) continue;
+                console.error(`Ledger line ${index + 1}:\n  expected: ${expectedLines[index]}\n  generated: ${actualLines[index]}`);
+                if (++reported === 16) break;
+            }
+            fail('ledger is stale; run `bun run plugin-runtime:ledger`');
+        }
         console.log(`[compatibility-ledger] verified ${modules.length} modules, ${exportCount} exports, ${callableCount} callables, ${autoImportCount} Nuxt auto-imports`);
         return;
     }
