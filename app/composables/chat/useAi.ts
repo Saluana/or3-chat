@@ -238,6 +238,8 @@ export function useChat(
     );
     let activeRequestId: string | null = null;
     const abortController = ref<AbortController | null>(null);
+    // Cancellation may change while an awaited operation is pending.
+    const isRequestCancelled = (scope: ChatRequestScope): boolean => scope.cancelled;
     const aborted = ref<boolean>(false);
     const { apiKey, setKey } = useUserApiKey();
     const runtimeConfig = useRuntimeConfig();
@@ -566,7 +568,7 @@ export function useChat(
         if (backgroundStreamingConfig.value?.enabled !== true) return false;
         if (
             !isBackgroundStreamingEnabled(
-                backgroundStreamingConfig.value?.enabled
+                backgroundStreamingConfig.value.enabled
             )
         )
             return false;
@@ -1925,7 +1927,7 @@ export function useChat(
         // not let that older admission create messages in the newly selected
         // thread after it resumes.
         if (
-            requestScope.cancelled ||
+            isRequestCancelled(requestScope) ||
             (requestScope.threadId &&
                 threadIdRef.value !== requestScope.threadId)
         ) {
@@ -2006,7 +2008,7 @@ export function useChat(
                     limits: runtimeConfig.public.limits,
                 }
             );
-            if (requestScope.cancelled) {
+            if (isRequestCancelled(requestScope)) {
                 return { status: 'aborted', requestId, reason: 'aborted' };
             }
             requestScope.threadId = newThread.id;
@@ -2135,7 +2137,7 @@ export function useChat(
         const hydratedFiles = await Promise.all(
             Array.isArray(files) ? files.map(normalizeFileUrl) : []
         );
-        if (requestScope.cancelled || threadIdRef.value !== requestThreadId) {
+        if (isRequestCancelled(requestScope) || threadIdRef.value !== requestThreadId) {
             return { status: 'aborted', requestId, reason: 'aborted' };
         }
 
@@ -2252,7 +2254,7 @@ export function useChat(
             currentModelId = modelId;
             const systemMessage = await systemMessagePromise;
             if (
-                requestScope.cancelled ||
+                isRequestCancelled(requestScope) ||
                 threadIdRef.value !== requestThreadId
             ) {
                 return {
@@ -2294,7 +2296,7 @@ export function useChat(
                 maxInputTokens,
             });
             if (
-                requestScope.cancelled ||
+                isRequestCancelled(requestScope) ||
                 threadIdRef.value !== requestThreadId
             ) {
                 return {
@@ -2407,7 +2409,7 @@ export function useChat(
                 'ai.chat.messages:filter:before_send',
                 { messages: orMessages }
             );
-            if (requestScope.cancelled || !requestScope.ownsView())
+            if (isRequestCancelled(requestScope) || !requestScope.ownsView())
                 throw new DOMException('Chat request cancelled', 'AbortError');
 
             if (
@@ -2512,7 +2514,7 @@ export function useChat(
                 browserToolBridgeAvailable &&
                 modalities.length === 1 &&
                 modalities[0] === 'text';
-            if (requestScope.cancelled || !ownsCurrentView(requestScope)) {
+            if (isRequestCancelled(requestScope) || !ownsCurrentView(requestScope)) {
                 reportFinalization(await finalizeRequest(requestScope, {
                     outcome: 'aborted', messageError: 'stopped', deleteEmpty: true,
                 }));
@@ -2635,7 +2637,7 @@ export function useChat(
                         signal: requestScope.abortController.signal,
                     });
                     requestScope.jobId = result.jobId;
-                    if (requestScope.cancelled && requestScope.stopConfirmation) {
+                    if (isRequestCancelled(requestScope) && requestScope.stopConfirmation) {
                         throw new DOMException('Admission cancelled', 'AbortError');
                     }
 
@@ -2781,8 +2783,8 @@ export function useChat(
                     }
                 } catch (error) {
                     if (
-                        requestScope.cancelled ||
-                        requestScope.abortController?.signal.aborted ||
+                        isRequestCancelled(requestScope) ||
+                        requestScope.abortController.signal.aborted ||
                         (error instanceof Error && error.name === 'AbortError')
                     ) {
                         // Let the request-level abort path own cleanup and the
@@ -2993,7 +2995,7 @@ export function useChat(
             )
                 requestScope.message = tailAssistant.value;
             const stopped =
-                requestScope.cancelled ||
+                isRequestCancelled(requestScope) ||
                 requestScope.abortController?.signal.aborted === true;
             if (
                 stopped &&
@@ -3105,15 +3107,7 @@ export function useChat(
                 }
             }, 0);
         }
-        return (
-            terminalResult ?? {
-                status: 'failed',
-                requestId,
-                reason: 'stream_error',
-                error: 'Chat request ended without a terminal state.',
-                userMessageId: userDbMsg.id,
-            }
-        );
+        return terminalResult;
     }
 
     // END sendMessage
@@ -3161,6 +3155,7 @@ export function useChat(
      * - Requires an existing assistant message id
      */
     let activeContinuationScope: ChatRequestScope | null = null;
+    function getContinuationScope(): ChatRequestScope | null { return activeContinuationScope; }
     async function continueMessage(messageId: string, modelOverride?: string) {
         if (loading.value || activeRequestId) return;
         const request = admitRequest('continue');
@@ -3196,10 +3191,11 @@ export function useChat(
                     userId: notificationUserId.value,
                     beginBackgroundAdmission: (admissionId, assistantId) => {
                         backgroundJobMode.value = 'background';
-                        if (activeContinuationScope?.requestId === requestId) {
-                            activeContinuationScope.backgroundAdmissionId =
+                        const continuationScope = activeContinuationScope;
+                        if (continuationScope?.requestId === requestId) {
+                            continuationScope.backgroundAdmissionId =
                                 admissionId;
-                            activeContinuationScope.assistantMessageId =
+                            continuationScope.assistantMessageId =
                                 assistantId;
                         }
                     },
@@ -3259,7 +3255,8 @@ export function useChat(
                           assistantMessageId: request.assistantMessageId,
                       }
             );
-            if (activeContinuationScope?.requestId === requestId) {
+            const continuationScope = getContinuationScope();
+            if (continuationScope?.requestId === requestId) {
                 activeContinuationScope = null;
             }
         }
@@ -3308,7 +3305,7 @@ export function useChat(
 
     /** Clear only in-memory conversation projections; durable rows are preserved. */
     function clearConversation(options: { persistence?: 'preserve' } = {}) {
-        if ((options.persistence ?? 'preserve') !== 'preserve') {
+        if (((options as { persistence?: unknown }).persistence ?? 'preserve') !== 'preserve') {
             throw new Error('Only persistence: "preserve" is supported');
         }
         rawMessages.value = [];
@@ -3757,7 +3754,7 @@ export function useChat(
         } catch {
             /* intentionally empty */
         }
-        (requestScope?.accumulator ?? streamAcc).finalize({ aborted: true });
+        requestScope.accumulator.finalize({ aborted: true });
         if (tailAssistant.value?.pending) tailAssistant.value.pending = false;
         try {
             const showAbort =

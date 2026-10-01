@@ -58,7 +58,7 @@ export async function verifyReleaseMetadataSignature(input: {
     readonly trustRoot: readonly TrustedReleaseKey[];
 }): Promise<boolean> {
     const signature = input.document.signature;
-    if (!signature || signature.algorithm !== 'ed25519') return false;
+    if (!signature || (signature.algorithm as unknown) !== 'ed25519') return false;
 
     const key = input.trustRoot.find((candidate) => candidate.keyId === signature.keyId);
     if (!key) return false;
@@ -132,7 +132,7 @@ export async function verifyAdvisorySignature(input: {
     readonly trustRoot: readonly TrustedReleaseKey[];
 }): Promise<boolean> {
     const signature = input.document.signature;
-    if (!signature || signature.algorithm !== 'ed25519') return false;
+    if (!signature || (signature.algorithm as unknown) !== 'ed25519') return false;
 
     const key = input.trustRoot.find((candidate) => candidate.keyId === signature.keyId);
     if (!key) return false;
@@ -165,8 +165,8 @@ export async function verifyRegistryAdvisoryCheckpointSignature(input: {
     readonly checkpoint: RegistryAdvisoryCheckpoint;
     readonly trustRoot: readonly TrustedReleaseKey[];
 }): Promise<boolean> {
-    const signature = input.checkpoint.signature;
-    if (!signature || signature.algorithm !== 'ed25519') return false;
+    const signature = input.checkpoint.signature as typeof input.checkpoint.signature | undefined;
+    if (!signature || (signature.algorithm as unknown) !== 'ed25519') return false;
     const key = input.trustRoot.find((candidate) => candidate.keyId === signature.keyId);
     if (!key) return false;
     if (key.publicJwk.kty !== 'OKP' || key.publicJwk.crv !== 'Ed25519') return false;

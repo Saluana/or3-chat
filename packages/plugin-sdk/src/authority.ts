@@ -67,7 +67,7 @@ function dependencyEntries(dependencies: CandidateAuthorityManifest['dependencie
     if (!dependencies) return [];
     const entries: string[] = [];
     for (const group of ['required', 'optional'] as const) {
-        for (const dependency of dependencies[group] ?? []) {
+        for (const dependency of dependencies[group]) {
             const features = uniqueSorted(dependency.features ?? []).join('+');
             entries.push(
                 `${group}:${dependency.id}@${dependency.range}${features.length > 0 ? `#${features}` : ''}`
@@ -84,9 +84,9 @@ function dependencyEntries(dependencies: CandidateAuthorityManifest['dependencie
  * pre-sort here either: keep the mapping literal and let the payload match.
  */
 export function toCandidateAuthority(input: {
-    readonly manifest: CandidateAuthorityManifest;
-    readonly policy: Or3PackagePolicyV1;
-    readonly setup: Or3SetupDescriptorV1;
+    readonly manifest: CandidateAuthorityManifest | null;
+    readonly policy: Or3PackagePolicyV1 | null;
+    readonly setup: Or3SetupDescriptorV1 | null;
 }): EffectiveAuthorityPayload {
     const { manifest, policy, setup } = input;
     if (!manifest || !policy || !setup) {
@@ -96,7 +96,7 @@ export function toCandidateAuthority(input: {
         trust: manifest.trust,
         grants: uniqueSorted(manifest.requestedGrants),
         features: uniqueSorted([
-            ...(manifest.features?.required ?? []),
+            ...manifest.features.required,
             ...policy.requiredFeatures,
         ]),
         engines: [
@@ -221,9 +221,9 @@ function canonicalJson(value: unknown): string {
  * test vector pins this.
  */
 export function deriveCandidateAuthoritySha256(input: {
-    readonly manifest: CandidateAuthorityManifest;
-    readonly policy: Or3PackagePolicyV1;
-    readonly setup: Or3SetupDescriptorV1;
+    readonly manifest: CandidateAuthorityManifest | null;
+    readonly policy: Or3PackagePolicyV1 | null;
+    readonly setup: Or3SetupDescriptorV1 | null;
 }): Sha256 {
     const payload = canonicalAuthorityPayload(toCandidateAuthority(input));
     return `sha256-${createHash('sha256').update(canonicalJson(payload), 'utf8').digest('hex')}`;

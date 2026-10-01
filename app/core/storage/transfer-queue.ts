@@ -854,7 +854,7 @@ export class FileTransferQueue {
             ? normalizeTransferMime(responseMime)
             : '';
         const expectedMime = normalizeTransferMime(meta.mime_type);
-        const fileKind = (meta as FileMeta & { kind?: string }).kind;
+        const fileKind = (meta as { kind?: string }).kind;
         const expectedMimeCanBeActive =
             fileKind === 'file'
                 ? false

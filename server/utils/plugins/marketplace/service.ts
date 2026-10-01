@@ -188,7 +188,7 @@ export async function readLatestPublishedVersion(pluginId: string): Promise<stri
     } | null;
     if (!entry) return null;
     for (const release of entry.releases ?? []) {
-        if (typeof release?.version === 'string' && release.version.length > 0) {
+        if (typeof release.version === 'string' && release.version.length > 0) {
             return release.version;
         }
     }

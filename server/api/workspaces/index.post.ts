@@ -50,7 +50,7 @@ export default defineEventHandler(async (event) => {
     });
 
     let warnings: string[] = [];
-    try { warnings = (await provisionWorkspaceDefaults(event, result.workspaceId, { ownerUserId: session.user.id, name }))?.warnings ?? []; }
+    try { warnings = ((await provisionWorkspaceDefaults(event, result.workspaceId, { ownerUserId: session.user.id, name })) as { warnings?: string[] } | undefined)?.warnings ?? []; }
     catch { warnings = [`Plugin defaults could not be applied to workspace ${result.workspaceId}; review its plugin settings.`]; }
 
     return { id: result.workspaceId, ...(warnings.length ? { provisioningWarning: warnings.join(' ') } : {}) };

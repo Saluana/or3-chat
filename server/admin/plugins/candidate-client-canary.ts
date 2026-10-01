@@ -245,10 +245,10 @@ export class PluginClientCanaryStore {
         }
         try {
             const parsed = JSON.parse(raw) as ClientCanaryEvidenceRecord;
-            if (parsed.schemaVersion !== 1) return null;
+            if ((parsed.schemaVersion as unknown) !== 1) return null;
             if (parsed.pluginId !== pluginId || parsed.packageDigest !== packageDigest) return null;
             if (parsed.workspaceId !== workspaceId) return null;
-            if (parsed.status !== 'passed' && parsed.status !== 'blocked') return null;
+            if (parsed.status !== 'passed' && (parsed.status as unknown) !== 'blocked') return null;
             return parsed;
         } catch {
             return null;
@@ -310,11 +310,11 @@ export function isClientCanaryTicket(value: unknown): value is ClientCanaryTicke
         typeof ticket.expiresAt === 'number' &&
         typeof ticket.clientId === 'string' &&
         typeof ticket.profile === 'string' &&
-        ticket.clientEntry !== null &&
+        (ticket.clientEntry as unknown) !== null &&
         typeof ticket.clientEntry === 'object' &&
         typeof ticket.clientEntry.entry === 'string' &&
         typeof ticket.clientEntry.digest === 'string' &&
-        ticket.grants !== null &&
+        (ticket.grants as unknown) !== null &&
         typeof ticket.grants === 'object'
     );
 }

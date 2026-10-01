@@ -29,7 +29,7 @@ export async function projectCanonicalBackgroundMessage(
         'rw',
         getWriteTxTableNames(db, 'messages'),
         async () => {
-            const tx = Dexie.currentTransaction;
+            const tx = Dexie.currentTransaction as typeof Dexie.currentTransaction | undefined;
             if (!tx)
                 throw new Error('Missing background projection transaction');
             getHookBridge(db).markSyncTransaction(tx);
@@ -230,7 +230,7 @@ export async function persistBackgroundJobUpdate(
     const reasoningChanged =
         reasoning !== undefined &&
         (replaceReasoning ||
-            reasoning.length > (tracker.lastPersistedReasoningLength ?? 0));
+            reasoning.length > (tracker.lastPersistedReasoningLength));
     const toolStateFingerprint = JSON.stringify(status.tool_calls ?? []);
     const workflowFingerprint = JSON.stringify(status.workflow_state ?? null);
     const toolStateChanged =
@@ -294,7 +294,7 @@ export async function persistBackgroundJobUpdate(
             workflowVersion: number;
         } | null> => {
             if (tracker.canonicalHistory) {
-                const tx = Dexie.currentTransaction;
+                const tx = Dexie.currentTransaction as typeof Dexie.currentTransaction | undefined;
                 if (!tx)
                     throw new Error(
                         'Missing background projection transaction'
@@ -336,7 +336,7 @@ export async function persistBackgroundJobUpdate(
             );
             const workflowVersion = workflowVersionOf(workflowState);
             const includeWorkflowState =
-                workflowState !== null &&
+                workflowState !== undefined &&
                 workflowVersion >= tracker.lastWorkflowVersion;
             const updated: StoredMessage = {
                 ...existing,

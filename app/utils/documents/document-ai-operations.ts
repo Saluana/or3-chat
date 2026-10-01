@@ -78,7 +78,7 @@ function textOf(node: JSONContent): string {
 }
 
 export function freezeDocumentForAi(editor: Editor): DocumentAiFrozenSnapshot {
-    const content = editor.getJSON();
+    const content: JSONContent = editor.getJSON();
     const blocks = (content.content ?? []).map((node, index) => ({
         ref: `b${index + 1}`,
         index,
@@ -91,7 +91,7 @@ export function freezeDocumentForAi(editor: Editor): DocumentAiFrozenSnapshot {
         return { content, blocks, selection: null };
     }
     const slice = editor.state.doc.slice(from, to);
-    const sliceJson = slice.content.toJSON();
+    const sliceJson: unknown = slice.content.toJSON();
     const selectionContent = (Array.isArray(sliceJson) ? sliceJson : sliceJson ? [sliceJson] : []) as JSONContent[];
     return {
         content,

@@ -19,7 +19,7 @@ export function markdownToTipTapDoc(source: string): JSONContent {
     });
 
     try {
-        const document = editor.getJSON();
+        const document: JSONContent = editor.getJSON();
         if (document.type !== 'doc') {
             throw new Error('Markdown conversion did not produce a document');
         }

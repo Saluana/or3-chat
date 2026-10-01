@@ -62,14 +62,14 @@ function estimateMessageTokens(message: ORMessage): number {
     if (typeof message.content === 'string') chunks.push(message.content);
     else if (Array.isArray(message.content)) {
         for (const part of message.content) {
-            if (part && typeof part === 'object' && part.type === 'text' && typeof part.text === 'string') {
+            if (typeof part === 'object' && part.type === 'text' && typeof part.text === 'string') {
                 chunks.push(part.text);
             }
         }
     }
     if (Array.isArray(message.tool_calls)) {
         for (const call of message.tool_calls) {
-            chunks.push(call.function?.name ?? '', call.function?.arguments ?? '');
+            chunks.push(call.function.name, call.function.arguments);
         }
     }
     // Cheap char≈token heuristic; exact tokenizer is too heavy for the hot loop.
@@ -100,7 +100,7 @@ export function enforceDocumentAiContextBudget(
         const message = messages[index];
         if (!message || message.role !== 'tool') continue;
         const content = Array.isArray(message.content)
-            ? message.content.find((part) => part?.type === 'text' && typeof part.text === 'string')
+            ? message.content.find((part) => part.type === 'text' && typeof part.text === 'string')
             : null;
         if (!content || typeof content.text !== 'string') continue;
         if (content.text.length <= 240) continue;

@@ -316,7 +316,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 defaultValue: './.data/or3-sync.sqlite',
                 tier: 'advanced',
                 visibleWhen: (answers) =>
-                    (answers.sqliteDriver ?? 'better-sqlite3') === 'better-sqlite3' ||
+                    (answers.sqliteDriver) === 'better-sqlite3' ||
                     answers.sqliteDriver === 'bun',
             },
             {
@@ -356,7 +356,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 defaultValue: 'WAL',
                 tier: 'advanced',
                 visibleWhen: (answers) =>
-                    (answers.sqliteDriver ?? 'better-sqlite3') === 'better-sqlite3' ||
+                    (answers.sqliteDriver) === 'better-sqlite3' ||
                     answers.sqliteDriver === 'bun',
             },
             {
@@ -367,7 +367,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 defaultValue: 'NORMAL',
                 tier: 'advanced',
                 visibleWhen: (answers) =>
-                    (answers.sqliteDriver ?? 'better-sqlite3') === 'better-sqlite3' ||
+                    (answers.sqliteDriver) === 'better-sqlite3' ||
                     answers.sqliteDriver === 'bun',
             },
             {
@@ -378,7 +378,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 defaultValue: false,
                 tier: 'advanced',
                 visibleWhen: (answers) =>
-                    (answers.sqliteDriver ?? 'better-sqlite3') === 'better-sqlite3' ||
+                    (answers.sqliteDriver) === 'better-sqlite3' ||
                     answers.sqliteDriver === 'bun',
             },
             {
@@ -389,7 +389,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 defaultValue: false,
                 tier: 'advanced',
                 visibleWhen: (answers) =>
-                    (answers.sqliteDriver ?? 'better-sqlite3') === 'better-sqlite3' ||
+                    (answers.sqliteDriver) === 'better-sqlite3' ||
                     answers.sqliteDriver === 'bun',
             },
         ],

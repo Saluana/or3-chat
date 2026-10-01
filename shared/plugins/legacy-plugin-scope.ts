@@ -197,7 +197,7 @@ export class LegacyPluginScope {
                     () => resolveTimeout('timeout'),
                     this.#cleanupTimeoutMs
                 );
-                timeoutHandle.unref?.();
+                if (typeof timeoutHandle.unref === 'function') timeoutHandle.unref();
             });
             const settlement = Promise.allSettled(thenables).then(() => 'settled' as const);
             timedOut = (await Promise.race([settlement, timeout])) === 'timeout';

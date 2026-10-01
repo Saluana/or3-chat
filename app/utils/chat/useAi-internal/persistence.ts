@@ -94,7 +94,7 @@ export function makeAssistantPersister(
             ifCurrent
         );
         if (ownedSerialized !== undefined) {
-            lastSerialized = ownedSerialized ?? null;
+            lastSerialized = ownedSerialized;
             return lastSerialized;
         }
         // Best-effort freshness for the return value only; the write itself

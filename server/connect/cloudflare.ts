@@ -296,7 +296,7 @@ export class CloudflareTunnelProvisioner {
                 { method: 'GET' }
             );
             const zoneAccountId = zone.account?.id?.trim() ?? '';
-            const zoneName = zone.name?.trim().toLowerCase() ?? '';
+            const zoneName = zone.name.trim().toLowerCase();
             const hostname = this.#normalizedHostname();
             if (
                 zone.id !== configuredZoneId ||

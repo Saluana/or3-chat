@@ -53,9 +53,9 @@ export default defineEventHandler(async (event) => {
     const pointers = new PluginPackagePointerStore(undefined, packages);
     const reader = new PluginPackageAssetReader(packages, pointers);
     const v2Policy = createModuleV2RuntimePolicy({
-        enabled: admin?.pluginModuleLoaderV2Enabled === true,
+        enabled: admin.pluginModuleLoaderV2Enabled,
         ssrHost: true,
-        workspaceIds: admin?.pluginModuleLoaderV2WorkspaceIds ?? [],
+        workspaceIds: admin.pluginModuleLoaderV2WorkspaceIds ?? [],
     });
     const catalog = new PluginPackageRouteCatalog(
         packages,

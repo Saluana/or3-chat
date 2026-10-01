@@ -387,6 +387,7 @@ export class HostRpcBroker {
         }
 
         let committed = false;
+        const isCancelledBeforeCommit = (): boolean => controller.signal.aborted && !committed;
         try {
             if (controller.signal.aborted) {
                 const reason =
@@ -431,7 +432,7 @@ export class HostRpcBroker {
                 },
             });
 
-            if (controller.signal.aborted && !committed) {
+            if (isCancelledBeforeCommit()) {
                 const code = controller.signal.reason === 'deadline-exceeded'
                     ? 'deadline-exceeded' : 'cancelled';
                 this.#send(respondError(request, code, code));

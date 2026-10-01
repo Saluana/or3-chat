@@ -69,14 +69,14 @@ export function useOpenRouterAuth() {
     const runtimeConfig = useRuntimeConfig();
     const toast = useToast();
     const sessionContext =
-        runtimeConfig.public?.ssrAuthEnabled === true
+        runtimeConfig.public.ssrAuthEnabled === true
             ? useSessionContext()
             : null;
 
     const startLogin = async () => {
         if (isLoggingIn.value) return;
         const rc = runtimeConfig;
-        if (rc.public?.ssrAuthEnabled === true) {
+        if (rc.public.ssrAuthEnabled === true) {
             let authenticated =
                 sessionContext?.data.value?.session?.authenticated === true;
             if (!authenticated) {

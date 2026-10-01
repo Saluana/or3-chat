@@ -97,7 +97,7 @@ export default defineEventHandler(async (event) => {
     } catch {
         canary = null;
     }
-    if (canary?.server?.status !== 'passed' || canary?.client?.status !== 'passed') {
+    if (canary?.server?.status !== 'passed' || canary.client?.status !== 'passed') {
         throw createError({
             statusCode: 409,
             statusMessage: 'Run the candidate canary to a pass first; verification binds to that evidence.',

@@ -15,7 +15,7 @@ export interface PreparedThemeEntry {
 export async function prepareThemeEntry(
     manifestEntry: ThemeManifestEntry
 ): Promise<PreparedThemeEntry> {
-    const themeModule = await manifestEntry.loader();
+    const themeModule = await manifestEntry.loader() as Partial<Awaited<ReturnType<ThemeManifestEntry['loader']>>> | null | undefined;
     const definition = themeModule?.default;
     if (!definition) {
         throw new Error(`Theme "${manifestEntry.name}" has no default export.`);
@@ -25,7 +25,8 @@ export async function prepareThemeEntry(
     let icons = definition.icons;
     if (!icons && manifestEntry.iconsLoader) {
         try {
-            icons = (await manifestEntry.iconsLoader())?.default;
+            const iconModule = await manifestEntry.iconsLoader() as Partial<Awaited<ReturnType<NonNullable<ThemeManifestEntry['iconsLoader']>>>> | null | undefined;
+            icons = iconModule?.default;
         } catch (error) {
             if (import.meta.dev) {
                 console.warn(

@@ -39,7 +39,7 @@ function isRolloutOwnedReview(raw: string | null, record: PluginRolloutRecord, c
         const value: unknown = JSON.parse(raw);
         if (!value || typeof value !== 'object') return false;
         const review = value as Record<string, unknown>;
-        const grants = Array.isArray(review.approvedGrants) ? review.approvedGrants : [];
+        const grants: unknown[] = Array.isArray(review.approvedGrants) ? review.approvedGrants : [];
         return review.schemaVersion === 2 && review.reviewedBy === rolloutReviewOwner(record) &&
             review.reviewedAt === record.createdAt && review.packageDigest === record.packageDigest &&
             review.authoritySha256 === record.authoritySha256 && review.releaseId === candidate.releaseId &&

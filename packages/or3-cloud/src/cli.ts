@@ -514,7 +514,7 @@ export function parseFlags(argv: string[]) {
       positionals.push(value);
       continue;
     }
-    const [rawKey, inline] = value.slice(2).split('=', 2);
+    const [rawKey, inline] = value.slice(2).split('=', 2) as [string, string?];
     if (inline !== undefined) {
       flags[rawKey] = inline;
       continue;
@@ -709,8 +709,8 @@ async function run(command: string, args: string[], cwd?: string, environment?: 
     });
     return {
       ok: true,
-      stdout: result.stdout ?? '',
-      stderr: result.stderr ?? '',
+      stdout: result.stdout,
+      stderr: result.stderr,
       command: printable,
       exitCode: 0,
     };
@@ -845,9 +845,9 @@ function serializeCredentialValue(value: string) {
   return serializeEnvValue(value);
 }
 
-export function serializeEnv(values: Record<string, string>) {
+export function serializeEnv(values: Record<string, string | undefined>) {
   return `${Object.entries(values)
-    .filter(([, value]) => value !== undefined)
+    .filter((entry): entry is [string, string] => entry[1] !== undefined)
     .map(([key, value]) => `${key}=${serializeEnvValue(value)}`)
     .join('\n')}\n`;
 }
@@ -1131,7 +1131,7 @@ type ComposeConfig = {
 
 function parseComposeConfig(text: string): ComposeConfig {
   try {
-    const parsed = JSON.parse(text) as ComposeConfig;
+    const parsed = JSON.parse(text) as ComposeConfig | null;
     if (!parsed || typeof parsed !== 'object' || !parsed.services) throw new Error('missing services');
     return parsed;
   } catch (error) {
@@ -1391,7 +1391,7 @@ async function removeManagedDataVolumeForRecreation(directory: string, state: Ma
   if (
     volume.Name !== state.volumeName
     || volume.Labels?.['com.docker.compose.project'] !== state.composeProject
-    || volume.Labels?.['com.docker.compose.volume'] !== 'or3-data'
+    || volume.Labels['com.docker.compose.volume'] !== 'or3-data'
   ) {
     throw new Error(`Volume ${state.volumeName} is not bound to this managed Compose deployment. Refusing to recreate it.`);
   }
@@ -1413,9 +1413,9 @@ async function ensureManagedDataVolume(
   if (!created.ok) throw new Error(`Could not create the managed data volume. ${redact(created.stderr, secretValues(env))}`);
   const inspected = await run('docker', ['volume', 'inspect', state.volumeName, '--format', '{{json .Labels}}'], directory);
   if (!inspected.ok) throw new Error(`Could not verify the recreated managed data volume ${state.volumeName}.`);
-  let labels: Record<string, unknown>;
+  let labels: Record<string, unknown> | null;
   try {
-    labels = JSON.parse(inspected.stdout.trim()) as Record<string, unknown>;
+    labels = JSON.parse(inspected.stdout.trim()) as Record<string, unknown> | null;
   } catch {
     throw new Error(`Docker returned unreadable labels for recreated managed volume ${state.volumeName}.`);
   }
@@ -1646,12 +1646,13 @@ export function assertImageReleaseLabels(image: string, labels: Record<string, u
 async function assertImageReleaseIdentity(image: string, version: string) {
   const result = await run('docker', ['image', 'inspect', '--format', '{{json .Config.Labels}}', image]);
   if (!result.ok) throw new Error(`Could not inspect release labels for ${image}. ${result.stderr.trim()}`);
-  let labels: Record<string, unknown>;
+  let labels: Record<string, unknown> | null;
   try {
-    labels = JSON.parse(result.stdout.trim()) as Record<string, unknown>;
+    labels = JSON.parse(result.stdout.trim()) as Record<string, unknown> | null;
   } catch {
     throw new Error(`OR3 image ${image} has no readable release labels.`);
   }
+  if (!labels || typeof labels !== 'object') throw new Error(`OR3 image ${image} has no readable release labels.`);
   assertImageReleaseLabels(image, labels, version, packagedSourceRevision(version));
 }
 
@@ -2038,6 +2039,7 @@ async function installManagedAssets(directory: string, assets: Map<string, Buffe
   const token = randomBytes(4).toString('hex');
   const staged: Array<{ destination: string; replacement: string; rollback?: string }> = [];
   let retainRollbackCopies = false;
+  const canCleanRollback = (): boolean => !retainRollbackCopies;
   try {
     for (const [name, contents] of assets) {
       const destination = join(directory, name);
@@ -2085,7 +2087,7 @@ async function installManagedAssets(directory: string, assets: Map<string, Buffe
   } finally {
     for (const entry of staged) {
       await rm(entry.replacement, { force: true }).catch(() => undefined);
-      if (entry.rollback && !retainRollbackCopies) await rm(entry.rollback, { force: true }).catch(() => undefined);
+      if (entry.rollback && canCleanRollback()) await rm(entry.rollback, { force: true }).catch(() => undefined);
     }
   }
 }
@@ -2418,7 +2420,7 @@ function classifyBackupError(error: unknown): { code: string; message: string } 
     return { code: 'backup-assets-invalid', message };
   }
   if (/Invalid backup manifest/i.test(message)) return { code: 'backup-manifest-invalid', message };
-  if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return { code: 'backup-entry-incomplete', message };
+  if ((error as NodeJS.ErrnoException | null | undefined)?.code === 'ENOENT') return { code: 'backup-entry-incomplete', message };
   return { code: 'backup-entry-invalid', message };
 }
 
@@ -2793,7 +2795,7 @@ function assertDeploymentDirectoryIdentity(directory: string, state: ManagedStat
   }
 }
 
-export function assertBackupMatchesDeployment(manifest: BackupManifest, backupEnv: Record<string, string>, state: ManagedState, env: Record<string, string>) {
+export function assertBackupMatchesDeployment(manifest: Partial<BackupManifest>, backupEnv: Record<string, string>, state: ManagedState, env: Record<string, string>) {
   if (manifest.mode !== state.mode || manifest.appVersion === undefined || manifest.image === undefined) {
     throw new Error(`Backup ${manifest.backupId} does not match the managed deployment mode.`);
   }
@@ -2882,6 +2884,7 @@ async function streamCommandToFile(
   });
   let stderr = '';
   let timedOut = false;
+  const hasTimedOut = (): boolean => timedOut;
   const timeout = setTimeout(() => {
     timedOut = true;
     terminateChildProcess(child);
@@ -2899,7 +2902,7 @@ async function streamCommandToFile(
       exit,
       pipeline(child.stdout, createWriteStream(temporary, { flags: 'wx', mode: 0o600 })),
     ]);
-    if (timedOut) throw new Error(`${command} exceeded the ${STREAM_COMMAND_TIMEOUT_MS / 1000}-second archive deadline.`);
+    if (hasTimedOut()) throw new Error(`${command} exceeded the ${STREAM_COMMAND_TIMEOUT_MS / 1000}-second archive deadline.`);
     if (exitCode !== 0) {
       throw new Error(`${command} ${args.join(' ')} exited with ${exitCode}. ${redact(stderr, secrets)}`.trim());
     }
@@ -2931,6 +2934,7 @@ async function streamFileToCommand(
   });
   let stderr = '';
   let timedOut = false;
+  const hasTimedOut = (): boolean => timedOut;
   const timeout = setTimeout(() => {
     timedOut = true;
     terminateChildProcess(child);
@@ -2948,7 +2952,7 @@ async function streamFileToCommand(
       exit,
       pipeline(createReadStream(source), child.stdin),
     ]);
-    if (timedOut) throw new Error(`${command} exceeded the ${STREAM_COMMAND_TIMEOUT_MS / 1000}-second archive deadline.`);
+    if (hasTimedOut()) throw new Error(`${command} exceeded the ${STREAM_COMMAND_TIMEOUT_MS / 1000}-second archive deadline.`);
     if (exitCode !== 0) {
       throw new Error(`${command} ${args.join(' ')} exited with ${exitCode}. ${redact(stderr, secrets)}`.trim());
     }
@@ -3136,7 +3140,7 @@ async function readManifest(backupPath: string, authenticatedForDirectory?: stri
   if (authenticatedForDirectory) await assertBackupAuthentication(authenticatedForDirectory, backupPath, manifestContents);
   const manifest = JSON.parse(manifestContents) as BackupManifest;
   if (
-    manifest.schemaVersion !== 1 ||
+    (manifest.schemaVersion as unknown) !== 1 ||
     !BACKUP_ID_PATTERN.test(manifest.backupId) ||
     !Number.isFinite(Date.parse(manifest.createdAt)) ||
     !isVersion(manifest.appVersion) ||
@@ -4578,7 +4582,7 @@ export async function assessUpdate(
   // Compatibility: unknown/future schemas are refused before mutation.
   try {
     assertKnownStateSchema(state?.schemaVersion);
-    checks.push({ code: 'state-schema', status: 'passed', detail: `Managed state schema ${String(state?.schemaVersion)} is supported.` });
+    checks.push({ code: 'state-schema', status: 'passed', detail: `Managed state schema ${String(state.schemaVersion)} is supported.` });
   } catch (error) {
     findings.push({ code: 'state-schema-unsupported', severity: 'blocker', message: error instanceof Error ? error.message : String(error) });
   }
@@ -5372,13 +5376,20 @@ type VerificationHealth = {
 };
 
 export function validateVerificationHealth(value: unknown): VerificationHealth {
-  const health = value as Partial<VerificationHealth> | null;
+  const health = value as {
+    status?: unknown;
+    providers?: {
+      auth?: { provider?: unknown };
+      sync?: { provider?: unknown };
+      storage?: { provider?: unknown };
+    };
+  } | null;
   if (
     !health ||
     health.status !== 'ok' ||
     health.providers?.auth?.provider !== 'basic-auth' ||
-    health.providers?.sync?.provider !== 'sqlite' ||
-    health.providers?.storage?.provider !== 'fs'
+    health.providers.sync?.provider !== 'sqlite' ||
+    health.providers.storage?.provider !== 'fs'
   ) {
     throw new Error('Public deep health does not report the managed Basic Auth + SQLite + filesystem profile.');
   }
@@ -5405,7 +5416,7 @@ async function verificationJson(
       accept: 'application/json',
       ...(options.body === undefined ? {} : { 'content-type': 'application/json' }),
       ...(options.cookie ? { cookie: options.cookie } : {}),
-      ...(method === 'GET' ? {} : { origin: baseUrl.origin }),
+      ...(method === 'GET' ? {} : { origin: baseUrl.origin, 'x-or3-cloud-intent': 'mutation' }),
     },
     ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
   });
@@ -5413,7 +5424,14 @@ async function verificationJson(
     const detail = (await response.text().catch(() => '')).slice(0, 300);
     throw new Error(`${response.url} returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`);
   }
-  return response.json() as Promise<Record<string, any>>;
+  const value: unknown = await response.json();
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${response.url} returned an invalid JSON object.`);
+  }
+  return value as Record<string, unknown> & {
+    session?: { user?: { email?: unknown }; workspace?: { id?: unknown } };
+    results?: { success?: unknown }[];
+  };
 }
 
 export function sameOriginVerificationUrl(baseUrl: URL, value: unknown, label: string) {
@@ -5425,7 +5443,7 @@ export function sameOriginVerificationUrl(baseUrl: URL, value: unknown, label: s
   return url;
 }
 
-export function assertVerificationGrant(value: Record<string, any>, expectedMethod: 'GET' | 'PUT', label: string) {
+export function assertVerificationGrant(value: Record<string, unknown>, expectedMethod: 'GET' | 'PUT', label: string) {
   if (value.method !== undefined && value.method !== expectedMethod) {
     throw new Error(`Filesystem storage returned unexpected ${label} method ${String(value.method)}.`);
   }
@@ -5477,14 +5495,14 @@ async function verifyPublicApplication(baseUrl: URL, credentials: { email: strin
     body: JSON.stringify({ email, password }),
   });
   if (signIn.status !== 200) throw new Error(`Public Basic Auth sign-in returned HTTP ${signIn.status}.`);
-  const responseHeaders = signIn.headers as Headers & { getSetCookie?: () => string[] };
+  const responseHeaders = signIn.headers as { getSetCookie?: () => string[] };
   const setCookies = responseHeaders.getSetCookie?.() ?? [signIn.headers.get('set-cookie')].filter((value): value is string => Boolean(value));
   const cookie = setCookies.map((value) => value.split(';', 1)[0]).join('; ');
   if (!cookie) throw new Error('Public Basic Auth sign-in did not set a session cookie.');
 
   try {
     const session = await verificationJson(baseUrl, '/api/auth/session', { cookie });
-    if (session.session?.user?.email !== email || !session.session?.workspace?.id) {
+    if (session.session?.user?.email !== email || !session.session.workspace?.id) {
       throw new Error('Public session hydration did not return the verification user and workspace.');
     }
     const workspaceId = String(session.session.workspace.id);
@@ -5634,7 +5652,7 @@ async function verifyPublicApplication(baseUrl: URL, credentials: { email: strin
 }
 
 function responseCookie(response: Response, label: string) {
-  const headers = response.headers as Headers & { getSetCookie?: () => string[] };
+  const headers = response.headers as { getSetCookie?: () => string[] };
   const values = headers.getSetCookie?.() ?? [response.headers.get('set-cookie')].filter((value): value is string => Boolean(value));
   const cookie = values.map((value) => value.split(';', 1)[0]).join('; ');
   if (!cookie) throw new Error(`${label} did not set a session cookie.`);
@@ -5657,7 +5675,7 @@ async function provisionManagedCredentialsOnce(
   const appCookie = responseCookie(appSignIn, 'Managed owner provisioning');
   try {
     const session = await verificationJson(baseUrl, '/api/auth/session', { cookie: appCookie });
-    if (session.session?.user?.email !== email || !session.session?.workspace?.id) {
+    if (session.session?.user?.email !== email || !session.session.workspace?.id) {
       throw new Error('Managed owner provisioning did not create the expected account and workspace.');
     }
   } finally {

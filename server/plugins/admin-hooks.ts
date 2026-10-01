@@ -5,7 +5,7 @@ import { createServerHookEngine } from '../hooks/runtime-kernel';
 export default defineNitroPlugin((nitroApp) => {
     const runtimeConfig = useRuntimeConfig();
     const version =
-        runtimeConfig.public?.admin?.hookEngineV2Enabled === true ? 'v2' : 'v1';
+        runtimeConfig.public.admin.hookEngineV2Enabled === true ? 'v2' : 'v1';
     nitroApp.hooks.hook('request', (event) => {
         const engine = createServerHookEngine(version);
         const typed = createTypedAdminHookEngine(engine);

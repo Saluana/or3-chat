@@ -201,12 +201,12 @@ async function executePendingClientTool(
     // cannot turn a recoverable reconnect into a false tool failure.
     if (!useToolRegistry().getTool(toolName)) return;
     const abortController = new AbortController();
+    const canDispatch = (): boolean => tracker.active && !abortController.signal.aborted;
     const dispatch = (async () => {
         const claim = await claimBackgroundClientTool(tracker.jobId, callId);
         if (!claim) return;
         if (
-            !tracker.active ||
-            abortController.signal.aborted ||
+            !canDispatch() ||
             (getActiveWorkspaceId() ?? 'local') !== tracker.workspaceId ||
             getCachedSessionContext()?.user?.id !== tracker.userId ||
             claim.context.workspaceId !== tracker.workspaceId
@@ -251,8 +251,7 @@ async function executePendingClientTool(
             }
         }
         if (
-            !tracker.active ||
-            abortController.signal.aborted ||
+            !canDispatch() ||
             (getActiveWorkspaceId() ?? 'local') !== tracker.workspaceId ||
             getCachedSessionContext()?.user?.id !== tracker.userId
         ) return;
@@ -511,7 +510,7 @@ function deriveBackgroundReasoning(
     tracker: BackgroundJobTracker,
     status: BackgroundJobStatus
 ): { safeReasoning: string; reasoningDelta: string; replace: boolean } {
-    const current = tracker.lastReasoning ?? '';
+    const current = tracker.lastReasoning;
     const replace =
         status.reasoning_reset === true ||
         (typeof tracker.lastAttempt === 'number' &&

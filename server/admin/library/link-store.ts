@@ -124,8 +124,8 @@ export function createFileLibraryLinkStore(
             throw error;
         }
         try {
-            const parsed = JSON.parse(raw) as LibraryLinkRecord;
-            if (parsed?.version !== 1 || parsed.userId !== userId) {
+            const parsed = JSON.parse(raw) as LibraryLinkRecord | null;
+            if (!parsed || (parsed.version as unknown) !== 1 || parsed.userId !== userId) {
                 throw new Error('unexpected binding shape');
             }
             return { ...parsed, revision: typeof parsed.revision === 'number' ? parsed.revision : 0 };

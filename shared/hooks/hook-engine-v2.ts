@@ -104,7 +104,7 @@ interface PriorityAls {
 
 function createPriorityAls(): PriorityAls | null {
     try {
-        const proc = (globalThis as { process?: unknown })?.process as
+        const proc = (globalThis as { process?: unknown }).process as
             | { getBuiltinModule?: (name: string) => unknown }
             | undefined;
         const ctor = (proc?.getBuiltinModule?.('async_hooks') as

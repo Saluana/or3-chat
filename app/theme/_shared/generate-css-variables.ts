@@ -128,7 +128,7 @@ function buildPalette(colors: ColorPalette): Record<string, string> {
         if (typeof value !== 'string') continue;
         // prefix variables with md for material design tokens
         const varName =
-            COLOR_TOKEN_REGISTRY[key as keyof typeof COLOR_TOKEN_REGISTRY] ??
+            (COLOR_TOKEN_REGISTRY as Partial<Record<string, string>>)[key] ??
             `--md-${kebab(key)}`;
         entries[varName] = value;
     }

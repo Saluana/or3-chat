@@ -27,7 +27,7 @@ interface ToastPayload {
 interface PreferenceStore {
     preferences: Ref<UserThemeAccessibilityPreferences>;
     loaded: boolean;
-    mediaQuery?: MediaQueryList;
+    mediaQuery?: Partial<MediaQueryList>;
     onMediaChange?: () => void;
     toast?: { add?: (payload: ToastPayload) => void };
 }
@@ -122,7 +122,7 @@ function initializeStore(store: PreferenceStore): void {
         $toast?: { add?: (payload: ToastPayload) => void };
     };
     store.toast = nuxtApp.$toast;
-    store.mediaQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    store.mediaQuery = (window as { matchMedia?: (query: string) => MediaQueryList }).matchMedia?.('(prefers-reduced-motion: reduce)');
     store.onMediaChange = () => {
         applyAccessibilityPreferences(
             store.preferences.value,
@@ -143,7 +143,7 @@ function initializeStore(store: PreferenceStore): void {
 
 function getPrefersReducedMotion(): boolean {
     if (!isBrowser()) return false;
-    return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    return (window as { matchMedia?: (query: string) => MediaQueryList }).matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 }
 
 function persist(

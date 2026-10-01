@@ -320,7 +320,7 @@ export function getCapabilities(m: OpenRouterModel): ModelCapabilities {
     const ctx = getContextLength(m);
 
     const nonTextMods = [...inputMods, ...outputMods].filter((x) => x !== 'text');
-    const idAndName = `${m.id} ${m.name ?? ''}`;
+    const idAndName = `${m.id} ${m.name}`;
 
     const embedding =
         outputMods.includes('embeddings') ||

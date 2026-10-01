@@ -92,7 +92,7 @@ export default defineEventHandler(async (event) => {
             if (current.selected?.packageDigest !== initialDigest || current.status !== 'ready') {
                 throw createError({ statusCode: 409, statusMessage: 'The selected plugin version changed. Review it again.' });
             }
-            if (body.data.enabled && reviewedPolicy) {
+            if (reviewedPolicy) {
                 const policy = await new SitePluginPolicyStore().read(body.data.pluginId);
                 if (!policy?.catalogVisible || policy.revision !== reviewedPolicy.revision) {
                     throw createError({ statusCode: 409, statusMessage: 'Site approval changed. Review it again.' });

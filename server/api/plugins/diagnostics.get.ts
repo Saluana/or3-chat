@@ -64,10 +64,10 @@ export default defineEventHandler(async (event) => {
                     ? (config.public as { appVersion: string }).appVersion
                     : 'unknown',
             pluginApiVersion: OR3_PLUGIN_V2_HOST_CAPABILITIES.pluginApiVersion,
-            mode: config.public?.ssrAuthEnabled === true ? 'cloud' : 'local',
-            ssrAuthEnabled: config.public?.ssrAuthEnabled === true,
+            mode: config.public.ssrAuthEnabled === true ? 'cloud' : 'local',
+            ssrAuthEnabled: config.public.ssrAuthEnabled === true,
             pluginRuntimeLoaderEnabled:
-                (config.public?.admin as { pluginRuntimeLoaderEnabled?: boolean } | undefined)
+                (config.public.admin as { pluginRuntimeLoaderEnabled?: boolean } | undefined)
                     ?.pluginRuntimeLoaderEnabled !== false,
             v2Host: {
                 trustModes: [...OR3_PLUGIN_V2_HOST_CAPABILITIES.supportedTrustModes],

@@ -14,7 +14,7 @@ import { initializeAuthHookEngine } from '../auth/hooks';
 export default defineNitroPlugin(() => {
     const runtimeConfig = useRuntimeConfig();
     const version =
-        runtimeConfig.public?.admin?.hookEngineV2Enabled === true ? 'v2' : 'v1';
+        runtimeConfig.public.admin.hookEngineV2Enabled === true ? 'v2' : 'v1';
     // Create singleton hook engine for auth
     const engine = createServerHookEngine(version);
 

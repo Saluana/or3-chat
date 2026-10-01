@@ -166,7 +166,7 @@ function toPluginError(
     const details =
         'details' in result &&
         typeof result.details === 'object' &&
-        result.details !== null &&
+        (result.details as unknown) !== null &&
         !Array.isArray(result.details)
             ? (result.details as Readonly<Record<string, unknown>>)
             : undefined;

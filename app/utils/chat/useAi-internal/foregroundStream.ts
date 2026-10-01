@@ -408,7 +408,7 @@ export async function runForegroundStreamLoop(
                             threadId: ctx.threadId,
                             assistantId: ctx.assistantId,
                             streamId: ctx.streamId,
-                            reasoningLength: current.reasoning_text?.length || 0,
+                            reasoningLength: current.reasoning_text.length || 0,
                         }
                     );
                     writeCoalescer.markDirty(utf8Bytes(ev.text));

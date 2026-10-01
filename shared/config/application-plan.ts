@@ -35,7 +35,7 @@ export function buildApplicationPlan(input: {
         const result = input.modules.get(moduleId);
         if (!result?.ok)
             errors.push(
-                `${setting} requires "${moduleId}". ${result && !result.ok ? result.message : 'The module entry is unavailable.'} Install/build the selected provider and rebuild; use bun run dev:offline for intentional local-only development.`,
+                `${setting} requires "${moduleId}". ${result ? result.message : 'The module entry is unavailable.'} Install/build the selected provider and rebuild; use bun run dev:offline for intentional local-only development.`,
             );
     }
     if (errors.length) return { ok: false as const, errors };
@@ -217,8 +217,8 @@ export function buildApplicationPlan(input: {
                 or3CloudConfig.admin?.auth?.deletedWorkspaceRetentionDays !==
                 undefined
                     ? String(
-                          or3CloudConfig.admin?.auth
-                              ?.deletedWorkspaceRetentionDays,
+                          or3CloudConfig.admin.auth
+                               .deletedWorkspaceRetentionDays,
                       )
                     : '',
         },
@@ -323,11 +323,11 @@ export function buildApplicationPlan(input: {
         legal: legalConfig,
         plugins: {
             defaultEnabled:
-                or3Config.extensions?.plugins?.defaultEnabled?.filter(
+                or3Config.extensions.plugins.defaultEnabled.filter(
                     Boolean,
-                ) ?? [],
+                ),
             modules:
-                or3Config.extensions?.plugins?.modules?.filter(Boolean) ?? [],
+                or3Config.extensions.plugins.modules.filter(Boolean),
         },
         security: {
             allowedOrigins: or3CloudConfig.security!.allowedOrigins!,
@@ -521,13 +521,13 @@ export function buildApplicationPlan(input: {
                 },
                 plugins: {
                     defaultEnabled:
-                        or3Config.extensions?.plugins?.defaultEnabled?.filter(
+                        or3Config.extensions.plugins.defaultEnabled.filter(
                             Boolean,
-                        ) ?? [],
+                        ),
                     modules:
-                        or3Config.extensions?.plugins?.modules?.filter(
+                        or3Config.extensions.plugins.modules.filter(
                             (id) => modulePackageName(id) !== null,
-                        ) ?? [],
+                        ),
                 },
             },
             // Auto-mapped from NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY

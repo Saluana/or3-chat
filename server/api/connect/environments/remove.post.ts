@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
     if (!session.user?.id || !session.workspace?.id) {
         throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
     }
-    const body = (await readBody(event)) as { environmentId?: unknown };
+    const body = (await readBody(event)) as { environmentId?: unknown } | null | undefined;
     const environmentId =
         typeof body?.environmentId === 'string'
             ? body.environmentId.trim()

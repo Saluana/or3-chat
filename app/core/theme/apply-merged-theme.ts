@@ -295,7 +295,7 @@ function applyColorOverrides(
     const overrideVariables = new Set([
         ...Object.values(COLOR_TOKEN_REGISTRY),
         ...Object.values(COLOR_TOKEN_ALIASES).flatMap(
-            (aliases) => aliases ?? []
+            (aliases) => aliases
         ),
     ]);
     for (const cssVar of overrideVariables) style.removeProperty(cssVar);

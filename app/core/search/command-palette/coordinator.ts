@@ -84,6 +84,7 @@ export function createPaletteCoordinator(options?: {
     const canOpenNewPane = options?.canOpenNewPane ?? (() => true);
 
     let disposed = false;
+    const isDisposed = (): boolean => disposed;
     let rawQuery = '';
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     let queryGeneration = 0;
@@ -196,7 +197,7 @@ export function createPaletteCoordinator(options?: {
             ? sources.filter((source) => options.sourceIds?.has(source.id))
             : sources;
         for (const source of selectedSources) {
-            if (disposed || generation !== workspaceGeneration) return;
+            if (isDisposed() || generation !== workspaceGeneration) return;
             const existing = bound.get(source.id);
             if (existing) {
                 existing.source = source;
@@ -225,7 +226,7 @@ export function createPaletteCoordinator(options?: {
                         options?.signal
                     );
                     throwIfAborted(options?.signal);
-                    if (disposed || generation !== workspaceGeneration) return;
+                    if (isDisposed() || generation !== workspaceGeneration) return;
                     if (bound.get(source.id) !== entry) {
                         return;
                     }
@@ -241,7 +242,7 @@ export function createPaletteCoordinator(options?: {
                             });
                             throwIfAborted(options?.signal);
                             if (
-                                disposed ||
+                                isDisposed() ||
                                 generation !== workspaceGeneration ||
                                 bound.get(source.id) !== entry
                             ) {
@@ -259,7 +260,7 @@ export function createPaletteCoordinator(options?: {
                     entry.status = { sourceId: source.id, state: 'ready' };
                 } catch (error) {
                     if (isAbortError(error)) return;
-                    if (disposed || generation !== workspaceGeneration) return;
+                    if (isDisposed() || generation !== workspaceGeneration) return;
                     if (bound.get(source.id) !== entry) return;
                     entry.status = {
                         sourceId: source.id,
@@ -277,7 +278,7 @@ export function createPaletteCoordinator(options?: {
             })
         );
 
-        if (disposed || generation !== workspaceGeneration) return;
+        if (isDisposed() || generation !== workspaceGeneration) return;
         statuses = [...bound.values()].map((entry) => entry.status);
         emitSnapshot();
     }
@@ -288,7 +289,7 @@ export function createPaletteCoordinator(options?: {
         const signal = warmAbortController.signal;
         const started = performance.now();
         await reconcileSources(generation, { signal });
-        if (disposed || generation !== workspaceGeneration) {
+        if (isDisposed() || generation !== workspaceGeneration) {
             emitPaletteTelemetry({
                 kind: 'build',
                 durationMs: performance.now() - started,
@@ -332,13 +333,13 @@ export function createPaletteCoordinator(options?: {
         const generation = workspaceGeneration;
         if (warmPromise) await warmPromise;
         else if (!bound.get(sourceId)?.ready) await ensureWarm();
-        if (disposed || generation !== workspaceGeneration) {
+        if (isDisposed() || generation !== workspaceGeneration) {
             throw new Error('The workspace changed during search.');
         }
         const entry = bound.get(sourceId);
         if (!entry?.ready) throw new Error('Document search is unavailable right now.');
         const search = await entry.index.search({ term, limit });
-        if (disposed || generation !== workspaceGeneration) {
+        if (isDisposed() || generation !== workspaceGeneration) {
             throw new Error('The workspace changed during search.');
         }
         return search.results.slice(0, limit);
@@ -430,7 +431,7 @@ export function createPaletteCoordinator(options?: {
                 );
 
                 if (
-                    disposed ||
+                    isDisposed() ||
                     requestId !== queryGeneration ||
                     generationAtStart !== workspaceGeneration
                 ) {
@@ -466,7 +467,7 @@ export function createPaletteCoordinator(options?: {
             }
 
             if (
-                disposed ||
+                isDisposed() ||
                 requestId !== queryGeneration ||
                 generationAtStart !== workspaceGeneration
             ) {
@@ -489,7 +490,7 @@ export function createPaletteCoordinator(options?: {
         } catch (error) {
             if (
                 isAbortError(error) ||
-                disposed ||
+                isDisposed() ||
                 requestId !== queryGeneration ||
                 generationAtStart !== workspaceGeneration
             ) {
@@ -545,8 +546,6 @@ export function createPaletteCoordinator(options?: {
                 .slice(0, PALETTE_EMPTY_RECENTS)
                 .map((resource) => resourceToResult(resource));
             out.push(...recentResources);
-        } else if (kind === 'category' && categoryId === 'command') {
-            // already handled
         }
 
         return out.slice(0, PALETTE_MAX_TOTAL);
@@ -599,7 +598,7 @@ export function createPaletteCoordinator(options?: {
             .then(async () => {
                 if (!bound.size) await startWarm();
                 else if (warmPromise) await warmPromise;
-                if (disposed || generation !== workspaceGeneration) return;
+                if (isDisposed() || generation !== workspaceGeneration) return;
                 const controller = new AbortController();
                 const onWarmAbort = () => controller.abort();
                 warmAbortController.signal.addEventListener(

@@ -5,7 +5,7 @@ import { writeUpdatePin } from '../../../utils/plugins/marketplace/update-pins';
 
 export default defineEventHandler(async (event) => {
     await requireAdminApiContext(event, { ownerOnly: true, mutation: true });
-    const body = await readBody<{ pluginId?: unknown; version?: unknown }>(event);
+    const body = await readBody<{ pluginId?: unknown; version?: unknown } | null | undefined>(event);
     if (!body || typeof body.pluginId !== 'string' ||
         !/^[a-z0-9][a-z0-9._-]{0,127}$/i.test(body.pluginId) ||
         (body.version !== null && (typeof body.version !== 'string' || !valid(body.version)))) {

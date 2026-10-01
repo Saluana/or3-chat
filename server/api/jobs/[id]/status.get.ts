@@ -101,7 +101,7 @@ export default defineEventHandler(async (event) => {
         liveState && liveState.content.length > job.content.length
             ? liveState.content
             : job.content;
-    const jobReasoning = job.reasoning ?? '';
+    const jobReasoning = job.reasoning;
     const effectiveReasoning =
         liveState && liveState.reasoning.length > jobReasoning.length
             ? liveState.reasoning

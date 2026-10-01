@@ -218,23 +218,24 @@ export function initializeAuthHookEngine(engine: HookEngine): AuthHookEngine {
                 {
                     id: `legacy-filter:${++constraintSeq}`,
                     evaluate({ decision, session }) {
-                        const next = fn(decision, { session });
+                        const next: unknown = fn(decision, { session });
                         if (isThenable(next)) {
                             return { allowed: false, reason: 'auth-constraint-async' };
                         }
                         if (!next || typeof next !== 'object') {
                             return { allowed: false, reason: 'auth-constraint-invalid' };
                         }
-                        if (decision.allowed && next.allowed === false) {
+                        const filtered = next as Record<string, unknown>;
+                        if (decision.allowed && filtered.allowed === false) {
                             return {
                                 allowed: false,
                                 reason:
-                                    typeof next.reason === 'string'
-                                        ? next.reason
+                                    typeof filtered.reason === 'string'
+                                        ? filtered.reason
                                         : 'forbidden',
                             };
                         }
-                        if (!decision.allowed && next.allowed === true) {
+                        if (!decision.allowed && filtered.allowed === true) {
                             // Grant attempts are ignored here; outer apply enforces deny.
                             return { allowed: true };
                         }

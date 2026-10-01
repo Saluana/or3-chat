@@ -63,8 +63,7 @@ export function diffBundledV1Descriptors(input: {
     }
     if (active.version !== desired.version) changes.push('version-metadata');
     if (active.pluginApiVersion !== desired.pluginApiVersion) changes.push('api-version');
-    if (active.manifestVersion !== desired.manifestVersion) changes.push('manifest-version');
-    if (changes.length === 0) changes.push('descriptor-key');
+        if (changes.length === 0) changes.push('descriptor-key');
 
     const executableChanged = changes.some(
         (change) => change === 'host-build' || change === 'module'

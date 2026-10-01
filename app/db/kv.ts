@@ -147,7 +147,7 @@ async function readQuotaUsage(
     let keys = 0;
     if (quota.maxRetainedKeys !== undefined) {
         const retained = new Set(rows.map((row) => row.name));
-        if (targetDb.tables?.some((table) => table.name === 'tombstones')) {
+        if (targetDb.tables.some((table) => table.name === 'tombstones')) {
             // Snapshots move deletion history out of kv. Count both forms,
             // deduplicating local soft deletes also captured by sync.
             const tombstones = await targetDb.tombstones.where('id')

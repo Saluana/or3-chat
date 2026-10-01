@@ -231,7 +231,7 @@ function validateFieldLevel(answers: WizardAnswers): {
         requireSsrAuthForSync: true,
     });
     if (usesSqlite) {
-        const sqliteDriver = answers.sqliteDriver ?? 'better-sqlite3';
+        const sqliteDriver: string = answers.sqliteDriver;
         if (sqliteDriver === 'better-sqlite3' || sqliteDriver === 'bun') {
             const sqlitePath = answers.sqliteDbPath?.trim() ?? '';
             if (!sqlitePath) {

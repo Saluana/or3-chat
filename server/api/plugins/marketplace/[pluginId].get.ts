@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
         if (!policy) throw createError({ statusCode: 404, statusMessage: 'This plugin is not approved for this site.' });
         const entry = await readCatalogEntry(pluginId) as Record<string, unknown> | null;
         if (!entry) throw createError({ statusCode: 404, statusMessage: 'This plugin is unavailable.' });
-        const releases = Array.isArray(entry.releases)
+        const releases: unknown[] = Array.isArray(entry.releases)
             ? entry.releases.filter((release) => release && typeof release === 'object' &&
                 (release as { version?: unknown }).version === policy.approvedRelease.version)
             : [];

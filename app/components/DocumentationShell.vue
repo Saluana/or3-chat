@@ -479,7 +479,7 @@ const mobileSidebarOpen = computed({
     set: (value: boolean) => { if (!value) closeSidebar(); },
 });
 const sidebarDialogContent = useDialogFocus(() => ({
-    onCloseAutoFocus(event) {
+    onCloseAutoFocus(event: Event) {
         if (!shouldRestoreFocus) event.preventDefault();
         shouldRestoreFocus = true;
     },

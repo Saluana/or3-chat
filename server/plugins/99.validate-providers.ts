@@ -26,7 +26,14 @@ function isStrictMode(): boolean {
 export default defineNitroPlugin(() => {
     if (!isStrictMode()) return;
 
-    const config = useRuntimeConfig();
+    // Optional subsystems may be absent in older or partial runtime configurations.
+    const completeConfig = useRuntimeConfig();
+    const config = {
+        ...completeConfig,
+        backgroundJobs: completeConfig.backgroundJobs as typeof completeConfig.backgroundJobs | undefined,
+        limits: completeConfig.limits as typeof completeConfig.limits | undefined,
+        connect: completeConfig.connect as typeof completeConfig.connect | undefined,
+    };
     const errors: string[] = [];
 
     if (config.auth.enabled) {
@@ -108,7 +115,7 @@ export default defineNitroPlugin(() => {
                 `connect.relayProvider "${relayProviderId}" is not registered.`
             );
         }
-        const publicURL = String(config.connect.publicURL ?? '').trim();
+        const publicURL = configuredText(config.connect.publicURL).trim();
         try {
             const parsed = new URL(publicURL);
             if (
@@ -126,7 +133,7 @@ export default defineNitroPlugin(() => {
                 'OR3_CONNECT_PUBLIC_URL must be an absolute HTTPS origin without a path, query, fragment, or embedded credentials.'
             );
         }
-        if (String(config.connect.encryptionKey ?? '').trim().length < 32) {
+        if (configuredText(config.connect.encryptionKey).trim().length < 32) {
             errors.push(
                 'OR3_CONNECT_ENCRYPTION_KEY must contain at least 32 characters.'
             );
@@ -141,11 +148,11 @@ export default defineNitroPlugin(() => {
             );
         }
         if (relayProviderId === 'cloudflare') {
-            const cloudflare = config.connect.cloudflare;
-            const accountId = String(cloudflare?.accountId ?? '').trim();
-            const zoneId = String(cloudflare?.zoneId ?? '').trim();
-            const apiToken = String(cloudflare?.apiToken ?? '').trim();
-            const suffix = String(cloudflare?.hostnameSuffix ?? '')
+            const cloudflare = config.connect.cloudflare as typeof config.connect.cloudflare | undefined;
+            const accountId = configuredText(cloudflare?.accountId).trim();
+            const zoneId = configuredText(cloudflare?.zoneId).trim();
+            const apiToken = configuredText(cloudflare?.apiToken).trim();
+            const suffix = configuredText(cloudflare?.hostnameSuffix)
                 .trim()
                 .toLowerCase()
                 .replace(/\.$/, '');
@@ -170,7 +177,7 @@ export default defineNitroPlugin(() => {
         }
         if (
             connectProviderId === 'convex' &&
-            !String(config.sync?.convexAdminKey ?? '').trim()
+            !configuredText(config.sync.convexAdminKey).trim()
         ) {
             errors.push(
                 'CONVEX_SELF_HOSTED_ADMIN_KEY is required when Convex backs OR3 Connect server operations.'
@@ -186,3 +193,5 @@ export default defineNitroPlugin(() => {
         );
     }
 });
+
+function configuredText(value: unknown): string { return value == null ? '' : String(value); }

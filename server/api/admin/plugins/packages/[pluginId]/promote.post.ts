@@ -211,7 +211,7 @@ export default defineEventHandler(async (event) => {
         });
     }
     let workspaceEnablement: 'enabled' | 'pending' | 'unchanged' = 'unchanged';
-    if (result.status === 'promoted') {
+    {
         // A first promotion installs the plugin for this workspace, so it is
         // enabled here too: the runtime gate refuses a disabled package, and
         // "promoted" without enablement would be a version nothing runs. An
@@ -251,7 +251,7 @@ export default defineEventHandler(async (event) => {
         }
     }
     return {
-        ok: result.status === 'promoted', workspaceId, ...result, workspaceEnablement,
+        ok: true, workspaceId, ...result, workspaceEnablement,
         ...(workspaceEnablement === 'pending' ? { warning: 'The selected package changed, but this workspace was not enabled. Refresh Installed and enable it there.' } : {}),
     };
 });

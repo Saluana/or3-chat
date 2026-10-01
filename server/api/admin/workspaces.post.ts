@@ -118,7 +118,7 @@ export default defineEventHandler(async (event) => {
     });
 
     let provisioningWarnings: string[] = [];
-    try { provisioningWarnings = (await provisionWorkspaceDefaults(event, result.workspaceId, { ownerUserId: ownerUserId.trim(), name: sanitizedName }))?.warnings ?? []; }
+    try { provisioningWarnings = ((await provisionWorkspaceDefaults(event, result.workspaceId, { ownerUserId: ownerUserId.trim(), name: sanitizedName })) as { warnings?: string[] } | undefined)?.warnings ?? []; }
     catch { provisioningWarnings = [`Plugin defaults could not be applied to workspace ${result.workspaceId}; review its plugin settings.`]; }
 
     const actorId = adminCtx.principal.kind === 'super_admin' 

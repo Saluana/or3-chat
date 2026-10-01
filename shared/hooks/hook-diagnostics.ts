@@ -246,9 +246,10 @@ export class HookDiagnostics {
                 min: count ? 1 : 0,
                 max: count ? 1 : 0,
                 recent: Object.freeze(
-                    Array(
-                        Math.min(count, HOOK_DIAGNOSTIC_SAMPLE_CAPACITY),
-                    ).fill(1),
+                    Array.from(
+                        { length: Math.min(count, HOOK_DIAGNOSTIC_SAMPLE_CAPACITY) },
+                        () => 1,
+                    ),
                 ),
             });
         }

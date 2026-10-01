@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
     const body = await readLimitedJsonBody<{
         deviceCode?: unknown;
         host?: unknown;
-    }>(event);
+    } | null>(event);
     const deviceCode =
         typeof body?.deviceCode === 'string' ? body.deviceCode.trim() : '';
     if (deviceCode.length < 32 || deviceCode.length > 200) {
@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
             statusMessage: 'The connection request is invalid.',
         });
     }
-    parseConnectHost(body.host);
+    parseConnectHost(body?.host);
     const deviceCodeHash = hashConnectSecret(deviceCode);
     const deviceLimit = await rateLimits.checkAndRecord(
         `connect:token:device:${deviceCodeHash}`,

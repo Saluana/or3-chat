@@ -69,7 +69,7 @@ export function localPackagesEnabled(
     const configured = env.OR3_USE_LOCAL_PACKAGES?.trim();
     if (env.NODE_ENV !== 'development') return false;
     if (configured === 'false') return false;
-    return env.NODE_ENV === 'development';
+    return true;
 }
 
 function siblingRoot(

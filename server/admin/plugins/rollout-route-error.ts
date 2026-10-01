@@ -35,7 +35,7 @@ export async function respondToRolloutMutation(
         const cleanup = setTimeout(() => {
             if (mutationStatuses.get(id) === status) mutationStatuses.delete(id);
         }, 300_000);
-        cleanup.unref?.();
+        cleanup.unref();
     };
     const observed = mutation.then((record) => {
         finish();
@@ -44,7 +44,7 @@ export async function respondToRolloutMutation(
         finish();
         status.failure = rolloutHttpError(error).statusMessage ?? 'The rollout request failed. Refresh and retry.';
         if (timedOut) console.warn('[plugin-rollout] Background mutation failed after pending response', {
-            operationId: id, code: (error as { code?: string })?.code ?? 'rollout-unavailable',
+            operationId: id, code: (error as { code?: string } | null | undefined)?.code ?? 'rollout-unavailable',
         });
         throw error;
     });

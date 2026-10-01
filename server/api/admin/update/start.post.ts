@@ -7,7 +7,7 @@ const versionPattern = /^\d+\.\d+\.\d+$/;
 
 export default defineEventHandler(async (event) => {
     await requireAdminApiContext(event, { superAdminOnly: true, mutation: true });
-    const body = await readBody<{ requestId?: unknown; targetVersion?: unknown }>(event);
+    const body = await readBody<{ requestId?: unknown; targetVersion?: unknown } | null | undefined>(event);
     if (typeof body?.requestId !== 'string' || !requestIdPattern.test(body.requestId) || typeof body.targetVersion !== 'string' || !versionPattern.test(body.targetVersion)) {
         throw createError({ statusCode: 400, statusMessage: 'A valid update request is required.' });
     }

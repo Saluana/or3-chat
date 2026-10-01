@@ -47,7 +47,7 @@ const KV_SYNC_BLOCKLIST = [
 /** Shared capture/replacement policy; plugins can extend device-local keys. */
 export function getLocalOnlyKvNames(): Set<string> {
     try {
-        const engine = useHooks()._engine;
+        const engine = useHooks()._engine as ReturnType<typeof useHooks>['_engine'] | undefined;
         if (!engine) return new Set(KV_SYNC_BLOCKLIST);
         const filtered: unknown = engine.applyFiltersSync(
             'sync.kv:blocklist',

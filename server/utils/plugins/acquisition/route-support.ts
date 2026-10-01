@@ -235,7 +235,7 @@ export async function acquisitionServiceFor(
                       if (libraryGrant) {
                           const link = await service.status(libraryUserId);
                           if (link.state !== 'linked' || link.link?.id !== libraryGrant.linkId ||
-                              link.link?.accountId !== libraryGrant.accountId) {
+                              link.link.accountId !== libraryGrant.accountId) {
                               return { ok: false as const, code: 'link-required' as const,
                                   message: 'The buyer’s Library link changed. Ask them for a new install request.' };
                           }

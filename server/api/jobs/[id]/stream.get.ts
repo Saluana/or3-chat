@@ -128,7 +128,7 @@ export function serializeJobStatus(
         reasoning_length:
             typeof overrides?.reasoning_length === 'number'
                 ? overrides.reasoning_length
-                : (job.reasoning ?? '').length,
+                : (job.reasoning).length,
         reasoning_reset: overrides?.reasoning_reset,
     };
 
@@ -138,7 +138,7 @@ export function serializeJobStatus(
         status.reasoning_text =
             typeof overrides?.reasoning_text === 'string'
                 ? overrides.reasoning_text
-                : (job.reasoning ?? '');
+                : (job.reasoning);
     } else if (typeof contentOverride === 'string') {
         status.content = contentOverride;
     }
@@ -237,7 +237,7 @@ export default defineEventHandler(async (event) => {
             let lastContentLength = initialOffset;
             let lastReasoningLength = attemptChanged
                 ? 0
-                : (initialJob.reasoning ?? '').length;
+                : (initialJob.reasoning).length;
             let lastStatus: BackgroundJob['status'] = initialJob.status;
             let lastWorkflowVersion = workflowStateVersionOf(
                 initialJob.workflow_state
@@ -342,8 +342,8 @@ export default defineEventHandler(async (event) => {
                         content: initialJob.content,
                         content_length: initialJob.content.length,
                         content_reset: attemptChanged || undefined,
-                        reasoning_text: initialJob.reasoning ?? '',
-                        reasoning_length: (initialJob.reasoning ?? '').length,
+                        reasoning_text: initialJob.reasoning,
+                        reasoning_length: (initialJob.reasoning).length,
                         reasoning_reset: attemptChanged || undefined,
                     }),
                 });
@@ -355,13 +355,13 @@ export default defineEventHandler(async (event) => {
                         content_delta: initialDelta,
                         includeContent: false,
                         content_length: initialJob.content.length,
-                        reasoning_text: initialJob.reasoning ?? '',
-                        reasoning_length: (initialJob.reasoning ?? '').length,
+                        reasoning_text: initialJob.reasoning,
+                        reasoning_length: (initialJob.reasoning).length,
                     }),
                 });
             }
             lastContentLength = initialJob.content.length;
-            lastReasoningLength = (initialJob.reasoning ?? '').length;
+            lastReasoningLength = (initialJob.reasoning).length;
 
             if (initialJob.status === 'streaming') {
                 // Subscribe to live stream updates (fast path when viewer is attached).
@@ -500,19 +500,10 @@ export default defineEventHandler(async (event) => {
                                 includeContent: true,
                                 content: liveEvent.content,
                                 content_length: liveEvent.content_length,
-                                reasoning_text:
-                                    liveEvent.reasoning ??
-                                    currentLiveState?.reasoning ??
-                                    initialJob.reasoning ??
-                                    '',
+                                reasoning_text: resolveLiveReasoning(liveEvent.reasoning, currentLiveState?.reasoning, initialJob.reasoning),
                                 reasoning_length:
                                     liveEvent.reasoning_length ??
-                                    (
-                                        liveEvent.reasoning ??
-                                        currentLiveState?.reasoning ??
-                                        initialJob.reasoning ??
-                                        ''
-                                    ).length,
+                                    resolveLiveReasoning(liveEvent.reasoning, currentLiveState?.reasoning, initialJob.reasoning).length,
                                 tool_calls:
                                     liveEvent.tool_calls ??
                                     currentLiveState?.tool_calls,
@@ -653,7 +644,7 @@ export default defineEventHandler(async (event) => {
 
                     const attemptChanged = (job.attempts ?? 0) !== lastAttempt;
                     const hasNewContent = job.content.length > lastContentLength;
-                    const jobReasoning = job.reasoning ?? '';
+                    const jobReasoning = job.reasoning;
                     const hasNewReasoning =
                         jobReasoning.length > lastReasoningLength;
                     const statusChanged = job.status !== lastStatus;
@@ -792,8 +783,12 @@ export default defineEventHandler(async (event) => {
         },
     }, {
         highWaterMark: MAX_SSE_VIEWER_QUEUE_BYTES,
-        size: (chunk) => chunk?.byteLength ?? 0,
+        size: (chunk) => chunk.byteLength,
     });
 
     return sendStream(event, stream);
 });
+
+function resolveLiveReasoning(current: string | undefined, previous: string | undefined, initial: string): string {
+    return current ?? previous ?? initial;
+}

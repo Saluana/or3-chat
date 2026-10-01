@@ -91,21 +91,21 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'values must be an object' });
     }
     const operationId =
-        typeof body?.operationId === 'string' && body.operationId.length > 0
+        typeof body.operationId === 'string' && body.operationId.length > 0
             ? body.operationId
             : null;
     const expectedRevision =
-        typeof body?.expectedRevision === 'number' &&
+        typeof body.expectedRevision === 'number' &&
         Number.isInteger(body.expectedRevision) &&
         body.expectedRevision >= 0
             ? body.expectedRevision
             : undefined;
     const expectedPackageDigest =
-        typeof body?.expectedPackageDigest === 'string' && body.expectedPackageDigest.length > 0
+        typeof body.expectedPackageDigest === 'string' && body.expectedPackageDigest.length > 0
             ? body.expectedPackageDigest
             : null;
     const activationId =
-        typeof body?.activationId === 'string' && body.activationId.length > 0
+        typeof body.activationId === 'string' && body.activationId.length > 0
             ? body.activationId
             : null;
 

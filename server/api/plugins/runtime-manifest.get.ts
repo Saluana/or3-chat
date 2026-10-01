@@ -324,7 +324,7 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
             const manifest = catalog.manifest;
             const base = {
                 clientEntry: manifest.runtime.client?.entry,
-                hasServerRoutes: Boolean(manifest.runtime.server?.routes?.length),
+                hasServerRoutes: Boolean(manifest.runtime.server?.routes.length),
                 loadAllowed: eligibility.status === 'ready',
                 loadDeniedReason:
                     eligibility.status === 'ready'

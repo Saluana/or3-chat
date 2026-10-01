@@ -45,10 +45,10 @@ export async function rolloutCandidateFor(pluginId: string, forDisable = false) 
     const candidate = await packageGrantCandidate({
         packagePath: packages.packagePath(pluginId, digest),
         packageDigest: digest,
-        release: release ? { releaseId: release.releaseId, authoritySha256: release.authoritySha256,
-            ...(release.authority === undefined ? {} : { authority: release.authority }) } : null,
+        release: { releaseId: release.releaseId, authoritySha256: release.authoritySha256,
+            ...(release.authority === undefined ? {} : { authority: release.authority }) },
     });
-    if (!candidate.authoritySha256 || (release && candidate.authoritySha256 !== release.authoritySha256)) throw stale('Installed authority differs from the approved release.');
+    if (!candidate.authoritySha256 || candidate.authoritySha256 !== release.authoritySha256) throw stale('Installed authority differs from the approved release.');
     return { candidate, release, policy };
 }
 

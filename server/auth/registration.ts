@@ -104,7 +104,7 @@ export function evaluateUnknownUserRegistration(input: {
         return { allowed: false, mode, reason: 'disabled' };
     }
 
-    if (mode === 'invite_only' && isBootstrapOwner(input)) {
+    if (isBootstrapOwner(input)) {
         // The deployment owner was bootstrapped by the operator; their first
         // sign-in provisions their account without requiring an invite.
         return { allowed: true, mode, invite: null };

@@ -403,7 +403,7 @@ export class SubscriptionManager {
 
         await stager.start();
         try {
-            while (true) {
+            for (;;) {
                 if (!this.isCurrentGeneration(generation)) return;
                 if (!circuitBreaker.canRetry()) {
                     throw new Error('Circuit breaker opened during snapshot bootstrap');

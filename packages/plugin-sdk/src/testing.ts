@@ -34,6 +34,10 @@ import {
     type PluginChatMessage,
 } from './capabilities';
 import { createHostPluginContext, type HostPluginScope } from './host';
+
+function isScopeAborted(scope: HostPluginScope): boolean {
+    return scope.signal.aborted;
+}
 import type { PluginError, PluginErrorCode, PluginResult } from './results';
 import { pluginError, pluginOk } from './results';
 import type { PluginGrant } from './manifest';
@@ -131,7 +135,7 @@ function isUint8Chunk(value: unknown): value is Uint8Array {
         value &&
             typeof value === 'object' &&
             ArrayBuffer.isView(value) &&
-            value.constructor?.name === 'Uint8Array'
+            value.constructor.name === 'Uint8Array'
     );
 }
 
@@ -733,7 +737,7 @@ export class PluginTestHost {
         if (scope.generation !== this.#activeGeneration) {
             return errorResult('conflict', 'Plugin generation is stale');
         }
-        if (scope.signal.aborted) return errorResult('aborted', 'Plugin generation is stopped');
+        if (isScopeAborted(scope)) return errorResult('aborted', 'Plugin generation is stopped');
         if (!scope.grants.has(grant)) {
             return errorResult('permission-denied', `Grant ${grant} was not approved`);
         }
@@ -748,7 +752,7 @@ export class PluginTestHost {
             if (scope.generation !== this.#activeGeneration) {
                 throw new Error('Plugin generation is stale');
             }
-            if (scope.signal.aborted) throw new Error('Plugin generation is stopped');
+            if (isScopeAborted(scope)) throw new Error('Plugin generation is stopped');
             if (!scope.grants.has(grant)) {
                 throw new Error(`Grant ${grant} was not approved`);
             }
@@ -1195,11 +1199,11 @@ export class PluginTestHost {
                 input.signal?.addEventListener('abort', cancel, { once: true });
                 scope.signal.addEventListener('abort', cancel, { once: true });
                 try {
-                    if (input.signal?.aborted || scope.signal.aborted) return pluginError('aborted', 'File write was cancelled');
+                    if (input.signal?.aborted || isScopeAborted(scope)) return pluginError('aborted', 'File write was cancelled');
                     iterator = input.data[Symbol.asyncIterator]();
                     for (;;) {
                         const next = await Promise.race([cancelled, iterator.next()]);
-                        if (input.signal?.aborted || scope.signal.aborted) return pluginError('aborted', 'File write was cancelled');
+                        if (input.signal?.aborted || isScopeAborted(scope)) return pluginError('aborted', 'File write was cancelled');
                         if (next.done) { completed = true; break; }
                         const chunk = next.value;
                         if (!isUint8Chunk(chunk)) {
@@ -1210,7 +1214,7 @@ export class PluginTestHost {
                         parts.push(new Uint8Array(chunk));
                     }
                 } catch (error) {
-                    if (input.signal?.aborted || scope.signal.aborted) return pluginError('aborted', 'File write was cancelled');
+                    if (input.signal?.aborted || isScopeAborted(scope)) return pluginError('aborted', 'File write was cancelled');
                     return pluginError('internal', error instanceof Error ? error.message : 'File input failed');
                 } finally {
                     input.signal?.removeEventListener('abort', cancel);
@@ -1225,7 +1229,7 @@ export class PluginTestHost {
                 // The iterable may have finished after a cancellation landed
                 // in its final next(): check both the caller and generation
                 // signals again immediately before commit.
-                if (input.signal?.aborted || scope.signal.aborted) {
+                if (input.signal?.aborted || isScopeAborted(scope)) {
                     return pluginError('aborted', 'File write was cancelled');
                 }
                 const stale = this.#scopeFailure(scope, 'files.write');

@@ -194,7 +194,6 @@ function providerFieldsStep(
             if (!current.ssrAuthEnabled) return true;
             if (kind === 'sync') return !current.syncEnabled;
             if (kind === 'storage') return !current.storageEnabled;
-            if (kind === 'auth') return false;
             return false;
         },
     };

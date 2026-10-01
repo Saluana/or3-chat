@@ -207,7 +207,7 @@ export function marketplacePluginDeepLink(origin: string, pluginId: string, vers
  * routes answer `{ ok, ..., operation }`; reading a top-level `operationId` or a
  * bare status view loses the operation the server just recorded.
  */
-function unwrapAcquisitionOperation(response: AcquisitionResponse | null): AcquisitionStatusView | null {
+function unwrapAcquisitionOperation(response: Partial<AcquisitionResponse> | null): AcquisitionStatusView | null {
     if (!response || typeof response !== 'object') return null;
     if (!response.operation || typeof response.operation.operationId !== 'string') return null;
     return response.operation;
@@ -783,7 +783,7 @@ export function useMarketplaceInstall() {
     const retry = async (pluginId: string): Promise<AcquisitionStatusView | null> => {
         if (!operationId.value || running.value || status.value?.pluginId !== pluginId) return null;
         const id = operationId.value;
-        const workspaceId = status.value?.workspaceId;
+        const workspaceId = status.value.workspaceId;
         const generation = ++operationGeneration;
         running.value = true;
         try {
@@ -793,7 +793,7 @@ export function useMarketplaceInstall() {
             if (generation !== operationGeneration) return null;
             const view = unwrapAcquisitionOperation(response);
             if (!view || view.operationId !== id || view.pluginId !== pluginId || view.workspaceId !== workspaceId) return null;
-            if (view) status.value = view;
+            status.value = view;
             return await settle(pluginId);
         } catch (caught) {
             if (generation === operationGeneration) error.value = acquisitionRequestError(caught);
@@ -840,8 +840,7 @@ export function useMarketplaceInstall() {
             );
             if (generation !== operationGeneration) return;
             const view = unwrapAcquisitionOperation(response);
-            if (view) status.value = view;
-            else await poll(id);
+            status.value = view;
             await followCancellation(id, generation);
         } catch (caught) {
             if (generation === operationGeneration) error.value = acquisitionRequestError(caught);

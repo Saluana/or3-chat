@@ -93,7 +93,7 @@ export function createTrustedMediation(options: TrustedMediationOptions = {}): {
                 let total = 0;
                 if (response.body) {
                     const reader = response.body.getReader();
-                    while (true) {
+                    for (;;) {
                         const next = await reader.read();
                         if (next.done) break;
                         total += next.value.byteLength;

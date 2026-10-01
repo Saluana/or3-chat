@@ -116,7 +116,7 @@ export function resolveReasoningConfig(params: {
 
     if (
         params.model?.reasoning?.supports_max_tokens === true &&
-        Array.isArray(params.model?.supported_parameters) &&
+        Array.isArray(params.model.supported_parameters) &&
         params.model.supported_parameters.includes('reasoning.max_tokens') &&
         !Array.isArray(params.model.reasoning.supported_efforts)
     ) {

@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
     const body = (await readBody(event)) as {
         accountId?: unknown;
         workspaceId?: unknown;
-    };
+    } | null;
     const userId =
         typeof body?.accountId === 'string' ? body.accountId.trim() : '';
     const workspaceId =

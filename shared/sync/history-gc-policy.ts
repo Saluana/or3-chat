@@ -5,7 +5,7 @@
  * bootstrap from a consistent materialized snapshot and replay changes after
  * that snapshot's high-watermark.
  */
-export const SYNC_HISTORY_GC_POLICY = Object.freeze({
+export const SYNC_HISTORY_GC_POLICY = Object.freeze<{ enabled: boolean; snapshotBootstrapVerified: boolean; reason: string }>({
     enabled: true,
     snapshotBootstrapVerified: true,
     reason:

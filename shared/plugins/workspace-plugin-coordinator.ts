@@ -23,11 +23,12 @@ export function eligibleWorkspacePluginDescriptors(
     for (const id of new Set(manifest.enabledPluginIds)) {
         const entry = manifest.runtime[id];
         if (entry?.loadAllowed !== true || entry.descriptorStatus !== 'ready') continue;
-        const descriptor = entry.descriptor;
+        const descriptor = entry.descriptor as typeof entry.descriptor | undefined;
         if (!descriptor || descriptor.id !== id || descriptor.workspaceId !== workspaceId) continue;
-        if (descriptor.manifestVersion === 1 && descriptor.trust === 'trusted-host' && descriptor.artifact?.kind === 'bundled-v1') {
+        const artifact = descriptor.artifact as { kind?: unknown } | undefined;
+        if (descriptor.manifestVersion === 1 && (descriptor.trust as unknown) === 'trusted-host' && artifact?.kind === 'bundled-v1') {
             descriptors.push(descriptor);
-        } else if (descriptor.manifestVersion === 2 && descriptor.source === 'package' && descriptor.artifact?.kind === 'package-v2') {
+        } else if (descriptor.manifestVersion === 2 && (descriptor.source as unknown) === 'package' && artifact?.kind === 'package-v2') {
             const client = descriptor.artifact.client;
             if (!client || !descriptor.artifact.clientEntry || !Array.isArray(descriptor.effectiveGrants)) continue;
             if ((descriptor.trust === 'trusted-host' && client.isolation === 'host') ||
@@ -45,7 +46,7 @@ function acceptManifest(input: unknown, workspaceId: string): PluginRuntimeManif
     if (typeof manifest.revision !== 'string' || !manifest.revision ||
         !Array.isArray(manifest.enabledPluginIds) || manifest.enabledPluginIds.some((id) => typeof id !== 'string') ||
         !Array.isArray(manifest.installedPluginIds) || manifest.installedPluginIds.some((id) => typeof id !== 'string') ||
-        !manifest.runtime || typeof manifest.runtime !== 'object' || Array.isArray(manifest.runtime)) {
+        !(manifest.runtime as unknown) || typeof manifest.runtime !== 'object' || Array.isArray(manifest.runtime)) {
         throw new Error('Invalid runtime manifest');
     }
     return { ...manifest, enabledPluginIds: eligibleWorkspacePluginDescriptors(manifest, workspaceId).map((descriptor) => descriptor.id) };

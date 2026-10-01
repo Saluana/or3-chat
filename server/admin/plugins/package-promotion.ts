@@ -289,7 +289,7 @@ export class PluginPackagePromotionService {
             ) {
                 return blockedPromote(
                     'canary-evidence',
-                    `grant-review-${grantReview.status ?? 'invalid'}`,
+                    `grant-review-${grantReview.status}`,
                     state
                 );
             }
@@ -321,7 +321,7 @@ export class PluginPackagePromotionService {
                     return blockedPromote('canary-evidence', 'canary-evidence-missing', state);
                 }
                 if (
-                    evidence.schemaVersion !== 2 ||
+                    (evidence.schemaVersion as unknown) !== 2 ||
                     evidence.pluginId !== input.pluginId ||
                     evidence.workspaceId !== input.workspaceId ||
                     evidence.packageDigest !== input.expectedCandidateDigest ||

@@ -103,7 +103,7 @@ export async function decodeDocumentRevision(
     if (!parsed || typeof parsed !== 'object') {
         throw new Error('Revision snapshot is invalid.');
     }
-    const snapshot = parsed as Partial<DocumentRevisionSnapshot>;
+    const snapshot = parsed as { title?: unknown; content?: { type?: unknown } };
     if (
         typeof snapshot.title !== 'string'
         || !snapshot.content

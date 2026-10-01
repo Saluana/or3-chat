@@ -44,7 +44,7 @@ export function validatePaletteAlias(alias: string): PaletteValidationResult {
 }
 
 function validateTargetId(
-    id: string,
+    id: string | undefined,
     label: string
 ): PaletteValidationResult {
     if (typeof id !== 'string' || !TARGET_ID_RE.test(id)) {
@@ -93,7 +93,7 @@ export function validateMetaKeys(
 }
 
 export function validatePalettePostSourceDefinition(
-    definition: PalettePostSourceDefinition
+    definition: Omit<PalettePostSourceDefinition, 'label' | 'filterAliases' | 'openTarget'> & { label?: string; filterAliases?: readonly string[]; openTarget?: { kind?: string; appId?: string; pageId?: string; pluginId?: string } }
 ): PaletteValidationResult {
     const idCheck = validatePaletteId(definition.id, 'id');
     if (!idCheck.ok) return idCheck;
@@ -152,7 +152,7 @@ export function validatePalettePostSourceDefinition(
 }
 
 export function validatePaletteCommandDefinition(
-    definition: PaletteCommandDefinition
+    definition: Omit<PaletteCommandDefinition, 'label'> & { label?: string }
 ): PaletteValidationResult {
     const idCheck = validatePaletteId(definition.id, 'id');
     if (!idCheck.ok) return idCheck;

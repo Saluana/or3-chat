@@ -3,10 +3,10 @@ import { useAsyncData } from '#imports';
 
 // Public assets are not available to Nitro's internal $fetch during SSR.
 // Vite supplies lazy raw modules so direct visits render the same Markdown.
-const bundledPages = import.meta.glob<string>(
+const bundledPages = import.meta.glob(
     '../../../public/_documentation/**/*.md',
     { query: '?raw', import: 'default' }
-);
+) as Record<string, () => Promise<string>>;
 
 export function useDocumentationContent(
     routePath: Ref<string>,

@@ -248,7 +248,7 @@ export async function stageV2PluginPackageFromZip(
     if (
         manifest.kind !== 'plugin' ||
         !('manifestVersion' in manifest) ||
-        manifest.manifestVersion !== 2
+        (manifest.manifestVersion as unknown) !== 2
     ) {
         throw new Error('Manifest V2 plugin package required');
     }

@@ -49,8 +49,8 @@ export async function readWatchStatus(profileRoot: string): Promise<WatchStatus>
     if (!file || !file.isFile() || file.size > 64 * 1024) {
         throw createError({ statusCode: 503, statusMessage: 'The plugin watcher is not ready.' });
     }
-    let status: WatchStatus;
-    try { status = JSON.parse(await readFile(path, 'utf8')) as WatchStatus; }
+    let status: WatchStatus | null;
+    try { status = JSON.parse(await readFile(path, 'utf8')) as WatchStatus | null; }
     catch { throw createError({ statusCode: 503, statusMessage: 'The plugin watcher reported invalid state.' }); }
     if (!status || typeof status !== 'object' || !/^[0-9a-f-]{36}$/.test(status.runId) ||
         !Number.isSafeInteger(status.generation) || status.generation < 0 ||

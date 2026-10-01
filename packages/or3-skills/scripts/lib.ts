@@ -1,5 +1,6 @@
 import { access, readFile, stat } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
+import { spawn } from 'node:child_process'
 
 export type CheckLevel = 'error' | 'warning'
 
@@ -21,7 +22,7 @@ export function parseArgs(args: string[]) {
       continue
     }
 
-    const [key, inline] = value.slice(2).split('=', 2)
+    const [key, inline] = value.slice(2).split('=', 2) as [string, string?]
     if (inline !== undefined) {
       flags.set(key, inline)
       continue
@@ -67,7 +68,7 @@ export async function readJson<T>(path: string): Promise<T> {
 
 export async function findUp(start: string, predicate: (path: string) => Promise<boolean>) {
   let current = resolve(start)
-  while (true) {
+  for (;;) {
     if (await predicate(current)) return current
     const parent = dirname(current)
     if (parent === current) return null
@@ -94,11 +95,15 @@ export function printChecks(checks: Check[], json: boolean, summary: Record<stri
 }
 
 export async function runText(command: string[], cwd: string) {
-  const process = Bun.spawn(command, { cwd, stdout: 'pipe', stderr: 'pipe' })
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
-    process.exited,
-  ])
-  return { exitCode, stdout: stdout.trim(), stderr: stderr.trim() }
+  return new Promise<{ exitCode: number; stdout: string; stderr: string }>((resolveResult, reject) => {
+    const child = spawn(command[0]!, command.slice(1), { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
+    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+    child.once('error', reject)
+    child.once('close', (code) => {
+      resolveResult({ exitCode: code ?? 1, stdout: stdout.trim(), stderr: stderr.trim() })
+    })
+  })
 }

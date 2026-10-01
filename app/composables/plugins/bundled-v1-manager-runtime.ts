@@ -48,7 +48,7 @@ export function parseWorkspacePluginModule(
     mod: unknown,
     pluginId: string
 ): Or3WorkspacePlugin | null {
-    const raw = ((mod as { default?: unknown })?.default ?? mod) as unknown;
+    const raw = ((mod as { default?: unknown } | null | undefined)?.default ?? mod) as unknown;
     if (!raw || typeof raw !== 'object') return null;
     const plugin = raw as Partial<Or3WorkspacePlugin>;
     if (typeof plugin.register !== 'function') return null;

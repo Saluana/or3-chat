@@ -177,7 +177,7 @@ export function createV2PaletteContributionHost(options?: {
 function parsePaletteContribution(
     params: Readonly<Record<string, unknown>>
 ): PluginContribution {
-    const raw =
+    const raw: unknown =
         params.contribution && typeof params.contribution === 'object'
             ? params.contribution
             : params;

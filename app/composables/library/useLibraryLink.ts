@@ -157,7 +157,7 @@ function normalizeStatus(raw: unknown): LibraryLinkStatus {
 }
 
 function failureFrom(error: unknown): LibraryLinkFailure {
-    const data = (error as { data?: unknown })?.data as
+    const data = (error as { data?: unknown } | null | undefined)?.data as
         | { error?: { code?: string; message?: string; retryable?: boolean }; message?: string }
         | undefined;
     if (data?.error && typeof data.error.message === 'string') {
@@ -200,6 +200,7 @@ export function useLibraryLink() {
     const failure = ref<LibraryLinkFailure | null>(null);
     let timer: ReturnType<typeof setTimeout> | null = null;
     let disposed = false;
+    const isDisposed = (): boolean => disposed;
     /** Invalidates in-flight responses when the identity or scope changes. */
     let generation = 0;
 
@@ -243,7 +244,7 @@ export function useLibraryLink() {
         try {
             await request(current);
         } finally {
-            if (!disposed && generation === current) schedule();
+            if (!isDisposed() && generation === current) schedule();
         }
     }
 

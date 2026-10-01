@@ -278,7 +278,7 @@ export async function hashToContentPart(hash: string): Promise<ContentPart | nul
                 type: 'file',
                 data: dataUrl,
                 mediaType: mime,
-                name: meta?.name || 'document.pdf',
+                name: meta.name || 'document.pdf',
             };
         }
         if (meta?.kind !== 'image' || !isSupportedRasterMimeType(mime)) {

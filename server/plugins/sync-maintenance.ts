@@ -74,7 +74,7 @@ export async function runSyncMaintenance(): Promise<void> {
  */
 export function startSyncMaintenanceScheduler(): { stop: () => void } | null {
     const config = useRuntimeConfig();
-    if (config.sync?.enabled !== true || config.sync?.provider !== 'sqlite') {
+    if (config.sync.enabled !== true || config.sync.provider !== 'sqlite') {
         return null;
     }
 
@@ -108,7 +108,7 @@ function queueInitialMaintenancePass(): void {
 
 export default defineNitroPlugin((nitroApp: NitroApp) => {
     const config = useRuntimeConfig();
-    if (config.sync?.enabled !== true || config.sync?.provider !== 'sqlite') {
+    if (config.sync.enabled !== true || config.sync.provider !== 'sqlite') {
         return;
     }
 

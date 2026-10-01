@@ -721,8 +721,8 @@ export function applyPortableProfileToManifest(
     manifest: PluginManifestV2,
     profile: Or3PortableProfile
 ): PluginManifestV2 {
-    const features = manifest.features ?? { required: [], optional: [] };
-    const required = uniqueStable([...(features.required ?? []), ...profile.requiredFeatures]);
+    const features = manifest.features;
+    const required = uniqueStable([...(features.required), ...profile.requiredFeatures]);
     return {
         ...manifest,
         features: {
@@ -730,7 +730,7 @@ export function applyPortableProfileToManifest(
             required,
         },
         settings: {
-            ...(manifest.settings ?? { version: 0 }),
+            ...(manifest.settings),
             schema: profile.setup.settingsSchemaPath,
         },
     };
@@ -788,7 +788,7 @@ export function validatePortableProfile(
             );
         }
         if (parsed.value) {
-            if (parsed.value.policyVersion !== PORTABLE_PROFILE_VERSION) {
+            if ((parsed.value.policyVersion as unknown) !== PORTABLE_PROFILE_VERSION) {
                 report(
                     'portable-profile-version-unsupported',
                     PACKAGE_POLICY_FILE,
@@ -810,7 +810,7 @@ export function validatePortableProfile(
             );
         }
         if (parsed.value) {
-            if (parsed.value.setupVersion !== PORTABLE_PROFILE_VERSION) {
+            if ((parsed.value.setupVersion as unknown) !== PORTABLE_PROFILE_VERSION) {
                 report(
                     'portable-profile-version-unsupported',
                     PACKAGE_SETUP_FILE,
@@ -1146,7 +1146,7 @@ export function validatePortableProfile(
         // action may name them directly (e.g. "documents.write").
         for (const scope of policyUsable.dataScopes) declaredOperations.add(scope);
         for (const write of policyUsable.writes) declaredOperations.add(write);
-        for (const connectionId of setupUsable.connections ?? []) {
+        for (const connectionId of setupUsable.connections) {
             if (!declaredConnections.has(connectionId)) {
                 report(
                     'portable-setup-connection-unknown',
@@ -1156,7 +1156,7 @@ export function validatePortableProfile(
             }
         }
         const actionOperations = uniqueStable(
-            [setupUsable.testAction?.operationId, setupUsable.firstAction?.operationId].filter(
+            [setupUsable.testAction?.operationId, setupUsable.firstAction.operationId].filter(
                 (value): value is string => typeof value === 'string'
             )
         );
@@ -1227,7 +1227,7 @@ export function validatePortableProfile(
         }
 
         const required = new Set(requiredFeatures);
-        for (const feature of policyUsable.requiredFeatures ?? []) {
+        for (const feature of policyUsable.requiredFeatures) {
             if (!required.has(feature)) {
                 report(
                     'portable-feature-mismatch',

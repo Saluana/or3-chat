@@ -213,7 +213,7 @@ export function describePluginStatus(view: PluginLifecycleView, facts: PluginSta
     if (facts.setup === 'blocked') {
         return { state: 'needs-attention', label: 'Needs attention', reason: 'This plugin’s setup cannot run on this host. Open setup details for the specific blocker.', action: 'configure' };
     }
-    if (facts.enabled && view.runtime.state === 'running' &&
+    if (view.runtime.state === 'running' &&
         view.runtime.identity.pluginId === view.selected.pluginId &&
         view.runtime.identity.packageTreeSha256 === view.selected.packageTreeSha256) {
         return { state: 'active', label: view.runtime.degradedContributions.length ? 'Active with issues' : 'Active here', reason: 'This browser observed the selected package in this workspace.', action: 'open' };

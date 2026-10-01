@@ -89,7 +89,7 @@ export async function readLocalAdmission(
         );
         const parsed = JSON.parse(raw) as LocalAdmissionRecord;
         if (
-            (parsed.schemaVersion !== 1 && parsed.schemaVersion !== 2) ||
+            (parsed.schemaVersion !== 1 && (parsed.schemaVersion as unknown) !== 2) ||
             parsed.pluginId !== pluginId ||
             parsed.packageDigest !== packageDigest
         ) {

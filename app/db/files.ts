@@ -113,7 +113,7 @@ function applyFileEntityToMeta<
     T extends Record<string, unknown> & LegacyFileMetaInput,
 >(
     meta: T,
-    entity: FileEntity
+    entity: Omit<FileEntity, 'kind'> & { kind?: FileEntity['kind'] }
 ): T {
     return {
         ...meta,
@@ -300,6 +300,7 @@ export async function createOrRefFile(
 
     let storedMeta: FileMeta | null = null;
     let createdNew = false;
+    const wasCreated = (): boolean => createdNew;
     assertCurrentDb();
     await db.transaction(
         'rw',
@@ -353,14 +354,14 @@ export async function createOrRefFile(
     // Use non-null assertion since the transaction guarantees the value is set
     const finalMeta = storedMeta!;
     if (import.meta.dev) {
-        console.debug(createdNew ? '[files] created' : '[files] ref existing', {
+        console.debug(wasCreated() ? '[files] created' : '[files] ref existing', {
             hash: finalMeta.hash.slice(0, 8),
             size: file.size,
             mime,
         });
     }
     if (markId && hasPerf) {
-        finalizePerf(markId, createdNew ? 'create' : 'ref', file.size);
+        finalizePerf(markId, wasCreated() ? 'create' : 'ref', file.size);
     }
     if (!finalMeta.storage_id) {
         assertCurrentDb();

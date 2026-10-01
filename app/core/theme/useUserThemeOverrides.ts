@@ -75,7 +75,7 @@ function loadFromStorage(mode: 'light' | 'dark'): UserThemeOverrides | null {
         const key = mode === 'light' ? STORAGE_KEY_LIGHT : STORAGE_KEY_DARK;
         const raw = localStorage.getItem(key);
         if (!raw) return null;
-        const parsed = JSON.parse(raw);
+        const parsed: unknown = JSON.parse(raw);
         if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
             return null;
         }
@@ -164,7 +164,7 @@ function initializeStore(store: StoreState): void {
             store.light,
             store.dark,
             store.activeMode,
-            () => store.themePlugin?.resolversVersion?.value,
+            () => (store.themePlugin as Partial<ThemePlugin> | undefined)?.resolversVersion?.value,
         ],
         () => scheduleCommit(store),
         { deep: true, flush: 'sync' }
@@ -224,7 +224,7 @@ export function useUserThemeOverrides() {
     function switchMode(mode: 'light' | 'dark') {
         if (mode === store.activeMode.value) return;
         store.activeMode.value = mode;
-        store.themePlugin?.set?.(mode);
+        (store.themePlugin as Partial<ThemePlugin> | undefined)?.set?.(mode);
     }
 
     function reapply() {

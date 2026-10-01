@@ -7,6 +7,7 @@ import {
     activityOk,
     type ActivityActionInput,
     type ActivityError,
+    type ActivityEvent,
     type ActivityListInput,
     type ActivityResult,
     type ActivityRunDetail,
@@ -62,7 +63,7 @@ function normalizeSummary(
             code: 'invalid_input',
             message: `Activity source "${sourceId}" returned an invalid run summary`,
             sourceId,
-            runId: input?.id,
+            runId: (input as ActivityRunSummary | null | undefined)?.id,
             cause: parsed.success ? undefined : parsed.error,
         });
     }
@@ -268,7 +269,7 @@ export class ActivityRegistry {
         const degradedSources: ActivityError[] = [];
         for (const result of settled) {
             if (result.error) degradedSources.push(result.error);
-            else if (result.runs) runs.push(...result.runs);
+            else runs.push(...result.runs);
         }
         runs.sort(
             (left, right) =>
@@ -404,7 +405,7 @@ export class ActivityRegistry {
                                     code: 'stale_event',
                                     message: `Activity source "${source.id}" emitted after its registration ended`,
                                     sourceId: source.id,
-                                    runId: candidate?.runId,
+                                    runId: (candidate as ActivityEvent | null | undefined)?.runId,
                                 });
                             }
                             return;
@@ -419,7 +420,7 @@ export class ActivityRegistry {
                                 code: 'invalid_input',
                                 message: `Activity source "${source.id}" emitted an invalid event`,
                                 sourceId: source.id,
-                                runId: candidate?.runId,
+                                runId: (candidate as ActivityEvent | null | undefined)?.runId,
                                 cause: parsed.success
                                     ? undefined
                                     : parsed.error,

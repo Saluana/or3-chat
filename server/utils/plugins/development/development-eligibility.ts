@@ -66,7 +66,7 @@ function isLoopbackHost(hostname: string): boolean {
 
 /** Request Host header hostname, without any port. */
 function requestHost(event: H3Event): string {
-    const host = event.node.req.headers?.host ?? '';
+    const host = event.node.req.headers.host ?? '';
     const withoutPort = host.startsWith('[')
         ? (host.match(/^\[([^\]]*)\]/)?.[1] ?? '')
         : host.split(':')[0] ?? '';
@@ -75,7 +75,7 @@ function requestHost(event: H3Event): string {
 
 /** Forwarder entries the request carries (X-Forwarded-For plus RFC 7239 Forwarded). */
 function forwarderEntries(event: H3Event): readonly string[] {
-    const headers = event.node.req.headers ?? {};
+    const headers = event.node.req.headers;
     const raw = (name: string): string => {
         const value = headers[name];
         return Array.isArray(value) ? value.join(',') : (value ?? '');

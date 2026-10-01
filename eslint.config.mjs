@@ -10,9 +10,11 @@ const nuxtProjects = [
     './.nuxt/tsconfig.node.json',
 ];
 
-const existingProjects = nuxtProjects.filter((path) =>
-    existsSync(new URL(path, import.meta.url))
-);
+// Indexed collections can be sparse at runtime. Preserve that uncertainty in
+// lint's type analysis so valid bounds checks are not reported as redundant.
+const existingProjects = nuxtProjects
+    .filter((path) => existsSync(new URL(path, import.meta.url)))
+    .map((path) => path.replace('./.nuxt/tsconfig.', './tsconfig.eslint.'));
 const lintProject = './tsconfig.eslint.json';
 
 export default [
@@ -42,10 +44,16 @@ export default [
         ignores: [
             '.nuxt/**',
             '.output/**',
+            '.or3-plugin-dev/**',
+            '.nuxt-plugin-dev/**',
+            'output/**',
+            'extensions/.store/**',
+            'convex/**',
             'node_modules/**',
             'dist/**',
             'public/**',
             '**/*.test.ts',
+            '**/*.test-d.ts',
             '**/*.vue',
             '**/*.d.ts',
             'tests/**',

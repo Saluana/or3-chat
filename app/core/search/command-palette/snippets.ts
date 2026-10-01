@@ -6,7 +6,7 @@ const DEFAULT_SNIPPET_RADIUS = 80;
  * escapes markup without exposing entity strings such as `&lt;` to users.
  */
 export function buildEscapedSnippet(
-    text: string,
+    text: string | null | undefined,
     term: string,
     radius = DEFAULT_SNIPPET_RADIUS
 ): string {

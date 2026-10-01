@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
             statusMessage: 'Too many connection attempts. Try again shortly.',
         });
     }
-    const body = (await readBody(event)) as { code?: unknown };
+    const body = (await readBody(event)) as { code?: unknown } | null | undefined;
     const code = normalizeUserCode(body?.code);
     const store = requireConnectStore();
     const authorization = await store.getAuthorizationByUserHash(

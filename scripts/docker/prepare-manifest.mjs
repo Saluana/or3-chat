@@ -22,7 +22,8 @@ const INACTIVE_FIXED_PROFILE_PROVIDERS = [
     'or3-provider-convex',
     'or3-provider-s3',
 ];
-const INACTIVE_FIXED_PROFILE_DEV_DEPENDENCIES = ['convex'];
+// Provider source fixtures are only used by contributor integration tests.
+const INACTIVE_FIXED_PROFILE_DEV_DEPENDENCIES = ['convex', 'or3-provider-sqlite-tests'];
 
 export function prepareDockerManifest(input) {
     const manifest = structuredClone(input);

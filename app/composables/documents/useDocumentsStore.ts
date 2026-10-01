@@ -89,6 +89,7 @@ export async function flush(id: string) {
     const capturedTitleGeneration = st.pendingTitleGeneration;
     const capturedContentGeneration = st.pendingContentGeneration;
     let saveSucceeded = false;
+    const didSaveSucceed = (): boolean => saveSucceeded;
 
     st.flushPromise = (async () => {
         const patch: Partial<Pick<Document, 'title' | 'content'>> = {};
@@ -112,14 +113,14 @@ export async function flush(id: string) {
             // Clear only the exact generations that were persisted. New edits
             // made during the write remain staged for the next flush.
             if (
-                saveSucceeded &&
+                didSaveSucceed() &&
                 st.pendingTitleGeneration === capturedTitleGeneration
             ) {
                 st.pendingTitle = undefined;
                 st.pendingTitleGeneration = undefined;
             }
             if (
-                saveSucceeded &&
+                didSaveSucceed() &&
                 st.pendingContentGeneration === capturedContentGeneration
             ) {
                 st.pendingContent = undefined;
@@ -157,7 +158,7 @@ export async function flush(id: string) {
 
     await st.flushPromise;
     if (
-        saveSucceeded &&
+        didSaveSucceed() &&
         (st.pendingTitle !== undefined || st.pendingContent !== undefined)
     ) {
         return flush(id);

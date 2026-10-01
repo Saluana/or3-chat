@@ -41,6 +41,7 @@ export async function fetchWithResponseDeadline(
     const timeoutMs = options.timeoutMs ?? DEFAULT_UPSTREAM_RESPONSE_TIMEOUT_MS;
     const controller = new AbortController();
     let timedOut = false;
+    const hasTimedOut = (): boolean => timedOut;
     let rejectBoundary!: (error: Error) => void;
     const boundary = new Promise<never>((_resolve, reject) => {
         rejectBoundary = reject;
@@ -65,7 +66,7 @@ export async function fetchWithResponseDeadline(
             boundary,
         ]);
     } catch (error) {
-        if (timedOut) {
+        if (hasTimedOut()) {
             throw error instanceof OpenRouterTimeoutError
                 ? error
                 : new OpenRouterTimeoutError('response', timeoutMs);

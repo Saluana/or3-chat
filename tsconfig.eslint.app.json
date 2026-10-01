@@ -1,0 +1,6 @@
+{
+  "extends": "./.nuxt/tsconfig.app.json",
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": true
+  }
+}

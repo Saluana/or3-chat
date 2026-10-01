@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
             statusMessage: 'Too many connection attempts. Try again shortly.',
         });
     }
-    const body = await readLimitedJsonBody<{ host?: unknown }>(event);
+    const body = await readLimitedJsonBody<{ host?: unknown } | null>(event);
     const host = parseConnectHost(body?.host);
     const deviceCode = randomURLSecret(32);
     const now = Date.now();

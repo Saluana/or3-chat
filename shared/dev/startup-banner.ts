@@ -79,6 +79,6 @@ let startupBannerPrinted = false;
 export function printStartupBanner(input: StartupBannerInput): void {
     if (startupBannerPrinted) return;
     startupBannerPrinted = true;
-    // eslint-disable-next-line no-console
+
     console.log(formatStartupBanner(input));
 }

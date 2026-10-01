@@ -782,7 +782,6 @@ export class RegistryClient {
             for (;;) {
                 const { done, value } = await reader.read();
                 if (done) break;
-                if (!value) continue;
                 written += value.byteLength;
                 if (written > this.#options.maxArtifactBytes) {
                     await reader.cancel('artifact-too-large');

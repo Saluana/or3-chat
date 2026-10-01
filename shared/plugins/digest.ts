@@ -66,7 +66,7 @@ function hex(bytes: Uint8Array): string {
 
 /** Lowercase SHA-256 hex of the input bytes. */
 export async function sha256Hex(input: HashInput): Promise<string> {
-    const subtle = globalThis.crypto?.subtle;
+    const subtle = (globalThis as { crypto?: Crypto }).crypto?.subtle;
     if (!subtle) {
         throw new Error('Web Crypto SHA-256 is unavailable');
     }
@@ -98,7 +98,7 @@ function toBase64(bytes: Uint8Array): string {
  * hex identity used elsewhere.
  */
 export async function sha256CspHash(input: HashInput): Promise<string> {
-    const subtle = globalThis.crypto?.subtle;
+    const subtle = (globalThis as { crypto?: Crypto }).crypto?.subtle;
     if (!subtle) {
         throw new Error('Web Crypto SHA-256 is unavailable');
     }

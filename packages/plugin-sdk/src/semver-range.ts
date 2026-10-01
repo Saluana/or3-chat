@@ -132,9 +132,9 @@ function expandCaret(partial: PartialVersion): ComparatorSet | null {
     let upper: ParsedVersion;
     if (major > 0) upper = version(major + 1, 0, 0);
     else if (minorWild) upper = version(1, 0, 0);
-    else if ((minor ?? 0) > 0) upper = version(0, (minor ?? 0) + 1, 0);
-    else if (patchWild) upper = version(0, (minor ?? 0) + 1, 0);
-    else upper = version(0, 0, (patch ?? 0) + 1);
+    else if ((minor) > 0) upper = version(0, (minor) + 1, 0);
+    else if (patchWild) upper = version(0, (minor) + 1, 0);
+    else upper = version(0, 0, (patch) + 1);
     return [
         { operator: '>=', version: lower },
         { operator: '<', version: upper },

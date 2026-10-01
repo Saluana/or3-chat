@@ -19,7 +19,7 @@ export function resolveAdminWorkspaceTarget(
         typeof requestedWorkspaceId === 'string'
             ? requestedWorkspaceId.trim()
             : '';
-    const sessionWorkspaceId = context.session?.workspace?.id?.trim() ?? '';
+    const sessionWorkspaceId = context.session?.workspace?.id.trim() ?? '';
 
     if (isSuperAdmin(context)) {
         const target = requested || sessionWorkspaceId;

@@ -28,7 +28,7 @@ export async function readLimitedJsonBody<T>(
     }
 
     const nodeRequest = (
-        event as H3Event & {
+        event as unknown as {
             node?: {
                 req?: AsyncIterable<Uint8Array | Buffer | string>;
             };
@@ -53,7 +53,7 @@ export async function readLimitedJsonBody<T>(
 
     // Web-runtime requests expose a bounded ReadableStream instead.
     const webBody = (
-        event as H3Event & {
+        event as unknown as {
             request?: { body?: ReadableStream<Uint8Array> | null };
         }
     ).request?.body;
@@ -88,7 +88,7 @@ export async function readLimitedJsonBody<T>(
     // check above. Production Node and edge requests use one of the bounded
     // streaming branches.
     const value = await readBody<T>(event);
-    const serialized = JSON.stringify(value);
+    const serialized = JSON.stringify(value) as string | undefined;
     if (serialized === undefined) {
         throw createError({
             statusCode: 400,

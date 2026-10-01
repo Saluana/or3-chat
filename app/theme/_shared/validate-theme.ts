@@ -404,7 +404,7 @@ export function validateThemeDefinition(
                 file: 'theme.ts',
                 suggestion: `Set componentContractVersion: ${THEME_COMPONENT_CONTRACT_VERSION} after running the component conformance tests.`,
             });
-        } else if (config.componentContractVersion !== THEME_COMPONENT_CONTRACT_VERSION) {
+        } else if ((config.componentContractVersion as unknown) !== THEME_COMPONENT_CONTRACT_VERSION) {
             errors.push({
                 severity: 'error',
                 code: 'THEME_021',

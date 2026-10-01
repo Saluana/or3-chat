@@ -85,7 +85,7 @@ export default defineEventHandler(async (event) => {
             throw createError({ statusCode: 409, statusMessage: 'The buyer no longer belongs to the requested workspace.' });
         }
         const link = await (await libraryLinkServiceFor(event)).service.status(request.buyerUserId);
-        if (link.state !== 'linked' || link.link?.id !== request.linkId || link.link?.accountId !== request.accountId) {
+        if (link.state !== 'linked' || link.link?.id !== request.linkId || link.link.accountId !== request.accountId) {
             throw createError({ statusCode: 409, statusMessage: 'The buyer’s Library link changed. Ask for a new install request.' });
         }
         const existing = (await new PluginAcquisitionOperationStore().list(request.pluginId))

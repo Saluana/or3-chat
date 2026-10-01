@@ -404,7 +404,6 @@ export async function resolveThemeStylesheetHref(
     }
 
     if (
-        !isExternal &&
         !trimmed.startsWith('~/') &&
         !trimmed.startsWith('./') &&
         !trimmed.startsWith('../')

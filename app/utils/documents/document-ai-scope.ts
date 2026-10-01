@@ -41,7 +41,7 @@ export function resolveDocumentAiScopeRange(
             from: position,
             to: end,
             isHeading: node.type.name === 'heading',
-            level: node.type.name === 'heading' ? Number(node.attrs?.level ?? 1) : 4,
+            level: node.type.name === 'heading' ? Number(node.attrs.level ?? 1) : 4,
         });
         const caret = editor.state.selection.from;
         if (caret >= position && caret <= end) selectedIndex = index;

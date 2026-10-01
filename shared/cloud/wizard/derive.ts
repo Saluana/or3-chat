@@ -324,7 +324,7 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
 
     const usesSqlite = usesSqliteProvider(answers);
     if (usesSqlite) {
-        const sqliteDriver = answers.sqliteDriver ?? 'better-sqlite3';
+        const sqliteDriver = answers.sqliteDriver;
         setEnv(env, 'OR3_SQLITE_DRIVER', sqliteDriver);
         if (
             sqliteDriver === 'better-sqlite3' ||
@@ -354,7 +354,7 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
                 'OR3_SQLITE_TURSO_AUTH_TOKEN',
                 answers.sqliteTursoAuthToken
             );
-        } else if (sqliteDriver === 'd1') {
+        } else {
             setEnv(env, 'OR3_SQLITE_D1_BINDING', answers.sqliteD1Binding);
         }
     }

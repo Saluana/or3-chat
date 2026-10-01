@@ -1,5 +1,6 @@
 import { computed, readonly, ref, watch, type Ref } from 'vue';
 import type { Editor, JSONContent } from '@tiptap/core';
+
 import { useUserApiKey } from '~/core/auth/useUserApiKey';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useTokenizer } from '~/composables/core/useTokenizer';
@@ -68,6 +69,11 @@ import {
     isForcedToolThinkingConflict,
     resolveDocumentAiToolStreamOptions,
 } from '~/core/documents/document-ai-agent-policy';
+
+// These commands exist only while the Document AI extension is installed.
+function documentAiCommands(editor: Editor): Partial<Editor['commands']> {
+    return editor.commands;
+}
 
 export {
     DOCUMENT_AI_WORKFLOW_INSTRUCTION,
@@ -254,13 +260,13 @@ function syncHunkDecorations(
 ) {
     if (!editor || editor.isDestroyed) return;
     if (!proposal) {
-        editor.commands.clearDocumentAiHunks?.();
+        documentAiCommands(editor).clearDocumentAiHunks?.();
         return;
     }
     const pendingId = activeHunkId
         ?? proposal.hunks.find((hunk) => hunk.status === 'pending')?.id
         ?? null;
-    editor.commands.setDocumentAiHunks?.({
+    documentAiCommands(editor).setDocumentAiHunks?.({
         hunks: proposal.hunks,
         snapshot: proposal.snapshot,
         activeHunkId: pendingId,
@@ -297,6 +303,7 @@ export function useDocumentAiAgent(options: {
     const error = ref('');
     const tokenEstimate = ref(0);
     const proposal = ref<DocumentAiProposal | null>(null);
+    function ownsProposal(documentId: string): boolean { return proposal.value?.documentId === documentId; }
     const chatToolRuns = new Map<string, {
         snapshotId: string;
         documentId: string;
@@ -509,7 +516,7 @@ export function useDocumentAiAgent(options: {
 
         if (mode === 'clear') {
             scopeHighlightActive = false;
-            editor.commands.setDocumentAiScopeRange?.(null);
+            documentAiCommands(editor).setDocumentAiScopeRange?.(null);
             return;
         }
         if (mode === 'show') scopeHighlightActive = true;
@@ -520,11 +527,11 @@ export function useDocumentAiAgent(options: {
             || status.value === 'preview'
             || Boolean(proposal.value)
         ) {
-            editor.commands.setDocumentAiScopeRange?.(null);
+            documentAiCommands(editor).setDocumentAiScopeRange?.(null);
             return;
         }
         const range = resolveDocumentAiScopeRange(editor, lastScope.value);
-        editor.commands.setDocumentAiScopeRange?.(range);
+        documentAiCommands(editor).setDocumentAiScopeRange?.(range);
     }
 
     function clearScopeHighlight() {
@@ -572,7 +579,7 @@ export function useDocumentAiAgent(options: {
     }
 
     function bindHunkHandlers(editor: Editor) {
-        editor.commands.setDocumentAiHunkHandlers?.({
+        documentAiCommands(editor).setDocumentAiHunkHandlers?.({
             onAcceptHunk: (hunkId) => {
                 if (accepting.value) return;
                 if (stale.value) {
@@ -675,6 +682,8 @@ export function useDocumentAiAgent(options: {
         );
     }
 
+    const isEstimating = (): boolean => status.value === 'estimating';
+
     async function estimate(request: DocumentAiEstimateRequest) {
         const editor = options.editor.value;
         if (!editor) return 0;
@@ -721,15 +730,15 @@ export function useDocumentAiAgent(options: {
             }
             const references = await referenceContext(request.references);
             tokenEstimate.value = await countTokens(`${request.prompt}\n${seedText}\n${references}`);
-            if (status.value === 'estimating') error.value = '';
+            if (isEstimating()) error.value = '';
             return tokenEstimate.value;
         } catch (caught) {
-            if (status.value === 'estimating') {
+            if (isEstimating()) {
                 error.value = caught instanceof Error ? caught.message : String(caught);
             }
             return 0;
         } finally {
-            if (status.value === 'estimating') status.value = 'idle';
+            if (isEstimating()) status.value = 'idle';
         }
     }
 
@@ -814,7 +823,7 @@ export function useDocumentAiAgent(options: {
         if (!runControl.isCurrent(myGeneration)) return;
         const contextLimit = model.top_provider?.context_length ?? model.context_length ?? 32_000;
         if (tokenEstimate.value + 4096 > contextLimit) {
-            error.value = `This ${scope} is too large for ${model.name ?? model.id}. Choose a larger-context model or a smaller scope.`;
+            error.value = `This ${scope} is too large for ${model.name}. Choose a larger-context model or a smaller scope.`;
             status.value = 'error';
             return;
         }
@@ -828,7 +837,7 @@ export function useDocumentAiAgent(options: {
             references: uniqueDocumentAiReferences(submission.references),
             referenceContext: references,
             tokenEstimate: tokenEstimate.value,
-            maxIterations: settings.value.maxIterations ?? DEFAULT_DOCUMENT_AI_MAX_ITERATIONS,
+            maxIterations: settings.value.maxIterations,
             chunkWordLimit: settings.value.chunkWordLimit,
         });
         if (!runControl.isCurrent(myGeneration) || options.documentId.value !== submitDocumentId) return;
@@ -1035,7 +1044,7 @@ export function useDocumentAiAgent(options: {
                 proposal.value = { ...interim, requestVersion: versionAfterAccept };
             }
             await options.persistCurrent();
-            if (proposal.value?.documentId !== current.documentId) return;
+            if (!ownsProposal(current.documentId)) return;
 
             if (!pending.length) {
                 proposal.value = null;
@@ -1153,7 +1162,7 @@ export function useDocumentAiAgent(options: {
         const editor = options.editor.value;
         if (!editor || !proposal.value) return;
         focusedHunkId.value = hunkId;
-        editor.commands.setActiveDocumentAiHunk?.(hunkId);
+        documentAiCommands(editor).setActiveDocumentAiHunk?.(hunkId);
         // Wait for the decoration refresh to mount the next card/marker before scrolling.
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {

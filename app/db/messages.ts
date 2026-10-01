@@ -35,8 +35,8 @@ import type { MessageEntity } from '../core/hooks/hook-types';
 import { serializeFileHashes } from './files-util';
 
 export function compareMessageOrder(
-    a: Pick<Message, 'index' | 'order_key' | 'id'>,
-    b: Pick<Message, 'index' | 'order_key' | 'id'>
+    a: Pick<Message, 'order_key' | 'id'> & { index?: number },
+    b: Pick<Message, 'order_key' | 'id'> & { index?: number }
 ): number {
     const indexOrder = (a.index ?? 0) - (b.index ?? 0);
     if (indexOrder !== 0) return indexOrder;
@@ -353,7 +353,7 @@ export async function patchMessageInDb(
             const validated = parseOrThrow(MessageSchema, candidate);
             const fresh = {
                 ...validated,
-                clock: nextClock(base.clock ?? validated.clock),
+                clock: nextClock(base.clock),
                 hlc:
                     (validated as { hlc?: string }).hlc ??
                     (base as { hlc?: string }).hlc ??

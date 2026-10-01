@@ -61,7 +61,7 @@ export default defineEventHandler(async (event) => {
             : `Rollback was refused: ${result.code}.`,
         data: { code: result.code, blocking: result.blocking ?? [] } });
     }
-    if (result.status === 'rolled-back') {
+    {
         // The selected package changed for every workspace: revoke live handles
         // so an activation from the rolled-back version cannot keep acting (or
         // saving settings) after the rollback, even if the digest it names is
@@ -78,5 +78,5 @@ export default defineEventHandler(async (event) => {
             console.warn('[plugin-rollback] Post-commit admin hook failed', { pluginId });
         }
     }
-    return { ok: result.status === 'rolled-back', workspaceId, ...result };
+    return { ok: true, workspaceId, ...result };
 });

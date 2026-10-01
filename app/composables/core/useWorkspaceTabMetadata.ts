@@ -67,7 +67,7 @@ export function useWorkspaceTabMetadata() {
                 title = documentTitles.get(tab.resource.documentId)?.trim() || title;
             } else if (tab.resource.kind === 'app') {
                 const appLabel = getPaneApp(tab.resource.appId)?.label;
-                const cachedTitle = tab.cachedTitle?.trim();
+                const cachedTitle = tab.cachedTitle.trim();
                 title =
                     cachedTitle &&
                     cachedTitle !== tab.resource.appId &&

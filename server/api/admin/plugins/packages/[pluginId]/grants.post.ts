@@ -137,7 +137,7 @@ export default defineEventHandler(async (event) => {
         const matchesStaged = body.data.expectedPackageDigest === packageDigest;
         const matchesSignedArtifact =
             operation !== undefined &&
-            body.data.expectedPackageDigest === operation.release?.packageTreeSha256;
+            body.data.expectedPackageDigest === operation.release.packageTreeSha256;
         if (!matchesStaged && !matchesSignedArtifact) {
             throw createError({
                 statusCode: 409,

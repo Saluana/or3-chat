@@ -104,6 +104,8 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
+      - name: Check fixed-profile Docker lockfile
+        run: bun scripts/release/check-lock-drift.mjs
       - name: Check banned provider imports
         if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.banned_imports == 'true'
         run: bash scripts/check-banned-imports.sh

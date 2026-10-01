@@ -15,7 +15,7 @@ export interface ChunkPlan {
  * Split content into overlapping chunks, preferring whitespace near the target length.
  */
 export function chunkText(
-    content: string,
+    content: string | null | undefined,
     options?: { size?: number; overlap?: number }
 ): string[] {
     const size = options?.size ?? PALETTE_CHUNK_SIZE;

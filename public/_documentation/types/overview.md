@@ -22,3 +22,5 @@ A database row is not a UI message or a provider payload. A document row has ser
 Use `import type` for declarations with no runtime dependency. Nuxt's `~/` alias resolves to `app/`, and `~~/` to the repository root. Those aliases are for host source development; a separately built portable plugin imports the SDK instead.
 
 Types do not grant authority or validate untrusted input. Use the existing runtime schemas, permission checks, and entity APIs where the data crosses a boundary.
+
+ESLint uses the Nuxt project types with `noUncheckedIndexedAccess` enabled. Sparse record and array lookups can return `undefined`, so keep their bounds checks. Runtime JSON should enter as `unknown` and be validated before it is treated as a complete contract.

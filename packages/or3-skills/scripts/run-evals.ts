@@ -10,14 +10,14 @@ const SKILLS = new Set([
 ])
 
 interface RoutingCase {
-  expected: { primarySkill: string | null; surface: string }
+  expected?: { primarySkill: string | null; surface: string }
   id: string
-  prompt: string
+  prompt?: string
 }
 
 interface CompletionCase {
   id: string
-  requiredSections: string[]
+  requiredSections?: string[]
 }
 
 export async function validateEvaluationFixtures(root = packageRoot) {

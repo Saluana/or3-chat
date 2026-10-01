@@ -462,7 +462,7 @@ export function createPortableSettingsServices(
                 }
             },
             async set(params, context) {
-                if (context?.signal?.aborted) {
+                if (context?.signal.aborted) {
                     throw Object.assign(new Error('Storage operation was revoked'), {
                         rpcCode: 'cancelled',
                     });
@@ -560,7 +560,7 @@ export function createPortableSettingsServices(
                 };
             },
             async delete(params, context) {
-                if (context?.signal?.aborted) {
+                if (context?.signal.aborted) {
                     throw Object.assign(new Error('Storage operation was revoked'), {
                         rpcCode: 'cancelled',
                     });

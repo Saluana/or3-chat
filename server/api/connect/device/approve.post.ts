@@ -45,7 +45,7 @@ export default defineEventHandler(async (event) => {
             statusMessage: 'Too many connection attempts. Try again shortly.',
         });
     }
-    const body = (await readBody(event)) as { code?: unknown; name?: unknown };
+    const body = (await readBody(event)) as { code?: unknown; name?: unknown } | null | undefined;
     const code = normalizeUserCode(body?.code);
     const name =
         typeof body?.name === 'string' ? body.name.trim().slice(0, 80) : '';

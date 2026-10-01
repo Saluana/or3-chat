@@ -897,7 +897,7 @@ export class PluginAcquisitionService {
                 false
             );
         }
-        if (!record.release || record.release.pluginId !== record.pluginId) {
+        if (!(record.release as unknown) || record.release.pluginId !== record.pluginId) {
             return await this.#fail(
                 record,
                 'release-identity-mismatch',
@@ -931,7 +931,7 @@ export class PluginAcquisitionService {
     }
 
     async #download(record: PluginAcquisitionOperation): Promise<StepResult> {
-        const release = record.release;
+        const release = record.release as typeof record.release | undefined;
         if (!release) {
             return await this.#fail(
                 record,
@@ -1006,7 +1006,7 @@ export class PluginAcquisitionService {
                 expectedRelease: release,
             });
             if (!access || !access.ok) {
-                const mapped = access && !access.ok ? libraryAccessFailure(access) : null;
+                const mapped = access ? libraryAccessFailure(access) : null;
                 return await this.#fail(
                     record,
                     mapped?.code ?? 'coverage-required',
@@ -1017,7 +1017,7 @@ export class PluginAcquisitionService {
                     { downloadedBytes: await safeFileSize(artifactPath), stagingObject: artifactPath }
                 );
             }
-            if (!access.receipt) {
+            if (!(access.receipt as unknown)) {
                 return await this.#fail(
                     record,
                     'library-unavailable',
@@ -1068,7 +1068,7 @@ export class PluginAcquisitionService {
 
     /** Canonical tree verification plus manifest identity, before any pointer write. */
     async #verify(record: PluginAcquisitionOperation): Promise<StepResult> {
-        const release = record.release;
+        const release = record.release as typeof record.release | undefined;
         if (!release) {
             return await this.#fail(record, 'internal-error', 'The operation has no release.', false);
         }
@@ -1144,7 +1144,7 @@ export class PluginAcquisitionService {
 
     /** Records the candidate through the existing candidate service. */
     async #recordCandidate(record: PluginAcquisitionOperation): Promise<StepResult> {
-        const release = record.release;
+        const release = record.release as typeof record.release | undefined;
         if (!release) {
             return await this.#fail(record, 'internal-error', 'The operation has no release.', false);
         }
@@ -1729,7 +1729,7 @@ export class PluginAcquisitionService {
         packageRoot: string,
         manifest: Or3ExtensionManifestV2
     ): Promise<{ code: PluginAcquisitionFailureCode; message: string } | null> {
-        const profile = record.release?.profile ?? '';
+        const profile = record.release.profile;
         const requirement = acquisitionProfileRequirement(profile);
         if (!requirement) {
             return {
@@ -1756,7 +1756,7 @@ export class PluginAcquisitionService {
                 descriptors.policy || descriptors.setup) {
                 return { code: 'package-profile-mismatch', message: 'The trusted-host package shape does not match its signed profile.' };
             }
-            if (record.release?.authority === undefined) {
+            if (record.release.authority === undefined) {
                 return { code: 'authority-mismatch', message: 'Trusted-host releases require a complete signed authority.' };
             }
             const derivedAuthority = toTrustedManifestAuthority(manifest);
@@ -1787,7 +1787,7 @@ export class PluginAcquisitionService {
                     .join(', ')}`,
             };
         }
-        if (record.release?.authority !== undefined) {
+        if (record.release.authority !== undefined) {
             // New envelopes carry the complete signed authority. Rebuild it
             // from the exact staged manifest and descriptors so promotion
             // cannot rely on a hash-only registry review.
@@ -1823,10 +1823,10 @@ export class PluginAcquisitionService {
                 descriptors.policy,
                 descriptors.setup
             );
-            if (legacyAuthority !== null && legacyAuthority !== record.release?.authoritySha256) {
+            if (legacyAuthority !== null && legacyAuthority !== record.release.authoritySha256) {
                 return {
                     code: 'authority-mismatch',
-                    message: `The package's reviewed authority ${legacyAuthority} does not match the signed authority ${record.release?.authoritySha256}.`,
+                    message: `The package's reviewed authority ${legacyAuthority} does not match the signed authority ${record.release.authoritySha256}.`,
                 };
             }
         }
@@ -1902,7 +1902,7 @@ export class PluginAcquisitionService {
         record: PluginAcquisitionOperation,
         dryRun: { readonly packagePath: string; readonly state: unknown }
     ): Promise<CandidateCanaryStepResult> {
-        const requirement = acquisitionProfileRequirement(record.release?.profile ?? '');
+        const requirement = acquisitionProfileRequirement(record.release.profile);
         if (requirement?.serverRuntime === 'forbidden') {
             try {
                 await this.#deps.services.packages.verifyStoredPackage(
@@ -1931,7 +1931,7 @@ export class PluginAcquisitionService {
         record: PluginAcquisitionOperation,
         context: { readonly packagePath: string; readonly clientId: string }
     ): Promise<CandidateCanaryStepResult> {
-        const requirement = acquisitionProfileRequirement(record.release?.profile ?? '');
+        const requirement = acquisitionProfileRequirement(record.release.profile);
         if (!requirement || requirement.clientRuntime !== 'required') {
             return { status: 'skipped', code: 'server-only-profile' };
         }

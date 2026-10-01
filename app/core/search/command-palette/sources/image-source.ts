@@ -16,8 +16,8 @@ function category() {
     return CORE_PALETTE_CATEGORIES.find((c) => c.id === 'image')!;
 }
 
-export function isImageFileMeta(meta: FileMeta): boolean {
-    const kind = meta.kind ?? classifyFileKind(meta.mime_type);
+export function isImageFileMeta(meta: Omit<FileMeta, 'kind' | 'mime_type'> & { kind?: FileMeta['kind']; mime_type?: string }): boolean {
+    const kind = meta.kind ?? classifyFileKind(meta.mime_type ?? '');
     return !meta.deleted &&
         kind === 'image' &&
         isSupportedRasterMimeType(meta.mime_type ?? '');

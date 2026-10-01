@@ -27,7 +27,7 @@ export const Or3DocumentImage = Node.create({
     renderHTML({ HTMLAttributes }) {
         return ['figure', mergeAttributes(HTMLAttributes, {
             'data-or3-image': '',
-            'data-width': HTMLAttributes.width,
+            'data-width': HTMLAttributes.width as unknown,
         })];
     },
 

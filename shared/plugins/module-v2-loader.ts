@@ -168,7 +168,7 @@ export class ModuleV2Loader {
         }
 
         const { descriptor } = input;
-        if (descriptor.artifact.kind !== 'package-v2') {
+        if ((descriptor.artifact.kind as unknown) !== 'package-v2') {
             return {
                 status: 'blocked',
                 code: 'missing-client-entry',
@@ -285,19 +285,19 @@ export class ModuleV2Loader {
             clientEntry: normalizedEntry,
             requiresTrustedHostUi,
             load: async (): Promise<ModuleV2LoadOutcome> => {
-                if (signal.aborted || !isGenerationCurrent()) {
+                if (isAborted(signal) || !isGenerationCurrent()) {
                     return {
                         status: 'cancelled',
-                        reason: signal.aborted ? 'aborted' : 'generation-stale',
+                        reason: isAborted(signal) ? 'aborted' : 'generation-stale',
                         generation,
                         packageDigest,
                     };
                 }
                 const module = await importModule(url);
-                if (signal.aborted || !isGenerationCurrent()) {
+                if (isAborted(signal) || !isGenerationCurrent()) {
                     return {
                         status: 'cancelled',
-                        reason: signal.aborted ? 'aborted' : 'generation-stale',
+                        reason: isAborted(signal) ? 'aborted' : 'generation-stale',
                         generation,
                         packageDigest,
                     };
@@ -323,3 +323,5 @@ export function buildPluginPackageAssetUrl(input: ModuleV2AssetUrlInput): string
     const segments = entry.split('/').map((segment) => encodeURIComponent(segment));
     return `/api/plugins/packages/${encodeURIComponent(input.pluginId)}/${encodeURIComponent(input.packageDigest)}/${segments.join('/')}`;
 }
+
+function isAborted(signal: AbortSignal): boolean { return signal.aborted; }

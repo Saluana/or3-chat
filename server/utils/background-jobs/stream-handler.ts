@@ -1315,7 +1315,7 @@ export async function consumeBackgroundStreamWithTools(params: {
                 MAX_TOOL_ITERATIONS
             ).state;
         }
-        while (true) {
+        for (;;) {
             // A browser result can resume with no remaining queue. Check the
             // prior tool iteration before opening another paid model request.
             normalizedState = finishNormalizedIteration(

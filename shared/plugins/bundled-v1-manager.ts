@@ -431,7 +431,7 @@ export class BundledV1PluginManager {
                     }),
                 this.#options.cleanupTimeoutMs
             );
-            timeoutHandle.unref?.();
+            if (typeof timeoutHandle.unref === 'function') timeoutHandle.unref();
         });
         try {
             return await Promise.race([

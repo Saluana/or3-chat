@@ -31,7 +31,7 @@ function approxDataUrlBytes(dataUrl: string): number {
  * Panel checks are not trusted — clients can forge mime/kind/dataUrl.
  */
 export function validateDocumentAiAttachment(
-    attachment: DocumentAiAttachment,
+    attachment: { name: string; kind?: string; mime?: string; dataUrl?: string },
     maxBytes: number = getMaxFileBytes(),
 ): void {
     if (attachment.kind !== 'image' && attachment.kind !== 'pdf') {
@@ -44,7 +44,7 @@ export function validateDocumentAiAttachment(
         throw new Error(`Attachment “${attachment.name}” mime type does not match its kind.`);
     }
 
-    const match = DATA_URL_PATTERN.exec(String(attachment.dataUrl ?? ''));
+    const match = DATA_URL_PATTERN.exec(attachment.dataUrl ?? '');
     if (!match) {
         throw new Error(`Attachment “${attachment.name}” must use a data: URL.`);
     }
@@ -58,11 +58,11 @@ export function validateDocumentAiAttachment(
     }
 
     // Prefer the payload mime when present; reject mismatched declared mime.
-    if (dataMime && mime && dataMime !== mime) {
+    if (dataMime !== mime) {
         throw new Error(`Attachment “${attachment.name}” mime does not match its data URL.`);
     }
 
-    const bytes = approxDataUrlBytes(attachment.dataUrl);
+    const bytes = approxDataUrlBytes(attachment.dataUrl ?? '');
     if (bytes <= 0) {
         throw new Error(`Attachment “${attachment.name}” is empty.`);
     }

@@ -94,14 +94,12 @@ export class PluginPackageLifecycleService {
             const cleared: PluginPackagePointer = {
                 schemaVersion: 1,
                 pluginId,
-                revision: (pointer?.revision ?? 0) + 1,
+                revision: pointer.revision + 1,
                 current: null,
                 candidate: null,
                 previous: null,
             };
-            if (pointer) {
-                await this.pointers.writePointerWithinOperation(pluginId, cleared);
-            }
+            await this.pointers.writePointerWithinOperation(pluginId, cleared);
             return Object.freeze({
                 pluginId,
                 pointerCleared: true,
