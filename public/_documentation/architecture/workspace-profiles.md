@@ -52,6 +52,15 @@ SSR-renders a Vue probe, hydrates it in a DOM, and checks that serialized
 built-in profile markup stays in place without Vue hydration warnings. It does
 not boot a built Nuxt server or load a client package.
 
+A separate local browser check of a built Nuxt app confirmed that applying
+Document Workspace survives a hard reload without hydration warnings. HTTP
+payload checks also confirmed Standard OR3 fallback for an unavailable
+Coding Workspace ID and for a selection cookie scoped to another workspace.
+That check used an isolated Undici 7 override because the installed Undici 8
+requires a worker-thread API missing from Bun. It verifies the built-in
+profile boundary, but does not qualify the normal production build or an
+authenticated client-package transition.
+
 To verify that boundary in a browser, use a disposable SSR-auth workspace with
 External Agents installed and enabled. In the Dashboard's **Workspace Profile**
 settings, apply **Coding Workspace**, then hard-reload the workspace. Capture
@@ -61,8 +70,8 @@ because Coding Workspace is registered by the client package through the
 after the package registers, the client should restore Coding Workspace. Check
 that hydration emits no Vue mismatch warnings and that the profile selector
 settles on Coding Workspace. Repeat in another workspace to check the
-workspace-scoped selection cookie. This built-Nuxt/browser path remains
-unverified.
+workspace-scoped selection cookie. This authenticated client-package path
+remains unverified.
 
 A theme may bundle validated profiles and recommend one, but
 install/activation never applies it; the user must invoke the explicit
