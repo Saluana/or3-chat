@@ -182,6 +182,12 @@ function main() {
     const behaviorProfileCatalog = readBehaviorProfiles(config);
     const absoluteModules = config.modules.map((module) => resolve(repoRoot, module.source));
     const autoImports = parseNuxtAutoImports(resolve(repoRoot, config.nuxtImportsDeclaration));
+    // Match the declaration snapshot scope. Nuxt adds environment-specific
+    // framework imports (such as DevTools) outside the plugin API contract.
+    const scopedAutoImports = config.modules.map((module) => ({
+        source: module.source,
+        names: [...(autoImports.get(withoutExtension(resolve(repoRoot, module.source))) ?? [])].sort(),
+    })).sort((a, b) => a.source.localeCompare(b.source));
     const { checker, program } = loadProgram(absoluteModules);
     const modules = config.modules.slice().sort((a, b) => a.source.localeCompare(b.source)).map((module) => {
         const absoluteSource = resolve(repoRoot, module.source);
@@ -226,7 +232,7 @@ function main() {
             moduleManifest: repoPath(configPath),
             moduleManifestSha256: sha256(readFileSync(configPath, 'utf8')),
             nuxtImportsDeclaration: config.nuxtImportsDeclaration,
-            nuxtImportsDeclarationSha256: sha256(readFileSync(resolve(repoRoot, config.nuxtImportsDeclaration), 'utf8')),
+            scopedNuxtImportsDeclarationSha256: sha256(JSON.stringify(scopedAutoImports)),
             behaviorProfiles: config.behaviorProfiles,
             behaviorProfilesSha256: sha256(readFileSync(resolve(repoRoot, config.behaviorProfiles), 'utf8')),
         },

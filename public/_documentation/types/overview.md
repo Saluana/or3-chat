@@ -24,3 +24,5 @@ Use `import type` for declarations with no runtime dependency. Nuxt's `~/` alias
 Types do not grant authority or validate untrusted input. Use the existing runtime schemas, permission checks, and entity APIs where the data crosses a boundary.
 
 ESLint uses the Nuxt project types with `noUncheckedIndexedAccess` enabled. Sparse record and array lookups can return `undefined`, so keep their bounds checks. Runtime JSON should enter as `unknown` and be validated before it is treated as a complete contract.
+
+The plugin compatibility ledger and declaration snapshots cover the modules listed in `planning/complete/plugin-runtime-v2/compatibility-ledger.modules.json`. Their import checks exclude environment-dependent framework utilities such as Nuxt DevTools.
