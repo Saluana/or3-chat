@@ -62,7 +62,9 @@ async function jsonRequest(path, { body, cookie, method = 'POST' } = {}) {
                 ? {}
                 : { 'content-type': 'application/json' }),
             ...(cookie ? { cookie } : {}),
-            ...(method === 'GET' ? {} : { origin: baseUrl }),
+            ...(method === 'GET'
+                ? {}
+                : { origin: new URL(baseUrl).origin, 'x-or3-cloud-intent': 'mutation' }),
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
