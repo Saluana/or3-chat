@@ -60,666 +60,15 @@
                     "categoryOrder": 1,
                     "order": 2,
                     "summary": "Register trusted source UI with owned lifecycle cleanup."
-                }
-            ]
-        },
-        {
-            "title": "Composables",
-            "path": "/composables",
-            "files": [
-                {
-                    "name": "recordValidation.md",
-                    "path": "/composables/recordValidation",
-                    "category": "Core",
-                    "summary": "Tiny helper that validates a database record exists before a UI binds to it. It retries a few times to survive transient Dexie states (e.g. a closed database during startup)."
-                },
-                {
-                    "name": "registerSidebarPage.md",
-                    "path": "/composables/registerSidebarPage",
-                    "category": "Sidebar",
-                    "summary": "Enhanced helper function for registering sidebar pages with guardrails, HMR cleanup, and developer-friendly error handling. Provides a safe and convenient way to register sidebar pages. Think of registerSidebarPage as the sidebar's page registration assista..."
-                },
-                {
-                    "name": "useActivePrompt.md",
-                    "path": "/composables/useActivePrompt",
-                    "category": "Chat",
-                    "summary": "Reactive composable that manages the currently selected system prompt for chat conversations. This composable provides a module-singleton selection state (id + content) so multiple components"
-                },
-                {
-                    "name": "useActiveSidebarPage.md",
-                    "path": "/composables/useActiveSidebarPage",
-                    "category": "Sidebar",
-                    "summary": "Manages the active sidebar page state with persistence, activation hooks, and page transitions. Uses global singleton state to ensure consistency across all components. Think of useActiveSidebarPage as the sidebar's navigation controller — it tracks which p..."
-                },
-                {
-                    "name": "useAdminAuth.md",
-                    "path": "/composables/useAdminAuth",
-                    "category": "Core",
-                    "summary": "Role-based permission helpers for admin pages. It derives computed booleans from the workspace role returned by the admin API."
-                },
-                {
-                    "name": "useAdminData.md",
-                    "path": "/composables/useAdminData",
-                    "category": "Core",
-                    "summary": "Client-side data fetch helpers for the admin dashboard. Each helper wraps useFetch against an admin API endpoint with credentials: 'include'."
-                },
-                {
-                    "name": "useAdminExtensions.md",
-                    "path": "/composables/useAdminExtensions",
-                    "category": "Core",
-                    "summary": "Client helpers for installing and uninstalling extensions (plugins, themes, and admin plugins) from the admin dashboard."
-                },
-                {
-                    "name": "useAdminPlugins.md",
-                    "path": "/composables/useAdminPlugins",
-                    "category": "Core",
-                    "summary": "Extension registry for the admin dashboard. Plugins register admin pages and widgets that appear inside the admin UI."
-                },
-                {
-                    "name": "useAdminTypes.md",
-                    "path": "/composables/useAdminTypes",
-                    "category": "Core",
-                    "summary": "Type definitions shared by the admin dashboard API responses. These are types only — no runtime code."
-                },
-                {
-                    "name": "useAdminUserLookup.md",
-                    "path": "/composables/useAdminUserLookup",
-                    "category": "Core",
-                    "summary": "Search helper for finding users in the admin dashboard. It queries /api/admin/search-users and guards against out-of-order responses."
-                },
-                {
-                    "name": "useAdminWorkspaceContext.md",
-                    "path": "/composables/useAdminWorkspaceContext",
-                    "category": "Core",
-                    "summary": "Global workspace selection state for admin pages. Super admins use it to pick which workspace they are operating on."
-                },
-                {
-                    "name": "useAdminWorkspaceGate.md",
-                    "path": "/composables/useAdminWorkspaceGate",
-                    "category": "Core",
-                    "summary": "Gate that shows the workspace selector for super admins who have not picked a workspace yet. It coordinates the session kind with the workspace context."
-                },
-                {
-                    "name": "useAiSettings.md",
-                    "path": "/composables/useAiSettings",
-                    "category": "Chat",
-                    "summary": "Persistence layer for AI preference knobs. Keeps the chat experience consistent by storing master prompts and model defaults in browser storage, while exposing a clean interface for UI controls or automated scripts."
-                },
-                {
-                    "name": "useApiError.md",
-                    "path": "/composables/useApiError",
-                    "category": "Core",
-                    "summary": "Consistent extraction of user-friendly messages from API errors."
-                },
-                {
-                    "name": "useAuthTokenBroker.md",
-                    "path": "/composables/useAuthTokenBroker",
-                    "category": "Core",
-                    "summary": "Client-side token broker registry. Auth providers register a factory that can mint provider-specific tokens (for example Convex JWTs), and app code requests them by provider id."
-                },
-                {
-                    "name": "useChat.md",
-                    "path": "/composables/useChat",
-                    "category": "Chat",
-                    "summary": "Manages AI chat messages, streaming, retries, and mixed-runtime tools. Chat context follows the selected model's advertised window, reserving response space and refreshing missing model metadata. Background turns execute server tools in the worker and delegate browser tools through a durable claim/result bridge. Chat settings selects a saved system prompt, the current default, or Disabled per chat; the choice applies to future messages."
-                },
-                {
-                    "name": "useChatAttachmentDisplay.md",
-                    "path": "/composables/useChatAttachmentDisplay",
-                    "category": "Core",
-                    "summary": "Helper composable that prepares chat input attachments for rendering. It takes the raw attachment list and splits it into image and PDF buckets with stable display indexes."
-                },
-                {
-                    "name": "useChatInputBridge.md",
-                    "path": "/composables/useChatInputBridge",
-                    "category": "Chat",
-                    "summary": "Lightweight registry that lets external features (pane plugins, slash commands, automation) inject chat messages into an existing chat input without duplicating business logic."
-                },
-                {
-                    "name": "useChatInputTheme.md",
-                    "path": "/composables/useChatInputTheme",
-                    "category": "Core",
-                    "summary": "Composable that resolves themed props for every control in the chat input surface. It centralises send, stop, attach, settings, and composer action button styling so the input looks consistent across themes."
-                },
-                {
-                    "name": "useChatMentions.md",
-                    "path": "/composables/useChatMentions",
-                    "category": "Chat",
-                    "summary": "Enhance your chat conversations by referencing documents and chats directly in your messages. The mentions system lets you @-mention documents and chat threads, automatically injecting their full content as context for the AI."
-                },
-                {
-                    "name": "useChatModelSelection.md",
-                    "path": "/composables/useChatModelSelection",
-                    "category": "Core",
-                    "summary": "Reactive controller for the model picker in a chat composer. It manages the selected model, routing variant, thinking mode, and reasoning effort for a single thread, and persists the last model choice."
-                },
-                {
-                    "name": "useClientAuthStatus.md",
-                    "path": "/composables/useClientAuthStatus",
-                    "category": "Core",
-                    "summary": "Client-side auth status resolver registry. Provider packages register a resolver that reports whether their SDK is ready and whether a user session exists."
-                },
-                {
-                    "name": "useClientSessionRecovery.md",
-                    "path": "/composables/useClientSessionRecovery",
-                    "category": "Core",
-                    "summary": "Client-side session recovery registry. Auth providers register a recovery callback (for example a silent refresh) that the session context invokes when /api/auth/session reports no session."
-                },
-                {
-                    "name": "useCommandPalette.md",
-                    "path": "/composables/useCommandPalette",
-                    "category": "Core",
-                    "summary": "Controller for the global command palette. It manages open state, search query, result groups, keyboard selection, previews, and the action tray, and coordinates all search sources through a lazy-loaded coordinator."
-                },
-                {
-                    "name": "useCommandPaletteShortcut.md",
-                    "path": "/composables/useCommandPaletteShortcut",
-                    "category": "Core",
-                    "summary": "Global keyboard handler for the command palette. It binds Cmd/Ctrl+K to open the palette and Escape to close it, then prewarms the search module during idle time."
-                },
-                {
-                    "name": "useComposerActions.md",
-                    "path": "/composables/useComposerActions",
-                    "category": "Sidebar",
-                    "summary": "Composer action registry powering the quick-action buttons beneath the chat composer. Lets plugins add buttons that hook into the active editor, thread, or pane context with visibility and disabled logic."
-                },
-                {
-                    "name": "useConfirmDialog.md",
-                    "path": "/composables/useConfirmDialog",
-                    "category": "Core",
-                    "summary": "Shared confirmation dialog controller. Any component can open a modal confirm and await the user's choice as a promise."
-                },
-                {
-                    "name": "useDashboardPlugins.md",
-                    "path": "/composables/useDashboardPlugins",
-                    "category": "Dashboard",
-                    "summary": "Dashboard extension hub for launcher tiles, optional app images with Iconify fallbacks, lazy-loaded pages, capability flags, discovery, and navigation state."
-                },
-                {
-                    "name": "useDefaultPrompt.md",
-                    "path": "/composables/useDefaultPrompt",
-                    "category": "Chat",
-                    "summary": "Central helper for tracking the default system prompt across chat panes. It wraps the kv table, keeps a singleton ref of the active prompt ID, and fires hooks when the default changes so other modules can react."
-                },
-                {
-                    "name": "useDocumentAiActions.md",
-                    "path": "/composables/useDocumentAiActions",
-                    "category": "Core",
-                    "summary": "Registry for Document AI prompt commands. Plugins contribute / commands shown in the Document AI composer."
-                },
-                {
-                    "name": "useDocumentAiAgent.md",
-                    "path": "/composables/useDocumentAiAgent",
-                    "category": "Documents",
-                    "summary": "The Document AI agent turns a prompt into a bounded, reviewable TipTap edit proposal. Its live editor session also exposes the same native tools to chat."
-                },
-                {
-                    "name": "useDocumentAiSettings.md",
-                    "path": "/composables/useDocumentAiSettings",
-                    "category": "Core",
-                    "summary": "Persistence and defaults for Document AI agent preferences. Settings are stored in the Dexie kv table and sanitized on every read."
-                },
-                {
-                    "name": "useDocumentationContent.md",
-                    "path": "/composables/useDocumentationContent",
-                    "category": "Core",
-                    "summary": "Loader for documentation markdown pages. It fetches / documentation/<slug .md files for the /documentation routes."
-                },
-                {
-                    "name": "useDocumentationNavigation.md",
-                    "path": "/composables/useDocumentationNavigation",
-                    "category": "Core",
-                    "summary": "Sidebar navigation for the documentation viewer. It builds category/group/item trees from the docmap and tracks which groups are expanded."
-                },
-                {
-                    "name": "useDocumentationToc.md",
-                    "path": "/composables/useDocumentationToc",
-                    "category": "Core",
-                    "summary": "Table-of-contents helpers for rendered documentation pages. These are pure functions that inspect a rendered HTML element."
-                },
-                {
-                    "name": "useDocumentEditorSessions.md",
-                    "path": "/composables/useDocumentEditorSessions",
-                    "category": "Core",
-                    "summary": "Registry of active document editor sessions. Callers can find an exact tab session, capture live content, or use its chat context and document tool bridge."
-                },
-                {
-                    "name": "useDocumentEditorToolbar.md",
-                    "path": "/composables/useDocumentEditorToolbar",
-                    "category": "Core",
-                    "summary": "Toolbar builder for the document editor. It defines the core button set and wires each button to TipTap commands."
-                },
-                {
-                    "name": "useDocumentHistoryActions.md",
-                    "path": "/composables/useDocumentHistoryActions",
-                    "category": "Documents",
-                    "summary": "Registry composable that lets plugins inject extra actions into the document history sidebar menu. Keeps a global list of action buttons, sorts them, and survives HMR so dashboard add-ons can extend the UI safely."
-                },
-                {
-                    "name": "useDocumentInsights.md",
-                    "path": "/composables/useDocumentInsights",
-                    "category": "Core",
-                    "summary": "Document metrics and outline computed from a live TipTap editor. It watches editor transactions and refreshes on a requestAnimationFrame budget."
-                },
-                {
-                    "name": "useDocumentsList.md",
-                    "path": "/composables/useDocumentsList",
-                    "category": "Documents",
-                    "summary": "Lightweight fetch-and-refresh composable for the documents sidebar. Loads recent Dexie documents entries, trims heavy fields, and keeps the list fresh when database hooks fire."
-                },
-                {
-                    "name": "useDocumentsStore.md",
-                    "path": "/composables/useDocumentsStore",
-                    "category": "Documents",
-                    "summary": "Stateful document manager that loads Dexie records, stages edits, debounces autosaves, and coordinates pane-level hooks. It is the backbone for rich text documents in OR3’s multi-pane UI."
-                },
-                {
-                    "name": "useEditorExtensionLoader.md",
-                    "path": "/composables/useEditorExtensionLoader",
-                    "category": "Editor",
-                    "summary": "Factory and loader for lazy-loading TipTap editor extensions (nodes, marks, extensions). Resolves factories to actual extension instances while gracefully handling failures and skipping unavailable extensions."
-                },
-                {
-                    "name": "useEditorInspectorPanels.md",
-                    "path": "/composables/useEditorInspectorPanels",
-                    "category": "Core",
-                    "summary": "Registry for the document editor's side inspector panels. Plugins add panels that render contextual tools beside the editor."
-                },
-                {
-                    "name": "useEditorNodes.md",
-                    "path": "/composables/useEditorNodes",
-                    "category": "Editor",
-                    "summary": "Registry trio that lets plugins add TipTap nodes, marks, and extensions to the OR3 editor without patching the core component. Maintains global maps, keeps ordering stable, and plays nicely with HMR."
-                },
-                {
-                    "name": "useEditorToolbar.md",
-                    "path": "/composables/useEditorToolbar",
-                    "category": "Editor",
-                    "summary": "Toolbar registry for the TipTap editor. Lets plugins add buttons, toggles, or dropdowns to the retro editor header while keeping the UI reactive and order-aware."
-                },
-                {
-                    "name": "useExtensionManagement.md",
-                    "path": "/composables/useExtensionManagement",
-                    "category": "Core",
-                    "summary": "Owner-gated wrapper around extension install and uninstall operations for the admin dashboard. It combines the file input with the extension API helpers."
-                },
-                {
-                    "name": "useHeaderActions.md",
-                    "path": "/composables/useHeaderActions",
-                    "category": "Sidebar",
-                    "summary": "Sidebar header action registry that powers the icon buttons in the chrome header (new thread, toggle layout, etc.). Lets plugins contribute actions that react to route, breakpoint, or custom context."
-                },
-                {
-                    "name": "useHookEffect.md",
-                    "path": "/composables/useHookEffect",
-                    "category": "Core",
-                    "summary": "Typed helper for subscribing to the internal hook bus. It registers a callback, cleans up automatically on component unmount and during hot-module reload, and returns a disposer if you need manual control."
-                },
-                {
-                    "name": "useIcon.md",
-                    "path": "/composables/useIcon",
-                    "category": "Core",
-                    "summary": "Reactive resolver for semantic icon tokens. It returns the concrete Iconify name for a token under the active theme."
-                },
-                {
-                    "name": "useLazyBoundaries.md",
-                    "path": "/composables/useLazyBoundaries",
-                    "category": "Core",
-                    "summary": "Singleton lazy boundary manager for code-splitting heavy features in OR3. Handles dynamic imports, loading state, module caching, and telemetry for performance-critical boundaries. Think of useLazyBoundaries as your code-splitting coordinator — it ensures h..."
-                },
-                {
-                    "name": "useManagedWebhooks.md",
-                    "path": "/composables/useManagedWebhooks",
-                    "category": "Core",
-                    "summary": "Controller for the managed webhooks dashboard page. It loads webhooks, handles create/edit/log UI state, and performs delete, toggle, bulk-disable, and test-ping operations with toast feedback."
-                },
-                {
-                    "name": "useMessageActions.md",
-                    "path": "/composables/useMessageActions",
-                    "category": "Chat",
-                    "summary": "Extensible action registry for chat messages. Lets core UI and plugins add contextual buttons (copy, retry, favorite, etc.) in a consistent order with minimal wiring."
-                },
-                {
-                    "name": "useMessageEditing.md",
-                    "path": "/composables/useMessageEditing",
-                    "category": "Chat",
-                    "summary": "Encapsulates the UI + persistence flow for editing a chat message. Handles toggling edit mode, keeping a draft buffer, and writing the updated content back to Dexie."
-                },
-                {
-                    "name": "useMessageMarkdown.md",
-                    "path": "/composables/useMessageMarkdown",
-                    "category": "Core",
-                    "summary": "Composable that prepares assistant message text for markdown rendering. It swaps file-hash: image references for placeholder URLs and exposes the current code-highlighting theme."
-                },
-                {
-                    "name": "useMessageMediaPrefetch.md",
-                    "path": "/composables/useMessageMediaPrefetch",
-                    "category": "Core",
-                    "summary": "Controller that warms image blobs for a virtual window of messages without mounting their rows. It keeps resources retained while their hashes stay inside the latest range, and releases them when they leave."
-                },
-                {
-                    "name": "useMessageThumbnails.md",
-                    "path": "/composables/useMessageThumbnails",
-                    "category": "Core",
-                    "summary": "Composable that resolves thumbnail URLs for attachments on a single message. It loads image blobs on demand, tracks PDF metadata, and supports an expand/collapse toggle for many attachments."
-                },
-                {
-                    "name": "useModelStore.md",
-                    "path": "/composables/useModelStore",
-                    "category": "Chat",
-                    "summary": "Shared catalog + favorites manager for OpenRouter models. Centralises fetching, caching, and filtering so every pane sees the same list without repeated network hits."
-                },
-                {
-                    "name": "useMultiPane.md",
-                    "path": "/composables/useMultiPane",
-                    "category": "Core",
-                    "summary": "State manager that powers OR3’s multi-pane chat/document workspace. It keeps the active pane list, loads messages on demand, enforces pane limits, and fires hook events so plugins can react to pane lifecycle changes."
-                },
-                {
-                    "name": "useNotifications.md",
-                    "path": "/composables/useNotifications",
-                    "category": "Core",
-                    "summary": "Reactive notification center backed by Dexie live queries and the notification hook system. It is the app-wide surface for reading and mutating notifications."
-                },
-                {
-                    "name": "useOr3Config.md",
-                    "path": "/composables/useOr3Config",
-                    "category": "Core",
-                    "summary": "Typed access to the app's runtime configuration. It merges fallback defaults with public runtime config and exposes feature, limits, UI, and site settings as a readonly object."
-                },
-                {
-                    "name": "usePageShellTheme.md",
-                    "path": "/composables/usePageShellTheme",
-                    "category": "Core",
-                    "summary": "Theme prop resolver for the app shell chrome: sidebar toggles, pane buttons, and the theme toggle. It resolves which components and button props the shell should render for the active theme."
-                },
-                {
-                    "name": "usePaginatedSidebarItems.md",
-                    "path": "/composables/usePaginatedSidebarItems",
-                    "category": "Core",
-                    "summary": "Paged, searchable list of sidebar items (threads and documents) backed by Dexie live queries. It grows the result window as the user scrolls."
-                },
-                {
-                    "name": "usePaneApps.md",
-                    "path": "/composables/usePaneApps",
-                    "category": "Core",
-                    "summary": "Registry for custom pane applications in the multi-pane workspace. Plugins register a PaneAppDef and the workspace opens it as a pane with its own mode id."
-                },
-                {
-                    "name": "usePaneDocuments.md",
-                    "path": "/composables/usePaneDocuments",
-                    "category": "Documents",
-                    "summary": "Pane-aware controller that lets the dashboard create or switch documents inside the multi-pane workspace. It glues useDocumentsStore, pane state, and hook events into two ergonomic methods."
-                },
-                {
-                    "name": "usePanePrompt.md",
-                    "path": "/composables/usePanePrompt",
-                    "category": "Core",
-                    "summary": "Tiny helper that tracks a “pending system prompt” per pane. It lets the UI stage a prompt that will be applied when the user creates their next thread in that pane."
-                },
-                {
-                    "name": "usePaneResizeController.md",
-                    "path": "/composables/usePaneResizeController",
-                    "category": "Core",
-                    "summary": "Controller for resizing panes in the multi-pane workspace. It wires pointer-drag resizing, keyboard resizing, and container-width recalculation into a single component."
-                },
-                {
-                    "name": "usePopoverKeyboard.md",
-                    "path": "/composables/usePopoverKeyboard",
-                    "category": "Core",
-                    "summary": "Accessibility helper for popover trigger buttons. It makes triggers keyboard-activatable with Enter and Space."
-                },
-                {
-                    "name": "usePostsList.md",
-                    "path": "/composables/usePostsList",
-                    "category": "Core",
-                    "summary": "Reactive listing of posts by type with a live Dexie query. It filters soft-deleted posts, sorts by timestamp, and parses meta from JSON."
-                },
-                {
-                    "name": "usePreviewCache.md",
-                    "path": "/composables/usePreviewCache",
-                    "category": "Core",
-                    "summary": "In-memory LRU-ish cache for preview assets (images, PDFs, etc.). It wraps blob URL creation, tracks byte usage, exposes metrics, and handles eviction with pinning so priority previews stick around."
-                },
-                {
-                    "name": "useProjectsCrud.md",
-                    "path": "/composables/useProjectsCrud",
-                    "category": "Projects",
-                    "summary": "Project CRUD toolkit that wraps Dexie helpers with validation, timestamping, and data normalisation for OR3 project records."
-                },
-                {
-                    "name": "useProjectTreeActions.md",
-                    "path": "/composables/useProjectTreeActions",
-                    "category": "Projects",
-                    "summary": "Extensible action registry for the project tree sidebar. Lets plugins add context buttons to project rows or child entries (documents, chats) with ordering and visibility controls."
-                },
-                {
-                    "name": "useResponsiveState.md",
-                    "path": "/composables/useResponsiveState",
-                    "category": "Core",
-                    "summary": "Centralised responsive state helper that tracks viewport size and provides consistent mobile/desktop detection across your app. Enables SSR-safe responsive rendering without hydration mismatches."
-                },
-                {
-                    "name": "useScrollLock.md",
-                    "path": "/composables/useScrollLock",
-                    "category": "Core",
-                    "summary": "Utility composable that locks and unlocks body (or any element) scroll, essential for mobile overlays and modals. Manages overflow CSS property with automatic cleanup and optional reactive control."
-                },
-                {
-                    "name": "useServerRestart.md",
-                    "path": "/composables/useServerRestart",
-                    "category": "Core",
-                    "summary": "Owner-gated server restart flow with confirmation and toast feedback."
-                },
-                {
-                    "name": "useSession.md",
-                    "path": "/composables/useSession",
-                    "category": "Core",
-                    "summary": "Client-side session state composable (exported as useOr3Session). It exposes a small, stable session surface regardless of whether SSR auth is enabled."
-                },
-                {
-                    "name": "useSessionContext.md",
-                    "path": "/composables/useSessionContext",
-                    "category": "Core",
-                    "summary": "Workspace-aware session context. It fetches the full session payload from /api/auth/session and exposes reactive state plus a refresh action."
-                },
-                {
-                    "name": "useSessionRefresh.md",
-                    "path": "/composables/useSessionRefresh",
-                    "category": "Core",
-                    "summary": "Client-only composable that periodically refreshes the provider session token so it stays valid."
-                },
-                {
-                    "name": "useSidebarEnvironment.md",
-                    "path": "/composables/useSidebarEnvironment",
-                    "category": "Sidebar",
-                    "summary": "Provides dependency injection and context access for sidebar components. Creates a reactive environment with access to multi-pane API, data sources, and UI controls. Think of useSidebarEnvironment as the sidebar's service locator — it gives child components..."
-                },
-                {
-                    "name": "useSidebarPageControls.md",
-                    "path": "/composables/useSidebarPageControls",
-                    "category": "Sidebar",
-                    "summary": "Provides access to sidebar page navigation controls from child components. Allows sidebar pages to programmatically switch pages or check their own active status. Think of useSidebarPageControls as the sidebar's navigation remote — it gives pages the abilit..."
-                },
-                {
-                    "name": "useSidebarPages.md",
-                    "path": "/composables/useSidebarPages",
-                    "category": "Sidebar",
-                    "summary": "Registry and discovery system for sidebar pages, including optional app images with Iconify fallbacks, validation, ordering, and HMR cleanup."
-                },
-                {
-                    "name": "useSidebarProjectActionButtonProps.md",
-                    "path": "/composables/useSidebarProjectActionButtonProps",
-                    "category": "Core",
-                    "summary": "Theme-aware props for project tree action buttons in the sidebar. It resolves overrides for a given button identifier and merges them with a neutral popover-style default."
-                },
-                {
-                    "name": "useSidebarProjectDisplay.md",
-                    "path": "/composables/useSidebarProjectDisplay",
-                    "category": "Core",
-                    "summary": "Computed view over sidebar datasets that decides what to render: threads, projects (with surviving entries), and documents, honoring the current search query."
-                },
-                {
-                    "name": "useSidebarSearch.md",
-                    "path": "/composables/useSidebarSearch",
-                    "category": "Sidebar",
-                    "summary": "Unified search composable that indexes threads, projects, and documents for the sidebar search bar. Uses Orama for fast client-side search with a substring fallback to guarantee results."
-                },
-                {
-                    "name": "useSidebarSections.md",
-                    "path": "/composables/useSidebarSections",
-                    "category": "Sidebar",
-                    "summary": "Sidebar chrome registry that lets plugins add new panels (top/main/bottom stacks) and footer actions to the OR3 sidebar. Provides ordering, placement, visibility, and disabled control."
-                },
-                {
-                    "name": "useSidebarThemeProps.md",
-                    "path": "/composables/useSidebarThemeProps",
-                    "category": "Core",
-                    "summary": "Theme-aware props for the sidebar's project selector and form fields."
-                },
-                {
-                    "name": "useStreamAccumulator.md",
-                    "path": "/composables/useStreamAccumulator",
-                    "category": "Chat",
-                    "summary": "Frame-batched accumulator for AI streaming tokens. It receives partial text/reasoning deltas, buffers them, and flushes at most once per animation frame so the UI stays smooth."
-                },
-                {
-                    "name": "useSystemPromptsModal.md",
-                    "path": "/composables/useSystemPromptsModal",
-                    "category": "Chat",
-                    "summary": "useSystemPromptsModal is the shared controller for the system prompt library. PageShell renders one modal host, while chat settings and the command palette open it with the appropriate entry state and chat context."
-                },
-                {
-                    "name": "useThemeClasses.md",
-                    "path": "/composables/useThemeClasses",
-                    "category": "Core",
-                    "summary": "Deprecated no-op composable."
-                },
-                {
-                    "name": "useThemeResolver.md",
-                    "path": "/composables/useThemeResolver",
-                    "category": "Core",
-                    "summary": "Core theming API. It resolves theme overrides for components, tracks the active theme, and switches themes."
-                },
-                {
-                    "name": "useThemeSelection.md",
-                    "path": "/composables/useThemeSelection",
-                    "category": "Core",
-                    "summary": "Persistence for the user's selected theme. It loads the choice from the Dexie kv table (with a one-time localStorage migration) and saves changes."
-                },
-                {
-                    "name": "useThreadHistoryActions.md",
-                    "path": "/composables/useThreadHistoryActions",
-                    "category": "Threads",
-                    "summary": "Registry for adding custom actions to the thread history sidebar dropdown. Mirrors the document history registry but targets threads, letting plugins inject export, share, or workflow buttons."
-                },
-                {
-                    "name": "useThreadSearch.md",
-                    "path": "/composables/useThreadSearch",
-                    "category": "Threads",
-                    "summary": "Thread-specific search composable that powers the sidebar query field. Builds a small Orama index over thread titles, debounces input, and falls back to substring matching when required."
-                },
-                {
-                    "name": "useThumbnailUrlCache.md",
-                    "path": "/composables/useThumbnailUrlCache",
-                    "category": "Core",
-                    "summary": "Shared cache for thumbnail object URLs. It deduplicates in-flight loads, tracks reference counts, and revokes blob URLs after a grace period so memory stays bounded."
-                },
-                {
-                    "name": "useTokenizer.md",
-                    "path": "/composables/useTokenizer",
-                    "category": "Core",
-                    "summary": "Composable for GPT tokenization with automatic Web Worker optimization. Counts tokens using a dedicated worker thread when available, falling back to direct encoding for SSR or when workers fail."
-                },
-                {
-                    "name": "useTypedThemeOverrides.md",
-                    "path": "/composables/useTypedThemeOverrides",
-                    "category": "Core",
-                    "summary": "Type-safe wrappers around useThemeOverrides for common component types. Each wrapper merges base props with resolved theme overrides."
-                },
-                {
-                    "name": "useValidatedEntityPageShell.md",
-                    "path": "/composables/useValidatedEntityPageShell",
-                    "category": "Core",
-                    "summary": "Page guard for entity detail routes. It loads the route entity, redirects when it is missing or deleted, and only then marks the page ready to render."
-                },
-                {
-                    "name": "useWorkflowStreamAccumulator.md",
-                    "path": "/composables/useWorkflowStreamAccumulator",
-                    "category": "Core",
-                    "summary": "Reactive accumulator for workflow execution streaming. It receives per-node execution events and exposes a single read-only state object that UI components can render live."
-                },
-                {
-                    "name": "useWorkspaceBackup.md",
-                    "path": "/composables/useWorkspaceBackup",
-                    "category": "Core",
-                    "summary": "Full-featured workspace export/import controller for OR3. It coordinates Dexie exports, streaming backups, progress reporting, hook telemetry, and error handling so the UI can offer reliable backup workflows."
-                },
-                {
-                    "name": "useWorkspaceLegacyImport.md",
-                    "path": "/composables/useWorkspaceLegacyImport",
-                    "category": "Core",
-                    "summary": "One-time migration helper that copies local (legacy) database data into a workspace-scoped database."
-                },
-                {
-                    "name": "useWorkspaceManager.md",
-                    "path": "/composables/useWorkspaceManager",
-                    "category": "Core",
-                    "summary": "Single source of truth for the active workspace id. It watches the session context and switches the active Dexie database exactly once per workspace change."
-                },
-                {
-                    "name": "useWorkspaceManagerCache.md",
-                    "path": "/composables/useWorkspaceManagerCache",
-                    "category": "Core",
-                    "summary": "KV-backed cache for workspace lists. It stores workspace summaries plus the active id so workspace switching can render instantly before a fetch completes."
-                },
-                {
-                    "name": "useWorkspaceManagerSession.md",
-                    "path": "/composables/useWorkspaceManagerSession",
-                    "category": "Core",
-                    "summary": "Programmatic workspace switching with server confirmation. It coordinates a revision coordinator so only the newest switch wins, even when multiple tabs act at once."
-                },
-                {
-                    "name": "useWorkspaceProfiles.md",
-                    "path": "/composables/useWorkspaceProfiles",
-                    "category": "Core",
-                    "summary": "Runtime for workspace profiles. A profile defines which sidebar pages, dashboard tiles, pane apps, and commands a workspace uses, and how many panes are allowed."
-                },
-                {
-                    "name": "useWorkspaceResourceActions.md",
-                    "path": "/composables/useWorkspaceResourceActions",
-                    "category": "Core",
-                    "summary": "Reusable open-in-new-tab and open-in-new-pane actions for chat, document, and pane-app resources."
-                },
-                {
-                    "name": "useWorkspaceTabDrafts.md",
-                    "path": "/composables/useWorkspaceTabDrafts",
-                    "category": "Core",
-                    "summary": "In-memory draft store for chat composers inside workspace tabs. It keeps unsent text, editor JSON, attachments, and composer settings alive while a user switches tabs, and never persists drafts to the manifest."
-                },
-                {
-                    "name": "useWorkspaceTabHost.md",
-                    "path": "/composables/useWorkspaceTabHost",
-                    "category": "Core",
-                    "summary": "Adapter that connects the workspace tab session to the multi-pane engine. It is a narrow bridge: it maps pane ids to pane indexes and binds tab resources to panes, but never owns messages or document content."
-                },
-                {
-                    "name": "useWorkspaceTabMetadata.md",
-                    "path": "/composables/useWorkspaceTabMetadata",
-                    "category": "Core",
-                    "summary": "Batch resolver for tab strip titles and icons. It refreshes one compact metadata map instead of creating a live database query for every open tab."
-                },
-                {
-                    "name": "useWorkspaceTabPersistence.md",
-                    "path": "/composables/useWorkspaceTabPersistence",
-                    "category": "Core",
-                    "summary": "Local storage layer for the workspace tab session. It writes the tab manifest to localStorage per workspace and profile, debounced, and reads it back on restore."
                 },
                 {
-                    "name": "useWorkspaceTabs.md",
-                    "path": "/composables/useWorkspaceTabs",
-                    "category": "Core",
-                    "summary": "Reactive orchestration for the local workspace tab session. It owns the tab manifest (open tabs, active tab, pane bindings) and every tab operation, while a host adapter owns the mounted panes."
+                    "name": "source-map.md",
+                    "path": "/start/source-map",
+                    "title": "Source contributor map",
+                    "category": "Development",
+                    "categoryOrder": 1,
+                    "order": 3,
+                    "summary": "Find feature owners, extension registries, and lifecycle rules without a copied API catalog."
                 }
             ]
         },
@@ -948,6 +297,15 @@
                     "categoryOrder": 3,
                     "order": 2,
                     "summary": "Zod helpers, IDs, clocks, transaction scopes, and dbTry error contracts."
+                },
+                {
+                    "name": "backup.md",
+                    "path": "/database/backup",
+                    "title": "Back up and restore",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 3,
+                    "summary": "Export, inspect, append or replace, and verify active-workspace recovery."
                 }
             ]
         },
@@ -1007,100 +365,58 @@
             "path": "/utils",
             "files": [
                 {
-                    "name": "capability-guards.md",
-                    "path": "/utils/capability-guards",
-                    "category": "Reference",
-                    "summary": "UI-level permission checks for actions exposed to plugins. Guards verify that the active plugin holds the required capability before an operation runs, and show a permission-denied toast when it does not."
-                },
-                {
-                    "name": "document-chat-tools.md",
-                    "path": "/utils/document-chat-tools",
-                    "category": "Tools",
-                    "summary": "Chat can create and duplicate documents, search them, read bounded open-tab context, and use the document agent's native tools to stage reviewable edits in a visible editor."
-                },
-                {
-                    "name": "thread-chat-tools.md",
-                    "path": "/utils/thread-chat-tools",
-                    "category": "Tools",
-                    "summary": "Chat can search other conversation threads, read their recent messages, and post a message into another thread, all scoped to the active workspace."
-                },
-                {
-                    "name": "errors.md",
-                    "path": "/utils/errors",
-                    "category": "Error Handling",
-                    "summary": "Centralized error utility for OR3. Provides error types, factories, reporting, retry logic, and duplicate suppression with automatic secret scrubbing and hook integration. Think of errors.ts as your error handling toolkit — it standardizes error creation, e..."
-                },
-                {
-                    "name": "files-attachments.md",
-                    "path": "/utils/files-attachments",
-                    "category": "Reference",
-                    "summary": "Pure functions that normalize file hash and image inputs into consistent shapes. Used by chat and workflow utilities for attachment handling. Attachment helpers tolerate messy input: hash lists arrive as arrays, JSON strings, comma lists, or a single string..."
-                },
-                {
-                    "name": "hash.md",
-                    "path": "/utils/hash",
-                    "category": "Reference",
-                    "summary": "File hashing helpers used for deduplication and attachment tracking. New files use SHA-256 with a sha256: prefix; legacy MD5 hashes stay supported for reading and verification. Hashing utilities keep uploads smooth: they chunk large files, yield to the main..."
-                },
-                {
-                    "name": "modelCatalog.md",
-                    "path": "/utils/modelCatalog",
-                    "category": "Reference",
-                    "summary": "Pure, framework-free helpers that power the model catalog UI. Derive provider info, capabilities, badges, filters, and formatted labels from OpenRouter model records. Model catalog helpers turn raw OpenRouterModel data into what the UI actually shows: provi..."
-                },
-                {
-                    "name": "multiPaneApi.md",
-                    "path": "/utils/multiPaneApi",
-                    "category": "Reference",
-                    "summary": "Global access to the multi-pane layout, plus type-safe helpers for reading pane state. Follows the same singleton pattern as sidebarLayoutApi. The multi-pane API lets any component or plugin reach the active panes without prop drilling. The API instance its..."
-                },
-                {
-                    "name": "openrouterStream.md",
-                    "path": "/utils/openrouterStream",
-                    "category": "Streaming",
-                    "summary": "Low-level streaming helper for OpenRouter API responses. Handles SSE (Server-Sent Events) parsing, tool calling, reasoning, images, and text chunks with proper buffering and accumulation. Also starts and tracks SSR background streaming jobs."
-                },
-                {
-                    "name": "server-tool-registry.md",
-                    "path": "/utils/server-tool-registry",
-                    "category": "Tools",
-                    "summary": "Server tool registration and execution for background chat and workflows, with request-scoped execution context, admitted definitions, validation, cancellation and per-tool timeouts."
-                },
-                {
-                    "name": "sidebar-layout-api.md",
-                    "path": "/utils/sidebar-layout-api",
-                    "category": "Sidebar",
-                    "summary": "Global API for controlling sidebar layout state from any component. Lets plugins close the sidebar on mobile, expand/collapse, or toggle visibility without event chain modifications. Think of the sidebar layout API as a remote control for the sidebar — any..."
-                },
-                {
-                    "name": "tool-registry.md",
-                    "path": "/utils/tool-registry",
-                    "category": "Tools",
-                    "summary": "Client tool registration, enablement, runtime admission, and captured foreground workspace/thread availability gates."
+                    "name": "chat-tools.md",
+                    "path": "/utils/chat-tools",
+                    "title": "Built-in chat tools",
+                    "category": "Using tools",
+                    "categoryOrder": 0,
+                    "order": 0,
+                    "summary": "Search conversations and documents, stage reviewable edits, and understand workspace and editor boundaries."
                 },
                 {
                     "name": "tool-runtime.md",
                     "path": "/utils/tool-runtime",
-                    "category": "Tools",
-                    "summary": "Client, server and hybrid tool placement. Native background chat orchestrates server handlers and delegates browser-only calls through the client-tool bridge; runtime placement does not grant data access."
+                    "title": "Add tools from source",
+                    "category": "Source integration",
+                    "categoryOrder": 1,
+                    "order": 1,
+                    "summary": "Register trusted client and server tools with owned lifecycle, runtime admission, and request authorization."
                 },
                 {
-                    "name": "tools-public.md",
-                    "path": "/utils/tools-public",
-                    "category": "Tools",
-                    "summary": "Simplified plugin API for tool registration. Re-exports registry functions and provides a helper for better TypeScript inference when defining tools. This is the recommended import path for plugins registering tools — it keeps your plugin code clean and iso..."
+                    "name": "openrouterStream.md",
+                    "path": "/utils/openrouterStream",
+                    "title": "Chat streaming",
+                    "category": "Source integration",
+                    "categoryOrder": 1,
+                    "order": 2,
+                    "summary": "Understand foreground SSE, cancellation, background execution, and provider routing."
                 },
                 {
-                    "name": "uiMessages.md",
-                    "path": "/utils/uiMessages",
-                    "category": "Chat",
-                    "summary": "Type definitions and utilities for chat messages in the OR3 UI layer. Extends database message types with display properties like tool calls, workflow state, and pending flags. Think of uiMessages as the bridge between raw database records and what you actu..."
+                    "name": "file-handling.md",
+                    "path": "/utils/file-handling",
+                    "title": "Files and attachments",
+                    "category": "Source integration",
+                    "categoryOrder": 1,
+                    "order": 3,
+                    "summary": "Normalize attachment inputs, hash new files, and preserve stored file identity."
+                },
+                {
+                    "name": "errors.md",
+                    "path": "/utils/errors",
+                    "title": "Report and handle errors",
+                    "category": "Source integration",
+                    "categoryOrder": 1,
+                    "order": 4,
+                    "summary": "Use centralized errors, secret scrubbing, reporting hooks, and deliberate retries."
                 },
                 {
                     "name": "workspace-backup-stream.md",
                     "path": "/utils/workspace-backup-stream",
-                    "category": "Reference",
-                    "summary": "Streams workspace backups to and from a versioned JSONL format. Exports Dexie tables line by line, keeps file blobs lines small, and imports with strict validation. Workspace backups move large datasets without loading everything into memory. Export writes..."
+                    "title": "Backup stream format",
+                    "category": "Source integration",
+                    "categoryOrder": 1,
+                    "order": 5,
+                    "summary": "Maintain the JSONL codec, strict import validation, and transactional restore guarantees."
                 }
             ]
         },
@@ -1152,15 +468,6 @@
                     "categoryOrder": 1,
                     "order": 3,
                     "summary": "Portable SDK contracts versus trusted host registry types."
-                },
-                {
-                    "name": "composables.md",
-                    "path": "/types/composables",
-                    "title": "Composable types",
-                    "category": "Reference",
-                    "categoryOrder": 1,
-                    "order": 4,
-                    "summary": "Existing composable return-type reference."
                 }
             ]
         },
@@ -1258,8 +565,11 @@
                 {
                     "name": "editor.md",
                     "path": "/workflows/editor",
-                    "category": "Guide",
-                    "summary": "Browse, build, validate, and run workflows with explicit agent dataflow, tool selection, generated-image persistence, stop, interrupted-run recovery, and checkpoint resume. The editor is supplied by the separately installed Workflows package."
+                    "category": "Start here",
+                    "summary": "Browse, build, validate, and run workflows with explicit agent dataflow, tool selection, generated-image persistence, stop, interrupted-run recovery, and checkpoint resume. The editor is supplied by the separately installed Workflows package.",
+                    "title": "Build and run a workflow",
+                    "categoryOrder": 0,
+                    "order": 0
                 }
             ]
         },
@@ -1493,13 +803,28 @@
                     "name": "activity-external-agents.md",
                     "path": "/architecture/activity-external-agents",
                     "category": "Architecture",
-                    "summary": "Activity projects canonical run state. The separately installed External Agents package owns browser sessions and UI, with host-mediated HTTP and SSE for approved hosts; OR3 Connect remains a host service."
+                    "summary": "Activity projects canonical run state. The separately installed External Agents package owns browser sessions and UI, with host-mediated HTTP and SSE for approved hosts; OR3 Connect remains a host service.",
+                    "title": "Activity and external agents",
+                    "categoryOrder": 0,
+                    "order": 0
                 },
                 {
                     "name": "workspace-profiles.md",
                     "path": "/architecture/workspace-profiles",
                     "category": "Reference",
-                    "summary": "Workspace Profiles are safe, declarative projections over existing OR3 registries. V1 may reference navigation, dashboard, pane, command, and mobile IDs; Zod rejects unknown or executable fields."
+                    "summary": "Workspace Profiles are safe, declarative projections over existing OR3 registries. V1 may reference navigation, dashboard, pane, command, and mobile IDs; Zod rejects unknown or executable fields.",
+                    "title": "Workspace profiles and app layout",
+                    "categoryOrder": 1,
+                    "order": 0
+                },
+                {
+                    "name": "chat-lifecycle.md",
+                    "path": "/architecture/chat-lifecycle",
+                    "title": "Chat lifecycle and persistence",
+                    "category": "Architecture",
+                    "categoryOrder": 0,
+                    "order": 1,
+                    "summary": "Preserve durable sends, streaming ownership, tool authority, tab sessions, and composer drafts."
                 }
             ]
         },

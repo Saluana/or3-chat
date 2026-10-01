@@ -1,119 +1,41 @@
-# Documentation System
+# Documentation system
 
-The OR3 documentation system uses a dynamic routing approach with the `DocumentationShell` component to display markdown documentation files.
+The public docs are feature guides and task-oriented references. Internal controller signatures remain in source JSDoc and TypeScript. Start with [the source map](../../public/_documentation/start/source-map.md) rather than adding a standalone page for each composable.
 
-## Architecture
+## Source owners
 
-### Routes
-- `/documentation` - Main documentation index (welcome page)
-- `/documentation/[...slug]` - Catch-all route for all documentation pages
+| Module | Responsibility |
+| --- | --- |
+| `app/components/DocumentationShell.vue` | Viewer, navigation, search integration, and Markdown rendering. |
+| `app/composables/documents/useDocumentationContent.ts` | Loads route-specific Markdown and accepts an optional content override. |
+| `app/composables/documents/useDocumentationNavigation.ts` | Builds groups and page labels from docmap and manages expanded groups. |
+| `app/composables/documents/useDocumentationToc.ts` | Builds the TOC from rendered headings. |
+| `public/_documentation/docmap.json` | Published page inventory and navigation metadata. |
 
-### File Structure
-```
-public/_documentation/
-  ├── docmap.json          # Navigation map and file registry
-  ├── composables/
-  │   ├── useActivePrompt.md
-  │   └── useChat.md
-  ├── hooks/
-  └── database/
-```
+## Routing and discovery
 
-### How It Works
+`/documentation` resolves to `/start/overview`. The catch-all route loads the corresponding Markdown. SSR uses lazy raw modules bundled by Vite; client navigation fetches `/_documentation<slug>.md`, for example `/_documentation/database/overview.md`. Content loading follows the route path; a missing docmap entry alone does not stop a publicly served Markdown file from loading.
 
-1. **Navigation Building**
-   - `DocumentationShell` loads `docmap.json` on mount
-   - Sections are sorted alphabetically by title
-   - Files within sections are sorted alphabetically by name
-   - Navigation is rendered in the left sidebar
+Docmap entries supply navigation and search discovery. Retire a page by removing its file, entry, and incoming/tooling references together. Failed loads show a Page Not Found screen. The viewer does not currently set an HTTP 404 status, so the screen alone is not proof of a 404 response.
 
-2. **Content Loading**
-   - Route path is matched against `docmap.json` entries
-   - Markdown file is fetched from `/_documentation/{section}/{filename}`
-   - Content is rendered using `StreamMarkdown` component
+Getting Started sorts first, then other sections alphabetically. Files sort by numeric `order`, then filename; groups use `categoryOrder`, then their label. `title` supplies a readable page label, falling back to its filename. The category groups are scoped to their section so repeated “Reference” or “Start here” labels remain distinct.
 
-3. **Search**
-   - Orama search index is built from all documentation files
-   - Indexes first 5000 characters of each file
-   - Debounced search with 120ms delay
-   - Results show title, excerpt, and link to full document
+## Add a feature page
 
-## Adding New Documentation
+Read the existing category first. Prefer updating its task guide over creating another API mirror. Create a Markdown page under its feature directory and add an entry such as:
 
-### 1. Create the markdown file
-Place your `.md` file in the appropriate section folder:
-```bash
-public/_documentation/composables/myNewComposable.md
-```
-
-### 2. Update docmap.json
-Add entry to the relevant section:
 ```json
 {
-  "title": "Composables",
-  "path": "/composables",
-  "files": [
-    {
-      "name": "myNewComposable.md",
-      "path": "/composables/myNewComposable",
-      "category": "Chat"
-    }
-  ]
+  "name": "my-feature.md",
+  "path": "/start/my-feature",
+  "title": "Use my feature",
+  "category": "Development",
+  "categoryOrder": 1,
+  "order": 4,
+  "summary": "Explain the task and link to the source contracts."
 }
 ```
 
-### 3. Access the documentation
-Navigate to: `/documentation/composables/myNewComposable`
+Use `/documentation/...` Markdown links inside public pages. Verify headings and anchors against the viewer, especially when adding code or punctuation to a heading. Avoid copying complete TypeScript declarations that will drift separately from their implementation.
 
-## Docmap Schema
-
-```typescript
-interface Docmap {
-  title: string;        // Site title
-  description: string;  // Site description
-  version: string;      // Documentation version
-  sections: Section[];  // Navigation sections
-}
-
-interface Section {
-  title: string;   // Section name (e.g., "Composables")
-  path: string;    // Section path (e.g., "/composables")
-  files: File[];   // Files in this section
-}
-
-interface File {
-  name: string;     // Filename (e.g., "useChat.md")
-  path: string;     // Route path (e.g., "/composables/useChat")
-  category: string; // Category tag (e.g., "Chat")
-}
-```
-
-## Features
-
-- ✅ Dynamic route-based content loading
-- ✅ Alphabetically sorted navigation
-- ✅ Full-text search with Orama
-- ✅ Retro-styled markdown rendering
-- ✅ Theme toggle support
-- ✅ Responsive layout with sidebar and TOC
-- ✅ 404 handling for missing pages
-
-## Styling
-
-The documentation uses the retro theme system with:
-- Material Design CSS variables
-- `VT323` for body text
-- `Press Start 2P` for headings
-- Hard shadows and pixel-perfect borders
-- Code blocks with syntax highlighting
-
-## Search Implementation
-
-Search is powered by Orama and includes:
-- Title search
-- Full-text content search
-- Category filtering
-- Result excerpts
-- Click-to-navigate results
-
-The search index is built asynchronously when the documentation route is accessed.
+Run `bun scripts/release/check-docs.mjs` and open changed pages. Check sidebar labels, previous/next navigation, links, tables, syntax highlighting, and the TOC. A successful Markdown parse alone does not prove usable rendering.

@@ -63,14 +63,14 @@ const customNav = [
         label: 'Getting Started',
         items: [
             { label: 'Introduction', path: '/documentation' },
-            { label: 'Installation', path: '/documentation/installation' },
+            { label: 'Development setup', path: '/documentation/start/development-setup' },
         ],
     },
     {
         label: 'API',
         items: [
-            { label: 'Components', path: '/documentation/components' },
-            { label: 'Composables', path: '/documentation/composables' },
+            { label: 'SDK', path: '/documentation/plugins/plugin-sdk' },
+            { label: 'Source map', path: '/documentation/start/source-map' },
         ],
     },
 ];

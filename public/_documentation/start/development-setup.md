@@ -43,6 +43,8 @@ Nuxt's source directory is `app/`: `~/` and `@/` refer there, while `~~/` refers
 | `shared/` | Contracts shared across runtimes. |
 | `public/_documentation/` | Documentation pages and navigation map. |
 
+The [source contributor map](/documentation/start/source-map) identifies feature controllers and extension registries.
+
 Use [hooks](/documentation/hooks/overview) and registries for extension points. Use existing Nuxt UI variants in `app.config.ts` and the [theme system](/documentation/themes/overview) for UI changes. Keep server SDKs under server boundaries and browser storage in client paths.
 
 ## Work with sibling packages

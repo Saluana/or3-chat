@@ -156,4 +156,4 @@ A `viewer` will not see this item in the dashboard, and even if they navigate di
 - [Authentication System](/documentation/cloud/auth-system)
 - [Cloud Providers](/documentation/cloud/providers)
 - [Troubleshooting OR3 Cloud](/documentation/cloud/troubleshooting)
-- [useDashboardPlugins](/documentation/composables/useDashboardPlugins)
+- [Source UI registries](/documentation/start/source-map#extend-source-ui-through-its-registry)

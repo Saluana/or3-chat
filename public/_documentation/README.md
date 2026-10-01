@@ -1,38 +1,23 @@
-# OR3 Documentation
+# OR3 documentation
 
-This folder contains all the markdown documentation files for the OR3 project.
+Public docs are task guides and supported feature references. Function signatures and return types for internal controllers stay in source TypeScript/JSDoc; the [source contributor map](start/source-map.md) identifies the important owners.
 
-## Structure
+## Add or update a page
 
-```
-_documentation/
-├── README.md           # This file
-├── docmap.json        # Navigation configuration
-├── composables/       # Composable documentation
-├── hooks/            # Hooks system documentation
-└── database/         # Database documentation
-```
+1. Read `docmap.json` and the existing feature guide before adding another page.
+2. Keep usage and integration rules in the relevant category. Avoid a page per internal helper or copied interfaces.
+3. Add the Markdown file and its docmap entry. Use `title` for a readable navigation label, `category` for grouping, and `categoryOrder`/`order` for intentional ordering.
+4. Use root links such as `/documentation/database/overview` in rendered public docs.
+5. Run `bun run check:docs` and open the page to check code blocks, tables, links, navigation, and the table of contents.
 
-## Adding Documentation
+The maintained checker derives routes from docmap, checks local links and heading anchors, and detects unlisted Markdown pages. Source examples in Getting Started, OpenRouter, Database, Types, Architecture, and Utils also receive TypeScript checks against the generated Nuxt application types. Vue checks cover script blocks, not templates; other categories include partial API/config excerpts that still need source review. Run `bun run postinstall` first if Nuxt types are missing.
 
-1. Create your markdown file in the appropriate folder
-2. Update `docmap.json` with the file entry
-3. The documentation will automatically appear in the sidebar
+## Routes and navigation
 
-## Navigation Order
+`/documentation` opens the Getting Started overview. `/documentation/{section}/{file}` loads the corresponding `/_documentation/{section}/{file}.md`. For example, `/documentation/start/source-map` loads `start/source-map.md`.
 
-- Sections are sorted alphabetically by title
-- Files within sections are sorted alphabetically by name
-- File names are automatically formatted (e.g., `useActivePrompt` → `use Active Prompt`)
+The docmap supplies navigation and search discovery. Getting Started appears first; other sections sort alphabetically. Explicit file/group order wins, with filename/group fallbacks. Readable labels use `title` when present and the filename otherwise.
 
-## Routes
+Removing a page requires removing its docmap entry and updating inbound links and tooling references. Keeping an unlisted Markdown file under public still serves it directly; retiring a page means removing the file too.
 
-All documentation is accessible at:
-- `/documentation` - Documentation home
-- `/documentation/{section}/{file}` - Specific document
-
-Example: `/documentation/composables/useChat`
-
-## Search
-
-The documentation includes full-text search powered by Orama. Search is available via the search bar in the header.
+The viewer implementation lives in `app/components/DocumentationShell.vue` and `app/composables/documents/useDocumentation*.ts`. See [documentation system](../../docs/UI/documentation-system.md) for source implementation guidance.

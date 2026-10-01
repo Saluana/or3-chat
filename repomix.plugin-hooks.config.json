@@ -100,23 +100,12 @@
     "public/_documentation/start/plugin-quickstart.md",
     "public/_documentation/cloud/plugin-access-gating.md",
     "public/_documentation/types/hooks.md",
-    "public/_documentation/composables/useHookEffect.md",
-    "public/_documentation/composables/useDashboardPlugins.md",
-    "public/_documentation/composables/useMessageActions.md",
-    "public/_documentation/composables/useComposerActions.md",
-    "public/_documentation/composables/useHeaderActions.md",
-    "public/_documentation/composables/useSidebarSections.md",
-    "public/_documentation/composables/useSidebarPages.md",
-    "public/_documentation/composables/registerSidebarPage.md",
-    "public/_documentation/composables/useEditorNodes.md",
-    "public/_documentation/composables/useEditorToolbar.md",
-    "public/_documentation/composables/useEditorExtensionLoader.md",
-    "public/_documentation/composables/useMultiPane.md",
     "planning/complete/plugin-runtime-extraction/**",
     "planning/complete/or3-cloud-plugin-access-gating/**",
     ".agent/skills/hooks-system/SKILL.md",
     ".agent/skills/plugin-development/SKILL.md",
-    "tests/unit/hooks-system-consistency.test.ts"
+    "tests/unit/hooks-system-consistency.test.ts",
+    "public/_documentation/start/source-map.md"
   ],
   "ignore": {
     "customPatterns": [

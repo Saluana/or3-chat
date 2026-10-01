@@ -1,15 +1,45 @@
-# Workflow editor
+# Build and run a workflow
 
-The workflow editor is a node canvas for building and testing saved workflows.
-It is supplied by the separately installed `or3-plugin-workflows` package.
-When that package is disabled, Workflows navigation and editor controls are
-absent. Existing `workflow-entry` posts and execution messages stay in the
-workspace. Saved execution messages show a read-only status and output summary
-until the package is enabled again, when the full workflow card returns.
+Use this guide to create a workflow, run it from chat, and understand the
+editor controls. The node canvas and chat integration are supplied by the
+separately installed `or3-plugin-workflows` package. When that package is
+disabled, its Workflows navigation and editor controls are absent. Existing
+`workflow-entry` posts and execution messages stay in the workspace. Saved
+execution messages show a read-only status and output summary until the package
+is enabled again, when the full workflow card returns.
+
+## Create your first workflow
+
+For an AI-backed run, connect OpenRouter and make sure your account can use the
+selected model. The workflow package must be enabled, with workflow editing and
+execution allowed in the feature settings.
+
+1. Open **Workflows** in the sidebar, select **New workflow**, enter a name,
+   then select **Create**. The editor opens with a **Start** node.
+2. Select **Node Palette**, then choose **AI Agent** to add it to the canvas.
+   You can also drag the palette item onto the canvas.
+3. Connect the **Start** output handle to the **AI Agent** input handle by
+   dragging between them.
+4. Select the agent and open **Node Inspector**. Enter stable role or policy
+   instructions for the agent. For example: “You are a concise summarizer.
+   Return exactly three bullets and preserve dates and action items.” Keep the
+   default model or choose another available model in the **Model** tab. The
+   instructions describe the agent's behavior; the request for each run comes
+   from the chat message.
+5. Check the validation status in the editor toolbar. Open it to review issues;
+   choose **Open node** to go to the node that needs attention. Fix validation
+   errors before running. Warnings do not block a run.
+6. Select **Run**. OR3 opens a new chat and prefills the workflow command; it
+   does not send it yet. Add a request after the command, such as “Summarize
+   these release notes for a project manager: …”, then send the message. That
+   request becomes the workflow input.
+
+The workflow run appears as a card in chat. Expand the Agent node to follow its
+live output; its result should be a concise summary of the text you supplied.
+After the run, select the workflow from **Workflows** again to edit and reuse
+it.
 
 ## Toolbar
-
-The toolbar follows the document editor's sizing and responsive contract: shared theme tokens, 40px desktop controls, a 900px compact breakpoint, a scrollable primary rail, and pinned workflow actions. The workflow name and save state appear when the pane is wide enough; narrow panes keep controls contained so they never overlap an adjacent pane.
 
 - **Pan / Select** switches between dragging the canvas and marquee-selecting nodes. In Pan mode, hold Shift while dragging to marquee-select. In Select mode, switch back to Pan or hold Space while dragging to move the canvas.
 - **Delete** removes selected nodes or connections and is disabled when nothing deletable is selected. The Start trigger cannot be deleted.
@@ -64,7 +94,7 @@ reference stay in the foreground until their output capability is known.
 
 The Workflows sidebar groups saved workflows by update date using the same row, timestamp, selection, and overflow-action patterns as Home. Each row shows the workflow name and a short description so its purpose is visible before opening it.
 
-Use **New workflow** to provide a name and optional description. Open a workflow's overflow menu and select **Edit details** to change either value. Descriptions are stored in the workflow's existing `meta.description` field, included in imports and exports, and require no data migration.
+Use **New workflow** to provide a name and optional description. Open a workflow's overflow menu and select **Edit details** to change either value. Descriptions are stored in the workflow's existing `meta.description` field and included in imports and exports.
 
 ## Canvas interaction
 
@@ -89,18 +119,16 @@ inherit the surrounding chat thread: pass required context through the graph
 instead.
 
 Keep reusable role and policy instructions in the agent's system prompt. Put a
-node-specific action in its task field, which is appended after inbound data so
-the stable prefix remains cacheable. Each workflow run and retry reuse one
+run-specific request in the chat message after the workflow command. The Agent
+inspector's **Instructions** field defines the system prompt; connected
+upstream outputs provide graph context. Keeping reusable instructions stable
+helps preserve the cacheable prompt prefix. Each workflow run and retry reuse one
 OpenRouter `session_id` and `prompt_cache_key` for sticky provider and cache
 routing. Long workflow session IDs are deterministically reduced to OpenAI's
 64-character `prompt_cache_key` limit while the full OpenRouter session ID is
 preserved.
 Provider-reported cache reads and writes are exposed as `cachedTokens` and
 `cacheWriteTokens` in model-call usage.
-
-OR3 sends no agent output-token cap by default. If a particular step needs a
-budget, set **Maximum output tokens** in that agent's **Advanced** inspector
-section; leaving it blank uses the provider's model limit.
 
 ## Local package development
 

@@ -10,4 +10,4 @@ The maintained hook documentation lives in the public documentation category:
 
 Use [Plugin SDK](../public/_documentation/plugins/plugin-sdk.md) for installable packages. Application-private imports and host hook registration are not portable package APIs.
 
-For UI contributions, use the dedicated composable references rather than a duplicated hook registry guide: [sidebar sections](../public/_documentation/composables/useSidebarSections.md), [header actions](../public/_documentation/composables/useHeaderActions.md), and [composer actions](../public/_documentation/composables/useComposerActions.md).
+For source UI contributions, start with the [source contributor map](../public/_documentation/start/source-map.md#extend-source-ui-through-its-registry) and [source pane tutorial](../public/_documentation/start/mini-app-tutorial.md). Function contracts remain in the defining modules and JSDoc.

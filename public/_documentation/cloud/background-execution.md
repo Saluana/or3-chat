@@ -339,5 +339,4 @@ Deterministic browser harness + Playwright specs cover:
 ## Related
 
 - `public/_documentation/utils/tool-runtime.md`
-- `public/_documentation/utils/server-tool-registry.md`
 - `public/_documentation/utils/openrouterStream.md`

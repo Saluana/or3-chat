@@ -1,12 +1,19 @@
-import { computed, onMounted, type Ref } from 'vue';
+import { computed, type Ref } from 'vue';
 import { useAsyncData } from '#imports';
+
+// Public assets are not available to Nitro's internal $fetch during SSR.
+// Vite supplies lazy raw modules so direct visits render the same Markdown.
+const bundledPages = import.meta.glob<string>(
+    '../../../public/_documentation/**/*.md',
+    { query: '?raw', import: 'default' }
+);
 
 export function useDocumentationContent(
     routePath: Ref<string>,
     contentOverride: Ref<string | undefined>
 ) {
     const { data: fetchedContent, pending, error, refresh } = useAsyncData(
-        () => `doc-content:v3:${routePath.value}`,
+        () => `doc-content:v4:${routePath.value}`,
         async () => {
             const path = routePath.value;
             if (!path.startsWith('/documentation')) return '';
@@ -14,20 +21,14 @@ export function useDocumentationContent(
             const slug = path.replace(/^\/documentation/, '') || '/start/overview';
             const markdownPath = `/_documentation${slug}.md`;
 
-            try {
-                if (import.meta.server && slug === '/start/overview') {
-                    const bundled = await import(
-                        '~~/public/_documentation/start/overview.md?raw'
-                    );
-                    return bundled.default;
-                }
-                const content = await $fetch<string>(markdownPath, {
-                    responseType: 'text',
-                });
-                return typeof content === 'string' ? content : '';
-            } catch {
-                return '';
+            if (import.meta.server) {
+                const load = bundledPages[`../../../public/_documentation${slug}.md`];
+                if (!load) throw new Error('Documentation page not found');
+                return await load();
             }
+            return await $fetch<string>(markdownPath, {
+                responseType: 'text',
+            });
         },
         {
             server: true,
@@ -47,32 +48,6 @@ export function useDocumentationContent(
     const displayContent = computed(
         () => contentOverride.value || currentContent.value
     );
-
-    if (import.meta.client) {
-        onMounted(() => {
-            if (
-                routePath.value.startsWith('/documentation') &&
-                !fetchedContent.value
-            ) {
-                void refresh();
-
-                const slug =
-                    routePath.value.replace(/^\/documentation/, '') ||
-                    '/start/overview';
-                const markdownPath = `/_documentation${slug}.md`;
-
-                void $fetch<string>(markdownPath, { responseType: 'text' })
-                    .then((content) => {
-                        if (typeof content === 'string' && content.length > 0) {
-                            fetchedContent.value = content;
-                        }
-                    })
-                    .catch(() => {
-                        // Ignore fallback errors; async-data path already handled.
-                    });
-            }
-        });
-    }
 
     return {
         fetchedContent,

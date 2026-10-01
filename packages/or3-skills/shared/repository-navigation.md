@@ -15,7 +15,7 @@ Required paths by surface:
 | Setup | `public/_documentation/cloud/or3-cloud-wizard.md`, `cloud/configure.md`, `scripts/cli/or3-cloud.ts` |
 | Plugin | `public/_documentation/plugins/`, `packages/plugin-sdk/`, `examples/plugins/`, `tests/plugin-runtime/` |
 | Theme | `public/_documentation/themes/`, `app/theme/`, `scripts/cli/validate-theme.ts` |
-| Core | Relevant docmap page, public type, existing extension registry or hook, its canonical test |
+| Core | `public/_documentation/start/source-map.md`, relevant feature guide, defining source type/JSDoc, existing extension registry or hook, its canonical test |
 
 Never assume a command, manifest field, contribution kind, or host capability
 exists because an older reference mentions it. Confirm it in the checkout and

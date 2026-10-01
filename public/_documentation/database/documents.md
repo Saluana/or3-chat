@@ -70,3 +70,21 @@ Document storage built on the shared `posts` table (`postType: 'doc'`) with TipT
 -   Use `listDocumentFileHashes()` for “used in docs” membership or other reference facts where document content must stay unloaded.
 -   Call `updateDocument` with partial patches—passing `content` as TipTap JSON automatically serializes to string.
 -   Write hook extensions to auto-tag docs or enforce title casing.
+
+## Live editor content and autosave
+
+Source editors use `app/composables/documents/useDocumentsStore.ts` to stage title/content changes and debounce writes (currently 750 ms). Cached content and a scheduled save are not evidence of local durability. Explicitly flush and confirm the saved/error state before a workflow depends on that content being persisted.
+
+Resolve the exact mounted editor through `app/composables/documents/useDocumentEditorSessions.ts`. Modern sessions use pane/tab identity, so a split view can select the intended editor. Session capture and local-durability methods serve different purposes. An inactive document generally supplies saved read-only content rather than a live editor snapshot.
+
+Releasing a cached document drops heavy content and timers. The current `releaseDocument` implementation suppresses flush errors during release, so release alone is not a successful-save acknowledgement. Keep save/error handling explicit before navigation or teardown, and preserve workspace admission guards.
+
+## Document AI proposals
+
+The document AI composer accepts a request, attachments, saved/plugin slash actions, and document/chat references. Slash actions insert a prompt without immediately sending it. References are deduplicated and resolved again before submission; a missing/deleted reference or a reference to the current document is refused.
+
+The request separates the user prompt, frozen editable document context, and escaped read-only reference context. With a selection, only that selection is writable through a single replace_selection operation. Without a selection, the cursor block is the default target unless the request calls for broader edits. Large documents use bounded local context plus outline/chunk lookup instead of duplicating the entire document in every request.
+
+Reference content counts toward context limits but does not grant editable block references. Proposed operations must validate against the frozen snapshot and enter the review UI. Only accepting the proposal writes the edit. Changes to the document, stale snapshots, workspace switches, and another pending proposal can invalidate edit authority.
+
+Source hooks `ai.document.edit:filter:request` and `ai.document.edit:action:before` expose editable context and separate referenceContext; preserve that distinction. The implementation is `app/composables/documents/useDocumentAiAgent.ts`. Its live editor bridge also serves [document tools in chat](/documentation/utils/chat-tools).

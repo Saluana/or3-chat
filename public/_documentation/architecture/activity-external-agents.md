@@ -1,4 +1,8 @@
-# Activity and External Agents
+# Activity and External Agent Boundaries
+
+Use this guide when connecting a feature to Activity or extending the remote
+agent integration. It explains which subsystem owns saved run state, remote
+requests, credentials, and UI.
 
 ## Ownership model
 

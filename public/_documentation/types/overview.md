@@ -11,7 +11,7 @@ These references help you choose the right type and understand its boundary. The
 | Parsed documents and document patches | `~/db/documents`; [Database types](/documentation/types/database). |
 | Typed hook payloads and augmentation | `~/core/hooks/hook-types`; [Hook types](/documentation/types/hooks). |
 | Portable plugin contracts | `@or3/plugin-sdk`; [Plugin types](/documentation/types/plugins). |
-| Composable return contracts | [Composable types](/documentation/types/composables). |
+| Source controllers and registries | [Source contributor map](/documentation/start/source-map); import return types from the defining module. |
 | Provider message parts | `~/core/auth/openrouter-build`; [Build provider messages](/documentation/auth/openrouter-build). |
 | OpenRouter model metadata | `~~/shared/openrouter/types`; [Model catalog](/documentation/auth/models-service). |
 

@@ -4,9 +4,9 @@
   "generator": "scripts/plugin-runtime/generate-compatibility-ledger.ts",
   "inputs": {
     "moduleManifest": "planning/complete/plugin-runtime-v2/compatibility-ledger.modules.json",
-    "moduleManifestSha256": "f732887f9daed262f7fbbaccbe526cf9c4723ae18c3c82340a9ad9f1a10938f5",
+    "moduleManifestSha256": "51216706d8863384247da6daba35ca0fcabfaceb11c1b78391cd022732cc1842",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
-    "nuxtImportsDeclarationSha256": "b95eb96834b6ca1696ca0db13f0ec5cc25371be67aae53da33235c498a2ae398",
+    "nuxtImportsDeclarationSha256": "d2a7f5e797a99412ba0e161f34a6e5c3da3fae742279beca05999ee3273c694e",
     "behaviorProfiles": "planning/complete/plugin-runtime-v2/compatibility-profiles.json",
     "behaviorProfilesSha256": "6e35c5b9392b785e5bb541580865f80f0d5f0888851c2ff68c5a3ecd75097cc1"
   },
@@ -457,7 +457,7 @@
       ],
       "nuxtAutoImportModule": "#imports",
       "docs": [
-        "public/_documentation/types/composables.md"
+        "public/_documentation/types/overview.md"
       ],
       "behaviorProfileIds": [],
       "exports": [
@@ -849,7 +849,7 @@
       ],
       "nuxtAutoImportModule": "#imports",
       "docs": [
-        "public/_documentation/composables/useMessageActions.md"
+        "public/_documentation/start/source-map.md"
       ],
       "behaviorProfileIds": [
         "registry.message-actions"
@@ -984,7 +984,7 @@
       ],
       "nuxtAutoImportModule": "#imports",
       "docs": [
-        "public/_documentation/composables/useHookEffect.md"
+        "public/_documentation/hooks/reference.md"
       ],
       "behaviorProfileIds": [],
       "exports": [
@@ -1097,7 +1097,7 @@
       "nuxtAutoImportModule": "#imports",
       "docs": [
         "docs/UI/dashboard-plugins.md",
-        "public/_documentation/composables/useDashboardPlugins.md"
+        "public/_documentation/start/source-map.md"
       ],
       "behaviorProfileIds": [
         "registry.dashboard"
@@ -1654,7 +1654,7 @@
       ],
       "nuxtAutoImportModule": "#imports",
       "docs": [
-        "public/_documentation/composables/useDocumentHistoryActions.md"
+        "public/_documentation/start/source-map.md"
       ],
       "behaviorProfileIds": [
         "registry.history-actions"
@@ -1912,7 +1912,7 @@
       ],
       "nuxtAutoImportModule": "#imports",
       "docs": [
-        "public/_documentation/composables/useEditorExtensionLoader.md"
+        "public/_documentation/start/source-map.md"
       ],
       "behaviorProfileIds": [
         "registry.editor-extensions"
@@ -2240,7 +2240,7 @@
       ],
       "nuxtAutoImportModule": "#imports",
       "docs": [
-        "public/_documentation/composables/useEditorNodes.md"
+        "public/_documentation/start/source-map.md"
       ],
       "behaviorProfileIds": [
         "registry.editor-extensions"
@@ -2611,7 +2611,7 @@
       ],
       "nuxtAutoImportModule": "#imports",
       "docs": [
-        "public/_documentation/composables/useEditorToolbar.md"
+        "public/_documentation/start/source-map.md"
       ],
       "behaviorProfileIds": [
         "registry.editor-toolbar"
@@ -2746,8 +2746,7 @@
       ],
       "nuxtAutoImportModule": "#imports",
       "docs": [
-        "public/_documentation/composables/useDocumentHistoryActions.md",
-        "public/_documentation/composables/useThreadHistoryActions.md"
+        "public/_documentation/start/source-map.md"
       ],
       "behaviorProfileIds": [
         "registry.history-actions"
@@ -7832,7 +7831,7 @@
       ],
       "nuxtAutoImportModule": "#imports",
       "docs": [
-        "public/_documentation/composables/useProjectTreeActions.md"
+        "public/_documentation/start/source-map.md"
       ],
       "behaviorProfileIds": [
         "registry.project-tree-actions"
@@ -8052,7 +8051,7 @@
       ],
       "nuxtAutoImportModule": "#imports",
       "docs": [
-        "public/_documentation/composables/registerSidebarPage.md"
+        "public/_documentation/start/source-map.md"
       ],
       "behaviorProfileIds": [
         "registry.sidebar-pages"
@@ -8187,7 +8186,7 @@
       ],
       "nuxtAutoImportModule": "#imports",
       "docs": [
-        "public/_documentation/composables/useComposerActions.md"
+        "public/_documentation/start/source-map.md"
       ],
       "behaviorProfileIds": [
         "registry.composer-actions"
@@ -8350,7 +8349,7 @@
       ],
       "nuxtAutoImportModule": "#imports",
       "docs": [
-        "public/_documentation/composables/useHeaderActions.md"
+        "public/_documentation/start/source-map.md"
       ],
       "behaviorProfileIds": [
         "registry.header-actions"
@@ -8514,7 +8513,7 @@
       ],
       "nuxtAutoImportModule": "#imports",
       "docs": [
-        "public/_documentation/composables/useSidebarEnvironment.md"
+        "public/_documentation/start/source-map.md"
       ],
       "behaviorProfileIds": [],
       "exports": [
@@ -8964,7 +8963,7 @@
       ],
       "nuxtAutoImportModule": "#imports",
       "docs": [
-        "public/_documentation/composables/useSidebarPageControls.md"
+        "public/_documentation/start/source-map.md"
       ],
       "behaviorProfileIds": [],
       "exports": [
@@ -9136,7 +9135,7 @@
       ],
       "nuxtAutoImportModule": "#imports",
       "docs": [
-        "public/_documentation/composables/useSidebarPages.md"
+        "public/_documentation/start/source-map.md"
       ],
       "behaviorProfileIds": [
         "registry.sidebar-pages"
@@ -9235,7 +9234,7 @@
       ],
       "nuxtAutoImportModule": "#imports",
       "docs": [
-        "public/_documentation/composables/useSidebarSections.md"
+        "public/_documentation/start/source-map.md"
       ],
       "behaviorProfileIds": [
         "registry.sidebar-footer-actions",
@@ -9559,7 +9558,7 @@
       ],
       "nuxtAutoImportModule": "#imports",
       "docs": [
-        "public/_documentation/composables/useThreadHistoryActions.md"
+        "public/_documentation/start/source-map.md"
       ],
       "behaviorProfileIds": [
         "registry.history-actions"
@@ -9694,7 +9693,7 @@
       ],
       "nuxtAutoImportModule": "#imports",
       "docs": [
-        "public/_documentation/hooks/hook-keys.md"
+        "public/_documentation/hooks/hook-catalog.md"
       ],
       "behaviorProfileIds": [],
       "exports": [
@@ -11208,7 +11207,7 @@
       "nuxtAutoImportModule": "#imports",
       "docs": [
         "docs/hooks.md",
-        "public/_documentation/hooks/typed-hooks.md"
+        "public/_documentation/hooks/reference.md"
       ],
       "behaviorProfileIds": [],
       "exports": [
@@ -11320,7 +11319,7 @@
       "nuxtAutoImportModule": "#imports",
       "docs": [
         "docs/hooks-augmentation.md",
-        "public/_documentation/hooks/typed-hooks.md"
+        "public/_documentation/hooks/reference.md"
       ],
       "behaviorProfileIds": [],
       "exports": [
@@ -12558,7 +12557,7 @@
       ],
       "nuxtAutoImportModule": null,
       "docs": [
-        "public/_documentation/types/composables.md"
+        "public/_documentation/types/overview.md"
       ],
       "behaviorProfileIds": [],
       "exports": [
