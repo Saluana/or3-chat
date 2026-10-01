@@ -14,6 +14,10 @@ The three plans are directionally aligned, but there are several conflicts and m
 
 ## Implementation updates (resolved)
 
+- Dexie schema 19 removes three unused outbox indexes while preserving queued
+  rows, statuses, revisions, and the due-time scheduler index. Upgrade coverage
+  includes pre-scheduler and schema-18 queues across reopen; the strict outbox
+  benchmark retains its original workload and budgets.
 - Extended deployment qualification now preserves local-image binding during
   explicit recovery. Dashboard interruption qualification requires an explicit
   snapshot restore after target mutation and is available on demand, including

@@ -8,7 +8,7 @@ Dexie database client that defines the `Or3DB` schema, typed tables, and version
 
 -   Establishes the IndexedDB database named `or3-db`.
 -   Declares typed `Dexie.Table` instances for every entity.
--   Applies the current version `17` schema while preserving explicit upgrade paths for older installs.
+-   Applies the current version `19` schema while preserving explicit upgrade paths for older installs.
 -   Installs deterministic local derived-index hooks on every database instance, including workspace DBs.
 -   Provides workspace-scoped database instances named `or3-db-${workspaceId}` held in a bounded LRU cache.
 
@@ -26,7 +26,7 @@ Dexie database client that defines the `Or3DB` schema, typed tables, and version
 | `file_meta`     | `hash`      | `[kind+deleted]`, `mime_type`, `clock`, `created_at`, `updated_at`, `gallery_state`, `[gallery_state+created_at+hash]`, `[gallery_state+size_bytes+hash]`, `[gallery_state+name+mime_type+created_at+size_bytes+hash]`                                                                                                                   |
 | `file_blobs`    | `hash`      | (none)                                                                                                                                                                                                                                                                                                                                   |
 | `posts`         | `id`        | `title`, `postType`, `[postType+title]`, `document_reference_key`, `deleted`, `created_at`, `updated_at`                                                                                                                                                                                                                                 |
-| `pending_ops`   | `id`        | `tableName`, `status`, `createdAt`, `[tableName+pk]`, `[status+readyAt+createdAt+id]`                                                                                                                                                                                                                                                    |
+| `pending_ops`   | `id`        | `status`, `[status+readyAt+createdAt+id]`                                                                                                                                                                                                                                                    |
 | `tombstones`    | `id`        | `[tableName+pk]`, `deletedAt`                                                                                                                                                                                                                                                                                                            |
 | `sync_state`    | `id`        | (none)                                                                                                                                                                                                                                                                                                                                   |
 | `sync_runs`     | `id`        | `startedAt`, `status`                                                                                                                                                                                                                                                                                                                    |
@@ -56,6 +56,10 @@ Version 17 adds one local-only scheduling field and its index:
 The v17 upgrade backfills `readyAt` transactionally from the same projection rule without rewriting operation identity, revisions, attempts, statuses, or payloads; legacy rows with absent retry times stay discoverable (`readyAt: 0`). Every `pending_ops` create/update path recomputes `readyAt` from the effective committed row (including when `nextAttemptAt` is cleared), so capture, retry, deferral, manual retry, bulk writes, and startup recovery keep the index current in the same transaction. A failed migration aborts opening rather than clearing the queue.
 
 `[status+readyAt+createdAt+id]` serves status-scoped due ranges (`readyAt <= now`, inclusive) already ordered by `(readyAt, createdAt, id)` before limiting. `readyAt` is stripped before wire-size calculation and provider submission and never leaves the device.
+
+Version 19 removes the unused standalone `tableName`, `createdAt`, and
+`[tableName+pk]` outbox indexes. It preserves every queued row and the status
+and due-range indexes, reducing index maintenance during capture and draining.
 
 ---
 

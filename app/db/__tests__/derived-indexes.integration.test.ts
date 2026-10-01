@@ -156,7 +156,7 @@ describe('derived index maintenance', () => {
         const db = new Or3DB(name);
         databases.push(db);
         await db.open();
-        expect(db.verno).toBe(18);
+        expect(db.verno).toBe(19);
         expect(await db.snapshot_staging.count()).toBe(0);
 
         const storedActive = await db.posts.get('doc-active');
@@ -575,11 +575,12 @@ describe('derived index maintenance', () => {
         expect(await db.pending_ops.count()).toBe(0);
     });
 
-    it('backfills readyAt for legacy outbox rows and keeps them queryable across reopen', async () => {
+    it.each([16, 18])('preserves outbox rows from schema %i and keeps them queryable across reopen', async (sourceVersion) => {
         const name = `or3-test-readyat-upgrade-${crypto.randomUUID()}`;
         const legacy = new Dexie(name);
-        legacy.version(16).stores({
-            pending_ops: 'id, tableName, status, createdAt, [tableName+pk]',
+        legacy.version(sourceVersion).stores({
+            pending_ops: 'id, tableName, status, createdAt, [tableName+pk]' +
+                (sourceVersion >= 17 ? ', [status+readyAt+createdAt+id]' : ''),
         });
         await legacy.open();
         await legacy.table('pending_ops').bulkPut([
@@ -618,13 +619,15 @@ describe('derived index maintenance', () => {
                 status: 'pending',
                 nextAttemptAt: 9_999_999,
             },
-        ]);
+        ].map((op) => sourceVersion >= 17
+            ? { ...op, readyAt: op.nextAttemptAt ?? 0 }
+            : op));
         legacy.close();
 
         const db = new Or3DB(name);
         databases.push(db);
         await db.open();
-        expect(db.verno).toBe(18);
+        expect(db.verno).toBe(19);
 
         // IDs, revisions, attempts, statuses, and payloads are preserved.
         expect(await db.pending_ops.get('legacy-missing-time')).toMatchObject({

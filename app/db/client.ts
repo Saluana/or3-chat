@@ -310,6 +310,14 @@ export class Or3DB extends Dexie {
             snapshot_staging: 'id, generation, [generation+sequence]',
         });
 
+        // Version 19: Keep only the indexes queried by the outbox scheduler
+        // and status views. The old tableName/createdAt/table+pk indexes have
+        // no readers but add work to every capture, coalesce, and deletion.
+        // Dexie drops the indexes without rewriting or deleting queued rows.
+        this.version(19).stores({
+            pending_ops: 'id, status, [status+readyAt+createdAt+id]',
+        });
+
         // Derived-key maintenance must run on every instance, including
         // workspace DBs, and independently of sync capture suppression.
         installDerivedIndexHooks(this);
