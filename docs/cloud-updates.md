@@ -571,6 +571,9 @@ Go to **Actions → Extended validation → Run workflow** and pick a suite:
 - `tests` — full test suite, browser suites, and full-project lint.
 - `lint` — full-project ESLint only.
 - `performance` — strict performance budgets and production build budgets.
+  The populated-workspace gate uses the existing deep-release comparison:
+  absolute budgets first, with a same-runner comparison against the preceding
+  commit when both exceed a limit. A regression above 10% still fails.
 - `plugin-runtime` — full plugin compatibility and static generation.
 - `deployment` — complete disposable Cloud deployment lifecycle.
 - `dashboard-recovery` — interrupt a published dashboard update, reject an
