@@ -674,10 +674,10 @@ describe('or3 cloud wizard apply', () => {
             instanceDir,
         });
         expect(plan.commands.npm).toContain(
-            'or3-provider-basic-auth@0.0.9'
+            'or3-provider-basic-auth@0.0.10'
         );
-        expect(plan.commands.npm).toContain('or3-provider-fs@0.0.7');
-        expect(plan.commands.npm).toContain('or3-provider-sqlite@0.0.10');
+        expect(plan.commands.npm).toContain('or3-provider-fs@0.0.9');
+        expect(plan.commands.npm).toContain('or3-provider-sqlite@0.0.11');
     });
 
     it('uses local provider package specs when sibling workspaces exist', async () => {
