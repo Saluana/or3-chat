@@ -74,8 +74,8 @@ export function execPackageCommand(
 ): PackageManagerCommand {
     if (packageManager === 'bun') {
         return {
-            command: 'bunx',
-            args,
+            command: 'bun',
+            args: ['x', ...args],
         };
     }
     return {

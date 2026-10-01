@@ -75,6 +75,19 @@ plugins, themes, and server changes; it is not required for a managed Cloud
 deployment. See [source wizard documentation](../public/_documentation/cloud/or3-cloud-wizard.md)
 when you need the advanced provider wizard.
 
+To develop Cloud features from source, configure the provider stack through
+that wizard, then run:
+
+```bash
+bun run dev:ssr
+```
+
+This enables SSR with your existing configuration. It does not create Cloud
+credentials or select providers. The launcher uses Node for the default SQLite
+driver and Bun when the configured SQLite provider selects Bun's driver. Use
+the Bun version pinned in `package.json`; startup checks required SQLite drivers
+before launching Nuxt.
+
 ## What to do next
 
 - Cloud owners: read [installation and operations](installation.md).

@@ -593,7 +593,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Use the managed @or3/cloud distribution for normal local or single-VPS deployments. It runs a versioned container with Basic Auth, SQLite sync, and filesystem storage. The canonical host installation guide, including firewall, Caddy, Cloudf"
+                    "summary": "Set up managed Cloud or develop the configured SSR application from source, with runtime-aware SQLite startup checks."
                 },
                 {
                     "name": "configure.md",
@@ -665,7 +665,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "Setup and operating guide for the default-stack sync backend."
+                    "summary": "Configure SQLite sync runtimes, source launcher selection, native-driver prerequisites, and persistence invariants."
                 },
                 {
                     "name": "provider-fs.md",

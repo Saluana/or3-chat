@@ -5,8 +5,6 @@ import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import {
     CLOUD_SETUP_ARGS,
-    LOCAL_MODE_STATE_CONTENTS,
-    LOCAL_MODE_STATE_PATH,
     shouldAskModeChoice,
     writeLocalModeMarker,
 } from '../../scripts/cli/start.mjs';
@@ -38,10 +36,10 @@ describe('bun start mode choice', () => {
 
     it('writes a local-mode state marker without creating an environment file', async () => {
         const path = writeLocalModeMarker(cwd);
-        expect(path).toBe(join(cwd, LOCAL_MODE_STATE_PATH));
+        expect(path).toBe(join(cwd, '.or3/setup.json'));
         expect(existsSync(path)).toBe(true);
         const contents = await readFile(path, 'utf8');
-        expect(contents).toBe(LOCAL_MODE_STATE_CONTENTS);
+        expect(JSON.parse(contents)).toEqual({ version: 1, mode: 'local' });
         expect(existsSync(join(cwd, '.env'))).toBe(false);
         expect(shouldAskModeChoice(cwd)).toBe(false);
     });

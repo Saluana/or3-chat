@@ -47,6 +47,9 @@ export async function importThemeSourceModule<T = unknown>(
     const root = process.cwd();
     const jiti = createJiti(import.meta.url, {
         interopDefault: true,
+        // Bun's data-URL ESM evaluation can fail with NameTooLong after a
+        // native alias import falls back to Jiti's transformer.
+        esmEvalTempFile: Boolean(process.versions.bun),
         alias: {
             '~': join(root, 'app'),
             '~~': root,

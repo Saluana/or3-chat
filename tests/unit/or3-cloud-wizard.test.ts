@@ -545,8 +545,8 @@ describe('or3 cloud wizard apply', () => {
             (command) => `${command.command} ${command.args.join(' ')}`
         );
         expect(commands).toContain('bun run dev:ssr');
-        expect(commands).toContain('bunx or3-provider-convex init');
-        expect(commands).toContain('bunx convex dev --once');
+        expect(commands).toContain('bun x or3-provider-convex init');
+        expect(commands).toContain('bun x convex dev --once');
     });
 
     it('skips convex dev --once for self-hosted convex setups', () => {
@@ -564,8 +564,8 @@ describe('or3 cloud wizard apply', () => {
         const commands = plan.map(
             (command) => `${command.command} ${command.args.join(' ')}`
         );
-        expect(commands).toContain('bunx or3-provider-convex init');
-        expect(commands).not.toContain('bunx convex dev --once');
+        expect(commands).toContain('bun x or3-provider-convex init');
+        expect(commands).not.toContain('bun x convex dev --once');
     });
 
     it('does not include convex scaffold/dev steps when convex is not selected', () => {
@@ -580,8 +580,8 @@ describe('or3 cloud wizard apply', () => {
         const commands = plan.map(
             (command) => `${command.command} ${command.args.join(' ')}`
         );
-        expect(commands).not.toContain('bunx or3-provider-convex init');
-        expect(commands).not.toContain('bunx convex dev --once');
+        expect(commands).not.toContain('bun x or3-provider-convex init');
+        expect(commands).not.toContain('bun x convex dev --once');
     });
 
     it('builds npm-native local commands without Bun', () => {

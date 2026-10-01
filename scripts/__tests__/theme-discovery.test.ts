@@ -2,10 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
-import {
-    discoverThemeSourceFiles,
-    importThemeSourceModule,
-} from '../theme-discovery';
+import { execFileSync } from 'node:child_process';
+import { discoverThemeSourceFiles } from '../theme-discovery';
 
 describe('discoverThemeSourceFiles', () => {
     const temporaryDirectories: string[] = [];
@@ -35,7 +33,7 @@ describe('discoverThemeSourceFiles', () => {
         ]);
     });
 
-    it('imports installed theme source with Nuxt aliases', async () => {
+    it.each(['node', 'bun'])('imports installed theme source with Nuxt aliases under %s', async (runtime) => {
         const root = await mkdtemp(join(tmpdir(), 'or3-theme-import-'));
         temporaryDirectories.push(root);
         const themePath = join(root, 'theme.ts');
@@ -49,9 +47,21 @@ describe('discoverThemeSourceFiles', () => {
             'utf8'
         );
 
-        const module = await importThemeSourceModule<{
-            default: { name: string };
-        }>(themePath);
-        expect(module.default.name).toBe('installed-test');
+        const importer = join(process.cwd(), 'scripts/theme-discovery.ts');
+        const probe = join(root, 'probe.mts');
+        await writeFile(probe, `
+            import { importThemeSourceModule } from ${JSON.stringify(importer)};
+            const theme = await importThemeSourceModule(${JSON.stringify(themePath)});
+            console.log(JSON.stringify({ name: theme.default.name }));
+        `);
+        const args = runtime === 'bun'
+            ? [probe]
+            : ['--import', import.meta.resolve('tsx'), probe];
+        const stdout = execFileSync(runtime === 'bun' ? 'bun' : process.execPath, args, {
+            cwd: process.cwd(), encoding: 'utf8', timeout: 15_000,
+            env: { ...process.env, JITI_FS_CACHE: 'false', JITI_MODULE_CACHE: 'false' },
+            maxBuffer: 64 * 1024,
+        });
+        expect(JSON.parse(stdout)).toEqual({ name: 'installed-test' });
     });
 });

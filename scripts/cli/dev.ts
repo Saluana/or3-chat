@@ -18,17 +18,18 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { basename, resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
     detectPackageManager,
-    execPackageCommand,
     runForegroundCommand,
     type PackageManager,
     type PackageManagerCommand,
 } from '../../shared/cloud/wizard/package-manager';
 import { isPortAvailable } from '../../shared/cloud/wizard/dev-server';
 import { prepareLocalProviders } from '../../shared/dev/local-providers';
+import { requiredProviderModules } from '../../shared/cloud/provider-compatibility';
+import { buildOr3CloudConfigFromEnv } from '../../server/admin/config/resolve-config';
 
 export const DEFAULT_PORT = 3000;
 
@@ -49,6 +50,41 @@ function enabled(value: string | undefined): boolean {
     return value?.trim().toLowerCase() === 'true';
 }
 
+function usesSqliteProvider(env: NodeJS.ProcessEnv): boolean {
+    if (!enabled(env.SSR_AUTH_ENABLED)) return false;
+    return requiredProviderModules(
+        buildOr3CloudConfigFromEnv(env, { strict: false }), env,
+    ).some(({ moduleId }) => moduleId === 'or3-provider-sqlite/nuxt');
+}
+
+function usesBunSqlite(env: NodeJS.ProcessEnv): boolean {
+    const driver = env.OR3_SQLITE_DRIVER?.trim().toLowerCase();
+    return (driver === 'bun' || driver === 'bun:sqlite') && usesSqliteProvider(env);
+}
+
+/** Select the application runtime independently of its package manager. */
+function nuxtRuntime(env: NodeJS.ProcessEnv = process.env): string {
+    if (usesBunSqlite(env)) return process.versions.bun ? process.execPath : 'bun';
+    return process.versions.bun ? 'node' : process.execPath;
+}
+
+function probeRuntime(runtime: string, source: string, label: string): void {
+    // Explicit exit also covers Bun versions that lose uncaught CJS errors in -e.
+    const result = crossSpawn.sync(runtime, ['-e', `
+        try { ${source} } catch (error) {
+            console.error(error instanceof Error ? error.message : String(error));
+            process.exit(1);
+        }
+    `], {
+        encoding: 'utf8', timeout: 10_000, maxBuffer: 64 * 1024,
+    });
+    if (result.error || result.status !== 0) {
+        const detail = result.error?.message ||
+            (result.signal ? `runtime exited with ${result.signal}` : result.stderr.trim());
+        throw new Error(`${label}: ${detail}`);
+    }
+}
+
 /** Whether the active configuration needs the native better-sqlite3 binding. */
 export function usesNativeSqlite(
     env: NodeJS.ProcessEnv = process.env,
@@ -60,14 +96,11 @@ export function usesNativeSqlite(
         env.AUTH_PROVIDER?.trim().toLowerCase();
     if (authProvider === 'basic-auth') return true;
 
-    const syncEnabled = env.OR3_CLOUD_SYNC_ENABLED ?? env.OR3_SYNC_ENABLED;
-    const syncProvider = env.OR3_SYNC_PROVIDER?.trim().toLowerCase();
     const sqliteDriver =
         env.OR3_SQLITE_DRIVER?.trim().toLowerCase() || 'better-sqlite3';
     return (
-        enabled(syncEnabled) &&
-        syncProvider === 'sqlite' &&
-        sqliteDriver === 'better-sqlite3'
+        usesSqliteProvider(env) &&
+        ['better-sqlite3', 'better', 'sqlite'].includes(sqliteDriver)
     );
 }
 
@@ -87,8 +120,6 @@ export function nativeSqliteDependencyTargets(
     const authProvider =
         env.OR3_AUTH_PROVIDER?.trim().toLowerCase() ||
         env.AUTH_PROVIDER?.trim().toLowerCase();
-    const syncEnabled = env.OR3_CLOUD_SYNC_ENABLED ?? env.OR3_SYNC_ENABLED;
-    const syncProvider = env.OR3_SYNC_PROVIDER?.trim().toLowerCase();
     const sqliteDriver =
         env.OR3_SQLITE_DRIVER?.trim().toLowerCase() || 'better-sqlite3';
 
@@ -99,9 +130,8 @@ export function nativeSqliteDependencyTargets(
         });
     }
     if (
-        enabled(syncEnabled) &&
-        syncProvider === 'sqlite' &&
-        sqliteDriver === 'better-sqlite3'
+        usesSqliteProvider(env) &&
+        ['better-sqlite3', 'better', 'sqlite'].includes(sqliteDriver)
     ) {
         targets.push({
             cwd: resolve(projectRoot, '..', 'or3-provider-sqlite'),
@@ -134,11 +164,12 @@ function verifyNativeSqliteDependency(target: NativeSqliteDependencyTarget): voi
     if (!existsSync(dependency)) return;
 
     const requireFromTarget = createRequire(resolve(target.cwd, 'package.json'));
-    const Database = requireFromTarget('better-sqlite3') as new (
-        filename: string,
-    ) => { close: () => void };
-    const database = new Database(':memory:');
-    database.close();
+    const entry = requireFromTarget.resolve('better-sqlite3');
+    probeRuntime(nuxtRuntime(), `
+        const Database = require(${JSON.stringify(entry)});
+        const database = new Database(':memory:');
+        database.close();
+    `, `Native SQLite preflight for ${target.label} failed under ${usesBunSqlite(process.env) ? 'Bun' : 'Node'}. Check better-sqlite3 compatibility with that runtime`);
 }
 
 function nativeSqliteRepairCommand(
@@ -262,14 +293,6 @@ export function rewritePortArg(argv: string[], port: number): string[] {
 }
 
 /**
- * Args that `dev:ssr` / `dev:offline` should pass through to the dev script.
- * Kept as a pure helper so tests can assert the package.json → wrapper contract.
- */
-export function forwardDevArgs(argvAfterDoubleDash: string[]): string[] {
-    return argvAfterDoubleDash.filter((arg) => arg !== '--');
-}
-
-/**
  * Node 22+ exposes an experimental server-side localStorage global. Nuxt's
  * devtools dependency sees Node's built-in navigator and probes that global,
  * which otherwise emits an ExperimentalWarning after the first browser load.
@@ -282,6 +305,7 @@ export function nuxtDevEnvironment(
     const nodeMajor = Number(process.versions.node.split('.')[0]);
     const nodeOptions = env.NODE_OPTIONS?.trim() ?? '';
     if (
+        usesBunSqlite(env) ||
         nodeMajor < 22 ||
         /(?:^|\s)--localstorage-file(?:=|\s|$)/.test(nodeOptions)
     ) {
@@ -301,13 +325,10 @@ export function nuxtDevEnvironment(
 
 async function runNuxtDev(argv: string[]): Promise<number> {
     const localProviders = await prepareLocalProviders(process.cwd());
-    const command = execPackageCommand(detectPackageManager(), [
-        'nuxt',
-        'dev',
-        ...argv,
-    ]);
+    const requireFromProject = createRequire(resolve(process.cwd(), 'package.json'));
+    const entry = resolve(dirname(requireFromProject.resolve('nuxt/package.json')), 'bin/nuxt.mjs');
     return new Promise((resolvePromise, rejectPromise) => {
-        const child = crossSpawn(command.command, command.args, {
+        const child = crossSpawn(nuxtRuntime(), [entry, 'dev', ...argv], {
             stdio: 'inherit',
             env: {
                 ...nuxtDevEnvironment(),
@@ -315,7 +336,7 @@ async function runNuxtDev(argv: string[]): Promise<number> {
             },
         });
         child.on('error', rejectPromise);
-        child.on('exit', (code) => resolvePromise(code ?? 0));
+        child.on('exit', (code) => resolvePromise(code ?? 1));
         // Forward termination signals to the child so Ctrl+C behaves normally.
         const forward = (signal: NodeJS.Signals) => {
             try {
@@ -348,6 +369,13 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         process.env.SSR_AUTH_ENABLED = 'true';
     }
 
+    if (usesBunSqlite(process.env)) {
+        probeRuntime(nuxtRuntime(), `
+            const { Database } = require('bun:sqlite');
+            const database = new Database(':memory:');
+            database.close();
+        `, 'OR3_SQLITE_DRIVER=bun requires a working Bun runtime. Install the project-pinned Bun version');
+    }
     await ensureNativeSqliteDependencies();
 
     const port = parsePort(nuxtArgs);

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
+import { spawnSync, execFileSync } from 'node:child_process';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { prepareLocalProviders, resolveDevProviderModule } from '../../shared/dev/local-providers';
@@ -17,6 +19,102 @@ const nativeAddonMismatch = new Error(
 NODE_MODULE_VERSION 137. This version of Node.js requires
 NODE_MODULE_VERSION 147.`,
 );
+
+// Exercise the real launcher and subprocess boundary without starting Nuxt or
+// writing application databases. The installed CLI fixture reports its runtime.
+describe('dev launcher runtime', () => {
+    const roots: string[] = [];
+    afterEach(() => {
+        for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+    });
+
+    async function launch(driver: string, args: string[] = [], withBun = true, auth = 'clerk') {
+        const root = mkdtempSync(join(tmpdir(), 'or3-dev-runtime-'));
+        roots.push(root);
+        const bin = join(root, 'bin');
+        const nuxt = join(root, 'node_modules/nuxt');
+        mkdirSync(bin);
+        mkdirSync(join(nuxt, 'bin'), { recursive: true });
+        mkdirSync(join(root, 'node_modules/.bin'));
+        symlinkSync(process.execPath, join(bin, 'node'));
+        if (withBun) symlinkSync(execFileSync('bun', ['-p', 'process.execPath'], { encoding: 'utf8' }).trim(), join(bin, 'bun'));
+        writeFileSync(join(root, 'package.json'), '{}');
+        writeFileSync(join(nuxt, 'package.json'), JSON.stringify({ name: 'nuxt', bin: { nuxt: './bin/nuxt.mjs' } }));
+        const entry = join(nuxt, 'bin/nuxt.mjs');
+        writeFileSync(entry, `#!/usr/bin/env node
+            console.log('NUXT_RECEIPT=' + JSON.stringify({
+                runtime: process.versions.bun ? 'bun' : 'node',
+                args: process.argv.slice(2),
+                nodeOptions: process.env.NODE_OPTIONS ?? '',
+                ssr: process.env.SSR_AUTH_ENABLED,
+            }));
+        `, { mode: 0o755 });
+        symlinkSync(entry, join(root, 'node_modules/.bin/nuxt'));
+        if (auth === 'basic-auth') {
+            const addon = join(root, 'node_modules/better-sqlite3');
+            mkdirSync(addon);
+            writeFileSync(join(addon, 'package.json'), JSON.stringify({ name: 'better-sqlite3', main: 'index.cjs' }));
+            // An incompatible native dependency must fail before Nuxt starts.
+            writeFileSync(join(addon, 'index.cjs'), `module.exports = class {
+                constructor() { if (process.versions.bun) throw new Error('incompatible SQLite binding'); }
+                close() {}
+            };`);
+        }
+        const server = createServer();
+        const port = await new Promise<number>((resolvePort, reject) => {
+            server.once('error', reject);
+            server.listen(0, '127.0.0.1', () => {
+                const address = server.address() as { port: number };
+                server.close(() => resolvePort(address.port));
+            });
+        });
+        return spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'),
+            resolve('scripts/cli/dev.ts'), '--or3-ssr', '--port', String(port), ...args], {
+            cwd: root, encoding: 'utf8', timeout: 20_000,
+            env: {
+                PATH: bin, npm_config_user_agent: 'bun/1.3.14', CI: '1',
+                SSR_AUTH_ENABLED: 'true', OR3_AUTH_PROVIDER: auth,
+                OR3_SYNC_PROVIDER: 'sqlite', OR3_SYNC_ENABLED: 'false',
+                OR3_CLOUD_SYNC_ENABLED: 'false', OR3_SQLITE_DRIVER: driver,
+                OR3_LOCAL_PROVIDERS: 'false', NODE_OPTIONS: '',
+            },
+        });
+    }
+
+    it.each(['bun', 'bun:sqlite'])('selects Bun for %s with SQLite sync transfer disabled and no bunx', async (driver) => {
+        const result = await launch(driver);
+        expect(result.status, result.stderr).toBe(0);
+        const receipt = JSON.parse(result.stdout.split('NUXT_RECEIPT=')[1]!);
+        expect(receipt.runtime).toBe('bun');
+        expect(receipt.nodeOptions).not.toContain('--localstorage-file');
+        expect(receipt.args.slice(0, 2)).toEqual(['dev', '--port']);
+        expect(Number(receipt.args[2])).toBeGreaterThan(0);
+    });
+
+    it('keeps the default SQLite and offline launchers under Node', async () => {
+        for (const [driver, args, ssr] of [['better-sqlite3', [], 'true'], ['bun', ['--or3-offline'], 'false']] as const) {
+            const result = await launch(driver, [...args]);
+            expect(result.status, result.stderr).toBe(0);
+            const receipt = JSON.parse(result.stdout.split('NUXT_RECEIPT=')[1]!);
+            expect(receipt.runtime).toBe('node');
+            expect(receipt.ssr).toBe(ssr);
+        }
+    });
+
+    it('explains missing Bun before launching Nuxt', async () => {
+        const result = await launch('bun', [], false);
+        expect(result.status).toBe(1);
+        expect(result.stderr).toMatch(/Bun.*OR3_SQLITE_DRIVER|OR3_SQLITE_DRIVER.*Bun/);
+        expect(result.stdout).not.toContain('NUXT_RECEIPT=');
+    });
+
+    it('rejects an incompatible Basic Auth binding before launching Nuxt', async () => {
+        const result = await launch('bun', [], true, 'basic-auth');
+        expect(result.status).toBe(1);
+        expect(result.stderr).toContain('incompatible SQLite binding');
+        expect(result.stdout).not.toContain('NUXT_RECEIPT=');
+    });
+});
 
 describe('native SQLite dev dependency repair', () => {
     it('gives Nuxt devtools an ignored localStorage file on modern Node', () => {

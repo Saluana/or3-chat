@@ -13,8 +13,8 @@ import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 
 /** Marker written after a user picks local mode so we never re-ask. */
-export const LOCAL_MODE_STATE_CONTENTS = `${JSON.stringify({ version: 1, mode: 'local' })}\n`;
-export const LOCAL_MODE_STATE_PATH = '.or3/setup.json';
+const LOCAL_MODE_STATE_CONTENTS = `${JSON.stringify({ version: 1, mode: 'local' })}\n`;
+const LOCAL_MODE_STATE_PATH = '.or3/setup.json';
 
 /** Args passed to the managed installer when the user picks cloud from start. */
 export const CLOUD_SETUP_ARGS = ['init', '--local'];
@@ -39,7 +39,7 @@ function runScriptCommand(packageManager, script, args = []) {
 
 function cloudInstallCommand(packageManager) {
     return packageManager === 'bun'
-        ? { command: 'bunx', args: ['@or3/cloud', ...CLOUD_SETUP_ARGS] }
+        ? { command: 'bun', args: ['x', '@or3/cloud', ...CLOUD_SETUP_ARGS] }
         : {
               command: 'npm',
               args: ['exec', '--yes', '@or3/cloud', '--', ...CLOUD_SETUP_ARGS],
