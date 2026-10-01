@@ -175,7 +175,6 @@ import type {
 } from '~/utils/chat/types';
 import { Or3Scroll } from 'or3-scroll';
 import ChatInputDropper from '~/components/chat/ChatInputDropper.vue';
-import ChatMessage from '~/components/chat/ChatMessage.vue';
 import { CORE_APP_COMPONENT_DEFAULTS } from '~/theme/_shared/theme-components-registry';
 import 'or3-scroll/style.css';
 import { useElementSize } from '@vueuse/core';
@@ -216,7 +215,11 @@ function resolveCoreChatComponent(
     key: 'chat-input' | 'chat-message'
 ): Component {
     if (active && active !== CORE_APP_COMPONENT_DEFAULTS[key]) return active;
-    return key === 'chat-input' ? ChatInputDropper : ChatMessage;
+    // Reuse the registry's lazy message renderer: empty chats do not need
+    // Markdown/highlighting in the root preload graph.
+    return key === 'chat-input'
+        ? ChatInputDropper
+        : CORE_APP_COMPONENT_DEFAULTS['chat-message'];
 }
 
 const model = ref('~openai/gpt-luna-latest');

@@ -34,6 +34,10 @@ The draft comparison also protects text typed while a send was pending. The exis
 
 ## Streaming, stopping, and teardown
 
+The default message renderer loads through the theme registry when a message
+row mounts. Empty chats keep Markdown and highlighting out of the initial
+preload graph; theme-provided message components keep their existing selection.
+
 Render the controller's UI projections rather than raw stream events. Text, reasoning, tool progress, and partial output can arrive independently. Accumulators batch UI updates; persistence and display have separate responsibilities. A transport disconnect does not necessarily mean a server background job stopped.
 
 `abort()` requests cancellation. `dispose()` releases view listeners/subscriptions and can leave admitted generation tracking detached. It does not delete saved messages. `clearConversation({ persistence: 'preserve' })` clears in-memory projections and preserves durable rows. Do not use teardown as a destructive conversation operation or report it as a completed cancellation.

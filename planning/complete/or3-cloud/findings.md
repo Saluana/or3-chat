@@ -14,6 +14,10 @@ The three plans are directionally aligned, but there are several conflicts and m
 
 ## Implementation updates (resolved)
 
+- The empty-chat fallback reuses the theme registry's lazy message renderer,
+  keeping Markdown/highlighting out of the root preload graph. The offline
+  chat journey harness disables Cloud features and mocks catalog startup with
+  SDK-compatible pagination metadata so local SSR settings cannot cause 429s.
 - Dexie schema 20 removes the unused standalone snapshot-staging generation
   index while preserving staged rows and its sentinel. The compound sequence
   index remains the page reader; snapshot workload and budgets are unchanged.

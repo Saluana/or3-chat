@@ -8,6 +8,11 @@ test.skip(
 const chatPage = '/__or3-chat-journey-test';
 
 async function openChat(page: Page): Promise<void> {
+    // Catalog loading can start before the fixture component mounts and
+    // installs its fetch harness. Keep that startup request deterministic too.
+    await page.route('**/api/__or3-e2e/models*', (route) =>
+        route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } })
+    );
     await page.goto(chatPage);
     await expect(page.getByTestId('production-chat-journey')).toBeVisible({
         timeout: 30_000,

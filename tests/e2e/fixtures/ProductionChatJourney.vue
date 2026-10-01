@@ -102,7 +102,7 @@ function installDeterministicFetch(): void {
     const originalFetch = globalThis.fetch.bind(globalThis);
     globalThis.fetch = async (input, init) => {
         if (requestUrl(input).includes('/api/__or3-e2e/models')) {
-            return Response.json({ data: [] });
+            return Response.json({ data: [], links: { next: null }, total_count: 0 });
         }
         if (!requestUrl(input).includes('/api/__or3-e2e/chat/completions')) {
             return originalFetch(input, init);
