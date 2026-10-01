@@ -645,6 +645,10 @@ export default defineNuxtConfig({
         },
         build: {
             rolldownOptions: {
+                // Nitro bundles shared source externals in the next stage. Keep
+                // their absolute IDs: relative paths derived from the app entry
+                // root do not resolve from .nuxt/dist/server in clean builds.
+                makeAbsoluteExternalsRelative: false,
                 output: {
                     codeSplitting: {
                         groups: [
