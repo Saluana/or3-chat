@@ -2796,7 +2796,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "b137df6d7f3e5bff7d1fd70cd6eee72bb9ebe9ec8e45412cf4c4f70d09b0ecae",
+      "apiSha256": "2008fb0af548278560d26d5f44c5ec6aab73731b0879ec21d304d99b396db442",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2818,7 +2818,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 352,
+                "line": 353,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function __hasPendingDocumentChanges(id: string): boolean;"
               }
@@ -2827,7 +2827,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 352,
+              "line": 353,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function __hasPendingDocumentChanges(id: string): boolean;"
             }
@@ -2844,7 +2844,7 @@
               "resolvedReturnType": "\"idle\" | \"saving\" | \"saved\" | \"error\" | \"loading\" | undefined",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 377,
+                "line": 378,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function __peekDocumentStatus(\n    id: string\n): DocState['status'] | undefined;"
               }
@@ -2853,7 +2853,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 377,
+              "line": 378,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function __peekDocumentStatus(\n    id: string\n): DocState['status'] | undefined;"
             }
@@ -3335,7 +3335,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 95,
+              "line": 101,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentAiEstimateRequest {\n    prompt: string;\n    scope: DocumentAiScope;\n    references: DocumentAiContextReference[];\n}"
             }
@@ -3349,7 +3349,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 81,
+              "line": 87,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentAiProposal {\n    documentId: string;\n    candidate: JSONContent;\n    diff: DocumentAiDiffSummary;\n    operations: DocumentAiOperation[];\n    hunks: DocumentAiHunk[];\n    snapshot: DocumentAiFrozenSnapshot;\n    requestVersion: number;\n    prompt: string;\n    scope: DocumentAiScope;\n}"
             }
@@ -3405,7 +3405,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 101,
+              "line": 107,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentAiSubmission extends DocumentAiEstimateRequest {\n    attachments: DocumentAiAttachment[];\n}"
             }
@@ -4466,7 +4466,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 185,
+                "line": 186,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function loadDocument(id: string);"
               }
@@ -4475,7 +4475,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 185,
+              "line": 186,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function loadDocument(id: string);"
             }
@@ -4602,7 +4602,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 221,
+                "line": 222,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function newDocument(initial?: {\n    title?: string;\n    content?: TipTapDocument | null;\n});"
               }
@@ -4611,7 +4611,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 221,
+              "line": 222,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function newDocument(initial?: {\n    title?: string;\n    content?: TipTapDocument | null;\n});"
             }
@@ -5339,7 +5339,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 404,
+                "line": 405,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function releaseDocument(\n    id: string,\n    opts: { flush?: boolean; deleteEntry?: boolean } = {}\n);"
               }
@@ -5348,7 +5348,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 404,
+              "line": 405,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function releaseDocument(\n    id: string,\n    opts: { flush?: boolean; deleteEntry?: boolean } = {}\n);"
             }
@@ -5365,7 +5365,7 @@
               "resolvedReturnType": "DocumentAiScope",
               "declaration": {
                 "source": "app/composables/documents/useDocumentAiAgent.ts",
-                "line": 112,
+                "line": 118,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function resolveAutomaticDocumentAiScope(editor: Editor): DocumentAiScope;"
               }
@@ -5374,7 +5374,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 112,
+              "line": 118,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function resolveAutomaticDocumentAiScope(editor: Editor): DocumentAiScope;"
             }
@@ -5417,7 +5417,7 @@
               "resolvedReturnType": "number",
               "declaration": {
                 "source": "app/composables/documents/useDocumentAiAgent.ts",
-                "line": 116,
+                "line": 122,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function resolveDocumentAiCursorBlockIndex(\n    editor: Editor,\n    snapshot: DocumentAiFrozenSnapshot,\n): number;"
               }
@@ -5426,7 +5426,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 116,
+              "line": 122,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function resolveDocumentAiCursorBlockIndex(\n    editor: Editor,\n    snapshot: DocumentAiFrozenSnapshot,\n): number;"
             }
@@ -5549,7 +5549,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentAiAgent.ts",
-                "line": 157,
+                "line": 163,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function seedEditableContext(\n    editor: Editor,\n    snapshot: DocumentAiFrozenSnapshot,\n    scope: DocumentAiScope,\n    chunkWordLimit: number,\n);"
               }
@@ -5558,7 +5558,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 157,
+              "line": 163,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function seedEditableContext(\n    editor: Editor,\n    snapshot: DocumentAiFrozenSnapshot,\n    scope: DocumentAiScope,\n    chunkWordLimit: number,\n);"
             }
@@ -5575,7 +5575,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 282,
+                "line": 283,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function setDocumentContent(id: string, content: TipTapDocument | null);"
               }
@@ -5584,7 +5584,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 282,
+              "line": 283,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function setDocumentContent(id: string, content: TipTapDocument | null);"
             }
@@ -5601,7 +5601,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 255,
+                "line": 256,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function setDocumentTitle(id: string, title: string);"
               }
@@ -5610,7 +5610,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 255,
+              "line": 256,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function setDocumentTitle(id: string, title: string);"
             }
@@ -6353,7 +6353,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 331,
+                "line": 332,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAllDocumentsState();"
               }
@@ -6362,7 +6362,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 331,
+              "line": 332,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAllDocumentsState();"
             }
@@ -6575,7 +6575,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentAiAgent.ts",
-                "line": 289,
+                "line": 295,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDocumentAiAgent(options: {\n    editor: Ref<Editor | null>;\n    documentId: Ref<string>;\n    title: Ref<string>;\n    contentVersion: Ref<number>;\n    persistCurrent: () => Promise<void>;\n});"
               }
@@ -6584,7 +6584,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentAiAgent.ts",
-              "line": 289,
+              "line": 295,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDocumentAiAgent(options: {\n    editor: Ref<Editor | null>;\n    documentId: Ref<string>;\n    title: Ref<string>;\n    contentVersion: Ref<number>;\n    persistCurrent: () => Promise<void>;\n});"
             }
@@ -6705,7 +6705,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 309,
+                "line": 310,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDocumentState(id: string);"
               }
@@ -6714,7 +6714,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 309,
+              "line": 310,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDocumentState(id: string);"
             }
