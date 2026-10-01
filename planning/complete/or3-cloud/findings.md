@@ -14,6 +14,9 @@ The three plans are directionally aligned, but there are several conflicts and m
 
 ## Implementation updates (resolved)
 
+- Dexie schema 20 removes the unused standalone snapshot-staging generation
+  index while preserving staged rows and its sentinel. The compound sequence
+  index remains the page reader; snapshot workload and budgets are unchanged.
 - Dexie schema 19 removes three unused outbox indexes while preserving queued
   rows, statuses, revisions, and the due-time scheduler index. Upgrade coverage
   includes pre-scheduler and schema-18 queues across reopen; the strict outbox

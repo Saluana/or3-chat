@@ -318,6 +318,13 @@ export class Or3DB extends Dexie {
             pending_ops: 'id, status, [status+readyAt+createdAt+id]',
         });
 
+        // Version 20: Snapshot pages are read through the compound sequence
+        // index; the generation-only index has no reader. Preserve staged rows
+        // and the active-generation sentinel while dropping its write overhead.
+        this.version(20).stores({
+            snapshot_staging: 'id, [generation+sequence]',
+        });
+
         // Derived-key maintenance must run on every instance, including
         // workspace DBs, and independently of sync capture suppression.
         installDerivedIndexHooks(this);

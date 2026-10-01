@@ -156,7 +156,7 @@ describe('derived index maintenance', () => {
         const db = new Or3DB(name);
         databases.push(db);
         await db.open();
-        expect(db.verno).toBe(19);
+        expect(db.verno).toBe(20);
         expect(await db.snapshot_staging.count()).toBe(0);
 
         const storedActive = await db.posts.get('doc-active');
@@ -575,12 +575,17 @@ describe('derived index maintenance', () => {
         expect(await db.pending_ops.count()).toBe(0);
     });
 
-    it.each([16, 18])('preserves outbox rows from schema %i and keeps them queryable across reopen', async (sourceVersion) => {
+    it.each([16, 18, 19])('preserves outbox rows from schema %i and keeps them queryable across reopen', async (sourceVersion) => {
         const name = `or3-test-readyat-upgrade-${crypto.randomUUID()}`;
         const legacy = new Dexie(name);
         legacy.version(sourceVersion).stores({
-            pending_ops: 'id, tableName, status, createdAt, [tableName+pk]' +
-                (sourceVersion >= 17 ? ', [status+readyAt+createdAt+id]' : ''),
+            pending_ops: sourceVersion >= 19
+                ? 'id, status, [status+readyAt+createdAt+id]'
+                : 'id, tableName, status, createdAt, [tableName+pk]' +
+                    (sourceVersion >= 17 ? ', [status+readyAt+createdAt+id]' : ''),
+            ...(sourceVersion >= 18 ? {
+                snapshot_staging: 'id, generation, [generation+sequence]',
+            } : {}),
         });
         await legacy.open();
         await legacy.table('pending_ops').bulkPut([
@@ -622,12 +627,15 @@ describe('derived index maintenance', () => {
         ].map((op) => sourceVersion >= 17
             ? { ...op, readyAt: op.nextAttemptAt ?? 0 }
             : op));
+        const sentinel = { id: '__active__', generation: 'staged-before-upgrade', sequence: -1, item: null };
+        if (sourceVersion >= 18) await legacy.table('snapshot_staging').put(sentinel);
         legacy.close();
 
         const db = new Or3DB(name);
         databases.push(db);
         await db.open();
-        expect(db.verno).toBe(19);
+        expect(db.verno).toBe(20);
+        if (sourceVersion >= 18) expect(await db.snapshot_staging.get('__active__')).toEqual(sentinel);
 
         // IDs, revisions, attempts, statuses, and payloads are preserved.
         expect(await db.pending_ops.get('legacy-missing-time')).toMatchObject({

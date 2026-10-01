@@ -8,7 +8,7 @@ Dexie database client that defines the `Or3DB` schema, typed tables, and version
 
 -   Establishes the IndexedDB database named `or3-db`.
 -   Declares typed `Dexie.Table` instances for every entity.
--   Applies the current version `19` schema while preserving explicit upgrade paths for older installs.
+-   Applies the current version `20` schema while preserving explicit upgrade paths for older installs.
 -   Installs deterministic local derived-index hooks on every database instance, including workspace DBs.
 -   Provides workspace-scoped database instances named `or3-db-${workspaceId}` held in a bounded LRU cache.
 
@@ -60,6 +60,10 @@ The v17 upgrade backfills `readyAt` transactionally from the same projection rul
 Version 19 removes the unused standalone `tableName`, `createdAt`, and
 `[tableName+pk]` outbox indexes. It preserves every queued row and the status
 and due-range indexes, reducing index maintenance during capture and draining.
+
+Version 20 removes the unused standalone `snapshot_staging.generation` index.
+Staged rows and the active-generation sentinel are preserved; page reads keep
+using `[generation+sequence]`.
 
 ---
 
