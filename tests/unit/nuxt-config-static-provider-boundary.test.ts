@@ -121,6 +121,26 @@ describe('static generation provider import boundary', () => {
         expect(fsObservations.providerPackageChecks).toEqual([]);
     });
 
+    it.each([undefined, 'false', 'true'])('gates the mobile auth audit route when the journey harness is %s', async (enabled) => {
+        vi.stubEnv('OR3_PRODUCTION_JOURNEY_TEST_HARNESS', enabled);
+        const { default: config } = await import('../../nuxt.config');
+        const pages: Array<{ name: string; path: string; file: string }> = [];
+        config.hooks['pages:extend'](pages);
+        const auditRoute = pages.find((page) => page.path === '/__or3-mobile-auth-test');
+        if (enabled === 'true') {
+            expect(auditRoute?.file).toMatch(/tests\/e2e\/fixtures\/MobileAuthJourney\.vue$/);
+            expect(config.routeRules['/__or3-mobile-auth-test']).toEqual({ ssr: false });
+            expect(pages.map((page) => page.path)).toEqual([
+                '/__or3-chat-journey-test',
+                '/__or3-document-journey-test',
+                '/__or3-mobile-auth-test',
+            ]);
+        } else {
+            expect(auditRoute).toBeUndefined();
+            expect(config.routeRules['/__or3-mobile-auth-test']).toBeUndefined();
+        }
+    });
+
     it('keeps generated provider modules available to non-static SSR builds', async () => {
         vi.stubEnv('SSR_AUTH_ENABLED', 'true');
         process.argv = originalArgv.filter(

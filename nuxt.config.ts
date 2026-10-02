@@ -202,6 +202,7 @@ export default defineNuxtConfig({
             ? {
                   '/__or3-chat-journey-test': { ssr: false },
                   '/__or3-document-journey-test': { ssr: false },
+                  '/__or3-mobile-auth-test': { ssr: false },
               }
             : {}),
     },
@@ -716,6 +717,14 @@ export default defineNuxtConfig({
                         file: resolve(
                             __dirname,
                             'tests/e2e/fixtures/ProductionDocumentJourney.vue'
+                        ),
+                    },
+                    {
+                        name: 'or3-mobile-auth-test-harness',
+                        path: '/__or3-mobile-auth-test',
+                        file: resolve(
+                            __dirname,
+                            'tests/e2e/fixtures/MobileAuthJourney.vue'
                         ),
                     }
                 );
