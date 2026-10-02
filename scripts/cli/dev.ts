@@ -28,8 +28,7 @@ import {
 } from '../../shared/cloud/wizard/package-manager';
 import { isPortAvailable } from '../../shared/cloud/wizard/dev-server';
 import { prepareLocalProviders } from '../../shared/dev/local-providers';
-import { requiredProviderModules } from '../../shared/cloud/provider-compatibility';
-import { buildOr3CloudConfigFromEnv } from '../../server/admin/config/resolve-config';
+import { nuxtRuntime, usesBunSqlite, usesSqliteProvider } from '../../shared/dev/nuxt-runtime';
 
 export const DEFAULT_PORT = 3000;
 
@@ -48,24 +47,6 @@ type NativeSqliteDependencyHooks = {
 
 function enabled(value: string | undefined): boolean {
     return value?.trim().toLowerCase() === 'true';
-}
-
-function usesSqliteProvider(env: NodeJS.ProcessEnv): boolean {
-    if (!enabled(env.SSR_AUTH_ENABLED)) return false;
-    return requiredProviderModules(
-        buildOr3CloudConfigFromEnv(env, { strict: false }), env,
-    ).some(({ moduleId }) => moduleId === 'or3-provider-sqlite/nuxt');
-}
-
-function usesBunSqlite(env: NodeJS.ProcessEnv): boolean {
-    const driver = env.OR3_SQLITE_DRIVER?.trim().toLowerCase();
-    return (driver === 'bun' || driver === 'bun:sqlite') && usesSqliteProvider(env);
-}
-
-/** Select the application runtime independently of its package manager. */
-function nuxtRuntime(env: NodeJS.ProcessEnv = process.env): string {
-    if (usesBunSqlite(env)) return process.versions.bun ? process.execPath : 'bun';
-    return process.versions.bun ? 'node' : process.execPath;
 }
 
 function probeRuntime(runtime: string, source: string, label: string): void {
