@@ -1,6 +1,6 @@
 # Tasks
 
-Progress snapshot: **11 complete, 18 partial, 26 not started (55 tasks)**. Checked boxes mean the full stated task criteria are implemented and verified at the linked boundary. Partial and unverified work remains unchecked; this is not a full-feature completion claim. Runtime source at `ab8b70dc` is separate from this documentation update. Evidence and retained first failures: [evidence.md](./evidence.md). Each task is intended to take roughly 1–4 hours; split a task at its existing component/provider boundary if discovery makes it larger. Dependencies run from top to bottom. Where fixtures are written first, their final assertions become green only when the corresponding production task is complete; do not commit permanently skipped cases as a substitute.
+Progress snapshot: **11 complete, 22 partial, 22 not started (55 tasks)**. Checked boxes mean the full stated task criteria are implemented and verified at the linked boundary. Partial and unverified work remains unchecked; this is not a full-feature completion claim. Reviewed background-usage runtime is adopted at `e832700f` (tree `82821322afb51b88273a4f8560187bcfb23a4eef`); publication and exact-head CI remain held. Evidence and retained first failures: [evidence.md](./evidence.md). Each task is intended to take roughly 1–4 hours; split a task at its existing component/provider boundary if discovery makes it larger. Dependencies run from top to bottom. Where fixtures are written first, their final assertions become green only when the corresponding production task is complete; do not commit permanently skipped cases as a substitute.
 
 This plan changes native chat only. Preserve unrelated working-tree edits. Provider source changes require their owning source checkout and builds; installed `node_modules` files are not implementation targets. No task authorizes publication, a stable release, or production data changes.
 
@@ -42,25 +42,25 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C1, C9, C12.
       Requirements: R2.AC2, R2.AC3, R15.AC2.
       Done when: a measured multi-iteration generation is finalized and reloaded through real job/history APIs, and the pre-change failure demonstrates dropped usage.
-      Status: Not started — real background terminal/history usage survival regression is not added.
+      Status: Partial — retained pre-change host/SQLite/Convex failures and reviewed actual execution/history/canonical reload owners are adopted; Mac host98/SQLite111/Convex72 pass. Source review is closed in the cloud packet; adoption review and exact-head remote qualification remain pending.
 
 - [ ] 2.4 Extend background job snapshots, finalization and client tracking with usage (3h).
       Components: C1, C9.
       Requirements: R2.AC2, R2.AC3, R14.AC2.
       Done when: server text/tool paths, terminal snapshots, status/SSE and client reload carry the same measurement; generation-state writes merge owned fields rather than replace unrelated message data.
-      Status: Not started — background job snapshots/finalization/tracking usage integration is not implemented.
+      Status: Partial — reviewed V3 carries immutable last-request usage through real text/tool execution, terminal/status/SSE/client Dexie reload and owned-field merges, with attempt/auth/workspace/lease fences. Cloud445 and Mac98 owner cases pass; adoption review and exact-head CI remain pending.
 
 - [ ] 2.5a Implement usage-aware finalization in the SQLite provider source and rebuild it (4h).
       Components: C1, C9.
       Requirements: R2.AC2, R14.AC2, R15.AC2.
       Done when: provider-source contract cases written first prove terminal usage survives canonical persistence and sync; rebuilt artifacts are consumed in host verification. Missing provider source is reported as an explicit dependency, never patched into installed dist.
-      Status: Not started — SQLite provider-source usage implementation/rebuild/host conformance pending; installed dist unchanged.
+      Status: Partial — private SQLite source96f51d4/treeefc317a0 preserves PR3 registration, adds migration021/usage finalization and reviewed lease/checkpoint fixes. Normal Mac rebuild and unchanged rebuilt-runtime actual-host owners111/111 pass; publication/pins/remote qualification remain held. Installed host dist unchanged.
 
 - [ ] 2.5b Implement usage-aware finalization in the Convex provider source/scaffold and rebuild it (4h).
       Components: C1, C9.
       Requirements: R2.AC2, R14.AC2, R15.AC2.
       Done when: contract cases written first prove terminal usage survives canonical persistence and sync through Convex, schema/scaffold changes agree with the host, and rebuilt artifacts are consumed in host verification without editing installed dist.
-      Status: Not started — Convex provider-source/scaffold usage implementation/rebuild pending.
+      Status: Partial — private Convex source6f92003/treef1942e52 agrees with host usage, repairs released-worker fences and rebuilds24 scaffold files. Mac rebuilt-runtime/generated-scaffold actual-host owners72/72 pass after preserving a missing-scaffold first failure. Deployed validators/transactions, compatible rollout, publication/pins and remote qualification remain open.
 
 - [ ] 2.6 Specify failing budget/admission and lossy-confirmation cases before replacing implicit trimming (3h).
       Components: C2, C12.
@@ -72,7 +72,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C2.
       Requirements: R2.AC4, R3.AC1, R3.AC2, R3.AC3, R3.AC5, R3.AC6, R16.AC3.
       Done when: capacity comes from OpenRouter metadata, native chat has no 128k cap/8k fallback/fixed or percentage reserve, optional user maximum intersects with model capacity, reply allowance uses the actual remainder/model output maximum, and measured-prefix/full-payload checks distinguish estimated occupancy from known capacity.
-      Status: Partial — shared policy/estimator and auxiliary consumption are implemented; native128k/8k/reserve/implicit trimming has NOT been removed and measured-prefix/native admission integration remains.
+      Status: Partial — shared policy/estimator and auxiliary consumption are implemented; native8k fallback/reserve/implicit trimming remain; the128k numeric cap is already absent and measured-prefix/native admission integration remains.
 
 - [ ] 2.7a Integrate existing catalog/cache metadata with budget readiness and refresh (2h).
       Components: C2.
