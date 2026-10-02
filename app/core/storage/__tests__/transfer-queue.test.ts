@@ -1038,9 +1038,8 @@ describe('FileTransferQueue', () => {
 
         const queue = new FileTransferQueue(db as any, provider, { maxAttempts: 5 });
         queue.setWorkspaceId('ws-1');
-        (queue as any).doUpload = vi.fn(async () => {
-            throw { message: 'File too large', retryable: false };
-        });
+        const upload = vi.fn(async () => new Response('upstream token=private-token', { status: 413 }));
+        vi.stubGlobal('fetch', upload);
 
         const transfer: FileTransfer = {
             id: 'non-retryable-1',
@@ -1060,7 +1059,12 @@ describe('FileTransferQueue', () => {
         const failed = await db.file_transfers.get(transfer.id);
         expect(failed?.state).toBe('failed');
         expect(failed?.attempts).toBe(1);
-        expect(failed?.last_error).toBe('The file transfer could not be completed. Please try again.');
+        expect(failed?.last_error).toBe('Choose a smaller file and try again.');
+        expect(failed?.last_error_details).toMatchObject({ code: 'ERR_FILE_TOO_LARGE', status: 413, source: 'storage', retryable: false });
+        expect(failed?.retry_at).toBe(0);
+        expect(JSON.stringify(failed?.last_error_details)).not.toContain('private-token');
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(upload).toHaveBeenCalledOnce();
     });
 
     it('waitForTransfer handles done/failed/not-found/timeout and ensureDownloadedBlob uses cache', async () => {

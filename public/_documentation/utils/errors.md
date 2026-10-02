@@ -36,6 +36,12 @@ for 300 ms. Primary UI uses `presentError()` from `shared/errors`, never an
 arbitrary exception message or response body. Pass an app-owned operation
 fallback with `message` (reporter) or `fallbackMessage` (presenter).
 
+`asAppError()` retains explicitly supplied operation copy and login context
+when the same error is normalized or reported again. That trust stays local
+and does not apply to arbitrary exception text or objects claiming to be an
+`AppError`. New explicit operation copy takes precedence. Nuxt UI generates
+toast identifiers so separate failures in the same millisecond stay separate.
+
 Provider credentials and OR3 sessions receive different guidance. Recovery
 controls appear only when the host supports them. Retry requires classified
 retryability and an operation-owned safe callback; it is withheld during a

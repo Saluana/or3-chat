@@ -45,6 +45,13 @@ export interface AppError extends Error, ErrorMetadata {
 
 export type StandardError = AppError; // alias for wording continuity
 
+// Only explicit app-owned presentation context can survive another boundary.
+// Exception messages and objects claiming to be AppErrors never establish trust.
+const trustedErrorContexts = new WeakMap<
+    Error,
+    Pick<ErrorContext, 'fallbackMessage' | 'operation'>
+>();
+
 /**
  * `err`
  *
@@ -91,9 +98,13 @@ export function asAppError(
     v: unknown,
     fb: ErrorContext & { message?: string } = {},
 ): AppError {
+    const inherited =
+        v instanceof Error ? trustedErrorContexts.get(v) : undefined;
     const context = {
         ...fb,
-        fallbackMessage: fb.message ?? fb.fallbackMessage,
+        fallbackMessage:
+            fb.message ?? fb.fallbackMessage ?? inherited?.fallbackMessage,
+        operation: fb.operation ?? inherited?.operation,
     };
     const metadata = normalizeError(v, context);
     const presentation = presentError(metadata, context);
@@ -104,7 +115,18 @@ export function asAppError(
         tags: original.tags,
         cause: v,
     });
-    // App-owned presentation survives another reporting boundary.
+    if (
+        context.fallbackMessage !== undefined ||
+        context.operation !== undefined
+    ) {
+        trustedErrorContexts.set(e, {
+            fallbackMessage:
+                context.fallbackMessage === undefined
+                    ? undefined
+                    : redactErrorText(context.fallbackMessage),
+            operation: context.operation,
+        });
+    }
     if (isAppError(v) && v.timestamp) e.timestamp = v.timestamp;
     return e;
 }
@@ -190,6 +212,7 @@ function pushToast(error: AppError, retry?: () => void) {
     if (!toast) return;
     try {
         const presentation = presentError(error, {
+            ...trustedErrorContexts.get(error),
             fallbackMessage: error.message,
         });
         const actions: ToastAction[] = [];
@@ -228,7 +251,6 @@ function pushToast(error: AppError, retry?: () => void) {
                 },
             });
         toast.add({
-            id: 'error-' + error.timestamp,
             title: presentation.title,
             description: presentation.message,
             actions: actions.length ? actions : undefined,

@@ -731,6 +731,8 @@ export class FileTransferQueue {
                     `Try compressing the image or using a smaller file.`,
                     { 
                         tags: { domain: 'storage', stage: 'upload' },
+                        status: uploadResponse.status,
+                        source: 'storage',
                         retryable: false, // Don't retry - permanent failure
                     }
                 );

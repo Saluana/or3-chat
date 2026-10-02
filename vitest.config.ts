@@ -110,6 +110,13 @@ export default defineConfig({
     },
     test: {
         globals: true,
+        server: {
+            deps: {
+                // Transform this real toast owner so its Nuxt #imports use the
+                // existing test alias rather than Node package-import lookup.
+                inline: [/\/@nuxt\/ui\/dist\/runtime\/composables\/useToast\.js$/],
+            },
+        },
         projects: [
             {
                 extends: true,

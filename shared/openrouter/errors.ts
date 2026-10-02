@@ -44,6 +44,7 @@ export type OpenRouterStreamFailureKind =
  * Carries enough metadata for the caller to decide whether to retry.
  */
 export class OpenRouterStreamError extends Error {
+    code?: ErrorCode;
     source: ErrorSource;
     credentialSource?: CredentialSource;
     status: number;
@@ -56,6 +57,7 @@ export class OpenRouterStreamError extends Error {
     constructor(
         message: string,
         {
+            code,
             status,
             source = 'provider',
             credentialSource,
@@ -65,6 +67,7 @@ export class OpenRouterStreamError extends Error {
             providerCode,
             finishReason,
         }: {
+            code?: ErrorCode;
             status: number;
             source?: ErrorSource;
             credentialSource?: CredentialSource;
@@ -77,6 +80,7 @@ export class OpenRouterStreamError extends Error {
     ) {
         super(message);
         this.name = 'OpenRouterStreamError';
+        this.code = code;
         this.status = status;
         this.source = source;
         this.credentialSource = credentialSource;

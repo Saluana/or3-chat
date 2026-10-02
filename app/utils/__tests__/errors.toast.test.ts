@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createApp, defineComponent, nextTick } from 'vue';
+import { useToast } from '@nuxt/ui/composables/useToast';
 
 const mocks = vi.hoisted(() => ({
     addToast: vi.fn(),
@@ -6,6 +8,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.unmock('~/utils/errors');
+
+// Supply Nuxt state while exercising the real Nuxt UI toast queue/identity owner.
+vi.mock('#imports', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('#imports')>();
+    const { ref } = await import('vue');
+    return { ...actual, useState: (_key: string, init: () => unknown) => ref(init()) };
+});
 
 vi.mock('~/core/hooks/useHooks', () => ({
     useHooks: () => ({ doAction: mocks.doAction }),
@@ -16,6 +25,7 @@ import { serializeError, errorDiagnostics } from '~~/shared/errors';
 import { useApiError } from '~/composables/useApiError';
 import {
     err,
+    asAppError,
     reportError,
     setErrorToastApi,
     setErrorRecoveryApi,
@@ -49,6 +59,30 @@ describe('error toast bridge', () => {
         });
 
         expect(mocks.addToast).not.toHaveBeenCalled();
+    });
+
+    it('keeps distinct same-millisecond errors and their recovery controls in Nuxt UI', async () => {
+        let toast!: ReturnType<typeof useToast>;
+        const app = createApp(defineComponent({
+            setup() { toast = useToast(); return () => null; },
+        }));
+        app.mount(document.createElement('div'));
+        const clock = vi.spyOn(Date, 'now').mockReturnValue(1000);
+        try {
+            setErrorRecoveryApi({ update_key: vi.fn() });
+            setErrorToastApi(toast);
+            reportError({ status: 401, source: 'provider', credentialSource: 'personal' });
+            reportError({ status: 503, source: 'provider' });
+            for (let i = 0; i < 6; i++) await nextTick();
+
+            expect(toast.toasts.value).toHaveLength(2);
+            expect(toast.toasts.value.map(t => t.title)).toEqual(['OpenRouter key rejected', 'AI provider unavailable']);
+            expect(toast.toasts.value[0]?.actions).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Update API key' })]));
+        } finally {
+            clock.mockRestore();
+            app.unmount();
+            setErrorRecoveryApi({});
+        }
     });
 });
 
@@ -116,6 +150,28 @@ describe('structured failures at UI boundaries', () => {
         vi.clearAllMocks();
         setErrorRecoveryApi({});
         setErrorToastApi({ add: mocks.addToast });
+    });
+    it.each([
+        {
+            name: 'development reload', input: new Error('raw token=private-token'),
+            context: { code: 'ERR_STREAM_FAILURE', fallbackMessage: 'The development server reloaded. Reload OR3, then resend your message.' } as const,
+            title: 'Response interrupted', message: 'The development server reloaded. Reload OR3, then resend your message.',
+        },
+        {
+            name: 'failed sign-in', input: { statusCode: 401, message: 'raw token=private-token' },
+            context: { operation: 'login' } as const,
+            title: 'Sign-in failed', message: 'Check your sign-in details and try again.',
+        },
+    ])('preserves trusted $name recovery through repeated normalization and reporting', ({ input, context, title, message }) => {
+        setErrorRecoveryApi({ sign_in: vi.fn() });
+        const normalized = asAppError(asAppError(input, context));
+        const result = reportError(normalized);
+        expect(result.message).toBe(message);
+        expect(mocks.addToast.mock.lastCall?.[0]).toMatchObject({ title, description: message, actions: undefined });
+        expect(JSON.stringify(mocks.addToast.mock.calls)).not.toContain('private-token');
+        expect(reportError(normalized, { message: 'New operation guidance.' }).message).toBe(
+            'operation' in context && context.operation === 'login' ? message : 'New operation guidance.',
+        );
     });
     it('preserves a persisted background failure without retaining upstream text', () => {
         const serialized = serializeError(Object.assign(new Error('secret raw upstream body'), {

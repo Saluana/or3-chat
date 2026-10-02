@@ -1,4 +1,5 @@
 import { OpenRouterProviderError } from '~~/shared/openrouter/errors';
+import { presentError } from '~~/shared/errors';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
     openRouterStream,
@@ -55,6 +56,31 @@ describe('openrouterStream', () => {
 
     afterEach(() => {
         vi.useRealTimers();
+    });
+
+    it.each(['personal', 'server'] as const)('preserves canonical auth guidance from a %s HTTP error envelope', async (owner) => {
+        const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({
+            error: {
+                code: 'ERR_AUTH', status: 400, source: 'provider',
+                credentialSource: owner, retryable: false,
+                message: 'upstream token=private-token',
+            },
+        }, 400));
+        vi.stubGlobal('fetch', fetchMock);
+        let failure: unknown;
+        try {
+            for await (const _event of openRouterStream({
+                apiKey: 'key-1', model: 'model-1',
+                orMessages: [{ role: 'user', content: 'hi' }],
+            })) { /* consume */ }
+        } catch (error) { failure = error; }
+
+        expect(failure).toMatchObject({ code: 'ERR_AUTH', status: 400, source: 'provider', credentialSource: owner, retryable: false });
+        expect(presentError(failure)).toMatchObject(owner === 'personal'
+            ? { title: 'OpenRouter key rejected', action: 'update_key' }
+            : { title: 'Server AI connection needs attention', action: undefined });
+        expect((failure as Error).message).not.toContain('private-token');
+        expect(fetchMock).toHaveBeenCalledOnce();
     });
 
     it.each(['personal', 'server'])('retains %s credential ownership on an SSE provider failure', async (owner) => {
