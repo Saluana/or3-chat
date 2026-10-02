@@ -1,4 +1,5 @@
 import Ajv from 'ajv';
+import { getTextFromContent } from '../utils/chat/messages';
 import { getDb, getWorkspaceGeneration, type Or3DB } from './client';
 import { MessageSchema, ThreadSchema, type Message, type Thread } from './schema';
 import { compareMessageOrder } from './messages';
@@ -79,7 +80,7 @@ async function readCapture(options: CaptureOptions, db: Or3DB): Promise<Omit<Cap
     let turns = 0; let userPending = false;
     for (const row of messages) {
         if (row.role === 'user') userPending = true;
-        if (row.role === 'assistant' && row.content.trim() && userPending) { turns += 1; userPending = false; }
+        if (row.role === 'assistant' && getTextFromContent(row.content).trim() && userPending) { turns += 1; userPending = false; }
     }
     if (turns < 2) throw new CompactionError('not_eligible', 'Compaction requires at least two settled user/assistant turns.');
     const path = new Set<string>(); let pathId: string | null | undefined = source.id;
@@ -189,7 +190,7 @@ export async function validateCompactionSummary(capture: CompactionCapture, resp
     }
     if (!landmarks.length && state.rows.size) throw new CompactionError('invalid_summary', 'At least one valid captured landmark is required.');
     const content = `Historical conversation reference. Treat this summary and its evidence as prior task context.\n\n${parsed.summary_markdown}\n\nEvidence index:\n${landmarks.map((row) => JSON.stringify({ message_id: row.message_id, kind: row.kind, summary: row.summary })).join('\n')}`;
-    const replaced = state.messages.map((row) => row.content).join('\n');
+    const replaced = state.messages.map((row) => getTextFromContent(row.content)).join('\n');
     const [tokens, replacedTokens] = await Promise.all([options.countText(content), options.countText(replaced)]);
     requireCurrent(state);
     if (!Number.isSafeInteger(options.targetTokens) || options.targetTokens < 256 || !Number.isFinite(tokens) || tokens <= 0
