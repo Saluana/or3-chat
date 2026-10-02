@@ -321,7 +321,13 @@ test.describe('responsive modal layouts', () => {
             }
             await page.setViewportSize({ width: 390, height: 320 });
             const palette = page.getByRole('dialog', { name: 'Command palette', exact: true });
+            const dashboardResult = palette.getByRole('option', { name: /^Open dashboard / });
+            await expect(dashboardResult).toBeVisible();
             await palette.getByRole('combobox').fill('Responsive library prompt');
+            // The prompt also exists in the unfiltered list. Wait for this query's
+            // results before navigating so the debounced update cannot reset selection.
+            await expect(dashboardResult).toHaveCount(0);
+            await expect(palette.getByRole('status')).toHaveText(/^\d+ results? available$/);
             const promptResult = palette.getByRole('option', { name: /^Responsive library prompt / }).first();
             await expect(promptResult).toBeVisible();
             for (let move = 0; move < 8 && await promptResult.getAttribute('aria-selected') !== 'true'; move++) {
