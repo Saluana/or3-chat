@@ -13,6 +13,8 @@ can leave an incomplete download in browsers that cannot retract written bytes;
 discard that download and retry. A destination that fails to commit the file is
 reported as an export error.
 
+An export stays bound to the workspace selected when **Export workspace** was clicked, including while hooks, the save picker, or the streaming fallback are loading. Switching workspaces during that wait does not retarget the export.
+
 Keep the downloaded file in a safe place. Backups can contain private conversations, document content, files, and stored preferences or credentials; they are not encrypted by this export flow. Successful download proves that an export was produced, not that it has been restored successfully on another installation.
 
 ## Inspect before importing

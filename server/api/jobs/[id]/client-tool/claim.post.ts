@@ -42,6 +42,9 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Invalid tool claim' });
     }
 
+    // Reserve the request after validation but before provider work so
+    // concurrent calls cannot share one slot and invalid requests are free.
+    recordSyncRequest(userId, 'chat-tool:claim');
     const provider = await getJobProvider();
     if (!provider.claimClientToolCall) {
         throw createError({ statusCode: 501, statusMessage: 'Client tool bridge unavailable' });
@@ -71,7 +74,6 @@ export default defineEventHandler(async (event) => {
     if (!claimed || !pending || pending.callId !== callId) {
         throw createError({ statusCode: 409, statusMessage: 'Tool call already claimed' });
     }
-    recordSyncRequest(userId, 'chat-tool:claim');
     return {
         claimToken,
         call: {

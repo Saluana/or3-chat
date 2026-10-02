@@ -14,6 +14,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { testRuntimeConfig } from '../../../../tests/setup';
 import {
     checkSyncRateLimit,
@@ -183,6 +184,33 @@ describe('sync rate limiter', () => {
     });
 
     describe('sliding window behavior', () => {
+        it('retains the configured window beyond the cache cleanup age', () => {
+            // LRU captures its clock outside Vitest's VM. Load it in a disposable
+            // process after setting both clocks, rather than mocking cache expiry.
+            const result: unknown = JSON.parse(execFileSync('bun', ['-e', `
+                let now = 10000;
+                Date.now = () => now;
+                Object.defineProperty(performance, 'now', { value: () => now });
+                const { createSlidingWindowRateLimiter } = await import('./server/utils/rate-limit/sliding-window.ts');
+                const limiter = createSlidingWindowRateLimiter({ maxEntries: 3, entryTtlMs: 600000 });
+                const config = { maxRequests: 1, windowMs: 3600000 };
+                limiter.record('fixture', config);
+                const first = limiter.check('fixture', config);
+                now += 660000;
+                await new Promise(resolve => setTimeout(resolve, 5));
+                const during = limiter.check('fixture', config);
+                now += 2940000;
+                await new Promise(resolve => setTimeout(resolve, 5));
+                const expired = limiter.check('fixture', config);
+                process.stdout.write(JSON.stringify({ first, during, expired }));
+            `], { encoding: 'utf8' }));
+            expect(result).toEqual({
+                first: { allowed: false, remaining: 0, retryAfterMs: 3600000 },
+                during: { allowed: false, remaining: 0, retryAfterMs: 2940000 },
+                expired: { allowed: true, remaining: 1 },
+            });
+        });
+
         it('should allow requests after window expires', async () => {
             // Use a mock timer to avoid actual waiting
             vi.useFakeTimers();

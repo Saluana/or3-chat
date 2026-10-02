@@ -54,6 +54,9 @@ describe('buyer Library install request', () => {
     it('checks same-origin mutation before auth/body and binds the exact acquired release to the current workspace', async () => {
         const result = await route({ context: {} } as never);
         expect(mocks.guard).toHaveBeenCalledOnce();
+        expect(mocks.entitlements).toHaveBeenCalledWith('buyer-local', {
+            releaseId: 'rel_fixture_1',
+        });
         expect(mocks.guard.mock.invocationCallOrder[0]).toBeLessThan(mocks.body.mock.invocationCallOrder[0]!);
         expect(mocks.create).toHaveBeenCalledWith({
             buyerUserId: 'buyer-local', workspaceId: 'ws-1', linkId: 'link-1',

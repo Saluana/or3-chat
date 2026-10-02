@@ -102,6 +102,7 @@ interface Harness {
         verify: string[];
         revoke: string[];
         entitlements: string[];
+        entitlementOptions: unknown[];
         acquire: { token: string; releaseId: string }[];
     };
     startResult: TransportResult<StartedPairingPayload>;
@@ -124,6 +125,7 @@ function createHarness(overrides: { configured?: boolean; encryptionKey?: string
         verify: [],
         revoke: [],
         entitlements: [],
+        entitlementOptions: [],
         acquire: [],
     };
     const state = {
@@ -139,6 +141,7 @@ function createHarness(overrides: { configured?: boolean; encryptionKey?: string
                 pluginCoverage: [],
                 acquired: [],
                 acquiredCursor: null,
+                pluginCoverageCursor: null,
             },
         } as TransportResult<RemoteLibraryEntitlements>,
     };
@@ -169,8 +172,9 @@ function createHarness(overrides: { configured?: boolean; encryptionKey?: string
             if (!result) throw new Error('unexpected revoke');
             return result;
         },
-        async entitlements(token) {
+        async entitlements(token, options) {
             calls.entitlements.push(token);
+            calls.entitlementOptions.push(options);
             return state.entitlementsResult;
         },
         async acquire(token, releaseId) {
@@ -900,7 +904,11 @@ describe('library entitlements view', () => {
             value: {
                 plus: { status: 'active', until: '2027-01-01T00:00:00.000Z' },
                 pluginCoverage: [
-                    { pluginId: 'com.fixture.paid-plugin', until: '2027-01-01T00:00:00.000Z', status: 'valid' },
+                    {
+                        pluginId: 'com.fixture.paid-plugin',
+                        until: '2027-01-01T00:00:00.000Z',
+                        status: 'valid',
+                    },
                 ],
                 acquired: [
                     {
@@ -914,6 +922,7 @@ describe('library entitlements view', () => {
                     },
                 ],
                 acquiredCursor: null,
+                pluginCoverageCursor: null,
             },
         };
 
@@ -927,6 +936,36 @@ describe('library entitlements view', () => {
         });
         expect(view.acquired?.[0]?.releaseId).toBe('rel_fixture_100');
         expect(JSON.stringify(view)).not.toContain(TOKEN);
+    });
+
+    it('preserves continuation cursors and scopes every page to the initiating linked user', async () => {
+        const h = createHarness();
+        await toLinked(h);
+        const acquiredCursor = '2026-09-17T12:00:00.000Z|rel_fixture_100';
+        const pluginCoverageCursor = 'com.fixture.paid-plugin';
+        h.entitlementsResult = {
+            ok: true,
+            value: {
+                plus: { status: 'none', until: null },
+                pluginCoverage: [],
+                acquired: [],
+                acquiredCursor,
+                pluginCoverageCursor,
+            },
+        };
+        const options = { acquiredCursor, pluginCoverageCursor, releaseId: 'rel_older' };
+        expect(await h.service.entitlements(USER, options)).toMatchObject({
+            linked: true,
+            accountId: 'central-user',
+            acquiredCursor,
+            pluginCoverageCursor,
+        });
+        expect(h.calls.entitlementOptions).toEqual([options]);
+        expect(await h.service.entitlements('unlinked-user', options)).toEqual({
+            configured: true,
+            linked: false,
+        });
+        expect(h.calls.entitlements).toEqual([TOKEN]);
     });
 
     it('ends the link locally when central proves it is gone', async () => {

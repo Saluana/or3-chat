@@ -147,6 +147,13 @@ describe('wizard: native SQLite drivers', () => {
         );
     });
 
+    it('rejects Basic Auth with Bun SQLite during wizard validation', () => {
+        const result = validateAnswers({ ...answers(), sqliteDriver: 'bun' }, { strict: false });
+        expect(result.errors).toContain(
+            'Basic Auth requires Node 24 with the supported better-sqlite3 binding. Use OR3_SQLITE_DRIVER=better-sqlite3, or choose a Bun-compatible auth provider for Bun SQLite.',
+        );
+    });
+
     it('does not validate an inactive no-SSR sync provider', () => {
         const noSsrSync = validateAnswers({
             ...answers(),

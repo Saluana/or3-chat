@@ -35,7 +35,13 @@ Entitlements are separate plan/feature flags resolved by a registered backend re
 
 The core server resolver in `server/auth/session.ts` verifies a registered provider session, maps the external identity through `AuthWorkspaceStore`, resolves active membership and role, and checks deployment-admin status. The result is cached on the current request. It does not directly hard-code a Convex workspace mutation.
 
-`GET /api/auth/session` returns an envelope with `session` and `appAccessAllowed`. Client code reads it through `useSessionContext()`:
+`GET /api/auth/session` reserves its existing per-IP `auth:session` rate allowance before
+resolving identity or entitlements, so concurrent lookups share the configured
+bucket. A rate-limited response includes `Retry-After`; all session responses
+remain `no-store`.
+
+It returns an envelope with `session` and `appAccessAllowed`. Client code reads
+it through `useSessionContext()`:
 
 ```ts
 const context = useSessionContext();

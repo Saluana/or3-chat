@@ -166,4 +166,122 @@ describe('LibraryHome purchases', () => {
         expect(wrapper.text()).toContain('Request sent');
         wrapper.unmount();
     });
+    it('appends both Library pages once and keeps the exact older release install link', async () => {
+        const first = {
+            ...entitlements('buyer-a', 'first.plugin'),
+            acquiredCursor: '2026-09-01T00:00:00.000Z|rel_first',
+            pluginCoverageCursor: 'first.plugin',
+        };
+        const second = {
+            ...entitlements('buyer-a', 'older.plugin'),
+            acquiredCursor: null,
+            pluginCoverageCursor: null,
+        };
+        second.acquired.unshift(first.acquired[0]!);
+        fetchMock.mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+        const wrapper = mount(LibraryHome, { global: { stubs } });
+        const library = libraryHolder.current as {
+            state: ReturnType<typeof ref<string>>;
+            link: ReturnType<typeof ref<ReturnType<typeof linked> | null>>;
+        };
+        library.link.value = linked('link-a', 'buyer-a');
+        library.state.value = 'linked';
+        await flush();
+        const more = wrapper
+            .findAll('button')
+            .find((button) => button.text().includes('Load more'));
+        expect(more).toBeDefined();
+        await more!.trigger('click');
+        await flush();
+        expect(fetchMock).toHaveBeenLastCalledWith('/api/plugins/library/entitlements', {
+            query: {
+                acquiredCursor: first.acquiredCursor,
+                pluginCoverageCursor: first.pluginCoverageCursor,
+            },
+        });
+        const links = wrapper
+            .findAll('a')
+            .filter((anchor) => anchor.text().includes('Install or restore'));
+        expect(links).toHaveLength(2);
+        expect(
+            links.some((anchor) =>
+                anchor.attributes('href')?.includes('plugin=older.plugin&version=1.2.3'),
+            ),
+        ).toBe(true);
+        expect(
+            wrapper.findAll('button').some((button) => button.text().includes('Load more')),
+        ).toBe(false);
+        wrapper.unmount();
+    });
+
+    it('keeps loaded purchases and the cursor after a page failure so the buyer can retry', async () => {
+        fetchMock
+            .mockResolvedValueOnce({
+                ...entitlements('buyer-a', 'first.plugin'),
+                acquiredCursor: '2026-09-01T00:00:00.000Z|rel_first',
+            })
+            .mockRejectedValueOnce(new Error('offline'))
+            .mockResolvedValueOnce({
+                ...entitlements('buyer-a', 'older.plugin'),
+                acquiredCursor: null,
+            });
+        const wrapper = mount(LibraryHome, { global: { stubs } });
+        const library = libraryHolder.current as {
+            state: ReturnType<typeof ref<string>>;
+            link: ReturnType<typeof ref<ReturnType<typeof linked> | null>>;
+        };
+        library.link.value = linked('link-a', 'buyer-a');
+        library.state.value = 'linked';
+        await flush();
+        const more = () =>
+            wrapper.findAll('button').find((button) => button.text().includes('Load more'));
+        expect(more()).toBeDefined();
+        await more()!.trigger('click');
+        await flush();
+        expect(wrapper.text()).toContain('first.plugin');
+        expect(more()).toBeDefined();
+        await more()!.trigger('click');
+        await flush();
+        expect(wrapper.text()).toContain('older.plugin');
+        wrapper.unmount();
+    });
+
+    it('discards a late page after the linked marketplace account changes', async () => {
+        let resolvePage!: (value: unknown) => void;
+        fetchMock
+            .mockResolvedValueOnce({
+                ...entitlements('buyer-a', 'first.plugin'),
+                acquiredCursor: '2026-09-01T00:00:00.000Z|rel_first',
+            })
+            .mockImplementationOnce(
+                () =>
+                    new Promise((resolve) => {
+                        resolvePage = resolve;
+                    }),
+            )
+            .mockResolvedValueOnce(entitlements('buyer-b', 'second.plugin'));
+        const wrapper = mount(LibraryHome, { global: { stubs } });
+        const library = libraryHolder.current as {
+            state: ReturnType<typeof ref<string>>;
+            link: ReturnType<typeof ref<ReturnType<typeof linked> | null>>;
+        };
+        library.link.value = linked('link-a', 'buyer-a');
+        library.state.value = 'linked';
+        await flush();
+        const more = wrapper
+            .findAll('button')
+            .find((button) => button.text().includes('Load more'));
+        expect(more).toBeDefined();
+        await more!.trigger('click');
+        await nextTick();
+        library.link.value = linked('link-b', 'buyer-b');
+        await flush();
+        resolvePage(entitlements('buyer-a', 'older.plugin'));
+        await flush();
+        expect(wrapper.text()).toContain('second.plugin');
+        expect(wrapper.text()).not.toContain('older.plugin');
+        expect(wrapper.text()).not.toContain('first.plugin');
+        wrapper.unmount();
+    });
+
 });

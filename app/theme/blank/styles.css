@@ -379,6 +379,16 @@
     }
 }
 
+/* Keep the primary auth action readable when mobile labels need more room. */
+html[data-theme='blank'] .basic-auth-modal-content div:has(> button[type='submit']) {
+    flex-wrap: wrap;
+}
+
+html[data-theme='blank'] .basic-auth-modal-content button[type='submit'] {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
 /* ── Dark mode overrides ── */
 html[data-theme='blank'].dark,
 [data-theme='blank'].dark,

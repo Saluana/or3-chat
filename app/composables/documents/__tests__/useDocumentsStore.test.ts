@@ -11,9 +11,9 @@ import {
 import * as documentsDb from '~/db/documents';
 
 vi.mock('~/db/documents', () => ({
-    createDocument: vi.fn(),
-    updateDocument: vi.fn(),
-    getDocument: vi.fn(),
+    createDocumentInDb: vi.fn(),
+    updateDocumentInDb: vi.fn(),
+    getDocumentInDb: vi.fn(),
 }));
 
 vi.mock('#imports', () => ({
@@ -43,8 +43,8 @@ describe('useDocumentsStore - memory leaks', () => {
             deleted: false,
         };
 
-        vi.mocked(documentsDb.getDocument).mockResolvedValue(mockDoc as any);
-        vi.mocked(documentsDb.updateDocument).mockResolvedValue(mockDoc as any);
+        vi.mocked(documentsDb.getDocumentInDb).mockResolvedValue(mockDoc as any);
+        vi.mocked(documentsDb.updateDocumentInDb).mockResolvedValue(mockDoc as any);
 
         await loadDocument('doc1');
 
@@ -72,8 +72,8 @@ describe('useDocumentsStore - memory leaks', () => {
             deleted: false,
         };
 
-        vi.mocked(documentsDb.getDocument).mockResolvedValue(mockDoc as any);
-        vi.mocked(documentsDb.updateDocument).mockResolvedValue(mockDoc as any);
+        vi.mocked(documentsDb.getDocumentInDb).mockResolvedValue(mockDoc as any);
+        vi.mocked(documentsDb.updateDocumentInDb).mockResolvedValue(mockDoc as any);
 
         await loadDocument('doc2');
         setDocumentTitle('doc2', 'New Title');
@@ -106,7 +106,7 @@ describe('useDocumentsStore - memory leaks', () => {
             deleted: false,
         };
 
-        vi.mocked(documentsDb.getDocument).mockResolvedValue(mockDoc as any);
+        vi.mocked(documentsDb.getDocumentInDb).mockResolvedValue(mockDoc as any);
 
         await loadDocument('doc3');
 
@@ -130,8 +130,8 @@ describe('useDocumentsStore - memory leaks', () => {
             deleted: false,
         };
 
-        vi.mocked(documentsDb.getDocument).mockResolvedValue(mockDoc as any);
-        vi.mocked(documentsDb.updateDocument).mockResolvedValue(mockDoc as any);
+        vi.mocked(documentsDb.getDocumentInDb).mockResolvedValue(mockDoc as any);
+        vi.mocked(documentsDb.updateDocumentInDb).mockResolvedValue(mockDoc as any);
 
         await loadDocument('doc4');
         setDocumentTitle('doc4', 'New Title');
@@ -140,7 +140,7 @@ describe('useDocumentsStore - memory leaks', () => {
         await Promise.all([flush('doc4'), flush('doc4'), flush('doc4')]);
 
         // Should only update once because timer is cleared on first flush
-        expect(documentsDb.updateDocument).toHaveBeenCalledTimes(1);
+        expect(documentsDb.updateDocumentInDb).toHaveBeenCalledTimes(1);
     });
 
     it('does not clear edits staged while a save is in flight', async () => {
@@ -153,22 +153,23 @@ describe('useDocumentsStore - memory leaks', () => {
             deleted: false,
         };
         let finishFirst!: (value: typeof mockDoc) => void;
-        vi.mocked(documentsDb.getDocument).mockResolvedValue(mockDoc as any);
-        vi.mocked(documentsDb.updateDocument)
+        vi.mocked(documentsDb.getDocumentInDb).mockResolvedValue(mockDoc as any);
+        vi.mocked(documentsDb.updateDocumentInDb)
             .mockImplementationOnce(() => new Promise((resolve) => { finishFirst = resolve as typeof finishFirst; }))
             .mockResolvedValue(mockDoc as any);
 
         await loadDocument(mockDoc.id);
         setDocumentTitle(mockDoc.id, 'First');
         const firstFlush = flush(mockDoc.id);
-        await vi.waitFor(() => expect(documentsDb.updateDocument).toHaveBeenCalledTimes(1));
+        await vi.waitFor(() => expect(documentsDb.updateDocumentInDb).toHaveBeenCalledTimes(1));
         setDocumentTitle(mockDoc.id, 'Second');
         finishFirst(mockDoc);
         await firstFlush;
 
-        expect(documentsDb.updateDocument).toHaveBeenCalledTimes(2);
-        expect(documentsDb.updateDocument).toHaveBeenNthCalledWith(
+        expect(documentsDb.updateDocumentInDb).toHaveBeenCalledTimes(2);
+        expect(documentsDb.updateDocumentInDb).toHaveBeenNthCalledWith(
             2,
+            expect.anything(),
             mockDoc.id,
             expect.objectContaining({ title: 'Second' })
         );
@@ -184,8 +185,8 @@ describe('useDocumentsStore - memory leaks', () => {
             updated_at: Date.now(),
             deleted: false,
         };
-        vi.mocked(documentsDb.getDocument).mockResolvedValue(mockDoc as any);
-        vi.mocked(documentsDb.updateDocument)
+        vi.mocked(documentsDb.getDocumentInDb).mockResolvedValue(mockDoc as any);
+        vi.mocked(documentsDb.updateDocumentInDb)
             .mockRejectedValueOnce(new Error('disk unavailable'))
             .mockResolvedValue(mockDoc as any);
 
@@ -196,7 +197,7 @@ describe('useDocumentsStore - memory leaks', () => {
         expect(useDocumentState(mockDoc.id).status).toBe('error');
 
         await flush(mockDoc.id);
-        expect(documentsDb.updateDocument).toHaveBeenCalledTimes(2);
+        expect(documentsDb.updateDocumentInDb).toHaveBeenCalledTimes(2);
         expect(useDocumentState(mockDoc.id).pendingTitle).toBeUndefined();
         expect(useDocumentState(mockDoc.id).status).toBe('saved');
     });
@@ -218,8 +219,8 @@ describe('useDocumentsStore - type safety', () => {
             deleted: false,
         };
 
-        vi.mocked(documentsDb.getDocument).mockResolvedValue(mockDoc as any);
-        vi.mocked(documentsDb.updateDocument).mockResolvedValue(mockDoc as any);
+        vi.mocked(documentsDb.getDocumentInDb).mockResolvedValue(mockDoc as any);
+        vi.mocked(documentsDb.updateDocumentInDb).mockResolvedValue(mockDoc as any);
 
         await loadDocument('doc5');
 
@@ -233,7 +234,7 @@ describe('useDocumentsStore - type safety', () => {
     });
 
     it('handles errors gracefully without throwing', async () => {
-        vi.mocked(documentsDb.getDocument).mockRejectedValue(
+        vi.mocked(documentsDb.getDocumentInDb).mockRejectedValue(
             new Error('Network error')
         );
 
