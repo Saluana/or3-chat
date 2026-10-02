@@ -13,7 +13,7 @@ import { MAX_SYNC_PAYLOAD_BYTES } from '~~/shared/sync/sanitize';
 
 export class CompactionError extends Error {
     constructor(readonly code: 'stale_source' | 'cancelled' | 'source_busy' | 'not_eligible' | 'scope_incomplete'
-        | 'invalid_summary' | 'summary_too_large' | 'not_beneficial' | 'invalid_capture', message: string) {
+        | 'invalid_summary' | 'summary_too_large' | 'not_beneficial' | 'invalid_capture' | 'summary_input_too_large' | 'model_metadata_unavailable', message: string) {
         super(message); this.name = 'CompactionError';
     }
 }
@@ -138,6 +138,13 @@ async function readCapture(options: CaptureOptions, db: Or3DB): Promise<Omit<Cap
     const root = ancestry.at(-1)!.id;
     return { root, source, anchor, scope, rows, messages,
         snapshot: stable({ root, ancestry, inheritedScopes, segments: snapshotSegments, inheritedRows: [...rows.values()], model: options.model }) };
+}
+
+/** Checks the host-owned operation identity before any auxiliary request is spent. */
+export function assertCompactionCaptureCurrent(capture: CompactionCapture): void {
+    const state = captures.get(capture);
+    if (!state) throw new CompactionError('invalid_capture', 'Use a valid captured compaction operation.');
+    requireCurrent(state);
 }
 
 /** Captures IDs and clocks; inference happens after the read transaction has ended. */

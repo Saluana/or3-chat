@@ -37,6 +37,15 @@ async function collect(
 }
 
 describe('parseOpenRouterSSE', () => {
+    it('retains explicit provider refusal for auxiliary consumers without converting it into text', async () => {
+        const frame = { choices: [{ delta: { refusal: 'Unable to summarize' }, finish_reason: 'stop' }] };
+        expect(await collect(streamFromSSE(`data: ${JSON.stringify(frame)}\n\ndata: [DONE]\n\n`))).toEqual([{ type: 'done', refused: true }]);
+    });
+    it('marks explicit length termination for auxiliary validation while preserving ordinary streamed text', async () => {
+        const frame = { choices: [{ delta: { content: 'Partial answer' }, finish_reason: 'length' }] };
+        expect(await collect(streamFromSSE(`data: ${JSON.stringify(frame)}\n\ndata: [DONE]\n\n`)))
+            .toEqual([{ type: 'text', text: 'Partial answer' }, { type: 'done', truncated: true }]);
+    });
     it('preserves valid final usage after a finish reason, empty choices and fragmented transport without duplicate accounting', async () => {
         const frames = [
             { id: 'provider-request', model: 'large-model', choices: [{ delta: { content: 'Settled answer' }, finish_reason: 'stop' }] },
