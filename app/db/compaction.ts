@@ -31,6 +31,7 @@ export interface ValidatedCompactionSummary { readonly summaryMarkdown: string; 
 interface CapturedState {
     db: Or3DB; generation: number; options: CaptureOptions; snapshot: string; root: string;
     source: Thread; anchor: Message; scope: HistoryScope; rows: Map<string, Message>; messages: CanonicalTranscriptRecord[];
+    messageCount: number; priorMessageCount: number;
 }
 interface CaptureOptions {
     sourceThreadId: string; anchorMessageId: string; model: string; db?: Or3DB;
@@ -93,6 +94,7 @@ async function readCapture(options: CaptureOptions, db: Or3DB): Promise<Omit<Cap
         ancestry.push(row); pathId = row.parent_thread_id;
     }
     const rows = new Map<string, Message>();
+    const priorIds = new Set<string>(); let priorMessageCount = 0;
     const segments: HistoryScope['segments'] = [];
     const snapshotSegments: unknown[] = [];
     let inherited: string | undefined;
@@ -114,9 +116,11 @@ async function readCapture(options: CaptureOptions, db: Or3DB): Promise<Omit<Cap
                 if (!metadata || !path.has(metadata.source_thread_id) || !path.has(scopeRow.thread_id)) {
                     throw new CompactionError('scope_incomplete', 'Prior summary scope is outside this conversation lineage.');
                 }
+                if (scopeRow === summary) priorMessageCount = metadata.message_count + metadata.prior_message_count;
                 for (const part of metadata.history_scope.segments) {
                     if (!path.has(part.thread_id)) throw new CompactionError('scope_incomplete', 'Prior summary refers to an unrelated conversation.');
                     for (const ref of part.messages) {
+                        priorIds.add(ref.message_id);
                         const row = await db.messages.get(ref.message_id);
                         if (row && row.thread_id !== part.thread_id) throw new CompactionError('scope_incomplete', 'Prior summary message ownership is invalid.');
                         if (row && !row.deleted) rows.set(row.id, row);
@@ -136,7 +140,10 @@ async function readCapture(options: CaptureOptions, db: Or3DB): Promise<Omit<Cap
     }
     const scope: HistoryScope = { version: 1, segments, ...(inherited ? { inherited_scope_message_id: inherited } : {}) };
     const root = ancestry.at(-1)!.id;
-    return { root, source, anchor, scope, rows, messages,
+    // Coverage counts describe original visible messages, never generated
+    // summary rows or a second copy of the inherited original IDs.
+    const messageCount = new Set(messages.filter((row) => !row.compaction && !priorIds.has(row.id)).map((row) => row.id)).size;
+    return { root, source, anchor, scope, rows, messages, messageCount, priorMessageCount,
         snapshot: stable({ root, ancestry, inheritedScopes, segments: snapshotSegments, inheritedRows: [...rows.values()], model: options.model }) };
 }
 
@@ -241,7 +248,7 @@ export async function validateCompactionSummary(capture: CompactionCapture, resp
         || tokens > options.targetTokens || tokens >= replacedTokens) throw new CompactionError('not_beneficial', 'Summary must fit its target and be smaller than the context it replaces.');
     const data = CompactionDataSchema.parse({ version: 1, compaction_id: capture.operationId, source_thread_id: capture.sourceThreadId,
         anchor_message_id: capture.anchorMessageId, anchor_index: state.anchor.index, generated_at: nowSec(), model: capture.model,
-        message_count: state.messages.length, prior_message_count: state.rows.size, summary_markdown: parsed.summary_markdown, landmarks, history_scope: state.scope });
+        message_count: state.messageCount, prior_message_count: state.priorMessageCount, summary_markdown: parsed.summary_markdown, landmarks, history_scope: state.scope });
     const summary = freeze({ summaryMarkdown: parsed.summary_markdown, content, discardedLandmarks: discarded });
     summaries.set(summary, { capture, data, content }); return summary;
 }
