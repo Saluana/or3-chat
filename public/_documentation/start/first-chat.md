@@ -4,7 +4,9 @@ This guide starts from an OR3 instance already open in your browser. To run one 
 
 ## 1. Connect a model provider
 
-For local-first use, the empty chat welcome card offers **Connect with OpenRouter** and a field for pasting an API key. Complete one of those options. The sidebar also has a **Connect** control.
+OpenRouter provides access to the AI models you chat with. Model usage may cost money, depending on the model; creating an API key does not make paid models free. Check the model's pricing in OpenRouter before chatting.
+
+For local-first use, choose **Connect with OpenRouter** on the empty chat welcome card, or expand **Use an existing API key** to paste a key you already have. The sidebar also has a **Connect** control.
 
 On a Cloud instance, sign in if requested. The operator may supply an instance key or allow your own OpenRouter key. When an instance key is provided, a personal key may be unnecessary or disallowed. See [OpenRouter connection and troubleshooting](/documentation/auth/connect).
 

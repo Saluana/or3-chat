@@ -87,16 +87,21 @@ describe('ChatWelcomeCard a11y', () => {
         );
         expect(wrapper.get('#chat-welcome-title').text()).toContain('Welcome to OR3');
         expect(wrapper.get('#chat-welcome-description').text()).toContain(
-            'local-first'
+            'Connect OpenRouter to start chatting.'
         );
 
         wrapper.unmount();
     });
 
-    it('labels the paste key field and dismiss control', async () => {
+    it('reveals labelled key controls and key-use details on request', async () => {
         const wrapper = mountCard();
         await flushPromises();
 
+        const disclosure = wrapper.get('[aria-controls="chat-welcome-existing-key"]');
+        expect(disclosure.attributes('aria-expanded')).toBe('false');
+        expect(wrapper.find('input').exists()).toBe(false);
+        await disclosure.trigger('click');
+        expect(disclosure.attributes('aria-expanded')).toBe('true');
         expect(wrapper.get('input').attributes('aria-label')).toBe(
             'OpenRouter API key'
         );
@@ -106,10 +111,22 @@ describe('ChatWelcomeCard a11y', () => {
                 .some((btn) => btn.attributes('aria-label') === 'Dismiss welcome')
         ).toBe(true);
 
+        await disclosure.trigger('click');
+        expect(wrapper.find('input').exists()).toBe(false);
+
+        const keyDetails = wrapper.get('[aria-controls="chat-welcome-key-details"]');
+        expect(keyDetails.attributes('aria-expanded')).toBe('false');
+        expect(wrapper.find('a[href]').exists()).toBe(false);
+        await keyDetails.trigger('click');
+        expect(keyDetails.attributes('aria-expanded')).toBe('true');
+        expect(wrapper.get('a[href]').attributes('href')).toBe('https://openrouter.ai/keys');
+        await keyDetails.trigger('click');
+        expect(wrapper.find('a[href]').exists()).toBe(false);
+
         wrapper.unmount();
     });
 
-    it('describes the self-hosted workspace in cloud mode', async () => {
+    it('offers OpenRouter connection in cloud mode', async () => {
         runtimeConfig.value = {
             public: {
                 branding: { appName: 'OR3' },
@@ -121,7 +138,7 @@ describe('ChatWelcomeCard a11y', () => {
         await flushPromises();
 
         expect(wrapper.get('#chat-welcome-description').text()).toContain(
-            'connected to this self-hosted workspace'
+            'Connect OpenRouter to start chatting.'
         );
         wrapper.unmount();
     });
@@ -145,7 +162,7 @@ describe('ChatWelcomeCard a11y', () => {
 
         const root = wrapper.get('[data-welcome-card]');
         const buttons = wrapper.findAll('button');
-        const lastFocusable = wrapper.get<HTMLAnchorElement>('a[href]');
+        const lastFocusable = wrapper.get<HTMLButtonElement>('[aria-controls="chat-welcome-key-details"]');
         lastFocusable.element.focus();
 
         await root.trigger('keydown', { key: 'Tab' });

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
+import * as nuxtImports from '#imports';
+import { kv } from '~/db';
 import { defineComponent, nextTick, reactive, ref, toRaw } from 'vue';
 import ChatContainer from '../ChatContainer.vue';
 
@@ -151,6 +153,11 @@ describe('ChatContainer', () => {
             global: {
                 mocks: { $theme: createThemeMock() },
                 stubs: {
+                    Teleport: true,
+                    ChatWelcomeCard: {
+                        name: 'ChatWelcomeCard',
+                        template: '<button data-test="welcome-preview" @click="$emit(\'dismiss\')">Welcome</button>',
+                    },
                     LazyChatMessage,
                     LazyChatInputDropper,
                     ClientOnly: { template: '<div><slot /></div>' },
@@ -163,6 +170,49 @@ describe('ChatContainer', () => {
             },
         });
     }
+
+    it('reopens welcome for an explicit preview and dismisses without saving preferences', async () => {
+        const runtimeConfig = nuxtImports.useRuntimeConfig();
+        const config = vi.spyOn(nuxtImports, 'useRuntimeConfig').mockReturnValue({
+            ...runtimeConfig,
+            public: { ...runtimeConfig.public, ssrAuthEnabled: false },
+        });
+        const route = vi.spyOn(nuxtImports, 'useRoute').mockReturnValue({ ...nuxtImports.useRoute(), query: { welcome: '1' } });
+        const save = vi.spyOn(kv, 'set').mockResolvedValue(undefined as never);
+        const wrapper = mountChatInstance(makeChatInstance({
+            messages: ref([{ id: 'existing', role: 'user', text: 'Existing chat' }]),
+        }));
+        try {
+            await flushPromises();
+            await vi.waitFor(() => expect(wrapper.find('[data-test="welcome-preview"]').exists()).toBe(true));
+            await wrapper.get('[data-test="welcome-preview"]').trigger('click');
+            expect(wrapper.find('[data-test="welcome-preview"]').exists()).toBe(false);
+            expect(save).not.toHaveBeenCalledWith('or3_welcome_card_dismissed', 'true');
+        } finally {
+            wrapper.unmount();
+            route.mockRestore();
+            save.mockRestore();
+            config.mockRestore();
+        }
+    });
+
+    it('keeps the sign-in gate when a welcome preview is requested', async () => {
+        const route = vi.spyOn(nuxtImports, 'useRoute').mockReturnValue({ ...nuxtImports.useRoute(), query: { welcome: '1' } });
+        const runtimeConfig = nuxtImports.useRuntimeConfig();
+        const config = vi.spyOn(nuxtImports, 'useRuntimeConfig').mockReturnValue({
+            ...runtimeConfig,
+            public: { ...runtimeConfig.public, ssrAuthEnabled: true },
+        });
+        const wrapper = mountChatInstance(makeChatInstance());
+        try {
+            await flushPromises();
+            expect(wrapper.find('[data-test="welcome-preview"]').exists()).toBe(false);
+        } finally {
+            wrapper.unmount();
+            route.mockRestore();
+            config.mockRestore();
+        }
+    });
 
     function makeStreamingInstance(): MockChatInstance {
         const instance = makeChatInstance();

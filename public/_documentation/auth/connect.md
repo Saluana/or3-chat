@@ -1,5 +1,7 @@
 # Connect OpenRouter
 
+OpenRouter provides access to AI models. Model usage may cost money, depending on the model; creating an API key does not make paid models free. Check pricing in OpenRouter before chatting.
+
 A local-first OR3 session needs an OpenRouter key to generate responses. A Cloud operator can supply an instance key instead, and controls whether users can override it with their own keys. Connecting OpenRouter does not sign you into OR3 Cloud.
 
 ## Connect through OpenRouter
@@ -13,7 +15,11 @@ OR3 uses PKCE to exchange the returned code for a key. The verifier is kept in b
 
 ## Paste an existing key
 
-The welcome card also accepts a key starting with `sk-or-`. OR3 checks its format and saves it in the browser's Dexie KV table before updating the connected state. Format validation does not prove that the key is active, funded, or permitted to use a particular model; the model request can still fail.
+Expand **Use an existing API key** on the welcome card to enter a key starting with `sk-or-`. OR3 checks its format and saves it in the browser's Dexie KV table before updating the connected state. Format validation does not prove that the key is active, funded, or permitted to use a particular model; the model request can still fail.
+
+Use **How your API key is handled** on the welcome card for a short explanation of storage and requests. The saved personal key is excluded from workspace sync. AI requests still send it to OpenRouter: the browser first tries the OR3 server route, which receives the key and forwards it to OpenRouter when user keys are allowed. If that route is unavailable, requests with a personal key can go directly to OpenRouter. Browser storage does not mean the key never leaves the browser.
+
+When background streaming is enabled, the server can also keep encrypted credentials for the job. Storage and retention depend on the configured provider.
 
 IndexedDB persistence is browser storage, not an encrypted credential vault. Keep keys out of logs, screenshots, and shared code. A locally saved key is not an operator's server key or an OR3 sign-in credential.
 

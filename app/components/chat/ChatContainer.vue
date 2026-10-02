@@ -182,7 +182,7 @@ import { isMobile } from '~/state/global';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
-import { useToast, useHooks, useChat, useRuntimeConfig, useState } from '#imports';
+import { useToast, useHooks, useChat, useRuntimeConfig, useRoute, useState } from '#imports';
 import { getMaxMessageFileHashes } from '~/db/files-util';
 import { kv } from '~/db';
 import {
@@ -291,6 +291,9 @@ const emit = defineEmits<{
 // key. Disappears automatically once a key exists; dismissal is persisted.
 const WELCOME_DISMISS_KV_KEY = 'or3_welcome_card_dismissed';
 const runtimeConfig = useRuntimeConfig();
+const route = useRoute();
+const welcomePreviewRequested = computed(() => route.query.welcome === '1');
+const welcomePreviewDismissed = ref(false);
 // Managed Cloud must let an anonymous visitor reach the sign-in control before
 // showing the OpenRouter first-run card. The shared auth-session state is
 // populated by useSessionContext after sign-in; local/static builds have no
@@ -313,14 +316,20 @@ const showWelcomeCard = computed(
         keyStateReady.value &&
         (runtimeConfig.public?.ssrAuthEnabled !== true ||
             authSessionState.value?.session?.authenticated === true) &&
-        !welcomeDismissed.value &&
         !dashboardModalOpen.value &&
-        openRouterAvailability.value.canAcceptUserKey &&
-        !openRouterAvailability.value.hasUsableKey(apiKey.value) &&
-        allMessages.value.length === 0
+        (welcomePreviewRequested.value
+            ? !welcomePreviewDismissed.value
+            : !welcomeDismissed.value &&
+              openRouterAvailability.value.canAcceptUserKey &&
+              !openRouterAvailability.value.hasUsableKey(apiKey.value) &&
+              allMessages.value.length === 0)
 );
 
 function onWelcomeDismiss(): void {
+    if (welcomePreviewRequested.value) {
+        welcomePreviewDismissed.value = true;
+        return;
+    }
     welcomeDismissed.value = true;
     kv.set(WELCOME_DISMISS_KV_KEY, 'true').catch(() => {
         // Persistence failure is non-critical; card just reappears next load.
