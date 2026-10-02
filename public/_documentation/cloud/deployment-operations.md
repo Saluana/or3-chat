@@ -80,6 +80,13 @@ restoration is safe only before the target can accept writes; after target start
 review the journal and choose explicit recovery. Each mutation holds one deployment-wide
 lease. Do not remove `.or3-cloud` lock or recovery files manually.
 
+Restore and ownership recovery verify the actual Docker volume's Compose project,
+data-volume role, and immutable deployment identity before changing it. A matching
+volume name alone is insufficient. Missing or conflicting labels, or an
+inspection failure without an explicit Docker not-found result, stop recovery
+before clearing data. Inspect the recorded deployment identity and Docker
+metadata; do not relabel an unrelated volume to bypass this check.
+
 Interrupted updates recover from their authenticated `backupPath`/`backupId`
 snapshot; restore and rollback operations instead recover from
 `previousBackupPath`/`previousBackupId`. Recovery separates outcomes:

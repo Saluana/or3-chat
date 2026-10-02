@@ -131,6 +131,7 @@ describe('workspace backup export stream', () => {
             name: 'test-db',
             verno: 1,
             tables,
+            transaction: async (_mode: string, _tables: unknown, operation: () => Promise<void>) => operation(),
             table(name: string) {
                 const found = tables.find((table) => table.name === name);
                 if (!found) {
