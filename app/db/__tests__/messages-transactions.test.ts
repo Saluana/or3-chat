@@ -370,10 +370,10 @@ describe('message transaction and ordering contracts', () => {
 
     it.each(['new-owner', 'finalized'] as const)('preserves %s against a prepared foreground progress write', async (change) => {
         const db = testState.db!;
-        const initial = makeMessage('assistant', 'thread', 1, {
-            role: 'assistant', pending: true,
+        const initial = {
+            ...makeMessage('assistant', 'thread', 1, { role: 'assistant', pending: true }),
             data: { content: 'partial', generation_lease_id: 'owner' },
-        });
+        };
         await db.messages.put(initial);
         let release!: () => void;
         testState.doAction.mockImplementation((name: string) => name === 'db.messages.upsert:action:before'
