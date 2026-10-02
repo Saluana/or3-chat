@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { flushPromises, shallowMount, type VueWrapper } from '@vue/test-utils';
-import type { Editor } from '@tiptap/vue-3';
+import { Editor } from '@tiptap/vue-3';
 import Dexie from 'dexie';
 import { setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { createDocumentInDb, getDocumentInDb } from '~/db/documents';
@@ -53,7 +53,10 @@ async function mountedWorkspaces() {
     const hooks = createTypedHookEngine(createHookEngine());
     setHookEngine(hooks);
     let editor!: Editor;
-    hooks.addAction('editor.created:action:after', (payload) => { editor = payload.editor; });
+    hooks.addAction('editor.created:action:after', (payload) => {
+        if (!(payload.editor instanceof Editor)) throw new Error('Expected a real mounted TipTap editor');
+        editor = payload.editor;
+    });
     const idA = `mounted-doc-a-${crypto.randomUUID()}`;
     const idB = `mounted-doc-b-${crypto.randomUUID()}`;
     const dbA = setActiveWorkspaceDb(idA);
