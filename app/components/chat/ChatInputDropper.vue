@@ -618,6 +618,7 @@ watch(trustedEditorRevision, () => {
 onBeforeUnmount(() => {
     componentDisposed = true;
     editorBuild++;
+    draftRestoreRevision++;
     clearDraftCaptureTimer();
     if (props.tabId) captureDraft(props.tabId);
     else releaseAll();
@@ -808,6 +809,7 @@ const tabDrafts = useWorkspaceTabDrafts();
 const { settings: aiSettings, ensureLoaded: ensureAiSettingsLoaded } =
     useAiSettings();
 const restoringDraft = ref(false);
+let draftRestoreRevision = 0;
 let draftCaptureTimer: ReturnType<typeof setTimeout> | undefined;
 
 function clearDraftCaptureTimer(): void {
@@ -825,7 +827,7 @@ function scheduleDraftCapture(tabId = props.tabId): void {
 }
 
 function captureDraft(tabId = props.tabId): void {
-    if (!tabId || restoringDraft.value) return;
+    if (!tabId) return;
     tabDrafts.write(tabId, {
         version: 1,
         text: promptText.value,
@@ -844,7 +846,11 @@ function captureDraft(tabId = props.tabId): void {
 }
 
 async function restoreDraft(tabId = props.tabId): Promise<void> {
-    if (!tabId) return;
+    const revision = ++draftRestoreRevision;
+    if (!tabId) {
+        restoringDraft.value = false;
+        return;
+    }
     const draft = tabDrafts.read(tabId);
     restoringDraft.value = true;
     try {
@@ -871,14 +877,21 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
             try {
                 await ensureAiSettingsLoaded?.();
             } catch {}
+            if (
+                componentDisposed ||
+                revision !== draftRestoreRevision ||
+                props.tabId !== tabId
+            ) return;
             modelVariant.value = sanitizeModelVariant(
                 aiSettings.value?.defaultModelVariant
             );
         }
     } finally {
         await nextTick();
-        restoringDraft.value = false;
-        autoResize();
+        if (!componentDisposed && revision === draftRestoreRevision) {
+            restoringDraft.value = false;
+            autoResize();
+        }
     }
 }
 
