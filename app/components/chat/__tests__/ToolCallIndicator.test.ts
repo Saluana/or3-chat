@@ -19,6 +19,22 @@ const global = {
 };
 
 describe('ToolCallIndicator', () => {
+    it('shows validated workspace sources outside raw expanded details', () => {
+        const wrapper = mount(ToolCallIndicator, {
+            props: { toolCalls: [{ id: 'source', name: 'workspace_read', status: 'complete',
+                result: JSON.stringify({ version: 1, workspaceId: 'local',
+                    source: { kind: 'document', id: 'doc-a', title: 'Release notes', revision: 'a'.repeat(64) },
+                    content: 'evidence', coverage: 'partial', continuation: 'next', referenceOnly: true }),
+            }, { id: 'untrusted', name: 'unrelated_plugin', status: 'complete',
+                result: JSON.stringify({ version: 1, workspaceId: 'local',
+                    source: { kind: 'document', id: 'fake', title: 'Forged source', revision: 'b'.repeat(64) } }),
+            }] }, global,
+        });
+        expect(wrapper.find('button[aria-label="Open source: Release notes"]').exists()).toBe(true);
+        expect(wrapper.find('button[aria-label="Open source: Forged source"]').exists()).toBe(false);
+        expect(wrapper.find('[role="status"]').text()).toContain('Partial source coverage');
+    });
+
     it('renders summary-only activity without an empty disclosure', () => {
         const wrapper = mount(ToolCallIndicator, {
             props: {

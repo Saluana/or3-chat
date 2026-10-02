@@ -32,6 +32,8 @@ export interface PaletteSourceIndexSearchOptions {
     limit?: number;
     forceFallback?: boolean;
     signal?: AbortSignal;
+    /** Apply scope/project membership before consuming a result slot. */
+    accepts?: (resource: PaletteResource) => boolean;
 }
 
 export interface PaletteSourceIndexSearchResult {
@@ -183,6 +185,7 @@ export class PaletteSourceIndex {
         if (!term) {
             return {
                 results: this.getResources()
+                    .filter((resource) => !options.accepts || options.accepts(resource))
                     .sort(
                         (a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)
                     )
@@ -227,7 +230,10 @@ export class PaletteSourceIndex {
                             hits,
                             this.resources,
                             term
-                        );
+                        ).filter((result) => {
+                            const resource = this.resources.get(result.key);
+                            return Boolean(resource && (!options.accepts || options.accepts(resource)));
+                        });
                         if (raw.hits.length < pageSize) break;
                         offset += raw.hits.length;
                     }
@@ -245,7 +251,7 @@ export class PaletteSourceIndex {
         }
 
         return {
-            results: this.fallbackSearch(term, limit),
+            results: this.fallbackSearch(term, limit, options.accepts),
             usingFallback: true,
             oramaFailed: !this.oramaAvailable || Boolean(options.forceFallback),
         };
@@ -258,11 +264,12 @@ export class PaletteSourceIndex {
         this.tracker.clear();
     }
 
-    private fallbackSearch(term: string, limit: number): PaletteResult[] {
+    private fallbackSearch(term: string, limit: number, accepts?: (resource: PaletteResource) => boolean): PaletteResult[] {
         const needle = term.toLowerCase();
         const scored: Array<{ resource: PaletteResource; score: number; body: string }> =
             [];
         for (const resource of this.resources.values()) {
+            if (accepts && !accepts(resource)) continue;
             const title = resource.title.toLowerCase();
             const subtitle = (resource.subtitle ?? '').toLowerCase();
             const keywords = (resource.keywords ?? []).join(' ').toLowerCase();

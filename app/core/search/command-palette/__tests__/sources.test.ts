@@ -16,6 +16,62 @@ const context: PaletteLoadContext = {
 };
 
 describe('palette source adapters', () => {
+    it('retains visible history across more than 128 reference generations', () => {
+        const threads = Array.from({ length: 130 }, (_, index) => ({
+            id: `thread-${index}`, title: `Branch ${index}`, deleted: false, updated_at: 1,
+            ...(index ? { parent_thread_id: `thread-${index - 1}`, branch_mode: 'reference', anchor_message_id: `message-${index - 1}` } : {}),
+        }));
+        const messages = threads.map((thread, index) => ({
+            id: `message-${index}`, thread_id: thread.id, role: 'user', index: 0,
+            data: { content: `Generation ${index}` }, deleted: false, created_at: 1, updated_at: 1, clock: 1,
+        }));
+        const leaf = buildChatResources(threads as never[], messages as never[], context).at(-1);
+        expect(leaf?.metadata?.incomplete).toBe(false);
+        expect(leaf?.metadata?.messageCount).toBe(130);
+        expect(leaf?.content).toContain('Generation 0');
+        expect(leaf?.content).toContain('Generation 129');
+    });
+    it('searches reference ancestry only through its exact anchor across generations', () => {
+        const threads = [
+            { id: 'root', title: 'Root', deleted: false, updated_at: 1 },
+            { id: 'branch', title: 'Branch', deleted: false, updated_at: 2,
+                parent_thread_id: 'root', branch_mode: 'reference', anchor_message_id: 'root-one', anchor_index: 0 },
+            { id: 'child', title: 'Child', deleted: false, updated_at: 3,
+                parent_thread_id: 'branch', branch_mode: 'reference', anchor_message_id: 'branch-one', anchor_index: 0 },
+        ];
+        const row = (id: string, thread_id: string, index: number, content: string) => ({
+            id, thread_id, index, role: 'user', data: { content }, deleted: false,
+            created_at: 1, updated_at: 1, clock: 1,
+        });
+        const resources = buildChatResources(threads as never[], [
+            row('root-one', 'root', 0, 'root included'),
+            row('root-two', 'root', 1, 'root excluded'),
+            row('branch-one', 'branch', 0, 'branch included'),
+            row('branch-two', 'branch', 1, 'branch excluded'),
+            row('child-one', 'child', 0, 'child local'),
+        ] as never[], context);
+        expect(resources.find((resource) => resource.recordId === 'child')?.content)
+            .toBe('root included\nbranch included\nchild local');
+    });
+
+    it('indexes only current visible conversational text in canonical order', () => {
+        const thread = { id: 'visible', title: 'Visible', deleted: false, updated_at: 1 };
+        const row = (id: string, role: string, index: number, data: object) => ({
+            id, role, index, data, thread_id: 'visible', deleted: false,
+            created_at: 1, updated_at: 1, clock: 1,
+        });
+        const resources = buildChatResources([thread as never], [
+            row('later', 'assistant', 3, { content: 'current answer', reasoning: 'private reasoning' }),
+            row('tool', 'tool', 2, { content: 'raw tool secret' }),
+            row('old', 'assistant', 1, { content: 'superseded secret', superseded_by: 'later' }),
+            row('first', 'user', 0, { content: 'visible question' }),
+            { ...row('deleted', 'user', 4, { content: 'deleted secret' }), deleted: true },
+            row('system', 'system', 5, { content: 'system secret' }),
+        ] as never[], context);
+        expect(resources[0]?.content).toBe('visible question\ncurrent answer');
+        expect(resources[0]?.metadata?.messageCount).toBe(2);
+    });
+
     it('groups chat messages into one thread resource', () => {
         const resources = buildChatResources(
             [

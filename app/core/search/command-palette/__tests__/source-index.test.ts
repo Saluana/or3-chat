@@ -33,6 +33,17 @@ const resources: PaletteResource[] = [
 ];
 
 describe('PaletteSourceIndex', () => {
+    it('filters project membership before the fallback result limit', async () => {
+        const { PaletteSourceIndex } = await import('../source-index');
+        const index = new PaletteSourceIndex('chat');
+        await index.replaceAll(resources);
+        const result = await index.search({
+            term: 'alpha', limit: 1, forceFallback: true,
+            accepts: (resource: PaletteResource) => resource.recordId === '1',
+        });
+        expect(result.results.map((item) => item.recordId)).toEqual(['1']);
+    });
+
     beforeEach(() => {
         vi.resetModules();
     });

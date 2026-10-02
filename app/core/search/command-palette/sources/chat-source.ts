@@ -1,6 +1,7 @@
 import type { Or3DB } from '~/db/client';
 import type { Message, Thread } from '~/db/schema';
 import { normalizeMessageContent } from '../normalize';
+import { projectWorkspaceConversation } from '~/utils/chat/workspace-conversation';
 import {
     CORE_PALETTE_CATEGORIES,
     type PaletteLoadContext,
@@ -50,9 +51,14 @@ export function buildChatResources(
     }
 
     const resources: PaletteResource[] = [];
+    const threadMap = new Map(threads.map((thread) => [thread.id, thread]));
     for (const thread of threads) {
         context.signal?.throwIfAborted();
-        const threadMessages = byThread.get(thread.id) ?? [];
+        if (thread.deleted) continue;
+        let threadMessages: Message[];
+        let incomplete = false;
+        try { threadMessages = projectWorkspaceConversation(thread.id, threadMap, byThread); }
+        catch { threadMessages = []; incomplete = true; }
         const body = threadMessages
             .map((message) => normalizeMessageContent(message))
             .filter(Boolean)
@@ -72,6 +78,7 @@ export function buildChatResources(
             secondaryActions: actions.secondary,
             metadata: {
                 messageCount: threadMessages.length,
+                incomplete,
             },
         });
     }

@@ -10,13 +10,20 @@ import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine } from '~/core/hooks/useHooks';
 import { registerDocumentChatTools } from '../document-chat-tools';
+import { registerWorkspaceChatTools } from '~/utils/chat/workspace-chat-tools';
+import { testRuntimeConfig } from '~~/tests/setup';
+import { workspaceRevision } from '~/utils/chat/workspace-items';
 
 const disposers: Array<() => void> = [];
+let originalSsrAuth: boolean;
 beforeEach(async () => {
+    originalSsrAuth = testRuntimeConfig.value.public.ssrAuthEnabled;
+    testRuntimeConfig.value.public.ssrAuthEnabled = false;
     setHookEngine(createTypedHookEngine(createHookEngine()));
     await setActiveWorkspaceDb('workspace-a').open();
 });
 afterEach(async () => {
+    testRuntimeConfig.value.public.ssrAuthEnabled = originalSsrAuth;
     while (disposers.length) disposers.pop()?.();
     const name = getDb().name;
     setActiveWorkspaceDb(null);
@@ -26,6 +33,174 @@ afterEach(async () => {
 });
 
 describe('chat document tools', () => {
+    it('refuses disagreement between live document buffers before flushing either', async () => {
+        disposers.push(registerWorkspaceChatTools());
+        const flush = vi.fn(async () => undefined);
+        for (const [tabId, text] of [['tab-one', 'first draft'], ['tab-two', 'second draft']]) {
+            disposers.push(registerDocumentEditorSession({
+                documentId: 'conflicted-doc', paneId: tabId, tabId, captureContent: () => undefined,
+                ensureLocalDurability: flush, captureViewState: () => ({ version: 1, documentId: 'conflicted-doc', scrollTop: 0 }),
+                restoreViewState: async () => undefined,
+                getDocumentSnapshot: () => ({ title: 'Draft', content: { type: 'doc', content: [
+                    { type: 'paragraph', content: [{ type: 'text', text }] },
+                ] } }),
+            }));
+        }
+        const registry = useToolRegistry();
+        const tool = registry.getTool('workspace_read')!;
+        const result = await registry.executeTool('workspace_read', '{"item":{"kind":"document","id":"conflicted-doc"}}',
+            { subject: null, workspaceId: 'workspace-a', threadId: 'thread-a', messageId: null,
+                callId: 'conflict-read', requestId: 'conflict-request', abortSignal: new AbortController().signal },
+            { definition: tool.definition });
+        expect(result.error).toMatch(/reconcile|disagree/i);
+        expect(flush).not.toHaveBeenCalled();
+    });
+    it('rejects source content changed while its revision is being computed', async () => {
+        disposers.push(registerWorkspaceChatTools());
+        const registry = useToolRegistry();
+        await getDb().posts.put({ id: 'changing-doc', title: 'Changing', postType: 'doc',
+            content: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"old secret"}]}]}',
+            created_at: 1, updated_at: 1, deleted: false, clock: 1 });
+        let release!: () => void;
+        let entered!: () => void;
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        const hashing = new Promise<void>((resolve) => { entered = resolve; });
+        const realDigest = crypto.subtle.digest.bind(crypto.subtle);
+        const spy = vi.spyOn(crypto.subtle, 'digest').mockImplementationOnce(async (algorithm, bytes) => {
+            entered(); await gate; return realDigest(algorithm, bytes);
+        });
+        try {
+            const tool = registry.getTool('workspace_read')!;
+            const pending = registry.executeTool('workspace_read', '{"item":{"kind":"document","id":"changing-doc"}}',
+                { subject: null, workspaceId: 'workspace-a', threadId: 'thread-a', messageId: null,
+                    callId: 'changing-read', requestId: 'changing-request', abortSignal: new AbortController().signal },
+                { definition: tool.definition });
+            await hashing;
+            await getDb().posts.update('changing-doc', { content: '{"type":"doc","content":[]}', clock: 2 });
+            release();
+            expect((await pending).error).toMatch(/changed/i);
+        } finally { release(); spy.mockRestore(); }
+    });
+    it('associates a new document atomically and preserves unknown project entries', async () => {
+        disposers.push(registerWorkspaceChatTools());
+        const registry = useToolRegistry();
+        const project = { id: 'project-a', name: 'Project A', data: [
+            { kind: 'plugin-private', id: 'private-record', extra: 'retain' },
+        ], created_at: 1, updated_at: 1, deleted: false, clock: 1 };
+        await getDb().projects.put(project);
+        const context = { subject: null, workspaceId: 'workspace-a', threadId: 'thread-a',
+            messageId: null, callId: 'association-call', requestId: 'association-request',
+            abortSignal: new AbortController().signal };
+        const tool = registry.getTool('workspace_create_document')!;
+        const args = { title: 'Associated result', content: { type: 'doc', content: [{ type: 'paragraph' }] },
+            project: { id: project.id, revision: await workspaceRevision(project) } };
+        const created = await registry.executeTool('workspace_create_document', JSON.stringify(args), context,
+            { definition: tool.definition });
+        expect(created.error).toBeUndefined();
+        const id = JSON.parse(created.result!).source.id;
+        expect((await getDb().projects.get(project.id))?.data).toEqual([
+            project.data[0], { kind: 'doc', id, name: 'Associated result' },
+        ]);
+        const stale = await registry.executeTool('workspace_create_document', JSON.stringify(args),
+            { ...context, callId: 'stale-association' }, { definition: tool.definition });
+        expect(stale.error).toMatch(/changed/i);
+        expect(await getDb().posts.count()).toBe(1);
+    });
+    it('updates a project by read revision and removes association without deleting its document', async () => {
+        disposers.push(registerWorkspaceChatTools());
+        const registry = useToolRegistry();
+        const project = { id: 'project-a', name: 'Project A', data: [
+            { kind: 'plugin-private', id: 'private-record', extra: 'retain' },
+            { kind: 'doc', id: 'document-a' },
+        ], created_at: 1, updated_at: 1, deleted: false, clock: 1 };
+        await getDb().projects.put(project);
+        await getDb().posts.put({ id: 'document-a', title: 'Keep me', postType: 'doc',
+            content: '{"type":"doc","content":[{"type":"paragraph"}]}', created_at: 1, updated_at: 1, deleted: false, clock: 1 });
+        const context = { subject: null, workspaceId: 'workspace-a', threadId: 'thread-a',
+            messageId: null, callId: 'project-call', requestId: 'project-request',
+            abortSignal: new AbortController().signal };
+        const tool = registry.getTool('workspace_update_project');
+        expect(tool).toBeDefined();
+        const revision = await workspaceRevision(project);
+        const result = await registry.executeTool('workspace_update_project', JSON.stringify({
+            operation: 'remove_item', projectId: project.id, revision, item: { kind: 'document', id: 'document-a' },
+        }), context, { definition: tool!.definition });
+        expect(result.error).toBeUndefined();
+        expect((await getDb().projects.get(project.id))?.data).toEqual([project.data[0]]);
+        expect((await getDb().posts.get('document-a'))?.deleted).toBe(false);
+        const stale = await registry.executeTool('workspace_update_project', JSON.stringify({
+            operation: 'rename', projectId: project.id, revision, name: 'Stale rename',
+        }), { ...context, callId: 'stale-rename' }, { definition: tool!.definition });
+        expect(stale.error).toMatch(/changed/i);
+        expect((await getDb().projects.get(project.id))?.name).toBe('Project A');
+    });
+    it('creates once per host execution and rejects invalid native content without writing', async () => {
+        disposers.push(registerWorkspaceChatTools());
+        const registry = useToolRegistry();
+        const context = {
+            subject: null, workspaceId: 'workspace-a', threadId: 'thread-a',
+            messageId: null, callId: 'create-call', requestId: 'create-request',
+            abortSignal: new AbortController().signal,
+        };
+        const tool = registry.getTool('workspace_create_document');
+        expect(tool, 'normal chat advertises native document creation').toBeDefined();
+        const args = JSON.stringify({ title: 'Durable result', content: {
+            type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Actual saved result' }] }],
+        } });
+        const first = await registry.executeTool('workspace_create_document', args, context, { definition: tool!.definition });
+        expect(first.error).toBeUndefined();
+        const receipt = JSON.parse(first.result!);
+        const replay = await registry.executeTool('workspace_create_document', args, context, { definition: tool!.definition });
+        expect(replay.error).toBeUndefined();
+        expect(JSON.parse(replay.result!).source.id).toBe(receipt.source.id);
+        expect(await getDb().posts.count()).toBe(1);
+        expect((await getDb().posts.get(receipt.source.id))?.content).toContain('Actual saved result');
+        const invalid = await registry.executeTool('workspace_create_document', JSON.stringify({
+            title: 'Invalid', content: { type: 'doc', content: [{ type: 'unknown-node' }] },
+        }), { ...context, callId: 'invalid-call' }, { definition: tool!.definition });
+        expect(invalid.error).toBeDefined();
+        expect(await getDb().posts.count()).toBe(1);
+        const distinct = await registry.executeTool('workspace_create_document', args,
+            { ...context, requestId: 'deliberate-new-request' }, { definition: tool!.definition });
+        expect(distinct.error).toBeUndefined();
+        expect(JSON.parse(distinct.result!).source.id).not.toBe(receipt.source.id);
+    });
+    it('reads an identified saved document in explicit pages through workspace tools', async () => {
+        disposers.push(registerWorkspaceChatTools());
+        const registry = useToolRegistry();
+        await getDb().posts.put({
+            id: 'saved-document', title: 'Saved evidence', postType: 'doc',
+            content: JSON.stringify({ type: 'doc', content: [
+                { type: 'paragraph', content: [{ type: 'text', text: 'first source paragraph' }] },
+                { type: 'paragraph', content: [{ type: 'text', text: 'second source paragraph' }] },
+            ] }),
+            created_at: 1, updated_at: 1, deleted: false, clock: 7,
+        });
+        const context = {
+            subject: null, workspaceId: 'workspace-a', threadId: 'thread-a',
+            messageId: null, callId: 'workspace-read', requestId: 'workspace-request',
+            abortSignal: new AbortController().signal,
+        };
+        const tool = registry.getTool('workspace_read');
+        expect(tool, 'normal chat advertises workspace_read').toBeDefined();
+        const result = await registry.executeTool('workspace_read', JSON.stringify({
+            item: { kind: 'document', id: 'saved-document' },
+        }), context, { definition: tool!.definition });
+        expect(result.error).toBeUndefined();
+        const receipt = JSON.parse(result.result!);
+        expect(receipt).toMatchObject({
+            version: 1, workspaceId: 'workspace-a',
+            source: { kind: 'document', id: 'saved-document', title: 'Saved evidence' },
+        });
+        expect(receipt.content).toContain('first source paragraph');
+        expect(await getDb().posts.get('saved-document')).toMatchObject({ clock: 7 });
+        await getDb().posts.update('saved-document', { deleted: true });
+        const unavailable = await registry.executeTool('workspace_read', JSON.stringify({
+            item: { kind: 'document', id: 'saved-document' },
+        }), context, { definition: tool!.definition });
+        expect(unavailable.error).toMatch(/unavailable/i);
+    });
+
     it('creates a document with content and duplicates its saved content', async () => {
         disposers.push(registerDocumentChatTools());
         const registry = useToolRegistry();

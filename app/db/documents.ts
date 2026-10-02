@@ -309,8 +309,21 @@ export async function createDocumentInDb(
     db: Or3DB,
     input: CreateDocumentInput = {}
 ): Promise<DocumentRecord> {
+    const prepared = await prepareDocumentCreate(input);
+    await dbTry(
+        () => putDocumentPostRow(db, prepared.row),
+        { op: 'write', entity: 'posts', action: 'createDocument' },
+        { rethrow: true }
+    );
+    await prepared.afterCommit();
+    return rowToRecord(prepared.row);
+}
+
+/** Prepare hooks outside a transaction; captured callers can commit an atomic association. */
+export async function prepareDocumentCreate(input: CreateDocumentInput, id = newId()): Promise<{
+    row: Post; afterCommit: () => Promise<void>;
+}> {
     const hooks = useHooks();
-    const id = newId();
     const baseRow: DocumentRow = {
         id,
         title: await resolveTitle(hooks, input.title, {
@@ -331,7 +344,7 @@ export async function createDocumentInDb(
         toDocumentEntity(baseRow)
     );
     const filteredRow = documentEntityToRow(filteredEntity, baseRow);
-    let actionPayload: DbCreatePayload<DocumentEntity> = {
+    const actionPayload: DbCreatePayload<DocumentEntity> = {
         entity: toDocumentEntity(filteredRow),
         tableName: DOCUMENT_TABLE,
     };
@@ -350,17 +363,11 @@ export async function createDocumentInDb(
         clock: persistedRow.clock ?? 0,
         file_hashes: persistedRow.file_hashes,
     };
-    await dbTry(
-        () => putDocumentPostRow(db, postRow),
-        { op: 'write', entity: 'posts', action: 'createDocument' },
-        { rethrow: true }
-    );
-    actionPayload = {
-        ...actionPayload,
-        entity: toDocumentEntity(persistedRow),
-    };
-    await hooks.doAction('db.documents.create:action:after', actionPayload);
-    return rowToRecord(persistedRow);
+    return { row: postRow, afterCommit: async () => {
+        await hooks.doAction('db.documents.create:action:after', {
+            ...actionPayload, entity: toDocumentEntity(persistedRow),
+        });
+    } };
 }
 
 /**

@@ -287,18 +287,12 @@ import { onClickOutside } from '@vueuse/core';
 import { Editor, EditorContent, type JSONContent } from '@tiptap/vue-3';
 import { Selection } from '@tiptap/pm/state';
 import { BubbleMenu } from '@tiptap/vue-3/menus';
-import StarterKit from '@tiptap/starter-kit';
-import { Placeholder } from '@tiptap/extensions/placeholder';
-import { TableKit } from '@tiptap/extension-table';
-import { TaskItem, TaskList } from '@tiptap/extension-list';
 import ToolbarButton from './ToolbarButton.vue';
 import DocumentInspector from './DocumentInspector.vue';
 import DocumentTableToolbar from './DocumentTableToolbar.vue';
 import { useIcon } from '~/composables/useIcon';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import AutocompleteState from '~/plugins/EditorAutocomplete/state';
-import { Or3DocumentImage } from '~/extensions/or3-document-image';
-import { DocumentAiHunks } from '~/plugins/DocumentAiHunks/TiptapExtension';
 import { flush, loadDocument, setDocumentContent, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { getDb, subscribeActiveWorkspaceDb } from '~/db/client';
 import {
@@ -324,9 +318,8 @@ import {
     useEditorToolbarButtons,
     type EditorToolbarButton,
 } from '~/composables/editor/useEditorToolbar';
-import { loadEditorExtensions } from '~/composables/editor/useEditorExtensionLoader';
-import { listEditorExtensions, listEditorMarks, listEditorNodes } from '~/composables/editor/useEditorNodes';
 import { useHooks } from '~/core/hooks/useHooks';
+import { loadDocumentEditorExtensions } from '~/utils/documents/document-editor-schema';
 import { createOrRefFile } from '~/db/files';
 import { createDocumentRevision, type CompleteDocumentRevision } from '~/db/document-revisions';
 import type { TipTapDocument } from '~/types/database';
@@ -592,25 +585,11 @@ async function insertFiles(files: File[]) {
 }
 
 async function makeEditor(isCurrent: () => boolean) {
-    const loaded = await loadEditorExtensions(listEditorNodes(), listEditorMarks(), listEditorExtensions());
+    const extensions = await loadDocumentEditorExtensions();
     if (!isCurrent()) return;
     editor.value?.destroy();
     editor.value = new Editor({
-        extensions: [
-            StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
-            TaskList,
-            TaskItem.configure({ nested: true }),
-            TableKit.configure({ table: { resizable: true } }),
-            Or3DocumentImage,
-            DocumentAiHunks,
-            Placeholder.configure({
-                placeholder: ({ node }) => (node.type.name === 'heading' ? 'Heading' : "Write, or press '/' for commands…"),
-                showOnlyCurrent: true,
-            }),
-            ...loaded.extensions,
-            ...loaded.nodes,
-            ...loaded.marks,
-        ],
+        extensions,
         content: capturedContent.value,
         autofocus: false,
         editorProps: {
@@ -777,6 +756,7 @@ function registerActiveSession(id: string): void {
     const db = editorDb.value;
     unregisterSession = registerDocumentEditorSession({
         documentId: id,
+        originDb: db,
         paneId: props.paneId,
         tabId: props.tabId,
         captureContent: () => captureContent(id, db),
@@ -785,6 +765,7 @@ function registerActiveSession(id: string): void {
         restoreViewState: (saved, options) =>
             restoreDocumentViewState(id, saved, options),
         getChatContext: (requestId) => ai.getChatContext(requestId),
+        getDocumentSnapshot: () => ({ title: titleDraft.value, content: normalizedContent(editor.value?.getJSON() ?? capturedContent.value) }),
         executeChatTool: (name, argsJson, requestId) =>
             ai.executeChatTool(name, argsJson, requestId),
     });
