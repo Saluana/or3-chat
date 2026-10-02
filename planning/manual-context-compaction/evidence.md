@@ -48,6 +48,8 @@ Trace inspection corrects the earlier production-failure attribution: post-reloa
 
 The journey now waits for the visible source anchor and selected source tab before the empty-input check/fresh fill. These observable conditions retain every existing assertion and introduce no sleep, timeout extension, retry or persistence redesign. Named-case collection PASS `/tmp/task3-compaction-source-lifetime-collect.log`; actual synchronized browser/remote CI/parent review remain pending.
 
+Clean synchronized3dbfea3bcc88c6b190a32fe7419c3c91a340b22e named PageShell journey PASS14.1s, one worker/retries0/scripted inference, `/tmp/task3-compaction-source-ready-browser-first.log`. All Cancel/no-write/source-draft, explicit child+summary, reload/model/body, original/tool-landmark/canonical evidence, fresh-source-draft/unchanged-row and subsequent ordinary-new-chat assertions reached and passed. Source-navigation screenshot was visually inspected. Trace/screenshots/logs retained `task-3/output/playwright/compaction-source-ready-first-browser`; preview stopped Ctrl-C EXIT130 and own3211/25211 listeners independently absent before release. Production source unchanged from configured-type-qualifiedd9c9ce1d. Remote branch tip independently verified8f5c8941 before authorized ordinary push; exact-headCI and parent review still required.
+
 The six plan files match upstream exactly at the inspected default base `6ee4450b`.
 This branch is separate from assistant/Files and starts on the temporary reviewed
 integration base containing PR179 `40b7aef6`, PR181 `bb86066c`, and PR182 `07b235b2`.
