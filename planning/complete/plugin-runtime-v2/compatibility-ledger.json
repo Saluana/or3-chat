@@ -2796,7 +2796,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "9190542070ff4de2f2f5f42491d79f7c3fcd51ad0a4a70e652d918c30ef63bd6",
+      "apiSha256": "fe709b41d3532de167057b024c8df2ece4a28976dfaff5923e779a1b4d8fb2c2",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -6939,7 +6939,7 @@
               "resolvedReturnType": "UseMultiPaneApi",
               "declaration": {
                 "source": "app/composables/core/useMultiPane.ts",
-                "line": 273,
+                "line": 286,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useMultiPane(\n    options: UseMultiPaneOptions = {}\n): UseMultiPaneApi;"
               }
@@ -6948,7 +6948,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 273,
+              "line": 286,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useMultiPane(\n    options: UseMultiPaneOptions = {}\n): UseMultiPaneApi;"
             }

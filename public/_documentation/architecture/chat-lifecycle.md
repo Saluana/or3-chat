@@ -56,7 +56,7 @@ The tab session owns the open-tab manifest and active bindings. The pane adapter
 
 Tab manifests persist to localStorage by workspace and profile. Composer drafts—including unsent text, editor JSON, attachment references, and settings—remain in memory and are not saved in that manifest. Reloading loses them. Draft discard revokes owned blob URLs; short deferred discard supports reopening a recently closed tab.
 
-The pane loader reconciles separate canonical tool-result rows into their assistant calls before seeding a chat controller. Tool evidence remains visible after tab activation or reload, while plugin-owned message metadata and stored rows remain intact. Consumers should use this loader rather than treating raw assistant rows as a complete tool transcript.
+The pane loader reconciles separate canonical tool-result rows into their assistant calls before seeding a chat controller. Tool evidence remains visible after tab activation or reload, while plugin-owned message metadata and stored rows remain intact. Tool-call presentation metadata is retained by stable call ID; canonical status, result and error override stale embedded execution fields. Consumers should use this loader rather than treating raw assistant rows as a complete tool transcript.
 
 A newer activation supersedes older work. Editor sessions are resolved by pane/tab identity, which matters when a document appears in more than one split. Capture outgoing edits and verify local durability before rebinding; do not assume the saved database snapshot contains everything currently visible in an editor.
 

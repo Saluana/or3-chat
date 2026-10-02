@@ -194,9 +194,22 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
         const result: MultiPaneMessage[] = [];
         for (const row of validRows) {
             const canonicalCalls = canonicalById.get(row.id)?.data?.tool_calls;
-            // Retain plugin-owned metadata while merging the host-owned calls.
+            const storedCalls = new Map<string, Record<string, unknown>>();
+            const rawCalls: unknown = row.data?.tool_calls;
+            if (Array.isArray(rawCalls)) {
+                for (const rawCall of rawCalls as unknown[]) {
+                    if (!rawCall || typeof rawCall !== 'object' || Array.isArray(rawCall)) continue;
+                    const call = rawCall as Record<string, unknown>;
+                    if (typeof call.id === 'string' && call.id) storedCalls.set(call.id, call);
+                }
+            }
+            // Keep presentation/plugin metadata by stable ID. Canonical result,
+            // error and status must override stale embedded execution fields.
             const data = Array.isArray(canonicalCalls) && canonicalCalls.length
-                ? { ...row.data, tool_calls: canonicalCalls }
+                ? { ...row.data, tool_calls: canonicalCalls.map((call) => ({
+                    ...(call.id ? storedCalls.get(call.id) : undefined),
+                    ...call,
+                })) }
                 : row.data;
             const content = deriveMessageContent({
                 content: row.content,
