@@ -6,7 +6,7 @@ import { compareMessageOrder } from './messages';
 import { getWriteTxTableNames, newId, nextClock, nowSec } from './util';
 import { generateHLC } from '../core/sync/hlc';
 import { useHooks } from '../core/hooks/useHooks';
-import { resolveRootThreadId, resolveThreadProjection, type ThreadProjection } from '../utils/chat/compaction/history';
+import { resolveThreadProjection, type ThreadProjection } from '../utils/chat/compaction/history';
 import { storedMessagesToCanonicalTranscript, type CanonicalTranscriptRecord } from '../utils/chat/transcript';
 import { CompactionDataSchema, readCompactionData, type CompactionData, type HistoryScope } from '~~/shared/chat/compaction';
 import { MAX_SYNC_PAYLOAD_BYTES } from '~~/shared/sync/sanitize';
@@ -83,12 +83,14 @@ async function readCapture(options: CaptureOptions, db: Or3DB): Promise<Omit<Cap
         if (row.role === 'assistant' && getTextFromContent(row.content).trim() && userPending) { turns += 1; userPending = false; }
     }
     if (turns < 2) throw new CompactionError('not_eligible', 'Compaction requires at least two settled user/assistant turns.');
+    const ancestry: Thread[] = [];
+    const inheritedScopes: Message[] = [];
     const path = new Set<string>(); let pathId: string | null | undefined = source.id;
     while (pathId) {
         if (path.has(pathId)) throw new CompactionError('scope_incomplete', 'Conversation lineage is cyclic.');
         path.add(pathId); const row: Thread | undefined = await db.threads.get(pathId);
         if (!row) throw new CompactionError('scope_incomplete', 'Conversation lineage is incomplete.');
-        pathId = row.parent_thread_id;
+        ancestry.push(row); pathId = row.parent_thread_id;
     }
     const rows = new Map<string, Message>();
     const segments: HistoryScope['segments'] = [];
@@ -107,7 +109,7 @@ async function readCapture(options: CaptureOptions, db: Or3DB): Promise<Omit<Cap
             const visitedScopes = new Set<string>(); let scopeRow: Message = summary;
             for (;;) {
                 if (visitedScopes.has(scopeRow.id)) throw new CompactionError('scope_incomplete', 'Inherited history scope is cyclic.');
-                visitedScopes.add(scopeRow.id);
+                visitedScopes.add(scopeRow.id); inheritedScopes.push(scopeRow);
                 const metadata = readCompactionData((scopeRow.data as Record<string, unknown> | null)?.compaction);
                 if (!metadata || !path.has(metadata.source_thread_id) || !path.has(scopeRow.thread_id)) {
                     throw new CompactionError('scope_incomplete', 'Prior summary scope is outside this conversation lineage.');
@@ -133,8 +135,9 @@ async function readCapture(options: CaptureOptions, db: Or3DB): Promise<Omit<Cap
         snapshotSegments.push({ thread: segment.thread, rows: captured });
     }
     const scope: HistoryScope = { version: 1, segments, ...(inherited ? { inherited_scope_message_id: inherited } : {}) };
-    return { root: await resolveRootThreadId(source.id, db), source, anchor, scope, rows, messages,
-        snapshot: stable({ segments: snapshotSegments, inheritedRows: [...rows.values()], model: options.model }) };
+    const root = ancestry.at(-1)!.id;
+    return { root, source, anchor, scope, rows, messages,
+        snapshot: stable({ root, ancestry, inheritedScopes, segments: snapshotSegments, inheritedRows: [...rows.values()], model: options.model }) };
 }
 
 /** Captures IDs and clocks; inference happens after the read transaction has ended. */
@@ -158,15 +161,39 @@ interface ModelSummary { summary_markdown: string; landmarks: Array<{ message_id
 const validateModelSummary = new Ajv({ allErrors: true, strict: true, validateFormats: false }).compile<ModelSummary>(modelSummarySchema);
 function requireSections(markdown: string): void {
     const headings = new Set(['Objective', 'Important Details', 'Work State', 'Next Move', 'Relevant Files']);
-    const sections = new Map<string, string[]>(); let current: string | undefined; let fence: string | undefined;
+    const sections = new Map<string, string[]>(); let current: string | undefined; let fence: { character: string; length: number } | undefined; let comment = false;
     for (const line of markdown.split('\n')) {
-        const marker = /^\s{0,3}(`{3,}|~{3,})/.exec(line)?.[1];
-        if (marker) { if (!fence) fence = marker[0]; else if (marker[0] === fence) fence = undefined; continue; }
-        if (fence) { if (current) sections.get(current)!.push(line); continue; }
-        const heading = /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(line)?.[1];
+        const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+        if (fence) {
+            if (marker && marker[1]![0] === fence.character && marker[1]!.length >= fence.length && !marker[2]!.trim()) {
+                fence = undefined;
+            } else if (current) sections.get(current)!.push(line);
+            continue;
+        }
+        let visible = ''; let cursor = 0;
+        while (cursor < line.length) {
+            if (comment) {
+                const end = line.indexOf('-->', cursor);
+                if (end < 0) break;
+                comment = false; cursor = end + 3;
+            } else {
+                const start = line.indexOf('<!--', cursor);
+                if (start < 0) { visible += line.slice(cursor); break; }
+                visible += line.slice(cursor, start); comment = true; cursor = start + 4;
+            }
+        }
+        // CommonMark permits longer closing runs, but shorter runs or a closing
+        // line with an info suffix are content. Backtick info strings cannot
+        // contain backticks; such a line never opens a fenced block.
+        const visibleMarker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(visible);
+        if (visibleMarker && (visibleMarker[1]![0] !== '`' || !visibleMarker[2]!.includes('`'))) {
+            fence = { character: visibleMarker[1]![0]!, length: visibleMarker[1]!.length }; continue;
+        }
+        const heading = /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(visible)?.[1];
         if (heading) { current = headings.has(heading) ? heading : undefined; if (current && !sections.has(current)) sections.set(current, []); }
-        else if (current) sections.get(current)!.push(line);
+        else if (current) sections.get(current)!.push(visible);
     }
+    if (comment) throw new CompactionError('invalid_summary', 'Summary has an unfinished HTML comment.');
     if (fence) throw new CompactionError('invalid_summary', 'Summary has an unfinished Markdown code block.');
     if ([...headings].some((name) => !sections.get(name)?.join('\n').trim())) {
         throw new CompactionError('invalid_summary', 'Summary needs five real Markdown sections with nonempty bodies.');

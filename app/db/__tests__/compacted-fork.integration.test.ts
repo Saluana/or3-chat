@@ -103,6 +103,44 @@ describe('atomic compacted fork', () => {
         expect(committed.thread.root_thread_id).toBe('source');
         expect((committed.summary.data as { compaction: { history_scope: unknown } }).compaction.history_scope).toEqual(second.capture.historyScope);
     });
+    it('rejects ancestor parentage changes beyond a compacted boundary before writes and keeps completed replay stable', async () => {
+        const first = await createCompactedFork(await prepared());
+        await getDb().transaction('rw', getWriteTxTableNames(getDb(), ['messages']), async () => {
+            for (let index = 0; index < 4; index += 1) await getDb().messages.put({ id: `new${index}`, thread_id: first.thread.id, index: index + 1,
+                role: index % 2 ? 'assistant' : 'user', data: { content: 'Rolling settled task facts '.repeat(300) }, pending: false, deleted: false, clock: 1, created_at: 2, updated_at: 2 });
+        });
+        const rolling = await prepared(first.thread.id, 'new3');
+        await getDb().transaction('rw', getWriteTxTableNames(getDb(), ['threads']), async () => {
+            await getDb().threads.put({ id: 'new-root', status: 'ready', created_at: 1, updated_at: 1, clock: 1, deleted: false, pinned: false, forked: false });
+            await getDb().threads.update('source', { parent_thread_id: 'new-root' });
+        });
+        const before = { threads: await getDb().threads.toArray(), messages: await getDb().messages.toArray(), ops: await getDb().pending_ops.toArray() };
+        await expect(createCompactedFork(rolling)).rejects.toMatchObject({ code: 'stale_source' });
+        expect(await getDb().threads.toArray()).toEqual(before.threads); expect(await getDb().messages.toArray()).toEqual(before.messages); expect(await getDb().pending_ops.toArray()).toEqual(before.ops);
+        expect(await getDb().threads.get(rolling.capture.childThreadId)).toBeUndefined();
+        const fresh = await prepared(first.thread.id, 'new3'); const committed = await createCompactedFork(fresh);
+        expect(committed.thread.root_thread_id).toBe('new-root');
+        await getDb().transaction('rw', getWriteTxTableNames(getDb(), ['threads']), () => getDb().threads.update('source', { parent_thread_id: null }));
+        expect((await createCompactedFork(fresh)).thread.id).toBe(committed.thread.id);
+    });
+    it('revalidates inherited summary records beyond the effective prompt boundary', async () => {
+        const first = await createCompactedFork(await prepared());
+        async function addTurns(owner: string, prefix: string) {
+            await getDb().transaction('rw', getWriteTxTableNames(getDb(), ['messages']), async () => {
+                for (let index = 0; index < 4; index += 1) await getDb().messages.put({ id: `${prefix}${index}`, thread_id: owner, index: index + 1,
+                    role: index % 2 ? 'assistant' : 'user', data: { content: 'Settled rolling evidence '.repeat(300) }, pending: false, deleted: false, clock: 1, created_at: 2, updated_at: 2 });
+            });
+        }
+        await addTurns(first.thread.id, 'new'); const second = await createCompactedFork(await prepared(first.thread.id, 'new3'));
+        await addTurns(second.thread.id, 'third'); const rolling = await prepared(second.thread.id, 'third3');
+        const data = first.summary.data as Record<string, unknown> & { compaction: Record<string, unknown> };
+        await getDb().transaction('rw', getWriteTxTableNames(getDb(), ['messages']), () => getDb().messages.update(first.summary.id,
+            { data: { ...data, compaction: { ...data.compaction, summary_markdown: `${markdown}\nChanged historical scope record` } } }));
+        const beforeOps = await getDb().pending_ops.count();
+        await expect(createCompactedFork(rolling)).rejects.toMatchObject({ code: 'stale_source' });
+        expect(await getDb().pending_ops.count()).toBe(beforeOps); expect(await getDb().threads.get(rolling.capture.childThreadId)).toBeUndefined();
+        expect(await getDb().messages.get(rolling.capture.summaryMessageId)).toBeUndefined();
+    });
     it('rejects a branch filter changing the prepared source before any commit', async () => {
         const value = await prepared();
         useHooks().addFilter('branch.fork:filter:options', (options) => ({ ...options, sourceThreadId: 'foreign' }));
@@ -118,6 +156,8 @@ describe('atomic compacted fork', () => {
     });
     it.each([
         { summary_markdown: `~~~\n${markdown}\n~~~`, landmarks: [{ message_id: 'm0', kind: 'decision', summary: 'Evidence' }] },
+        { summary_markdown: `<!--\n${markdown}\n-->`, landmarks: [{ message_id: 'm0', kind: 'decision', summary: 'Evidence' }] },
+        ...['`', '~'].map((character) => ({ summary_markdown: `${character.repeat(4)}\n${character.repeat(3)}\n${markdown}\n${character.repeat(3)}\n${character.repeat(4)}`, landmarks: [{ message_id: 'm0', kind: 'decision', summary: 'Evidence' }] })),
         { summary_markdown: markdown, landmarks: [{ message_id: 'm0', kind: 'decision', summary: 'x'.repeat(201) }] },
         { summary_markdown: markdown, landmarks: [{ message_id: 'foreign', kind: 'decision', summary: 'Unrelated' }] },
         { summary_markdown: markdown, landmarks: [{ message_id: 'm0', kind: 'decision', summary: 'Evidence', thread_id: 'forged' }] },
@@ -125,6 +165,13 @@ describe('atomic compacted fork', () => {
         const { capture } = await prepared();
         await expect(validateCompactionSummary(capture, JSON.stringify(response), { targetTokens: 4096, countText })).rejects.toMatchObject({ code: 'invalid_summary' });
         expect(await getDb().threads.count()).toBe(1); expect(await getDb().pending_ops.count()).toBe(0);
+    });
+    it('allows fenced code and HTML-comment literals around otherwise real summary sections', async () => {
+        const { capture } = await prepared();
+        const annotated = `<!--\n\`\`\`text\ncomment-only code marker\n-->\n${markdown.replace('None.', '\`\`\`\`text\n\`\`\`\napp/main.ts\n\`\`\`\n\`\`\`\`\`')}`;
+        const summary = await validateCompactionSummary(capture, JSON.stringify({ summary_markdown: annotated,
+            landmarks: [{ message_id: 'm0', kind: 'code', summary: 'Evidence' }] }), { targetTokens: 4096, countText });
+        expect(summary.summaryMarkdown).toBe(annotated);
     });
     it('derives trusted landmark ownership, discards unrelated/duplicate IDs and accepts code bodies under real headings', async () => {
         const { capture } = await prepared();
