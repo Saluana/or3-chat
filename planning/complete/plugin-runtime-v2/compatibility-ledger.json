@@ -2796,7 +2796,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "bbe185c805515791c25c8d7520da35eafbbd2520934663cab7c4b4b9cd42547a",
+      "apiSha256": "ceba47c646f87e79b3a8101a0ef2e7a5385e2f62b4b040ffc0949ab75e905723",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -5483,7 +5483,7 @@
               "resolvedReturnType": "AiSettingsV1",
               "declaration": {
                 "source": "app/composables/chat/useAiSettings.ts",
-                "line": 109,
+                "line": 111,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function sanitizeAiSettings(\n    input: unknown,\n    defaults: AiSettingsV1 = DEFAULT_AI_SETTINGS\n): AiSettingsV1;"
               }
@@ -5492,7 +5492,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 109,
+              "line": 111,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function sanitizeAiSettings(\n    input: unknown,\n    defaults: AiSettingsV1 = DEFAULT_AI_SETTINGS\n): AiSettingsV1;"
             }
@@ -6327,7 +6327,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAiSettings.ts",
-                "line": 208,
+                "line": 248,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAiSettings();"
               }
@@ -6336,7 +6336,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 208,
+              "line": 248,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAiSettings();"
             }

@@ -48,7 +48,8 @@ export function admitChatContext(input: {
     const routeContext = positiveInteger(input.routeLimits?.contextTokens);
     const routeOutput = positiveInteger(input.routeLimits?.outputTokens);
     const catalogOutput = positiveInteger(input.model?.top_provider?.max_completion_tokens);
-    const outputMaximum = routeOutput && catalogOutput ? Math.min(routeOutput, catalogOutput) : routeOutput ?? catalogOutput;
+    // A verified selected route supersedes the default catalog provider configuration.
+    const outputMaximum = routeOutput ?? catalogOutput;
     const effectiveContext = Math.min(modelContext, userMaximum ?? modelContext, routeContext ?? modelContext);
     const inputTokens = Number.isFinite(input.inputTokens) && input.inputTokens >= 0 ? Math.ceil(input.inputTokens) : Infinity;
     const remaining = Math.max(0, effectiveContext - inputTokens);

@@ -32,6 +32,17 @@ describe('provider context admission', () => {
             routeLimits: { contextTokens: 64_000, inputTokens: 8_192, outputTokens: 4_096 } })).toMatchObject({ ok: true,
             budget: { effective_context_tokens: 64_000, available_completion_tokens: 4_096 } });
     });
+    it('uses a verified selected route output limit instead of an unrelated catalog provider ceiling', () => {
+        const catalog = { context_length: 100_000, top_provider: { max_completion_tokens: 4_096 } };
+        expect(admitChatContext({ model: catalog, inputTokens: 1_000, requestedCompletionTokens: 8_192,
+            routeLimits: { outputTokens: 65_536 } })).toMatchObject({ ok: true, budget: { available_completion_tokens: 65_536 } });
+        expect(admitChatContext({ model: catalog, inputTokens: 1_000, requestedCompletionTokens: 70_000,
+            routeLimits: { outputTokens: 65_536 } })).toMatchObject({ ok: false, code: 'invalid_output_limit' });
+        expect(admitChatContext({ model: catalog, inputTokens: 99_000, requestedCompletionTokens: 8_192,
+            routeLimits: { outputTokens: 65_536 } })).toMatchObject({ ok: false, code: 'context_full' });
+        expect(admitChatContext({ model: catalog, inputTokens: 1_000, requestedCompletionTokens: 8_192 }))
+            .toMatchObject({ ok: false, code: 'invalid_output_limit' });
+    });
     it('keeps unavailable/invalid metadata explicit even when a user maximum exists', () => {
         for (const missing of [undefined, {}, { context_length: 0 }, { context_length: -1 }, { context_length: '1000000' }, { context_length: Infinity }]) {
             expect(admitChatContext({ model: missing, inputTokens: 10, userMaxContextTokens: 100_000 })).toEqual({ ok: false, code: 'model_metadata_unavailable' });

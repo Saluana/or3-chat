@@ -41,7 +41,7 @@ independent compaction foundation receives implementation attention now.
 ## Engineering milestones
 
 - Shared capacity policy: 7 boundary cases passed in `/tmp/task16-compaction-budget-candidate.log` after the missing-module baseline. Million-token capacity, explicit output demand, verified route input/output limits, unknown metadata and tool/media estimates are covered. This is not yet native admission.
-- Existing AI settings now persist an optional `maxContextTokens` (null by default/reset/legacy) without clamping it to the selected model. The canonical suite uses real Dexie KV; a delayed A-load reproduces a stale setting write crossing into B before origin/generation guards. Baselines: `/tmp/task16-compaction-settings-baseline.log`, `/tmp/task16-compaction-settings-race-baseline.log`. Candidate13 tests/two owners passed in `/tmp/task16-compaction-settings-candidate.log`.
+- Existing AI settings now persist an optional `maxContextTokens` (null by default/reset/legacy) without clamping it to the selected model. The canonical suite uses real Dexie KV; a delayed A-load reproduces a stale setting write crossing into B before origin guards. The later A→B→A review controls below require the actual workspace generation as well. Baselines: `/tmp/task16-compaction-settings-baseline.log`, `/tmp/task16-compaction-settings-race-baseline.log`. Candidate13 tests/two owners passed in `/tmp/task16-compaction-settings-candidate.log`.
 - The preference UI and generation capture remain pending until native admission consumes this value. No inactive control is advertised as working.
 
 ## Acceptance status
@@ -63,3 +63,11 @@ independent compaction foundation receives implementation attention now.
 No checked box or feature-complete claim substitutes for a real owner boundary
 test and a current-head evidence receipt. No extra worker, publication, deployment,
 default merge, credentials change or destructive real-user operation is authorized.
+
+## Independent foundation review corrections
+
+- Initial head `c3c075cd` had Core/Contracts success run36979751771; three subsequent source review concerns supersede that readiness.
+- Verified selected-route output precedence reproduces an incorrect 4,096-token restriction despite the selected route supporting65,536 and the explicit request needing8,192. Shared admission now uses the verified route output limit; total-window and actual selected output overflow still reject. `/tmp/task16-compaction-review-all-baseline.log`.
+- Actual KV timing reproduces lost different-field updates plus stale set/reset overwrites after A→B→A with a reused DB handle. Saves now queue within their captured workspace generation, merge current durable preferences, recheck generation through every mutation await, and use existing KV revision CAS. Separate-handle writes during a delayed save are refused instead of overwritten. All four settings failures reproduced at the pre-fix owner in `/tmp/task16-settings-review-full-baseline.log`. The failure control injects an actual Dexie write failure; throwing in a normal filter is intentionally swallowed by the existing hook engine and is not used as proof.
+- Final18 cases/two canonical owners pass in `/tmp/task16-compaction-review-final-focused.log`; production lint exits0 and generated ledger is refreshed. New-head CI/configured local typecheck remain pending.
+- Native admission must preserve installed workflow delegation: the workflow plugin runs inside the final before-send filter and depends on durable assistant IDs captured by the preceding send action. Moving that filter ahead of persistence without a compatible delegation boundary would break an existing workflow path. Native admission, usage, UI and full compaction remain unimplemented/unqualified.
