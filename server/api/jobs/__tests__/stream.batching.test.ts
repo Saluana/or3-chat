@@ -300,7 +300,7 @@ describe('fresh authorization of bounded, ordered SSE batches', () => {
         const stream = await attach();
         const before = stream.frames.length;
         const tools: NonNullable<BackgroundJob['tool_calls']> = [
-            { id: 'tool', name: 'tool', status: 'running', args: '{}' },
+            { id: 'tool', name: 'tool', status: 'loading', args: '{}' },
         ];
         emitJobDelta(stream.jobId, 'before', {
             contentLength: 6,
@@ -318,7 +318,7 @@ describe('fresh authorization of bounded, ordered SSE batches', () => {
         await vi.advanceTimersByTimeAsync(auth.delay);
         expect(stream.content).toBe('before');
         expect(stream.frames[before]?.status.tool_calls?.[0]).toMatchObject({
-            status: 'running',
+            status: 'loading',
         });
         expect(JSON.stringify(stream.frames.slice(before))).not.toContain(
             'later secret'
@@ -368,7 +368,7 @@ describe('fresh authorization of bounded, ordered SSE batches', () => {
             attempt: 1,
             workflow_state: workflow,
             tool_calls: [
-                { id: 'tool', name: 'tool', status: 'running', args: '{}' },
+                { id: 'tool', name: 'tool', status: 'loading', args: '{}' },
             ],
         });
         emitJobReasoningDelta(stream.jobId, '!', {
@@ -419,7 +419,7 @@ describe('fresh authorization of bounded, ordered SSE batches', () => {
             stream.frames.some(
                 (frame) =>
                     frame.status.workflow_state?.version === 1 &&
-                    frame.status.tool_calls?.[0]?.status === 'running'
+                    frame.status.tool_calls?.[0]?.status === 'loading'
             )
         ).toBe(true);
         expect(
@@ -503,7 +503,7 @@ describe('fresh authorization of bounded, ordered SSE batches', () => {
                 {
                     id: 'large-tool',
                     name: 'tool',
-                    status: 'running',
+                    status: 'loading',
                     args: '{}',
                 },
             ],
@@ -548,7 +548,7 @@ describe('fresh authorization of bounded, ordered SSE batches', () => {
         expect(stream.done).toBe(true);
         expect(
             stream.frames.some(
-                (frame) => frame.status.tool_calls?.[0]?.status === 'running'
+                (frame) => frame.status.tool_calls?.[0]?.status === 'loading'
             )
         ).toBe(true);
         expect(stream.frames.at(-1)?.status.tool_calls?.[0]?.status).toBe(
