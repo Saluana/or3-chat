@@ -53,6 +53,13 @@ describe('ordinary forks after compaction', () => {
         await expect(ordinaryFork('legacy')).rejects.toThrow(/atomic|validated/i);
         expect(await getDb().threads.count()).toBe(count);
     });
+    it.each(['create', 'fork'] as const)('protects an existing compacted boundary from a generic %s ID collision', async (api) => {
+        const original = await getDb().threads.get('compacted');
+        const write = api === 'create' ? createThread({ id: 'compacted', branch_mode: null, title: 'Overwrite' })
+            : ordinaryFork('legacy', { id: 'compacted', branch_mode: null });
+        await expect(write).rejects.toThrow(/atomic|validated/i);
+        expect(await getDb().threads.get('compacted')).toEqual(original);
+    });
     it('refuses generic create/upsert/fork and branch filters making unvalidated compacted threads', async () => {
         const count = await getDb().threads.count();
         await expect(createThread({ branch_mode: 'compacted', summary_message_id: 'forged' })).rejects.toThrow(/atomic|validated/i);
