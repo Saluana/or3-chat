@@ -477,7 +477,7 @@ const emit = defineEmits<{
     (e: 'cancel-edit', id: string): void;
     (e: 'save-edit', id: string): void;
     (e: 'content-resize'): void;
-    (e: 'view-compaction-source', target: { threadId: string; messageId: string; originThreadId: string }): void;
+    (e: 'view-compaction-source', target: { threadId: string; messageId: string; originThreadId: string; scrollMessageId?: string }): void;
 }>();
 
 const copyIcon = useIcon('chat.message.copy');

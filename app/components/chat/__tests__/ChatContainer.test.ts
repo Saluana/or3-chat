@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import * as nuxtImports from '#imports';
 import { kv } from '~/db';
+import { getWorkspaceGeneration } from '~/db/client';
 import { defineComponent, nextTick, reactive, ref, toRaw } from 'vue';
 import ChatContainer from '../ChatContainer.vue';
 
@@ -187,8 +188,11 @@ describe('ChatContainer', () => {
             row.vm.$emit('view-compaction-source', { threadId: 'unrelated', messageId: 'anchor', originThreadId: 'child' });
             expect(wrapper.emitted('thread-selected')).toBeUndefined();
             row.vm.$emit('view-compaction-source', { threadId: 'source', messageId: 'anchor', originThreadId: 'child' });
-            expect(wrapper.emitted('thread-selected')).toEqual([['source']]);
+            expect(wrapper.emitted('thread-selected')).toBeUndefined();
+            expect(wrapper.emitted('view-compaction-source')).toMatchObject([[{ threadId: 'source', messageId: 'anchor', originThreadId: 'child' }]]);
             await wrapper.setProps({ threadId: 'source' }); await flushPromises();
+            const destination = wrapper.vm.$.exposed as { scrollToMessage: (target: { threadId: string; messageId: string; generation: number }) => void };
+            destination.scrollToMessage({ threadId: 'source', messageId: 'anchor', generation: getWorkspaceGeneration() });
             expect(scroll).not.toHaveBeenCalled();
             instance.messages.value = [{ id: 'earlier', role: 'user', text: 'Earlier' }, { id: 'anchor', role: 'assistant', text: 'Exact original' }];
             await vi.waitFor(() => expect(scroll).toHaveBeenCalledWith('anchor', { align: 'center', smooth: false }));
@@ -208,6 +212,18 @@ describe('ChatContainer', () => {
             expect(instance.threadId.value).toBe('new-child');
             wrapper.findComponent(LazyChatMessage).vm.$emit('view-compaction-source', { threadId: 'source', messageId: 'anchor', originThreadId: 'child' });
             expect(wrapper.emitted('thread-selected')).toBeUndefined();
+            expect(wrapper.emitted('view-compaction-source')).toBeUndefined();
+        } finally { wrapper.unmount(); }
+    });
+
+    it('keeps internally created blank-chat threads on the existing creation event', async () => {
+        const instance = makeChatInstance(); instance.threadId.value = undefined;
+        const wrapper = mountChatInstance(instance);
+        try {
+            await flushPromises();
+            instance.threadId.value = 'newly-created'; await nextTick();
+            expect(wrapper.emitted('thread-selected')).toEqual([['newly-created']]);
+            expect(wrapper.emitted('view-compaction-source')).toBeUndefined();
         } finally { wrapper.unmount(); }
     });
 

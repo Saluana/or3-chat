@@ -14,7 +14,7 @@
             <span data-testid="fixture-compaction-state">{{ compactor.state.value.status }}</span>
             <span class="sr-only" data-testid="fixture-compaction-result">{{ fixtureResult }}</span>
         </section>
-        <PageShell v-if="ready && compactionJourney" :key="fixtureViewThread" :initial-thread-id="fixtureViewThread" :route-sync="false" class="flex-1 min-h-0" />
+        <PageShell v-if="ready && compactionJourney" :initial-thread-id="fixtureViewThread" :route-sync="false" class="flex-1 min-h-0" />
         <PageShell v-else-if="ready && workspaceJourney" />
         <ChatContainer
             v-else-if="ready"
@@ -30,6 +30,7 @@
 import { defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute } from '#imports';
 import { getDb } from '~/db/client';
+import { getWorkspaceResourceNavigationApi } from '~/utils/workspaceResourceNavigation';
 import { useThreadCompaction } from '~/composables/chat/useThreadCompaction';
 import ChatContainer from '~/components/chat/ChatContainer.vue';
 import { persistUserApiKey } from '~/core/auth/useUserApiKey';
@@ -53,7 +54,10 @@ const compactor = useThreadCompaction({
     apiKey: 'sk-or-v1-production-journey-test-key',
     getPreferences: async () => ({ maxContextTokens: null }),
     resolveModelMetadata: async () => ({ context_length: 1_000_000, top_provider: { max_completion_tokens: 65_536 } }),
-    onCommitted: ({ thread }) => { fixtureViewThread.value = thread.id; localStorage.setItem('or3:e2e:compaction-view', thread.id); },
+    onCommitted: async ({ thread }) => {
+        fixtureViewThread.value = thread.id; localStorage.setItem('or3:e2e:compaction-view', thread.id);
+        if (!await getWorkspaceResourceNavigationApi()?.openResource({ kind: 'chat', threadId: thread.id }, 'new-tab', { reuseExisting: true })) throw new Error('Saved fixture child could not be opened.');
+    },
 });
 async function startFixtureCompaction() { fixtureResult.value = JSON.stringify(await compactor.start()); }
 async function seedCompactionSource() {
@@ -68,7 +72,8 @@ async function seedCompactionSource() {
             { id: `${id}-decision`, thread_id: id, role: 'user', index: 0, created_at: 1, updated_at: 1, clock: 1, deleted: false, pending: false, data: { content: 'Original decision: preserve app/example.ts exactly. ' + 'Historical source context remains available for inspection. '.repeat(160) } },
             { id: `${id}-reply`, thread_id: id, role: 'assistant', index: 1, created_at: 1, updated_at: 1, clock: 1, deleted: false, pending: false, data: { content: 'Original anchor: implementation is pending. ' + 'Keep the latest confirmed work state and explicit next action. '.repeat(160) } },
             { id: `${id}-followup`, thread_id: id, role: 'user', index: 2, created_at: 1, updated_at: 1, clock: 1, deleted: false, pending: false, data: { content: 'Next request: inspect the confirmed source evidence. ' + 'Retain original facts without silently trimming the conversation. '.repeat(160) } },
-            { id: `${id}-anchor`, thread_id: id, role: 'assistant', index: 3, created_at: 1, updated_at: 1, clock: 1, deleted: false, pending: false, data: { content: 'Original anchor: implementation is pending. ' + 'Keep exact identifiers and continue only after inspecting the source. '.repeat(160) } },
+            { id: `${id}-anchor`, thread_id: id, role: 'assistant', index: 3, created_at: 1, updated_at: 1, clock: 1, deleted: false, pending: false, data: { content: 'Original anchor: implementation is pending. ' + 'Keep exact identifiers and continue only after inspecting the source. '.repeat(160), tool_calls: [{ id: `${id}-lookup`, name: 'read_source_evidence', args: '{}', status: 'complete' }] } },
+            { id: `${id}-tool-evidence`, thread_id: id, role: 'tool', index: 4, created_at: 1, updated_at: 1, clock: 1, deleted: false, pending: false, data: { content: 'Canonical tool evidence: preserve app/example.ts exactly.', tool_call_id: `${id}-lookup`, tool_name: 'read_source_evidence', parent_assistant_id: `${id}-anchor` } },
         ]);
         fixtureSourceThread.value = id;
         localStorage.setItem('or3:e2e:compaction-source', id);
@@ -203,7 +208,7 @@ function installDeterministicFetch(): void {
                         });
                         if (!stopped) enqueue(sseChunk(JSON.stringify({
                             summary_markdown: '## Objective\nContinue the implementation.\n## Important Details\nPreserve app/example.ts exactly.\n## Work State\nImplementation is pending.\n## Next Move\nInspect original evidence.\n## Relevant Files\napp/example.ts',
-                            landmarks: [{ message_id: `${fixtureSourceThread.value}-decision`, kind: 'constraint', summary: 'Preserve the exact source path' }],
+                            landmarks: [{ message_id: `${fixtureSourceThread.value}-tool-evidence`, kind: 'tool-result', summary: 'Preserve the exact source path' }],
                         })));
                     } else if (text.includes('journey:workspace-find') || text.includes('journey:workspace-create') || text.includes('journey:workspace-edit')) {
                         const userIndex = messages.findLastIndex((message) => message && typeof message === 'object' && (message as { role?: unknown }).role === 'user');

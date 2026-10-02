@@ -350,6 +350,7 @@
                                 ? (id: string) => onInternalThreadCreated(id, i)
                                 : undefined
                         "
+                        @view-compaction-source="onCompactionSourceSelected($event, i)"
                         @tab-status="
                             (status: WorkspaceTabStatus) => onPaneTabStatus(pane.id, status)
                         "
@@ -405,6 +406,7 @@ import type { WorkspaceNewTabCreateKind } from '~/components/workspace-tabs/Work
 import { usePaneApps } from '~/composables/core/usePaneApps';
 import {
     getActiveWorkspaceId,
+    getWorkspaceGeneration,
     getDb,
     subscribeActiveWorkspaceDb,
 } from '~/db/client';
@@ -1667,6 +1669,26 @@ function onSidebarSelected(id: string) {
         pane.documentId = undefined;
     }
     if (target === activePaneIndex.value) updateUrl();
+    closeSidebarIfMobile();
+}
+async function onCompactionSourceSelected(target: { threadId: string; messageId: string; originThreadId: string; scrollMessageId?: string; generation: number }, paneIndex: number) {
+    const pane = panes.value[paneIndex];
+    if (!pane || pane.mode !== 'chat' || pane.threadId !== target.originThreadId || getWorkspaceGeneration() !== target.generation) return;
+    if (workspaceTabsEnabled.value) {
+        const originTab = workspaceTabs.state.value.paneBindings.get(pane.id);
+        if (!originTab || !await workspaceTabs.activateTab(originTab, 'pointer')) return;
+        if (getWorkspaceGeneration() !== target.generation || panes.value[paneIndex]?.id !== pane.id
+            || pane.threadId !== target.originThreadId || activePaneIndex.value !== paneIndex) return;
+        if (!await workspaceTabs.openResource({ kind: 'chat', threadId: target.threadId })) return;
+    } else {
+        setActive(paneIndex);
+        await setPaneThread(paneIndex, target.threadId);
+    }
+    await nextTick();
+    const destination = panes.value[activePaneIndex.value];
+    if (getWorkspaceGeneration() !== target.generation || destination?.mode !== 'chat' || destination.threadId !== target.threadId) return;
+    paneComponentRefs.get(destination.id)?.scrollToMessage?.({ threadId: target.threadId,
+        messageId: target.scrollMessageId ?? target.messageId, generation: target.generation });
     closeSidebarIfMobile();
 }
 function onInternalThreadCreated(id: string, paneIndex?: number) {

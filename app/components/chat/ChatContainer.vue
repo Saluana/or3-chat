@@ -283,6 +283,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: 'thread-selected', id: string): void;
+    (e: 'view-compaction-source', target: { threadId: string; messageId: string; originThreadId: string; scrollMessageId?: string; generation: number }): void;
     (e: 'reached-top'): void;
     (e: 'reached-bottom'): void;
     (e: 'tab-status', status: WorkspaceTabStatus): void;
@@ -712,17 +713,22 @@ type ScrollApi = {
 };
 const scroller = ref<ScrollApi | null>(null);
 const compactionNavigation = shallowRef<{ threadId: string; messageId: string; generation: number; origin: string | undefined }>();
-function onViewCompactionSource(message: UiChatMessage, target: { threadId: string; messageId: string; originThreadId: string }) {
+function onViewCompactionSource(message: UiChatMessage, target: { threadId: string; messageId: string; originThreadId: string; scrollMessageId?: string }) {
     const data = message.compaction;
     if (currentThreadId.value !== target.originThreadId || props.threadId !== target.originThreadId) return;
     if (!data || !allMessages.value.some((row) => row.id === message.id)) return;
     const allowed = data.source_thread_id === target.threadId && data.anchor_message_id === target.messageId
         || data.landmarks.some((landmark) => landmark.thread_id === target.threadId && landmark.message_id === target.messageId);
     if (!allowed) return;
-    compactionNavigation.value = { ...target, generation: getWorkspaceGeneration(), origin: currentThreadId.value };
-    emit('thread-selected', target.threadId);
+    emit('view-compaction-source', { ...target, generation: getWorkspaceGeneration() });
 }
-watch([currentThreadId, allMessages, loading], async () => {
+// PageShell calls the destination pane after its normal resource activation.
+// The source identity remains in the event; this command uses the visible row.
+function scrollToMessage(target: { threadId: string; messageId: string; generation: number }) {
+    if (getWorkspaceGeneration() !== target.generation || props.threadId !== target.threadId) return;
+    compactionNavigation.value = { ...target, origin: currentThreadId.value };
+}
+watch([currentThreadId, allMessages, loading, compactionNavigation], async () => {
     const target = compactionNavigation.value;
     if (!target) return;
     if (getWorkspaceGeneration() !== target.generation || currentThreadId.value !== target.threadId && currentThreadId.value !== target.origin) {
@@ -1216,7 +1222,7 @@ onBeforeUnmount(() => {
     } catch {}
 });
 
-defineExpose({ captureViewState, restoreViewState });
+defineExpose({ captureViewState, restoreViewState, scrollToMessage });
 </script>
 
 <style>
