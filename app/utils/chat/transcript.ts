@@ -1,3 +1,4 @@
+import { readCompactionData, readRequestUsage, type CompactionData, type RequestUsage } from '~~/shared/chat/compaction';
 import type { Message } from '~/db/schema';
 import { parseFileHashes } from '~/db/files-util';
 import { normalizeStreamingMessage } from './messages';
@@ -89,6 +90,8 @@ export interface CanonicalTranscriptRecord {
     toolName?: string;
     toolCalls: CanonicalToolCall[];
     generation?: CanonicalGeneration;
+    compaction?: CompactionData;
+    usage?: RequestUsage;
     error?: string | null;
 }
 
@@ -234,6 +237,8 @@ export function messageToCanonicalTranscript(
                           : null,
               }
             : undefined,
+        compaction: data.kind === 'compaction' ? readCompactionData(data.compaction) : undefined,
+        usage: readRequestUsage(data.usage),
         error:
             message.error ??
             (typeof data.tool_error === 'string' ? data.tool_error : null),
@@ -296,6 +301,8 @@ export function projectTranscriptForOpenRouter(
             tool_call_id: record.callId,
             tool_calls: toolCalls,
             data: {
+                ...(record.compaction ? { kind: 'compaction', compaction: record.compaction } : {}),
+                ...(record.usage ? { usage: record.usage } : {}),
                 transcript_version: TRANSCRIPT_VERSION,
                 transcript_kind: record.kind,
                 turn_id: record.turnId,

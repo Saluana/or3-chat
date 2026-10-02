@@ -9,11 +9,21 @@ import {
     SnapshotRequestSchema,
     SnapshotResponseSchema,
     TABLE_PAYLOAD_SCHEMAS,
+    ThreadPayloadSchema,
     TombstoneSchema,
     MAX_SYNC_PUSH_BATCH_OPS,
 } from '../schemas';
 
 describe('sync schemas', () => {
+    it('validates optional compaction lineage fields while preserving legacy and partial-sync rows', () => {
+        const legacy = { id: 'old', status: 'ready', deleted: false, pinned: false, created_at: 1, updated_at: 1, clock: 1 };
+        expect(ThreadPayloadSchema.parse(legacy)).toEqual(legacy);
+        const child = { ...legacy, branch_mode: 'compacted', root_thread_id: 'root', summary_message_id: 'summary', fork_reason: 'compaction' };
+        expect(ThreadPayloadSchema.parse(JSON.parse(JSON.stringify(child)))).toEqual(child);
+        expect(ThreadPayloadSchema.safeParse({ ...legacy, branch_mode: 'compacted' }).success).toBe(true);
+        expect(ThreadPayloadSchema.safeParse({ ...child, fork_reason: 'fabricated' }).success).toBe(false);
+        expect(ThreadPayloadSchema.safeParse({ ...child, summary_message_id: 5 }).success).toBe(false);
+    });
     it('accepts only the current generic-file capability marker on requests', () => {
         const scope = { workspaceId: 'workspace-1' };
         expect(PullRequestSchema.safeParse({

@@ -10,13 +10,11 @@
 
 import type { Ref } from 'vue';
 import type { ChatMessage } from './types';
-import { getDb } from '~/db/client';
-import type { Message } from '~/db/schema';
-import { compareMessageOrder } from '~/db/messages';
+import { getDb, getWorkspaceGeneration } from '~/db/client';
+import { resolveThreadProjection } from './compaction/history';
 import {
     projectTranscriptForOpenRouter,
     storedMessagesToCanonicalTranscript,
-    withoutSupersededMessages,
 } from './transcript';
 
 /**
@@ -35,22 +33,9 @@ export async function ensureThreadHistoryLoaded(
     if (historyLoadedFor.value === targetThreadId) return true;
 
     try {
-        const DexieMod = (await import('dexie')).default;
         const db = getDb();
-        const all = await db.messages
-            .where('[thread_id+index]')
-            .between(
-                [targetThreadId, DexieMod.minKey],
-                [targetThreadId, DexieMod.maxKey]
-            )
-            .filter((m: Message) => !m.deleted)
-            .toArray();
-
-        all.sort(compareMessageOrder);
-
-        // Retry-superseded turns stay in storage but leave the visible
-        // transcript; unrelated later turns remain in their original order.
-        const visible = withoutSupersededMessages(all);
+        const generation = getWorkspaceGeneration();
+        const { messages: visible } = await resolveThreadProjection(targetThreadId, db);
 
         const nextMessages = projectTranscriptForOpenRouter(
             storedMessagesToCanonicalTranscript(visible)
@@ -58,7 +43,7 @@ export async function ensureThreadHistoryLoaded(
 
         // The database read can complete after navigation selects another
         // thread. Never commit an older thread's transcript into the new view.
-        if (threadIdRef.value !== targetThreadId) return false;
+        if (threadIdRef.value !== targetThreadId || getDb() !== db || getWorkspaceGeneration() !== generation) return false;
         messages.value = nextMessages;
         historyLoadedFor.value = targetThreadId;
         return true;

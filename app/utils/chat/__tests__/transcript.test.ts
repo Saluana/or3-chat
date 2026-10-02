@@ -23,6 +23,29 @@ const row = (input: Partial<Message> & Pick<Message, 'id' | 'role' | 'index'>): 
 });
 
 describe('canonical transcript projections', () => {
+    it('preserves validated host compaction/usage on reload while sending only summary text on the provider wire', async () => {
+        const compaction = { version: 1, compaction_id: 'compact-1', source_thread_id: 'source', anchor_message_id: 'anchor',
+            anchor_index: 7, generated_at: 100, model: 'model', message_count: 3, prior_message_count: 0,
+            summary_markdown: 'Summary reference', landmarks: [{ message_id: 'anchor', kind: 'decision', summary: 'Chosen option',
+                index: 7, role: 'assistant', thread_id: 'source' }],
+            history_scope: { version: 1, segments: [{ thread_id: 'source', messages: [{ message_id: 'anchor', clock: 3 }] }] } };
+        const usage = { prompt_tokens: 250, completion_tokens: 40, model: 'model', request_id: 'request', iteration: 0,
+            measured_at: 100, prefix_message_count: 2, prefix_hash: 'private-prefix', configuration_hash: 'private-config', input_estimate_tokens: 240 };
+        const records = storedMessagesToCanonicalTranscript([
+            row({ id: 'summary', role: 'system', index: 0, data: { kind: 'compaction', content: 'Historical summary and landmarks', compaction } }),
+            row({ id: 'answer', role: 'assistant', index: 1, data: { content: 'New answer', usage } }),
+            row({ id: 'malformed', role: 'assistant', index: 2, data: { content: 'Still readable', usage: { ...usage, prompt_tokens: -1 } } }),
+        ]);
+        const projected = projectTranscriptForOpenRouter(records);
+        expect(projected[0]?.data).toMatchObject({ kind: 'compaction', compaction });
+        expect(projected[1]?.data).toMatchObject({ usage });
+        expect(projected[2]?.data?.usage).toBeUndefined();
+        expect(projected[2]?.content).toBe('Still readable');
+        const { buildOpenRouterMessages } = await import('~/core/auth/openrouter-build');
+        const wire = await buildOpenRouterMessages(projected);
+        expect(wire[0]).toMatchObject({ role: 'system', content: [{ type: 'text', text: 'Historical summary and landmarks' }] });
+        expect(JSON.stringify(wire)).not.toMatch(/history_scope|prefix_hash|private-prefix|compaction_id/);
+    });
     it('round-trips user, assistant call, result, reasoning, files and generation relationships', () => {
         const records = storedMessagesToCanonicalTranscript([
             row({

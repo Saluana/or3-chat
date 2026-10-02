@@ -150,6 +150,10 @@ export const SyncChangesSchema = z.array(SyncChangeSchema);
  */
 
 export const ThreadPayloadSchema = createTablePayloadSchema('threads', {
+        branch_mode: z.enum(['reference', 'copy', 'compacted']).nullable().optional(),
+        root_thread_id: z.string().nullable().optional(),
+        summary_message_id: z.string().nullable().optional(),
+        fork_reason: z.enum(['manual', 'retry', 'compaction']).optional(),
         id: z.string(),
         title: z.string().nullable().optional(),
         status: z.string(),
