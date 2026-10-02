@@ -37,7 +37,7 @@ const coordinator: PaletteCoordinator = {
     retrySource,
     getResource: vi.fn(),
     searchSource: vi.fn(async () => []),
-    searchOnce: vi.fn(async () => ({ results: [], statuses: [] })),
+    searchOnce: vi.fn(async () => ({ results: [], statuses: [], snapshots: new Map() })),
     hydratePreview,
     dispose: vi.fn(),
 };

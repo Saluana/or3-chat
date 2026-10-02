@@ -320,7 +320,7 @@ describe('chat document tools', () => {
         };
         const table = operation === 'document' ? db.posts : db.projects;
         const get = table.get.bind(table);
-        const spy = vi.spyOn(table, 'get').mockImplementation((key) => get(key).then((row) => {
+        const spy = vi.spyOn(table, 'get').mockImplementation((key: Parameters<typeof get>[0]) => get(key).then((row) => {
             interrupt(); return row;
         }));
         try {
