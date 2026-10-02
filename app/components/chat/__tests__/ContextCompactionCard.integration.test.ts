@@ -1,9 +1,13 @@
 import Dexie from 'dexie';
+import { createHookEngine } from '~/core/hooks/hooks';
+import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
+import { setHookEngine } from '~/core/hooks/useHooks';
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { getDb, setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { storedMessagesToCanonicalTranscript, projectTranscriptForUi } from '~/utils/chat/transcript';
 import ContextCompactionCard from '../ContextCompactionCard.vue';
+import { captureCompaction, validateCompactionSummary, createCompactedFork } from '~/db/compaction';
 import type { CompactionData } from '~~/shared/chat/compaction';
 
 const data: CompactionData = { version: 1, compaction_id: 'operation', source_thread_id: 'source', anchor_message_id: 'anchor', anchor_index: 1,
@@ -14,6 +18,7 @@ const button = { props: ['disabled'], template: '<button type="button" :disabled
 let workspace: string;
 const wrappers: ReturnType<typeof mount>[] = [];
 beforeEach(async () => {
+    setHookEngine(createTypedHookEngine(createHookEngine()));
     workspace = `compaction-card-${crypto.randomUUID()}`; await setActiveWorkspaceDb(workspace).open();
     await getDb().threads.put({ id: 'source', title: 'Original', status: 'ready', deleted: false, pinned: false, forked: false, created_at: 1, updated_at: 1, clock: 1 });
     for (const [index, id] of ['evidence', 'anchor'].entries()) await getDb().messages.put({ id, thread_id: 'source', role: index ? 'assistant' : 'user', index,
@@ -21,12 +26,12 @@ beforeEach(async () => {
     await getDb().messages.put({ id: 'summary', thread_id: 'child', role: 'system', index: 0, created_at: 2, updated_at: 2, clock: 2, deleted: false,
         data: { kind: 'compaction', content: 'Historical reference', compaction: data } });
 });
-afterEach(async () => { for (const wrapper of wrappers.splice(0)) wrapper.unmount(); const db = getDb(); setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name); });
-async function card() {
-    const rows = await getDb().messages.where('thread_id').equals('child').toArray();
+afterEach(async () => { for (const wrapper of wrappers.splice(0)) wrapper.unmount(); const db = getDb(); setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name); setHookEngine(null); });
+async function card(threadId = 'child') {
+    const rows = await getDb().messages.where('thread_id').equals(threadId).toArray();
     const message = projectTranscriptForUi(storedMessagesToCanonicalTranscript(rows))[0]!;
     if (!message.compaction) throw new Error('Expected validated metadata after canonical reload');
-    const wrapper = mount(ContextCompactionCard, { props: { threadId: 'child', message: { ...message, compaction: message.compaction } }, global: { stubs: { UButton: button } } });
+    const wrapper = mount(ContextCompactionCard, { props: { threadId, message: { ...message, compaction: message.compaction } }, global: { stubs: { UButton: button } } });
     wrappers.push(wrapper); return wrapper;
 }
 it('renders a collapsed summary from durable canonical reload with truthful counts and manual landmarks', async () => {
@@ -90,4 +95,34 @@ it('keeps a retained summary tied to its rendered workspace when another workspa
     } finally { setActiveWorkspaceDb(workspace); evictWorkspaceDb(otherId); await Dexie.delete(other.name); }
     await wrapper.findAll('button')[1]!.trigger('click');
     await vi.waitFor(() => expect(wrapper.emitted('view-compaction-source')).toEqual([[{ threadId: 'source', messageId: 'anchor', originThreadId: 'child' }]]));
+});
+
+it.each([{ kind: 'landmark', lateWorkspace: false }, { kind: 'anchor', lateWorkspace: false }, { kind: 'landmark', lateWorkspace: true }] as const)('keeps a tool $kind identity with visible assistant evidence (late workspace: $lateWorkspace)', async ({ kind, lateWorkspace }) => {
+    const db = getDb();
+    await db.messages.update('anchor', { data: { content: 'Tool owner reply', tool_calls: [{ id: 'lookup', name: 'lookup', args: '{}', status: 'complete' }] } });
+    for (const [index, role] of ['user', 'assistant'].entries()) await db.messages.put({ id: `followup${index}`, thread_id: 'source', role, index: index + 2,
+        pending: false, deleted: false, clock: 1, created_at: 1, updated_at: 1, data: { content: 'Long settled evidence '.repeat(300) } });
+    await db.messages.put({ id: 'tool-evidence', thread_id: 'source', role: 'tool', index: 4, pending: false, deleted: false, clock: 1, created_at: 1, updated_at: 1,
+        data: { content: 'Canonical lookup evidence', tool_call_id: 'lookup', tool_name: 'lookup', parent_assistant_id: 'anchor' } });
+    const capture = await captureCompaction({ sourceThreadId: 'source', anchorMessageId: 'tool-evidence', model: 'chosen-model:exact-route' });
+    const summary = await validateCompactionSummary(capture, JSON.stringify({ summary_markdown: '## Objective\nContinue.\n## Important Details\nKeep evidence.\n## Work State\nSettled.\n## Next Move\nInspect source.\n## Relevant Files\nNone.',
+        landmarks: [{ message_id: 'tool-evidence', kind: 'tool-result', summary: 'Inspect canonical lookup evidence' }] }), { targetTokens: 4096, countText: async (text) => Math.ceil(text.length / 4) });
+    const child = await createCompactedFork({ capture, summary });
+    const visible = projectTranscriptForUi(storedMessagesToCanonicalTranscript(await db.messages.where('thread_id').equals('source').toArray()));
+    expect(visible.some((row) => row.id === 'tool-evidence')).toBe(false);
+    expect(visible.find((row) => row.id === 'anchor')?.toolCalls).toMatchObject([{ id: 'lookup', result: 'Canonical lookup evidence' }]);
+    const wrapper = await card(child.thread.id);
+    let changed = false; const otherId = `tool-link-${crypto.randomUUID()}`;
+    const switchDuringParent = (row: { id?: string }) => { if (lateWorkspace && row.id === 'anchor' && !changed) { changed = true; setActiveWorkspaceDb(otherId); setActiveWorkspaceDb(workspace); } return row; };
+    db.messages.hook('reading', switchDuringParent);
+    try {
+        await wrapper.findAll('button')[kind === 'landmark' ? 0 : 1]!.trigger('click');
+        if (lateWorkspace) {
+            await vi.waitFor(() => expect(changed).toBe(true)); await flushPromises();
+            expect(wrapper.emitted('view-compaction-source')).toBeUndefined();
+            await vi.waitFor(() => expect(wrapper.findAll('button')[0]!.attributes('disabled')).toBeUndefined());
+            await wrapper.findAll('button')[0]!.trigger('click');
+        }
+        await vi.waitFor(() => expect(wrapper.emitted('view-compaction-source')).toEqual([[{ threadId: 'source', messageId: 'tool-evidence', originThreadId: child.thread.id, scrollMessageId: 'anchor' }]]));
+    } finally { db.messages.hook('reading').unsubscribe(switchDuringParent); if (lateWorkspace) evictWorkspaceDb(otherId); }
 });

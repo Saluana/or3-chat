@@ -25,13 +25,13 @@
 <script setup lang="ts">
 import { computed, shallowRef, watch, onBeforeUnmount } from 'vue';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
-import { isSupersededMessage } from '~/utils/chat/transcript';
+import { storedMessagesToCanonicalTranscript, isSupersededMessage } from '~/utils/chat/transcript';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import type { CompactionData } from '~~/shared/chat/compaction';
 
 const props = defineProps<{ message: UiChatMessage & { compaction: CompactionData }; threadId?: string }>();
 const emit = defineEmits<{
-    (e: 'view-compaction-source', target: { threadId: string; messageId: string; originThreadId: string }): void;
+    (e: 'view-compaction-source', target: { threadId: string; messageId: string; originThreadId: string; scrollMessageId?: string }): void;
     (e: 'content-resize'): void;
 }>();
 const compaction = computed(() => props.message.compaction);
@@ -62,7 +62,20 @@ async function openTarget(threadId: string, messageId: string) {
             unavailable.value = 'This original message is unavailable. It may have been deleted or replaced.';
             return;
         }
-        emit('view-compaction-source', { threadId, messageId, originThreadId });
+        let scrollMessageId: string | undefined;
+        if (message.role === 'tool') {
+            const tool = storedMessagesToCanonicalTranscript([message])[0]!;
+            const parent = tool.parentAssistantId ? await db.messages.get(tool.parentAssistantId) : undefined;
+            if (!current()) return;
+            const parentRecord = parent && storedMessagesToCanonicalTranscript([parent, message]).find((row) => row.id === parent.id);
+            if (!parent || parent.deleted || parent.thread_id !== threadId || parent.role !== 'assistant' || isSupersededMessage(parent)
+                || !tool.callId || !parentRecord?.toolCalls.some((call) => call.callId === tool.callId)) {
+                unavailable.value = 'This original tool evidence is unavailable. Its visible assistant reply may have been deleted or replaced.';
+                return;
+            }
+            scrollMessageId = parent.id;
+        }
+        emit('view-compaction-source', { threadId, messageId, originThreadId, ...(scrollMessageId ? { scrollMessageId } : {}) });
     } catch {
         if (current()) unavailable.value = 'The original conversation could not be opened. Try again when it is available.';
     } finally { if (current()) opening.value = false; }

@@ -326,7 +326,7 @@ test('PageShell compaction summary reload and original landmark navigation', asy
         }
         throw new Error('The isolated fixture source was not found in IndexedDB');
     }, source);
-    const original = await readRows(); expect(original.sourceRows).toHaveLength(4); expect(original.children).toHaveLength(0);
+    const original = await readRows(); expect(original.sourceRows).toHaveLength(5); expect(original.children).toHaveLength(0);
     const input = page.getByRole('textbox', { name: 'Message input' }); await input.fill('Keep this unsent source draft.');
     const before = info.outputPath('compaction-original-before.png'); await page.screenshot({ path: before, animations: 'disabled' }); await info.attach('original-before', { path: before, contentType: 'image/png' });
     await page.getByTestId('fixture-hold-summary').check(); await page.getByTestId('fixture-compact').click();
@@ -338,9 +338,13 @@ test('PageShell compaction summary reload and original landmark navigation', asy
     await page.getByTestId('fixture-hold-summary').uncheck(); await page.getByTestId('fixture-compact').click();
     await expect(page.getByTestId('fixture-compaction-state')).toHaveText('complete');
     const card = page.locator('[data-compaction-card]'); await expect(card).toBeVisible();
+    await card.getByRole('button', { name: 'View original', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toHaveText('Keep this unsent source draft.');
+    await page.getByRole('tab', { name: 'Compaction original evidence — compacted', exact: true }).click();
+    await expect(card).toBeVisible();
     const saved = await readRows(); expect(saved.sourceRows).toEqual(original.sourceRows); expect(saved.children).toHaveLength(1); expect(saved.summaries).toHaveLength(1); expect(saved.totalMessages).toBe(original.totalMessages + 1);
     expect(saved.children[0]).toMatchObject({ branch_mode: 'compacted', summary_message_id: saved.summaries[0]!.id });
-    expect(saved.summaries[0]).toMatchObject({ role: 'system', pending: false, data: { compaction: { model: 'scripted-compaction-model:exact-route', anchor_message_id: `${source}-anchor` } } });
+    expect(saved.summaries[0]).toMatchObject({ role: 'system', pending: false, data: { compaction: { model: 'scripted-compaction-model:exact-route', anchor_message_id: `${source}-tool-evidence` } } });
     await page.reload(); await expect(card).toBeVisible(); expect(await readRows()).toEqual(saved);
     await expect(card.locator('details')).not.toHaveAttribute('open');
     await card.locator('summary').click(); await expect(card.locator('details')).toHaveAttribute('open', '');
@@ -354,7 +358,15 @@ test('PageShell compaction summary reload and original landmark navigation', asy
     expect(await readRows()).toEqual(saved);
     await page.reload(); await expect(card).toBeVisible(); await card.locator('summary').click();
     await card.getByRole('button', { name: 'Preserve the exact source path', exact: true }).click();
-    await expect(page.locator(`[data-msg-id="${source}-decision"]`)).toBeVisible();
+    await expect(anchor).toBeVisible();
+    await anchor.locator('.tool-call-indicator summary').click();
+    await expect(anchor.getByText('Canonical tool evidence: preserve app/example.ts exactly.', { exact: true })).toBeVisible();
     expect(await readRows()).toEqual(saved);
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toHaveText('Keep this unsent source draft.');
     const originalNavigation = info.outputPath('compaction-original-navigation.png'); await page.screenshot({ path: originalNavigation, animations: 'disabled' }); await info.attach('original-navigation', { path: originalNavigation, contentType: 'image/png' });
+    await page.getByRole('button', { name: 'New chat', exact: true }).first().click();
+    await send(page, 'journey:new-after-compaction');
+    await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('tab', { selected: true })).not.toHaveText('Compaction original evidence — compacted');
+    const afterNew = await readRows(); expect(afterNew.sourceRows).toEqual(saved.sourceRows); expect(afterNew.children).toEqual(saved.children); expect(afterNew.summaries).toEqual(saved.summaries);
 });
