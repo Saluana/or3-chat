@@ -54,7 +54,7 @@
  * Includes migration from legacy localStorage storage.
  */
 import { ref, computed, readonly } from 'vue';
-import { getDb } from '~/db/client';
+import { getDb, type Or3DB } from '~/db/client';
 import { setKvByName, getKvByName } from '~/db/kv';
 import {
     DEFAULT_MODEL_VARIANT,
@@ -69,6 +69,8 @@ export interface AiSettingsV1 {
     defaultModelMode: 'lastSelected' | 'fixed';
     fixedModelId: string | null;
     defaultModelVariant: OpenRouterModelVariant;
+    /** Null means the full advertised model capacity; values remain independent of model selection. */
+    maxContextTokens: number | null;
 }
 
 const AI_SETTINGS_KV_KEY = 'ai_settings';
@@ -83,13 +85,15 @@ export const DEFAULT_AI_SETTINGS: AiSettingsV1 = {
     defaultModelMode: 'lastSelected',
     fixedModelId: null,
     defaultModelVariant: DEFAULT_MODEL_VARIANT,
+    maxContextTokens: null,
 };
 
 // Module-level singleton state
 const _settings = ref<AiSettingsV1>({ ...DEFAULT_AI_SETTINGS });
 let _loaded = false;
-let _loadedDbName: string | null = null;
 let _loadPromise: Promise<void> | null = null;
+let _loadGeneration = 0;
+let _loadedDb: Or3DB | null = null;
 
 function isObj(v: unknown): v is Record<string, unknown> {
     return v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -123,6 +127,8 @@ export function sanitizeAiSettings(
         masterSystemPrompt,
         defaultModelMode,
         fixedModelId: fixedModelId ?? defaults.fixedModelId,
+        maxContextTokens: typeof inObj.maxContextTokens === 'number' && Number.isSafeInteger(inObj.maxContextTokens) && inObj.maxContextTokens > 0
+            ? inObj.maxContextTokens : null,
         defaultModelVariant: sanitizeModelVariant(
             inObj.defaultModelVariant,
             defaults.defaultModelVariant
@@ -159,57 +165,42 @@ async function migrateFromLocalStorage(): Promise<AiSettingsV1 | null> {
  * Load settings from KV, with localStorage migration fallback
  */
 async function loadSettings(): Promise<void> {
-    const dbName = getDb().name;
-    if (_loaded && _loadedDbName === dbName) return;
-    if (_loadPromise && _loadedDbName === dbName) return _loadPromise;
-    if (_loadedDbName !== dbName) {
-        _loaded = false;
-        _loadPromise = null;
-    }
-    _loadedDbName = dbName;
-    
+    const targetDb = getDb();
+    if (_loadedDb === targetDb && _loaded) return;
+    if (_loadedDb === targetDb && _loadPromise) return _loadPromise;
+    const generation = ++_loadGeneration;
+    _loadedDb = targetDb;
+    _loaded = false;
+    _settings.value = { ...DEFAULT_AI_SETTINGS };
+    const current = () => generation === _loadGeneration && getDb() === targetDb;
     _loadPromise = (async () => {
         try {
-            // Try KV first
-            const kvRecord = await getKvByName(AI_SETTINGS_KV_KEY);
-            if (kvRecord?.value) {
-                const parsed: unknown = JSON.parse(kvRecord.value);
-                _settings.value = sanitizeAiSettings(parsed);
-                _loaded = true;
-                return;
+            const kvRecord = await getKvByName(AI_SETTINGS_KV_KEY, targetDb);
+            if (!current()) return;
+            let next = kvRecord?.value ? sanitizeAiSettings(JSON.parse(kvRecord.value) as unknown) : null;
+            if (!next) {
+                next = await migrateFromLocalStorage();
+                if (!current()) return;
+                if (next) await setKvByName(AI_SETTINGS_KV_KEY, JSON.stringify(next), targetDb);
             }
-            
-            // Fall back to localStorage migration
-            const migrated = await migrateFromLocalStorage();
-            if (migrated) {
-                _settings.value = migrated;
-                // Persist to KV
-                await setKvByName(AI_SETTINGS_KV_KEY, JSON.stringify(migrated));
-                _loaded = true;
-                return;
-            }
-            
-            // No existing settings, use defaults
-            _settings.value = { ...DEFAULT_AI_SETTINGS };
+            if (!current()) return;
+            _settings.value = next ?? { ...DEFAULT_AI_SETTINGS };
             _loaded = true;
         } catch (error) {
+            if (!current()) return;
             console.error('[useAiSettings] Failed to load settings:', error);
             _settings.value = { ...DEFAULT_AI_SETTINGS };
             _loaded = true;
+        } finally {
+            if (generation === _loadGeneration) _loadPromise = null;
         }
     })();
-    
     return _loadPromise;
 }
 
-/**
- * Save settings to KV
- */
-async function saveSettings(settings: AiSettingsV1): Promise<void> {
-    try {
-        await setKvByName(AI_SETTINGS_KV_KEY, JSON.stringify(settings));
-    } catch (error) {
-        console.error('[useAiSettings] Failed to save settings:', error);
+function assertSettingsOrigin(targetDb: Or3DB): void {
+    if (getDb() !== targetDb || _loadedDb !== targetDb) {
+        throw new Error('Workspace changed before AI settings could be saved.');
     }
 }
 
@@ -223,18 +214,27 @@ export function useAiSettings() {
     const settings = computed(() => _settings.value);
 
     async function set(patch: Partial<AiSettingsV1>) {
-        await loadSettings(); // Ensure loaded before modifying
-        const merged = sanitizeAiSettings({
-            ..._settings.value,
-            ...patch,
-        });
+        if (patch.maxContextTokens !== undefined && patch.maxContextTokens !== null &&
+            (!Number.isSafeInteger(patch.maxContextTokens) || patch.maxContextTokens <= 0)) {
+            throw new Error('Maximum context must be a positive safe integer or Use model limit.');
+        }
+        const targetDb = getDb();
+        await loadSettings();
+        assertSettingsOrigin(targetDb);
+        const merged = sanitizeAiSettings({ ..._settings.value, ...patch });
+        await setKvByName(AI_SETTINGS_KV_KEY, JSON.stringify(merged), targetDb, { isValid: () => getDb() === targetDb && _loadedDb === targetDb });
+        assertSettingsOrigin(targetDb);
         _settings.value = merged;
-        await saveSettings(merged);
     }
 
     async function reset() {
-        _settings.value = { ...DEFAULT_AI_SETTINGS };
-        await saveSettings(_settings.value);
+        const targetDb = getDb();
+        await loadSettings();
+        assertSettingsOrigin(targetDb);
+        const defaults = { ...DEFAULT_AI_SETTINGS };
+        await setKvByName(AI_SETTINGS_KV_KEY, JSON.stringify(defaults), targetDb, { isValid: () => getDb() === targetDb && _loadedDb === targetDb });
+        assertSettingsOrigin(targetDb);
+        _settings.value = defaults;
     }
 
     function load(): AiSettingsV1 {
