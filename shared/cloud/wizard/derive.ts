@@ -78,7 +78,8 @@ function usesInsecureHttp(urlValue: string | undefined): boolean {
  * Resolves selected provider IDs to Nuxt module paths.
  *
  * Behavior:
- * - Collects auth, sync, and storage provider IDs based on enable flags.
+ * - Includes the auth workspace store even when sync transfer is disabled.
+ * - Collects other provider IDs based on enable flags.
  * - Filters out local/non-package IDs (see `LOCAL_PROVIDER_IDS`).
  * - Maps each remaining ID to `or3-provider-${id}/nuxt`.
  * - Returns a sorted, deduplicated array.
@@ -92,7 +93,8 @@ function usesInsecureHttp(urlValue: string | undefined): boolean {
 export function deriveProviderModules(answers: WizardAnswers): string[] {
     const providerIds = new Set<string>();
     if (answers.ssrAuthEnabled) providerIds.add(answers.authProvider);
-    if (answers.ssrAuthEnabled && answers.syncEnabled) {
+    if (answers.ssrAuthEnabled) {
+        // Account provisioning requires this workspace store independently of sync transfer.
         providerIds.add(answers.syncProvider);
     }
     if (answers.ssrAuthEnabled && answers.storageEnabled) {

@@ -464,10 +464,11 @@ describe('or3 cloud wizard validation', () => {
         );
     });
 
-    it('hides provider detail fields when provider features are disabled', () => {
+    it('hides workspace store detail fields when accounts and sync are disabled', () => {
         const answers = {
             ...validRecommendedAnswers(),
             targetAdvancedEnabled: true,
+            ssrAuthEnabled: false,
             syncEnabled: false,
         };
         const syncStep = getStepById(getWizardSteps(answers), 'provider-sync');

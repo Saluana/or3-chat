@@ -209,7 +209,8 @@ function addReason(
  *
  * Behavior:
  * - Includes provider dependencies only when `ssrAuthEnabled` is true.
- * - Includes sync/storage provider dependencies only when enabled.
+ * - Includes the auth workspace store even when sync transfer is disabled.
+ * - Includes storage provider dependencies only when enabled.
  * - Packages are deduplicated; reasons accumulate if multiple providers
  *   require the same package (e.g. `better-sqlite3`).
  *
@@ -233,13 +234,11 @@ export function createDependencyInstallPlan(
             addReason(reasons, dependency.packageName, dependency.reason);
         });
 
-        if (answers.syncEnabled) {
-            const syncProvider = getProviderDescriptor('sync', answers.syncProvider);
-            syncProvider?.dependencies.forEach((dependency) => {
-                packageSet.add(dependency.packageName);
-                addReason(reasons, dependency.packageName, dependency.reason);
-            });
-        }
+        const syncProvider = getProviderDescriptor('sync', answers.syncProvider);
+        syncProvider?.dependencies.forEach((dependency) => {
+            packageSet.add(dependency.packageName);
+            addReason(reasons, dependency.packageName, dependency.reason);
+        });
 
         if (answers.storageEnabled) {
             const storageProvider = getProviderDescriptor('storage', answers.storageProvider);

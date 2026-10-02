@@ -159,6 +159,13 @@ Runs deploy for the last session (or specific `--session <id>`):
 
 ## Environment Variables Written
 
+Disabling conversation sync stops transfers between devices. When accounts are
+enabled, the selected sync provider still supplies the workspace store used by
+sign-in and account provisioning. Its provider selection, runtime and connection
+fields remain available, validated, installed and saved even with sync disabled.
+For example, a custom SQLite workspace database path is preserved. Browser-only
+mode with accounts and sync disabled does not activate this store.
+
 The wizard writes canonical runtime env keys that OR3 already consumes:
 
 - `SSR_AUTH_ENABLED` (master cloud switch)
