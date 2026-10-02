@@ -176,6 +176,7 @@ test.describe('responsive modal layouts', () => {
         const dismiss = welcome.getByRole('button', { name: 'Dismiss welcome' });
         expect((await dismiss.boundingBox())!.height).toBeGreaterThanOrEqual(44);
         expect((await dismiss.boundingBox())!.width).toBeGreaterThanOrEqual(44);
+        await welcome.getByRole('button', { name: 'Use an existing API key', exact: true }).click();
         await welcome.getByLabel('OpenRouter API key', { exact: true }).focus();
         await page.evaluate(() => {
             Object.assign(window.visualViewport!, { height: 320, offsetTop: 74 });
@@ -185,9 +186,9 @@ test.describe('responsive modal layouts', () => {
             const r = el.getBoundingClientRect();
             return r.top >= 73 && r.bottom <= 395 && r.left >= 16 && r.right <= innerWidth - 16;
         })).toBe(true);
-        const helperText = welcome.locator('p').filter({ hasText: 'Your key never leaves this browser.' });
+        const save = welcome.getByRole('button', { name: 'Save', exact: true });
         const keyInput = welcome.getByLabel('OpenRouter API key', { exact: true });
-        for (const control of [helperText, keyInput, dismiss]) {
+        for (const control of [save, keyInput, dismiss]) {
             await expect.poll(() => control.evaluate(el => {
                 const r = el.getBoundingClientRect();
                 const viewport = window.visualViewport!;
@@ -195,7 +196,7 @@ test.describe('responsive modal layouts', () => {
             })).toBe(true);
         }
         await keyInput.fill('invalid-audit-key');
-        await welcome.getByRole('button', { name: 'Save', exact: true }).click();
+        await save.click();
         await expect(welcome.getByRole('alert')).toBeVisible();
         await expect(keyInput).toHaveAttribute('aria-invalid', 'true');
         await keyInput.fill('');
@@ -374,6 +375,12 @@ test.describe('responsive modal layouts', () => {
             const more = page.getByRole('button', { name: 'More options', exact: true });
             await more.focus();
             await more.click();
+            // A visible sheet must also receive pointer input. The default modal
+            // overlay previously covered every row and dismissed More on activation.
+            await page.getByRole('button', { name: 'My Info', exact: true }).click();
+            await expect(page.getByRole('dialog', { name: 'About OR3', exact: true })).toBeVisible();
+            await page.getByRole('button', { name: 'Back to More', exact: true }).click();
+            await expect(page.getByRole('dialog', { name: 'More', exact: true })).toBeVisible();
             for (const size of [{ width: 320, height: 568 }, { width: 390, height: 320 }]) {
                 await page.setViewportSize(size);
                 await captureChat(page, info, `modal-${theme}-light-${size.width}x${size.height}-more`);
@@ -530,6 +537,11 @@ async function openThemeStudio(page: Page, isMobile: boolean): Promise<void> {
     });
     await page.goto('/chat');
 
+    await expect(page.getByRole('textbox', { name: 'Message input' }).first())
+        .toBeVisible({ timeout: 30_000 });
+    const dismissWelcome = page.getByRole('button', { name: 'Dismiss welcome' });
+    if (await dismissWelcome.isVisible()) await dismissWelcome.click();
+
     const dashboard = page.getByRole('button', {
         name: 'Dashboard',
         exact: true,
@@ -628,6 +640,68 @@ async function expectWorkspaceTabTextFits(
 test.setTimeout(120_000);
 
 test.describe('chat responsive layout', () => {
+    for (const mode of modes) test(`blank ${mode} mobile sign-in label fits without wrapping`, async ({ page }, info) => {
+        test.skip(process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS !== 'true', 'Requires the gated provider UI fixture');
+        await openResponsiveChat(page, 'blank', mode);
+        await page.goto('/__or3-mobile-auth-test');
+        const dialog = page.getByRole('dialog', { name: 'Sign In', exact: true });
+        const signIn = dialog.getByRole('button', { name: 'Sign In', exact: true });
+        const email = dialog.getByLabel('Email', { exact: true });
+        const password = dialog.getByLabel('Password', { exact: true });
+        await expect(email).toBeVisible();
+        await expect(password).toBeVisible();
+        for (const width of [320, 390, 430]) {
+            await page.setViewportSize({ width, height: 844 });
+            await expect(signIn).toBeInViewport({ ratio: 1 });
+            await expect.poll(() => signIn.evaluate(button => {
+                const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
+                while (walker.nextNode()) {
+                    const node = walker.currentNode;
+                    if (node.textContent?.trim() !== 'Sign In') continue;
+                    const range = document.createRange();
+                    range.selectNodeContents(node);
+                    return range.getBoundingClientRect().height <= parseFloat(getComputedStyle(button).lineHeight) + 1;
+                }
+                return false;
+            })).toBe(true);
+            await expect.poll(async () =>
+                (await dialog.getByRole('button', { name: 'Close', exact: true }).boundingBox())?.height ?? 0
+            ).toBeGreaterThanOrEqual(44);
+            await expectDialogFits(page, 'Sign In');
+            await captureChat(page, info, `sign-in-${mode}-${width}`);
+        }
+        await email.focus();
+        await page.keyboard.press('Tab');
+        await expect(password).toBeFocused();
+        for (let index = 0; index < 7; index++) {
+            await page.keyboard.press('Tab');
+            await expect.poll(() => dialog.evaluate(element =>
+                element.contains(document.activeElement)
+            )).toBe(true);
+        }
+        await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await expect(dialog).toBeHidden();
+    });
+
+    for (const mode of modes) test(`blank ${mode} mobile empty composer keeps its single-row layout`, async ({ page }, info) => {
+        await openResponsiveChat(page, 'blank', mode);
+        for (const width of [320, 390, 430, 767]) {
+            await page.setViewportSize({ width, height: 844 });
+            await expectComposerFits(page);
+            const composer = page.locator('.chat-input-main:visible').first();
+            await expect.poll(() => composer.evaluate(element => {
+                const editor = element.querySelector('.chat-input-editor')!.getBoundingClientRect();
+                return Array.from(element.querySelectorAll('button'))
+                    .filter(button => button.getClientRects().length)
+                    .every(button => {
+                        const action = button.getBoundingClientRect();
+                        return Math.abs((action.top + action.bottom - editor.top - editor.bottom) / 2) <= 2;
+                    });
+            })).toBe(true);
+            await captureChat(page, info, `compact-empty-${mode}-${width}`);
+        }
+    });
+
     for (const theme of themes) test(`${theme} composer follows the visible viewport when Safari opens its keyboard`, async ({ page }, info) => {
         await page.setViewportSize({ width: 390, height: 844 });
         await page.addInitScript(() => {
