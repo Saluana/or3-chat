@@ -325,6 +325,11 @@ export class Or3DB extends Dexie {
             snapshot_staging: 'id, [generation+sequence]',
         });
 
+        // Lineage lookup without rewriting legacy rows or capturing startup operations.
+        this.version(21).stores({
+            threads: 'id, project_id, [project_id+updated_at], parent_thread_id, [parent_thread_id+anchor_index], root_thread_id, [root_thread_id+updated_at+id], status, pinned, deleted, last_message_at, clock, created_at, updated_at',
+        });
+
         // Derived-key maintenance must run on every instance, including
         // workspace DBs, and independently of sync capture suppression.
         installDerivedIndexHooks(this);

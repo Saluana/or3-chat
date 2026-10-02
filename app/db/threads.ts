@@ -17,6 +17,7 @@ import { useRuntimeConfig } from '#imports';
 import { getDb, type Or3DB } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
+import { resolveRootThreadId } from '../utils/chat/compaction/history';
 import {
     newId,
     nowSec,
@@ -106,6 +107,7 @@ export async function createThreadInDb(
         tableName: 'threads',
     });
     await db.transaction('rw', getWriteTxTableNames(db, 'threads'), async () => {
+        rejectGenericCompactionTransition(value);
         await dbTry(
             () => db.threads.put(value),
             { op: 'write', entity: 'threads', action: 'create' },
@@ -155,6 +157,7 @@ export async function upsertThread(value: Thread): Promise<void> {
             entity: next,
             tableName: 'threads',
         });
+        rejectGenericCompactionTransition(next, existing);
         await dbTry(
             () => db.threads.put(next),
             { op: 'write', entity: 'threads', action: 'upsert' },
@@ -165,6 +168,18 @@ export async function upsertThread(value: Thread): Promise<void> {
             tableName: 'threads',
         });
     });
+}
+
+/** Only the atomic compaction writer may create or replace a summary boundary. */
+function rejectGenericCompactionTransition(next: Thread, existing?: Thread | null): void {
+    const protectedFields = ['branch_mode', 'parent_thread_id', 'anchor_message_id', 'anchor_index',
+        'summary_message_id', 'root_thread_id', 'fork_reason'] as const;
+    if (next.branch_mode === 'compacted' || existing?.branch_mode === 'compacted') {
+        if (!existing || existing.branch_mode !== 'compacted'
+            || protectedFields.some((field) => next[field] !== existing[field])) {
+            throw new Error('Compacted forks require the validated atomic writer.');
+        }
+    }
 }
 
 /**
@@ -386,7 +401,9 @@ export async function forkThread(
             { op: 'read', entity: 'threads', action: 'get' },
             { rethrow: true }
         );
-        if (!src) throw new Error('Source thread not found');
+        if (!src || src.deleted) throw new Error('Source thread not found');
+        if (overrides.branch_mode === 'compacted') throw new Error('Compacted forks require the validated atomic writer.');
+        const rootThreadId = await resolveRootThreadId(src.id, db);
         const now = nowSec();
         const forkId = newId();
         const fork = parseOrThrow(ThreadSchema, {
@@ -399,11 +416,25 @@ export async function forkThread(
             last_message_at: null,
             clock: nextClock(),
             ...overrides,
+            parent_thread_id: src.id,
+            root_thread_id: rootThreadId,
+            summary_message_id: null,
+            fork_reason: 'manual',
+            branch_mode: options.copyMessages ? 'copy' : overrides.branch_mode ?? null,
+            anchor_message_id: overrides.anchor_message_id ?? null,
+            anchor_index: overrides.anchor_index ?? null,
         });
         await hooks.doAction('db.threads.fork:action:before', {
             source: src,
             fork,
         });
+        rejectGenericCompactionTransition(fork);
+        if (fork.parent_thread_id !== src.id || fork.root_thread_id !== rootThreadId || fork.summary_message_id != null
+            || fork.fork_reason !== 'manual') throw new Error('Invalid ordinary fork lineage.');
+        if (fork.branch_mode === 'reference') {
+            const anchor = fork.anchor_message_id ? await db.messages.get(fork.anchor_message_id) : undefined;
+            if (!anchor || anchor.deleted || anchor.thread_id !== src.id) throw new Error('Invalid reference anchor.');
+        }
         await dbTry(
             () => db.threads.put(fork),
             { op: 'write', entity: 'threads', action: 'fork' },

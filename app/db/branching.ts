@@ -19,6 +19,7 @@ import { getDb } from './client';
 import { newId, nowSec, nextClock, getWriteTxTableNames } from './util';
 import type { Thread, Message } from './schema';
 import { useHooks } from '../core/hooks/useHooks';
+import { resolveRootThreadId } from '../utils/chat/compaction/history';
 import type {
     BranchMode,
     BranchForkOptions,
@@ -41,23 +42,25 @@ import type {
  * Non-Goals:
  * - Does not introduce new branch modes.
  */
-export type ForkMode = BranchMode;
+export type ForkMode = Exclude<BranchMode, 'compacted'>;
 
 interface ForkThreadParams {
     sourceThreadId: string;
     anchorMessageId: string; // must be a user message in source thread
     mode?: ForkMode;
     titleOverride?: string;
+    reason?: 'manual' | 'retry';
 }
 
-const DEFAULT_BRANCH_MODE: BranchMode = 'reference';
+const DEFAULT_BRANCH_MODE: ForkMode = 'reference';
 
-function normalizeBranchMode(mode?: ForkMode | null): BranchMode {
+function normalizeBranchMode(mode?: BranchMode | null): Exclude<BranchMode, 'compacted'> {
+    if (mode === 'compacted') throw new Error('Compacted forks require the validated atomic writer.');
     return mode === 'copy' ? 'copy' : DEFAULT_BRANCH_MODE;
 }
 
 function normalizeMessageRole(role: string): MessageEntity['role'] {
-    return role === 'assistant' || role === 'system' ? role : 'user';
+    return role === 'assistant' || role === 'system' || role === 'tool' ? role : 'user';
 }
 
 function toMessageEntity(message: Message): MessageEntity {
@@ -121,6 +124,9 @@ function toThreadEntity(thread: Thread): ThreadEntity {
         forked: thread.forked,
         project_id: thread.project_id ?? null,
         system_prompt_id: thread.system_prompt_id ?? null,
+        root_thread_id: thread.root_thread_id ?? null,
+        summary_message_id: thread.summary_message_id ?? null,
+        fork_reason: thread.fork_reason,
     };
 }
 
@@ -149,6 +155,7 @@ export async function forkThread({
     anchorMessageId,
     mode = 'reference',
     titleOverride,
+    reason = 'manual',
 }: ForkThreadParams): Promise<{ thread: Thread; anchor: Message }> {
     const hooks = useHooks();
     const filteredOptions = await hooks.applyFilters(
@@ -171,7 +178,8 @@ export async function forkThread({
         getWriteTxTableNames(db, ['threads', 'messages']),
         async () => {
         const src = await db.threads.get(sourceThreadId);
-        if (!src) throw new Error('Source thread not found');
+        if (!src || src.deleted) throw new Error('Source thread not found');
+        const rootThreadId = await resolveRootThreadId(src.id, db);
 
         const anchor = await db.messages.get(anchorMessageId);
         if (!anchor || anchor.thread_id !== sourceThreadId)
@@ -189,6 +197,9 @@ export async function forkThread({
             anchor_message_id: anchorMessageId,
             anchor_index: anchor.index,
             branch_mode: branchMode,
+            root_thread_id: rootThreadId,
+            summary_message_id: null,
+            fork_reason: reason,
             created_at: now,
             updated_at: now,
             last_message_at: null,
@@ -294,8 +305,9 @@ export async function retryBranch({
     const res = await forkThread({
         sourceThreadId: assistant.thread_id,
         anchorMessageId: prevUser.id,
-        mode,
+        mode: normalizeBranchMode(mode),
         titleOverride,
+        reason: 'retry',
     });
     await hooks.doAction('branch.retry:action:after', {
         assistantMessageId,
@@ -330,47 +342,17 @@ interface BuildContextParams {
  * - Does not format messages for provider-specific payloads.
  */
 export async function buildContext({ threadId }: BuildContextParams) {
+    const db = getDb();
+    const { resolveThreadProjection } = await import('~/utils/chat/compaction/history');
+    const projection = await resolveThreadProjection(threadId, db);
+    const combinedMessages = projection.messages;
+    const leaf = projection.segments.at(-1)!;
+    const branchMode = leaf.thread.branch_mode ?? 'reference';
     const hooks = useHooks();
-    const t = await getDb().threads.get(threadId);
-    if (!t) return [] as Message[];
-
-    if (!t.parent_thread_id || t.branch_mode === 'copy') {
-        return getDb().messages.where('thread_id').equals(threadId).sortBy('index');
-    }
-
-    const [ancestors, locals] = await Promise.all([
-        getDb().messages
-            .where('[thread_id+index]')
-            // include anchor message by setting includeUpper=true
-            .between(
-                [t.parent_thread_id, Dexie.minKey],
-                [t.parent_thread_id, t.anchor_index!],
-                true,
-                true
-            )
-            .sortBy('index'),
-        getDb().messages.where('thread_id').equals(threadId).sortBy('index'),
-    ]);
-
-    const combinedMessages = [...ancestors, ...locals];
-    const branchMode = normalizeBranchMode(t.branch_mode);
-    const messageMap = new Map(combinedMessages.map((m) => [m.id, m]));
-    const combinedEntities = combinedMessages.map(toMessageEntity);
-    const filteredEntities = await hooks.applyFilters(
-        'branch.context:filter:messages',
-        combinedEntities,
-        threadId,
-        branchMode
-    );
-    const mergedMessages = filteredEntities.map((entity) =>
-        mergeMessageEntity(entity, messageMap.get(entity.id))
-    );
-    await hooks.doAction('branch.context:action:after', {
-        threadId,
-        mode: branchMode,
-        ancestorCount: ancestors.length,
-        localCount: locals.length,
-        finalCount: mergedMessages.length,
-    });
-    return mergedMessages;
+    const messageMap = new Map(combinedMessages.map((message) => [message.id, message]));
+    const filtered = await hooks.applyFilters('branch.context:filter:messages', combinedMessages.map(toMessageEntity), threadId, branchMode);
+    const merged = filtered.map((entity) => mergeMessageEntity(entity, messageMap.get(entity.id)));
+    await hooks.doAction('branch.context:action:after', { threadId, mode: branchMode,
+        ancestorCount: combinedMessages.length - leaf.visible.length, localCount: leaf.visible.length, finalCount: merged.length });
+    return merged;
 }

@@ -5,6 +5,8 @@
  * Shared chat type definitions used across UI and streaming utilities.
  */
 
+import type { CompactionData, RequestUsage } from '~~/shared/chat/compaction';
+
 export type TextPart = { type: 'text'; text: string };
 
 export type ImagePart = {
@@ -37,7 +39,7 @@ export interface ChatMessage {
     reasoning_text?: string | null;
     error?: string | null;
     pending?: boolean;
-    data?: Record<string, unknown> | null;
+    data?: (Record<string, unknown> & { compaction?: CompactionData; usage?: RequestUsage }) | null;
     index?: number | null;
     order_key?: string | null;
     created_at?: number | null;

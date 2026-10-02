@@ -44,7 +44,10 @@ export interface ThreadEntity {
     parent_thread_id?: string | null;
     anchor_message_id?: string | null;
     anchor_index?: number | null;
-    branch_mode?: 'reference' | 'copy' | null;
+    branch_mode?: 'reference' | 'copy' | 'compacted' | null;
+    root_thread_id?: string | null;
+    summary_message_id?: string | null;
+    fork_reason?: 'manual' | 'retry' | 'compaction';
     status: string;
     deleted: boolean;
     pinned: boolean;
@@ -63,7 +66,10 @@ export interface ThreadCreateEntity {
     parent_thread_id?: string | null;
     anchor_message_id?: string | null;
     anchor_index?: number | null;
-    branch_mode?: 'reference' | 'copy' | null;
+    branch_mode?: 'reference' | 'copy' | 'compacted' | null;
+    root_thread_id?: string | null;
+    summary_message_id?: string | null;
+    fork_reason?: 'manual' | 'retry' | 'compaction';
     status?: string;
     deleted?: boolean;
     pinned?: boolean;

@@ -2439,7 +2439,10 @@ export declare function useSidebarThreads(): Ref<{
     parent_thread_id?: string | null | undefined;
     anchor_message_id?: string | null | undefined;
     anchor_index?: number | null | undefined;
-    branch_mode?: "copy" | "reference" | null | undefined;
+    branch_mode?: "copy" | "reference" | "compacted" | null | undefined;
+    root_thread_id?: string | null | undefined;
+    summary_message_id?: string | null | undefined;
+    fork_reason?: "manual" | "retry" | "compaction" | undefined;
     hlc?: string | undefined;
     op_id?: string | undefined;
     project_id?: string | null | undefined;
@@ -2458,7 +2461,10 @@ export declare function useSidebarThreads(): Ref<{
     parent_thread_id?: string | null | undefined;
     anchor_message_id?: string | null | undefined;
     anchor_index?: number | null | undefined;
-    branch_mode?: "copy" | "reference" | null | undefined;
+    branch_mode?: "copy" | "reference" | "compacted" | null | undefined;
+    root_thread_id?: string | null | undefined;
+    summary_message_id?: string | null | undefined;
+    fork_reason?: "manual" | "retry" | "compaction" | undefined;
     hlc?: string | undefined;
     op_id?: string | undefined;
     project_id?: string | null | undefined;
@@ -3604,7 +3610,7 @@ export interface FilesAttachInputPayload {
     size: number;
     kind: FileKind;
 }
-export type BranchMode = 'reference' | 'copy';
+export type BranchMode = 'reference' | 'copy' | 'compacted';
 export interface BranchForkOptions {
     sourceThreadId: string;
     anchorMessageId: string;

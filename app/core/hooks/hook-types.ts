@@ -331,7 +331,7 @@ export interface FilesAttachInputPayload {
 // BRANCHING — payloads & helpers
 // ============================================================================
 
-export type BranchMode = 'reference' | 'copy';
+export type BranchMode = 'reference' | 'copy' | 'compacted';
 
 export interface BranchForkOptions {
     sourceThreadId: string;

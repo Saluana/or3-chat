@@ -9825,7 +9825,7 @@
     },
     {
       "source": "app/core/hooks/hook-types.ts",
-      "apiSha256": "d4a2b2d24af71e09337423b7b073838401ba200849dda7da7cdd948da50322bf",
+      "apiSha256": "58bde80468a4803bee2fa126b048b6d503d97e19c1bbdef2844ebd4ca6e79f47",
       "runtime": "client",
       "publicPaths": [
         "~/core/hooks/hook-types"
@@ -9844,7 +9844,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 159,
+              "line": 165,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AccessDecision {\n    allowed: boolean;\n    permission: Permission;\n    reason?:\n        | 'unauthenticated'\n        | 'forbidden'\n        | 'unknown-permission'\n        | (string & {});\n    userId?: string;\n    workspaceId?: string;\n    role?: WorkspaceRole;\n    resource?: { kind: string; id?: string };\n}"
             }
@@ -10068,7 +10068,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 133,
+              "line": 139,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AttachmentEntity {\n    id: string;\n    message_id?: string;\n    file_hash?: string;\n}"
             }
@@ -10126,7 +10126,7 @@
               "source": "app/core/hooks/hook-types.ts",
               "line": 334,
               "syntaxKind": "TypeAliasDeclaration",
-              "text": "export type BranchMode = 'reference' | 'copy';"
+              "text": "export type BranchMode = 'reference' | 'copy' | 'compacted';"
             }
           ]
         },
@@ -10208,7 +10208,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 298,
+              "line": 304,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DbCreatePayload<T = unknown> {\n    entity: T;\n    tableName: string;\n}"
             }
@@ -10222,7 +10222,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 310,
+              "line": 316,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DbDeletePayload<T = unknown> {\n    entity: T;\n    id: string;\n    tableName: string;\n}"
             }
@@ -10306,7 +10306,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 303,
+              "line": 309,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DbUpdatePayload<T = unknown> {\n    existing: T;\n    updated: T;\n    patch: Partial<T>;\n    tableName: string;\n}"
             }
@@ -10348,7 +10348,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 76,
+              "line": 82,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentEntity {\n    id: string;\n    title?: string;\n    content?: string;\n    file_hashes?: string | null;\n    created_at?: number;\n    updated_at?: number;\n}"
             }
@@ -10418,7 +10418,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 85,
+              "line": 91,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface FileEntity {\n    hash: string;\n    name: string;\n    mime: string;\n    size: number;\n    kind: FileKind;\n    ref_count?: number;\n}"
             }
@@ -10600,7 +10600,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 139,
+              "line": 145,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface KvEntry {\n    id: string;\n    name: string;\n    value?: string | null;\n    deleted?: boolean;\n    created_at: number;\n    updated_at: number;\n    clock: number;\n}"
             }
@@ -10670,7 +10670,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 219,
+              "line": 225,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface NotificationAction {\n    id: string;\n    label: string;\n    kind: 'navigate' | 'callback';\n    target?: {\n        threadId?: string;\n        documentId?: string;\n        route?: string;\n    };\n    data?: Record<string, unknown>;\n}"
             }
@@ -10684,7 +10684,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 231,
+              "line": 237,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface NotificationCreatePayload {\n    type: string;\n    title: string;\n    body?: string;\n    threadId?: string;\n    documentId?: string;\n    actions?: NotificationAction[];\n}"
             }
@@ -10698,7 +10698,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 240,
+              "line": 246,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface NotificationEntity {\n    id: string;\n    workspace_id?: string;\n    user_id: string;\n    thread_id?: string;\n    document_id?: string;\n    type: string;\n    title: string;\n    body?: string;\n    actions?: NotificationAction[];\n    read_at?: number;\n    deleted: boolean;\n    deleted_at?: number;\n    created_at: number;\n    updated_at: number;\n    clock: number;\n}"
             }
@@ -10726,7 +10726,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 149,
+              "line": 155,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type Permission =\n    | 'workspace.read'\n    | 'workspace.write'\n    | 'workspace.settings.manage'\n    | 'users.manage'\n    | 'plugins.manage'\n    | 'admin.access';"
             }
@@ -10740,7 +10740,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 113,
+              "line": 119,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface PostCreateEntity {\n    id?: string;\n    title: string;\n    content?: string;\n    postType?: string;\n    created_at?: number;\n    updated_at?: number;\n    deleted?: boolean;\n    meta?: unknown;\n    file_hashes?: string | null;\n}"
             }
@@ -10754,7 +10754,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 105,
+              "line": 111,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface PostEntity {\n    id: string;\n    title?: string;\n    body?: string;\n    created_at?: number;\n    updated_at?: number;\n}"
             }
@@ -10768,7 +10768,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 94,
+              "line": 100,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectEntity {\n    id: string;\n    name: string;\n    description?: string | null;\n    data: unknown;\n    created_at: number;\n    updated_at: number;\n    deleted: boolean;\n    clock: number;\n}"
             }
@@ -10782,7 +10782,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 125,
+              "line": 131,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface PromptEntity {\n    id: string;\n    name: string;\n    text: string;\n    tags?: string[];\n    favorite?: boolean;\n}"
             }
@@ -10810,7 +10810,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 173,
+              "line": 179,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SessionContext {\n    authenticated: boolean;\n    provider?: string;\n    providerUserId?: string;\n    user?: { id: string; email?: string; displayName?: string };\n    workspace?: { id: string; name: string };\n    role?: WorkspaceRole;\n    expiresAt?: string;\n    authorizationRevision?: number;\n    deploymentAdmin?: boolean;\n    /** Host-resolved entitlement ids used by immediate client-side plugin gating. */\n    entitlements?: string[];\n}"
             }
@@ -10824,7 +10824,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 275,
+              "line": 281,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileDownloadAfterPayload {\n    hash: string;\n    workspace_id: string;\n    size_bytes: number;\n}"
             }
@@ -10838,7 +10838,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 270,
+              "line": 276,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileDownloadBeforePayload {\n    hash: string;\n    workspace_id: string;\n}"
             }
@@ -10852,7 +10852,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 293,
+              "line": 299,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileGcPayload {\n    deleted_count: number;\n    workspace_id: string;\n}"
             }
@@ -10866,7 +10866,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 264,
+              "line": 270,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileUploadAfterPayload {\n    hash: string;\n    workspace_id: string;\n    storage_id: string;\n}"
             }
@@ -10880,7 +10880,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 258,
+              "line": 264,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileUploadBeforePayload {\n    hash: string;\n    workspace_id: string;\n    size_bytes: number;\n}"
             }
@@ -10894,7 +10894,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 287,
+              "line": 293,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileUploadPolicyPayload {\n    hash: string;\n    mime_type: string;\n    size_bytes: number;\n}"
             }
@@ -10908,7 +10908,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 281,
+              "line": 287,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileUrlOptionsPayload {\n    hash: string;\n    expiry_ms: number;\n    disposition?: string;\n}"
             }
@@ -10936,7 +10936,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 192,
+              "line": 198,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SyncPendingOpPayload {\n    id: string;\n    tableName: string;\n    operation: 'put' | 'delete';\n    pk: string;\n    payload?: unknown;\n    stamp: {\n        deviceId: string;\n        opId: string;\n        hlc: string;\n        clock: number;\n    };\n    createdAt: number;\n    attempts: number;\n    nextAttemptAt?: number;\n    status:\n        | 'pending'\n        | 'in_flight'\n        | 'retry_wait'\n        | 'failed_retryable'\n        | 'failed_permanent'\n        | 'applied'\n        | 'discarded'\n        | 'syncing'\n        | 'failed';\n}"
             }
@@ -10950,7 +10950,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 187,
+              "line": 193,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SyncScopePayload {\n    workspaceId: string;\n    projectId?: string;\n}"
             }
@@ -10978,9 +10978,9 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 57,
+              "line": 60,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface ThreadCreateEntity {\n    id?: string;\n    title?: string | null;\n    created_at?: number;\n    updated_at?: number;\n    last_message_at?: number | null;\n    parent_thread_id?: string | null;\n    anchor_message_id?: string | null;\n    anchor_index?: number | null;\n    branch_mode?: 'reference' | 'copy' | null;\n    status?: string;\n    deleted?: boolean;\n    pinned?: boolean;\n    clock?: number;\n    forked?: boolean;\n    project_id?: string | null;\n    system_prompt_id?: string | null;\n}"
+              "text": "export interface ThreadCreateEntity {\n    id?: string;\n    title?: string | null;\n    created_at?: number;\n    updated_at?: number;\n    last_message_at?: number | null;\n    parent_thread_id?: string | null;\n    anchor_message_id?: string | null;\n    anchor_index?: number | null;\n    branch_mode?: 'reference' | 'copy' | 'compacted' | null;\n    root_thread_id?: string | null;\n    summary_message_id?: string | null;\n    fork_reason?: 'manual' | 'retry' | 'compaction';\n    status?: string;\n    deleted?: boolean;\n    pinned?: boolean;\n    clock?: number;\n    forked?: boolean;\n    project_id?: string | null;\n    system_prompt_id?: string | null;\n}"
             }
           ]
         },
@@ -10994,7 +10994,7 @@
               "source": "shared/hooks/hook-domain-types.ts",
               "line": 38,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface ThreadEntity {\n    id: string;\n    title?: string | null;\n    created_at: number;\n    updated_at: number;\n    last_message_at?: number | null;\n    parent_thread_id?: string | null;\n    anchor_message_id?: string | null;\n    anchor_index?: number | null;\n    branch_mode?: 'reference' | 'copy' | null;\n    status: string;\n    deleted: boolean;\n    pinned: boolean;\n    clock: number;\n    forked: boolean;\n    project_id?: string | null;\n    system_prompt_id?: string | null;\n}"
+              "text": "export interface ThreadEntity {\n    id: string;\n    title?: string | null;\n    created_at: number;\n    updated_at: number;\n    last_message_at?: number | null;\n    parent_thread_id?: string | null;\n    anchor_message_id?: string | null;\n    anchor_index?: number | null;\n    branch_mode?: 'reference' | 'copy' | 'compacted' | null;\n    root_thread_id?: string | null;\n    summary_message_id?: string | null;\n    fork_reason?: 'manual' | 'retry' | 'compaction';\n    status: string;\n    deleted: boolean;\n    pinned: boolean;\n    clock: number;\n    forked: boolean;\n    project_id?: string | null;\n    system_prompt_id?: string | null;\n}"
             }
           ]
         },
@@ -11188,7 +11188,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 157,
+              "line": 163,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type WorkspaceRole = 'owner' | 'editor' | 'viewer';"
             }
@@ -11615,7 +11615,7 @@
     },
     {
       "source": "app/utils/chat/tools-public.ts",
-      "apiSha256": "36c0a1d842662abaf5ba6e41283273b37bb0c1d40f1d1b38edc5dfd30dbd8357",
+      "apiSha256": "67ab236d9b57ee6446a8de5d5501bd52373561e58fa657fbceecc7af43fca5d6",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tools-public"
@@ -11688,7 +11688,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 108,
+              "line": 110,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolCall {\n    id: string;\n    type: 'function';\n    function: {\n        name: string;\n        arguments: string; // JSON string, parsed by consumer\n    };\n}"
             }
@@ -11702,7 +11702,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 146,
+              "line": 148,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolDefinition {\n    type: 'function';\n    function: {\n        name: string;\n        description: string;\n        parameters: import('~~/shared/chat/tool-schema').JsonSchemaObject;\n    };\n    ui?: {\n        label?: string;\n        icon?: string;\n        descriptionHint?: string;\n        defaultEnabled?: boolean;\n        category?: string;\n    };\n    runtime?: ToolRuntime;\n}"
             }
@@ -11716,7 +11716,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 120,
+              "line": 122,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolExecutionContext {\n    subject: string | null;\n    workspaceId: string | null;\n    threadId: string | null;\n    messageId: string | null;\n    callId: string;\n    requestId: string;\n    abortSignal: AbortSignal;\n}"
             }
@@ -11744,7 +11744,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 117,
+              "line": 119,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolRuntime = 'hybrid' | 'client' | 'server';"
             }
