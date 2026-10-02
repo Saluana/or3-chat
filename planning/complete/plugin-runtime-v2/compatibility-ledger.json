@@ -2796,7 +2796,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "eae0f6b1fe4eea2d2b55140be61e31a054cffb56edaa66c318a80350e3765bdf",
+      "apiSha256": "a7e6b6fdf5647012be896d6424148773addf71f81f2f946534eed5c57c9db92b",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2818,7 +2818,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 353,
+                "line": 405,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function __hasPendingDocumentChanges(id: string): boolean;"
               }
@@ -2827,7 +2827,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 353,
+              "line": 405,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function __hasPendingDocumentChanges(id: string): boolean;"
             }
@@ -2844,7 +2844,7 @@
               "resolvedReturnType": "\"idle\" | \"saving\" | \"saved\" | \"error\" | \"loading\" | undefined",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 378,
+                "line": 430,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function __peekDocumentStatus(\n    id: string\n): DocState['status'] | undefined;"
               }
@@ -2853,7 +2853,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 378,
+              "line": 430,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function __peekDocumentStatus(\n    id: string\n): DocState['status'] | undefined;"
             }
@@ -3611,23 +3611,23 @@
           "nuxtAutoImport": false,
           "signatures": [
             {
-              "signature": "export async function flush(id: string);",
+              "signature": "export async function flush(id: string, db = getDb());",
               "declaredReturnType": null,
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 67,
+                "line": 108,
                 "syntaxKind": "FunctionDeclaration",
-                "text": "export async function flush(id: string);"
+                "text": "export async function flush(id: string, db = getDb());"
               }
             }
           ],
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 67,
+              "line": 108,
               "syntaxKind": "FunctionDeclaration",
-              "text": "export async function flush(id: string);"
+              "text": "export async function flush(id: string, db = getDb());"
             }
           ]
         },
@@ -4461,23 +4461,23 @@
           "nuxtAutoImport": false,
           "signatures": [
             {
-              "signature": "export async function loadDocument(id: string);",
+              "signature": "export async function loadDocument(id: string, db = getDb());",
               "declaredReturnType": null,
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 186,
+                "line": 235,
                 "syntaxKind": "FunctionDeclaration",
-                "text": "export async function loadDocument(id: string);"
+                "text": "export async function loadDocument(id: string, db = getDb());"
               }
             }
           ],
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 186,
+              "line": 235,
               "syntaxKind": "FunctionDeclaration",
-              "text": "export async function loadDocument(id: string);"
+              "text": "export async function loadDocument(id: string, db = getDb());"
             }
           ]
         },
@@ -4602,7 +4602,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 222,
+                "line": 271,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function newDocument(initial?: {\n    title?: string;\n    content?: TipTapDocument | null;\n});"
               }
@@ -4611,7 +4611,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 222,
+              "line": 271,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function newDocument(initial?: {\n    title?: string;\n    content?: TipTapDocument | null;\n});"
             }
@@ -5339,7 +5339,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 405,
+                "line": 457,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function releaseDocument(\n    id: string,\n    opts: { flush?: boolean; deleteEntry?: boolean } = {}\n);"
               }
@@ -5348,7 +5348,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 405,
+              "line": 457,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function releaseDocument(\n    id: string,\n    opts: { flush?: boolean; deleteEntry?: boolean } = {}\n);"
             }
@@ -5570,23 +5570,23 @@
           "nuxtAutoImport": false,
           "signatures": [
             {
-              "signature": "export function setDocumentContent(id: string, content: TipTapDocument | null);",
+              "signature": "export function setDocumentContent(id: string, content: TipTapDocument | null, db = getDb());",
               "declaredReturnType": null,
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 283,
+                "line": 334,
                 "syntaxKind": "FunctionDeclaration",
-                "text": "export function setDocumentContent(id: string, content: TipTapDocument | null);"
+                "text": "export function setDocumentContent(id: string, content: TipTapDocument | null, db = getDb());"
               }
             }
           ],
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 283,
+              "line": 334,
               "syntaxKind": "FunctionDeclaration",
-              "text": "export function setDocumentContent(id: string, content: TipTapDocument | null);"
+              "text": "export function setDocumentContent(id: string, content: TipTapDocument | null, db = getDb());"
             }
           ]
         },
@@ -5596,23 +5596,23 @@
           "nuxtAutoImport": false,
           "signatures": [
             {
-              "signature": "export function setDocumentTitle(id: string, title: string);",
+              "signature": "export function setDocumentTitle(id: string, title: string, db = getDb());",
               "declaredReturnType": null,
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 256,
+                "line": 306,
                 "syntaxKind": "FunctionDeclaration",
-                "text": "export function setDocumentTitle(id: string, title: string);"
+                "text": "export function setDocumentTitle(id: string, title: string, db = getDb());"
               }
             }
           ],
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 256,
+              "line": 306,
               "syntaxKind": "FunctionDeclaration",
-              "text": "export function setDocumentTitle(id: string, title: string);"
+              "text": "export function setDocumentTitle(id: string, title: string, db = getDb());"
             }
           ]
         },
@@ -6353,7 +6353,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 332,
+                "line": 384,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAllDocumentsState();"
               }
@@ -6362,7 +6362,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 332,
+              "line": 384,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAllDocumentsState();"
             }
@@ -6700,23 +6700,23 @@
           "nuxtAutoImport": false,
           "signatures": [
             {
-              "signature": "export function useDocumentState(id: string);",
+              "signature": "export function useDocumentState(id: string, db = getDb());",
               "declaredReturnType": null,
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 310,
+                "line": 362,
                 "syntaxKind": "FunctionDeclaration",
-                "text": "export function useDocumentState(id: string);"
+                "text": "export function useDocumentState(id: string, db = getDb());"
               }
             }
           ],
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 310,
+              "line": 362,
               "syntaxKind": "FunctionDeclaration",
-              "text": "export function useDocumentState(id: string);"
+              "text": "export function useDocumentState(id: string, db = getDb());"
             }
           ]
         },
@@ -7269,7 +7269,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSearch.ts",
-                "line": 181,
+                "line": 182,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarSearch(\n    threads: Ref<Thread[]>,\n    projects: Ref<Project[]>,\n    documents: Ref<Post[]>\n);"
               }
@@ -7278,7 +7278,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSearch.ts",
-              "line": 181,
+              "line": 182,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarSearch(\n    threads: Ref<Thread[]>,\n    projects: Ref<Project[]>,\n    documents: Ref<Post[]>\n);"
             }

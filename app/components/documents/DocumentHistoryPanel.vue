@@ -71,9 +71,10 @@
 
 <script setup lang="ts">
 import AppModal from '~/components/ui/AppModal.vue';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { JSONContent } from '@tiptap/core';
 import { useIcon } from '~/composables/useIcon';
+import { getDb, subscribeActiveWorkspaceDb } from '~/db/client';
 import {
     listCompleteDocumentRevisions,
     type CompleteDocumentRevision,
@@ -94,6 +95,9 @@ const previewOpen = ref(false);
 const loading = ref(false);
 const busy = ref(false);
 const error = ref('');
+let generation = 0;
+let scopeGeneration = 0;
+let didUnmount = false;
 
 const previewTitle = computed(() => selected.value?.snapshot.title || 'Checkpoint preview');
 const previewDescription = computed(() => {
@@ -105,27 +109,40 @@ const selectedPreviewLines = computed(() =>
 );
 
 async function load() {
+    const db = getDb();
+    const id = props.documentId;
+    const requestGeneration = ++generation;
+    const isCurrent = () => !didUnmount && generation === requestGeneration &&
+        getDb() === db && props.documentId === id;
     loading.value = true;
     error.value = '';
     try {
-        revisions.value = await listCompleteDocumentRevisions(props.documentId);
+        const loaded = await listCompleteDocumentRevisions(id, db);
+        if (isCurrent()) revisions.value = loaded;
     } catch (caught) {
-        error.value = caught instanceof Error ? caught.message : String(caught);
+        if (isCurrent()) error.value = caught instanceof Error ? caught.message : String(caught);
     } finally {
-        loading.value = false;
+        if (isCurrent()) loading.value = false;
     }
 }
 
 async function checkpoint() {
+    const requestScope = scopeGeneration;
+    const isCurrent = () => !didUnmount && scopeGeneration === requestScope;
     busy.value = true;
     error.value = '';
     try {
         await props.createCheckpoint();
+        if (!isCurrent()) return;
         await load();
     } catch (caught) {
-        error.value = caught instanceof Error ? caught.message : String(caught);
+        if (isCurrent()) {
+            error.value = caught instanceof Error ? caught.message : String(caught);
+        }
     } finally {
-        busy.value = false;
+        if (isCurrent()) {
+            busy.value = false;
+        }
     }
 }
 
@@ -178,9 +195,20 @@ function previewLines(content: JSONContent) {
 watch(previewOpen, (open) => {
     if (!open) selected.value = null;
 });
-watch(() => props.documentId, () => {
+function resetScope() {
+    scopeGeneration += 1;
+    generation += 1;
+    revisions.value = [];
+    busy.value = false;
     closePreview();
     void load();
+}
+watch(() => props.documentId, resetScope);
+const stopWorkspaceSubscription = subscribeActiveWorkspaceDb(resetScope);
+onBeforeUnmount(() => {
+    didUnmount = true;
+    generation += 1;
+    stopWorkspaceSubscription();
 });
 onMounted(load);
 </script>
