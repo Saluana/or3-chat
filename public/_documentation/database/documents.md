@@ -75,6 +75,8 @@ Document storage built on the shared `posts` table (`postType: 'doc'`) with TipT
 
 Source editors use `app/composables/documents/useDocumentsStore.ts` to stage title/content changes and debounce writes (currently 750 ms). Cached content and a scheduled save are not evidence of local durability. Explicitly flush and confirm the saved/error state before a workflow depends on that content being persisted.
 
+The document cache and staged writes belong to the originating workspace database. Copied or imported documents with the same ID in different workspaces have separate state. A pending save or read completion after a workspace switch stays in its original database; it cannot replace the active workspace's cached document or save notification. Failed saves retain their staged changes for retry in the original workspace.
+
 Resolve the exact mounted editor through `app/composables/documents/useDocumentEditorSessions.ts`. Modern sessions use pane/tab identity, so a split view can select the intended editor. Session capture and local-durability methods serve different purposes. An inactive document generally supplies saved read-only content rather than a live editor snapshot.
 
 Releasing a cached document drops heavy content and timers. The current `releaseDocument` implementation suppresses flush errors during release, so release alone is not a successful-save acknowledgement. Keep save/error handling explicit before navigation or teardown, and preserve workspace admission guards.

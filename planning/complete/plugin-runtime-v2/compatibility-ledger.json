@@ -2796,7 +2796,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "eae0f6b1fe4eea2d2b55140be61e31a054cffb56edaa66c318a80350e3765bdf",
+      "apiSha256": "6df1bb2cffe547ef62b1a1dbe47136dcc498fa47c7f78c1d0224da6eb67d9b34",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2818,7 +2818,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 353,
+                "line": 379,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function __hasPendingDocumentChanges(id: string): boolean;"
               }
@@ -2827,7 +2827,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 353,
+              "line": 379,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function __hasPendingDocumentChanges(id: string): boolean;"
             }
@@ -2844,7 +2844,7 @@
               "resolvedReturnType": "\"idle\" | \"saving\" | \"saved\" | \"error\" | \"loading\" | undefined",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 378,
+                "line": 404,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function __peekDocumentStatus(\n    id: string\n): DocState['status'] | undefined;"
               }
@@ -2853,7 +2853,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 378,
+              "line": 404,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function __peekDocumentStatus(\n    id: string\n): DocState['status'] | undefined;"
             }
@@ -3616,7 +3616,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 67,
+                "line": 86,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function flush(id: string);"
               }
@@ -3625,7 +3625,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 67,
+              "line": 86,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function flush(id: string);"
             }
@@ -4466,7 +4466,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 186,
+                "line": 210,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function loadDocument(id: string);"
               }
@@ -4475,7 +4475,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 186,
+              "line": 210,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function loadDocument(id: string);"
             }
@@ -4602,7 +4602,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 222,
+                "line": 247,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function newDocument(initial?: {\n    title?: string;\n    content?: TipTapDocument | null;\n});"
               }
@@ -4611,7 +4611,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 222,
+              "line": 247,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function newDocument(initial?: {\n    title?: string;\n    content?: TipTapDocument | null;\n});"
             }
@@ -5339,7 +5339,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 405,
+                "line": 431,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function releaseDocument(\n    id: string,\n    opts: { flush?: boolean; deleteEntry?: boolean } = {}\n);"
               }
@@ -5348,7 +5348,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 405,
+              "line": 431,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function releaseDocument(\n    id: string,\n    opts: { flush?: boolean; deleteEntry?: boolean } = {}\n);"
             }
@@ -5575,7 +5575,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 283,
+                "line": 309,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function setDocumentContent(id: string, content: TipTapDocument | null);"
               }
@@ -5584,7 +5584,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 283,
+              "line": 309,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function setDocumentContent(id: string, content: TipTapDocument | null);"
             }
@@ -5601,7 +5601,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 256,
+                "line": 282,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function setDocumentTitle(id: string, title: string);"
               }
@@ -5610,7 +5610,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 256,
+              "line": 282,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function setDocumentTitle(id: string, title: string);"
             }
@@ -6353,7 +6353,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 332,
+                "line": 358,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAllDocumentsState();"
               }
@@ -6362,7 +6362,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 332,
+              "line": 358,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAllDocumentsState();"
             }
@@ -6705,7 +6705,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 310,
+                "line": 336,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDocumentState(id: string);"
               }
@@ -6714,7 +6714,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 310,
+              "line": 336,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDocumentState(id: string);"
             }
@@ -7269,7 +7269,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSearch.ts",
-                "line": 181,
+                "line": 182,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarSearch(\n    threads: Ref<Thread[]>,\n    projects: Ref<Project[]>,\n    documents: Ref<Post[]>\n);"
               }
@@ -7278,7 +7278,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSearch.ts",
-              "line": 181,
+              "line": 182,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarSearch(\n    threads: Ref<Thread[]>,\n    projects: Ref<Project[]>,\n    documents: Ref<Post[]>\n);"
             }

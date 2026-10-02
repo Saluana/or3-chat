@@ -2,13 +2,14 @@ import { reactive } from 'vue';
 import { useNuxtApp } from '#app';
 import { useDebounceFn } from '@vueuse/core';
 import {
-    createDocument,
-    updateDocument,
-    getDocument,
+    createDocumentInDb,
+    updateDocumentInDb,
+    getDocumentInDb,
     type Document,
 } from '~/db/documents';
 import { useToast } from '#imports';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
+import { getDb, type Or3DB } from '~/db/client';
 
 import type { TipTapDocument } from '~/types/database';
 
@@ -26,21 +27,39 @@ interface DocState {
     debouncedSave?: any;
 }
 
-const documentsMap = reactive(new Map<string, DocState>());
+// A copied/imported document can have the same id in multiple workspaces.
+// Cache and pending saves follow the actual originating DB, just like CRUD.
+const documentScopes = new WeakMap<Or3DB, Map<string, DocState>>();
+const pendingSaves = new Set<DocState>();
 
-function ensure(id: string): DocState {
+function getDocumentsMap(db = getDb()): Map<string, DocState> {
+    let scope = documentScopes.get(db);
+    if (!scope) {
+        scope = reactive(new Map<string, DocState>());
+        documentScopes.set(db, scope);
+    }
+    return scope;
+}
+
+function ensure(id: string, db = getDb()): DocState {
+    const documentsMap = getDocumentsMap(db);
     let st = documentsMap.get(id);
     if (!st) {
-        st = { record: null, status: 'loading', nextGeneration: 0 } as DocState;
-        st.debouncedSave = useDebounceFn(() => flush(id), 750);
+        st = reactive({ record: null, status: 'loading', nextGeneration: 0 }) as DocState;
+        const state = st;
+        st.debouncedSave = useDebounceFn(() => {
+            pendingSaves.delete(state);
+            return flushInDb(db, id);
+        }, 750);
         documentsMap.set(id, st);
     }
     return st;
 }
 
 function scheduleSave(id: string) {
-    const st = documentsMap.get(id);
+    const st = getDocumentsMap().get(id);
     if (!st || !st.debouncedSave) return;
+    pendingSaves.add(st);
     st.debouncedSave();
 }
 
@@ -65,14 +84,18 @@ function scheduleSave(id: string) {
  * ```
  */
 export async function flush(id: string) {
-    const st = documentsMap.get(id);
+    return flushInDb(getDb(), id);
+}
+
+async function flushInDb(db: Or3DB, id: string) {
+    const st = getDocumentsMap(db).get(id);
     if (!st || !st.record) return;
 
     // Wait for the active generation, then persist anything staged while it ran.
     if (st.flushPromise) {
         await st.flushPromise;
         if (st.pendingTitle !== undefined || st.pendingContent !== undefined) {
-            return flush(id);
+            return flushInDb(db, id);
         }
         return;
     }
@@ -85,6 +108,7 @@ export async function flush(id: string) {
     if (st.debouncedSave?.cancel) {
         st.debouncedSave.cancel();
     }
+    pendingSaves.delete(st);
 
     const capturedTitleGeneration = st.pendingTitleGeneration;
     const capturedContentGeneration = st.pendingContentGeneration;
@@ -97,7 +121,7 @@ export async function flush(id: string) {
         if (st.pendingContent !== undefined) patch.content = st.pendingContent;
         st.status = 'saving';
         try {
-            const updated = await updateDocument(id, patch);
+            const updated = await updateDocumentInDb(db, id, patch);
             if (updated) {
                 st.record = updated;
                 st.status = 'saved';
@@ -129,7 +153,7 @@ export async function flush(id: string) {
             st.flushPromise = undefined;
             // Emit pane-scoped saved hook for any panes displaying this doc.
             try {
-                if (saveSucceeded && typeof window !== 'undefined') {
+                if (saveSucceeded && db === getDb() && typeof window !== 'undefined') {
                     const nuxt = useNuxtApp();
                     interface NuxtWithHooks { $hooks?: { doAction: (name: string, payload: unknown) => void } }
                     const hooks = (nuxt as NuxtWithHooks).$hooks;
@@ -161,7 +185,7 @@ export async function flush(id: string) {
         didSaveSucceed() &&
         (st.pendingTitle !== undefined || st.pendingContent !== undefined)
     ) {
-        return flush(id);
+        return flushInDb(db, id);
     }
 }
 
@@ -184,10 +208,11 @@ export async function flush(id: string) {
  * ```
  */
 export async function loadDocument(id: string) {
-    const st = ensure(id);
+    const db = getDb();
+    const st = ensure(id, db);
     st.status = 'loading';
     try {
-        const rec = await getDocument(id);
+        const rec = await getDocumentInDb(db, id);
         st.record = rec || null;
         st.status = rec ? 'idle' : 'error';
         if (!rec) {
@@ -224,8 +249,9 @@ export async function newDocument(initial?: {
     content?: TipTapDocument | null;
 }) {
     try {
-        const rec = await createDocument(initial);
-        const st = ensure(rec.id);
+        const db = getDb();
+        const rec = await createDocumentInDb(db, initial);
+        const st = ensure(rec.id, db);
         st.record = rec;
         st.status = 'idle';
         return rec;
@@ -308,7 +334,7 @@ export function setDocumentContent(id: string, content: TipTapDocument | null) {
  * ```
  */
 export function useDocumentState(id: string) {
-    return documentsMap.get(id) || ensure(id);
+    return getDocumentsMap().get(id) || ensure(id);
 }
 
 /**
@@ -330,7 +356,7 @@ export function useDocumentState(id: string) {
  * ```
  */
 export function useAllDocumentsState() {
-    return documentsMap;
+    return getDocumentsMap();
 }
 
 // ---- Minimal internal peek helpers for multi-pane hook integration ----
@@ -351,7 +377,7 @@ export function useAllDocumentsState() {
  * - Triggering a save
  */
 export function __hasPendingDocumentChanges(id: string): boolean {
-    const st = documentsMap.get(id);
+    const st = getDocumentsMap().get(id);
     return !!(
         st &&
         st.record &&
@@ -378,7 +404,7 @@ export function __hasPendingDocumentChanges(id: string): boolean {
 export function __peekDocumentStatus(
     id: string
 ): DocState['status'] | undefined {
-    return documentsMap.get(id)?.status;
+    return getDocumentsMap().get(id)?.status;
 }
 
 // Release a document's in-memory state (after ensuring pending changes flushed).
@@ -408,16 +434,19 @@ export async function releaseDocument(
 ) {
     // Rename to avoid shadowing the exported flush(id) function above.
     const { flush: shouldFlush = true, deleteEntry = true } = opts;
+    const db = getDb();
+    const documentsMap = getDocumentsMap(db);
     const st = documentsMap.get(id);
     if (!st) return;
     // Cancel any pending debounced save
     if (st.debouncedSave?.cancel) {
         st.debouncedSave.cancel();
     }
+    pendingSaves.delete(st);
 
     if (shouldFlush) {
         try {
-            await flush(id);
+            await flushInDb(db, id);
         } catch { /* Silently ignore flush errors during release */ }
     }
     // Null record to drop heavy content reference; then optionally drop entry entirely.
@@ -442,10 +471,11 @@ export async function releaseDocument(
 // HMR cleanup: clear all pending timers on module disposal
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
-        for (const [, st] of documentsMap) {
+        for (const st of pendingSaves) {
             if (st.debouncedSave?.cancel) {
                 st.debouncedSave.cancel();
             }
         }
+        pendingSaves.clear();
     });
 }

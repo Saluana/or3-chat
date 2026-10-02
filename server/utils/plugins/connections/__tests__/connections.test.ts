@@ -179,10 +179,10 @@ describe('connection storage and references (4.7)', () => {
             })
         ).toMatchObject({ status: 'denied', code: 'connection-foreign' });
         expect(
-            await service.delete({ connectionId: created.view.id, ownerUserId: 'user_2' })
+            await service.delete({ connectionId: created.view.id, ownerUserId: 'user_2', workspaceId: 'ws_1' })
         ).toMatchObject({ status: 'denied', code: 'connection-foreign' });
         expect(
-            await service.delete({ connectionId: created.view.id, ownerUserId: 'user_1' })
+            await service.delete({ connectionId: created.view.id, ownerUserId: 'user_1', workspaceId: 'ws_1' })
         ).toEqual({ status: 'deleted' });
     });
 

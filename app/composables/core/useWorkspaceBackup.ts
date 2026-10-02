@@ -225,6 +225,8 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         state.progress.value = 0;
         state.error.value = null;
 
+        // A picker or hook can outlive the current workspace selection.
+        const exportDb = getDb();
         const exportStartedAt = Date.now();
         let exportTelemetry: {
             format: 'stream';
@@ -283,7 +285,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 });
 
                 await streamWorkspaceExport({
-                    db: getDb(),
+                    db: exportDb,
                     fileHandle,
                     chunkSize: STREAM_CHUNK_SIZE,
                     onProgress: updateStreamProgress,
@@ -357,7 +359,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 }
 
                 await streamWorkspaceExportToWritable({
-                    db: getDb(),
+                    db: exportDb,
                     writable: writer,
                     chunkSize: STREAM_CHUNK_SIZE,
                     onProgress: updateStreamProgress,
