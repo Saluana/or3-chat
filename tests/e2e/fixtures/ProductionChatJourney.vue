@@ -150,19 +150,24 @@ function installDeterministicFetch(): void {
                     new Promise((resolve) => setTimeout(resolve, ms));
 
                 try {
-                    if (text.includes('journey:workspace-find') || text.includes('journey:workspace-create')) {
+                    if (text.includes('journey:workspace-find') || text.includes('journey:workspace-create') || text.includes('journey:workspace-edit')) {
                         const userIndex = messages.findLastIndex((message) => message && typeof message === 'object' && (message as { role?: unknown }).role === 'user');
                         const replies = messages.slice(userIndex + 1).filter((message) => message && typeof message === 'object' && (message as { role?: unknown }).role === 'tool');
                         const readReply = replies.find((message) => (message as { name?: unknown }).name === 'workspace_read');
                         const createReply = replies.find((message) => (message as { name?: unknown }).name === 'workspace_create_document');
+                        const proposalReply = replies.find((message) => (message as { name?: unknown }).name === 'workspace_propose_document_edit');
                         const searchReply = replies.find((message) => (message as { name?: unknown }).name === 'workspace_search');
                         let name: string;
                         let args: Record<string, unknown>;
-                        if (readReply || createReply) {
-                            const receipt = JSON.parse(messageText(readReply ?? createReply)) as { content?: string; error?: string };
+                        if (proposalReply || createReply || readReply && !text.includes('journey:workspace-edit')) {
+                            const receipt = JSON.parse(messageText(proposalReply ?? readReply ?? createReply)) as { content?: string; error?: string };
                             enqueue(sseChunk(receipt.error ? `Workspace action failed: ${receipt.error}`
-                                : readReply ? `Verified workspace evidence: ${receipt.content ?? ''}` : 'Native workspace document saved.'));
+                                : proposalReply ? 'Workspace edit staged for review.' : readReply ? `Verified workspace evidence: ${receipt.content ?? ''}` : 'Native workspace document saved.'));
                             enqueue(encoder.encode('data: [DONE]\n\n')); controller.close(); return;
+                        } else if (readReply) {
+                            const receipt = JSON.parse(messageText(readReply)) as { readId?: string; source?: { id: string }; blocks?: Array<{ ref?: string | null }> };
+                            name = 'workspace_propose_document_edit';
+                            args = { documentId: receipt.source?.id, readId: receipt.readId, operations: [{ kind: 'replace_block', ref: receipt.blocks?.[0]?.ref, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'The saffron decision now includes review and recovery.' }] }] }] };
                         } else if (text.includes('journey:workspace-create')) {
                             name = 'workspace_create_document';
                             args = { title: 'Workspace saved result', content: { type: 'doc', content: [

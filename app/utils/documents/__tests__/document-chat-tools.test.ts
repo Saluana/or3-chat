@@ -202,6 +202,114 @@ describe('chat document tools', () => {
             expect((await pending).error).toMatch(/changed/i);
         } finally { release(); spy.mockRestore(); }
     });
+    it('keeps actual shared Orama token and fuzzy matches while refusing changed current content', async () => {
+        const { registerPaletteSource } = await import('~/core/search/command-palette/registry');
+        const { createDocumentPaletteSource } = await import('~/core/search/command-palette/sources/document-source');
+        const { useCommandPalette, disposeCommandPalette } = await import('~/composables/search/useCommandPalette');
+        const handle = registerPaletteSource(createDocumentPaletteSource());
+        disposers.push(() => { disposeCommandPalette(); handle.dispose(); });
+        disposers.push(registerWorkspaceChatTools());
+        await getDb().posts.put({ id: 'token-match', title: 'Planning', postType: 'doc',
+            content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'launch budget approved' }] }] }),
+            created_at: 1, updated_at: 1, deleted: false, clock: 1 });
+        const palette = useCommandPalette(); await palette.warm();
+        const coordinator = palette.getCoordinator()!;
+        const registry = useToolRegistry();
+        const context = { subject: null, workspaceId: 'workspace-a', threadId: 'thread-a', messageId: null,
+            requestId: 'token-search', callId: 'token-call', abortSignal: new AbortController().signal };
+        for (const query of ['budget launch', 'budjet']) {
+            const indexed = await coordinator.searchOnce({ term: query, sourceIds: ['document'], limit: 20 });
+            expect(indexed.results.map((result) => result.recordId)).toContain('token-match');
+            const reply = await registry.executeTool('workspace_search', JSON.stringify({ query, kinds: ['document'] }),
+                context, { definition: registry.getTool('workspace_search')!.definition });
+            expect(reply.error).toBeUndefined();
+            expect(JSON.parse(reply.result!).results).toEqual([expect.objectContaining({ source: expect.objectContaining({ id: 'token-match' }), excerpt: 'launch budget approved' })]);
+        }
+        await getDb().posts.update('token-match', { content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Removed evidence' }] }] }), clock: 2 });
+        const stale = await registry.executeTool('workspace_search', JSON.stringify({ query: 'budget launch', kinds: ['document'] }), context,
+            { definition: registry.getTool('workspace_search')!.definition });
+        expect(stale.error).toBeUndefined();
+        expect(JSON.parse(stale.result!).results).toEqual([]);
+        expect(JSON.parse(stale.result!).partial).toBe(true);
+        expect(stale.result).not.toContain('launch budget approved');
+    });
+    it.each(['document', 'project'].flatMap((operation) => ['abort', 'workspace', 'authorization'].map((interruption) => ({ operation, interruption }))))
+    ('rolls back $operation creation when $interruption changes during the transaction read', async ({ operation, interruption }) => {
+        const sessionModule = await import('~/composables/auth/useSessionContext');
+        let session: import('~/core/hooks/hook-types').SessionContext = { authenticated: true, user: { id: 'owner-a' },
+            workspace: { id: 'workspace-a', name: 'A' }, role: 'owner', authorizationRevision: 1 };
+        if (interruption === 'authorization') {
+            testRuntimeConfig.value.public.ssrAuthEnabled = true;
+            vi.spyOn(sessionModule, 'getCachedSessionContext').mockImplementation(() => session);
+        }
+        disposers.push(registerWorkspaceChatTools());
+        const db = getDb();
+        const controller = new AbortController();
+        let interrupted = false;
+        const interrupt = () => {
+            if (!Dexie.currentTransaction || interrupted) return;
+            interrupted = true;
+            if (interruption === 'abort') controller.abort();
+            else if (interruption === 'workspace') setActiveWorkspaceDb('interrupted-workspace');
+            else session = { ...session, role: 'viewer', authorizationRevision: 2 };
+        };
+        const table = operation === 'document' ? db.posts : db.projects;
+        const get = table.get.bind(table);
+        const spy = vi.spyOn(table, 'get').mockImplementation((...args: Parameters<typeof get>) => get(...args).then((row) => {
+            interrupt(); return row;
+        }));
+        try {
+            const registry = useToolRegistry();
+            const name = operation === 'document' ? 'workspace_create_document' : 'workspace_update_project';
+            const reply = await registry.executeTool(name, JSON.stringify(operation === 'document'
+                ? { title: 'Never committed', content: { type: 'doc', content: [{ type: 'paragraph' }] } }
+                : { operation: 'create', name: 'Never committed' }),
+                { subject: interruption === 'authorization' ? 'owner-a' : null, workspaceId: 'workspace-a', threadId: 'thread-a', messageId: null,
+                    requestId: `interrupted-${operation}`, callId: interruption, abortSignal: controller.signal },
+                { definition: registry.getTool(name)!.definition });
+            expect(interrupted).toBe(true);
+            expect(reply.error).toMatch(/abort|workspace|access/i);
+            spy.mockRestore();
+            expect(await db.posts.count()).toBe(0);
+            expect(await db.projects.count()).toBe(0);
+            expect(await db.pending_ops.count()).toBe(0);
+        } finally {
+            spy.mockRestore(); vi.restoreAllMocks(); setActiveWorkspaceDb('workspace-a');
+            evictWorkspaceDb('interrupted-workspace'); testRuntimeConfig.value.public.ssrAuthEnabled = false;
+        }
+    });
+    it('reads the same visible project membership used by scoped search including legacy pointers', async () => {
+        const { registerPaletteSource } = await import('~/core/search/command-palette/registry');
+        const { createChatPaletteSource } = await import('~/core/search/command-palette/sources/chat-source');
+        const { disposeCommandPalette } = await import('~/composables/search/useCommandPalette');
+        const handle = registerPaletteSource(createChatPaletteSource());
+        disposers.push(() => { disposeCommandPalette(); handle.dispose(); });
+        disposers.push(registerWorkspaceChatTools());
+        await getDb().projects.put({ id: 'membership-project', name: 'Members', data: [
+            { kind: 'doc', id: 'visible-doc' }, { kind: 'document', id: 'visible-doc' }, { kind: 'doc', id: 'deleted-doc' },
+            { kind: 'chat', id: 'foreign-chat' },
+        ], created_at: 1, updated_at: 1, deleted: false, clock: 1 });
+        for (const [id, deleted] of [['visible-doc', false], ['deleted-doc', true]] as const) {
+            await getDb().posts.put({ id, deleted, title: id, postType: 'doc', content: '{"type":"doc","content":[]}', created_at: 1, updated_at: 1, clock: 1 });
+        }
+        for (const [id, project, deleted] of [['legacy-chat', 'membership-project', false], ['deleted-chat', 'membership-project', true], ['other-project-chat', 'different-project', false]] as const) {
+            await getDb().threads.put({ id, title: 'legacy-link', project_id: project, status: 'ready', deleted, pinned: false, forked: false,
+                created_at: 1, updated_at: 1, clock: 1 });
+        }
+        const registry = useToolRegistry();
+        const context = { subject: null, workspaceId: 'workspace-a', threadId: 'thread-a', messageId: null,
+            requestId: 'membership-read', callId: 'read', abortSignal: new AbortController().signal };
+        const read = await registry.executeTool('workspace_read', '{"item":{"kind":"project","id":"membership-project"}}', context,
+            { definition: registry.getTool('workspace_read')!.definition });
+        expect(read.error).toBeUndefined();
+        expect(JSON.parse(JSON.parse(read.result!).content).entries).toEqual([
+            { kind: 'document', id: 'visible-doc' }, { kind: 'chat', id: 'legacy-chat' },
+        ]);
+        const search = await registry.executeTool('workspace_search', '{"query":"legacy-link","projectId":"membership-project","kinds":["chat"]}',
+            context, { definition: registry.getTool('workspace_search')!.definition });
+        expect(search.error).toBeUndefined();
+        expect(JSON.parse(search.result!).results.map((hit: { source: { id: string } }) => hit.source.id)).toEqual(['legacy-chat']);
+    });
     it('associates a new document atomically and preserves unknown project entries', async () => {
         disposers.push(registerWorkspaceChatTools());
         const registry = useToolRegistry();

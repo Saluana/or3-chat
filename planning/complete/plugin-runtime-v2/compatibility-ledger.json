@@ -2796,7 +2796,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "c600dd2773f9c54aee7315fe4fb41919292b10bad812a54f0f097d7cc9b5b382",
+      "apiSha256": "23d39d93e22762cb13060a3f522f619e8feac32eb762540c9db343cdcf0b0850",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2992,7 +2992,7 @@
               "resolvedReturnType": "Promise<void>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 174,
+                "line": 185,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function captureDocumentEditor(documentId: string): Promise<void>;"
               }
@@ -3001,7 +3001,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 174,
+              "line": 185,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function captureDocumentEditor(documentId: string): Promise<void>;"
             }
@@ -3616,7 +3616,7 @@
               "resolvedReturnType": "Promise<void>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 190,
+                "line": 201,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function ensureDocumentEditorLocalDurability(\n    documentId: string\n): Promise<void>;"
               }
@@ -3625,7 +3625,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 190,
+              "line": 201,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function ensureDocumentEditorLocalDurability(\n    documentId: string\n): Promise<void>;"
             }
@@ -3668,7 +3668,7 @@
               "resolvedReturnType": "ActiveDocumentEditorSession | undefined",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 238,
+                "line": 280,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getActiveDocumentEditorSession(\n    documentId: string,\n    tabId?: string,\n): ActiveDocumentEditorSession | undefined;"
               }
@@ -3677,7 +3677,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 238,
+              "line": 280,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getActiveDocumentEditorSession(\n    documentId: string,\n    tabId?: string,\n): ActiveDocumentEditorSession | undefined;"
             }
@@ -3746,7 +3746,7 @@
               "resolvedReturnType": "ActiveDocumentEditorSession | undefined",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 141,
+                "line": 152,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup\n): ActiveDocumentEditorSession | undefined;"
               }
@@ -3755,7 +3755,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 141,
+              "line": 152,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup\n): ActiveDocumentEditorSession | undefined;"
             }
@@ -3824,7 +3824,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 234,
+                "line": 276,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function hasActiveDocumentEditor(documentId: string): boolean;"
               }
@@ -3833,7 +3833,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 234,
+              "line": 276,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function hasActiveDocumentEditor(documentId: string): boolean;"
             }
@@ -4036,7 +4036,7 @@
               "resolvedReturnType": "{ release: () => void; accept: (row: Post) => void; }",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 217,
+                "line": 228,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function leaseWorkspaceDocumentEditors(documentId: string, db: Or3DB,\n    expected: { title: string; content: TipTapDocument }): { release: () => void; accept: (row: Post) => void };"
               }
@@ -4045,7 +4045,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 217,
+              "line": 228,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function leaseWorkspaceDocumentEditors(documentId: string, db: Or3DB,\n    expected: { title: string; content: TipTapDocument }): { release: () => void; accept: (row: Post) => void };"
             }
@@ -4990,7 +4990,7 @@
               "resolvedReturnType": "() => void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 84,
+                "line": 91,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDocumentEditorSession(\n    session: ActiveDocumentEditorSession\n): () => void;"
               }
@@ -5001,7 +5001,7 @@
               "resolvedReturnType": "() => void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 88,
+                "line": 95,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDocumentEditorSession(\n    documentId: string,\n    session: LegacyDocumentEditorSession\n): () => void;"
               }
@@ -5010,19 +5010,19 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 84,
+              "line": 91,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDocumentEditorSession(\n    session: ActiveDocumentEditorSession\n): () => void;"
             },
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 88,
+              "line": 95,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDocumentEditorSession(\n    documentId: string,\n    session: LegacyDocumentEditorSession\n): () => void;"
             },
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 92,
+              "line": 99,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDocumentEditorSession(\n    documentIdOrSession: string | ActiveDocumentEditorSession,\n    legacySession?: LegacyDocumentEditorSession\n): () => void;"
             }
@@ -5705,7 +5705,7 @@
               "resolvedReturnType": "Promise<void>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 203,
+                "line": 214,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function settleWorkspaceDocumentEditors(documentId: string, db: Or3DB): Promise<void>;"
               }
@@ -5714,7 +5714,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 203,
+              "line": 214,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function settleWorkspaceDocumentEditors(documentId: string, db: Or3DB): Promise<void>;"
             }
@@ -7529,7 +7529,7 @@
               "resolvedReturnType": "Promise<ActiveDocumentEditorSession | undefined>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 148,
+                "line": 159,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function waitForDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup,\n    timeoutMs = 1_500\n): Promise<ActiveDocumentEditorSession | undefined>;"
               }
@@ -7538,7 +7538,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 148,
+              "line": 159,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function waitForDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup,\n    timeoutMs = 1_500\n): Promise<ActiveDocumentEditorSession | undefined>;"
             }

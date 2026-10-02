@@ -41,28 +41,33 @@ export async function createWorkspaceDocument(args: Record<string, unknown>, con
     const association = args.project ? await prepareWorkspaceProjectAssociation(scope,
         args.project as { id: string; revision: string }, { kind: 'document', id, title: prepared.row.title }) : undefined;
     scope.assertCurrent('write');
-    let committed = false;
-    await scope.db.transaction('rw', getWriteTxTableNames(scope.db, 'posts', { include: ['file_meta', 'projects'] }), async () => {
+    const committed = await scope.db.transaction('rw', getWriteTxTableNames(scope.db, 'posts', { include: ['file_meta', 'projects'] }), async () => {
         scope.assertCurrent('write');
         const existing = await scope.db.posts.get(id);
+        scope.assertCurrent('write');
         if (existing) {
             if (existing.meta !== prepared.row.meta || existing.deleted || existing.postType !== 'doc') {
                 throw new Error('This execution already saved a different result.');
             }
-            return;
+            return false;
         }
         // References are checked in the same transaction as ownership, never against a new workspace.
         const hashes = JSON.parse(prepared.row.file_hashes || '[]') as string[];
         for (const hash of hashes) {
             const file = await scope.db.file_meta.get(hash);
+            scope.assertCurrent('write');
             if (!file || file.deleted) throw new Error('A referenced workspace image is unavailable.');
         }
         if (association) {
-            assertProjectUnchanged(await scope.db.projects.get(association.base.id), association.base);
+            const currentProject = await scope.db.projects.get(association.base.id);
+            scope.assertCurrent('write');
+            assertProjectUnchanged(currentProject, association.base);
             await scope.db.projects.put({ ...association.prepared.row, clock: nextClock(association.base.clock) });
         }
+        scope.assertCurrent('write');
         await scope.db.posts.put(prepared.row);
-        committed = true;
+        scope.assertCurrent('write');
+        return true;
     });
     // A failed notification cannot turn a committed write into a fictitious unsaved result.
     if (committed) {

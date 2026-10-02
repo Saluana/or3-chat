@@ -88,12 +88,20 @@ Incremental engineering evidence (not full-plan qualification):
   Undo and second-handle draft retention. Real mounted TipTap verifies captured
   synchronous acceptance before post-commit hooks; owner workspace regressions pass.
 - Review-card baseline/candidate: host controls appear only for the admitted tool;
-  unrelated plugin/model prose cannot claim saved state. Current UI/browser
-  proposal qualification remains pending. Configured Basic Auth/SQLite/FS typecheck
+  unrelated plugin/model prose cannot claim saved state. The initial proposal UI/browser increment is qualified below; additional reviewed race corrections still require fresh qualification. Configured Basic Auth/SQLite/FS typecheck
   passes after two fixture-only Dexie PromiseExtended typing corrections; no production
   errors were reported. `/tmp/task16-assistant-safety-typecheck-fixed.log` exits 0.
   The corrected failure-injection owners pass 24 tests in two files,
   `/tmp/task16-safety-fixture-fixed.log`. Both changes preserve injected failures.
+
+## Review corrections and bounded proposal journey
+
+- Draft PR187 initial head `563520a4` received Core/Contracts success in run36976969195. Four subsequently confirmed source findings supersede readiness of that head.
+- Search exact-phrase restriction reproduced against actual shared Orama: token-order hit reached the index but was discarded by tool revalidation. Current repair compares the indexed title/body with freshly read accessible content, retaining shared matching semantics and disclosing skipped stale coverage. `/tmp/task16-token-search-baseline.log`.
+- Mounted cold-pane race reproduced both after commit and while the write transaction was held open: closing the late pane revived the old content. Real TipTap/store/Dexie owner baseline `/tmp/task16-late-pane-two-baseline.log` has two intended failures. Repair refreshes the origin buffer after lazy loading, avoids staging unchanged own buffers as edits, and enrolls newly registered panes in the active write lease. Competing same-base leases share the editor lock while the transaction preserves at-most-once/CAS semantics.
+- Six actual awaited transaction-read interruption cases reproduced committed side effects despite error receipts (document/project × abort/workspace/auth revision). Legacy project reads omitted linked chats and retained duplicate/deleted/missing IDs. All seven fail before repair in `/tmp/task16-authority-membership-baseline.log`. Writes now check captured authority after awaited reads and before/after mutations; reads/search share one visible captured project-membership boundary.
+- Corrected focused owners pass39 tests/three files in `/tmp/task16-review-corrections-candidate.log`; explicit visible-buffer checks pass10 mounted cases in `/tmp/task16-late-pane-buffer-candidate.log`. Final focused regressions pass51 tests/five files in `/tmp/task16-assistant-corrections-final-focused.log`. Production feature lint exits0 with five existing typed-parser warnings in `/tmp/task16-assistant-production-lint.log`. Generated compatibility ledger refreshed. Corrected configured types/current-head CI remain to run.
+- One actual PageShell proposal browser journey passed15.5s: search/read/propose, Review with unchanged durable document, Apply/reload, Undo/reload, original editor navigation. `/tmp/task16-proposal-browser-first.log`; `output/playwright/workspace-assistant/proposal-test-results` and `proposal-playwright-report`, with before-Apply/after-Undo screenshots inspected. Inference is scripted. This browser pass precedes the additional reviewed race corrections.
 
 ## Remaining acceptance groups
 
@@ -106,6 +114,6 @@ UTF-8 extraction, Trash/reference protection and provider capability admission),
 4 (Files pane/actions/accessibility), and 5 (cloud recovery, scale/performance,
 documentation/contracts/builds/final gates) are unfinished.
 
-The full review/apply/undo browser journey, Files/Trash, provider admission,
+The bounded review/apply/undo browser journey passes; broader Files/Trash, provider admission,
 mobile/zoom/performance and cloud recovery are not yet qualified. No task box
 represents proof without the command, source revision and observed artifact.

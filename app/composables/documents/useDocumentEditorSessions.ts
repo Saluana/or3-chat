@@ -60,6 +60,13 @@ const activeSessions = new Map<
     Set<RegisteredDocumentEditorSession>
 >();
 const sessionOrigins = new WeakMap<RegisteredDocumentEditorSession, Or3DB>();
+interface ExternalDocumentWrite {
+    join(session: ActiveDocumentEditorSession): void;
+    expected: string;
+    acquire(): { release: () => void; accept: (row: Post) => void };
+}
+const externalWrites = new WeakMap<Or3DB, Map<string, ExternalDocumentWrite>>();
+
 const activeSessionsByWorkspaceKey = new Map<
     DocumentSessionKey,
     ActiveDocumentEditorSession
@@ -107,6 +114,10 @@ export function registerDocumentEditorSession(
     }
     sessionOrigins.set(session, isActiveDocumentEditorSession(session) && session.originDb ? session.originDb : getDb());
 
+    if (isActiveDocumentEditorSession(session)) {
+        const origin = sessionOrigins.get(session)!;
+        externalWrites.get(origin)?.get(documentId)?.join(session);
+    }
     const sessions = activeSessions.get(documentId) ?? new Set();
     sessions.add(session);
     activeSessions.set(documentId, sessions);
@@ -216,19 +227,50 @@ export async function settleWorkspaceDocumentEditors(documentId: string, db: Or3
 
 export function leaseWorkspaceDocumentEditors(documentId: string, db: Or3DB,
     expected: { title: string; content: TipTapDocument }): { release: () => void; accept: (row: Post) => void } {
-    const sessions = [...(activeSessions.get(documentId) ?? [])]
-        .filter((session): session is ActiveDocumentEditorSession => isActiveDocumentEditorSession(session) && sessionOrigins.get(session) === db);
+    const writes = externalWrites.get(db) ?? new Map<string, ExternalDocumentWrite>();
+    externalWrites.set(db, writes);
+    const existing = writes.get(documentId);
+    if (existing) {
+        if (existing.expected !== JSON.stringify(expected)) throw new Error('This document is already being saved. Retry after it finishes.');
+        return existing.acquire();
+    }
+    const joined = new Set<ActiveDocumentEditorSession>();
     const releases: Array<() => void> = [];
-    try {
-        for (const session of sessions) {
-            if (session.getDocumentSnapshot && JSON.stringify(session.getDocumentSnapshot()) !== JSON.stringify(expected)) {
+    let accepted: Post | undefined;
+    let released = false;
+    let holders = 0;
+    const lease: ExternalDocumentWrite = {
+        expected: JSON.stringify(expected),
+        acquire() {
+            holders += 1;
+            let done = false;
+            return { release() { if (!done) { done = true; if (--holders === 0) release(); } },
+                accept(row) { accepted = row; joined.forEach((session) => session.acceptExternalWrite?.(row)); } };
+        },
+        join(session) {
+            if (joined.has(session) || released) return;
+            const current = accepted ? { title: accepted.title, content: JSON.parse(accepted.content) as TipTapDocument } : expected;
+            if (session.getDocumentSnapshot && JSON.stringify(session.getDocumentSnapshot()) !== JSON.stringify(current)) {
                 throw new Error('This document changed. Update the proposal from a new read.');
             }
-            if (session.beginExternalWrite) releases.push(session.beginExternalWrite(expected));
+            if (session.beginExternalWrite) releases.push(session.beginExternalWrite(current));
+            joined.add(session);
+            if (accepted) session.acceptExternalWrite?.(accepted);
+        },
+    };
+    const release = () => {
+        if (released) return;
+        released = true;
+        if (writes.get(documentId) === lease) writes.delete(documentId);
+        releases.reverse().forEach((unlock) => unlock());
+    };
+    writes.set(documentId, lease);
+    try {
+        for (const session of activeSessions.get(documentId) ?? []) {
+            if (isActiveDocumentEditorSession(session) && sessionOrigins.get(session) === db) lease.join(session);
         }
-    } catch (error) { releases.reverse().forEach((release) => release()); throw error; }
-    return { release: () => releases.reverse().forEach((release) => release()),
-        accept: (row) => { sessions.forEach((session) => session.acceptExternalWrite?.(row)); } };
+    } catch (error) { release(); throw error; }
+    return lease.acquire();
 }
 
 export function hasActiveDocumentEditor(documentId: string): boolean {

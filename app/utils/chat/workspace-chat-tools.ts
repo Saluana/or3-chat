@@ -1,5 +1,7 @@
+import { normalizeMessageContent } from '~/core/search/command-palette/normalize';
+import type { Project } from '~/db/schema';
 import { useCommandPalette } from '~/composables/search/useCommandPalette';
-import { preservedProjectEntries, projectEntryIdentity } from './workspace-projects';
+import { readVisibleWorkspaceProjectEntries } from './workspace-projects';
 import { useToolRegistry } from './tool-registry';
 import type { ToolDefinition, ToolExecutionContext } from './types';
 import { captureWorkspaceOperation, workspaceToolsAvailable } from './workspace-access';
@@ -94,12 +96,12 @@ async function searchWorkspace(args: Record<string, unknown>, context: ToolExecu
     const selected = Array.isArray(args.kinds) ? args.kinds as WorkspaceItemKind[] : [...kinds];
     const limit = typeof args.limit === 'number' ? args.limit : 20;
     let members: Set<string> | undefined;
+    let membershipProject: Project | undefined;
     if (typeof args.projectId === 'string') {
         const project = await scope.db.projects.get(args.projectId);
         if (!project || project.deleted) throw new Error('That project is unavailable.');
-        members = new Set(preservedProjectEntries(project.data).map(projectEntryIdentity).filter((key): key is string => key !== null));
-        const chats = await scope.db.threads.where('project_id').equals(project.id).toArray();
-        for (const chat of chats) if (!chat.deleted) members.add(`chat:${chat.id}`);
+        membershipProject = project;
+        members = new Set((await readVisibleWorkspaceProjectEntries(scope, project)).map((item) => `${item.kind}:${item.id}`));
         members.add(`project:${project.id}`);
         scope.assertCurrent();
     }
@@ -111,22 +113,41 @@ async function searchWorkspace(args: Record<string, unknown>, context: ToolExecu
     const found = await coordinator.searchOnce({ term: query, sourceIds: selected, limit,
         signal: scope.signal, accepts: (resource) => !members || members.has(`${resource.sourceId}:${resource.recordId}`) });
     scope.assertCurrent();
+    const indexed = new Map(found.results.map((hit) => [hit.key, coordinator.getResource(hit.sourceId, hit.key)]));
     const results = [];
+    let unavailableHits = 0;
     for (const hit of found.results) {
         try {
             const loaded = await readWorkspaceItem(scope, { kind: hit.sourceId as WorkspaceItemKind, id: hit.recordId });
             // Rebuild excerpt from the current row: cached snippets may contain removed text.
+            const snapshot = indexed.get(hit.key);
+            const currentBody = loaded.messages ? loaded.messages.map(normalizeMessageContent).filter(Boolean).join('\n')
+                : hit.sourceId === 'project' ? (loaded.row as Project).description?.trim() ?? '' : loaded.content;
+            // The shared index owns token/fuzzy matching. Keep its hit only while the
+            // actual indexed title/body still equal the current accessible record.
+            if (!snapshot || snapshot.title !== loaded.source.title || (snapshot.content ?? '') !== currentBody) {
+                unavailableHits += 1; continue;
+            }
             const at = loaded.content.toLowerCase().indexOf(query.toLowerCase());
-            if (at < 0 && !loaded.source.title.toLowerCase().includes(query.toLowerCase())) continue;
             results.push({ source: loaded.source, excerpt: loaded.content.slice(Math.max(0, at - 80), Math.max(0, at - 80) + 300) });
         } catch {
             scope.assertCurrent();
+            unavailableHits += 1;
             // Missing/deleted hits are unavailable, never substituted with another identity.
+        }
+    }
+    if (membershipProject && members) {
+        const current = new Set((await readVisibleWorkspaceProjectEntries(scope, membershipProject)).map((item) => `${item.kind}:${item.id}`));
+        current.add(`project:${membershipProject.id}`);
+        if (current.size !== members.size || [...members].some((key) => !current.has(key))) unavailableHits += 1;
+        for (let index = results.length - 1; index >= 0; index -= 1) {
+            const result = results[index]!;
+            if (!current.has(`${result.source.kind}:${result.source.id}`)) results.splice(index, 1);
         }
     }
     scope.assertCurrent();
     return JSON.stringify({ version: 1, workspaceId: scope.workspaceId, query, results,
-        coverage: found.statuses, partial: found.statuses.some((status) => status.state !== 'ready'), referenceOnly: true });
+        coverage: found.statuses, unavailableHits, partial: unavailableHits > 0 || found.statuses.some((status) => status.state !== 'ready'), referenceOnly: true });
 }
 
 export function registerWorkspaceChatTools(): () => void {

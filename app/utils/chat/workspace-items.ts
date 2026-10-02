@@ -46,10 +46,8 @@ export async function readWorkspaceItem(scope: WorkspaceOperationScope, item: Wo
         scope.assertCurrent();
         if (JSON.stringify(await scope.db.projects.get(item.id)) !== JSON.stringify(project)) throw new Error('This source changed. Read it again.');
         scope.assertCurrent();
-        const { preservedProjectEntries, projectEntryIdentity } = await import('./workspace-projects');
-        const entries = preservedProjectEntries(project.data).map(projectEntryIdentity)
-            .filter((identity): identity is string => identity !== null)
-            .map((identity) => ({ kind: identity.slice(0, identity.indexOf(':')), id: identity.slice(identity.indexOf(':') + 1) }));
+        const { readVisibleWorkspaceProjectEntries } = await import('./workspace-projects');
+        const entries = await readVisibleWorkspaceProjectEntries(scope, project);
         scope.assertCurrent();
         return { source: { ...item, title: project.name, revision },
             content: JSON.stringify({ description: project.description ?? '', entries }), row: project };
@@ -59,16 +57,17 @@ export async function readWorkspaceItem(scope: WorkspaceOperationScope, item: Wo
         if (!thread || thread.deleted) throw new Error('That chat is unavailable.');
         const threads = new Map<string, Thread>();
         const messages = new Map<string, Message[]>();
-        let current: Thread | undefined = thread;
-        while (current) {
+        let current: Thread = thread;
+        for (;;) {
             if (threads.has(current.id)) throw new Error('Conversation lineage is incomplete.');
             threads.set(current.id, current);
             messages.set(current.id, await scope.db.messages.where('thread_id').equals(current.id).toArray());
             scope.assertCurrent();
             if (current.branch_mode !== 'reference' || !current.parent_thread_id) break;
-            current = await scope.db.threads.get(current.parent_thread_id);
+            const parent = await scope.db.threads.get(current.parent_thread_id);
             scope.assertCurrent();
-            if (!current || current.deleted) throw new Error('Conversation source is unavailable.');
+            if (!parent || parent.deleted) throw new Error('Conversation source is unavailable.');
+            current = parent;
         }
         const rows = projectWorkspaceConversation(item.id, threads, messages);
         const content = rows.map((row) => `[${row.id} ${row.role}] ${normalizeMessageContent(row)}`).join('\n');

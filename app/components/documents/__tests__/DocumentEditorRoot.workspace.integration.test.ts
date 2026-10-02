@@ -30,6 +30,7 @@ vi.mock('~/composables/documents/useDocumentAiAgent', () => ({
 }));
 
 import DocumentEditorRoot from '../DocumentEditorRoot.vue';
+import * as documentSchema from '~/utils/documents/document-editor-schema';
 
 const Title = defineComponent({
     name: 'TitleFixture', props: ['modelValue'], emits: ['update:model-value'],
@@ -126,6 +127,71 @@ describe('mounted document editor workspace lifecycle', () => {
             await flush(documentId, dbA);
             expect((await get(documentId))?.content).toContain('Mounted applied body');
         } finally { dispose(); testRuntimeConfig.value.public.ssrAuthEnabled = originalAuth; }
+    });
+    it.each(['after commit', 'during write'] as const)('keeps Apply when a second real pane finishes a cold editor load $phase', async (phase) => {
+        vi.stubGlobal('Blob', NodeBlob);
+        const originalAuth = testRuntimeConfig.value.public.ssrAuthEnabled;
+        testRuntimeConfig.value.public.ssrAuthEnabled = false;
+        const { dbA, idA, currentEditor } = await mountedWorkspaces();
+        const dispose = registerWorkspaceChatTools();
+        const registry = useToolRegistry();
+        let latePane: VueWrapper | undefined;
+        let release!: () => void;
+        let finishWrite: (() => void) | undefined;
+        try {
+            await dbA.messages.put({ id: 'late-pane-message', thread_id: 'mounted-thread', role: 'assistant',
+                data: { content: '' }, created_at: 1, updated_at: 1, deleted: false, clock: 1, pending: false, index: 0 });
+            const context = { subject: null, workspaceId: idA, threadId: 'mounted-thread', messageId: 'late-pane-message',
+                requestId: 'late-pane-request', callId: 'late-read', abortSignal: new AbortController().signal };
+            const read = await registry.executeTool('workspace_read', JSON.stringify({ item: { kind: 'document', id: documentId } }),
+                context, { definition: registry.getTool('workspace_read')!.definition });
+            expect(read.error).toBeUndefined();
+            const proposal = await registry.executeTool('workspace_propose_document_edit', JSON.stringify({
+                documentId, readId: JSON.parse(read.result!).readId,
+                operations: [{ kind: 'replace_block', ref: 'b1', content: content('Applied while pane loads').content }],
+            }), { ...context, callId: 'late-proposal' }, { definition: registry.getTool('workspace_propose_document_edit')!.definition });
+            expect(proposal.error).toBeUndefined();
+            const realLoad = documentSchema.loadDocumentEditorExtensions;
+            const gate = new Promise<void>((resolve) => { release = resolve; });
+            let entered!: () => void;
+            const loading = new Promise<void>((resolve) => { entered = resolve; });
+            // Delay only the real pane's cold extension boundary; Apply still validates the actual schema.
+            vi.spyOn(documentSchema, 'loadDocumentEditorExtensions').mockImplementationOnce(async () => {
+                const extensions = await realLoad(); entered(); await gate; return extensions;
+            });
+            latePane = shallowMount(DocumentEditorRoot, {
+                props: { documentId, paneId: 'late-pane', tabId: 'late-tab' },
+                global: { directives: { theme: () => {} }, stubs: {
+                    UTextarea: Title, USelect: true, UDropdownMenu: true, UFormField: true, USwitch: true,
+                } },
+            });
+            await loading;
+            if (phase === 'after commit') {
+                expect((await applyWorkspaceDocumentChange(JSON.parse(proposal.result!))).status).toBe('applied');
+                release();
+            } else {
+                const realPut = dbA.posts.put.bind(dbA.posts);
+                const writeGate = new Promise<void>((resolve) => { finishWrite = resolve; });
+                let writeEntered!: () => void;
+                const writing = new Promise<void>((resolve) => { writeEntered = resolve; });
+                vi.spyOn(dbA.posts, 'put').mockImplementationOnce((...args: Parameters<typeof realPut>) => realPut(...args).then((id) => {
+                    writeEntered(); return Dexie.waitFor(writeGate).then(() => id);
+                }));
+                const applying = applyWorkspaceDocumentChange(JSON.parse(proposal.result!));
+                await writing;
+                release();
+                await vi.waitFor(() => expect(latePane!.emitted('ready')).toEqual([[documentId]]));
+                finishWrite!();
+                expect((await applying).status).toBe('applied');
+            }
+            await vi.waitFor(() => expect(latePane!.emitted('ready')).toEqual([[documentId]]));
+            expect(JSON.stringify(currentEditor().getJSON())).toContain('Applied while pane loads');
+            latePane.unmount(); latePane = undefined;
+            await flushPromises(); await flush(documentId, dbA);
+            expect((await dbA.posts.get(documentId))?.content).toContain('Applied while pane loads');
+        } finally {
+            release?.(); finishWrite?.(); latePane?.unmount(); dispose(); testRuntimeConfig.value.public.ssrAuthEnabled = originalAuth;
+        }
     });
     it('avoids a spurious missing-document toast when workspace tabs tear down the old pane', async () => {
         const { dbB, idB } = await mountedWorkspaces();

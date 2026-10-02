@@ -437,8 +437,11 @@ function captureContent(id = props.documentId, db = editorDb.value): void {
     if (captureTimer) clearTimeout(captureTimer);
     captureTimer = undefined;
     const json = current.getJSON();
+    // A buffer that never changed is not a new edit merely because another pane committed.
+    const unchangedBuffer = JSON.stringify(json) === JSON.stringify(capturedContent.value);
     capturedContent.value = json;
     setSerializedSize(new TextEncoder().encode(JSON.stringify(json)).byteLength);
+    if (unchangedBuffer) return;
     const currentState = useDocumentState(id, db);
     if (JSON.stringify(json) === JSON.stringify(currentState.pendingContent !== undefined
         ? currentState.pendingContent : currentState.record?.content)) return;
@@ -814,6 +817,12 @@ async function loadActiveDocument(id: string) {
     contentVersion.value = 0;
     await makeEditor(isCurrent);
     if (!isCurrent()) return;
+    // Lazy extension loading can cross a committed Apply. Use the current origin buffer
+    // before registering, then the session lease covers writes still in progress.
+    titleDraft.value = state.value.pendingTitle ?? state.value.record?.title ?? '';
+    capturedContent.value = normalizedContent(state.value.pendingContent !== undefined
+        ? state.value.pendingContent : state.value.record?.content);
+    editor.value?.commands.setContent(capturedContent.value, { emitUpdate: false, errorOnInvalidContent: true });
     loadedDocumentId = id;
     registerActiveSession(id);
     emit('ready', id);
