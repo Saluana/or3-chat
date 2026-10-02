@@ -7,12 +7,30 @@ import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine, useHooks } from '~/core/hooks/useHooks';
 import type { ORStreamEvent } from '~~/shared/openrouter/parseOpenRouterSSE';
-const transport = vi.hoisted(() => vi.fn());
+import type { openRouterStream } from '~/utils/chat/openrouterStream';
+const transport = vi.hoisted(() => vi.fn<typeof openRouterStream>());
 vi.mock('~/utils/chat/openrouterStream', () => ({ openRouterStream: transport }));
 let workspace: string;
 const markdown = '## Objective\nFinish implementation.\n## Important Details\nKeep exact paths.\n## Work State\nTwo turns settled.\n## Next Move\nContinue safely.\n## Relevant Files\nNone.';
 const envelope = (id = 'm0') => JSON.stringify({ summary_markdown: markdown, landmarks: [{ message_id: id, kind: 'decision', summary: 'Source evidence' }] });
 const modelMetadata = { context_length: 1000000, top_provider: { max_completion_tokens: 8192 } };
+function bodyAt(call = 0): string {
+    const body = transport.mock.calls[call]![0].orMessages[1]!.content;
+    if (typeof body !== 'string') throw new Error('Expected text-only summary reference');
+    return body;
+}
+function toolRecord(body: string): { content: string; display_index: number } {
+    for (const line of body.split('\n')) {
+        let parsed: unknown;
+        try { parsed = JSON.parse(line) as unknown; } catch { continue; }
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
+        const row = parsed as Record<string, unknown>;
+        if (row.message_id !== 'tool') continue;
+        if (typeof row.content !== 'string' || typeof row.display_index !== 'number') throw new Error('Malformed tool reference');
+        return { content: row.content, display_index: row.display_index };
+    }
+    throw new Error('Missing canonical tool reference');
+}
 beforeEach(async () => {
     workspace = `summary-auxiliary-${crypto.randomUUID()}`; await setActiveWorkspaceDb(workspace).open();
     setHookEngine(createTypedHookEngine(createHookEngine())); transport.mockReset();
@@ -37,7 +55,7 @@ it('uses history-first guarded same-model inference with no send hooks, placehol
     expect(request.tools).toBeUndefined(); expect(request.threadId).toBeUndefined(); expect(request.messageId).toBeUndefined();
     expect(request.maxCompletionTokens).toBeGreaterThan(0); expect(request.maxCompletionTokens).toBeLessThanOrEqual(8192);
     expect(request.orMessages).toHaveLength(2); expect(request.orMessages[0].role).toBe('system');
-    const body = request.orMessages[1].content;
+    const body = bodyAt();
     expect(body).toContain('\\u003c/conversation-reference\\u003e'); expect(body).not.toContain('PRIVATE_REASONING_EXCLUDE');
     expect(body.indexOf('TASK_SYSTEM_REFERENCE')).toBeLessThan(body.indexOf('End of conversation history.'));
     expect(body.indexOf('Evidence3')).toBeLessThan(body.indexOf('Return only the requested summary JSON.'));
@@ -47,7 +65,7 @@ it('corrects an invalid envelope once using original bounded history and compact
     let calls = 0;
     transport.mockImplementation(async function* (): AsyncGenerator<ORStreamEvent> { calls += 1; yield { type: 'text', text: calls === 1 ? 'MALFORMED_MODEL_RESPONSE' : envelope() }; yield { type: 'done' }; });
     const source = await capture(); const summary = await generateCompactionSummary(source, { modelMetadata, apiKey: 'scripted' });
-    const correction = transport.mock.calls[1]![0].orMessages[1].content;
+    const correction = bodyAt(1);
     expect(correction).toContain('Evidence0'); expect(correction).toContain('Validation correction:'); expect(correction).not.toContain('MALFORMED_MODEL_RESPONSE');
     const result = await createCompactedFork({ capture: source, summary });
     expect(result.thread.branch_mode).toBe('compacted'); expect(result.summary.data).toMatchObject({ kind: 'compaction' }); expect(transport).toHaveBeenCalledTimes(2);
@@ -77,7 +95,7 @@ it('does not re-expand original rows during a rolling summary', async () => {
     const rolling = await captureCompaction({ sourceThreadId: created.thread.id, anchorMessageId: 'new3', model: 'large-model' });
     transport.mockReset(); transport.mockImplementation(async function* (): AsyncGenerator<ORStreamEvent> { yield { type: 'text', text: envelope('m0') }; yield { type: 'done' }; });
     await generateCompactionSummary(rolling, { modelMetadata });
-    const body = transport.mock.calls[0]![0].orMessages[1].content;
+    const body = bodyAt();
     expect(body).toContain('<previous-summary>'); expect(body).toContain('Source evidence'); expect(body).toContain('NEW_EVIDENCE3');
     expect(body).not.toContain('Evidence0'); expect(body).not.toContain('PRIVATE_REASONING_EXCLUDE'); expect(transport).toHaveBeenCalledOnce();
 });
@@ -87,11 +105,11 @@ it('serializes canonical tools once with explicit Unicode excerpt/media omission
     await getDb().messages.put({ id: 'tool', thread_id: 'source', role: 'tool', index: 1.5, pending: false, deleted: false, created_at: 1, updated_at: 1, clock: 1,
         data: { content: `CANONICAL_START${'😀'.repeat(10000)}CANONICAL_END`, tool_call_id: 'call', tool_name: 'lookup', parent_assistant_id: 'm1' } });
     await getDb().messages.update('m2', { file_hashes: JSON.stringify(['owned-hash']), data: { content: `Media caption data:image/png;base64,AAAA ${'Task facts '.repeat(300)}` } });
-    await generate(); const body = transport.mock.calls[0]![0].orMessages[1].content;
+    await generate(); const body = bodyAt();
     expect(body).toContain('CANONICAL_START'); expect(body).toContain('CANONICAL_END'); expect(body).toContain('middle omitted');
     expect(body).not.toContain('DUPLICATE_EMBEDDED_OUTPUT'); expect(body).not.toContain('PRIVATE_REASONING_EXCLUDE'); expect(body).not.toContain('base64,AAAA');
     expect(body).toContain('Media caption'); expect(body).toContain('owned-hash'); expect(body).toContain('Image/PDF/audio contents omitted');
-    const record = body.split('\n').map((line: string) => { try { return JSON.parse(line); } catch { return null; } }).find((row: { message_id?: string } | null) => row?.message_id === 'tool');
+    const record = toolRecord(body);
     expect(record.display_index).toBe(3);
     expect(Array.from(record.content)).toHaveLength(8000);
 });
@@ -105,8 +123,8 @@ it('reduces only tool excerpts once when needed and retains all conversational r
     await getDb().messages.put({ id: 'tool', thread_id: 'source', role: 'tool', index: 1.5, pending: false, deleted: false, created_at: 1, updated_at: 1, clock: 1,
         data: { content: `FIRST${'工具'.repeat(10000)}LAST`, tool_call_id: 'call', tool_name: 'lookup', parent_assistant_id: 'm1' } });
     await generate({ modelMetadata: { context_length: 5000, top_provider: { max_completion_tokens: 2000 } } });
-    const body = transport.mock.calls[0]![0].orMessages[1].content;
-    const record = body.split('\n').map((line: string) => { try { return JSON.parse(line); } catch { return null; } }).find((row: { message_id?: string } | null) => row?.message_id === 'tool');
+    const body = bodyAt();
+    const record = toolRecord(body);
     expect(Array.from(record.content)).toHaveLength(2000); expect(record.content).toContain('FIRST'); expect(record.content).toContain('LAST');
     for (let index = 0; index < 4; index += 1) expect(body).toContain(`TURN${index}`);
     expect(transport).toHaveBeenCalledOnce();
