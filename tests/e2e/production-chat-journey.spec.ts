@@ -452,6 +452,8 @@ test('PageShell compaction summary reload and original landmark navigation', asy
     // Drafts live in memory: reload clears them. Re-establish the source draft
     // before checking preservation across child/landmark navigation.
     await card.getByRole('button', { name: 'View original', exact: true }).click();
+    await expect(anchor).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Compaction original evidence', exact: true })).toHaveAttribute('aria-selected', 'true');
     await expect(input).toHaveText('');
     await input.fill('Keep this unsent source draft.');
     await page.getByRole('tab', { name: 'Compaction original evidence — compacted', exact: true }).click();
