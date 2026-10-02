@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-import { getDb, setActiveWorkspaceDb, evictWorkspaceDb, Or3DB } from '~/db/client';
+import { getDb, getWorkspaceGeneration, setActiveWorkspaceDb, evictWorkspaceDb, Or3DB } from '~/db/client';
 import { getKvByName, setKvByName } from '~/db/kv';
 import { useHooks, setHookEngine } from '~/core/hooks/useHooks';
 import { createHookEngine } from '~/core/hooks/hooks';
@@ -223,6 +223,114 @@ describe('useAiSettings', () => {
             await api.set({ defaultModelVariant: 'nitro' });
             expect(api.load()).toMatchObject({ masterSystemPrompt: 'other tab', maxContextTokens: 2_000_000, defaultModelVariant: 'nitro' });
         } finally { release(); externalDb.close(); }
+    });
+
+    // Capture risks: using defaults before the actual KV read settles, later
+    // settings changing an admitted scalar, A→B→A reusing a database handle,
+    // and a failed read silently removing the user's chosen constraint.
+    it('captures the durable maximum once without changing with later settings', async () => {
+        await setKvByName('ai_settings', JSON.stringify({ ...DEFAULT_AI_SETTINGS, maxContextTokens: 100_000 }));
+        const api = useAiSettings();
+        const origin = { db: getDb(), workspaceGeneration: getWorkspaceGeneration() };
+        const captured = await api.captureContextPreference();
+        expect(captured.db).toBe(origin.db);
+        expect(captured.workspaceGeneration).toBe(origin.workspaceGeneration);
+        expect(captured.maxContextTokens).toBe(100_000);
+        expect(Object.isFrozen(captured)).toBe(true);
+        await api.set({ maxContextTokens: 2_000_000 });
+        expect(captured.maxContextTokens).toBe(100_000);
+        expect((await api.captureContextPreference()).maxContextTokens).toBe(2_000_000);
+    });
+
+    it('awaits the real maximum read before returning a capture', async () => {
+        await setKvByName('ai_settings', JSON.stringify({ ...DEFAULT_AI_SETTINGS, maxContextTokens: 125_000 }));
+        let entered!: () => void; let release!: () => void;
+        const pending = new Promise<void>((resolve) => { entered = resolve; });
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        const hooks = useHooks();
+        const hold: Parameters<typeof hooks.addFilter<'db.kv.getByName:filter:output'>>[1] = async (row) => {
+            if (row?.value?.includes('125000')) { entered(); await gate; }
+            return row;
+        };
+        hooks.addFilter('db.kv.getByName:filter:output', hold);
+        dispose = () => hooks.removeFilter('db.kv.getByName:filter:output', hold);
+        try {
+            const api = useAiSettings();
+            let settled = false;
+            const capturing = api.captureContextPreference().then((value) => { settled = true; return value; });
+            await pending;
+            expect(settled).toBe(false);
+            release();
+            expect((await capturing).maxContextTokens).toBe(125_000);
+        } finally { release(); }
+    });
+
+    it('captures the current durable preference after a separate handle updates it', async () => {
+        const api = useAiSettings();
+        await api.ensureLoaded();
+        await api.set({ maxContextTokens: 100_000 });
+        const otherHandle = new Or3DB(getDb().name);
+        await otherHandle.open();
+        try {
+            await setKvByName('ai_settings', JSON.stringify({ ...DEFAULT_AI_SETTINGS, maxContextTokens: 250_000 }), otherHandle);
+            const captured = await api.captureContextPreference();
+            expect(captured.db).toBe(getDb());
+            expect(captured.maxContextTokens).toBe(250_000);
+        } finally { otherHandle.close(); }
+    });
+
+    it('rejects a delayed capture after A→B→A and captures the new A generation', async () => {
+        const dbA = getDb();
+        await setKvByName('ai_settings', JSON.stringify({ ...DEFAULT_AI_SETTINGS, maxContextTokens: 150_000 }), dbA);
+        const generationA = getWorkspaceGeneration();
+        let entered!: () => void; let release!: () => void; let held = false;
+        const pending = new Promise<void>((resolve) => { entered = resolve; });
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        const hooks = useHooks();
+        const hold: Parameters<typeof hooks.addFilter<'db.kv.getByName:filter:output'>>[1] = async (row) => {
+            if (!held && row?.value?.includes('150000')) { held = true; entered(); await gate; }
+            return row;
+        };
+        hooks.addFilter('db.kv.getByName:filter:output', hold);
+        dispose = () => hooks.removeFilter('db.kv.getByName:filter:output', hold);
+        const otherId = `settings-capture-${crypto.randomUUID()}`;
+        let dbB: Or3DB | undefined;
+        try {
+            const api = useAiSettings();
+            const oldCapture = api.captureContextPreference().then(() => null, (error: unknown) => error);
+            await pending;
+            dbB = setActiveWorkspaceDb(otherId);
+            await setKvByName('ai_settings', JSON.stringify({ ...DEFAULT_AI_SETTINGS, maxContextTokens: 64_000 }), dbB);
+            expect((await api.captureContextPreference()).maxContextTokens).toBe(64_000);
+            expect(setActiveWorkspaceDb(workspace)).toBe(dbA);
+            await api.set({ maxContextTokens: 900_000 });
+            const newCapture = await api.captureContextPreference();
+            expect(newCapture.db).toBe(dbA);
+            expect(newCapture.maxContextTokens).toBe(900_000);
+            expect(newCapture.workspaceGeneration).not.toBe(generationA);
+            release();
+            expect(await oldCapture).toBeInstanceOf(Error);
+            expect(newCapture.maxContextTokens).toBe(900_000);
+        } finally {
+            release(); setActiveWorkspaceDb(workspace);
+            if (dbB) { evictWorkspaceDb(otherId); await Dexie.delete(dbB.name); }
+        }
+    });
+
+    it('refuses a maximum capture after a failed read and allows an explicit retry', async () => {
+        await setKvByName('ai_settings', JSON.stringify({ ...DEFAULT_AI_SETTINGS, maxContextTokens: 175_000 }));
+        const api = useAiSettings();
+        await api.ensureLoaded();
+        // Hook exceptions deliberately fall back to the original row. Inject
+        // an actual DB transaction failure at the strict persisted-read owner.
+        const readFailure = vi.spyOn(getDb(), 'transaction').mockImplementationOnce(() => {
+            throw new Error('Injected maximum read failure');
+        });
+        try {
+            await expect(api.captureContextPreference()).rejects.toThrow(/read|unavailable/i);
+            expect(readFailure).toHaveBeenCalledOnce();
+        } finally { readFailure.mockRestore(); }
+        expect((await api.captureContextPreference()).maxContextTokens).toBe(175_000);
     });
 
 });

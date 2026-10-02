@@ -55,7 +55,7 @@
  */
 import { ref, computed } from 'vue';
 import { getDb, getWorkspaceGeneration, type Or3DB } from '~/db/client';
-import { setKvByName, getKvByName } from '~/db/kv';
+import { setKvByName, getKvByName, getKvRecordByName } from '~/db/kv';
 import {
     DEFAULT_MODEL_VARIANT,
     sanitizeModelVariant,
@@ -71,6 +71,13 @@ export interface AiSettingsV1 {
     defaultModelVariant: OpenRouterModelVariant;
     /** Null means the full advertised model capacity; values remain independent of model selection. */
     maxContextTokens: number | null;
+}
+
+/** A request-scoped scalar snapshot; the DB handle identifies its captured origin. */
+export interface CapturedContextPreference {
+    readonly db: Or3DB;
+    readonly workspaceGeneration: number;
+    readonly maxContextTokens: number | null;
 }
 
 const AI_SETTINGS_KV_KEY = 'ai_settings';
@@ -203,11 +210,32 @@ async function loadSettings(): Promise<void> {
     return _loadPromise;
 }
 
-function assertSettingsOrigin(targetDb: Or3DB, generation: number): void {
+function assertSettingsOrigin(targetDb: Or3DB, generation: number, operation = 'saved'): void {
     if (getDb() !== targetDb || getWorkspaceGeneration() !== generation || _loadedDb !== targetDb
         || _loadedWorkspaceGeneration !== generation) {
-        throw new Error('Workspace changed before AI settings could be saved.');
+        throw new Error(`Workspace changed before AI settings could be ${operation}.`);
     }
+}
+
+async function captureContextPreference(): Promise<CapturedContextPreference> {
+    const db = getDb();
+    const workspaceGeneration = getWorkspaceGeneration();
+    await loadSettings();
+    assertSettingsOrigin(db, workspaceGeneration, 'captured');
+    let maximum: number | null;
+    try {
+        // Use the existing strict read owner. getKvByName's UI fallback cannot
+        // distinguish a missing preference from a failed read, and an in-memory
+        // settings value can lag a write from another tab or sync handle.
+        const { row } = await getKvRecordByName(AI_SETTINGS_KV_KEY, db);
+        maximum = row?.value
+            ? sanitizeAiSettings(JSON.parse(row.value) as unknown).maxContextTokens
+            : DEFAULT_AI_SETTINGS.maxContextTokens;
+    } catch (error) {
+        throw new Error('Maximum context preference could not be read. Retry settings.', { cause: error });
+    }
+    assertSettingsOrigin(db, workspaceGeneration, 'captured');
+    return Object.freeze({ db, workspaceGeneration, maxContextTokens: maximum });
 }
 
 /** Serialize calls within a navigation origin; a new workspace generation never waits on an old hook. */
@@ -275,5 +303,6 @@ export function useAiSettings() {
         reset,
         load,
         ensureLoaded: loadSettings,
+        captureContextPreference,
     };
 }

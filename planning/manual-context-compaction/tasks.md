@@ -1,6 +1,6 @@
 # Tasks
 
-Progress snapshot: **11 complete, 22 partial, 22 not started (55 tasks)**. Checked boxes mean the full stated task criteria are implemented and verified at the linked boundary. Partial and unverified work remains unchecked; this is not a full-feature completion claim. Reviewed background-usage runtime is adopted at `e832700f` (tree `82821322afb51b88273a4f8560187bcfb23a4eef`); publication and exact-head CI remain held. Evidence and retained first failures: [evidence.md](./evidence.md). Each task is intended to take roughly 1–4 hours; split a task at its existing component/provider boundary if discovery makes it larger. Dependencies run from top to bottom. Where fixtures are written first, their final assertions become green only when the corresponding production task is complete; do not commit permanently skipped cases as a substitute.
+Progress snapshot: **11 complete, 23 partial, 21 not started (55 tasks)**. Checked boxes mean the full stated task criteria are implemented and verified at the linked boundary. Partial and unverified work remains unchecked; this is not a full-feature completion claim. Reviewed background-usage runtime is adopted at `e832700f` (tree `82821322afb51b88273a4f8560187bcfb23a4eef`); publication and exact-head CI remain held. Evidence and retained first failures: [evidence.md](./evidence.md). Each task is intended to take roughly 1–4 hours; split a task at its existing component/provider boundary if discovery makes it larger. Dependencies run from top to bottom. Where fixtures are written first, their final assertions become green only when the corresponding production task is complete; do not commit permanently skipped cases as a substitute.
 
 This plan changes native chat only. Preserve unrelated working-tree edits. Provider source changes require their owning source checkout and builds; installed `node_modules` files are not implementation targets. No task authorizes publication, a stable release, or production data changes.
 
@@ -90,7 +90,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C2, C1.
       Requirements: R16.AC4, R16.AC5.
       Done when: new generations capture the current preference, foreground/background iterations and reconnect retain that value, server admission still resolves the model's actual capacity independently, and internal context metadata never becomes an unrelated provider parameter.
-      Status: Not started — native generation/background/reconnect preference capture is not wired; auxiliary controller capture alone does not complete this task.
+      Status: Partial — useAiSettings strict durable preference capture returns a frozen maximum with captured DB/workspace generation;15 real-KV cases cover delayed reads, late changes, A→B→A, separate handles and read-error retry. Native generation/iterations/background/reconnect consumption, independent server resolution and wire separation remain unwired; this read contract does not complete the task.
 
 - [ ] 2.8 Admit native send/retry/continue before durable turn mutations (4h).
       Components: C2, C4.

@@ -62,6 +62,14 @@ bytes, canonical tool calls and media options before asynchronous context
 hydration. Hydration appends to the request copy; later edits to the caller's
 messages or media settings do not change that in-flight copy.
 
+The preparation foundation exposes
+`useAiSettings().captureContextPreference()`: it loads existing settings, reads
+the current durable maximum through the strict KV snapshot API, and returns a
+frozen scalar with its DB handle and workspace generation. A failed read or
+changed workspace rejects capture; retry can recover. These origin fields are
+internal and must not be serialized as provider parameters. Native generation
+and reconnect consumers are still pending.
+
 Context budgeting uses the selected model's advertised window, reserves response space, and trims history through the existing message helpers. Missing catalog metadata is refreshed; if it remains unavailable the input fallback is 8,000 tokens. Response reserve is bounded at 8,192 tokens. Counts are estimates, particularly for images and files; do not introduce a second fixed context ceiling in a caller.
 
 Source UI token counting uses `app/composables/core/useTokenizer.ts` and a
