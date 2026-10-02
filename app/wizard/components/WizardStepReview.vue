@@ -109,7 +109,7 @@
                 <div>
                     <p class="text-sm font-semibold">Save your admin login now</p>
                     <p class="mt-1 text-xs text-[var(--md-on-surface)]/60">
-                        The wizard does not persist this password in its session history.
+                        Save this password before closing setup. A private copy is also saved in .or3-initial-credentials in your project folder.
                     </p>
                 </div>
                 <UButton
@@ -148,6 +148,13 @@
                     {{ stepMessage }}
                 </li>
             </ol>
+            <a
+                v-if="deployResponse.deployResult.accessUrl"
+                :href="deployResponse.deployResult.accessUrl"
+                target="_blank"
+                rel="noopener"
+                class="mt-3 inline-block text-sm font-semibold underline"
+            >Open OR3 in a new tab</a>
         </div>
 
         <div class="flex flex-wrap items-center gap-3 border-t-[length:var(--md-border-width-subtle)] border-[color:var(--md-border-color)] pt-5">
@@ -221,7 +228,8 @@ defineEmits<{
 
 const showBootstrapCredentials = computed(
     () =>
-        Boolean(props.deployResponse?.deployResult) &&
+        props.deployResponse?.ok &&
+        Boolean(props.deployResponse.applyResult && !props.deployResponse.applyResult.dryRun) &&
         (props.answers.wizardMode === 'preset-local' ||
             props.answers.wizardMode === 'preset-local-fast') &&
         Boolean(props.answers.basicAuthBootstrapEmail) &&
@@ -247,8 +255,10 @@ const successBanner = computed(() => {
     }
     if (props.deployResponse.deployResult) {
         return {
-            title: 'Deployment complete',
-            body: 'Your OR3 Cloud instance has been configured and deployed. Check the next steps below to get started.',
+            title: props.deployResponse.deployResult.started ? 'Deployment complete' : 'Settings saved — startup needs attention',
+            body: props.deployResponse.deployResult.started
+                ? 'Your OR3 Cloud instance has been configured and deployed. Check the next steps below to get started.'
+                : props.deployResponse.deployResult.instructions ?? 'Follow the next steps below to start your instance.',
         };
     }
     return {

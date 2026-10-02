@@ -188,7 +188,7 @@ function providerFieldsStep(
     return {
         id,
         title,
-        description: `Configure your ${descriptor.label.replace(/ \(.*\)$/, '')} settings. Press Enter to accept defaults.`,
+        description: `Configure your ${descriptor.label.replace(/ \(.*\)$/, '')} settings. Defaults are filled automatically.`,
         fields,
         canSkip: (current) => {
             if (!current.ssrAuthEnabled) return true;
