@@ -116,7 +116,7 @@ describe('mounted document editor workspace lifecycle', () => {
             let afterCommitRead = false;
             const get = dbA.posts.get.bind(dbA.posts);
             hooks.addAction('db.documents.update:action:after', () => {
-                vi.spyOn(dbA.posts, 'get').mockImplementationOnce(async () => { afterCommitRead = true; throw new Error('Injected post-commit read failure'); });
+                vi.spyOn(dbA.posts, 'get').mockImplementationOnce(() => { afterCommitRead = true; throw new Error('Injected post-commit read failure'); });
             });
             expect((await applyWorkspaceDocumentChange(JSON.parse(proposal.result!))).status).toBe('applied');
             expect(afterCommitRead).toBe(false);

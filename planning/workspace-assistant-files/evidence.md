@@ -89,7 +89,11 @@ Incremental engineering evidence (not full-plan qualification):
   synchronous acceptance before post-commit hooks; owner workspace regressions pass.
 - Review-card baseline/candidate: host controls appear only for the admitted tool;
   unrelated plugin/model prose cannot claim saved state. Current UI/browser
-  proposal qualification and current-head typecheck remain pending.
+  proposal qualification remains pending. Configured Basic Auth/SQLite/FS typecheck
+  passes after two fixture-only Dexie PromiseExtended typing corrections; no production
+  errors were reported. `/tmp/task16-assistant-safety-typecheck-fixed.log` exits 0.
+  The corrected failure-injection owners pass 24 tests in two files,
+  `/tmp/task16-safety-fixture-fixed.log`. Both changes preserve injected failures.
 
 ## Remaining acceptance groups
 

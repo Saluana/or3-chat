@@ -109,7 +109,7 @@ describe('chat document tools', () => {
         const changes = await import('~/utils/chat/workspace-document-change');
         expect(changes).toHaveProperty('applyWorkspaceDocumentChange');
         const realPut = getDb().messages.put.bind(getDb().messages);
-        const put = vi.spyOn(getDb().messages, 'put').mockImplementationOnce(async () => { throw new Error('Injected durable receipt failure'); });
+        const put = vi.spyOn(getDb().messages, 'put').mockImplementationOnce(() => { throw new Error('Injected durable receipt failure'); });
         try {
             await expect(changes.applyWorkspaceDocumentChange(ref)).rejects.toThrow(/receipt failure/i);
             expect((await getDb().posts.get('apply-doc'))?.content).toContain('Original apply paragraph');
