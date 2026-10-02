@@ -37,6 +37,38 @@ async function collect(
 }
 
 describe('parseOpenRouterSSE', () => {
+    it('preserves valid final usage after a finish reason, empty choices and fragmented transport without duplicate accounting', async () => {
+        const frames = [
+            { id: 'provider-request', model: 'large-model', choices: [{ delta: { content: 'Settled answer' }, finish_reason: 'stop' }] },
+            { choices: [], usage: { prompt_tokens: 180000, completion_tokens: 42 } },
+            { choices: [], usage: { prompt_tokens: 180000, completion_tokens: 42 } },
+        ];
+        const body = frames.map((frame) => `data: ${JSON.stringify(frame)}\n\n`).join('') + 'data: [DONE]\n\n';
+        const bytes = new TextEncoder().encode(body);
+        const chunks = Array.from({ length: Math.ceil(bytes.length / 13) }, (_, index) => bytes.slice(index * 13, (index + 1) * 13));
+        const events = await collect(streamFromChunks(chunks));
+        expect(events.filter((event) => event.type === 'usage')).toEqual([{ type: 'usage', usage: {
+            prompt_tokens: 180000, completion_tokens: 42, model: 'large-model', response_id: 'provider-request',
+        } }]);
+        expect(events.filter((event) => event.type !== 'usage')).toEqual([{ type: 'text', text: 'Settled answer' }, { type: 'done' }]);
+    });
+    it.each([
+        undefined, {}, { prompt_tokens: 12 }, { prompt_tokens: -1, completion_tokens: 2 },
+        { prompt_tokens: 2.5, completion_tokens: 1 }, { prompt_tokens: '20', completion_tokens: 1 },
+        { prompt_tokens: null, completion_tokens: 2 }, { prompt_tokens: 20, completion_tokens: Number.MAX_SAFE_INTEGER + 1 },
+    ])('ignores missing/malformed usage without failing valid text %#', async (usage) => {
+        const frame = { choices: [{ delta: { content: 'Valid text' }, finish_reason: 'stop' }], usage };
+        const events = await collect(streamFromSSE(`data: ${JSON.stringify(frame)}\n\ndata: [DONE]\n\n`));
+        expect(events).toEqual([{ type: 'text', text: 'Valid text' }, { type: 'done' }]);
+    });
+    it('retains explicit zero usage and the final measurement rather than summing updates', async () => {
+        const body = [{ prompt_tokens: 0, completion_tokens: 0 }, { prompt_tokens: 55, completion_tokens: 3 }]
+            .map((usage) => `data: ${JSON.stringify({ choices: [], usage })}\n\n`).join('') + 'data: [DONE]\n\n';
+        expect((await collect(streamFromSSE(body))).filter((event) => event.type === 'usage')).toEqual([
+            { type: 'usage', usage: { prompt_tokens: 0, completion_tokens: 0 } },
+            { type: 'usage', usage: { prompt_tokens: 55, completion_tokens: 3 } },
+        ]);
+    });
     it('emits all reasoning_details entries in order', async () => {
         const sse = [
             'data: {"choices":[{"delta":{"reasoning_details":[{"type":"reasoning.text","text":"plan"},{"type":"reasoning.summary","summary":"summary"}]}}]}',

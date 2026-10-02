@@ -1,3 +1,4 @@
+import { resolveThreadProjection } from '~/utils/chat/compaction/history';
 /**
  * @module app/utils/chat/useAi-internal/continue.ts
  *
@@ -257,12 +258,18 @@ export async function continueMessageImpl(
         if (!existingText) return;
 
         const DexieMod = (await import('dexie')).default;
-        const all = await originDb.messages
-            .where('[thread_id+index]')
-            .between([ctx.threadIdRef.value, DexieMod.minKey], [ctx.threadIdRef.value, target.index])
-            .filter((m: Message) => !m.deleted)
-            .toArray();
-        all.sort(compareMessageOrder);
+        const admissionThread = await originDb.threads.get(originThreadId);
+        if (!ownsThread()) return;
+        const all = admissionThread?.branch_mode === 'compacted' || admissionThread?.branch_mode === 'reference'
+            ? (await resolveThreadProjection(originThreadId, originDb, target.id)).messages
+            : await originDb.messages
+                .where('[thread_id+index]')
+                .between([originThreadId, DexieMod.minKey], [originThreadId, target.index])
+                .filter((m: Message) => !m.deleted)
+                .toArray();
+        // Canonical branch projection already orders each lineage segment. Sorting
+        // the flattened result by local index would interleave child and ancestors.
+        if (admissionThread?.branch_mode !== 'compacted' && admissionThread?.branch_mode !== 'reference') all.sort(compareMessageOrder);
         if (!ownsThread()) return;
 
         const toContent = (m: StoredMessage): string => {

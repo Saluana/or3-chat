@@ -27,12 +27,18 @@ export function assertCompactedSummary(thread: Thread, rows: readonly Message[])
 }
 
 /** One read snapshot, iterative lineage, ID anchors and no arbitrary depth/conversation cutoff. */
-export async function resolveThreadProjection(threadId: string, db: Or3DB = getDb()): Promise<ThreadProjection> {
+export async function resolveThreadProjection(threadId: string, db: Or3DB = getDb(), throughMessageId?: string): Promise<ThreadProjection> {
     return db.transaction('r', ['threads', 'messages'], async () => {
         const visited = new Set<string>();
         const reverse: ThreadProjectionSegment[] = [];
         let id = threadId;
         let cutoff: Message | undefined;
+        if (throughMessageId) {
+            cutoff = await db.messages.get(throughMessageId);
+            if (!cutoff || cutoff.deleted || cutoff.thread_id !== threadId) {
+                throw new CompactionHistoryError('invalid_anchor', 'The selected conversation message is unavailable.');
+            }
+        }
         for (;;) {
             if (visited.has(id)) throw new CompactionHistoryError('cyclic_lineage', 'Conversation lineage is cyclic.');
             visited.add(id);
