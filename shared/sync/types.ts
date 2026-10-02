@@ -1,3 +1,4 @@
+import type { ErrorMetadata } from '../errors';
 /**
  * Shared Sync Types
  *
@@ -51,6 +52,7 @@ export interface PendingOp {
     readyAt?: number;
     status: PendingOpStatus;
     lastError?: string;
+    lastErrorDetails?: ErrorMetadata;
     lastErrorCode?: SyncErrorCode;
     failureKind?: 'retry_exhausted' | 'permanent';
     failedAt?: number;

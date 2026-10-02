@@ -190,9 +190,7 @@ async function refreshAdmins() {
     } catch (err: unknown) {
         admins.value = [];
         error.value =
-            err instanceof Error
-                ? err
-                : new Error(getMessage(err, 'Unable to load admins'));
+            new Error(getMessage(err, 'Unable to load admins'));
     } finally {
         hasLoadedAdmins.value = true;
         pending.value = false;

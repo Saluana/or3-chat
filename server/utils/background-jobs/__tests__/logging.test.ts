@@ -34,8 +34,8 @@ describe('background logging redaction', () => {
         };
 
         const redacted = redactForBackgroundLog(input);
-        expect(redacted.args).toContain('Bearer <redacted>');
-        expect(redacted.note).toContain('<redacted-key>');
-        expect(redacted.session).toContain('<redacted-jwt>');
+        expect(redacted.args).not.toContain('abc.def.ghi');
+        expect(redacted.note).not.toContain('sk-1234567890abcdefghijkl');
+        expect(redacted.session).not.toContain('eyJhbGci');
     });
 });

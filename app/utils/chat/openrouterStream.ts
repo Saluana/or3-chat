@@ -1,3 +1,4 @@
+import { normalizeError, presentError, parseRetryAfter } from '~~/shared/errors';
 /**
  * @module app/utils/chat/openrouterStream
  *
@@ -290,10 +291,15 @@ export async function* openRouterStream(params: {
                     signal,
                     timeoutMs: params.idleTimeoutMs,
                 });
+                try {
                 for await (const evt of parseOpenRouterSSE(guardedBody, {
                     streamedFieldMode: params.streamedFieldMode,
                 })) {
                     yield evt;
+                }
+                } catch (error) {
+                    if (error instanceof OpenRouterStreamError) error.credentialSource = serverResp.headers.get('x-or3-credential-source') === 'server' ? 'server' : hasApiKey ? 'personal' : undefined;
+                    throw error;
                 }
                 return; // Success; don't fall back
             }
@@ -311,15 +317,13 @@ export async function* openRouterStream(params: {
                     signal,
                     timeoutMs: params.idleTimeoutMs,
                 }).catch(() => '');
-                const retryable =
-                    serverResp.status === 429 || serverResp.status >= 500;
-                throw new OpenRouterStreamError(
-                    `OpenRouter proxy error ${serverResp.status}: ${errorText.slice(
-                        0,
-                        300
-                    )}`,
-                    { status: serverResp.status, retryable }
-                );
+                let payload: unknown;
+                try { payload = JSON.parse(errorText); } catch { payload = {}; }
+                const metadata = normalizeError({ data: payload, status: serverResp.status,
+                    retryAfterMs: parseRetryAfter(serverResp.headers.get('retry-after')) });
+                throw new OpenRouterStreamError(presentError(metadata).message, {
+                    ...metadata, status: serverResp.status,
+                });
             }
         } else if (networkError) {
             if (forceServerRoute) {
@@ -391,13 +395,9 @@ export async function* openRouterStream(params: {
         });
 
         const retryable = resp.status === 429 || resp.status >= 500;
-        const retryAfter = resp.headers.get('retry-after');
-        const retryAfterMs = retryAfter
-            ? parseRetryAfterSeconds(retryAfter) * 1000
-            : undefined;
         throw new OpenRouterStreamError(
-            `OpenRouter request failed ${resp.status} ${resp.statusText}`,
-            { status: resp.status, retryable, retryAfterMs }
+            presentError({ status: resp.status, source: 'provider', credentialSource: 'personal' }).message,
+            { status: resp.status, retryable, retryAfterMs: parseRetryAfter(resp.headers.get('retry-after')), credentialSource: 'personal', providerCode: resp.status }
         );
     }
 
@@ -406,10 +406,15 @@ export async function* openRouterStream(params: {
         signal,
         timeoutMs: params.idleTimeoutMs,
     });
+    try {
     for await (const evt of parseOpenRouterSSE(guardedBody, {
         streamedFieldMode: params.streamedFieldMode,
     })) {
         yield evt;
+    }
+    } catch (error) {
+        if (error instanceof OpenRouterStreamError) error.credentialSource = 'personal';
+        throw error;
     }
 }
 
@@ -793,9 +798,9 @@ export async function startBackgroundStream(params: {
                     setBackgroundStreamingAvailable(false);
                 }
                 const retryable = resp.status >= 500;
-                const error = makeBackgroundAdmissionError(message, {
-                    retryable,
-                });
+                const error = makeBackgroundAdmissionError(presentError({ status: resp.status }).message, { retryable });
+                Object.assign(error, normalizeError({ status: resp.status, retryable,
+                    retryAfterMs: parseRetryAfter(resp.headers.get('retry-after')) }));
                 if (!retryable || attempt === 2) throw error;
                 lastError = error;
             } else {

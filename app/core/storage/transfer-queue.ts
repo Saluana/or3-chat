@@ -1,3 +1,4 @@
+import { normalizeError, presentError, parseRetryAfter, errorDiagnostics } from '~~/shared/errors';
 /** Persistent, workspace-scoped upload and download execution queue. */
 import Dexie from 'dexie';
 import { getDb, getWorkspaceDb } from '~/db/client';
@@ -255,7 +256,7 @@ export class FileTransferQueue {
                 transfer.state === 'pending_upload' ||
                 transfer.state === 'remote_missing'
                     ? recoverableTransferError(transfer.state, errorMsg)
-                    : new Error(errorMsg);
+                    : Object.assign(new Error(errorMsg), transfer.last_error_details);
             this.rejectWaiters(id, parkedError);
             throw parkedError;
         }
@@ -479,11 +480,8 @@ export class FileTransferQueue {
             }
 
             const attempts = transfer.attempts + 1;
-            const message = error instanceof Error 
-                ? error.message 
-                : typeof error === 'object' && error !== null && 'message' in error
-                    ? String((error as { message: unknown }).message)
-                    : String(error);
+            const metadata = normalizeError(error, { source: 'storage', code: 'ERR_STORAGE_PROVIDER_ERROR' });
+            const message = presentError(metadata).message;
 
             // Check if error is marked as non-retryable (e.g., file too large)
             const isNonRetryable = typeof error === 'object' && 
@@ -492,11 +490,12 @@ export class FileTransferQueue {
                 (error as { retryable?: boolean }).retryable === false;
 
             const failed = isNonRetryable || attempts >= this.maxAttempts;
-            const delay = failed ? 0 : this.getBackoffDelay(attempts);
+            const delay = failed ? 0 : Math.max(this.getBackoffDelay(attempts), metadata.retryAfterMs ?? 0);
             const updated = await this.safeUpdateTransfer(transfer.id, {
                 state: failed ? 'failed' : 'queued',
                 attempts,
                 last_error: message,
+                last_error_details: errorDiagnostics(metadata),
                 retry_at: failed ? 0 : Date.now() + delay,
                 lease_owner: undefined,
                 lease_expires_at: undefined,
@@ -506,8 +505,8 @@ export class FileTransferQueue {
             }
 
             if (failed) {
-                this.rejectWaiters(transfer.id, message);
-                reportError(err('ERR_STORAGE_PROVIDER_ERROR', message), {
+                this.rejectWaiters(transfer.id, Object.assign(new Error(message), metadata));
+                reportError(Object.assign(new Error(message), errorDiagnostics(metadata)), {
                     tags: { domain: 'storage', stage: transfer.direction },
                     silent: true,
                 });
@@ -641,7 +640,7 @@ export class FileTransferQueue {
                     }
                     return;
                 }
-                console.error('[storage-transfer-queue] processQueue failed', error);
+                console.error('[storage-transfer-queue] processQueue failed', errorDiagnostics(error));
             });
         }, delayMs);
     }
@@ -739,7 +738,7 @@ export class FileTransferQueue {
             throw err(
                 'ERR_STORAGE_UPLOAD_FAILED',
                 `Upload failed (${uploadResponse.status})`,
-                { tags: { domain: 'storage', stage: 'upload' } }
+                { tags: { domain: 'storage', stage: 'upload' }, status: uploadResponse.status, source: 'storage', retryAfterMs: parseRetryAfter(uploadResponse.headers.get('retry-after')) }
             );
         }
 
@@ -844,7 +843,7 @@ export class FileTransferQueue {
             throw err(
                 'ERR_STORAGE_DOWNLOAD_FAILED',
                 `Download failed (${response.status})`,
-                { tags: { domain: 'storage', stage: 'download' } }
+                { tags: { domain: 'storage', stage: 'download' }, status: response.status, source: 'storage', retryAfterMs: parseRetryAfter(response.headers.get('retry-after')) }
             );
         }
 

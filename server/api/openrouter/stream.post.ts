@@ -1,3 +1,4 @@
+import { publicErrorEnvelope, parseRetryAfter } from '~~/shared/errors';
 /**
  * @module server/api/openrouter/stream.post
  *
@@ -171,10 +172,10 @@ export default defineEventHandler(async (event) => {
     if (!apiKey) {
         if (requireUserKey) {
             setResponseStatus(event, 400);
-            return 'User OpenRouter API key required';
+            return publicErrorEnvelope({ code: 'ERR_AUTH', status: 400, source: 'provider', credentialSource: 'personal', retryable: false });
         }
         setResponseStatus(event, 400);
-        return 'Missing OpenRouter API key';
+        return publicErrorEnvelope({ code: 'ERR_AUTH', status: 400, source: 'provider', credentialSource: 'server', retryable: false });
     }
 
     const limits = config.limits;
@@ -333,6 +334,7 @@ export default defineEventHandler(async (event) => {
             const result = await startBackgroundStream({
                 body,
                 apiKey,
+                credentialSource: selectedClientKey ? 'personal' : 'server',
                 userId,
                 workspaceId,
                 threadId: validation.threadId!,
@@ -484,7 +486,7 @@ export default defineEventHandler(async (event) => {
             error: e instanceof Error ? e.message : String(e),
         });
         setResponseStatus(event, 502);
-        return 'Failed to reach OpenRouter';
+        return publicErrorEnvelope({ status: 502, source: 'provider', retryable: true });
     }
 
     // Handle upstream non-OK responses
@@ -503,9 +505,14 @@ export default defineEventHandler(async (event) => {
             responseMetadata: sensitiveValueMetadata(respText),
         });
         setResponseStatus(event, upstream.status);
-        return respText.slice(0, 2000);
+        const retryAfterMs = parseRetryAfter(upstream.headers.get('retry-after'));
+        if (retryAfterMs !== undefined) setHeader(event, 'Retry-After', Math.ceil(retryAfterMs / 1000));
+        return publicErrorEnvelope({ status: upstream.status, source: 'provider',
+            credentialSource: selectedClientKey ? 'personal' : 'server',
+            providerCode: upstream.status, retryAfterMs });
     }
 
+    setHeader(event, 'X-OR3-Credential-Source', selectedClientKey ? 'personal' : 'server');
     // Req 6: Set SSE headers
     setHeader(event, 'Content-Type', 'text/event-stream');
     setHeader(event, 'Cache-Control', 'no-cache, no-transform');

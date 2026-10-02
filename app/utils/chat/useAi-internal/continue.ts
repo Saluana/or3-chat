@@ -47,7 +47,7 @@ import {
 } from '~/utils/chat/openrouterStream';
 import { dataUrlToBlob, fetchImageBlob } from '~/utils/chat/files';
 import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
-import { reportError, err } from '~/utils/errors';
+import { asAppError, reportError, err } from '~/utils/errors';
 import type { StoredMessage, OpenRouterMessage } from './types';
 import { makeAssistantPersister, updateMessageRecord } from './persistence';
 import { createForegroundGenerationLease } from '~/utils/chat/generation-lease';
@@ -732,10 +732,7 @@ export async function continueMessageImpl(
                 );
         } catch (streamError) {
             const ownershipLost = streamError instanceof ContinuationOwnershipLost;
-            const e =
-                streamError instanceof Error
-                    ? streamError
-                    : new Error(String(streamError));
+            const e = asAppError(streamError, { code: 'ERR_STREAM_FAILURE' });
             const stopped =
                 request.cancelled || continuationAbortController.signal.aborted;
             const finalization = await finalizeRequest(request, {

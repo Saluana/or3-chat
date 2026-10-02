@@ -1,3 +1,4 @@
+import { presentError } from '~~/shared/errors';
 /**
  * Notification Listeners Plugin
  * 
@@ -145,12 +146,8 @@ export default defineNuxtPlugin(() => {
                 return;
             }
             
-            // Truncate and sanitize error message (max 200 chars)
-            const rawMessage = error instanceof Error ? error.message : String(error || 'Sync error');
-            const message = rawMessage.length > 200 
-                ? rawMessage.slice(0, 197) + '...'
-                : rawMessage;
-                
+            const presentation = presentError(error, { source: 'sync', fallbackMessage: 'This change could not be synced. Check your connection or workspace access.' });
+            const message = presentation.message;
             const errorKey = `${op.tableName}:${op.pk}:${message}`;
             const now = Date.now();
             const lastSeen = errorDedupe.get(errorKey);
@@ -158,7 +155,7 @@ export default defineNuxtPlugin(() => {
             errorDedupe.set(errorKey, now);
 
             await emitSystemNotification({
-                title: 'Sync error',
+                title: presentation.title,
                 body: message,
             });
         } catch (err) {
@@ -169,10 +166,8 @@ export default defineNuxtPlugin(() => {
     // Listen for storage failures if such hooks exist
     hooks.addAction('storage:action:error', async (error) => {
         try {
-            await emitSystemNotification({
-                title: 'Storage error',
-                body: error?.message || 'An error occurred while accessing storage.',
-            });
+            const presentation = presentError(error, { source: 'storage', code: 'ERR_STORAGE_PROVIDER_ERROR' });
+            await emitSystemNotification({ title: presentation.title, body: presentation.message });
         } catch (err) {
             console.error('[notification-listeners] Failed to create storage error notification:', err);
         }
@@ -227,11 +222,8 @@ export default defineNuxtPlugin(() => {
             );
             await service.create({
                 type: 'system.warning',
-                title: 'AI response failed',
-                body:
-                    payload.error instanceof Error
-                        ? payload.error.message
-                        : 'Background response failed.',
+                title: presentError(payload.error, { code: 'ERR_STREAM_FAILURE' }).title,
+                body: presentError(payload.error, { code: 'ERR_STREAM_FAILURE' }).message,
                 threadId: payload.threadId,
             });
         } catch (err) {

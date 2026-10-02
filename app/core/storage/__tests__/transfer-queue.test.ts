@@ -1060,7 +1060,7 @@ describe('FileTransferQueue', () => {
         const failed = await db.file_transfers.get(transfer.id);
         expect(failed?.state).toBe('failed');
         expect(failed?.attempts).toBe(1);
-        expect(failed?.last_error).toContain('File too large');
+        expect(failed?.last_error).toBe('The file transfer could not be completed. Please try again.');
     });
 
     it('waitForTransfer handles done/failed/not-found/timeout and ensureDownloadedBlob uses cache', async () => {
@@ -1285,7 +1285,7 @@ describe('FileTransferQueue', () => {
 
         const failed = await db.file_transfers.get(transfer!.id);
         expect(failed?.state).toBe('failed');
-        expect(failed?.last_error).toContain('Upload rejected by policy');
+        expect(failed?.last_error).toBe('Check the attachment type, size and number of files.');
 
         // Seed old done/failed entries and force cleanup
         await db.file_transfers.put({

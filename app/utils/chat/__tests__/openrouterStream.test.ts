@@ -1,3 +1,4 @@
+import { OpenRouterProviderError } from '~~/shared/openrouter/errors';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
     openRouterStream,
@@ -54,6 +55,17 @@ describe('openrouterStream', () => {
 
     afterEach(() => {
         vi.useRealTimers();
+    });
+
+    it.each(['personal', 'server'])('retains %s credential ownership on an SSE provider failure', async (owner) => {
+        const input = new OpenRouterProviderError('User not found. token=secret-token', { status: 401, providerCode: 401, retryable: false });
+        parseMock.mockImplementationOnce(async function* () { throw input; });
+        const fetchMock = vi.fn().mockResolvedValue(createStreamResponse({ 'x-or3-credential-source': owner }));
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+        await expect((async () => {
+            for await (const _event of openRouterStream({ apiKey: 'key-1', model: 'model-1', orMessages: [{ role: 'user', content: 'hi' }], modalities: ['text'] })) { /* consume */ }
+        })()).rejects.toMatchObject({ status: 401, providerCode: 401, credentialSource: owner, retryable: false });
+        expect(fetchMock).toHaveBeenCalledOnce();
     });
 
     it('uses server route for streaming when available', async () => {
@@ -211,7 +223,7 @@ describe('openrouterStream', () => {
                     // noop
                 }
             })()
-        ).rejects.toThrow('OpenRouter proxy error 500');
+        ).rejects.toMatchObject({ status: 500, retryable: true, message: 'The service could not complete the request. Please try again later.' });
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
         expect(fetchMock).not.toHaveBeenCalledWith(
@@ -365,7 +377,7 @@ describe('openrouterStream', () => {
                     // noop
                 }
             })()
-        ).rejects.toThrow('OpenRouter proxy error 429');
+        ).rejects.toMatchObject({ status: 429, retryable: true, retryAfterMs: 0 });
 
         expect(fetchMock).toHaveBeenCalledTimes(2); // initial + 1 retry
     });
@@ -559,7 +571,7 @@ describe('background streaming helpers', () => {
                 messageId: 'm1',
                 history: testHistory(),
             })
-        ).rejects.toThrow('nope');
+        ).rejects.toMatchObject({ status: 404, retryable: false, message: 'This item could not be found. Refresh and check that it still exists.' });
 
         expect(localStorage.getItem('or3:background-streaming-available')).toBe(
             'false'

@@ -1,3 +1,4 @@
+import { redactErrorText, errorDiagnostics } from '../errors';
 export interface SensitiveValueMetadata {
     utf8Bytes: number;
     fingerprint: string;
@@ -29,32 +30,17 @@ export function redactDiagnosticDetails(
     details?: Record<string, unknown>
 ): Record<string, unknown> | undefined {
     if (!details) return undefined;
-    const result: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(details)) {
-        if (SENSITIVE_DETAIL_KEY_PATTERN.test(key)) {
-            result[key] = '[redacted]';
-            continue;
-        }
-        if (value === null || value === undefined) {
-            result[key] = value;
-        } else if (typeof value === 'string') {
-            result[key] = value.length > 200 ? `${value.slice(0, 200)}…` : value;
-        } else if (typeof value === 'number' || typeof value === 'boolean') {
-            result[key] = value;
-        } else if (value instanceof Error) {
-            result[key] = value.message;
-        } else {
-            try {
-                const serialized = JSON.stringify(value);
-                result[key] =
-                    serialized && serialized.length > 200
-                        ? `${serialized.slice(0, 200)}…`
-                        : serialized;
-            } catch {
-                result[key] = '[unserializable]';
-            }
-        }
+    function sanitize(value: unknown, depth = 0): unknown {
+        if (value instanceof Error) return errorDiagnostics(value);
+        if (typeof value === 'string') return redactErrorText(value, 200);
+        if (value === null || value === undefined || typeof value === 'boolean') return value;
+        if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+        if (depth >= 3) return '[details omitted]';
+        if (Array.isArray(value)) return value.slice(0, 10).map(item => sanitize(item, depth + 1));
+        if (typeof value !== 'object') return '[details omitted]';
+        return Object.fromEntries(Object.entries(value).slice(0, 32).map(([key, entry]) => [
+            redactErrorText(key, 64), SENSITIVE_DETAIL_KEY_PATTERN.test(key) ? '[redacted]' : sanitize(entry, depth + 1),
+        ]));
     }
-    return result;
+    return sanitize(details) as Record<string, unknown>;
 }
-

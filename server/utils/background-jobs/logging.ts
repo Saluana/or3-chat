@@ -1,3 +1,4 @@
+import { redactErrorText } from '~~/shared/errors';
 /**
  * Structured background execution logging with recursive secret redaction.
  */
@@ -12,7 +13,7 @@ const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/\-=]{8,}\b/gi;
 const OPENROUTER_KEY_PATTERN = /\bsk-[A-Za-z0-9_-]{12,}\b/g;
 
 function redactString(value: string): string {
-    return value
+    return redactErrorText(value, 2048)
         .replace(BEARER_PATTERN, 'Bearer <redacted>')
         .replace(JWT_LIKE_PATTERN, '<redacted-jwt>')
         .replace(OPENROUTER_KEY_PATTERN, '<redacted-key>');

@@ -10,6 +10,7 @@
  * verification receipt bound to the canary evidence.
  */
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { computed, onMounted, ref } from 'vue';
 import { useToast } from '#imports';
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
@@ -87,7 +88,7 @@ onMounted(async () => {
     try {
         eligibility.value = await apiGet<Eligibility>('/api/admin/plugins/development/eligibility');
     } catch (error) {
-        eligibilityError.value = error instanceof Error ? error.message : 'Eligibility could not be checked.';
+        eligibilityError.value = presentError(error, { source: 'admin', fallbackMessage: 'Eligibility could not be checked.' }).message;
     }
 });
 
@@ -132,7 +133,7 @@ async function previewReceipt(file: File): Promise<void> {
             revision: typeof source?.revision === 'string' ? source.revision : 'unknown',
         };
     } catch (error) {
-        previewError.value = error instanceof Error ? error.message : 'The receipt could not be read.';
+        previewError.value = presentError(error, { source: 'admin', fallbackMessage: 'The receipt could not be read.' }).message;
     }
 }
 
@@ -191,7 +192,7 @@ async function admit(): Promise<void> {
             color: 'success',
         });
     } catch (error) {
-        const message = error instanceof Error ? error.message : 'The candidate was refused.';
+        const message = presentError(error, { source: 'admin', fallbackMessage: 'The candidate was refused.' }).message;
         admitNote.value = message;
         toast.add({ title: 'Admission refused', description: message, color: 'error' });
     } finally {
@@ -240,7 +241,7 @@ async function exportVerification(): Promise<void> {    if (!admitted.value) ret
         URL.revokeObjectURL(url);
         toast.add({ title: 'Verification receipt exported', description: 'Developer-supplied evidence, bound to the candidate and host.', color: 'success' });
     } catch (error) {
-        toast.add({ title: 'Verification unavailable', description: error instanceof Error ? error.message : 'Run the candidate canary to a pass first.', color: 'error' });
+        toast.add({ title: 'Verification unavailable', description: presentError(error, { source: 'admin', fallbackMessage: 'Run the candidate canary to a pass first.' }).message, color: 'error' });
     } finally {
         exporting.value = false;
     }

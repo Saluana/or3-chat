@@ -25,17 +25,32 @@ async function saveAndReport(
 ```
 
 `AppError` carries a code, severity (`info`, `warn`, `error`, or `fatal`),
-optional `retryable` metadata, tags, a timestamp, and an optional cause.
+classified retryability, HTTP status, source, credential ownership, provider code, retry delay, tags, a timestamp, and an optional local cause.
 `reportError()` emits `error:raised`, then `error:<domain>` when a `domain`
 tag is present; chat-domain errors also emit `ai.chat.error:action`. It shows a
 toast by default except for info-level errors. Pass `silent: true` to suppress
 the toast or `toast: false` to override the default.
 
 The reporter suppresses duplicate log entries with the same code and message
-for 300 ms. Its redactor is only a heuristic: it masks top-level message/tag
-strings that contain a secret-related keyword and look like a long token. It
-does not scrub arbitrary nested values, all error data, or every credential
-format. Never put secrets in error messages or tags.
+for 300 ms. Primary UI uses `presentError()` from `shared/errors`, never an
+arbitrary exception message or response body. Pass an app-owned operation
+fallback with `message` (reporter) or `fallbackMessage` (presenter).
+
+Provider credentials and OR3 sessions receive different guidance. Recovery
+controls appear only when the host supports them. Retry requires classified
+retryability and an operation-owned safe callback; it is withheld during a
+provider retry delay. Authentication, quota, validation and uncertain tool
+outcomes cannot acquire a Retry button through an override.
+
+Details expose only allowlisted, bounded metadata: canonical code, HTTP status,
+source, credential ownership, known provider code, retry delay and retryability.
+Raw bodies, stacks, causes, headers, URLs and user content are omitted. Causes
+remain local for error handling. Lifecycle logging redacts nested credential
+fields and embedded token patterns before truncating strings. Never deliberately
+put secrets in messages, tags or app-owned fallback copy.
+
+Background jobs retain their metadata inside the existing error-string field;
+consumers must present it through the shared mapper rather than display it raw.
 
 ## Retry only when safe
 

@@ -143,7 +143,8 @@ export async function fetchModels(opts?: {
         if (cached?.data.length) return cached.data;
 
         const normalized = normalizeSDKError(error);
-        throw new Error(`Failed to fetch models: ${normalized.message}`);
+        const { raw: _raw, ...metadata } = normalized;
+        throw Object.assign(new Error(normalized.message, { cause: error }), metadata);
     }
 }
 

@@ -81,6 +81,6 @@ describe('file validation & persistence', () => {
         const att: any = { file: img, name: 'x.png', status: 'pending' };
         await persistAttachment(att);
         expect(att.status).toBe('error');
-        expect(att.error).toContain('disk boom');
+        expect(att.error).toBe('The attachment could not be saved. Please try attaching it again.');
     });
 });

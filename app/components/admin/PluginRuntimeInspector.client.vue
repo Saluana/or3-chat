@@ -136,8 +136,7 @@
                         v-if="record.lastError"
                         class="mt-1 text-[var(--md-error)]"
                     >
-                        {{ record.lastError.code }}:
-                        {{ record.lastError.message }}
+                        {{ presentError(record.lastError, { source: 'plugin', code: 'ERR_HOOK_FAILURE' }).message }}
                     </div>
                     <div v-if="record.nextRetryAt" class="mt-1 opacity-75">
                         Retry after
@@ -322,6 +321,7 @@
 </template>
 
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { getShadowPluginManager } from '~/composables/plugins/shadow-plugin-manager';
 import { getBundledV1WorkspaceManager } from '~/composables/plugins/bundled-v1-manager-runtime';
 import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';

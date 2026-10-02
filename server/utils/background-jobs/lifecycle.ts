@@ -1,3 +1,4 @@
+import { serializeError } from '~~/shared/errors';
 import { randomUUID } from 'node:crypto';
 import type { BackgroundJob, BackgroundJobProvider, JobUpdate } from './types';
 import type { BackgroundStreamParams } from './stream-handler';
@@ -126,9 +127,7 @@ export async function runClaimedBackgroundJob(
 
     try {
         if (hasUnsafeInterruptedTool(job)) {
-            throw new Error(
-                'Server restarted while a tool result was not safely checkpointed. Retry the message to avoid repeating a side effect.'
-            );
+            throw Object.assign(new Error('Tool execution was interrupted before checkpointing.'), { code: 'ERR_TOOL_OUTCOME_UNKNOWN', retryable: false });
         }
 
         const cleanup = pendingToolCleanup(job);
@@ -189,8 +188,7 @@ export async function runClaimedBackgroundJob(
             latest.leaseOwner === workerId &&
             !abortController.signal.aborted
         ) {
-            const message =
-                error instanceof Error ? error.message : String(error);
+            const message = serializeError(error, { code: 'ERR_STREAM_FAILURE', source: 'provider', credentialSource: latest.execution?.credentialSource });
             if (
                 latest.execution?.history &&
                 dependencies.provider.saveTerminalSnapshot

@@ -2,6 +2,7 @@
     <UApp>
         <!-- Register the PWA web manifest on all pages -->
         <VitePwaManifest />
+        <ErrorRecovery />
         <FatalErrorBoundary>
             <!-- Use NuxtLayout to avoid warning when layouts/ are present -->
             <NuxtLayout>

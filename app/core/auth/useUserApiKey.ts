@@ -1,3 +1,4 @@
+import { err } from '~/utils/errors';
 /**
  * @module app/core/auth/useUserApiKey
  *
@@ -58,7 +59,7 @@ export function isValidOpenRouterKeyFormat(key: string): boolean {
 export async function persistUserApiKey(key: string): Promise<void> {
     const trimmed = key.trim();
     if (!isValidOpenRouterKeyFormat(trimmed)) {
-        throw new Error(
+        throw err('ERR_VALIDATION',
             `That doesn't look like an OpenRouter API key. Keys start with "${OPENROUTER_KEY_PREFIX}" — get yours at openrouter.ai/keys.`
         );
     }

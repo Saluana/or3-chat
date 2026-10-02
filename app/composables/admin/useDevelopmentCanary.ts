@@ -1,3 +1,4 @@
+import { presentError } from '~~/shared/errors';
 import { ref } from 'vue';
 import { useToast } from '#imports';
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
@@ -53,7 +54,7 @@ export function useDevelopmentCanary() {
             notes.value = { ...notes.value, [pluginId]: 'Canary is still pending after three browser checks.' };
             return false;
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'The browser check failed.';
+            const message = presentError(error, { source: 'admin', fallbackMessage: 'The browser check failed.' }).message;
             notes.value = { ...notes.value, [pluginId]: message };
             if (!quiet) toast.add({ title: 'Browser check failed', description: message, color: 'error' });
             return false;
@@ -86,7 +87,7 @@ export function useDevelopmentCanary() {
             toast.add({ title: 'Verification receipt exported', description: 'Developer-supplied evidence, bound to the candidate and host.', color: 'success' });
             return true;
         } catch (error) {
-            toast.add({ title: 'Verification unavailable', description: error instanceof Error ? error.message : 'Run the candidate canary to a pass first.', color: 'error' });
+            toast.add({ title: 'Verification unavailable', description: presentError(error, { source: 'admin', fallbackMessage: 'Run the candidate canary to a pass first.' }).message, color: 'error' });
             return false;
         }
     };

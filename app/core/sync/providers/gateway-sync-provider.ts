@@ -1,3 +1,4 @@
+import { normalizeError, type ErrorCode } from '~~/shared/errors';
 /**
  * @module app/core/sync/providers/gateway-sync-provider
  *
@@ -68,6 +69,9 @@ export interface GatewaySyncProviderConfig {
 }
 
 class GatewaySyncRequestError extends Error {
+    readonly source = 'sync' as const;
+    code: ErrorCode;
+    retryable: boolean;
     status: number;
     path: string;
     retryAfterMs?: number;
@@ -75,6 +79,9 @@ class GatewaySyncRequestError extends Error {
     constructor(path: string, status: number, message: string, retryAfterMs?: number) {
         super(`[gateway-sync] ${path} failed (${status}): ${message}`);
         this.name = 'GatewaySyncRequestError';
+        const metadata = normalizeError({ status, retryAfterMs }, { source: 'sync' });
+        this.code = metadata.code;
+        this.retryable = metadata.retryable;
         this.status = status;
         this.path = path;
         this.retryAfterMs = retryAfterMs;

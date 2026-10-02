@@ -158,6 +158,7 @@ export interface BackgroundJobExecution {
     workspaceId: string;
     referer: string;
     apiKeyCiphertext: string;
+    credentialSource?: 'personal' | 'server';
     /** Immutable canonical-history admission captured before paid execution. */
     history?: ChatGenerationAdmissionEnvelope;
     /** Text that is already represented by a durable tool-loop checkpoint. */

@@ -1,3 +1,4 @@
+import { normalizeError, presentError, parseRetryAfter } from '~~/shared/errors';
 /**
  * @module app/core/storage/providers/gateway-storage-provider
  *
@@ -53,8 +54,9 @@ async function requestJson<T>(
     });
 
     if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`[gateway-storage] ${path} failed: ${res.status} ${text}`);
+        const metadata = normalizeError({ status: res.status,
+            retryAfterMs: parseRetryAfter(res.headers.get('retry-after')) }, { source: 'storage' });
+        throw Object.assign(new Error(presentError(metadata).message), metadata);
     }
 
     return (await res.json()) as T;

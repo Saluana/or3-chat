@@ -130,6 +130,7 @@
 </template>
 
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRuntimeConfig, useToast } from '#imports';
 import { useIcon } from '~/composables/useIcon';
@@ -239,9 +240,7 @@ async function onSavePaste(): Promise<void> {
         pasteValue.value = '';
     } catch (error) {
         pasteError.value =
-            error instanceof Error
-                ? error.message
-                : 'Could not save that key. Please try again.';
+            presentError(error, { code: 'ERR_DB_WRITE_FAILED', fallbackMessage: 'Your API key could not be saved. Please try again.' }).message;
         await nextTick();
         cardRoot.value?.querySelector<HTMLElement>('[role="alert"]')?.scrollIntoView?.({ block: 'nearest' });
         cardRoot.value?.querySelector<HTMLInputElement>('input')?.focus();
