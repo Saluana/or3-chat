@@ -126,3 +126,51 @@ represents proof without the command, source revision and observed artifact.
 - Residual candidate38 tests/four owners pass in `/tmp/task16-assistant-residual-candidate.log`; refreshed configured types and new-head CI still required.
 
 - Granted configured Basic Auth/SQLite/FS typecheck on51505747 initially found only two fixture errors: a searchOnce mock omitted the new snapshots field and the interrupted DB get key needed an explicit parameter type. Both repaired without changing assertions;45 focused cases/two fixtures pass `/tmp/task16-assistant-residual-fixtures.log`. The same configured gate now exits0 in `/tmp/task16-assistant-residual-typecheck-fixtures-fixed.log`. GOMAXPROCS2/UV pool2/Node4GiB; first sandbox tsx IPC failure and first TS errors retained. No full-suite/build/browser expansion in that short slot; explicitly released after success.
+
+## Final initial-milestone qualification at exact runtime5154
+
+Observed2026-10-02 14:07:22UTC: parent-granted single productionPageShell case
+`production chat journey › workspace edits require review and preserve durable Apply Undo across reload`
+PASS19.5s, worker1/retries0/scripted inference, frozen clean
+`5154f48db448b35db6da0401c05a609a83c1a316` throughout. This supersedes the
+historical proposal browser pass only for this named journey: real search/read/propose,
+Review with unchanged IndexedDB content, Apply/reload, Undo/reload and original
+editor navigation all reached their assertions. No additional model/provider call
+was authorized; existing fixture scripts inference, actual components/tools/index/DB
+execute normally.
+
+Preview command:
+`env OR3_PRODUCTION_JOURNEY_TEST_HARNESS=true SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false PW_PORT=3210 UV_THREADPOOL_SIZE=2 NODE_OPTIONS=--max-old-space-size=8192 bun run dev --host 127.0.0.1 --port 3210`
+
+Browser command:
+`env OR3_PRODUCTION_JOURNEY_TEST_HARNESS=true PW_SKIP_WEB_SERVER=true PW_PORT=3210 bunx playwright test tests/e2e/production-chat-journey.spec.ts --grep 'workspace edits require review and preserve durable Apply Undo across reload' --workers=1 --retries=0 --reporter=line --trace=on`
+
+Start observed14:06:14UTC; browser EXIT0; own preview Ctrl-C EXIT130 and both3210/25210
+listener checks clear at14:07:22UTC; explicit heavy-lane release delivered to parent.
+No source/test edit, correction or retry during this frozen gate. Installed HMR shares3210.
+Logs `/tmp/task16-assistant-final-proposal-{preview,browser-first}.log`; durable
+trace, logs and before-Apply/after-Undo screenshots at
+`/Users/brendon/Documents/Codex/2026-10-01/task-16/evidence/assistant-final-proposal-browser/`.
+Both screenshots inspected: existing blank-theme tokens/normal review diff and
+truthful undone card retained. This is not a full theme/mobile/accessibility proof.
+
+The preview log also records an existing editor-autocomplete request to local
+`/api/__or3-e2e/chat/completions` returning404 after editor navigation; that route
+is unsupported by the isolated fixture. The named durable-content/editor assertions
+passed. This was not a paid/external request and is not evidence of successful
+autocomplete or an error-free entire application. First log retained, no suppression
+or gate weakening. Full normal autocomplete/provider coverage remains outside this case.
+
+Exact runtime5154 Core and Contracts SUCCESS, run36983290347, independently reread;
+parent initial/residual source review closed. Configured BasicAuth/SQLite/fs types
+already pass. Historical pending statements above are superseded for this exact
+initial milestone by these recorded results, not for the unfinished full plan.
+
+Checklist status notes preserve every original task/Done when criterion and the
+full traceability/Definition of Done. Seven fully evidenced task boundaries are
+checked;14 partial and20 not-started tasks remain unchecked. Permanent Files,
+extraction/uploads, Trash/shared-reference retention, provider/capability matrices,
+Files UX/accessibility/scale, remaining history/cloud/static/server/docs/live-quality
+acceptance are unfinished. No deployment/default merge/provider publication or
+real-user destructive action occurred. Compaction ownership separately handed off
+without further edits to its source/tests/plans.
