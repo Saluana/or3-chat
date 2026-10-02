@@ -2796,7 +2796,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "2008fb0af548278560d26d5f44c5ec6aab73731b0879ec21d304d99b396db442",
+      "apiSha256": "eae0f6b1fe4eea2d2b55140be61e31a054cffb56edaa66c318a80350e3765bdf",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -6379,7 +6379,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAi.ts",
-                "line": 212,
+                "line": 213,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
               }
@@ -6388,7 +6388,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAi.ts",
-              "line": 212,
+              "line": 213,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
             }
