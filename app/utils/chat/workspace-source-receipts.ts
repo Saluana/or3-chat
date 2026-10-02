@@ -1,9 +1,28 @@
 import type { WorkspaceSource } from './workspace-items';
+import type { WorkspaceDocumentChangeRef } from './workspace-document-change';
 
 export interface WorkspaceSourceReceipt {
     workspaceId: string;
     source: WorkspaceSource;
     partial: boolean;
+    action?: 'created';
+}
+
+export function workspaceDocumentChangeReceipt(call: { name: string; status: string; result?: string }):
+    (WorkspaceDocumentChangeRef & { source: WorkspaceSource }) | null {
+    if (call.name !== 'workspace_propose_document_edit' || call.status !== 'complete' || !call.result) return null;
+    try {
+        const value = JSON.parse(call.result) as Record<string, unknown>;
+        const source = value.source as WorkspaceSource | undefined;
+        if (value.version !== 1 || typeof value.workspaceId !== 'string' || !value.workspaceId
+            || typeof value.messageId !== 'string' || !value.messageId || typeof value.documentId !== 'string' || !value.documentId
+            || typeof value.changeId !== 'string' || !/^[a-f0-9]{64}$/u.test(value.changeId)
+            || !['pending_review', 'applied', 'discarded', 'stale', 'undone'].includes(String(value.status))
+            || !source || source.kind !== 'document' || source.id !== value.documentId || typeof source.title !== 'string'
+            || !/^[a-f0-9]{64}$/u.test(source.revision)) return null;
+        return { workspaceId: value.workspaceId, messageId: value.messageId, documentId: value.documentId,
+            changeId: value.changeId, source };
+    } catch { return null; }
 }
 
 /** Only host workspace-tool results can produce source controls. No Markdown links. */
@@ -27,7 +46,9 @@ export function workspaceSourceReceipts(call: { name: string; status: string; re
                 && /^[a-f0-9]{64}$/.test(source.revision);
         })
             .map((source) => ({ workspaceId: value.workspaceId, source,
-                partial: value.partial === true || value.coverage === 'partial' })) as WorkspaceSourceReceipt[];
+                partial: value.partial === true || value.coverage === 'partial',
+                ...(call.name === 'workspace_create_document' && value.status === 'saved' ? { action: 'created' } : {}),
+            })) as WorkspaceSourceReceipt[];
     } catch { return []; }
 }
 

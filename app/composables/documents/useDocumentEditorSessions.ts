@@ -34,6 +34,10 @@ export interface ActiveDocumentEditorSession {
     getDocumentSnapshot?: () => { title: string; content: TipTapDocument };
     /** Captured origin handle, including while an old editor is saving after a switch. */
     originDb?: Or3DB;
+    /** Brief host Apply/Undo lease; rejects a buffer that changed during preparation. */
+    beginExternalWrite?: (expected: { title: string; content: TipTapDocument }) => () => void;
+    /** Accept the already committed row synchronously, without another fallible storage read. */
+    acceptExternalWrite?: (row: Post) => void;
 }
 
 interface LegacyDocumentEditorSession {
@@ -210,6 +214,23 @@ export async function settleWorkspaceDocumentEditors(documentId: string, db: Or3
     }
 }
 
+export function leaseWorkspaceDocumentEditors(documentId: string, db: Or3DB,
+    expected: { title: string; content: TipTapDocument }): { release: () => void; accept: (row: Post) => void } {
+    const sessions = [...(activeSessions.get(documentId) ?? [])]
+        .filter((session): session is ActiveDocumentEditorSession => isActiveDocumentEditorSession(session) && sessionOrigins.get(session) === db);
+    const releases: Array<() => void> = [];
+    try {
+        for (const session of sessions) {
+            if (session.getDocumentSnapshot && JSON.stringify(session.getDocumentSnapshot()) !== JSON.stringify(expected)) {
+                throw new Error('This document changed. Update the proposal from a new read.');
+            }
+            if (session.beginExternalWrite) releases.push(session.beginExternalWrite(expected));
+        }
+    } catch (error) { releases.reverse().forEach((release) => release()); throw error; }
+    return { release: () => releases.reverse().forEach((release) => release()),
+        accept: (row) => { sessions.forEach((session) => session.acceptExternalWrite?.(row)); } };
+}
+
 export function hasActiveDocumentEditor(documentId: string): boolean {
     return Boolean(activeSessions.get(documentId)?.size);
 }
@@ -230,3 +251,4 @@ export function getActiveDocumentEditorSession(
 }
 import { getDb, type Or3DB } from '~/db/client';
 import type { TipTapDocument } from '~/types/database';
+import type { Post } from '~/db/schema';

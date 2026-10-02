@@ -3,6 +3,7 @@ import { projectWorkspaceConversation } from './workspace-conversation';
 import { normalizeMessageContent, tiptapToPlainText } from '~/core/search/command-palette/normalize';
 import { settleWorkspaceDocumentEditors } from '~/composables/documents/useDocumentEditorSessions';
 import type { WorkspaceOperationScope } from './workspace-access';
+import type { ToolExecutionContext } from './types';
 
 export type WorkspaceItemKind = 'chat' | 'document' | 'project' | 'file';
 export interface WorkspaceItemRef { kind: WorkspaceItemKind; id: string }
@@ -12,7 +13,12 @@ const READ_PAGE_BYTES = 12 * 1024;
 
 /** Revision fingerprints detect content changes even when timestamps tie. */
 export async function workspaceRevision(row: unknown): Promise<string> {
-    const bytes = new TextEncoder().encode(JSON.stringify(row));
+    let canonical = row;
+    if (row && typeof row === 'object' && !Array.isArray(row) && 'postType' in row) {
+        const { document_reference_key: _localIndex, ...fields } = row as Record<string, unknown>;
+        canonical = fields;
+    }
+    const bytes = new TextEncoder().encode(JSON.stringify(canonical));
     const digest = await crypto.subtle.digest('SHA-256', bytes);
     return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -40,8 +46,13 @@ export async function readWorkspaceItem(scope: WorkspaceOperationScope, item: Wo
         scope.assertCurrent();
         if (JSON.stringify(await scope.db.projects.get(item.id)) !== JSON.stringify(project)) throw new Error('This source changed. Read it again.');
         scope.assertCurrent();
+        const { preservedProjectEntries, projectEntryIdentity } = await import('./workspace-projects');
+        const entries = preservedProjectEntries(project.data).map(projectEntryIdentity)
+            .filter((identity): identity is string => identity !== null)
+            .map((identity) => ({ kind: identity.slice(0, identity.indexOf(':')), id: identity.slice(identity.indexOf(':') + 1) }));
+        scope.assertCurrent();
         return { source: { ...item, title: project.name, revision },
-            content: JSON.stringify({ description: project.description ?? '', entries: project.data }), row: project };
+            content: JSON.stringify({ description: project.description ?? '', entries }), row: project };
     }
     if (item.kind === 'chat') {
         const thread = await scope.db.threads.get(item.id);
@@ -77,8 +88,12 @@ export async function readWorkspaceItem(scope: WorkspaceOperationScope, item: Wo
 }
 
 /** Continuations are bound to identity and revision; they cannot change scope. */
-export async function workspaceRead(scope: WorkspaceOperationScope, item: WorkspaceItemRef, continuation?: string) {
+export async function workspaceRead(scope: WorkspaceOperationScope, item: WorkspaceItemRef, continuation?: string, context?: ToolExecutionContext) {
     const loaded = await readWorkspaceItem(scope, item);
+    if (item.kind === 'document') {
+        const { readWorkspaceDocumentPage } = await import('./workspace-document-read');
+        return readWorkspaceDocumentPage(scope, { row: loaded.row as Post, source: loaded.source }, continuation, context);
+    }
     let offset = 0;
     if (continuation) {
         let cursor: { id?: unknown; kind?: unknown; revision?: unknown; offset?: unknown };

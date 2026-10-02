@@ -57,6 +57,7 @@ export async function updateWorkspaceProject(args: Record<string, unknown>, cont
     let proposed: Project;
     let item: WorkspaceItemRef | undefined;
     if (operation === 'create') {
+        if (typeof args.name !== 'string' || !args.name.trim()) throw new Error('Enter a project name.');
         const id = `workspace-project-${await workspaceRevision({ requestId: context.requestId, callId: context.callId })}`;
         scope.assertCurrent('write');
         const prior = await scope.db.projects.get(id);
@@ -67,7 +68,7 @@ export async function updateWorkspaceProject(args: Record<string, unknown>, cont
             const loaded = await readWorkspaceItem(scope, { kind: 'project', id });
             return JSON.stringify({ version: 1, workspaceId: scope.workspaceId, source: loaded.source, status: 'saved', replay: true });
         }
-        proposed = { id, name: String(args.name), description: typeof args.description === 'string' ? args.description : '',
+        proposed = { id, name: args.name.trim(), description: typeof args.description === 'string' ? args.description : '',
             data: [], created_at: nowSec(), updated_at: nowSec(), deleted: false, clock: 0 };
     } else {
         if (typeof args.projectId !== 'string' || typeof args.revision !== 'string') throw new Error('Read the identified project first.');

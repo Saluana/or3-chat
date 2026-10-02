@@ -9,6 +9,7 @@ export interface WorkspaceOperationScope {
     generation: number;
     subject: string | null;
     signal: AbortSignal;
+    writable: boolean;
     assertCurrent(access?: 'read' | 'write'): void;
 }
 
@@ -24,6 +25,7 @@ export function captureWorkspaceOperation(context: ToolExecutionContext): Worksp
     const role = session?.role;
     const scope: WorkspaceOperationScope = {
         db, generation, workspaceId, subject, signal: context.abortSignal,
+        writable: !authenticated || role === 'owner' || role === 'editor',
         assertCurrent(access = 'read') {
             context.abortSignal.throwIfAborted();
             if (!context.threadId || context.workspaceId !== workspaceId

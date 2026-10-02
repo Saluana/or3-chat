@@ -1,10 +1,12 @@
 import 'fake-indexeddb/auto';
 import Dexie from 'dexie';
+import { Blob as NodeBlob } from 'node:buffer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { registerDocumentEditorSession } from '~/composables/documents/useDocumentEditorSessions';
 import { setWorkspaceTabPaletteProvider } from '~/core/search/command-palette/sources/workspace-tab-source';
-import { evictWorkspaceDb, getDb, setActiveWorkspaceDb } from '~/db/client';
+import { evictWorkspaceDb, getDb, setActiveWorkspaceDb, Or3DB } from '~/db/client';
+import { flush, loadDocument, setDocumentContent, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { getDocumentInDb } from '~/db/documents';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
@@ -17,6 +19,7 @@ import { workspaceRevision } from '~/utils/chat/workspace-items';
 const disposers: Array<() => void> = [];
 let originalSsrAuth: boolean;
 beforeEach(async () => {
+    vi.stubGlobal('Blob', NodeBlob);
     originalSsrAuth = testRuntimeConfig.value.public.ssrAuthEnabled;
     testRuntimeConfig.value.public.ssrAuthEnabled = false;
     setHookEngine(createTypedHookEngine(createHookEngine()));
@@ -30,9 +33,127 @@ afterEach(async () => {
     evictWorkspaceDb('workspace-a');
     await Dexie.delete(name);
     setHookEngine(null);
+    vi.unstubAllGlobals();
 });
 
 describe('chat document tools', () => {
+    async function pendingChange() {
+        disposers.push(registerWorkspaceChatTools());
+        const registry = useToolRegistry();
+        await getDb().posts.put({ id: 'apply-doc', title: 'Apply draft', postType: 'doc',
+            content: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Original apply paragraph"}]}]}',
+            meta: '{"unrelated":"retain"}', created_at: 1, updated_at: 1, deleted: false, clock: 1 });
+        await getDb().messages.put({ id: 'apply-message', thread_id: 'thread-a', role: 'assistant',
+            data: { content: 'Model prose cannot mark this saved', unrelated: 'retain' }, created_at: 1,
+            updated_at: 1, deleted: false, clock: 1, index: 0, pending: false });
+        const context = { subject: null, workspaceId: 'workspace-a', threadId: 'thread-a', messageId: 'apply-message',
+            callId: 'apply-read', requestId: 'apply-request', abortSignal: new AbortController().signal };
+        const read = await registry.executeTool('workspace_read', '{"item":{"kind":"document","id":"apply-doc"}}',
+            context, { definition: registry.getTool('workspace_read')!.definition });
+        expect(read.error).toBeUndefined();
+        const proposed = await registry.executeTool('workspace_propose_document_edit', JSON.stringify({
+            documentId: 'apply-doc', readId: JSON.parse(read.result!).readId, operations: [
+                { kind: 'replace_block', ref: 'b1', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Applied paragraph' }] }] },
+            ],
+        }), { ...context, callId: 'apply-proposal' }, { definition: registry.getTool('workspace_propose_document_edit')!.definition });
+        expect(proposed.error).toBeUndefined();
+        return { ref: JSON.parse(proposed.result!), context };
+    }
+    it('commits checkpoint/content/action once across concurrent Apply and guards Undo after later edits', async () => {
+        const { ref } = await pendingChange();
+        const changes = await import('~/utils/chat/workspace-document-change');
+        expect(changes).toHaveProperty('applyWorkspaceDocumentChange');
+        const applied = await Promise.all([changes.applyWorkspaceDocumentChange(ref), changes.applyWorkspaceDocumentChange(ref)]);
+        expect(applied.every((receipt) => receipt.status === 'applied')).toBe(true);
+        const saved = await getDb().posts.get('apply-doc');
+        expect(saved?.content).toContain('Applied paragraph');
+        expect(saved?.clock).toBe(2);
+        expect(saved?.meta).toContain('unrelated');
+        expect(await getDb().posts.where('postType').equals('or3:document-revision').count()).toBe(1);
+        expect((await getDb().messages.get('apply-message'))?.data).toMatchObject({ unrelated: 'retain' });
+        await getDb().posts.update('apply-doc', { content: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Later user edit"}]}]}', clock: 3 });
+        await expect(changes.undoWorkspaceDocumentChange(ref)).rejects.toThrow(/history|later|changed/i);
+        expect((await getDb().posts.get('apply-doc'))?.content).toContain('Later user edit');
+    });
+    it('refuses stale Apply and leaves the changed document intact', async () => {
+        const { ref } = await pendingChange();
+        await getDb().posts.update('apply-doc', { content: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Newer user draft"}]}]}', clock: 2 });
+        const changes = await import('~/utils/chat/workspace-document-change');
+        expect(changes).toHaveProperty('applyWorkspaceDocumentChange');
+        await expect(changes.applyWorkspaceDocumentChange(ref)).rejects.toThrow(/changed|proposal/i);
+        expect((await getDb().posts.get('apply-doc'))?.content).toContain('Newer user draft');
+        expect(await getDb().posts.where('postType').equals('or3:document-revision').count()).toBe(0);
+    });
+    it('retains a second tab draft instead of autosaving it over committed Apply', async () => {
+        const { ref } = await pendingChange();
+        const otherTab = new Or3DB(getDb().name);
+        try {
+            await otherTab.open();
+            await loadDocument('apply-doc', otherTab);
+            const oldDraft = { type: 'doc' as const, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Second tab pending draft' }] }] };
+            setDocumentContent('apply-doc', oldDraft, otherTab);
+            const { applyWorkspaceDocumentChange } = await import('~/utils/chat/workspace-document-change');
+            expect((await applyWorkspaceDocumentChange(ref)).status).toBe('applied');
+            await flush('apply-doc', otherTab);
+            expect((await getDb().posts.get('apply-doc'))?.content).toContain('Applied paragraph');
+            expect(useDocumentState('apply-doc', otherTab)).toMatchObject({ status: 'error', pendingContent: oldDraft });
+        } finally {
+            // Dispose only this synthetic unsaved draft after proving it survived the failed save.
+            const state = useDocumentState('apply-doc', otherTab);
+            state.pendingContent = undefined; state.pendingTitle = undefined;
+            otherTab.close();
+        }
+    });
+    it('rolls back content and checkpoint on receipt-write failure, then permits a recoverable retry and Undo', async () => {
+        const { ref } = await pendingChange();
+        const changes = await import('~/utils/chat/workspace-document-change');
+        expect(changes).toHaveProperty('applyWorkspaceDocumentChange');
+        const realPut = getDb().messages.put.bind(getDb().messages);
+        const put = vi.spyOn(getDb().messages, 'put').mockImplementationOnce(async () => { throw new Error('Injected durable receipt failure'); });
+        try {
+            await expect(changes.applyWorkspaceDocumentChange(ref)).rejects.toThrow(/receipt failure/i);
+            expect((await getDb().posts.get('apply-doc'))?.content).toContain('Original apply paragraph');
+            expect(await getDb().posts.where('postType').equals('or3:document-revision').count()).toBe(0);
+        } finally { put.mockImplementation(realPut); put.mockRestore(); }
+        expect((await changes.applyWorkspaceDocumentChange(ref)).status).toBe('applied');
+        expect((await changes.undoWorkspaceDocumentChange(ref)).status).toBe('undone');
+        expect((await getDb().posts.get('apply-doc'))?.content).toContain('Original apply paragraph');
+    });
+    it('stages a durable document proposal from exposed read blocks without saving the candidate', async () => {
+        disposers.push(registerWorkspaceChatTools());
+        const registry = useToolRegistry();
+        await getDb().posts.put({ id: 'proposal-doc', title: 'Review draft', postType: 'doc',
+            content: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Original paragraph"}]}]}',
+            created_at: 1, updated_at: 1, deleted: false, clock: 1 });
+        await getDb().messages.put({ id: 'assistant-a', thread_id: 'thread-a', role: 'assistant', data: { content: '' },
+            created_at: 1, updated_at: 1, deleted: false, clock: 1, index: 0, pending: false });
+        const context = { subject: null, workspaceId: 'workspace-a', threadId: 'thread-a',
+            messageId: 'assistant-a', callId: 'read-for-proposal', requestId: 'proposal-request',
+            abortSignal: new AbortController().signal };
+        const propose = registry.getTool('workspace_propose_document_edit');
+        expect(propose, 'normal chat advertises one reviewable edit tool').toBeDefined();
+        const readTool = registry.getTool('workspace_read')!;
+        const read = await registry.executeTool('workspace_read', '{"item":{"kind":"document","id":"proposal-doc"}}',
+            context, { definition: readTool.definition });
+        expect(read.error).toBeUndefined();
+        const receipt = JSON.parse(read.result!);
+        expect(receipt.readId).toEqual(expect.any(String));
+        expect(receipt.blocks).toEqual(expect.arrayContaining([expect.objectContaining({ ref: 'b1', text: 'Original paragraph' })]));
+        const staged = await registry.executeTool('workspace_propose_document_edit', JSON.stringify({
+            documentId: 'proposal-doc', readId: receipt.readId, operations: [{ kind: 'replace_block', ref: 'b1', content: [
+                { type: 'paragraph', content: [{ type: 'text', text: 'Proposed paragraph' }] },
+            ] }],
+        }), { ...context, callId: 'proposal-call' }, { definition: propose!.definition });
+        expect(staged.error).toBeUndefined();
+        expect(JSON.parse(staged.result!)).toMatchObject({ status: 'pending_review', documentId: 'proposal-doc' });
+        expect((await getDb().posts.get('proposal-doc'))?.content).toContain('Original paragraph');
+        expect((await getDb().posts.get('proposal-doc'))?.content).not.toContain('Proposed paragraph');
+        expect(JSON.stringify((await getDb().messages.get('assistant-a'))?.data)).toContain('pending');
+        const forged = await registry.executeTool('workspace_propose_document_edit', JSON.stringify({
+            documentId: 'proposal-doc', readId: receipt.readId, operations: [{ kind: 'delete_block', ref: 'b99' }],
+        }), { ...context, callId: 'forged-proposal' }, { definition: propose!.definition });
+        expect(forged.error).toMatch(/exposed|reference/i);
+    });
     it('refuses disagreement between live document buffers before flushing either', async () => {
         disposers.push(registerWorkspaceChatTools());
         const flush = vi.fn(async () => undefined);
@@ -101,6 +222,11 @@ describe('chat document tools', () => {
         expect((await getDb().projects.get(project.id))?.data).toEqual([
             project.data[0], { kind: 'doc', id, name: 'Associated result' },
         ]);
+        const readProject = await registry.executeTool('workspace_read', JSON.stringify({ item: { kind: 'project', id: project.id } }),
+            context, { definition: registry.getTool('workspace_read')!.definition });
+        expect(readProject.error).toBeUndefined();
+        expect(readProject.result).not.toContain('private-record');
+        expect(readProject.result).not.toContain('plugin-private');
         const stale = await registry.executeTool('workspace_create_document', JSON.stringify(args),
             { ...context, callId: 'stale-association' }, { definition: tool.definition });
         expect(stale.error).toMatch(/changed/i);

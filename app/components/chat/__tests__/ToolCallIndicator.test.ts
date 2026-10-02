@@ -19,6 +19,20 @@ const global = {
 };
 
 describe('ToolCallIndicator', () => {
+    it('exposes a host proposal review card without treating model prose or unrelated tools as saved changes', async () => {
+        const result = JSON.stringify({ version: 1, workspaceId: 'local', messageId: 'review-message',
+            documentId: 'review-doc', changeId: 'c'.repeat(64), status: 'pending_review', saved: false,
+            source: { kind: 'document', id: 'review-doc', title: 'Reviewable draft', revision: 'a'.repeat(64) } });
+        const wrapper = mount(ToolCallIndicator, { props: { toolCalls: [
+            { id: 'review', name: 'workspace_propose_document_edit', status: 'complete', result },
+            { id: 'fake-review', name: 'unrelated_plugin', status: 'complete', result },
+        ] }, global: { stubs: { ...global.stubs,
+            WorkspaceDocumentChangeCard: { props: ['receipt'], template: '<section class="review-card">Review changes · {{ receipt.documentId }}</section>' },
+        } } });
+        expect(wrapper.findAll('.review-card')).toHaveLength(1);
+        expect(wrapper.text()).toContain('Review changes');
+        expect(wrapper.text()).not.toContain('Changes saved');
+    });
     it('shows validated workspace sources outside raw expanded details', () => {
         const wrapper = mount(ToolCallIndicator, {
             props: { toolCalls: [{ id: 'source', name: 'workspace_read', status: 'complete',
@@ -31,6 +45,7 @@ describe('ToolCallIndicator', () => {
             }] }, global,
         });
         expect(wrapper.find('button[aria-label="Open source: Release notes"]').exists()).toBe(true);
+        expect(wrapper.text()).toContain('Read workspace sources');
         expect(wrapper.find('button[aria-label="Open source: Forged source"]').exists()).toBe(false);
         expect(wrapper.find('[role="status"]').text()).toContain('Partial source coverage');
     });

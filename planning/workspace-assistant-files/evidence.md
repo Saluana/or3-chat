@@ -29,11 +29,11 @@ production API. Inference alone is mocked in browser journeys.
 
 ## Dependencies and limits
 
-- PR179: document/editor/sidebar/search workspace fences; final same-ID editor
-  correction pending owner review. Earlier green head is superseded.
-- Reliability: useAi/continue/retry/background persistence and canonical chat
-  fixtures; exact reviewed draft/head pending.
-- PR181: authenticated job/client-tool/workflow scope admission.
+- PR179: parent-reviewed `40b7aef695762ccb03476a48eaf17c6b46dbd8a6`.
+- PR182: parent-reviewed production `a515ab956bc15fa7c2c31eb51da9efac1219e06f`,
+  final three-file test followup `07b235b2042c4e660c979974d87b52c565d68dbf` also reviewed.
+- PR181: parent-reviewed final `bb86066cd20a8f9a97591116f1c225672f21b836`,
+  authenticated job/client-tool/workflow scope admission and delayed-store batching.
 - PR180: backup stream/restore with PR179 origin capture.
 - Provider packages must qualify workspace-item preservation/admission before
   cloud exposure. Installed dist is not an implementation target.
@@ -77,6 +77,31 @@ Incremental engineering evidence (not full-plan qualification):
   `regression-playwright-report`. Transport is scripted; tools, DB, navigation and
   components execute normally.
 
-The browser workspace journey, review/apply/undo, Files/Trash, provider admission,
+- Proposal missing-tool, Apply missing-writer, mounted post-commit reload, cross-tab
+  delayed autosave and private project-entry exposure baselines fail for their
+  intended reasons in `/tmp/task16-document-proposal-baseline.log`,
+  `/tmp/task16-document-apply-baseline.log`, `/tmp/task16-mounted-apply-baseline.log`,
+  `/tmp/task16-cross-tab-apply-baseline.log`, `/tmp/task16-project-read-privacy-baseline.log`.
+- Latest safety milestone: 49 tests / six canonical files pass,
+  `/tmp/task16-proposal-milestone.log`. Real Dexie verifies no-save staging,
+  concurrent duplicate Apply, checkpoint/content/receipt rollback, retry, guarded
+  Undo and second-handle draft retention. Real mounted TipTap verifies captured
+  synchronous acceptance before post-commit hooks; owner workspace regressions pass.
+- Review-card baseline/candidate: host controls appear only for the admitted tool;
+  unrelated plugin/model prose cannot claim saved state. Current UI/browser
+  proposal qualification and current-head typecheck remain pending.
+
+## Remaining acceptance groups
+
+Sections 0–1 have implementation and bounded increment evidence, with production
+disablement/deletion/ambiguous-target/workspace-switch cases still to qualify.
+Section 2 has creation/project and safety-critical proposal/Apply/Undo foundations;
+stale Update-proposal/history UX, permission/storage/race coverage and complete
+review/apply/undo/project browser journeys remain. Sections 3 (catalog, uploads,
+UTF-8 extraction, Trash/reference protection and provider capability admission),
+4 (Files pane/actions/accessibility), and 5 (cloud recovery, scale/performance,
+documentation/contracts/builds/final gates) are unfinished.
+
+The full review/apply/undo browser journey, Files/Trash, provider admission,
 mobile/zoom/performance and cloud recovery are not yet qualified. No task box
 represents proof without the command, source revision and observed artifact.

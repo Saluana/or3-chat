@@ -1,5 +1,5 @@
 <template>
-    <div ref="rootElement" v-theme="'document.editor'" class="document-editor-root" data-context="document">
+    <div ref="rootElement" v-theme="'document.editor'" class="document-editor-root" data-context="document" :inert="externalWrite">
         <div
             v-theme="'document.toolbar'"
             class="editor-toolbar document-editor-toolbar"
@@ -293,7 +293,7 @@ import DocumentTableToolbar from './DocumentTableToolbar.vue';
 import { useIcon } from '~/composables/useIcon';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import AutocompleteState from '~/plugins/EditorAutocomplete/state';
-import { flush, loadDocument, setDocumentContent, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
+import { acceptCommittedDocument, flush, loadDocument, setDocumentContent, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { getDb, subscribeActiveWorkspaceDb } from '~/db/client';
 import {
     registerDocumentEditorSession,
@@ -377,6 +377,7 @@ const rootElement = ref<HTMLElement>();
 const editorScroll = ref<HTMLElement>();
 const state = computed(() => useDocumentState(props.documentId, editorDb.value));
 const titleDraft = ref('');
+const externalWrite = ref(false);
 const capturedContent = ref<TipTapDocument>({
     type: 'doc',
     content: [{ type: 'paragraph' }],
@@ -438,6 +439,9 @@ function captureContent(id = props.documentId, db = editorDb.value): void {
     const json = current.getJSON();
     capturedContent.value = json;
     setSerializedSize(new TextEncoder().encode(JSON.stringify(json)).byteLength);
+    const currentState = useDocumentState(id, db);
+    if (JSON.stringify(json) === JSON.stringify(currentState.pendingContent !== undefined
+        ? currentState.pendingContent : currentState.record?.content)) return;
     setDocumentContent(id, json, db);
 }
 
@@ -766,6 +770,32 @@ function registerActiveSession(id: string): void {
             restoreDocumentViewState(id, saved, options),
         getChatContext: (requestId) => ai.getChatContext(requestId),
         getDocumentSnapshot: () => ({ title: titleDraft.value, content: normalizedContent(editor.value?.getJSON() ?? capturedContent.value) }),
+        beginExternalWrite: (expected) => {
+            if (didUnmount || editorDb.value !== db || props.documentId !== id || externalWrite.value
+                || JSON.stringify({ title: titleDraft.value, content: normalizedContent(editor.value?.getJSON() ?? capturedContent.value) }) !== JSON.stringify(expected)) {
+                throw new Error('This document changed. Update the proposal from a new read.');
+            }
+            externalWrite.value = true;
+            editor.value?.setEditable(false, false);
+            if (captureTimer) clearTimeout(captureTimer);
+            captureTimer = undefined;
+            return () => {
+                externalWrite.value = false;
+                if (!didUnmount && editorDb.value === db && props.documentId === id) editor.value?.setEditable(true, false);
+            };
+        },
+        acceptExternalWrite: (row) => {
+            if (didUnmount || editorDb.value !== db || props.documentId !== id) return;
+            const content = normalizedContent(JSON.parse(row.content) as TipTapDocument);
+            acceptCommittedDocument({ id: row.id, title: row.title, content, created_at: row.created_at,
+                updated_at: row.updated_at, deleted: row.deleted, file_hashes: row.file_hashes }, db);
+            titleDraft.value = row.title;
+            capturedContent.value = content;
+            editor.value?.commands.setContent(content, { emitUpdate: false, errorOnInvalidContent: true });
+            contentVersion.value += 1;
+            setSerializedSize(new TextEncoder().encode(row.content).byteLength);
+            refresh();
+        },
         executeChatTool: (name, argsJson, requestId) =>
             ai.executeChatTool(name, argsJson, requestId),
     });

@@ -79,13 +79,7 @@ function textOf(node: JSONContent): string {
 
 export function freezeDocumentForAi(editor: Editor): DocumentAiFrozenSnapshot {
     const content: JSONContent = editor.getJSON();
-    const blocks = (content.content ?? []).map((node, index) => ({
-        ref: `b${index + 1}`,
-        index,
-        type: node.type ?? 'unknown',
-        text: textOf(node).trim(),
-        node,
-    }));
+    const { blocks } = freezeDocumentContentForAi(content);
     const { from, to } = editor.state.selection;
     if (from === to) {
         return { content, blocks, selection: null };
@@ -94,17 +88,22 @@ export function freezeDocumentForAi(editor: Editor): DocumentAiFrozenSnapshot {
     const sliceJson: unknown = slice.content.toJSON();
     const selectionContent = (Array.isArray(sliceJson) ? sliceJson : sliceJson ? [sliceJson] : []) as JSONContent[];
     return {
-        content,
-        blocks,
-        selection: {
-            from,
-            to,
-            text: editor.state.doc.textBetween(from, to, '\n'),
-            content: selectionContent,
-            openStart: slice.openStart,
-            openEnd: slice.openEnd,
-        },
+        content, blocks,
+        selection: { from, to, text: editor.state.doc.textBetween(from, to, '\n'),
+            content: selectionContent, openStart: slice.openStart, openEnd: slice.openEnd },
     };
+}
+
+/** Stored and mounted documents share exactly the same host block-reference rules. */
+export function freezeDocumentContentForAi(content: JSONContent): DocumentAiFrozenSnapshot {
+    const blocks = (content.content ?? []).map((node, index) => ({
+        ref: `b${index + 1}`,
+        index,
+        type: node.type ?? 'unknown',
+        text: textOf(node).trim(),
+        node,
+    }));
+    return { content, blocks, selection: null };
 }
 
 function hasInvalidLink(node: JSONContent): boolean {
@@ -151,7 +150,7 @@ export function buildDocumentAiSelectionSlice(
     return new Slice(fragment, clamped.openStart, clamped.openEnd);
 }
 
-function validateInsertedNodes(editor: Editor, nodes: JSONContent[]): void {
+function validateInsertedNodes(editor: Pick<Editor, 'schema'>, nodes: JSONContent[]): void {
     if (!Array.isArray(nodes) || !nodes.length) {
         throw new Error('AI edit content must include at least one node.');
     }
@@ -162,7 +161,7 @@ function validateInsertedNodes(editor: Editor, nodes: JSONContent[]): void {
 }
 
 export function buildDocumentAiCandidate(
-    editor: Editor,
+    editor: Pick<Editor, 'schema'>,
     snapshot: DocumentAiFrozenSnapshot,
     operations: DocumentAiOperation[]
 ): JSONContent {

@@ -163,7 +163,7 @@ describe('useDocumentsStore - memory leaks', () => {
         const firstFlush = flush(mockDoc.id);
         await vi.waitFor(() => expect(documentsDb.updateDocumentInDb).toHaveBeenCalledTimes(1));
         setDocumentTitle(mockDoc.id, 'Second');
-        finishFirst(mockDoc);
+        finishFirst({ ...mockDoc, title: 'First' });
         await firstFlush;
 
         expect(documentsDb.updateDocumentInDb).toHaveBeenCalledTimes(2);
@@ -171,7 +171,8 @@ describe('useDocumentsStore - memory leaks', () => {
             2,
             expect.anything(),
             mockDoc.id,
-            expect.objectContaining({ title: 'Second' })
+            expect.objectContaining({ title: 'Second' }),
+            expect.objectContaining({ title: 'First', content: mockDoc.content })
         );
         expect(useDocumentState(mockDoc.id).pendingTitle).toBeUndefined();
     });
