@@ -84,7 +84,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C2.
       Requirements: R16.AC1, R16.AC2, R16.AC3, R16.AC5.
       Done when: `AiPage.vue` and `useAiSettings` support `maxContextTokens: number | null`, default/legacy/reset values mean Use model limit, invalid custom input is rejected, an above-model value remains saved for other models, and reload/workspace isolation match existing preferences.
-      Status: Partial — maxContextTokens nullable KV default/legacy/reset/custom/workspace CAS controls pass; Dashboard AiPage.vue controls are not implemented.
+      Status: Partial — Dashboard AiPage.vue now has a blank Use model limit input, explicit save, accessible validation, save-error retry and generation-fenced workspace/reset updates through existing KV.31 mounted/settings utility cases cover large-value persistence, model changes, blank/reset, invalid input, legacy values and pending-save workspace switches. Parent source review and actual browser/keyboard/theme qualification remain pending; native admission consumption is task2.7c/2.8.
 
 - [ ] 2.7c Capture the optional user maximum in generation admission and reconnect metadata (3h).
       Components: C2, C1.
@@ -336,7 +336,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C12.
       Requirements: R14.AC3, R14.AC4, R16.AC1, R16.AC2, R16.AC3.
       Done when: `public/_documentation/` includes compaction/context and retrieval guidance registered in `docmap.json`; AI-settings docs explain Use model limit and the optional maximum; model-capacity versus usage-estimation semantics are explicit; branching/chat/sidebar docs and hook type maps match implementation, with no unimplemented prompt hooks advertised.
-      Status: Partial — implementation/hook types and planning/evidence notes updated. Public documentation/docmap, optional Dashboard maximum and retrieval/user guidance remain.
+      Status: Partial — implementation/hook types and planning/evidence notes updated; registered AI-preferences documentation explains the optional Dashboard maximum and current admission boundary, and catalog docs explain provenance. Full compaction/retrieval/branching/sidebar user guidance and hook-contract closure remain.
 
 - [ ] 8.5 Verify static/server builds, types, generated contracts and affected lanes (3h).
       Components: C9, C12.

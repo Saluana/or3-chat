@@ -807,6 +807,15 @@
                     "categoryOrder": 0,
                     "order": 1,
                     "summary": "Preserve durable sends, streaming ownership, tool authority, tab sessions, and composer drafts."
+                },
+                {
+                    "name": "ai-preferences.md",
+                    "path": "/architecture/ai-preferences",
+                    "title": "AI preferences and context maximum",
+                    "category": "Architecture",
+                    "categoryOrder": 0,
+                    "order": 2,
+                    "summary": "Use model limit, custom context maximum, validation and workspace persistence; current admission boundaries."
                 }
             ]
         },
