@@ -41,7 +41,7 @@
                     "category": "Development",
                     "categoryOrder": 1,
                     "order": 0,
-                    "summary": "Install with Bun, choose a development mode, and troubleshoot without losing data."
+                    "summary": "Install with Bun, choose a development mode, set build memory limits, and launch source output with the supported runtime."
                 },
                 {
                     "name": "plugin-quickstart.md",

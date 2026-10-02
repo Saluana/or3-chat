@@ -64,7 +64,7 @@ function run(command, args) {
     return new Promise((resolvePromise, rejectPromise) => {
         const child = spawn(command, args, { stdio: 'inherit', env: process.env });
         child.on('error', rejectPromise);
-        child.on('exit', (code) => resolvePromise(code ?? 0));
+        child.on('exit', (code) => resolvePromise(code ?? 1));
         const forward = (signal) => {
             try {
                 child.kill(signal);

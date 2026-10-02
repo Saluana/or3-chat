@@ -63,17 +63,22 @@ OR3_SQLITE_DB_PATH=.data/or3-sync.sqlite
 ```
 
 For editable source development with the Bun driver, `bun run dev:ssr` selects
-Bun and checks `bun:sqlite` before Nuxt starts. Use the Bun version pinned in
-the host's `package.json`. The package manager alone does not select the server
+Bun and checks `bun:sqlite` before Nuxt starts. `bun run build` also selects Bun
+for this driver; static generation and type-checking use Node. Use the Bun
+version pinned in the host's `package.json`. The package manager alone does not select the server
 runtime. For a built server using this driver, run the output with Bun:
 
 ```bash
 bun .output/server/index.mjs
 ```
 
-Basic Auth keeps a separate `better-sqlite3` database. Its native binding must
-also work under Bun; selecting Bun for sync does not remove that dependency.
-The managed Cloud image uses Node and the default `better-sqlite3` driver.
+Basic Auth keeps a separate `better-sqlite3` database. The supported native
+binding crashes under Bun 1.3.14, so source validation rejects Basic Auth with
+Bun SQLite before probing that binding. Keep Basic Auth on Node 24 with
+`OR3_SQLITE_DRIVER=better-sqlite3`, or select a Bun-compatible auth provider such
+as Clerk for Bun SQLite. Disabling sync transfer does not remove SQLite's role
+as the auth workspace store. The managed Cloud image uses Node and the default
+`better-sqlite3` driver.
 
 ### Turso
 

@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import crossSpawn from 'cross-spawn';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import {
     detectPackageManager,
     execPackageCommand,
 } from '../../shared/cloud/wizard/package-manager';
+import { nuxtRuntime } from '../../shared/dev/nuxt-runtime';
 
 type Task = 'build' | 'generate-static' | 'type-check';
 
@@ -20,13 +22,13 @@ function run(
             env,
         });
         child.once('error', rejectPromise);
-        child.once('exit', (code) => {
+        child.once('exit', (code, signal) => {
             if (code === 0) {
                 resolvePromise();
             } else {
                 rejectPromise(
                     new Error(
-                        `${command} ${args.join(' ')} exited with code ${code ?? 'unknown'}.`
+                        `${command} ${args.join(' ')} ${signal ? `was terminated by ${signal}` : `exited with code ${code ?? 'unknown'}`}.`
                     )
                 );
             }
@@ -42,26 +44,35 @@ export async function runNuxtTask(
     const taskEnv = { ...env };
     const nuxtArgs =
         task === 'build'
-            ? ['nuxt', 'build']
+            ? ['build']
             : task === 'generate-static'
-              ? ['nuxt', 'generate']
-              : ['nuxt', 'typecheck'];
+              ? ['generate']
+              : ['typecheck'];
 
-    if (task === 'build') {
+    // Node accepts underscore aliases and double-quoted NODE_OPTIONS tokens.
+    // A percentage cap is also an operator-selected limit; never override it.
+    const explicitHeapLimit = /(?:^|[\s"])--max[-_]old[-_]space[-_]size(?:[-_]percentage)?(?:=|\s|"|$)/
+        .test(taskEnv.NODE_OPTIONS ?? '');
+    if (task === 'build' && !explicitHeapLimit) {
         taskEnv.NODE_OPTIONS = [
             taskEnv.NODE_OPTIONS,
-            '--max-old-space-size=8192',
+            '--max-old-space-size=4096',
         ]
             .filter(Boolean)
             .join(' ');
-    } else if (task === 'generate-static') {
+    }
+    if (task === 'generate-static') {
         taskEnv.SSR_AUTH_ENABLED = 'false';
-    } else {
+    } else if (task === 'type-check') {
         taskEnv.SSR_AUTH_ENABLED = 'true';
     }
 
-    const nuxt = execPackageCommand(packageManager, nuxtArgs);
-    await run(nuxt.command, nuxt.args, taskEnv);
+    const requireFromProject = createRequire(resolve(process.cwd(), 'package.json'));
+    const nuxtEntry = resolve(dirname(requireFromProject.resolve('nuxt/package.json')), 'bin/nuxt.mjs');
+    const runtime = task === 'type-check'
+        ? (process.versions.bun ? 'node' : process.execPath)
+        : nuxtRuntime(taskEnv);
+    await run(runtime, [nuxtEntry, ...nuxtArgs], taskEnv);
 
     if (task === 'build' || task === 'generate-static') {
         const check = execPackageCommand(packageManager, [
