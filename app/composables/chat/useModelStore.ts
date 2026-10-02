@@ -63,6 +63,9 @@ import { admitChatContext, type ContextModelMetadata } from '~~/shared/chat/cont
 
 // Module-level in-flight promise for deduping parallel fetches across composable instances
 let inFlight: Promise<OpenRouterModel[]> | null = null;
+// Retain the latest existing request identity after settlement. A delayed
+// cache read must not regain ownership when inFlight becomes null again.
+let latestCatalogRequest: Promise<OpenRouterModel[]> | null = null;
 let inFlightForced = false;
 let catalogSource: 'openrouter-live' | 'openrouter-cache' = 'openrouter-cache';
 let catalogFetchedAt: number | null = null;
@@ -141,8 +144,10 @@ export function useModelStore() {
         ttl: number
     ): Promise<OpenRouterModel[] | null> {
         if (!canUseDexie()) return null;
+        const requestOwner = latestCatalogRequest;
         try {
             const rec = await kv.get(MODELS_CACHE_KEY);
+            if (requestOwner !== latestCatalogRequest) return inFlight ?? catalog.value;
             if (!rec) return null;
             // rec.updated_at is seconds in Kv schema; convert to ms
             const updatedAtMs = rec.updated_at
@@ -367,6 +372,7 @@ export function useModelStore() {
             if (inFlight === pending) { inFlight = null; inFlightForced = false; }
         });
         inFlight = pending;
+        latestCatalogRequest = pending;
         inFlightForced = opts?.force === true;
         return pending;
     }
@@ -380,11 +386,14 @@ export function useModelStore() {
         checkCanceled();
         const withoutThinking = selectedModelId.endsWith(':thinking') ? selectedModelId.slice(0, -':thinking'.length) : selectedModelId;
         const lookupId = stripModelVariantSuffix(withoutThinking);
-        const matches = (model: OpenRouterModel) => model.id === lookupId || model.canonical_slug === lookupId;
         const lookup = (): Extract<ContextModelReadiness, { ok: true }> | undefined => {
-            const candidates = [
-                { model: catalog.value.find(matches), source: catalogSource, fetchedAt: catalogFetchedAt },
-                { model: favoriteModels.value.find(matches), source: 'openrouter-cache' as const, fetchedAt: null },
+            const exact = [
+                { model: catalog.value.find((model) => model.id === lookupId), source: catalogSource, fetchedAt: catalogFetchedAt },
+                { model: favoriteModels.value.find((model) => model.id === lookupId), source: 'openrouter-cache' as const, fetchedAt: null },
+            ];
+            const candidates = exact.some((candidate) => candidate.model) ? exact : [
+                { model: catalog.value.find((model) => model.canonical_slug === lookupId), source: catalogSource, fetchedAt: catalogFetchedAt },
+                { model: favoriteModels.value.find((model) => model.canonical_slug === lookupId), source: 'openrouter-cache' as const, fetchedAt: null },
             ];
             for (const candidate of candidates) {
                 if (!candidate.model || !admitChatContext({ model: candidate.model, inputTokens: 0 }).ok) continue;

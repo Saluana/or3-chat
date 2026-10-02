@@ -225,8 +225,10 @@
             </div>
         </section>
 
+        <!-- Remains dormant until native context admission consumes the preference. -->
         <section
             id="dashboard-ai-context-section"
+            v-show="false"
             class="section-card space-y-3"
             role="group"
             aria-labelledby="ai-section-context"
@@ -296,8 +298,8 @@
 
         <p class="ai-settings-note">
             <UIcon :name="useIcon('ui.hint').value" class="h-4 w-4" />
-            Model defaults apply immediately. The master prompt and context
-            maximum are saved when you choose Save changes.
+            Model defaults apply immediately. The master prompt is saved when
+            you choose Save changes.
         </p>
     </div>
 </template>
@@ -418,6 +420,7 @@ async function onReset() {
     try {
         await reset();
         if (generation !== getWorkspaceGeneration()) return;
+        contextInput.value = '';
         local.value.masterPrompt = '';
         promptDirty.value = false;
         promptSaved.value = true;

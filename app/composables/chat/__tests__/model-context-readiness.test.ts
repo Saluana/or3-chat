@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Dexie from 'dexie';
 import { getDb, setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { kv } from '~/db';
-import { setHookEngine } from '~/core/hooks/useHooks';
+import { setHookEngine, useHooks } from '~/core/hooks/useHooks';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 
@@ -98,6 +98,60 @@ describe('existing catalog context readiness', () => {
         expect(await useModelStore().resolveContextModel('catalog/model')).toMatchObject({ ok: false, code: 'model_metadata_unavailable' });
         list.mockImplementation(async () => pages());
         expect(await useModelStore().resolveContextModel('catalog/model')).toMatchObject({ ok: true, source: 'openrouter-live', metadata: { context_length: 1_000_000 } });
+    });
+
+    it('prefers an exact model ID over an earlier canonical-slug alias', async () => {
+        const alias = sdkModel(1_000_000, 'alias/model'); alias.canonicalSlug = 'route/model';
+        const exact = sdkModel(32_000, 'route/model');
+        await kv.set(MODELS_CACHE_KEY, JSON.stringify({ version: 1,
+            data: [sdkModelToLocal(alias), sdkModelToLocal(exact)], fetchedAt: Date.now() }));
+        expect(await useModelStore().resolveContextModel('route/model:nitro:thinking')).toMatchObject({
+            ok: true, selectedModelId: 'route/model:nitro:thinking', modelId: 'route/model',
+            metadata: { context_length: 32_000 },
+        });
+        expect(list).not.toHaveBeenCalled();
+    });
+
+    it('prefers an exact favorite ID over a catalog canonical-slug fallback', async () => {
+        const alias = sdkModel(1_000_000, 'alias/model'); alias.canonicalSlug = 'route/model';
+        useModelStore().catalog.value = [sdkModelToLocal(alias)];
+        useModelStore().favoriteModels.value = [sdkModelToLocal(sdkModel(32_000, 'route/model'))];
+        expect(await useModelStore().resolveContextModel('route/model')).toMatchObject({
+            ok: true, modelId: 'route/model', metadata: { context_length: 32_000 },
+        });
+    });
+
+    it('does not let an older held KV hydration overwrite a completed live forced refresh', async () => {
+        const fetchedAt = Date.now() - 1000;
+        await kv.set(MODELS_CACHE_KEY, JSON.stringify({ version: 1,
+            data: [sdkModelToLocal(sdkModel(32_000))], fetchedAt }));
+        let release!: () => void; let entered!: () => void; let held = false;
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        const started = new Promise<void>((resolve) => { entered = resolve; });
+        const hooks = useHooks();
+        const hold: Parameters<typeof hooks.addFilter<'db.kv.getByName:filter:output'>>[1] = async (row) => {
+            if (!held && row?.name === MODELS_CACHE_KEY) { held = true; entered(); await gate; }
+            return row;
+        };
+        hooks.addFilter('db.kv.getByName:filter:output', hold);
+        try {
+            const oldHydration = useModelStore().fetchModels();
+            await started;
+            list.mockImplementation(async () => pages());
+            const fresh = await useModelStore().fetchModels({ force: true });
+            expect(fresh[0]?.context_length).toBe(1_000_000);
+            const live = await useModelStore().resolveContextModel('catalog/model');
+            expect(live).toMatchObject({ ok: true, source: 'openrouter-live' });
+            await vi.waitFor(async () => {
+                const row = await kv.get(MODELS_CACHE_KEY);
+                expect(JSON.parse(row!.value as string).data[0].context_length).toBe(1_000_000);
+            });
+            release(); await oldHydration;
+            expect(await useModelStore().resolveContextModel('catalog/model')).toEqual(live);
+            expect(list).toHaveBeenCalledOnce();
+        } finally {
+            release(); hooks.removeFilter('db.kv.getByName:filter:output', hold);
+        }
     });
 
     it('keeps legacy KV catalogs usable with an unknown actual fetch time', async () => {

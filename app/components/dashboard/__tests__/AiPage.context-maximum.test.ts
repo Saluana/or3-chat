@@ -65,9 +65,13 @@ afterEach(async () => {
     setHookEngine(null);
 });
 
-describe('Dashboard optional context maximum through real KV', () => {
-    it('shows Use model limit without a numeric default and retains existing controls', async () => {
+// Maximum handlers are retained but hidden until native admission consumes
+// the preference. Programmatic DOM events below prove dormant preparation,
+// not an exposed product flow or browser/theme qualification.
+describe('dormant Dashboard context maximum through real KV', () => {
+    it('keeps the unenforced maximum hidden and retains existing controls', async () => {
         await openPage();
+        expect(wrapper!.get('#dashboard-ai-context-section').isVisible()).toBe(false);
         expect(input().element.value).toBe('');
         expect(input().attributes('placeholder')).toBe('Use model limit');
         expect(wrapper!.get('label[for="dashboard-ai-max-context-input"]').text()).toBe('Maximum context tokens');
@@ -95,6 +99,16 @@ describe('Dashboard optional context maximum through real KV', () => {
         await vi.waitFor(async () => expect(await savedMaximum()).toBe(250_000));
         await wrapper!.get('#dashboard-ai-reset-btn').trigger('click');
         await vi.waitFor(async () => expect(await savedMaximum()).toBeNull());
+        expect(input().element.value).toBe('');
+    });
+
+    it('clears an unsaved maximum on Reset when the stored maximum is already null', async () => {
+        await openPage();
+        expect(useAiSettings().settings.value.maxContextTokens).toBeNull();
+        await input().setValue('250000');
+        await wrapper!.get('#dashboard-ai-reset-btn').trigger('click');
+        await vi.waitFor(async () => expect(await savedMaximum()).toBeNull());
+        await nextTick();
         expect(input().element.value).toBe('');
     });
 
