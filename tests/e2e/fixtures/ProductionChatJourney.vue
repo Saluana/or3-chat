@@ -1,12 +1,21 @@
 <template>
     <main
         class="h-dvh min-h-0"
+        :class="compactionJourney ? 'flex flex-col' : undefined"
         data-testid="production-chat-journey"
     >
         <span class="sr-only" data-testid="chat-journey-thread-id">
             {{ threadId || 'new-thread' }}
         </span>
-        <PageShell v-if="ready && workspaceJourney" />
+        <section v-if="ready && compactionJourney" class="flex flex-wrap items-center gap-2 p-2" aria-label="Scripted compaction fixture controls">
+            <button type="button" data-testid="fixture-compact" :disabled="compactor.active.value" @click="startFixtureCompaction">Generate scripted summary</button>
+            <button type="button" data-testid="fixture-cancel-compaction" :disabled="!compactor.active.value" @click="compactor.cancel()">Cancel scripted summary</button>
+            <label><input v-model="holdSummary" type="checkbox" data-testid="fixture-hold-summary"> Hold scripted inference</label>
+            <span data-testid="fixture-compaction-state">{{ compactor.state.value.status }}</span>
+            <span class="sr-only" data-testid="fixture-compaction-result">{{ fixtureResult }}</span>
+        </section>
+        <PageShell v-if="ready && compactionJourney" :key="fixtureViewThread" :initial-thread-id="fixtureViewThread" :route-sync="false" class="flex-1 min-h-0" />
+        <PageShell v-else-if="ready && workspaceJourney" />
         <ChatContainer
             v-else-if="ready"
             :thread-id="threadId || undefined"
@@ -20,6 +29,8 @@
 <script setup lang="ts">
 import { defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute } from '#imports';
+import { getDb } from '~/db/client';
+import { useThreadCompaction } from '~/composables/chat/useThreadCompaction';
 import ChatContainer from '~/components/chat/ChatContainer.vue';
 import { persistUserApiKey } from '~/core/auth/useUserApiKey';
 import { useHooks } from '~/core/hooks/useHooks';
@@ -29,6 +40,41 @@ import { createDocument, getDocument } from '~/db/documents';
 
 const PageShell = defineAsyncComponent(() => import('~/components/PageShell.vue'));
 const workspaceJourney = useRoute().query.workspace === '1';
+
+const compactionJourney = useRoute().query.compaction === '1';
+const fixtureSourceThread = ref('');
+const fixtureViewThread = ref('');
+const holdSummary = ref(false);
+const fixtureResult = ref('');
+const compactor = useThreadCompaction({
+    threadId: fixtureSourceThread,
+    model: 'scripted-compaction-model:exact-route',
+    isBusy: false,
+    apiKey: 'sk-or-v1-production-journey-test-key',
+    getPreferences: async () => ({ maxContextTokens: null }),
+    resolveModelMetadata: async () => ({ context_length: 1_000_000, top_provider: { max_completion_tokens: 65_536 } }),
+    onCommitted: ({ thread }) => { fixtureViewThread.value = thread.id; localStorage.setItem('or3:e2e:compaction-view', thread.id); },
+});
+async function startFixtureCompaction() { fixtureResult.value = JSON.stringify(await compactor.start()); }
+async function seedCompactionSource() {
+    const db = getDb();
+    const remembered = localStorage.getItem('or3:e2e:compaction-source');
+    if (remembered && await db.threads.get(remembered)) {
+        fixtureSourceThread.value = remembered;
+    } else {
+        const id = `journey-compaction-${crypto.randomUUID()}`;
+        await db.threads.put({ id, title: 'Compaction original evidence', status: 'ready', deleted: false, pinned: false, forked: false, created_at: 1, updated_at: 1, clock: 1 });
+        await db.messages.bulkPut([
+            { id: `${id}-decision`, thread_id: id, role: 'user', index: 0, created_at: 1, updated_at: 1, clock: 1, deleted: false, pending: false, data: { content: 'Original decision: preserve app/example.ts exactly. ' + 'Historical source context remains available for inspection. '.repeat(160) } },
+            { id: `${id}-reply`, thread_id: id, role: 'assistant', index: 1, created_at: 1, updated_at: 1, clock: 1, deleted: false, pending: false, data: { content: 'Original anchor: implementation is pending. ' + 'Keep the latest confirmed work state and explicit next action. '.repeat(160) } },
+            { id: `${id}-followup`, thread_id: id, role: 'user', index: 2, created_at: 1, updated_at: 1, clock: 1, deleted: false, pending: false, data: { content: 'Next request: inspect the confirmed source evidence. ' + 'Retain original facts without silently trimming the conversation. '.repeat(160) } },
+            { id: `${id}-anchor`, thread_id: id, role: 'assistant', index: 3, created_at: 1, updated_at: 1, clock: 1, deleted: false, pending: false, data: { content: 'Original anchor: implementation is pending. ' + 'Keep exact identifiers and continue only after inspecting the source. '.repeat(160) } },
+        ]);
+        fixtureSourceThread.value = id;
+        localStorage.setItem('or3:e2e:compaction-source', id);
+    }
+    fixtureViewThread.value = localStorage.getItem('or3:e2e:compaction-view') || fixtureSourceThread.value;
+}
 
 const THREAD_KEY = 'or3:e2e:production-chat-thread';
 const TEST_API_KEY = 'sk-or-v1-production-journey-test-key';
@@ -150,7 +196,16 @@ function installDeterministicFetch(): void {
                     new Promise((resolve) => setTimeout(resolve, ms));
 
                 try {
-                    if (text.includes('journey:workspace-find') || text.includes('journey:workspace-create') || text.includes('journey:workspace-edit')) {
+                    if (compactionJourney && messageText(messages[0]).startsWith('You summarize historical task context')) {
+                        if (holdSummary.value) await new Promise<void>((resolve) => {
+                            if (signal?.aborted) { resolve(); return; }
+                            signal?.addEventListener('abort', () => resolve(), { once: true });
+                        });
+                        if (!stopped) enqueue(sseChunk(JSON.stringify({
+                            summary_markdown: '## Objective\nContinue the implementation.\n## Important Details\nPreserve app/example.ts exactly.\n## Work State\nImplementation is pending.\n## Next Move\nInspect original evidence.\n## Relevant Files\napp/example.ts',
+                            landmarks: [{ message_id: `${fixtureSourceThread.value}-decision`, kind: 'constraint', summary: 'Preserve the exact source path' }],
+                        })));
+                    } else if (text.includes('journey:workspace-find') || text.includes('journey:workspace-create') || text.includes('journey:workspace-edit')) {
                         const userIndex = messages.findLastIndex((message) => message && typeof message === 'object' && (message as { role?: unknown }).role === 'user');
                         const replies = messages.slice(userIndex + 1).filter((message) => message && typeof message === 'object' && (message as { role?: unknown }).role === 'tool');
                         const readReply = replies.find((message) => (message as { name?: unknown }).name === 'workspace_read');
@@ -282,6 +337,7 @@ onMounted(async () => {
             localStorage.setItem(key, document.id);
         }
     }
+    if (compactionJourney) await seedCompactionSource();
     localStorage.setItem(
         'or3:server-route-available',
         JSON.stringify({ available: false, timestamp: Date.now() })

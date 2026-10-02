@@ -48,6 +48,7 @@
                             @retry="onRetry"
                             @continue="onContinue"
                             @branch="onBranch"
+                            @view-compaction-source="onViewCompactionSource(item, $event)"
                             @edited="onEdited"
                             @begin-edit="onBeginEdit(item.id)"
                             @cancel-edit="onEndEdit(item.id)"
@@ -185,6 +186,7 @@ import { useIcon } from '~/composables/useIcon';
 import { useToast, useHooks, useChat, useRuntimeConfig, useRoute, useState } from '#imports';
 import { getMaxMessageFileHashes } from '~/db/files-util';
 import { kv } from '~/db';
+import { getWorkspaceGeneration } from '~/db/client';
 import {
     hydrateUserApiKeyFromKv,
     useUserApiKey,
@@ -703,11 +705,35 @@ type ScrollViewState = {
 
 type ScrollApi = {
     scrollToBottom?: (opts?: { smooth?: boolean }) => void;
+    scrollToItemKey?: (key: string, opts?: { align?: 'start' | 'center' | 'end'; smooth?: boolean }) => void;
     captureScrollState?: () => ScrollViewState;
     restoreScrollState?: (state?: ScrollViewState) => Promise<void>;
     refreshMeasurements?: () => void;
 };
 const scroller = ref<ScrollApi | null>(null);
+const compactionNavigation = shallowRef<{ threadId: string; messageId: string; generation: number; origin: string | undefined }>();
+function onViewCompactionSource(message: UiChatMessage, target: { threadId: string; messageId: string; originThreadId: string }) {
+    const data = message.compaction;
+    if (currentThreadId.value !== target.originThreadId || props.threadId !== target.originThreadId) return;
+    if (!data || !allMessages.value.some((row) => row.id === message.id)) return;
+    const allowed = data.source_thread_id === target.threadId && data.anchor_message_id === target.messageId
+        || data.landmarks.some((landmark) => landmark.thread_id === target.threadId && landmark.message_id === target.messageId);
+    if (!allowed) return;
+    compactionNavigation.value = { ...target, generation: getWorkspaceGeneration(), origin: currentThreadId.value };
+    emit('thread-selected', target.threadId);
+}
+watch([currentThreadId, allMessages, loading], async () => {
+    const target = compactionNavigation.value;
+    if (!target) return;
+    if (getWorkspaceGeneration() !== target.generation || currentThreadId.value !== target.threadId && currentThreadId.value !== target.origin) {
+        compactionNavigation.value = undefined; return;
+    }
+    if (loading.value || currentThreadId.value !== target.threadId || !allMessages.value.some((row) => row.id === target.messageId)) return;
+    await nextTick();
+    if (compactionNavigation.value !== target || getWorkspaceGeneration() !== target.generation || currentThreadId.value !== target.threadId) return;
+    scroller.value?.scrollToItemKey?.(target.messageId, { align: 'center', smooth: false });
+    compactionNavigation.value = undefined;
+});
 
 // Track editing state across child messages for scroll suppression (Task 5.2.2)
 const editingIds = ref<Set<string>>(new Set());
