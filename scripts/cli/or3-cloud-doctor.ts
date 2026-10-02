@@ -52,9 +52,10 @@ export async function runDoctorChecks(input: {
     let exitCode = 0;
 
     const authProvider = config.auth.provider;
-    const syncProvider = config.sync.provider;
+    const storageProvider = config.storage.provider;
+    const requirements = requiredProviderModules(config, map);
 
-    for (const { moduleId, setting } of requiredProviderModules(config, map)) {
+    for (const { moduleId, setting } of requirements) {
         const result = resolveModuleEntry(moduleId, cwd);
         lines.push(result.ok
             ? `  ✅ ${setting}: ${moduleId} — module entry resolved`
@@ -75,10 +76,10 @@ export async function runDoctorChecks(input: {
         }
     }
 
-    if (syncProvider === 'sqlite' && config.sync.enabled) {
+    if (requirements.some(({ moduleId }) => moduleId === 'or3-provider-sqlite/nuxt')) {
         const sqliteDriver =
             map.OR3_SQLITE_DRIVER?.trim().toLowerCase() || 'better-sqlite3';
-        if (sqliteDriver === 'better-sqlite3' || sqliteDriver === 'bun') {
+        if (['better-sqlite3', 'better', 'sqlite', 'bun', 'bun:sqlite'].includes(sqliteDriver)) {
             const dbPath = map.OR3_SQLITE_DB_PATH || './.data/or3-sync.sqlite';
             const dir = resolve(cwd, dbPath);
             const ok = checkWritableDir(dir);
@@ -101,7 +102,7 @@ export async function runDoctorChecks(input: {
             );
         }
     }
-    if (authProvider === 'basic-auth') {
+    if (config.auth.enabled && authProvider === 'basic-auth') {
         const dbPath =
             map.OR3_BASIC_AUTH_DB_PATH || './.data/or3-basic-auth.sqlite';
         const dir = resolve(cwd, dbPath);
@@ -112,8 +113,8 @@ export async function runDoctorChecks(input: {
                 : `  ⚠️  Basic-auth DB path may not be writable: ${dir}`
         );
     }
-    if (storageProvider === 'fs' && config.storage.enabled) {
-        const fsRoot = map.OR3_STORAGE_FS_ROOT || '/tmp/or3-storage';
+    if (config.auth.enabled && storageProvider === 'fs' && config.storage.enabled) {
+        const fsRoot = resolve(cwd, map.OR3_STORAGE_FS_ROOT || '/tmp/or3-storage');
         const ok = checkWritableDir(fsRoot);
         lines.push(
             ok
@@ -122,7 +123,7 @@ export async function runDoctorChecks(input: {
         );
     }
 
-    const port = Number(process.env.PORT) || 3000;
+    const port = Number(map.PORT || process.env.PORT) || 3000;
     const portFree = await isPortAvailable(port);
     lines.push(
         portFree
@@ -130,10 +131,7 @@ export async function runDoctorChecks(input: {
             : `  ⚠️  Port ${port} is already in use — another dev server may fail to start.`
     );
 
-    if (
-        (syncProvider === 'convex' && config.sync.enabled) ||
-        (storageProvider === 'convex' && config.storage.enabled)
-    ) {
+    if (requirements.some(({ moduleId }) => moduleId === 'or3-provider-convex/nuxt')) {
         const convexWarnings = await preflightConvex(cwd);
         if (convexWarnings.length === 0) {
             lines.push('  ✅ Convex CLI is accessible and project detected');

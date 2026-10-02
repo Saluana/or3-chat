@@ -42,7 +42,7 @@ export default defineEventHandler(async (event) => {
     if (link.state !== 'linked' || !link.link?.id || !link.link.accountId) {
         throw createError({ statusCode: 409, statusMessage: 'Connect your marketplace account first.' });
     }
-    const entitlements = await service.entitlements(userId);
+    const entitlements = await service.entitlements(userId, { releaseId: body.data.releaseId });
     if (!entitlements.linked || entitlements.accountId !== link.link.accountId) {
         throw createError({ statusCode: 409, statusMessage: 'The linked marketplace account changed. Refresh Library and retry.' });
     }

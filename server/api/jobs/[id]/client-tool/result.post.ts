@@ -60,6 +60,9 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Invalid tool result' });
     }
 
+    // Reserve the request after validation but before provider work so
+    // concurrent calls cannot share one slot and invalid requests are free.
+    recordSyncRequest(userId, 'chat-tool:result');
     const provider = await getJobProvider();
     if (!provider.settleClientToolCall) {
         throw createError({ statusCode: 501, statusMessage: 'Client tool bridge unavailable' });

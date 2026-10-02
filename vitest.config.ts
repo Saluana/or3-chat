@@ -119,6 +119,9 @@ export default defineConfig({
                     // Exercise the published job provider against the host's
                     // real store/config alias, including workflow scope fences.
                     /\/or3-provider-sqlite\/dist\/runtime\/server\/background-jobs\/sqlite-provider\.js$/,
+                    // Exercise the installed filesystem download route with the
+                    // host's auth aliases at the real HTTP boundary.
+                    /\/or3-provider-fs\/dist\/runtime\/server\//,
                 ],
             },
         },

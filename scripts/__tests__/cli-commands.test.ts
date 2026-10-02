@@ -7,10 +7,11 @@
 import { describe, it, expect } from 'vitest';
 import { ThemeCompiler } from '../theme-compiler';
 import { existsSync } from 'fs';
-import { readFile, rm, mkdir, mkdtemp, stat, writeFile } from 'node:fs/promises';
+import { readFile, rm, mkdir, mkdtemp, stat, writeFile, symlink } from 'node:fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 import {
     serializeInitialCredentials,
     writeInitialCredentialsFile,
@@ -85,6 +86,60 @@ describe('CLI Commands', () => {
                 expect(result.exitCode).toBe(0);
                 expect(result.output).toContain('Config is valid for .env.');
             } finally {
+                await rm(workspaceDir, { recursive: true, force: true });
+            }
+        });
+
+        it.each([true, false])('runs the full doctor for Basic Auth, SQLite and filesystem storage (sync transfer %s)', async (syncEnabled) => {
+            const workspaceDir = await mkdtemp(join(tmpdir(), 'or3-doctor-cli-'));
+            try {
+                await symlink(join(process.cwd(), 'node_modules'), join(workspaceDir, 'node_modules'), 'dir');
+                await mkdir(join(workspaceDir, '.data', 'storage'), { recursive: true });
+                await writeFile(join(workspaceDir, '.env'), [
+                    'SSR_AUTH_ENABLED=true', 'OR3_AUTH_PROVIDER=basic-auth',
+                    'OR3_BASIC_AUTH_JWT_SECRET=doctor-test-secret-0123456789abcdef',
+                    'OR3_SYNC_PROVIDER=sqlite', `OR3_SYNC_ENABLED=${syncEnabled}`,
+                    'OR3_STORAGE_ENABLED=true', 'NUXT_PUBLIC_STORAGE_PROVIDER=fs',
+                    'OR3_STORAGE_FS_ROOT=.data/storage',
+                ].join('\n'));
+                const result = await runBunCliScript(
+                    join(process.cwd(), 'scripts/cli/or3-cloud.ts'), ['doctor'], workspaceDir,
+                    { ...process.env, OR3_STRICT_CONFIG: 'false', NODE_ENV: 'development' },
+                );
+                expect(result.exitCode, result.output).toBe(0);
+                expect(result.output).toContain('SQLite sync DB path accessible');
+                expect(result.output).toContain('Basic-auth DB path accessible');
+                expect(result.output).toContain('FS storage root directory accessible');
+                expect(result.output).toContain('Doctor: all checks passed');
+            } finally {
+                await rm(workspaceDir, { recursive: true, force: true });
+            }
+        });
+
+        it('checks the port from the selected environment file and skips inactive provider paths', async () => {
+            const workspaceDir = await mkdtemp(join(tmpdir(), 'or3-doctor-port-'));
+            const server = createServer();
+            try {
+                const port = await new Promise<number>((resolvePort, reject) => {
+                    server.once('error', reject);
+                    server.listen(0, '127.0.0.1', () => {
+                        resolvePort((server.address() as { port: number }).port);
+                    });
+                });
+                await writeFile(join(workspaceDir, '.env.local'), [
+                    'SSR_AUTH_ENABLED=false', 'OR3_AUTH_PROVIDER=basic-auth',
+                    `PORT=${port}`,
+                ].join('\n'));
+                const result = await runBunCliScript(
+                    join(process.cwd(), 'scripts/cli/or3-cloud.ts'),
+                    ['doctor', '--env-file', '.env.local'], workspaceDir,
+                    { ...process.env, PORT: '9', NODE_ENV: 'development', OR3_STRICT_CONFIG: 'false' },
+                );
+                expect(result.exitCode, result.output).toBe(0);
+                expect(result.output).toContain(`Port ${port} is already in use`);
+                expect(result.output).not.toMatch(/(?:Basic-auth|SQLite sync) DB path/);
+            } finally {
+                await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
                 await rm(workspaceDir, { recursive: true, force: true });
             }
         });

@@ -21,6 +21,7 @@
  */
 import { defineOr3Config } from '../../../utils/or3-config';
 import { defineOr3CloudConfig } from '../../../utils/or3-cloud-config';
+import { requiredProviderModules } from '../../../shared/cloud/provider-compatibility';
 import type { Or3CloudConfig } from '../../../types/or3-cloud-config';
 import {
     AUTH_PROVIDER_IDS,
@@ -504,5 +505,18 @@ export function buildOr3CloudConfigFromEnv(
         },
     };
 
-    return defineOr3CloudConfig(config, { strict });
+    const resolvedConfig = defineOr3CloudConfig(config, { strict });
+    const sqliteDriver = env.OR3_SQLITE_DRIVER?.trim().toLowerCase();
+    if (
+        resolvedConfig.auth.provider === 'basic-auth' &&
+        (sqliteDriver === 'bun' || sqliteDriver === 'bun:sqlite') &&
+        requiredProviderModules(resolvedConfig, env).some(
+            ({ moduleId }) => moduleId === 'or3-provider-sqlite/nuxt',
+        )
+    ) {
+        throw new Error(
+            'Basic Auth requires Node 24 with the supported better-sqlite3 binding. Use OR3_SQLITE_DRIVER=better-sqlite3, or choose a Bun-compatible auth provider for Bun SQLite.',
+        );
+    }
+    return resolvedConfig;
 }

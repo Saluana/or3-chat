@@ -26,6 +26,7 @@ import {
 } from './link-store';
 import type {
     LibraryLinkTransport,
+    LibraryEntitlementsOptions,
     LibraryTransportFailure,
     LinkedSessionPayload,
     RemoteAcquiredRelease,
@@ -70,6 +71,8 @@ export interface LibraryEntitlementsView {
     readonly accountDisplayName?: string;
     readonly plus?: { readonly status: 'active' | 'none' | 'ended'; readonly until: string | null };
     readonly acquired?: readonly RemoteAcquiredRelease[];
+    readonly acquiredCursor?: string | null;
+    readonly pluginCoverageCursor?: string | null;
     readonly pluginCoverage?: RemoteLibraryEntitlements['pluginCoverage'];
     readonly notice?: LibraryTransportFailure;
 }
@@ -197,7 +200,7 @@ export class LibraryLinkService {
      * read-only listing: it never records an acquisition, downloads bytes or
      * changes authority, and an unlinked state is answered without a request.
      */
-    async entitlements(userId: string): Promise<LibraryEntitlementsView> {
+    async entitlements(userId: string, options?: LibraryEntitlementsOptions): Promise<LibraryEntitlementsView> {
         if (!this.configured) return { configured: false, linked: false };
         return await withUserLock(userId, async () => {
             const record = await this.#store.read(userId);
@@ -211,7 +214,7 @@ export class LibraryLinkService {
                 await this.#failTerminal(userId, record, 'lost', 'binding-undecryptable');
                 return { configured: true, linked: false };
             }
-            const result = await this.#transport.entitlements(token);
+            const result = await this.#transport.entitlements(token, options);
             if (!result.ok) {
                 if (revocationSettled(result.failure)) {
                     const state = result.failure.code === 'link-expired' ? 'expired' : 'revoked';
@@ -232,6 +235,8 @@ export class LibraryLinkService {
                 ...(record.accountDisplayName ? { accountDisplayName: record.accountDisplayName } : {}),
                 plus: result.value.plus,
                 acquired: result.value.acquired,
+                acquiredCursor: result.value.acquiredCursor,
+                pluginCoverageCursor: result.value.pluginCoverageCursor,
                 pluginCoverage: result.value.pluginCoverage,
             };
         });
