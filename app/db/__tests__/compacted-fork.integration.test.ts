@@ -38,7 +38,7 @@ describe('atomic compacted fork', () => {
             anchor_message_id: 'm3', summary_message_id: committed.summary.id, fork_reason: 'compaction', deleted: false, status: 'ready', pinned: false,
             project_id: 'project', system_prompt_id: 'prompt' });
         expect(committed.summary).toMatchObject({ role: 'system', thread_id: committed.thread.id, index: 0, pending: false,
-            data: { kind: 'compaction', compaction: { source_thread_id: 'source', model: 'large-model' } } });
+            data: { kind: 'compaction', compaction: { source_thread_id: 'source', model: 'large-model', message_count: 4, prior_message_count: 0 } } });
         expect(committed.summary.order_key).toBeTruthy(); expect(committed.summary.hlc).toBeTruthy();
         expect(await getDb().threads.get('source')).toEqual(originalThread);
         expect(await getDb().messages.where('thread_id').equals('source').toArray()).toEqual(originals);
@@ -101,6 +101,7 @@ describe('atomic compacted fork', () => {
         expect(second.capture.historyScope.segments.flatMap((part) => part.messages.map((row) => row.message_id))).toEqual(['new0', 'new1', 'new2', 'new3']);
         const committed = await createCompactedFork(second);
         expect(committed.thread.root_thread_id).toBe('source');
+        expect(committed.summary.data).toMatchObject({ compaction: { message_count: 4, prior_message_count: 4 } });
         expect((committed.summary.data as { compaction: { history_scope: unknown } }).compaction.history_scope).toEqual(second.capture.historyScope);
     });
     it('rejects ancestor parentage changes beyond a compacted boundary before writes and keeps completed replay stable', async () => {
