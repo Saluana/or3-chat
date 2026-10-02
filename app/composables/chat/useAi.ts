@@ -3679,7 +3679,7 @@ export function useChat(
             /* intentionally empty */
         }
         try {
-            const result = await abortBackgroundAdmission(admissionId);
+            const result = await abortBackgroundAdmission(admissionId, scope?.workspaceId ?? continuation?.workspaceId);
             if (result.aborted || result.pending) {
                 // `pending` means the server recorded a cancellation marker that
                 // the admission commit must honor, so projecting stopped is safe.

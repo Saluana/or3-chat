@@ -288,7 +288,7 @@ export default defineEventHandler(async (event) => {
     });
     event.context.or3PluginRequest = authorizedContext;
     if (pluginId === 'or3-workflows') {
-        event.context.or3WorkflowServer = createWorkflowServerBridge();
+        event.context.or3WorkflowServer = createWorkflowServerBridge(event);
     }
 
     try {

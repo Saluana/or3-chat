@@ -12,6 +12,7 @@
  */
 import type { BackgroundJob } from '../../../utils/background-jobs/types';
 import { shouldResetBackgroundContent } from '../../../utils/background-jobs/recovery';
+import { requireJobWorkspaceAccess } from '../../../utils/background-jobs/access';
 import { getJobProvider } from '../../../utils/background-jobs/store';
 import { resolveSessionContext } from '../../../auth/session';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
@@ -173,8 +174,9 @@ export default defineEventHandler(async (event) => {
 
     // Resolve user ID for authorization
     let userId: string | null = null;
+    let session: Awaited<ReturnType<typeof resolveSessionContext>> | null = null;
     if (isSsrAuthEnabled(event)) {
-        const session = await resolveSessionContext(event);
+        session = await resolveSessionContext(event);
         if (session.authenticated && session.user?.id) {
             userId = session.user.id;
         }
@@ -199,6 +201,8 @@ export default defineEventHandler(async (event) => {
         setResponseStatus(event, 404);
         return { error: 'Job not found or unauthorized' };
     }
+
+    await requireJobWorkspaceAccess(event, session, initialJob.execution?.workspaceId, 'workspace.read');
 
     const query = getQuery(event);
     const offsetParam = typeof query.offset === 'string' ? query.offset : null;
@@ -365,7 +369,7 @@ export default defineEventHandler(async (event) => {
 
             if (initialJob.status === 'streaming') {
                 // Subscribe to live stream updates (fast path when viewer is attached).
-                disposeLive = registerJobStream(jobId, (liveEvent) => {
+                const onLiveEvent: Parameters<typeof registerJobStream>[1] = (liveEvent) => {
                     if (isClosed()) return;
                     const deltaLength =
                         liveEvent.type === 'delta'
@@ -521,6 +525,29 @@ export default defineEventHandler(async (event) => {
                     if (liveEvent.status !== 'streaming') {
                         closeStream('live_terminal_status');
                     }
+                };
+
+                // Preserve live-event order while checking membership before delivery.
+                // Bound events waiting on a slow store as well as the output queue.
+                let pendingLiveBytes = 0;
+                let liveWrites = Promise.resolve();
+                disposeLive = registerJobStream(jobId, (liveEvent) => {
+                    if (isClosed()) return;
+                    const eventBytes = encoder.encode(JSON.stringify(liveEvent)).byteLength;
+                    if (!hasSseQueueCapacity(MAX_SSE_VIEWER_QUEUE_BYTES - pendingLiveBytes, eventBytes)) {
+                        closeStream('live_authorization_queue_full');
+                        return;
+                    }
+                    pendingLiveBytes += eventBytes;
+                    liveWrites = liveWrites.then(async () => {
+                        if (isClosed()) return;
+                        await requireJobWorkspaceAccess(event, session, initialJob.execution?.workspaceId, 'workspace.read');
+                        if (!isClosed()) onLiveEvent(liveEvent);
+                    }).catch(() => {
+                        closeStream('live_access_denied');
+                    }).finally(() => {
+                        pendingLiveBytes -= eventBytes;
+                    });
                 });
 
                 const liveState = getJobLiveState(jobId);
@@ -613,7 +640,13 @@ export default defineEventHandler(async (event) => {
 
             disposeReconciler = registerJobReconciler(
                 jobId,
-                () => provider.getJob(jobId, userId),
+                async () => {
+                    const job = await provider.getJob(jobId, userId);
+                    if (job) {
+                        await requireJobWorkspaceAccess(event, session, job.execution?.workspaceId, 'workspace.read');
+                    }
+                    return job;
+                },
                 (job, pollError) => {
                     if (isClosed()) return;
                     if (pollError) {

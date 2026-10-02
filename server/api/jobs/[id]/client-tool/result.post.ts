@@ -1,5 +1,7 @@
+import { getChatJobExecution } from '../../../../utils/background-jobs/types';
 import { createError, defineEventHandler, setHeader } from 'h3';
-import { requireCan, requireSession } from '../../../../auth/can';
+import { requireSession } from '../../../../auth/can';
+import { requireJobWorkspaceAccess } from '../../../../utils/background-jobs/access';
 import { resolveSessionContext } from '../../../../auth/session';
 import {
     getBackgroundJobEncryptionKey,
@@ -42,6 +44,7 @@ export default defineEventHandler(async (event) => {
     const userId = session.user?.id;
     if (!userId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
     enforceRateLimit(event, checkSyncRateLimit(userId, 'chat-tool:result'));
+    recordSyncRequest(userId, 'chat-tool:result');
     const jobId = getRouterParam(event, 'id');
     // JSON escaping can expand a valid 256 KiB result by up to six bytes per
     // character (for example, control characters encoded as \u00xx).
@@ -62,15 +65,12 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 501, statusMessage: 'Client tool bridge unavailable' });
     }
     const job = await provider.getJob(jobId, userId);
-    const execution = job?.execution;
+    const execution = job ? getChatJobExecution(job) : undefined;
     const pending = execution?.clientToolCall;
     if (!job || !execution || !pending || pending.callId !== callId) {
         throw createError({ statusCode: 409, statusMessage: 'Tool call is no longer pending' });
     }
-    requireCan(session, 'workspace.write', {
-        kind: 'workspace',
-        id: execution.workspaceId,
-    });
+    await requireJobWorkspaceAccess(event, session, execution.workspaceId, 'workspace.write');
 
     let resolvedError = error;
     const rawModelResult = error
@@ -157,7 +157,6 @@ export default defineEventHandler(async (event) => {
     if (!accepted) {
         throw createError({ statusCode: 409, statusMessage: 'Tool claim expired or was replaced' });
     }
-    recordSyncRequest(userId, 'chat-tool:result');
     emitJobStatus(jobId, 'streaming', {
         content: job.content,
         contentLength: job.content.length,

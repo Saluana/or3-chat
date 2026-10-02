@@ -1,4 +1,5 @@
 import type { BackgroundJob, BackgroundJobProvider } from "./types";
+import { getChatJobExecution } from './types';
 import { getSyncGatewayAdapter } from "../../sync/gateway/registry";
 import type { CanonicalGenerationSnapshot } from "~~/shared/chat/background-history";
 
@@ -61,7 +62,7 @@ export async function reconcileBackgroundJobHistory(
   provider: BackgroundJobProvider,
   job: BackgroundJob,
 ): Promise<"ready" | "committed" | "superseded" | "blocked" | "unchanged"> {
-  const admission = job.execution?.history;
+  const admission = getChatJobExecution(job)?.history;
   if (!admission || !job.syncProviderId) return "unchanged";
   const actor = { userId: job.userId, workspaceId: admission.workspaceId };
 

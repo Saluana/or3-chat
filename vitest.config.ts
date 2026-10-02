@@ -114,7 +114,12 @@ export default defineConfig({
             deps: {
                 // Transform this real toast owner so its Nuxt #imports use the
                 // existing test alias rather than Node package-import lookup.
-                inline: [/\/@nuxt\/ui\/dist\/runtime\/composables\/useToast\.js$/],
+                inline: [
+                    /\/@nuxt\/ui\/dist\/runtime\/composables\/useToast\.js$/,
+                    // Exercise the published job provider against the host's
+                    // real store/config alias, including workflow scope fences.
+                    /\/or3-provider-sqlite\/dist\/runtime\/server\/background-jobs\/sqlite-provider\.js$/,
+                ],
             },
         },
         projects: [

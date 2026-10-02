@@ -198,6 +198,13 @@ function getSessionProvisioningFailureMode(
 export async function resolveSessionContext(
     event: H3Event
 ): Promise<SessionContext> {
+    return resolveSessionContextAttempt(event, 2);
+}
+
+async function resolveSessionContextAttempt(
+    event: H3Event,
+    retriesRemaining: number
+): Promise<SessionContext> {
     // Generate or retrieve request ID for cache isolation
     let requestId = event.context[REQUEST_ID_KEY] as string | undefined;
     if (!requestId) {
@@ -287,6 +294,21 @@ export async function resolveSessionContext(
         }
         sharedSessionCache.delete(sharedCacheKey);
     }
+
+    // Capture before any store reads. An invalidation must not bless in-flight
+    // workspace/role data with the newer revision when it reaches the cache.
+    const authorizationRevision = getAuthorizationRevision(
+        providerSession.provider, providerSession.user.id, storeId
+    );
+    const authorizationChanged = () => authorizationRevision !== getAuthorizationRevision(
+        providerSession.provider, providerSession.user.id, storeId
+    );
+    const retryResolution = (): Promise<SessionContext> => retriesRemaining > 0
+        ? resolveSessionContextAttempt(event, retriesRemaining - 1)
+        : Promise.reject(createError({
+            statusCode: 503,
+            statusMessage: 'Workspace permissions changed; please retry',
+        }));
 
     // Map provider session to internal user/workspace via the configured AuthWorkspaceStore
     try {
@@ -453,6 +475,12 @@ export async function resolveSessionContext(
             providerSession.provider
         );
 
+        if (authorizationChanged()) {
+            // Return the retry promise without awaiting inside the provisioning
+            // catch: transient contention must never become a signed-out session.
+            return retryResolution();
+        }
+
         const workspaceInfo = {
             id: workspaceId,
             name: workspaceName,
@@ -475,11 +503,7 @@ export async function resolveSessionContext(
             role: workspaceInfo.role,
             expiresAt: providerSession.expiresAt.toISOString(),
             deploymentAdmin,
-            authorizationRevision: getAuthorizationRevision(
-                providerSession.provider,
-                providerSession.user.id,
-                storeId
-            ),
+            authorizationRevision,
         };
 
         recordSessionResolution(true);
@@ -491,6 +515,7 @@ export async function resolveSessionContext(
         });
         return sessionContext;
     } catch (error) {
+        if (authorizationChanged()) return retryResolution();
         recordSessionResolution(false);
         // Log structured error for workspace provisioning failures
         console.error('[auth:session] Workspace provisioning failed:', {

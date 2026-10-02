@@ -264,6 +264,7 @@ export async function* openRouterStream(params: {
         try {
             const headers: Record<string, string> = {
                 'Content-Type': 'application/json',
+                'x-or3-cloud-intent': 'mutation',
             };
             if (hasApiKey) {
                 headers['x-or3-openrouter-key'] = apiKey as string;
@@ -751,6 +752,7 @@ export async function startBackgroundStream(params: {
 
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
+        'x-or3-cloud-intent': 'mutation',
     };
     if (params.apiKey) {
         headers['x-or3-openrouter-key'] = params.apiKey;
@@ -999,6 +1001,8 @@ export async function pollJobStatus(
 export async function abortBackgroundJob(jobId: string): Promise<boolean> {
     const resp = await fetch(`/api/jobs/${jobId}/abort`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-or3-cloud-intent': 'mutation' },
+        body: '{}',
     });
 
     if (!resp.ok) {
@@ -1088,15 +1092,16 @@ export async function submitBackgroundClientToolResult(params: {
  * cancellation marker consumed when the admission commits.
  */
 export async function abortBackgroundAdmission(
-    admissionId: string
+    admissionId: string,
+    workspaceId: string | undefined
 ): Promise<{ aborted: boolean; pending: boolean; jobId?: string }> {
     let resp: Response;
     try {
         resp = await fetch('/api/jobs/admission-abort', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'x-or3-cloud-intent': 'mutation' },
             credentials: 'include',
-            body: JSON.stringify({ admissionId }),
+            body: JSON.stringify({ admissionId, workspaceId }),
         });
     } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') throw error;

@@ -90,7 +90,11 @@ with `background_history_unsupported` before model execution.
 
 ### Cancelling before the job ID exists
 
-`POST /api/jobs/admission-abort` accepts `{ admissionId }`. Providers implement
+`POST /api/jobs/admission-abort` accepts `{ admissionId, workspaceId }`; the browser
+captures the originating workspace when admission begins. Current write membership
+in that workspace is required. The server binds the provider's idempotency key to
+the authenticated user, workspace, and opaque admission ID, so cancellation and
+duplicate admission cannot collide across users or workspaces. Providers implement
 the durable `cancelAdmission` contract: a committed streaming job is aborted
 immediately; otherwise a cancellation marker is recorded in the job store
 (memory, SQLite `background_admission_cancels`, Convex
@@ -99,6 +103,9 @@ its admission transaction, rejecting creation with `AdmissionCancelledError`.
 A Stop therefore cannot be lost to a crash or a second worker, and a late
 admission can never launch work. Providers that predate the contract fall back
 to the in-process marker, which is best-effort and logged.
+
+Admissions created before scoped keys were introduced remain cancellable by their
+known job ID; the new admission-cancellation route does not target their raw keys.
 
 ### Terminal retention and transport errors
 
@@ -219,6 +226,11 @@ Server-side behavior:
 
 `workflow_state` is persisted on the background job and includes execution state, per-node states, HITL requests, output, and version counter.
 
+The host stamps every new workflow job with its authenticated originating workspace.
+This scope contains no chat recovery body or credential envelope. Its settled history
+phase excludes it from chat-worker claims while preserving normal terminal retention
+in the existing SQLite and Convex providers.
+
 Cancellation is authoritative at the provider. External providers are polled
 through a run-local abort signal so Stop interrupts the active model request and
 prevents later nodes from starting. The abort response also emits a terminal
@@ -302,10 +314,20 @@ the next model request, so reload cannot repeat an already completed side effect
 ## Security and Limits
 
 - SSR-only auth checks for all background job endpoints.
+- Status and stream require current read membership in the originating workspace;
+  Stop and client-tool claim/result require current write membership. Switching the
+  active workspace does not remove access to a job's original workspace. Live SSE
+  output is reauthorized before delivery, and a stalled authorization backlog closes
+  the connection at the existing transport capacity so clients can reconnect.
+- Jobs without a recorded workspace scope fail closed. Older workflow jobs must be
+  retried through the scoped host bridge before they can be observed or stopped.
 - Chat background start requires `workspace.write`; viewers cannot launch paid
   background work even when they supply a caller-owned OpenRouter key.
 - Managed OpenRouter credentials require an authenticated workspace writer.
   Guest foreground traffic must use caller-supplied credentials.
+- Managed streaming, background admission, and Stop require JSON mutation intent
+  and a trusted request origin. Workflow and client-tool rate slots are recorded
+  before asynchronous work, including when the admitted operation later fails.
 - Workflow endpoints enforce `can('workspace.write')`.
 - Background provider enforces concurrency/timeouts/retention.
 - Durable providers enforce atomic idempotent admission, per-user/global caps,

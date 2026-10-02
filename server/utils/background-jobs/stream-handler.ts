@@ -35,6 +35,8 @@ import {
     isBackgroundStreamingEnabled,
 } from '../background-jobs/store';
 import { encryptBackgroundCredential } from './crypto';
+import { getScopedAdmissionKey, hasAdmissionCancelled } from './admission-cancels';
+import { AdmissionCancelledError } from './types';
 import { claimAndRunBackgroundJob } from './lifecycle';
 import {
     parseOpenRouterSSE,
@@ -421,6 +423,10 @@ export async function startBackgroundStream(
         hasTools: Array.isArray(params.body.tools) && params.body.tools.length > 0,
     });
 
+    // Bind admission and cancellation atomically through the provider's existing key.
+    const admissionKey = getScopedAdmissionKey(params.userId, params.workspaceId, admissionId);
+    if (hasAdmissionCancelled(admissionKey)) throw new AdmissionCancelledError(admissionId);
+
     // Create job
     const jobId = await provider.createJob({
         userId: params.userId,
@@ -428,7 +434,7 @@ export async function startBackgroundStream(
         messageId: params.messageId,
         model,
         kind: 'chat',
-        idempotencyKey: admissionId,
+        idempotencyKey: admissionKey,
         generationId: history.generationId,
         syncProviderId,
         historyPhase: 'admission_pending',
@@ -436,6 +442,10 @@ export async function startBackgroundStream(
         initialReasoning: execution.reasoningBase,
         execution,
     });
+    if (hasAdmissionCancelled(admissionKey)) {
+        await provider.abortJob(jobId, params.userId);
+        throw new AdmissionCancelledError(admissionId);
+    }
     const created = await provider.getJob(jobId, params.userId);
     if (!created) throw new Error('Background job disappeared during admission');
     const historyResult = await reconcileBackgroundJobHistory(provider, created);

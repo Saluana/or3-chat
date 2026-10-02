@@ -136,8 +136,8 @@ export interface BackgroundJob {
     }>;
     /** Workflow execution state snapshot */
     workflow_state?: WorkflowMessageData;
-    /** Encrypted, server-only input required to resume a chat job. */
-    execution?: BackgroundJobExecution;
+    /** Server-only chat recovery input or immutable workflow authorization scope. */
+    execution?: BackgroundJobExecution | BackgroundWorkflowScope;
     /** Current durable worker lease owner. Never exposed by job API routes. */
     leaseOwner?: string;
     /** Unix timestamp when the current worker lease expires. */
@@ -210,10 +210,20 @@ export function isAdmissionCancelledError(error: unknown): boolean {
     return error instanceof Error && error.name === 'AdmissionCancelledError';
 }
 
-/**
- * Purpose:
- * Input for creating a new streaming job.
- */
+/** Immutable workflow authorization scope; this is never chat recovery input. */
+export interface BackgroundWorkflowScope {
+    version: 1;
+    kind: 'workflow';
+    workspaceId: string;
+}
+
+export function getChatJobExecution(job: Pick<BackgroundJob, 'execution' | 'kind'>): BackgroundJobExecution | undefined {
+    const execution = job.execution;
+    if (!execution || job.kind === 'workflow' || 'kind' in execution) return undefined;
+    return execution;
+}
+
+/** Input for creating a new streaming job. */
 export interface CreateJobParams {
     userId: string;
     threadId: string;
@@ -234,8 +244,8 @@ export interface CreateJobParams {
     initialContent?: string;
     /** Seed reasoning for a continuation. */
     initialReasoning?: string;
-    /** Server-only execution input used by the durable worker. */
-    execution?: BackgroundJobExecution;
+    /** Chat recovery input or immutable workflow authorization scope. */
+    execution?: BackgroundJobExecution | BackgroundWorkflowScope;
 }
 
 /**
