@@ -1,6 +1,6 @@
 # Tasks
 
-Progress snapshot: **11 complete, 23 partial, 21 not started (55 tasks)**. Checked boxes mean the full stated task criteria are implemented and verified at the linked boundary. Partial and unverified work remains unchecked; this is not a full-feature completion claim. Reviewed background-usage runtime is adopted at `e832700f` (tree `82821322afb51b88273a4f8560187bcfb23a4eef`); publication and exact-head CI remain held. Evidence and retained first failures: [evidence.md](./evidence.md). Each task is intended to take roughly 1–4 hours; split a task at its existing component/provider boundary if discovery makes it larger. Dependencies run from top to bottom. Where fixtures are written first, their final assertions become green only when the corresponding production task is complete; do not commit permanently skipped cases as a substitute.
+Progress snapshot: **11 complete, 24 partial, 20 not started (55 tasks)**. Checked boxes mean the full stated task criteria are implemented and verified at the linked boundary. Partial and unverified work remains unchecked; this is not a full-feature completion claim. Reviewed background-usage runtime is adopted at `e832700f` (tree `82821322afb51b88273a4f8560187bcfb23a4eef`); publication and exact-head CI remain held. Evidence and retained first failures: [evidence.md](./evidence.md). Each task is intended to take roughly 1–4 hours; split a task at its existing component/provider boundary if discovery makes it larger. Dependencies run from top to bottom. Where fixtures are written first, their final assertions become green only when the corresponding production task is complete; do not commit permanently skipped cases as a substitute.
 
 This plan changes native chat only. Preserve unrelated working-tree edits. Provider source changes require their owning source checkout and builds; installed `node_modules` files are not implementation targets. No task authorizes publication, a stable release, or production data changes.
 
@@ -78,7 +78,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C2.
       Requirements: R3.AC5, R3.AC6.
       Done when: native browser/server budget preparation uses validated OpenRouter records and route-relevant constraints, valid cached metadata remains usable, a missing record refreshes through the existing catalog path, and failure retains the draft with metadata-unavailable rather than a guessed numeric capacity. No parallel catalog/cache is introduced.
-      Status: Not started — native catalog/cache readiness and refresh binding is not implemented; auxiliary callers provide metadata explicitly.
+      Status: Partial — existing SDK-normalized catalog/service/store and caches now expose validated immutable capacity facts, exact selected routing identity, truthful live/cache provenance and actual fetch timestamps; missing/invalid records coalesce a forced refresh and cancellation affects only its waiter.66 focused cases include legacy-cache unknown timestamps. Native browser/server budget consumers, route-authority qualification and draft-preserving admission remain unwired; no guessed numeric capacity or parallel catalog was added.
 
 - [ ] 2.7b Add the optional maximum to Dashboard AI settings and existing KV persistence (3h).
       Components: C2.

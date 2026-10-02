@@ -54,12 +54,51 @@ import { ref } from 'vue';
 import modelsService, {
     type OpenRouterModel,
     type PriceBucket,
+    type ModelCatalogResult,
 } from '~/core/auth/models-service';
 
 import { openRouterModelListSchema } from '~~/shared/openrouter/types';
+import { stripModelVariantSuffix } from '~~/shared/openrouter/model-variants';
+import { admitChatContext, type ContextModelMetadata } from '~~/shared/chat/context-budget';
 
 // Module-level in-flight promise for deduping parallel fetches across composable instances
 let inFlight: Promise<OpenRouterModel[]> | null = null;
+let inFlightForced = false;
+let catalogSource: 'openrouter-live' | 'openrouter-cache' = 'openrouter-cache';
+let catalogFetchedAt: number | null = null;
+
+export type ContextModelReadiness =
+    | { ok: false; code: 'model_metadata_unavailable' }
+    | { ok: true; selectedModelId: string; modelId: string; source: ModelCatalogResult['source'];
+        fetchedAt: number | null; metadata: ContextModelMetadata };
+
+/** Decode the existing cache key; legacy lists retain unknown fetch provenance. */
+function decodeCatalog(raw: string): Pick<ModelCatalogResult, 'data' | 'fetchedAt'> | null {
+    const parsed: unknown = JSON.parse(raw);
+    const envelope = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown> : null;
+    if (envelope && envelope.version !== 1) return null;
+    const validated = openRouterModelListSchema.safeParse(envelope ? envelope.data : parsed);
+    if (!validated.success) return null;
+    const timestamp = envelope?.fetchedAt;
+    return { data: validated.data, fetchedAt: typeof timestamp === 'number'
+        && Number.isSafeInteger(timestamp) && timestamp > 0 ? timestamp : null };
+}
+
+/** Cancel one waiter promptly without canceling the catalog refresh shared by other callers. */
+function waitForCatalog<T>(pending: Promise<T>, signal?: AbortSignal): Promise<T> {
+    if (!signal) return pending;
+    return new Promise((resolve, reject) => {
+        const abort = () => { signal.removeEventListener('abort', abort); reject(new DOMException('Model preparation canceled.', 'AbortError')); };
+        if (signal.aborted) abort();
+        else signal.addEventListener('abort', abort, { once: true });
+        void pending.then((value) => {
+            signal.removeEventListener('abort', abort); resolve(value);
+        }, (error: unknown) => {
+            signal.removeEventListener('abort', abort); reject(error);
+        });
+    });
+}
 
 export const MODELS_CACHE_KEY = 'MODELS_CATALOG';
 export const MODELS_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
@@ -123,11 +162,12 @@ export function useModelStore() {
             const raw = rec.value;
             if (!raw || typeof raw !== 'string') return null;
             try {
-                const parsed: unknown = JSON.parse(raw);
-                const validated = openRouterModelListSchema.safeParse(parsed);
-                if (!validated.success) return null;
+                const validated = decodeCatalog(raw);
+                if (!validated) return null;
                 catalog.value = validated.data;
-                lastLoadedAt.value = updatedAtMs;
+                lastLoadedAt.value = validated.fetchedAt ?? updatedAtMs;
+                catalogSource = 'openrouter-cache';
+                catalogFetchedAt = validated.fetchedAt;
                 if (import.meta.dev)
                     console.debug(
                         '[models-cache] dexie hit — hydrated catalog from cache',
@@ -157,10 +197,10 @@ export function useModelStore() {
         }
     }
 
-    async function saveToDexie(list: OpenRouterModel[]) {
+    async function saveToDexie(list: OpenRouterModel[], fetchedAt: number | null) {
         if (!canUseDexie()) return;
         try {
-            await kv.set(MODELS_CACHE_KEY, JSON.stringify(list));
+            await kv.set(MODELS_CACHE_KEY, JSON.stringify({ version: 1, data: list, fetchedAt }));
             if (import.meta.dev)
                 console.debug('[models-cache] saved catalog to Dexie', {
                     count: list.length,
@@ -178,6 +218,8 @@ export function useModelStore() {
         }
         catalog.value = [];
         lastLoadedAt.value = undefined;
+        catalogSource = 'openrouter-cache';
+        catalogFetchedAt = null;
         if (!canUseDexie()) return;
         try {
             await kv.delete(MODELS_CACHE_KEY);
@@ -188,7 +230,7 @@ export function useModelStore() {
         }
     }
 
-    async function fetchModels(opts?: { force?: boolean; ttlMs?: number }) {
+    async function fetchModels(opts?: { force?: boolean; ttlMs?: number }): Promise<OpenRouterModel[]> {
         const ttl = opts?.ttlMs ?? MODELS_TTL_MS;
 
         // Memory fast-path
@@ -220,24 +262,33 @@ export function useModelStore() {
         }
 
         // Dedupe in-flight network requests
-        if (inFlight && !opts?.force) return inFlight;
+        if (inFlight) {
+            if (!opts?.force || inFlightForced) return inFlight;
+            // A forced refresh must not inherit a normal service cache hit.
+            // Wait for that owner, then coalesce one genuinely forced refresh.
+            await inFlight.catch(() => undefined);
+            return fetchModels(opts);
+        }
 
         const fetchPromise = (async () => {
             if (import.meta.dev) {
-                console.info('[models-cache] fetching models from network');
+                console.info('[models-cache] loading model catalog');
             }
             try {
-                const list = await modelsService.fetchModels(opts);
+                const result = await modelsService.fetchModelCatalog(opts);
+                const list = result.data;
                 catalog.value = list;
-                lastLoadedAt.value = Date.now();
+                lastLoadedAt.value = result.fetchedAt ?? undefined;
+                catalogSource = result.source;
+                catalogFetchedAt = result.fetchedAt;
                 if (import.meta.dev) {
-                    console.info(
-                        '[models-cache] network fetch successful — updated memory, persisting to Dexie'
-                    );
+                    console.info('[models-cache] catalog loaded', {
+                        source: result.source, fetchedAt: result.fetchedAt,
+                    });
                 }
                 // Removed network source console.log
                 // persist async (don't block response)
-                saveToDexie(list).catch(() => {});
+                saveToDexie(list, result.fetchedAt).catch(() => {});
                 return list;
             } catch (err) {
                 console.warn('[models-cache] network fetch failed', err);
@@ -259,16 +310,16 @@ export function useModelStore() {
                             staleness < MAX_STALE_AGE_MS
                         ) {
                             try {
-                                const parsed: unknown = JSON.parse(raw);
-                                const validated =
-                                    openRouterModelListSchema.safeParse(parsed);
+                                const validated = decodeCatalog(raw);
                                 if (
-                                    validated.success &&
+                                    validated &&
                                     validated.data.length
                                 ) {
                                     catalog.value = validated.data;
                                     lastLoadedAt.value =
-                                        updatedAtMs || Date.now();
+                                        validated.fetchedAt ?? updatedAtMs;
+                                    catalogSource = 'openrouter-cache';
+                                    catalogFetchedAt = validated.fetchedAt;
                                     console.warn(
                                         '[models-cache] network failed; serving stale cached models',
                                         {
@@ -312,13 +363,52 @@ export function useModelStore() {
             }
         })();
 
-        if (!opts?.force) {
-            inFlight = fetchPromise.finally(() => {
-                inFlight = null;
-            });
-        }
+        const pending = fetchPromise.finally(() => {
+            if (inFlight === pending) { inFlight = null; inFlightForced = false; }
+        });
+        inFlight = pending;
+        inFlightForced = opts?.force === true;
+        return pending;
+    }
 
-        return fetchPromise;
+    /** Capture validated catalog facts. This prepares metadata only, never a chat turn. */
+    async function resolveContextModel(selectedModelId: string, opts?: { signal?: AbortSignal }): Promise<ContextModelReadiness> {
+        const signal = opts?.signal;
+        const checkCanceled = () => {
+            if (signal?.aborted) throw new DOMException('Model preparation canceled.', 'AbortError');
+        };
+        checkCanceled();
+        const withoutThinking = selectedModelId.endsWith(':thinking') ? selectedModelId.slice(0, -':thinking'.length) : selectedModelId;
+        const lookupId = stripModelVariantSuffix(withoutThinking);
+        const matches = (model: OpenRouterModel) => model.id === lookupId || model.canonical_slug === lookupId;
+        const lookup = (): Extract<ContextModelReadiness, { ok: true }> | undefined => {
+            const candidates = [
+                { model: catalog.value.find(matches), source: catalogSource, fetchedAt: catalogFetchedAt },
+                { model: favoriteModels.value.find(matches), source: 'openrouter-cache' as const, fetchedAt: null },
+            ];
+            for (const candidate of candidates) {
+                if (!candidate.model || !admitChatContext({ model: candidate.model, inputTokens: 0 }).ok) continue;
+                const model = candidate.model;
+                const metadata = Object.freeze({ context_length: model.context_length,
+                    top_provider: model.top_provider ? Object.freeze({ context_length: model.top_provider.context_length,
+                        max_completion_tokens: model.top_provider.max_completion_tokens }) : undefined });
+                return Object.freeze({ ok: true, selectedModelId, modelId: model.id,
+                    source: candidate.source, fetchedAt: candidate.fetchedAt, metadata });
+            }
+        };
+        let known = lookup();
+        if (known) return known;
+        try {
+            await waitForCatalog(fetchModels(), signal);
+            checkCanceled(); known = lookup();
+            if (known) return known;
+            await waitForCatalog(fetchModels({ force: true }), signal);
+        } catch {
+            checkCanceled();
+            // Failed refresh can still leave valid last-known metadata.
+        }
+        checkCanceled();
+        return lookup() ?? { ok: false, code: 'model_metadata_unavailable' };
     }
 
     async function persist() {
@@ -378,6 +468,7 @@ export function useModelStore() {
         searchQuery,
         filters,
         fetchModels,
+        resolveContextModel,
         refreshModels,
         invalidate,
         getFavoriteModels,

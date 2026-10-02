@@ -32,6 +32,7 @@ import {
     type OpenRouterModel,
 } from '~~/shared/openrouter';
 import { useRuntimeConfig } from '#imports';
+import { openRouterModelListSchema } from '~~/shared/openrouter/types';
 
 // Re-export the type from shared location for consumers
 export type { OpenRouterModel } from '~~/shared/openrouter/types';
@@ -40,6 +41,13 @@ export type { OpenRouterModel } from '~~/shared/openrouter/types';
 export interface ModelCatalogCache {
     data: OpenRouterModel[];
     fetchedAt: number;
+}
+
+export interface ModelCatalogResult {
+    data: OpenRouterModel[];
+    /** Null means a legacy cache did not retain an actual fetch timestamp. */
+    fetchedAt: number | null;
+    source: 'openrouter-live' | 'openrouter-cache';
 }
 
 const CACHE_KEY = 'openrouter_model_catalog_v1';
@@ -53,24 +61,26 @@ function readApiKey(): string | null {
     }
 }
 
-function saveCache(data: OpenRouterModel[]): void {
+function saveCache(data: OpenRouterModel[], fetchedAt: number): void {
     try {
         if (typeof window === 'undefined') return;
-        const payload: ModelCatalogCache = { data, fetchedAt: Date.now() };
+        const payload: ModelCatalogCache = { data, fetchedAt };
         localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
     } catch {
         // localStorage may fail in private browsing - ignore
     }
 }
 
-function loadCache(): ModelCatalogCache | null {
+function loadCache(): Pick<ModelCatalogResult, 'data' | 'fetchedAt'> | null {
     try {
         if (typeof window === 'undefined') return null;
         const raw = localStorage.getItem(CACHE_KEY);
         if (!raw) return null;
-        const parsed = JSON.parse(raw) as ModelCatalogCache;
-        if (!Array.isArray(parsed.data)) return null;
-        return parsed;
+        const parsed = JSON.parse(raw) as { data?: unknown; fetchedAt?: unknown };
+        const validated = openRouterModelListSchema.safeParse(parsed.data);
+        if (!validated.success) return null;
+        return { data: validated.data, fetchedAt: typeof parsed.fetchedAt === 'number'
+            && Number.isSafeInteger(parsed.fetchedAt) && parsed.fetchedAt > 0 ? parsed.fetchedAt : null };
     } catch {
         return null;
     }
@@ -106,15 +116,24 @@ export async function fetchModels(opts?: {
     force?: boolean;
     ttlMs?: number;
 }): Promise<OpenRouterModel[]> {
+    return (await fetchModelCatalog(opts)).data;
+}
+
+/** Same catalog/cache path, with transport provenance for capacity preparation. */
+export async function fetchModelCatalog(opts?: {
+    force?: boolean;
+    ttlMs?: number;
+}): Promise<ModelCatalogResult> {
     const ttlMs = opts?.ttlMs ?? 1000 * 60 * 60; // 1 hour
     if (!opts?.force) {
         const cached = loadCache();
         if (
             cached &&
+            cached.fetchedAt !== null &&
             Date.now() - cached.fetchedAt <= ttlMs &&
             cached.data.length
         ) {
-            return cached.data;
+            return { ...cached, source: 'openrouter-cache' };
         }
     }
 
@@ -135,12 +154,13 @@ export async function fetchModels(opts?: {
         // Map SDK model type to our OpenRouterModel interface
         const models: OpenRouterModel[] = sdkModels.map(sdkModelToLocal);
 
-        saveCache(models);
-        return models;
+        const fetchedAt = Date.now();
+        saveCache(models, fetchedAt);
+        return { data: models, fetchedAt, source: 'openrouter-live' };
     } catch (error) {
         // Fallback to cache on any error
         const cached = loadCache();
-        if (cached?.data.length) return cached.data;
+        if (cached?.data.length) return { ...cached, source: 'openrouter-cache' };
 
         const normalized = normalizeSDKError(error);
         const { raw: _raw, ...metadata } = normalized;
@@ -275,6 +295,7 @@ export function filterByPriceBucket(
  */
 export const modelsService = {
     fetchModels,
+    fetchModelCatalog,
     filterByText,
     filterByModalities,
     filterByContextLength,
