@@ -31,12 +31,33 @@ interface DocState {
 // Cache and pending saves follow the actual originating DB, just like CRUD.
 const documentScopes = new WeakMap<Or3DB, Map<string, DocState>>();
 const pendingSaves = new Set<DocState>();
+// Keep only unsaved edits alive when the workspace DB's LRU handle is closed.
+// DB names identify the same local workspace across handle replacement.
+const retainedDocuments = new Map<string, Map<string, DocState>>();
+const saveDatabases = new WeakMap<DocState, Or3DB>();
+
+function retainDocument(db: Or3DB, id: string, st: DocState) {
+    let pending = retainedDocuments.get(db.name);
+    if (!pending) {
+        pending = new Map();
+        retainedDocuments.set(db.name, pending);
+    }
+    pending.set(id, st);
+}
+
+function forgetRetainedDocument(db: Or3DB, id: string, st: DocState) {
+    const pending = retainedDocuments.get(db.name);
+    if (pending?.get(id) !== st) return;
+    pending.delete(id);
+    if (!pending.size) retainedDocuments.delete(db.name);
+}
 
 function getDocumentsMap(db = getDb()): Map<string, DocState> {
     let scope = documentScopes.get(db);
     if (!scope) {
-        scope = reactive(new Map<string, DocState>());
+        scope = reactive(new Map<string, DocState>(retainedDocuments.get(db.name)));
         documentScopes.set(db, scope);
+        for (const st of scope.values()) saveDatabases.set(st, db);
     }
     return scope;
 }
@@ -49,15 +70,16 @@ function ensure(id: string, db = getDb()): DocState {
         const state = st;
         st.debouncedSave = useDebounceFn(() => {
             pendingSaves.delete(state);
-            return flushInDb(db, id);
+            return flushInDb(saveDatabases.get(state) ?? db, id);
         }, 750);
         documentsMap.set(id, st);
+        saveDatabases.set(st, db);
     }
     return st;
 }
 
-function scheduleSave(id: string) {
-    const st = getDocumentsMap().get(id);
+function scheduleSave(id: string, db: Or3DB) {
+    const st = getDocumentsMap(db).get(id);
     if (!st || !st.debouncedSave) return;
     pendingSaves.add(st);
     st.debouncedSave();
@@ -83,8 +105,8 @@ function scheduleSave(id: string) {
  * await flush(documentId);
  * ```
  */
-export async function flush(id: string) {
-    return flushInDb(getDb(), id);
+export async function flush(id: string, db = getDb()) {
+    return flushInDb(db, id);
 }
 
 async function flushInDb(db: Or3DB, id: string) {
@@ -151,6 +173,9 @@ async function flushInDb(db: Or3DB, id: string) {
                 st.pendingContentGeneration = undefined;
             }
             st.flushPromise = undefined;
+            if (st.pendingTitle === undefined && st.pendingContent === undefined) {
+                forgetRetainedDocument(db, id, st);
+            }
             // Emit pane-scoped saved hook for any panes displaying this doc.
             try {
                 if (saveSucceeded && db === getDb() && typeof window !== 'undefined') {
@@ -207,8 +232,7 @@ async function flushInDb(db: Or3DB, id: string) {
  * const doc = await loadDocument(documentId);
  * ```
  */
-export async function loadDocument(id: string) {
-    const db = getDb();
+export async function loadDocument(id: string, db = getDb()) {
     const st = ensure(id, db);
     st.status = 'loading';
     try {
@@ -279,12 +303,13 @@ export async function newDocument(initial?: {
  * setDocumentTitle(documentId, 'New Title');
  * ```
  */
-export function setDocumentTitle(id: string, title: string) {
-    const st = ensure(id);
+export function setDocumentTitle(id: string, title: string, db = getDb()) {
+    const st = ensure(id, db);
     if (st.record) {
         st.pendingTitle = title;
         st.pendingTitleGeneration = ++st.nextGeneration;
-        scheduleSave(id);
+        retainDocument(db, id, st);
+        scheduleSave(id, db);
     }
 }
 
@@ -306,12 +331,13 @@ export function setDocumentTitle(id: string, title: string) {
  * setDocumentContent(documentId, tiptapJson);
  * ```
  */
-export function setDocumentContent(id: string, content: TipTapDocument | null) {
-    const st = ensure(id);
+export function setDocumentContent(id: string, content: TipTapDocument | null, db = getDb()) {
+    const st = ensure(id, db);
     if (st.record) {
         st.pendingContent = content;
         st.pendingContentGeneration = ++st.nextGeneration;
-        scheduleSave(id);
+        retainDocument(db, id, st);
+        scheduleSave(id, db);
     }
 }
 
@@ -333,8 +359,8 @@ export function setDocumentContent(id: string, content: TipTapDocument | null) {
  * const state = useDocumentState(documentId);
  * ```
  */
-export function useDocumentState(id: string) {
-    return getDocumentsMap().get(id) || ensure(id);
+export function useDocumentState(id: string, db = getDb()) {
+    return getDocumentsMap(db).get(id) || ensure(id, db);
 }
 
 /**
@@ -463,6 +489,7 @@ export async function releaseDocument(
     st.pendingContent = undefined;
     st.pendingTitleGeneration = undefined;
     st.pendingContentGeneration = undefined;
+    forgetRetainedDocument(db, id, st);
     if (deleteEntry) {
         documentsMap.delete(id);
     }

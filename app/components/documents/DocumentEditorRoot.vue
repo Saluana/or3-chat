@@ -300,6 +300,7 @@ import AutocompleteState from '~/plugins/EditorAutocomplete/state';
 import { Or3DocumentImage } from '~/extensions/or3-document-image';
 import { DocumentAiHunks } from '~/plugins/DocumentAiHunks/TiptapExtension';
 import { flush, loadDocument, setDocumentContent, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
+import { getDb, subscribeActiveWorkspaceDb } from '~/db/client';
 import {
     registerDocumentEditorSession,
     type DocumentEditorFocusedRegion,
@@ -378,9 +379,10 @@ const icons = reactive({
 const documentId = toRef(props, 'documentId');
 const hooks = useHooks();
 const editor = shallowRef<Editor | null>(null);
+const editorDb = shallowRef(getDb());
 const rootElement = ref<HTMLElement>();
 const editorScroll = ref<HTMLElement>();
-const state = computed(() => useDocumentState(props.documentId));
+const state = computed(() => useDocumentState(props.documentId, editorDb.value));
 const titleDraft = ref('');
 const capturedContent = ref<TipTapDocument>({
     type: 'doc',
@@ -427,13 +429,15 @@ const inspectorDefaultApplied = ref(false);
 const inspectorTransitionsReady = ref(false);
 let suppressFindAutofocus = false;
 let loadedDocumentId: string | undefined;
+let loadGeneration = 0;
 
 const pluginButtons = useEditorToolbarButtons(editor);
 const inspectorPanels = useEditorInspectorPanels();
 const documentAiActions = useDocumentAiActions();
 const { outline, activeOutlineId, stats, scrollTo, setSerializedSize, refresh } = useDocumentInsights(editor);
 
-function captureContent(id = props.documentId): void {
+function captureContent(id = props.documentId, db = editorDb.value): void {
+    if (db !== editorDb.value || loadedDocumentId !== id) return;
     const current = editor.value;
     if (!current || current.isDestroyed) return;
     if (captureTimer) clearTimeout(captureTimer);
@@ -441,13 +445,13 @@ function captureContent(id = props.documentId): void {
     const json = current.getJSON();
     capturedContent.value = json;
     setSerializedSize(new TextEncoder().encode(JSON.stringify(json)).byteLength);
-    setDocumentContent(id, json);
+    setDocumentContent(id, json, db);
 }
 
-async function ensureLocalDurability(id = props.documentId): Promise<void> {
-    captureContent(id);
-    await flush(id);
-    const currentState = useDocumentState(id);
+async function ensureLocalDurability(id = props.documentId, db = editorDb.value): Promise<void> {
+    captureContent(id, db);
+    await flush(id, db);
+    const currentState = useDocumentState(id, db);
     if (currentState.status === 'error') {
         throw currentState.lastError instanceof Error
             ? currentState.lastError
@@ -529,7 +533,7 @@ function scheduleAutomaticRevision() {
             title: titleDraft.value,
             content: current.getJSON(),
             source: 'auto',
-        }).catch(() => null);
+        }, editorDb.value).catch(() => null);
         if (created) lastAutomaticRevisionAt = Date.now();
     }, earliest);
 }
@@ -587,9 +591,9 @@ async function insertFiles(files: File[]) {
     }
 }
 
-async function makeEditor(id: string) {
+async function makeEditor(isCurrent: () => boolean) {
     const loaded = await loadEditorExtensions(listEditorNodes(), listEditorMarks(), listEditorExtensions());
-    if (didUnmount || props.documentId !== id) return;
+    if (!isCurrent()) return;
     editor.value?.destroy();
     editor.value = new Editor({
         extensions: [
@@ -770,12 +774,13 @@ async function restoreDocumentViewState(
 
 function registerActiveSession(id: string): void {
     unregisterSession?.();
+    const db = editorDb.value;
     unregisterSession = registerDocumentEditorSession({
         documentId: id,
         paneId: props.paneId,
         tabId: props.tabId,
-        captureContent: () => captureContent(id),
-        ensureLocalDurability: () => ensureLocalDurability(id),
+        captureContent: () => captureContent(id, db),
+        ensureLocalDurability: () => ensureLocalDurability(id, db),
         captureViewState: () => captureDocumentViewState(id),
         restoreViewState: (saved, options) =>
             restoreDocumentViewState(id, saved, options),
@@ -786,13 +791,18 @@ function registerActiveSession(id: string): void {
 }
 
 async function loadActiveDocument(id: string) {
-    await loadDocument(id);
-    if (didUnmount || props.documentId !== id) return;
-    titleDraft.value = state.value.record?.title ?? '';
-    capturedContent.value = normalizedContent(state.value.record?.content);
+    const db = editorDb.value;
+    const generation = ++loadGeneration;
+    const isCurrent = () => !didUnmount && props.documentId === id &&
+        editorDb.value === db && loadGeneration === generation;
+    await loadDocument(id, db);
+    if (!isCurrent()) return;
+    titleDraft.value = state.value.pendingTitle ?? state.value.record?.title ?? '';
+    capturedContent.value = normalizedContent(state.value.pendingContent !== undefined
+        ? state.value.pendingContent : state.value.record?.content);
     contentVersion.value = 0;
-    await makeEditor(id);
-    if (didUnmount || props.documentId !== id) return;
+    await makeEditor(isCurrent);
+    if (!isCurrent()) return;
     loadedDocumentId = id;
     registerActiveSession(id);
     emit('ready', id);
@@ -818,6 +828,34 @@ watch(documentId, async (id, previous) => {
     overflowOpen.value = false;
     ai.reset();
     await loadActiveDocument(id);
+});
+
+const stopWorkspaceSubscription = subscribeActiveWorkspaceDb(() => {
+    // The active DB has already changed. Capture the old editor against its
+    // own DB before clearing it, including when PageShell unmounts next tick.
+    void ensureLocalDurability(props.documentId, editorDb.value).catch((caught) => {
+        console.error('[DocumentEditor] Failed to save before workspace switch', caught);
+    });
+    unregisterSession?.();
+    unregisterSession = undefined;
+    if (captureTimer) clearTimeout(captureTimer);
+    if (revisionTimer) clearTimeout(revisionTimer);
+    captureTimer = undefined;
+    revisionTimer = undefined;
+    editor.value?.destroy();
+    editor.value = null;
+    loadedDocumentId = undefined;
+    lastAutomaticRevisionAt = 0;
+    editorDb.value = getDb();
+    titleDraft.value = '';
+    capturedContent.value = emptyDocument();
+    closeSlashMenu(false);
+    findOpen.value = false;
+    findQuery.value = '';
+    replaceQuery.value = '';
+    overflowOpen.value = false;
+    ai.reset();
+    void loadActiveDocument(props.documentId);
 });
 
 watch(
@@ -888,6 +926,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
     didUnmount = true;
+    stopWorkspaceSubscription();
     paneResizeObserver?.disconnect();
     paneResizeObserver = undefined;
     ai.abort();
@@ -903,7 +942,7 @@ onBeforeUnmount(() => {
 
 function onTitleInput(value: string | number | null) {
     titleDraft.value = String(value ?? '');
-    setDocumentTitle(props.documentId, titleDraft.value);
+    setDocumentTitle(props.documentId, titleDraft.value, editorDb.value);
 }
 
 const activeBlock = computed(() => {
@@ -1391,16 +1430,19 @@ async function acceptAi() {
 
 async function restoreRevision(revision: CompleteDocumentRevision) {
     const current = editor.value;
+    const db = editorDb.value;
+    const id = props.documentId;
     if (!current) return;
     await createDocumentRevision({
         documentId: props.documentId,
         title: titleDraft.value,
         content: current.getJSON(),
         source: 'restore',
-    });
+    }, db);
+    if (didUnmount || editor.value !== current || editorDb.value !== db || props.documentId !== id) return;
     current.schema.nodeFromJSON(revision.snapshot.content);
     titleDraft.value = revision.snapshot.title;
-    setDocumentTitle(props.documentId, titleDraft.value);
+    setDocumentTitle(id, titleDraft.value, db);
     current.commands.setContent(revision.snapshot.content, {
         emitUpdate: true,
         errorOnInvalidContent: true,
@@ -1416,7 +1458,7 @@ async function createManualCheckpoint() {
         title: titleDraft.value,
         content: current.getJSON(),
         source: 'manual',
-    });
+    }, editorDb.value);
 }
 </script>
 

@@ -4,6 +4,7 @@ import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine } from '~/core/hooks/useHooks';
 import { createDocumentInDb, getDocumentInDb } from '~/db/documents';
+import { createDocumentRevision, listCompleteDocumentRevisions, pruneDocumentRevisions, DOCUMENT_REVISION_POST_TYPE, DOCUMENT_REVISION_CHUNK_POST_TYPE } from '~/db/document-revisions';
 import { useWorkspaceBackup } from '~/composables/core/useWorkspaceBackup';
 import {
     flush, loadDocument, releaseDocument, setDocumentTitle, useDocumentState,
@@ -27,6 +28,7 @@ const TEST_WORKSPACES = [
 ] as const;
 
 afterEach(async () => {
+    vi.unstubAllGlobals();
     delete (window as Window & { showSaveFilePicker?: unknown }).showSaveFilePicker;
     for (const { id, name } of disposableWorkspaces.splice(0)) {
         setActiveWorkspaceDb(id);
@@ -58,6 +60,59 @@ async function documentWorkspaces() {
 }
 
 describe('document workspace isolation through the real Dexie store', () => {
+    it('finishes a checkpoint history read in its originating workspace', async () => {
+        vi.stubGlobal('CompressionStream', undefined);
+        const { idB } = await documentWorkspaces();
+        await createDocumentRevision({ documentId: 'copied-document', title: 'A checkpoint owner', content: { type: 'doc', content: [] }, source: 'manual' });
+        const reading = listCompleteDocumentRevisions('copied-document');
+        setActiveWorkspaceDb(idB);
+        expect((await reading)[0]?.snapshot.title).toBe('A checkpoint owner');
+        expect(await listCompleteDocumentRevisions('copied-document')).toEqual([]);
+    });
+
+    it('prunes only the origin checkpoint history after switching to a copied workspace', async () => {
+        vi.stubGlobal('CompressionStream', undefined);
+        const { dbA, dbB, idB } = await documentWorkspaces();
+        const manifest = (await createDocumentRevision({ documentId: 'copied-document', title: 'Fixture checkpoint', content: { type: 'doc', content: [] }, source: 'manual' }))!;
+        const template = (await dbA.posts.get(manifest.revisionId))!;
+        const chunk = (await dbA.posts.get(manifest.chunkIds[0]!))!;
+        const copied = Array.from({ length: 21 }, (_, index) => {
+            const revisionId = `copied-revision-${index}`;
+            const chunkId = `${revisionId}:chunk:0`;
+            return [
+                { ...template, id: revisionId, content: JSON.stringify({ ...manifest, revisionId, chunkIds: [chunkId] }) },
+                { ...chunk, id: chunkId, title: revisionId },
+            ];
+        }).flat();
+        await dbA.posts.where('postType').anyOf(DOCUMENT_REVISION_POST_TYPE, DOCUMENT_REVISION_CHUNK_POST_TYPE).delete();
+        await dbA.posts.bulkPut(copied);
+        await dbB.posts.bulkPut(copied);
+        const pruning = pruneDocumentRevisions('copied-document');
+        setActiveWorkspaceDb(idB);
+        expect((await pruning).removed).toBe(1);
+        expect(await dbA.posts.where('postType').equals(DOCUMENT_REVISION_POST_TYPE).count()).toBe(20);
+        expect(await dbB.posts.where('postType').equals(DOCUMENT_REVISION_POST_TYPE).count()).toBe(21);
+    });
+
+    it('keeps an in-flight document checkpoint in its originating workspace', async () => {
+        // Happy DOM's Blob lacks stream(); exercise the real identity codec
+        // that browsers without CompressionStream also use.
+        vi.stubGlobal('CompressionStream', undefined);
+        const { idA, idB } = await documentWorkspaces();
+        const checkpoint = createDocumentRevision({
+            documentId: 'copied-document', title: 'A private checkpoint',
+            content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'A checkpoint body' }] }] },
+            source: 'manual',
+        });
+        setActiveWorkspaceDb(idB);
+        await checkpoint;
+        expect(await listCompleteDocumentRevisions('copied-document')).toEqual([]);
+        setActiveWorkspaceDb(idA);
+        const revisions = await listCompleteDocumentRevisions('copied-document');
+        expect(revisions).toHaveLength(1);
+        expect(revisions[0]?.snapshot.title).toBe('A private checkpoint');
+    });
+
     it('exports the originating workspace when switching while the save picker is open', async () => {
         const { dbA, idB } = await documentWorkspaces();
         const chunks: Uint8Array[] = [];
@@ -167,6 +222,33 @@ describe('document workspace isolation through the real Dexie store', () => {
         expect((await getDocumentInDb(dbA, 'copied-document'))?.title).toBe('Workspace A second edit');
         expect((await getDocumentInDb(dbB, 'copied-document'))?.title).toBe('Workspace B owner');
         expect(useDocumentState('copied-document').record?.title).toBe('Workspace B owner');
+    });
+
+    it('retains a failed save for retry after the origin DB is evicted and reopened', async () => {
+        const { dbA, dbB, idA, idB } = await documentWorkspaces();
+        await loadDocument('copied-document');
+        setDocumentTitle('copied-document', 'Workspace A retained retry');
+        const failure = () => { throw new Error('Disposable write failure'); };
+        dbA.posts.hook('updating', failure);
+        await flush('copied-document');
+        expect(useDocumentState('copied-document').status).toBe('error');
+        dbA.posts.hook('updating').unsubscribe(failure);
+        setActiveWorkspaceDb(idB);
+        for (let index = 0; index < 11; index++) {
+            const id = `document-eviction-${crypto.randomUUID()}`;
+            const db = setActiveWorkspaceDb(id);
+            disposableWorkspaces.push({ id, name: db.name });
+        }
+        expect(dbA.isOpen()).toBe(false);
+        const reopenedA = setActiveWorkspaceDb(idA);
+        expect(reopenedA).not.toBe(dbA);
+        await loadDocument('copied-document');
+        expect(useDocumentState('copied-document').pendingTitle).toBe('Workspace A retained retry');
+        await flush('copied-document');
+        expect((await getDocumentInDb(reopenedA, 'copied-document'))?.title).toBe('Workspace A retained retry');
+        const reopenedB = setActiveWorkspaceDb(idB);
+        expect((await getDocumentInDb(reopenedB, 'copied-document'))?.title).toBe('Workspace B owner');
+        expect(reopenedB.name).toBe(dbB.name);
     });
 });
 

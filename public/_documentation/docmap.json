@@ -206,7 +206,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Document CRUD, workspace-scoped editor caches, autosave, and AI proposals."
+                    "summary": "Document CRUD, workspace-scoped editors and checkpoint history, autosave, and AI proposals."
                 },
                 {
                     "name": "prompts.md",

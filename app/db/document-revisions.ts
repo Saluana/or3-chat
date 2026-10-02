@@ -1,4 +1,4 @@
-import { getDb } from './client';
+import { getDb, type Or3DB } from './client';
 import { getWriteTxTableNames, newId, nextClock, nowSec } from './util';
 import type { Post } from './schema';
 import type { TipTapDocument } from '~/types/database';
@@ -99,8 +99,8 @@ function makePost(input: {
     };
 }
 
-async function manifestRows(documentId: string): Promise<Post[]> {
-    return getDb().posts
+async function manifestRows(documentId: string, db: Or3DB): Promise<Post[]> {
+    return db.posts
         .where('[postType+title]')
         .equals([DOCUMENT_REVISION_POST_TYPE, documentId])
         .and((row) => !row.deleted)
@@ -108,9 +108,10 @@ async function manifestRows(documentId: string): Promise<Post[]> {
 }
 
 export async function readDocumentRevision(
-    manifest: DocumentRevisionManifest
+    manifest: DocumentRevisionManifest,
+    db = getDb()
 ): Promise<CompleteDocumentRevision | null> {
-    const rows = await getDb().posts.bulkGet(manifest.chunkIds);
+    const rows = await db.posts.bulkGet(manifest.chunkIds);
     if (rows.some((row) => !row || row.deleted || row.postType !== DOCUMENT_REVISION_CHUNK_POST_TYPE)) {
         return null;
     }
@@ -127,14 +128,15 @@ export async function readDocumentRevision(
 }
 
 export async function listCompleteDocumentRevisions(
-    documentId: string
+    documentId: string,
+    db = getDb()
 ): Promise<CompleteDocumentRevision[]> {
-    const manifests = (await manifestRows(documentId))
+    const manifests = (await manifestRows(documentId, db))
         .map(parseManifest)
         .filter((value): value is DocumentRevisionManifest => Boolean(value))
         .sort((left, right) => right.createdAt - left.createdAt
             || right.revisionId.localeCompare(left.revisionId));
-    const complete = await Promise.all(manifests.map(readDocumentRevision));
+    const complete = await Promise.all(manifests.map((manifest) => readDocumentRevision(manifest, db)));
     return complete.filter((value): value is CompleteDocumentRevision => Boolean(value));
 }
 
@@ -143,18 +145,18 @@ export async function createDocumentRevision(input: {
     title: string;
     content: TipTapDocument;
     source: DocumentRevisionSource;
-}): Promise<DocumentRevisionManifest | null> {
+}, db = getDb()): Promise<DocumentRevisionManifest | null> {
     const snapshot: DocumentRevisionSnapshot = {
         title: input.title,
         content: input.content,
     };
     const encoded = await encodeRevisionInWorker(snapshot);
-    const newest = (await manifestRows(input.documentId))
+    const newest = (await manifestRows(input.documentId, db))
         .map(parseManifest)
         .filter((value): value is DocumentRevisionManifest => Boolean(value))
         .sort((left, right) => right.createdAt - left.createdAt
             || right.revisionId.localeCompare(left.revisionId))[0];
-    if (newest?.titleContentHash === encoded.hash && await readDocumentRevision(newest)) {
+    if (newest?.titleContentHash === encoded.hash && await readDocumentRevision(newest, db)) {
         return null;
     }
 
@@ -194,11 +196,10 @@ export async function createDocumentRevision(input: {
     ];
     rows.forEach(assertRevisionSyncPayloadSize);
 
-    const db = getDb();
     await db.transaction('rw', getWriteTxTableNames(db, 'posts'), async () => {
         await db.posts.bulkPut(rows);
     });
-    await pruneDocumentRevisions(input.documentId);
+    await pruneDocumentRevisions(input.documentId, db);
     return manifest;
 }
 
@@ -242,18 +243,17 @@ export function selectRevisionIdsForRetention(
     return preferred;
 }
 
-export async function pruneDocumentRevisions(documentId: string): Promise<{
+export async function pruneDocumentRevisions(documentId: string, db = getDb()): Promise<{
     removed: number;
     overBudget: boolean;
 }> {
-    const rows = await manifestRows(documentId);
+    const rows = await manifestRows(documentId, db);
     const manifests = rows.map(parseManifest)
         .filter((value): value is DocumentRevisionManifest => Boolean(value));
     const retained = selectRevisionIdsForRetention(manifests);
     const pruned = manifests.filter((item) => !retained.has(item.revisionId));
     if (pruned.length) {
         const ids = pruned.flatMap((item) => [item.revisionId, ...item.chunkIds]);
-        const db = getDb();
         await db.transaction(
             'rw',
             getWriteTxTableNames(db, 'posts', { includeTombstones: true }),
@@ -272,15 +272,15 @@ export async function pruneDocumentRevisions(documentId: string): Promise<{
 export async function repairOrphanRevisionChunks(options: {
     bootstrapComplete: boolean;
     now?: number;
-}): Promise<number> {
+}, db = getDb()): Promise<number> {
     if (!options.bootstrapComplete) return 0;
     const threshold = (options.now ?? nowSec()) - (7 * 24 * 60 * 60);
-    const chunks = await getDb().posts.where('postType')
+    const chunks = await db.posts.where('postType')
         .equals(DOCUMENT_REVISION_CHUNK_POST_TYPE)
         .and((row) => !row.deleted && row.created_at <= threshold)
         .toArray();
     const manifestIds = [...new Set(chunks.map((row) => row.title))];
-    const manifests = await getDb().posts.bulkGet(manifestIds);
+    const manifests = await db.posts.bulkGet(manifestIds);
     const validIds = new Set(manifests
         .filter((row): row is Post => Boolean(row && !row.deleted && row.postType === DOCUMENT_REVISION_POST_TYPE))
         .map((row) => row.id));
@@ -288,7 +288,6 @@ export async function repairOrphanRevisionChunks(options: {
         .filter((row) => !validIds.has(row.title))
         .map((row) => row.id);
     if (orphanIds.length) {
-        const db = getDb();
         await db.transaction(
             'rw',
             getWriteTxTableNames(db, 'posts', { includeTombstones: true }),
