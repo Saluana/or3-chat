@@ -5,6 +5,7 @@ import { getDb, setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import type { Thread, Message } from '~/db/schema';
 import type { ChatMessage } from '../types';
 import { ensureThreadHistoryLoaded } from '../history';
+import { ensureUiMessage } from '../uiMessages';
 import { buildContext } from '~/db/branching';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
@@ -42,6 +43,26 @@ async function loaded(id: string) {
 }
 
 describe('canonical lineage history and summary readiness', () => {
+    it('hydrates separate canonical tool evidence through the production pane seed without rewriting stored history', async () => {
+        await thread('original');
+        await message('assistant', 'original', 0, { role: 'assistant', data: {
+            content: 'Inspecting source', plugin_receipt: { retained: true },
+            tool_calls: [{ id: 'lookup', name: 'read_source_evidence', args: '{}', status: 'complete' }],
+        } });
+        await message('tool-evidence', 'original', 1, { role: 'tool', data: {
+            content: 'Canonical tool evidence: preserve app/example.ts exactly.',
+            tool_call_id: 'lookup', tool_name: 'read_source_evidence', parent_assistant_id: 'assistant',
+        } });
+        const stored = await getDb().messages.toArray();
+        const { useMultiPane } = await import('~/composables/core/useMultiPane');
+        const seed = await useMultiPane().loadMessagesFor('original');
+        expect(seed.map((row) => row.id)).toEqual(['assistant', 'tool-evidence']);
+        expect(seed[0]?.data).toMatchObject({ plugin_receipt: { retained: true } });
+        expect(ensureUiMessage(seed[0]!)).toMatchObject({ toolCalls: [{
+            id: 'lookup', status: 'complete', result: 'Canonical tool evidence: preserve app/example.ts exactly.',
+        }] });
+        expect(await getDb().messages.toArray()).toEqual(stored);
+    });
     it('loads two anchored reference generations by ID with canonical tool roles and excludes superseded/deleted rows', async () => {
         await thread('root'); await message('r-user', 'root', 0);
         await message('r-call', 'root', 1, { role: 'assistant', data: { content: '', tool_calls: [{ id: 'call', name: 'lookup', args: '{}', status: 'complete' }] } });
