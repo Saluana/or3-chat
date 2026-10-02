@@ -1,3 +1,5 @@
+import { readMeasuredRequestUsage } from './request-usage';
+import type { RequestUsage } from './compaction';
 import { normalizeProviderRequestUsage, type ORStreamEvent, type ProviderRequestUsage } from '../openrouter/parseOpenRouterSSE';
 import {
     CANONICAL_MESSAGE_FIXED_BYTES,
@@ -20,6 +22,7 @@ export type NormalizedStreamState = {
     iteration: number;
     /** Last measured provider request, never a sum of tool-loop prompt occupancy. */
     usage?: ProviderRequestUsage & { iteration: number };
+    requestUsage?: RequestUsage;
     cumulativeText: string;
     iterationText: string;
     reasoningText: string;
@@ -140,7 +143,10 @@ export function reduceNormalizedStreamEvent(
         const measurement = normalizeProviderRequestUsage(event.usage);
         if (!measurement) return state;
         const usage = { ...measurement, iteration: state.iteration };
-        return JSON.stringify(state.usage) === JSON.stringify(usage) ? state : { ...state, usage };
+        const record = readMeasuredRequestUsage(measurement, event.requestUsage);
+        const requestUsage = record ? { ...record, iteration: state.iteration } : undefined;
+        return JSON.stringify(state.usage) === JSON.stringify(usage) && JSON.stringify(state.requestUsage) === JSON.stringify(requestUsage)
+            ? state : { ...state, usage, requestUsage };
     }
     if (event.type === 'text') {
         return {

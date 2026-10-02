@@ -360,6 +360,7 @@ export async function runForegroundStreamLoop(
             await writeCoalescer.flush(async () => {
                 await ctx.persistAssistant({
                     content: current.text,
+                    usage: normalizedState.requestUsage,
                     reasoning: current.reasoning_text ?? null,
                     toolCalls: current.toolCalls ?? undefined,
                 });
@@ -372,7 +373,9 @@ export async function runForegroundStreamLoop(
         try {
             for await (const ev of stream) {
                 normalizedState = reduceNormalizedStreamEvent(normalizedState, ev);
-                if (ev.type === 'tool_call') {
+                if (ev.type === 'usage') {
+                    if (normalizedState.requestUsage) writeCoalescer.markDirty();
+                } else if (ev.type === 'tool_call') {
                     // Tool call detected - enqueue for execution after stream closes
                     if (current.pending) current.pending = false;
 
@@ -705,7 +708,8 @@ export async function runForegroundStreamLoop(
             }
             throw streamError;
         } finally {
-            await writeCoalescer.dispose();
+            try { if (normalizedState.requestUsage) await flushProgress(); }
+            finally { await writeCoalescer.dispose(); }
         }
     }
 }

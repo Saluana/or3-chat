@@ -1,3 +1,5 @@
+import { readMeasuredRequestUsage } from '~~/shared/chat/request-usage';
+import type { RequestUsage } from '~~/shared/chat/compaction';
 import { resolveThreadProjection } from '~/utils/chat/compaction/history';
 /**
  * @module app/utils/chat/useAi-internal/continue.ts
@@ -655,10 +657,12 @@ export async function continueMessageImpl(
             onIdleFlush: () => flushProgress(),
         });
 
+        let requestUsage: RequestUsage | undefined;
         const flushProgress = async () => {
             await writeCoalescer.flush(async () => {
                 await persistAssistant({
                     content: current.text,
+                    usage: requestUsage,
                     reasoning: current.reasoning_text ?? null,
                     toolCalls: current.toolCalls ?? undefined,
                 });
@@ -677,7 +681,10 @@ export async function continueMessageImpl(
         try {
             for await (const ev of stream) {
                 if (!ownsThread()) throw new ContinuationOwnershipLost();
-                if (ev.type === 'reasoning') {
+                if (ev.type === 'usage') {
+                    const measured = readMeasuredRequestUsage(ev.usage, ev.requestUsage);
+                    if (measured) { requestUsage = { ...measured, iteration: 1 }; writeCoalescer.markDirty(); }
+                } else if (ev.type === 'reasoning') {
                     if (current.reasoning_text === null) current.reasoning_text = ev.text;
                     else current.reasoning_text += ev.text;
                     ctx.streamAcc.append(ev.text, { kind: 'reasoning' });
@@ -745,6 +752,11 @@ export async function continueMessageImpl(
                     }
                 );
         } catch (streamError) {
+            if (requestUsage) {
+                try { await flushProgress(); } catch (error) {
+                    reportError(error, { code: 'ERR_DB_WRITE_FAILED', tags: { domain: 'chat', stage: 'continue_usage' } });
+                }
+            }
             stopHeartbeat();
             await writeCoalescer.dispose();
             const ownershipLost = streamError instanceof ContinuationOwnershipLost;

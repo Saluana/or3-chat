@@ -1,3 +1,5 @@
+import { captureUsagePrefix, attachRequestUsage } from '~~/shared/chat/request-usage';
+import { countTokensApprox } from './tokens';
 import { normalizeError, presentError, parseRetryAfter } from '~~/shared/errors';
 /**
  * @module app/utils/chat/openrouterStream
@@ -253,6 +255,19 @@ export async function* openRouterStream(params: {
         body.tool_choice = params.toolChoice ?? 'auto';
     }
 
+    // This is the actual provider request boundary. Freeze the serialized body
+    // before asynchronous provenance work so later view/tool mutations cannot
+    // change the sent prefix after its fingerprint was captured.
+    const requestSnapshot = JSON.parse(JSON.stringify(body)) as OpenRouterRequestBody;
+    const { messages: _messages, _threadId: _thread, _messageId: _message, _background: _background, ...providerConfiguration } = requestSnapshot;
+    const usagePrefix = await captureUsagePrefix({ model, messages: requestSnapshot.messages,
+        tools: requestSnapshot.tools, modalities: requestSnapshot.modalities, configuration: providerConfiguration,
+        countText: countTokensApprox }).catch(() => undefined);
+    const usageRequestId = crypto.randomUUID();
+    const measuredEvent = (event: ORStreamEvent): ORStreamEvent => event.type === 'usage'
+        ? { ...event, requestUsage: attachRequestUsage(usagePrefix, event.usage,
+            { requestId: usageRequestId, iteration: 1, measuredAt: Date.now() }) } : event;
+
     // Req 3, 5, 6: Try server route first (/api/openrouter/stream) if available.
     // Only 404/405 and genuine network failures are treated as "route unavailable";
     // other proxy errors (5xx, 401, 403, etc.) propagate so the caller can retry or
@@ -272,7 +287,7 @@ export async function* openRouterStream(params: {
             serverResp = await fetchWithResponseDeadline('/api/openrouter/stream', {
                 method: 'POST',
                 headers,
-                body: JSON.stringify(body),
+                body: JSON.stringify(requestSnapshot),
             }, { signal, timeoutMs: params.responseTimeoutMs });
         } catch (e) {
             if (
@@ -296,7 +311,7 @@ export async function* openRouterStream(params: {
                 for await (const evt of parseOpenRouterSSE(guardedBody, {
                     streamedFieldMode: params.streamedFieldMode,
                 })) {
-                    yield evt;
+                    yield measuredEvent(evt);
                 }
                 } catch (error) {
                     if (error instanceof OpenRouterStreamError) error.credentialSource = serverResp.headers.get('x-or3-credential-source') === 'server' ? 'server' : hasApiKey ? 'personal' : undefined;
@@ -345,7 +360,7 @@ export async function* openRouterStream(params: {
     }
 
     // Fallback: direct OpenRouter (legacy path)
-    const fallbackBody = { ...body };
+    const fallbackBody = { ...requestSnapshot };
     delete fallbackBody._background;
     delete fallbackBody._threadId;
     delete fallbackBody._messageId;
@@ -411,7 +426,7 @@ export async function* openRouterStream(params: {
     for await (const evt of parseOpenRouterSSE(guardedBody, {
         streamedFieldMode: params.streamedFieldMode,
     })) {
-        yield evt;
+        yield measuredEvent(evt);
     }
     } catch (error) {
         if (error instanceof OpenRouterStreamError) error.credentialSource = 'personal';

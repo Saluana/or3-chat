@@ -1,3 +1,4 @@
+import type { RequestUsage } from '~~/shared/chat/compaction';
 /**
  * @module app/utils/chat/useAi-internal/types
  *
@@ -172,6 +173,7 @@ export type ToolResultPayload = {
 /** Persister function signature for assistant messages */
 export type AssistantPersister = (params: {
     content?: string;
+    usage?: RequestUsage;
     reasoning?: string | null;
     toolCalls?: ToolCallInfo[] | null;
     finalize?: boolean;

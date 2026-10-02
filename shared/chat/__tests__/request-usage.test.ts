@@ -1,0 +1,48 @@
+import { describe, it, expect } from 'vitest';
+import { captureUsagePrefix, attachRequestUsage, readMeasuredRequestUsage } from '../request-usage';
+const countText = async (text: string) => Math.ceil(text.length / 4);
+const request = () => ({ model: 'large-model', messages: [{ role: 'user', content: 'Original task' }],
+    tools: [{ type: 'function', function: { name: 'lookup', parameters: { type: 'object' } } }], modalities: ['text'], countText });
+describe('measured request prefix provenance', () => {
+    it('snapshots the actual prefix before asynchronous counting and binds measurement to that request', async () => {
+        const input = request(); let release!: () => void;
+        const paused = new Promise<void>((resolve) => { release = resolve; });
+        const capture = captureUsagePrefix({ ...input, countText: async (text: string) => { await paused; return countText(text); } });
+        input.messages[0]!.content = 'Later mutation'; release();
+        const prefix = await capture;
+        expect(prefix.prefix_hash).toBe((await captureUsagePrefix(request())).prefix_hash);
+        expect(prefix.prefix_message_count).toBe(1); expect(prefix.input_estimate_tokens).toBeGreaterThan(0);
+        const usage = attachRequestUsage(prefix, { prompt_tokens: 180000, completion_tokens: 42, response_id: 'provider-request', model: 'resolved-model' },
+            { requestId: 'host-request', iteration: 2, measuredAt: 123 });
+        expect(usage).toMatchObject({ model: 'resolved-model', request_id: 'provider-request', iteration: 2, measured_at: 123,
+            prompt_tokens: 180000, completion_tokens: 42, prefix_hash: prefix.prefix_hash, configuration_hash: prefix.configuration_hash });
+    });
+    it('invalidates changed text/tool results or configuration without hashing credentials or unrelated UI fields', async () => {
+        const initial = await captureUsagePrefix(request());
+        const text = request(); text.messages[0]!.content = 'Changed task';
+        expect((await captureUsagePrefix(text)).prefix_hash).not.toBe(initial.prefix_hash);
+        const config = request(); config.tools[0]!.function.name = 'different';
+        expect((await captureUsagePrefix(config)).configuration_hash).not.toBe(initial.configuration_hash);
+        expect((await captureUsagePrefix({ ...request(), model: 'other-model' })).configuration_hash).not.toBe(initial.configuration_hash);
+        const reordered = { ...request(), tools: [{ function: { parameters: { type: 'object' }, name: 'lookup' }, type: 'function' }] };
+        expect((await captureUsagePrefix(reordered)).configuration_hash).toBe(initial.configuration_hash);
+    });
+    it('does not turn missing/malformed measurements into zero and preserves explicit provider zero', async () => {
+        const prefix = await captureUsagePrefix(request());
+        expect(attachRequestUsage(prefix, undefined, { requestId: 'host', iteration: 1, measuredAt: 1 })).toBeUndefined();
+        expect(attachRequestUsage(prefix, { prompt_tokens: -1, completion_tokens: 4 }, { requestId: 'host', iteration: 1, measuredAt: 1 })).toBeUndefined();
+        expect(attachRequestUsage(prefix, { prompt_tokens: 0, completion_tokens: 0 }, { requestId: 'host', iteration: 1, measuredAt: 1 }))
+            .toMatchObject({ request_id: 'host', model: 'large-model', prompt_tokens: 0, completion_tokens: 0 });
+    });
+    it('rejects old or malformed provenance for a new provider measurement', async () => {
+        const prefix = await captureUsagePrefix(request());
+        const initial = { prompt_tokens: 100, completion_tokens: 20, model: 'large-model', response_id: 'first' };
+        const record = attachRequestUsage(prefix, initial, { requestId: 'host', iteration: 1, measuredAt: 1 });
+        expect(readMeasuredRequestUsage(initial, record)).toEqual(record);
+        expect(readMeasuredRequestUsage({ ...initial, prompt_tokens: 150 }, record)).toBeUndefined();
+        expect(readMeasuredRequestUsage({ ...initial, response_id: 'second' }, record)).toBeUndefined();
+        expect(readMeasuredRequestUsage({ ...initial, model: 'other' }, record)).toBeUndefined();
+        expect(readMeasuredRequestUsage(initial, { ...record, prefix_hash: '' })).toBeUndefined();
+    });
+
+});
