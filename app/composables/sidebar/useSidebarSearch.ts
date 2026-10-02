@@ -15,6 +15,7 @@
 import { ref, watch, onBeforeUnmount, type Ref } from 'vue';
 import { useDebounceFn, watchDebounced } from '@vueuse/core';
 import type { Thread, Project, Post } from '~/db';
+import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import {
     createDb,
     buildIndex as buildOramaIndex,
@@ -200,6 +201,20 @@ export function useSidebarSearch(
         doc: ref<Record<string, Post>>({}),
     };
 
+    cleanupFns.push(subscribeActiveWorkspaceDb(() => {
+        lastQueryToken += 1;
+        dbInstance = null;
+        lastIndexedSignature.value = '';
+        ready.value = false;
+        busy.value = false;
+        threadResults.value = [];
+        projectResults.value = [];
+        documentResults.value = [];
+        idMaps.thread.value = {};
+        idMaps.project.value = {};
+        idMaps.doc.value = {};
+    }));
+
     /**
      * Ensures the search index is built and up-to-date.
      *
@@ -207,6 +222,7 @@ export function useSidebarSearch(
      * Updates ID maps for result mapping and sets ready/busy states.
      */
     async function ensureIndex() {
+        const generation = getWorkspaceGeneration();
         if (busy.value) return;
         const sig = computeSignature(
             threads.value,
@@ -225,15 +241,17 @@ export function useSidebarSearch(
             idMaps.doc.value = Object.fromEntries(
                 documents.value.filter(isDocPost).map((d) => [d.id, d])
             );
-            dbInstance = await buildIndex(
+            const nextIndex = await buildIndex(
                 threads.value,
                 projects.value,
                 documents.value
             );
+            if (generation !== getWorkspaceGeneration()) return;
+            dbInstance = nextIndex;
             lastIndexedSignature.value = sig;
             ready.value = true;
         } finally {
-            busy.value = false;
+            if (generation === getWorkspaceGeneration()) busy.value = false;
         }
     }
 
@@ -275,7 +293,9 @@ export function useSidebarSearch(
      * Uses token-based cancellation to prevent stale results from overriding newer searches.
      */
     async function runSearch() {
+        const generation = getWorkspaceGeneration();
         if (!dbInstance) await ensureIndex();
+        if (generation !== getWorkspaceGeneration()) return;
         if (!dbInstance) return;
         const raw = query.value.trim();
         if (!raw) {
@@ -323,7 +343,9 @@ export function useSidebarSearch(
             );
             // If a project contains matching threads/docs but project name itself didn't match, UI can choose to retain by containment; we leave that logic to integration to keep composable lean.
         } catch {
-            substringFallback(raw);
+            if (generation === getWorkspaceGeneration() && token === lastQueryToken) {
+                substringFallback(raw);
+            }
         }
     }
 

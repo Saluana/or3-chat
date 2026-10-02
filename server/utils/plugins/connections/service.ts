@@ -258,6 +258,7 @@ export class PluginConnectionService {
     async delete(input: {
         readonly connectionId: string;
         readonly ownerUserId: string;
+        readonly workspaceId: string;
     }): Promise<{ readonly status: 'deleted' } | ConnectionServiceFailure> {
         const existing = await this.#store.get(input.connectionId);
         if (!existing) {
@@ -267,11 +268,14 @@ export class PluginConnectionService {
                 message: 'Connection not found',
             };
         }
-        if (existing.ownerUserId !== input.ownerUserId) {
+        if (
+            existing.ownerUserId !== input.ownerUserId ||
+            existing.workspaceId !== input.workspaceId
+        ) {
             return {
                 status: 'denied',
                 code: 'connection-foreign',
-                message: 'Connection belongs to another user',
+                message: 'Connection belongs to another user or workspace',
             };
         }
         await this.#store.delete(existing.id);

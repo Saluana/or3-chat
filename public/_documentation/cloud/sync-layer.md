@@ -71,6 +71,11 @@ Gateway `/api/sync/push` validates each operation independently and returns
 HTTP 200 mixed results. Request bodies are bounded; rate limits are recorded on
 admission, including when the adapter later fails.
 
+Snapshot, cursor, and enabled GC requests also reserve their existing operation
+allowance before asynchronous provider work, so concurrent requests cannot share
+the same remaining slot. Cache expiry respects operator-configured rate windows;
+HTTP 429 carries `Retry-After` for graceful deferral.
+
 Browser writes to `/api/sync/push`, `/api/sync/update-cursor`, and sync GC routes
 send JSON with `x-or3-cloud-intent: mutation`. The server checks the exact
 browser origin against its effective origin or `OR3_ALLOWED_ORIGINS` before

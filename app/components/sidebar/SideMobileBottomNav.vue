@@ -130,6 +130,7 @@
             description="Manage your workspace and account."
             :content="moreDialogContent"
             :transition="false"
+            :overlay="false"
             :ui="{ content: 'more-sheet-dialog bg-transparent! border-0! ring-0! p-0! divide-y-0! z-[80]!' }"
         >
             <template #content>

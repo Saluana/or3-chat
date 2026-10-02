@@ -98,10 +98,11 @@ const textEncoder = new TextEncoder();
 interface WorkspaceBackupWriter {
     write(chunk: Uint8Array): Promise<void>;
     close(): Promise<void>;
+    abort(reason: unknown): Promise<void>;
 }
 
 async function writeLine(
-    writer: WorkspaceBackupWriter,
+    writer: Pick<WorkspaceBackupWriter, 'write'>,
     line: WorkspaceBackupLine
 ) {
     const text = JSON.stringify(line) + '\n';
@@ -115,19 +116,14 @@ function emitProgress(
     onProgress?.({ ...progress });
 }
 
-async function blobToBase64(
-    blob: Blob
-): Promise<{ data: string; type: string }> {
-    const arrayBuffer = await blob.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
+function bytesToBase64(bytes: Uint8Array): string {
     let binary = '';
     const chunkSize = 0x8000;
     for (let i = 0; i < bytes.length; i += chunkSize) {
         const chunk = bytes.subarray(i, i + chunkSize);
         binary += String.fromCharCode(...chunk);
     }
-    const data = btoa(binary);
-    return { data, type: blob.type };
+    return btoa(binary);
 }
 
 function base64ToBlob(payload: { data: string; type: string }): Blob {
@@ -189,7 +185,8 @@ export async function streamWorkspaceExport({
     const writable = await fileHandle.createWritable();
     const writer: WorkspaceBackupWriter = {
         write: (chunk) => writable.write(chunk as unknown as Blob),
-        close: () => writable.close().catch(() => undefined),
+        close: () => writable.close(),
+        abort: (reason) => writable.abort(reason),
     };
 
     await streamWorkspaceExportCore({
@@ -222,13 +219,22 @@ export async function streamWorkspaceExportToWritable({
         close: async () => {
             try {
                 await writable.close();
-            } catch {
-                // close failed, just release the lock
             } finally {
                 try {
                     writable.releaseLock();
                 } catch {
                     // lock might already be released
+                }
+            }
+        },
+        abort: async (reason) => {
+            try {
+                await writable.abort(reason);
+            } finally {
+                try {
+                    writable.releaseLock();
+                } catch {
+                    // The stream may already have released its lock.
                 }
             }
         },
@@ -258,7 +264,38 @@ async function streamWorkspaceExportCore({
             ? Math.max(1, Math.floor(chunkSize))
             : DEFAULT_EXPORT_LIMIT;
 
-    try {
+    const hashModule = import('@noble/hashes/sha2.js');
+    const snapshot = async (
+        sink?: Pick<WorkspaceBackupWriter, 'write'>,
+        reportProgress?: (progress: WorkspaceBackupProgress) => void
+    ) => {
+        const { sha256 } = await hashModule;
+        const digestBytes = async (bytes: Uint8Array) => {
+            const subtle = globalThis.crypto?.subtle;
+            return subtle
+                ? new Uint8Array(
+                      await Dexie.waitFor(
+                          subtle.digest('SHA-256', bytes as Uint8Array<ArrayBuffer>)
+                      )
+                  )
+                : sha256(bytes);
+        };
+        const fingerprint = sha256.create();
+        const writeSnapshotLine = async (line: WorkspaceBackupLine) => {
+            const text = JSON.stringify(line) + '\n';
+            const bytes = textEncoder.encode(text);
+            // Export time is informational and differs between the two reads.
+            if (line.type !== 'rows' || line.table !== 'file_blobs') {
+                fingerprint.update(
+                    await digestBytes(
+                        line.type === 'meta'
+                            ? textEncoder.encode(JSON.stringify({ ...line, createdAt: '' }) + '\n')
+                            : bytes
+                    )
+                );
+            }
+            await sink?.write(bytes);
+        };
         const summaries = await Promise.all(
             db.tables.map(async (table) => ({
                 name: table.name,
@@ -284,11 +321,11 @@ async function streamWorkspaceExportCore({
             totalRows: summaries.reduce((sum, t) => sum + t.rowCount, 0),
         };
 
-        await writeLine(writer, header);
+        await writeSnapshotLine(header);
 
         for (const summary of summaries) {
             const table = db.table(summary.name);
-            await writeLine(writer, {
+            await writeSnapshotLine({
                 type: 'table-start',
                 table: summary.name,
             });
@@ -298,23 +335,14 @@ async function streamWorkspaceExportCore({
 
             const tableChunkSize =
                 summary.name === 'file_blobs'
-                    ? Math.max(
-                          1,
-                          Math.min(
-                              normalizedChunkSize,
-                              FILE_BLOBS_MAX_ROWS_PER_BATCH
-                          )
-                      )
+                    ? Math.max(1, Math.min(normalizedChunkSize, FILE_BLOBS_MAX_ROWS_PER_BATCH))
                     : normalizedChunkSize;
 
             while (hasMore) {
                 const collection =
                     lastKey == null
                         ? table.limit(tableChunkSize)
-                        : table
-                              .where(':id')
-                              .above(lastKey)
-                              .limit(tableChunkSize);
+                        : table.where(':id').above(lastKey).limit(tableChunkSize);
 
                 const rows: unknown[] = await collection.toArray();
                 if (rows.length === 0) {
@@ -336,47 +364,60 @@ async function streamWorkspaceExportCore({
                         const rowsToWrite = chunkPayload;
                         chunkPayload = [];
                         serializedBytes = 0;
-                        await writeLine(writer, {
+                        await writeSnapshotLine({
                             type: 'rows',
                             table: summary.name,
                             rows: rowsToWrite,
                         });
                         progress.completedRows += rowsToWrite.length;
-                        emitProgress(progress, onProgress);
+                        emitProgress(progress, reportProgress);
                     };
 
                     for (const row of rows as Array<{
                         hash: string;
                         blob: Blob;
                     }>) {
-                        const base64 = await blobToBase64(row.blob);
+                        const bytes = new Uint8Array(await Dexie.waitFor(row.blob.arrayBuffer()));
+                        // Cover blob identity, length, MIME type and every byte
+                        // without re-encoding binary data during validation.
+                        fingerprint.update(
+                            await digestBytes(
+                                textEncoder.encode(
+                                    JSON.stringify({
+                                        type: 'file-blob',
+                                        hash: row.hash,
+                                        mime: row.blob.type,
+                                        size: bytes.length,
+                                    }) + '\n'
+                                )
+                            )
+                        );
+                        fingerprint.update(await digestBytes(bytes));
+                        if (!sink) continue;
+                        const base64 = { data: bytesToBase64(bytes), type: row.blob.type };
                         chunkPayload.push({
                             hash: row.hash,
                             blob: base64,
                         });
                         serializedBytes +=
-                            base64.data.length +
-                            base64.type.length +
-                            row.hash.length;
-                        if (
-                            serializedBytes >= FILE_BLOBS_MAX_SERIALIZED_BYTES
-                        ) {
+                            base64.data.length + base64.type.length + row.hash.length;
+                        if (serializedBytes >= FILE_BLOBS_MAX_SERIALIZED_BYTES) {
                             await flushPayload();
                         }
                     }
 
                     await flushPayload();
                 } else if (summary.inbound) {
-                    await writeLine(writer, {
+                    await writeSnapshotLine({
                         type: 'rows',
                         table: summary.name,
                         rows,
                     });
                     progress.completedRows += rows.length;
-                    emitProgress(progress, onProgress);
+                    emitProgress(progress, reportProgress);
                 } else {
                     keys = await collection.primaryKeys();
-                    await writeLine(writer, {
+                    await writeSnapshotLine({
                         type: 'rows',
                         table: summary.name,
                         rows: keys.map((key, idx) => ({
@@ -385,7 +426,7 @@ async function streamWorkspaceExportCore({
                         })),
                     });
                     progress.completedRows += rows.length;
-                    emitProgress(progress, onProgress);
+                    emitProgress(progress, reportProgress);
                 }
 
                 if (summary.inbound) {
@@ -395,36 +436,47 @@ async function streamWorkspaceExportCore({
                         pk.keyPath ?? pk.name
                     ) as IndexableType;
                 } else {
-                    const keyList: IndexableType[] =
-                        keys ?? (await collection.primaryKeys());
+                    const keyList: IndexableType[] = keys ?? (await collection.primaryKeys());
                     lastKey = keyList[keyList.length - 1] ?? null;
                 }
                 hasMore = rows.length === tableChunkSize;
             }
 
-            await writeLine(writer, {
+            await writeSnapshotLine({
                 type: 'table-end',
                 table: summary.name,
             });
 
             progress.completedTables += 1;
-            emitProgress(progress, onProgress);
+            emitProgress(progress, reportProgress);
         }
+        return fingerprint.digest();
+    };
 
+    try {
+        const exported = await snapshot(writer, onProgress);
+        // Prove the streamed records equal one consistent database snapshot.
+        // The validation sink performs no I/O: a stalled destination never
+        // holds a database read lock or blocks chat persistence in other tabs.
+        await db.transaction('r', db.tables, async () => {
+            const verified = await snapshot();
+            if (!exported.every((byte, index) => byte === verified[index])) {
+                throw new Error(
+                    'Workspace changed during export. Wait for current chat or sync activity to finish, then export again.'
+                );
+            }
+        });
+        // Even a sink that cannot roll back receives no valid terminal marker
+        // when validation fails; the importer rejects its incomplete output.
         await writeLine(writer, { type: 'end' });
-
-        progress.completedRows = progress.totalRows;
-        progress.completedTables = progress.totalTables;
-        emitProgress(progress, onProgress);
-    } finally {
+        await writer.close();
+    } catch (error) {
         try {
-            await writer.close();
-        } catch (closeError) {
-            console.warn(
-                '[workspace-backup] Failed to close export stream',
-                closeError
-            );
+            await writer.abort(error);
+        } catch {
+            // Preserve the original read, write, or finalization failure.
         }
+        throw error;
     }
 }
 

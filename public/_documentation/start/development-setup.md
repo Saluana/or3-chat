@@ -30,6 +30,37 @@ The dev wrapper checks port availability on both IPv4 and IPv6. If the port is o
 
 For provider configuration, use the [source setup wizard](/documentation/cloud/or3-cloud-wizard). Restart after configuration changes. An environment file is an advanced integration tool, not a prerequisite for the ordinary local-first app.
 
+## Build and launch source output
+
+The build wrapper defaults Node's old-space heap limit to 4096 MiB and preserves
+an explicit limit in `NODE_OPTIONS`, including a lower limit. The heap limit is
+only part of the build's total memory use. Leave room for native allocations,
+workers, and the operating system; a small VPS may need the build performed on
+a larger machine.
+
+```bash
+NODE_OPTIONS=--max-old-space-size=3072 bun run build
+```
+
+Exit 137 or `SIGKILL` means the process was killed. Check the host or container's
+memory limit and OOM logs before attributing it to an application defect.
+Raising the heap limit can increase memory pressure.
+
+Bun installs dependencies and runs repository commands. The source dev and
+build wrappers select Node for the default Basic Auth/SQLite stack. For advanced
+source operation with that stack, start the built server with Node 24 and load
+its environment explicitly:
+
+```bash
+node --env-file=.env .output/server/index.mjs
+```
+
+Running this default server directly with Bun bypasses the wrappers and can
+crash when `better-sqlite3` loads. Bun SQLite needs a compatible auth provider;
+see [SQLite runtimes](/documentation/cloud/provider-sqlite#bun). The source
+doctor checks configuration, packages, paths, and ports; verify deep health and
+authenticated behavior after starting the server.
+
 ## Find the right files
 
 Nuxt's source directory is `app/`: `~/` and `@/` refer there, while `~~/` refers to the repository root.

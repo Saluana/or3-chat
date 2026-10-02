@@ -66,6 +66,19 @@ The `FileTransferQueue` (`core/storage/transfer-queue.ts`) manages all network a
 4.  **Stream**: The file is downloaded and verified against its hash.
 5.  **Cache**: The blob is stored in `file_blobs` for future offline use.
 
+Filesystem download tokens also bind the issuing user and workspace. The
+download route rechecks `workspace.read` on each request: another user, a
+different active workspace, or a removed member cannot use an issued token.
+Viewers retain read access after a role downgrade. Tokens expire; deleting a
+canonical metadata row prevents new signing, but an already-issued filesystem
+token can still serve retained bytes until it expires or the object is removed.
+
+S3 and Convex downloads use provider URLs directly. An issued URL does not pass
+through the application authorization check again, so membership changes alone
+do not revoke it immediately. Treat these URLs as sensitive and account for the
+provider's URL lifetime. Downloaded offline copies and exported files are also
+outside server-side revocation.
+
 ---
 
 ## Storage Providers
@@ -174,7 +187,11 @@ For backend-specific credentials, persistence, URL lifetime, and limitations, us
 *   **Empty files**: Zero-byte generic files are valid and remain hash checked.
 *   **Size Limits**: Enforced at the Gateway level (default 100MB).
 *   **Permissions**: `requireCan(session, 'workspace.write')` checks on all operations.
-*   **Rate Limiting**: Per-user limits on upload/download generation endpoints.
+*   **Rate Limiting**: Existing per-user operation limits reserve each admitted
+    presign or commit request before asynchronous provider work. Parallel calls
+    share the configured allowance, including provider attempts that later fail;
+    denied rate checks do not consume another slot. HTTP 429 includes
+    `Retry-After`. Cache expiry respects operator-configured rate windows.
 *   **Hash Verification**: Files verified against SHA-256 hash after download.
 *   **Presigned URLs**: Upload and download URLs are capped at one hour; provider
     defaults are shorter. Download signing also checks the provider's commit

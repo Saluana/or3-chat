@@ -152,6 +152,7 @@ export default defineEventHandler(async (event) => {
     const userId = session.user.id;
     const rateLimitResult = checkSyncRateLimit(userId, 'storage:download');
     enforceRateLimit(event, rateLimitResult);
+    recordSyncRequest(userId, 'storage:download');
 
     const liveFile = await resolveLiveStorageId(
         event,
@@ -191,7 +192,6 @@ export default defineEventHandler(async (event) => {
         filename: downloadPolicy.filename,
     });
 
-    recordSyncRequest(userId, 'storage:download');
     recordDownloadStart();
 
     const expiresAt = resolvePresignExpiresAt(result, body.data.expires_in_ms);

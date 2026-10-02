@@ -114,7 +114,12 @@ export default defineConfig({
             deps: {
                 // Transform this real toast owner so its Nuxt #imports use the
                 // existing test alias rather than Node package-import lookup.
-                inline: [/\/@nuxt\/ui\/dist\/runtime\/composables\/useToast\.js$/],
+                inline: [
+                    /\/@nuxt\/ui\/dist\/runtime\/composables\/useToast\.js$/,
+                    // Exercise the installed filesystem download route with the
+                    // host's auth aliases at the real HTTP boundary.
+                    /\/or3-provider-fs\/dist\/runtime\/server\//,
+                ],
             },
         },
         projects: [

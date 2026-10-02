@@ -12,6 +12,7 @@ export default defineEventHandler(async (event) => {
     const result = await context.service.delete({
         connectionId: id,
         ownerUserId: context.userId,
+        workspaceId: context.workspaceId,
     });
     if (result.status !== 'deleted') {
         throw createError({

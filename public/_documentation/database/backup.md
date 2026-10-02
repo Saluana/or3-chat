@@ -6,6 +6,15 @@ Open **Workspace Backup** from the dashboard. It exports or restores the active 
 
 Select **Export workspace**, choose the destination when prompted, and wait for completion. The current export is a JSONL stream containing database metadata and table records. The browser uses a save picker when supported and a streaming-download fallback otherwise. Cancelling the picker cancels the export.
 
+Export checks that the streamed records match one consistent local snapshot
+before completing the file. If chat or sync activity changes those records,
+wait for that activity to finish and export again. A failed or cancelled export
+can leave an incomplete download in browsers that cannot retract written bytes;
+discard that download and retry. A destination that fails to commit the file is
+reported as an export error.
+
+An export stays bound to the workspace selected when **Export workspace** was clicked, including while hooks, the save picker, or the streaming fallback are loading. Switching workspaces during that wait does not retarget the export.
+
 Keep the downloaded file in a safe place. Backups can contain private conversations, document content, files, and stored preferences or credentials; they are not encrypted by this export flow. Successful download proves that an export was produced, not that it has been restored successfully on another installation.
 
 ## Inspect before importing
