@@ -845,6 +845,7 @@ const stopWorkspaceSubscription = subscribeActiveWorkspaceDb(() => {
     editor.value?.destroy();
     editor.value = null;
     loadedDocumentId = undefined;
+    const generation = ++loadGeneration;
     lastAutomaticRevisionAt = 0;
     editorDb.value = getDb();
     titleDraft.value = '';
@@ -855,7 +856,15 @@ const stopWorkspaceSubscription = subscribeActiveWorkspaceDb(() => {
     replaceQuery.value = '';
     overflowOpen.value = false;
     ai.reset();
-    void loadActiveDocument(props.documentId);
+    const db = editorDb.value;
+    const id = props.documentId;
+    // Workspace tabs may remove this pane on the same Vue update. Only a
+    // retained pane should reload, avoiding a missing-doc toast on teardown.
+    void nextTick().then(() => {
+        if (!didUnmount && editorDb.value === db && loadGeneration === generation && props.documentId === id) {
+            void loadActiveDocument(id);
+        }
+    });
 });
 
 watch(

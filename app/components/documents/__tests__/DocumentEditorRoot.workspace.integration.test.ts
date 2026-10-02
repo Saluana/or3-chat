@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { flushPromises, shallowMount, type VueWrapper } from '@vue/test-utils';
 import { Editor } from '@tiptap/vue-3';
+import * as nuxtImports from '#imports';
 import Dexie from 'dexie';
 import { setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { createDocumentInDb, getDocumentInDb } from '~/db/documents';
@@ -47,6 +48,7 @@ afterEach(async () => {
         await Dexie.delete(name);
     }
     setHookEngine(null);
+    vi.restoreAllMocks();
 });
 
 async function mountedWorkspaces() {
@@ -83,6 +85,17 @@ async function mountedWorkspaces() {
 }
 
 describe('mounted document editor workspace lifecycle', () => {
+    it('avoids a spurious missing-document toast when workspace tabs tear down the old pane', async () => {
+        const { dbB, idB } = await mountedWorkspaces();
+        await dbB.posts.delete(documentId);
+        const add = vi.fn();
+        vi.spyOn(nuxtImports, 'useToast').mockReturnValue({ ...nuxtImports.useToast(), add });
+        setActiveWorkspaceDb(idB);
+        wrapper!.unmount(); wrapper = undefined;
+        await flushPromises();
+        expect(add).not.toHaveBeenCalledWith(expect.objectContaining({ title: 'Document: not found' }));
+    });
+
     it('refreshes a retained same-ID editor for the new workspace', async () => {
         const { idB, currentEditor } = await mountedWorkspaces();
         setActiveWorkspaceDb(idB);
