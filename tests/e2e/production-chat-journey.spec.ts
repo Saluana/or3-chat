@@ -32,7 +32,7 @@ async function send(page: Page, message: string): Promise<void> {
     const input = page.getByRole('textbox', { name: 'Message input' });
     await input.fill(message);
     await page.getByRole('button', { name: 'Send message' }).click();
-    await expect(page.getByText(message, { exact: true })).toBeVisible();
+    await expect(page.locator('.cm-text-user').getByText(message, { exact: true })).toBeVisible();
 }
 
 async function waitForDurableReply(page: Page, content: string): Promise<void> {

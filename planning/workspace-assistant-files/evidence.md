@@ -64,6 +64,18 @@ Incremental engineering evidence (not full-plan qualification):
   storage disabled), `/tmp/task16-typecheck-increment.log`. No credentials used.
 - Upstream ordinary chat screenshot:
   `output/playwright/workspace-assistant/upstream-before.jpg`.
+- Real `PageShell` browser baseline now fails for missing advertised workspace
+  tools; fixture UI says "Workspace tools unavailable in this fixture". See
+  `baseline-test-results` / `baseline-playwright-report` under the same directory.
+- Candidate based on reviewed PR179 `40b7aef6` and PR182 `a515ab95`: two production
+  journeys pass (search/read source navigation, native creation and editor reload),
+  `/tmp/task16-workspace-browser-candidate.log`, `increment-test-results` and
+  `increment-playwright-report`. Original editor generation fence is preserved.
+- Four existing browser regressions pass: blank/retro/cyberpunk responsive rich
+  chat at 320/390/844/1920 px and stop/continue durable reply,
+  `/tmp/task16-workspace-browser-regressions.log`, `regression-test-results` and
+  `regression-playwright-report`. Transport is scripted; tools, DB, navigation and
+  components execute normally.
 
 The browser workspace journey, review/apply/undo, Files/Trash, provider admission,
 mobile/zoom/performance and cloud recovery are not yet qualified. No task box
