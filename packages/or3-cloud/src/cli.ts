@@ -1333,10 +1333,18 @@ async function managedVolumeRootOwnership(image: string, volume: string): Promis
   return { uid: Number(match[1]), gid: Number(match[2]) };
 }
 
-async function setManagedVolumeRootOwnership(image: string, volume: string, ownership: VolumeRootOwnership) {
+async function setManagedVolumeRootOwnership(
+  directory: string,
+  state: ManagedState,
+  env: Record<string, string>,
+  image: string,
+  ownership: VolumeRootOwnership,
+) {
   if (!Number.isSafeInteger(ownership.uid) || ownership.uid < 0 || !Number.isSafeInteger(ownership.gid) || ownership.gid < 0) {
     throw new Error('Refusing an invalid managed volume root UID/GID.');
   }
+  await ensureManagedDataVolume(directory, state.mode, state, env);
+  const volume = state.volumeName;
   const result = await run('docker', [
     'run', '--rm', '--network', 'none', '--read-only', '--user', '0:0',
     '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL', '--cap-add', 'CHOWN',
@@ -1406,28 +1414,37 @@ async function ensureManagedDataVolume(
   env: Record<string, string>,
 ) {
   const existing = await run('docker', ['volume', 'inspect', state.volumeName, '--format', '{{.Name}}'], directory);
-  if (existing.ok && existing.stdout.trim() === state.volumeName) return;
-  const created = await run('docker', composeArgs(directory, mode, [
-    'run', '--rm', '-T', '--no-deps', '--entrypoint', 'sh', 'or3', '-c', 'true',
-  ]), directory);
-  if (!created.ok) throw new Error(`Could not create the managed data volume. ${redact(created.stderr, secretValues(env))}`);
+  if (existing.ok && existing.stdout.trim() !== state.volumeName) {
+    throw new Error(`Docker returned an unexpected name for managed volume ${state.volumeName}.`);
+  }
+  if (!existing.ok) {
+    if (existing.exitCode !== 1 || !/no such volume/i.test(`${existing.stdout}\n${existing.stderr}`)) {
+      throw new Error(`Could not inspect managed volume ${state.volumeName}. Refusing to assume it is missing. ${redact(existing.stderr, secretValues(env))}`);
+    }
+    const created = await run('docker', composeArgs(directory, mode, [
+      'run', '--rm', '-T', '--no-deps', '--entrypoint', 'sh', 'or3', '-c', 'true',
+    ]), directory);
+    if (!created.ok) throw new Error(`Could not create the managed data volume. ${redact(created.stderr, secretValues(env))}`);
+  }
+  // A matching name does not prove ownership. Check existing and recreated
+  // volumes before any caller can clear, extract into, or change their owner.
   const inspected = await run('docker', ['volume', 'inspect', state.volumeName, '--format', '{{json .Labels}}'], directory);
-  if (!inspected.ok) throw new Error(`Could not verify the recreated managed data volume ${state.volumeName}.`);
+  if (!inspected.ok) throw new Error(`Could not verify managed data volume ${state.volumeName}.`);
   let labels: Record<string, unknown> | null;
   try {
     labels = JSON.parse(inspected.stdout.trim()) as Record<string, unknown> | null;
   } catch {
-    throw new Error(`Docker returned unreadable labels for recreated managed volume ${state.volumeName}.`);
+    throw new Error(`Docker returned unreadable labels for managed volume ${state.volumeName}.`);
   }
   if (!labels || typeof labels !== 'object') {
-    throw new Error(`Recreated volume ${state.volumeName} has no managed deployment labels.`);
+    throw new Error(`Volume ${state.volumeName} has no managed deployment labels.`);
   }
   if (
     labels['com.docker.compose.project'] !== state.composeProject
     || labels['com.docker.compose.volume'] !== 'or3-data'
     || (env.OR3_DEPLOYMENT_ID && labels['io.or3.cloud.deployment-id'] !== env.OR3_DEPLOYMENT_ID)
   ) {
-    throw new Error(`Recreated volume ${state.volumeName} does not carry the expected managed deployment labels.`);
+    throw new Error(`Volume ${state.volumeName} does not carry the expected managed deployment labels.`);
   }
 }
 
@@ -4759,7 +4776,7 @@ async function runUpdateCommand(directory: string, flags: Flags, asJson: boolean
         // Change only the mount root, then recreate every data entry from the
         // checksummed backup as the target runtime user. Avoid recursive chown:
         // it would erase heterogeneous ownership without a reversible record.
-        await setManagedVolumeRootOwnership(targetImage, state.volumeName, {
+        await setManagedVolumeRootOwnership(loaded.directory, state, oldEnv, targetImage, {
           uid: MANAGED_RUNTIME_UID,
           gid: MANAGED_RUNTIME_GID,
         });
@@ -4776,7 +4793,7 @@ async function runUpdateCommand(directory: string, flags: Flags, asJson: boolean
       try {
         if (!recreateDataVolume) await stopProject(loaded.directory, state.mode).catch(() => undefined);
         if (migrateLegacyVolume && !recreateDataVolume) {
-          await setManagedVolumeRootOwnership(targetImage, state.volumeName, previousRootOwnership);
+          await setManagedVolumeRootOwnership(loaded.directory, state, oldEnv, targetImage, previousRootOwnership);
         }
         await restoreBackupData(loaded.directory, state, oldEnv, backup.backupDir, { recreateDataVolume });
       } catch (restoreError) {
@@ -5013,7 +5030,7 @@ async function restorePreMutationSnapshot(
   }
   if (pending.previousRootOwnership) {
     await pullAndRequireImage(state.image, state.imageDigest, 'Previous deployment');
-    await setManagedVolumeRootOwnership(state.image, state.volumeName, pending.previousRootOwnership);
+    await setManagedVolumeRootOwnership(directory, state, env, state.image, pending.previousRootOwnership);
   }
   await restoreBackupData(directory, state, env, previous.path);
   return previous;
