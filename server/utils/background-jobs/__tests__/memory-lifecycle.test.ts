@@ -11,6 +11,9 @@ import {
 } from '../lifecycle';
 import { startBackgroundStream } from '../stream-handler';
 import { getChatJobExecution } from '../types';
+import type { JobUpdate } from '../types';
+import type { RequestUsage } from '~~/shared/chat/compaction';
+import { createNormalizedStreamState } from '~~/shared/chat/normalized-stream-reducer';
 
 const config = vi.hoisted(() => ({
     maxConcurrentJobs: 2,
@@ -83,6 +86,30 @@ describe('memory background job admission and lifecycle', () => {
         expect(() =>
             decryptBackgroundCredential(`${encrypted}tampered`, secret)
         ).toThrow('Failed to decrypt background job credential');
+    });
+
+    it.each([true, false])('restores only checkpointed usage on reclaim (checkpoint=%s) and fences stale usage', async (checkpoint) => {
+        const measurement = (prompt: number): RequestUsage => ({
+            prompt_tokens: prompt, completion_tokens: 12, model: 'test-model', request_id: `request-${prompt}`,
+            iteration: 1, measured_at: Date.now(), prefix_message_count: 1,
+            prefix_hash: 'prefix', configuration_hash: 'configuration', input_estimate_tokens: 5,
+        });
+        const checkpointUsage = measurement(150);
+        const jobId = await memoryJobProvider.createJob({
+            userId: 'user-1', threadId: 'thread-1', messageId: 'message-1', model: 'test-model',
+            execution: { ...execution('checkpoint:'), normalizedToolState: {
+                ...createNormalizedStreamState(), ...(checkpoint ? { requestUsage: checkpointUsage } : {}),
+            } },
+        });
+        const now = Date.now();
+        await memoryJobProvider.claimJob!(jobId, 'worker-1', now, now + 10);
+        await memoryJobProvider.updateJob(jobId, { usage: measurement(400), leaseOwner: 'worker-1' } as JobUpdate);
+        expect((await memoryJobProvider.getJob(jobId, 'user-1') as unknown as { usage: RequestUsage }).usage).toMatchObject({ prompt_tokens: 400 });
+        await memoryJobProvider.claimJob!(jobId, 'worker-2', now + 11, now + 60000);
+        expect((await memoryJobProvider.getJob(jobId, 'user-1') as unknown as { usage?: RequestUsage }).usage).toEqual(checkpoint ? checkpointUsage : undefined);
+        await expect(memoryJobProvider.updateJob(jobId, { usage: measurement(900), leaseOwner: 'worker-1' } as JobUpdate))
+            .rejects.toMatchObject({ name: 'BackgroundJobLeaseLostError' });
+        expect((await memoryJobProvider.getJob(jobId, 'user-1') as unknown as { usage?: RequestUsage }).usage).toEqual(checkpoint ? checkpointUsage : undefined);
     });
 
     it('admits concurrent jobs atomically at the configured cap', async () => {

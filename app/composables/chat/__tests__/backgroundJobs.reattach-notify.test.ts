@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHookEngine, type HookEngine } from '~/core/hooks/hooks';
+import type { RequestUsage } from '~~/shared/chat/compaction';
 
 const pollJobStatusMock = vi.fn();
 const subscribeBackgroundJobStreamMock = vi.fn();
@@ -43,6 +44,12 @@ const dbMock = {
     },
 };
 let activeDbMock = dbMock;
+const measurement = (iteration = 1): RequestUsage => ({
+    prompt_tokens: 180000 + iteration, completion_tokens: 42, model: 'test-model',
+    request_id: `request-${iteration}`, iteration, measured_at: iteration,
+    prefix_message_count: iteration + 2, prefix_hash: `prefix-${iteration}`,
+    configuration_hash: 'configuration', input_estimate_tokens: 180000,
+});
 
 function makeStatus(
     status: 'streaming' | 'complete' | 'error' | 'aborted',
@@ -157,6 +164,127 @@ describe('backgroundJobs reattach + notifications', () => {
         ).__OR3_TEST_CLIENT = undefined;
     });
 
+    it.each(['missing', 'malformed'] as const)('retains accepted usage after a failed write and %s later snapshots', async (laterUsage) => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1', threadId: 'thread-1',
+            messageId: 'msg-1', initialAttempt: 2, useSse: true });
+        const updates = vi.fn();
+        mod.subscribeBackgroundJob(tracker, { onUpdate: updates });
+        const handlers = subscribeBackgroundJobStreamMock.mock.calls[0]![0] as { onStatus: (status: ReturnType<typeof makeStatus>) => void };
+        dbMock.messages.put.mockRejectedValueOnce(new Error('temporary local write failure'));
+        handlers.onStatus(makeStatus('streaming', { content: '', content_length: 0, attempt: 2, usage: measurement(2) }));
+        await tracker.streamChain;
+        handlers.onStatus(makeStatus('streaming', { content: '', content_length: 0, attempt: 1, usage: measurement(1) }));
+        await tracker.streamChain;
+        handlers.onStatus(makeStatus('complete', { attempt: 2,
+            ...(laterUsage === 'malformed' ? { usage: { ...measurement(3), completion_tokens: -1 } } : {}) }));
+        await tracker.completion;
+        expect(updates.mock.calls.map(([update]) => update.status.usage)).toEqual([measurement(2), measurement(2)]);
+        expect(dbMock.messages.put.mock.lastCall?.[0]).toMatchObject({ data: { usage: measurement(2) } });
+        expect(dbMock.messages.put).toHaveBeenCalledTimes(2);
+        mod.stopBackgroundJobTracking(tracker);
+        mod.backgroundJobTrackers.clear();
+    });
+
+    it('retains terminal usage when the full-content refetch has no measurement', async () => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        pollJobStatusMock.mockResolvedValue(makeStatus('complete', { content: 'full answer', content_length: 11 }));
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1', threadId: 'thread-1',
+            messageId: 'msg-1', useSse: true });
+        const handlers = subscribeBackgroundJobStreamMock.mock.calls[0]![0] as { onStatus: (status: ReturnType<typeof makeStatus>) => void };
+        handlers.onStatus(makeStatus('complete', { content: undefined, content_length: 11, usage: measurement(2) }));
+        await expect(tracker.completion).resolves.toMatchObject({ content: 'full answer', usage: measurement(2) });
+        expect(dbMock.messages.put.mock.lastCall?.[0]).toMatchObject({ data: { content: 'full answer', usage: measurement(2) } });
+        mod.stopBackgroundJobTracking(tracker);
+        mod.backgroundJobTrackers.clear();
+    });
+
+    it('does not regress the accepted iteration within one background attempt', async () => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1', threadId: 'thread-1',
+            messageId: 'msg-1', initialAttempt: 1, useSse: true });
+        const handlers = subscribeBackgroundJobStreamMock.mock.calls[0]![0] as { onStatus: (status: ReturnType<typeof makeStatus>) => void };
+        handlers.onStatus(makeStatus('streaming', { attempt: 1, usage: measurement(2) }));
+        await tracker.streamChain;
+        handlers.onStatus(makeStatus('complete', { attempt: 1, usage: measurement(1) }));
+        await expect(tracker.completion).resolves.toMatchObject({ usage: measurement(2) });
+        expect(dbMock.messages.put.mock.lastCall?.[0]?.data.usage).toEqual(measurement(2));
+        mod.stopBackgroundJobTracking(tracker);
+        mod.backgroundJobTrackers.clear();
+    });
+
+    it.each([{ attempt: 2 }, { attempt: 1, content_reset: true }])('drops discarded usage after recovery even if its local write fails: %j', async (reset) => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1', threadId: 'thread-1',
+            messageId: 'msg-1', initialAttempt: 1, useSse: true });
+        const handlers = subscribeBackgroundJobStreamMock.mock.calls[0]![0] as { onStatus: (status: ReturnType<typeof makeStatus>) => void };
+        handlers.onStatus(makeStatus('streaming', { attempt: 1, usage: measurement(1) }));
+        await tracker.streamChain;
+        const priorRow = dbMock.messages.put.mock.lastCall?.[0];
+        dbMock.messages.get.mockResolvedValue(priorRow);
+        dbMock.messages.put.mockRejectedValueOnce(new Error('temporary local write failure'));
+        handlers.onStatus(makeStatus('streaming', { ...reset, content: '', content_length: 0 }));
+        await tracker.streamChain;
+        handlers.onStatus(makeStatus('complete', { attempt: reset.attempt }));
+        await expect(tracker.completion).resolves.not.toHaveProperty('usage', measurement(1));
+        expect(dbMock.messages.put.mock.lastCall?.[0]?.data).not.toHaveProperty('usage');
+        mod.stopBackgroundJobTracking(tracker);
+        mod.backgroundJobTrackers.clear();
+    });
+
+    it('does not attach an earlier terminal event measurement to a newer attempt refetch', async () => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        pollJobStatusMock.mockResolvedValue(makeStatus('complete', { attempt: 2, content: 'recovered', content_length: 9 }));
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1', threadId: 'thread-1',
+            messageId: 'msg-1', initialAttempt: 1, useSse: true });
+        const handlers = subscribeBackgroundJobStreamMock.mock.calls[0]![0] as { onStatus: (status: ReturnType<typeof makeStatus>) => void };
+        handlers.onStatus(makeStatus('complete', { attempt: 1, content: undefined, content_length: 11, usage: measurement(1) }));
+        await tracker.completion;
+        expect(dbMock.messages.put.mock.lastCall?.[0]?.data).not.toHaveProperty('usage');
+        mod.stopBackgroundJobTracking(tracker);
+        mod.backgroundJobTrackers.clear();
+    });
+
+    it('retains a same-attempt reset instruction across a full-content refetch', async () => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        pollJobStatusMock.mockResolvedValue(makeStatus('complete', { attempt: 1, content: 'recovered', content_length: 9 }));
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1', threadId: 'thread-1',
+            messageId: 'msg-1', initialAttempt: 1, useSse: true });
+        const handlers = subscribeBackgroundJobStreamMock.mock.calls[0]![0] as { onStatus: (status: ReturnType<typeof makeStatus>) => void };
+        handlers.onStatus(makeStatus('streaming', { attempt: 1, usage: measurement(1) }));
+        await tracker.streamChain;
+        dbMock.messages.get.mockResolvedValue(dbMock.messages.put.mock.lastCall?.[0]);
+        handlers.onStatus(makeStatus('complete', { attempt: 1, content_reset: true, content: undefined, content_length: 9 }));
+        await tracker.completion;
+        expect(dbMock.messages.put.mock.lastCall?.[0]?.data).not.toHaveProperty('usage');
+        mod.stopBackgroundJobTracking(tracker);
+        mod.backgroundJobTrackers.clear();
+    });
+
+    it('ignores a terminal full-content refetch from an older attempt', async () => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        pollJobStatusMock.mockResolvedValue(makeStatus('complete', { attempt: 1, usage: measurement(1) }));
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1', threadId: 'thread-1',
+            messageId: 'msg-1', initialAttempt: 1, useSse: true });
+        const handlers = subscribeBackgroundJobStreamMock.mock.calls[0]![0] as { onStatus: (status: ReturnType<typeof makeStatus>) => void };
+        handlers.onStatus(makeStatus('complete', { attempt: 2, content: undefined, content_length: 9, usage: measurement(2) }));
+        await tracker.streamChain;
+        expect(dbMock.messages.put).not.toHaveBeenCalled();
+        expect(tracker.active).toBe(true);
+        handlers.onStatus(makeStatus('complete', { attempt: 2, content: 'recovered', content_length: 9, usage: measurement(2) }));
+        await tracker.completion;
+        expect(dbMock.messages.put.mock.lastCall?.[0]?.data.usage).toEqual(measurement(2));
+        mod.stopBackgroundJobTracking(tracker);
+        mod.backgroundJobTrackers.clear();
+    });
+
     it('restarts SSE when a detached polling job is reattached', async () => {
         pollJobStatusMock.mockResolvedValue(makeStatus('streaming'));
         subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
@@ -264,7 +392,7 @@ describe('backgroundJobs reattach + notifications', () => {
         mod.backgroundJobTrackers.clear();
     });
 
-    it('replaces a pre-restart partial response when the durable attempt changes', async () => {
+    it.each(['streaming', 'complete'] as const)('replaces a pre-restart measured partial response with an unmeasured %s attempt', async (status) => {
         let streamParams: {
             onStatus: (status: ReturnType<typeof makeStatus>) => void;
         } | null = null;
@@ -290,8 +418,15 @@ describe('backgroundJobs reattach + notifications', () => {
         const onUpdate = vi.fn();
         subscribeBackgroundJob(tracker, { onUpdate });
 
+        streamParams!.onStatus(makeStatus('streaming', {
+            content: 'old partial response', content_length: 20, attempt: 1, usage: measurement(1),
+        }));
+        await tracker.streamChain;
+        dbMock.messages.get.mockResolvedValue(dbMock.messages.put.mock.lastCall?.[0]);
+        onUpdate.mockClear();
+
         streamParams!.onStatus(
-            makeStatus('streaming', {
+            makeStatus(status, {
                 content: 'new',
                 content_length: 3,
                 content_reset: true,
@@ -317,6 +452,12 @@ describe('backgroundJobs reattach + notifications', () => {
                 }),
             })
         );
+        expect(tracker.lastUsage).toBeUndefined();
+        expect(dbMock.messages.put.mock.lastCall?.[0]?.data).not.toHaveProperty('usage');
+        expect(dbMock.messages.put.mock.lastCall?.[0]?.pending).toBe(status === 'streaming');
+        if (status === 'complete') {
+            await expect(tracker.completion).resolves.toMatchObject({ status: 'complete', attempt: 2, content: 'new' });
+        }
 
         stopBackgroundJobTracking(tracker);
         backgroundJobTrackers.clear();
@@ -1080,12 +1221,14 @@ describe('backgroundJobs reattach + notifications', () => {
                 content: 'ab',
                 content_delta: 'b',
                 content_length: 2,
+                usage: measurement(2),
             })
         );
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         expect(dbMock.messages.get).toHaveBeenCalledTimes(2);
         expect(dbMock.messages.put).toHaveBeenCalledTimes(2);
+        expect(dbMock.messages.put.mock.lastCall?.[0]).toMatchObject({ data: { usage: measurement(2) } });
         expect(workspaceBDb.messages.get).not.toHaveBeenCalled();
         expect(workspaceBDb.messages.put).not.toHaveBeenCalled();
         expect(abortBackgroundJobMock).not.toHaveBeenCalled();
@@ -1128,6 +1271,7 @@ describe('backgroundJobs reattach + notifications', () => {
                 content_length: 12,
                 reasoning_text: reasoning,
                 reasoning_reset: true,
+                usage: measurement(2),
             }));
             subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
             dbMock.messages.put.mockRejectedValueOnce(
@@ -1150,6 +1294,7 @@ describe('backgroundJobs reattach + notifications', () => {
             // discard the final snapshot or the tracker.
             await expect(tracker.completion).resolves.toMatchObject({
                 status: 'complete',
+                usage: measurement(2),
             });
             expect(backgroundJobTrackers.has('job-1')).toBe(true);
 
@@ -1160,7 +1305,7 @@ describe('backgroundJobs reattach + notifications', () => {
             expect(dbMock.messages.put).toHaveBeenCalledTimes(2);
             expect(dbMock.messages.put.mock.lastCall?.[0]).toMatchObject({
                 pending: false,
-                data: { content: 'final answer', reasoning_text: reasoning },
+                data: { content: 'final answer', reasoning_text: reasoning, usage: measurement(2) },
             });
         } finally {
             vi.useRealTimers();

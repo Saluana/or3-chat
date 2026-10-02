@@ -1,5 +1,9 @@
 import { serializeError, normalizeError, presentError, parseRetryAfter } from '~~/shared/errors';
 import { OpenRouterStreamError } from '~~/shared/openrouter/errors';
+import { attachRequestUsage, captureUsagePrefix, type UsagePrefix } from '~~/shared/chat/request-usage';
+import { readRequestUsage } from '~~/shared/chat/compaction';
+import type { CountableChatMessage } from '~~/shared/chat/context-budget';
+import { countTokensApprox } from '~/utils/chat/tokens';
 /**
  * @module server/utils/background-jobs/stream-handler
  *
@@ -189,6 +193,8 @@ export interface BackgroundStreamParams {
     execution?: BackgroundJobExecution;
     /** Durable lease owner used to fence provider writes. */
     leaseOwner?: string;
+    /** Immutable attempt of this worker, also fences process-local projections. */
+    attempt?: number;
 }
 
 function normalizeStreamedFieldMode(value: unknown): StreamedFieldMode {
@@ -269,7 +275,8 @@ async function persistTerminalGenerationSnapshot(
 ): Promise<void> {
     if (provider.saveTerminalSnapshot) {
         try {
-            await provider.saveTerminalSnapshot(jobId, snapshot, leaseOwner);
+            const saved = await provider.saveTerminalSnapshot(jobId, snapshot, leaseOwner);
+            if (saved === false) throw createBackgroundJobLeaseLostError();
         } catch (error) {
             if (isBackgroundJobLeaseLost(error)) throw error;
             logBackgroundEvent('warn', 'background.chat.snapshot.save_failed', {
@@ -277,6 +284,9 @@ async function persistTerminalGenerationSnapshot(
                 status: snapshot.status,
                 error: error instanceof Error ? error.message : String(error),
             });
+            // Publishing a terminal event would otherwise advertise durable
+            // usage/history that this provider explicitly failed to save.
+            throw error;
         }
         return;
     }
@@ -296,6 +306,19 @@ async function persistTerminalGenerationSnapshot(
             await provider.failJob(jobId, message);
         }
     }
+}
+
+/** Only provider-visible fields enter the request fingerprint. */
+async function captureBackgroundUsagePrefix(body: Record<string, unknown>): Promise<UsagePrefix | undefined> {
+    const { messages, ...configuration } = body;
+    return captureUsagePrefix({
+        model: typeof body.model === 'string' ? body.model : '',
+        messages: Array.isArray(messages) ? messages as CountableChatMessage[] : [],
+        tools: Array.isArray(body.tools) ? body.tools : undefined,
+        modalities: Array.isArray(body.modalities) ? body.modalities as string[] : undefined,
+        configuration,
+        countText: countTokensApprox,
+    }).catch(() => undefined);
 }
 
 export async function startBackgroundStream(
@@ -516,7 +539,13 @@ export async function consumeBackgroundStream(params: {
     flushIntervalMs?: number;
     flushChunkInterval?: number;
     streamedFieldMode?: StreamedFieldMode;
+    usagePrefix?: UsagePrefix;
 }): Promise<void> {
+    const usagePrefix = params.usagePrefix ?? await captureBackgroundUsagePrefix(params.context.body);
+    const usageRequestId = crypto.randomUUID();
+    const initialJob = await params.provider.getJob(params.jobId, params.context.userId);
+    const attempt = params.context.attempt ?? initialJob?.attempts;
+    let requestUsage = readRequestUsage(initialJob?.usage);
     const contentBase = params.context.execution?.contentBase ?? '';
     const reasoningBase = params.context.execution?.reasoningBase ?? '';
     const continuationNormalizer = params.context.execution?.continuation
@@ -571,7 +600,7 @@ export async function consumeBackgroundStream(params: {
         updateIntervalMs: UPDATE_INTERVAL_MS,
     });
 
-    initJobLiveState(params.jobId, { contentBase, reasoningBase });
+    initJobLiveState(params.jobId, { contentBase, reasoningBase, attempt, usage: requestUsage });
 
     const clearFlushTimer = () => {
         if (!flushScheduled) return;
@@ -647,17 +676,30 @@ export async function consumeBackgroundStream(params: {
         for await (const evt of parseOpenRouterSSE(params.stream, {
             streamedFieldMode: params.streamedFieldMode,
         })) {
+            const measuredEvent = evt.type === 'usage'
+                ? { ...evt, requestUsage: attachRequestUsage(usagePrefix, evt.usage, {
+                    requestId: usageRequestId, iteration: normalizedState.iteration, measuredAt: Date.now(),
+                }) } : evt;
             const normalizedEvent =
                 evt.type === 'text' && continuationNormalizer
                     ? { ...evt, text: continuationNormalizer.push(evt.text) }
-                    : evt;
+                    : measuredEvent;
             if (normalizedEvent.type === 'text' && !normalizedEvent.text) continue;
             normalizedState = reduceNormalizedStreamEvent(normalizedState, normalizedEvent);
+            if (evt.type === 'usage' && normalizedState.requestUsage) {
+                requestUsage = normalizedState.requestUsage;
+                // A measured iteration must be durable before abort or a later
+                // request can win the race. This is not a text-chunk counter.
+                await params.provider.updateJob(params.jobId, {
+                    usage: requestUsage, leaseOwner: params.context.leaseOwner,
+                });
+            }
             if (evt.type === 'text') {
                 fullContent = contentBase + normalizedState.cumulativeText;
                 chunks = normalizedState.chunks;
                 pendingChunk += normalizedEvent.type === 'text' ? normalizedEvent.text : '';
                 emitJobDelta(params.jobId, normalizedEvent.type === 'text' ? normalizedEvent.text : '', {
+                    attempt,
                     contentLength: fullContent.length,
                     chunksReceived: chunks,
                     reasoningLength: fullReasoning.length,
@@ -673,6 +715,7 @@ export async function consumeBackgroundStream(params: {
                 fullReasoning = reasoningBase + normalizedState.reasoningText;
                 pendingReasoning += evt.text;
                 emitJobReasoningDelta(params.jobId, evt.text, {
+                    attempt,
                     reasoningLength: fullReasoning.length,
                     chunksReceived: chunks,
                 });
@@ -693,6 +736,7 @@ export async function consumeBackgroundStream(params: {
             chunks = normalizedState.chunks;
             pendingChunk += continuationTail;
             emitJobDelta(params.jobId, continuationTail, {
+                attempt,
                 contentLength: fullContent.length,
                 chunksReceived: chunks,
                 reasoningLength: fullReasoning.length,
@@ -737,6 +781,7 @@ export async function consumeBackgroundStream(params: {
             {
                 status: 'complete',
                 content: fullContent,
+                usage: requestUsage,
                 reasoning: fullReasoning,
                 completedAt,
             },
@@ -748,7 +793,9 @@ export async function consumeBackgroundStream(params: {
             contentLength: fullContent.length,
         });
         emitJobStatus(params.jobId, 'complete', {
+            attempt,
             content: fullContent,
+            usage: requestUsage,
             contentLength: fullContent.length,
             reasoning: fullReasoning,
             reasoningLength: fullReasoning.length,
@@ -837,7 +884,9 @@ export async function consumeBackgroundStream(params: {
                 contentLength: fullContent.length,
             });
             emitJobStatus(params.jobId, 'aborted', {
+                attempt,
                 content: fullContent,
+                usage: requestUsage,
                 contentLength: fullContent.length,
                 reasoning: fullReasoning,
                 reasoningLength: fullReasoning.length,
@@ -855,6 +904,7 @@ export async function consumeBackgroundStream(params: {
             {
                 status: 'error',
                 content: fullContent,
+                usage: requestUsage,
                 reasoning: fullReasoning,
                 error: failureMessage,
                 completedAt: failedAt,
@@ -862,7 +912,9 @@ export async function consumeBackgroundStream(params: {
             params.context.leaseOwner
         );
         emitJobStatus(params.jobId, 'error', {
+            attempt,
             content: fullContent,
+            usage: requestUsage,
             contentLength: fullContent.length,
             reasoning: fullReasoning,
             reasoningLength: fullReasoning.length,
@@ -1003,6 +1055,8 @@ export async function consumeBackgroundStreamWithTools(params: {
     let providerDirtyEvents = 0;
     let lastProviderFlushAt = Date.now();
     const persistedJob = await params.provider.getJob(params.jobId, params.context.userId);
+    const attempt = params.context.attempt ?? persistedJob?.attempts;
+    let requestUsage = readRequestUsage(persistedJob?.usage) ?? readRequestUsage(normalizedState.requestUsage);
     for (const call of persistedJob?.tool_calls ?? []) {
         if (!call.id) continue;
         const fingerprint = call.argument_fingerprint
@@ -1059,14 +1113,16 @@ export async function consumeBackgroundStreamWithTools(params: {
             })),
         });
         emitJobStatus(params.jobId, 'streaming', {
+            attempt,
             content: fullContent,
+            usage: requestUsage,
             contentLength: fullContent.length,
             chunksReceived: chunks,
             tool_calls: publicToolCalls,
         });
     };
 
-    initJobLiveState(params.jobId, { contentBase, reasoningBase });
+    initJobLiveState(params.jobId, { contentBase, reasoningBase, attempt, usage: requestUsage });
     logBgStream('server-consume-tools-start', {
         jobId: params.jobId,
         userId: params.context.userId,
@@ -1347,7 +1403,7 @@ export async function consumeBackgroundStreamWithTools(params: {
                 abortSignal: params.abortSignal,
             });
 
-            const requestBody = {
+            const requestBody = JSON.parse(JSON.stringify({
                 ...params.body,
                 messages: orMessages,
                 tools,
@@ -1359,7 +1415,9 @@ export async function consumeBackgroundStreamWithTools(params: {
                         ? 'auto'
                         : undefined,
                 stream: true,
-            } as Record<string, unknown>;
+            })) as Record<string, unknown>;
+            const usagePrefix = await captureBackgroundUsagePrefix(requestBody);
+            const usageRequestId = crypto.randomUUID();
 
             const upstream = await fetchWithResponseDeadline(openRouterUrl, {
                 method: 'POST',
@@ -1409,7 +1467,17 @@ export async function consumeBackgroundStreamWithTools(params: {
                     jobId: params.jobId,
                     abortSignal: params.abortSignal,
                 });
-                normalizedState = reduceNormalizedStreamEvent(normalizedState, evt);
+                const measuredEvent = evt.type === 'usage'
+                    ? { ...evt, requestUsage: attachRequestUsage(usagePrefix, evt.usage, {
+                        requestId: usageRequestId, iteration: loopIteration, measuredAt: Date.now(),
+                    }) } : evt;
+                normalizedState = reduceNormalizedStreamEvent(normalizedState, measuredEvent);
+                if (evt.type === 'usage' && normalizedState.requestUsage) {
+                    requestUsage = normalizedState.requestUsage;
+                    await params.provider.updateJob(params.jobId, {
+                        usage: requestUsage, leaseOwner: params.context.leaseOwner,
+                    });
+                }
                 if (evt.type === 'text') {
                     fullContent = contentBase + normalizedState.cumulativeText;
                     loopContent = normalizedState.iterationText;
@@ -1417,6 +1485,7 @@ export async function consumeBackgroundStreamWithTools(params: {
                     pendingProviderContent += evt.text;
                     providerDirtyEvents += 1;
                     emitJobDelta(params.jobId, evt.text, {
+                        attempt,
                         contentLength: fullContent.length,
                         chunksReceived: chunks,
                         reasoningLength: fullReasoning.length,
@@ -1431,6 +1500,7 @@ export async function consumeBackgroundStreamWithTools(params: {
                     pendingProviderReasoning += evt.text;
                     providerDirtyEvents += 1;
                     emitJobReasoningDelta(params.jobId, evt.text, {
+                        attempt,
                         reasoningLength: fullReasoning.length,
                         chunksReceived: chunks,
                     });
@@ -1526,6 +1596,7 @@ export async function consumeBackgroundStreamWithTools(params: {
             {
                 status: 'complete',
                 content: fullContent,
+                usage: requestUsage,
                 reasoning: fullReasoning,
                 toolCalls: Array.from(toolStates.values()),
                 completedAt: toolCompletedAt,
@@ -1543,7 +1614,9 @@ export async function consumeBackgroundStreamWithTools(params: {
             })),
         });
         emitJobStatus(params.jobId, 'complete', {
+            attempt,
             content: fullContent,
+            usage: requestUsage,
             contentLength: fullContent.length,
             reasoning: fullReasoning,
             reasoningLength: fullReasoning.length,
@@ -1627,7 +1700,9 @@ export async function consumeBackgroundStreamWithTools(params: {
                 contentLength: fullContent.length,
             });
             emitJobStatus(params.jobId, 'aborted', {
+                attempt,
                 content: fullContent,
+                usage: requestUsage,
                 contentLength: fullContent.length,
                 reasoning: fullReasoning,
                 reasoningLength: fullReasoning.length,
@@ -1646,6 +1721,7 @@ export async function consumeBackgroundStreamWithTools(params: {
             {
                 status: 'error',
                 content: fullContent,
+                usage: requestUsage,
                 reasoning: fullReasoning,
                 toolCalls: Array.from(toolStates.values()),
                 error: toolFailureMessage,
@@ -1654,7 +1730,9 @@ export async function consumeBackgroundStreamWithTools(params: {
             params.context.leaseOwner
         );
         emitJobStatus(params.jobId, 'error', {
+            attempt,
             content: fullContent,
+            usage: requestUsage,
             contentLength: fullContent.length,
             reasoning: fullReasoning,
             reasoningLength: fullReasoning.length,
@@ -1754,6 +1832,14 @@ export async function executeBackgroundJob(
     provider: BackgroundJobProvider,
     abortSignal?: AbortSignal
 ): Promise<void> {
+    // Capture before the first asynchronous boundary: provenance and bytes sent
+    // must not observe later caller/tool-loop mutations of an admitted payload.
+    const admittedBody = JSON.parse(JSON.stringify(params.body)) as Record<string, unknown>;
+    const admittedJob = await provider.getJob(jobId, params.userId);
+    if (params.leaseOwner && admittedJob?.leaseOwner !== params.leaseOwner) {
+        throw createBackgroundJobLeaseLostError();
+    }
+    params = { ...params, body: admittedBody, attempt: params.attempt ?? admittedJob?.attempts };
     const signal =
         abortSignal ??
         provider.getAbortController?.(jobId)?.signal ??
@@ -1771,7 +1857,7 @@ export async function executeBackgroundJob(
         _streamedFieldMode,
         _history,
         ...cleanBody
-    } = params.body;
+    } = admittedBody;
     const toolRuntime =
         typeof _toolRuntime === 'object' && _toolRuntime !== null
             ? (_toolRuntime as Record<string, string>)
@@ -1809,6 +1895,7 @@ export async function executeBackgroundJob(
     }
 
     const openRouterUrl = resolveOpenRouterChatCompletionsUrl();
+    const usagePrefix = await captureBackgroundUsagePrefix(cleanBody);
     const upstream = await fetchWithResponseDeadline(openRouterUrl, {
         method: 'POST',
         headers: {
@@ -1847,6 +1934,7 @@ export async function executeBackgroundJob(
         provider,
         shouldNotify: () => !hasJobViewers(jobId),
         streamedFieldMode,
+        usagePrefix,
     });
 }
 

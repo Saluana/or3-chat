@@ -12,6 +12,8 @@ import {
     BackgroundJobPollError,
     abortBackgroundAdmission,
     abortBackgroundJob,
+    subscribeBackgroundJobStream,
+    type BackgroundJobStatus,
 } from '../openrouterStream';
 import { OpenRouterTimeoutError } from '~~/shared/openrouter/deadlines';
 
@@ -49,6 +51,12 @@ function createJsonResponse(body: unknown, status = 200) {
     });
 }
 
+const backgroundMeasurement = {
+    prompt_tokens: 180000, completion_tokens: 42, model: 'model-1', request_id: 'request-2', iteration: 2,
+    measured_at: 123, prefix_message_count: 5, prefix_hash: 'prefix',
+    configuration_hash: 'configuration', input_estimate_tokens: 170000,
+};
+
 describe('openrouterStream', () => {
     beforeEach(() => {
         parseMock.mockClear();
@@ -60,6 +68,47 @@ describe('openrouterStream', () => {
 
     afterEach(() => {
         vi.useRealTimers();
+    });
+
+    it.each(['poll', 'sse'] as const)('validates background request usage at the %s boundary without failing valid text', async (transport) => {
+        const payloads = [
+            { ...backgroundMeasurement, untrusted: 'drop' },
+            { ...backgroundMeasurement, prompt_tokens: -1 },
+            { prompt_tokens: 2, completion_tokens: 3 },
+            undefined,
+            { ...backgroundMeasurement, prompt_tokens: 0, completion_tokens: 0 },
+        ];
+        const statuses = payloads.map((usage) => ({ id: 'job-1', status: 'complete', threadId: 'thread',
+            messageId: 'assistant', model: 'model-1', chunksReceived: 1, startedAt: 1,
+            content: 'answer', usage }));
+        const accepted: BackgroundJobStatus[] = [];
+        if (transport === 'poll') {
+            const fetchMock = vi.fn();
+            for (const status of statuses) fetchMock.mockResolvedValueOnce(createJsonResponse(status));
+            vi.stubGlobal('fetch', fetchMock);
+            for (const _status of statuses) accepted.push(await pollJobStatus('job-1'));
+        } else {
+            let source!: { onmessage?: (event: { data: string }) => void; close: () => void };
+            class EventSourceMock {
+                onmessage?: (event: { data: string }) => void;
+                close = vi.fn();
+                constructor() { source = this; }
+            }
+            vi.stubGlobal('EventSource', EventSourceMock);
+            const onError = vi.fn();
+            try {
+                const stop = subscribeBackgroundJobStream({ jobId: 'job-1', onStatus: (status) => accepted.push(status), onError });
+                for (const status of statuses) source.onmessage?.({ data: JSON.stringify({ event: 'status', status }) });
+                expect(onError).not.toHaveBeenCalled();
+                stop();
+                expect(source.close).toHaveBeenCalledOnce();
+            } finally { vi.unstubAllGlobals(); }
+        }
+        expect(accepted.map((status) => status.content)).toEqual(payloads.map(() => 'answer'));
+        expect(accepted.map((status) => (status as BackgroundJobStatus & { usage?: unknown }).usage)).toEqual([
+            backgroundMeasurement, undefined, undefined, undefined,
+            { ...backgroundMeasurement, prompt_tokens: 0, completion_tokens: 0 },
+        ]);
     });
 
     it.each(['server-key', 'personal-static'] as const)('sends an admitted auxiliary reply maximum through the existing %s auth route', async (route) => {

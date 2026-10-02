@@ -1,4 +1,5 @@
 import { presentError } from '~~/shared/errors';
+import { readRequestUsage, type RequestUsage } from '~~/shared/chat/compaction';
 /**
  * Atomic, workspace-bound persistence for background job projections.
  */
@@ -11,6 +12,15 @@ import { getHookBridge } from '~/core/sync/hook-bridge';
 import Dexie from 'dexie';
 
 export const BACKGROUND_JOB_PERSIST_INTERVAL_MS = 500;
+
+export function isBackgroundUsageReset(
+    status: BackgroundJobStatus,
+    previousAttempt: number | undefined
+): boolean {
+    return status.content_reset === true || status.reasoning_reset === true ||
+        (typeof status.attempt === 'number' && typeof previousAttempt === 'number' &&
+            status.attempt > previousAttempt);
+}
 
 /**
  * Apply browser-only metadata after canonical admission without advancing the
@@ -226,6 +236,7 @@ export async function persistBackgroundJobUpdate(
     superseded?: boolean;
     /** Another tab already projected a newer server execution attempt. */
     staleAttempt?: boolean;
+    usage?: RequestUsage;
     workflowState?: BackgroundJobStatus['workflow_state'];
 }> {
     if (!isClientRuntime()) {
@@ -233,6 +244,12 @@ export async function persistBackgroundJobUpdate(
     }
 
     const now = Date.now();
+    const usage = readRequestUsage(status.usage);
+    const usageFingerprint = usage ? JSON.stringify(usage) : undefined;
+    const usageChanged = usageFingerprint !== undefined &&
+        usageFingerprint !== tracker.lastPersistedUsageFingerprint;
+    const resetUsage = isBackgroundUsageReset(status, tracker.lastAttempt) ||
+        tracker.usageResetPending === true;
     const statusChanged = status.status !== tracker.status;
     const attemptChanged =
         typeof status.attempt === 'number' &&
@@ -266,7 +283,9 @@ export async function persistBackgroundJobUpdate(
         !shouldPersistContent &&
         !shouldPersistReasoning &&
         !toolStateChanged &&
-        !workflowChanged
+        !workflowChanged &&
+        !usageChanged &&
+        !resetUsage
     ) {
         return { persisted: true, workflowState: status.workflow_state };
     }
@@ -306,6 +325,8 @@ export async function persistBackgroundJobUpdate(
             record: StoredMessage;
             workflowState?: BackgroundJobStatus['workflow_state'];
             workflowVersion: number;
+            usageCleared: boolean;
+            usage?: RequestUsage;
         } | null> => {
             if (tracker.canonicalHistory) {
                 const tx = Dexie.currentTransaction as typeof Dexie.currentTransaction | undefined;
@@ -351,6 +372,18 @@ export async function persistBackgroundJobUpdate(
                 return null;
             }
             if (tracker.canonicalHistory && existing.pending !== true) return null;
+            const resetsStoredUsage = resetUsage || isBackgroundUsageReset(
+                status,
+                typeof baseData.background_job_attempt === 'number'
+                    ? baseData.background_job_attempt : undefined
+            );
+            const previousUsage = readRequestUsage(baseData.usage);
+            const acceptedUsage = !resetsStoredUsage && previousUsage &&
+                (!usage || usage.iteration < previousUsage.iteration)
+                ? previousUsage : usage;
+            const usageCleared = resetsStoredUsage && !acceptedUsage;
+            const preservedData = { ...baseData };
+            if (usageCleared) delete preservedData.usage;
             const incomingWorkflowState =
                 status.workflow_state &&
                 typeof status.workflow_state === 'object'
@@ -374,7 +407,7 @@ export async function persistBackgroundJobUpdate(
                 pending: status.status === 'streaming',
                 error: nextError,
                 data: {
-                    ...baseData,
+                    ...preservedData,
                     ...(includeWorkflowState ? workflowState : {}),
                     content:
                         replaceContent || content.length > 0
@@ -395,6 +428,7 @@ export async function persistBackgroundJobUpdate(
                     ...(persistedToolCalls
                         ? { tool_calls: persistedToolCalls }
                         : {}),
+                    ...(acceptedUsage ? { usage: acceptedUsage } : {}),
                 },
                 updated_at: nowSec(),
             };
@@ -408,6 +442,8 @@ export async function persistBackgroundJobUpdate(
                 workflowVersion: includeWorkflowState
                     ? workflowVersion
                     : tracker.lastWorkflowVersion,
+                usageCleared,
+                usage: acceptedUsage,
             };
         }
     );
@@ -422,6 +458,11 @@ export async function persistBackgroundJobUpdate(
         tracker.lastPersistedReasoningLength = reasoning.length;
     }
     tracker.lastToolStateFingerprint = toolStateFingerprint;
+    if (persistedResult.usage || persistedResult.usageCleared) {
+        tracker.lastPersistedUsageFingerprint = persistedResult.usage
+            ? JSON.stringify(persistedResult.usage) : undefined;
+    }
+    tracker.usageResetPending = false;
     tracker.lastWorkflowFingerprint = JSON.stringify(
         persistedResult.workflowState ?? null
     );
@@ -431,5 +472,6 @@ export async function persistBackgroundJobUpdate(
     return {
         persisted: true,
         workflowState: persistedResult.workflowState,
+        usage: persistedResult.usage,
     };
 }

@@ -10,6 +10,7 @@ import { resolveSessionContext } from '../../../auth/session';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 import { getJobLiveState } from '../../../utils/background-jobs/viewers';
 import { shouldResetBackgroundContent } from '../../../utils/background-jobs/recovery';
+import { readRequestUsage } from '../../../../shared/chat/compaction';
 
 function logBgStream(
     _stage: string,
@@ -87,49 +88,60 @@ export default defineEventHandler(async (event) => {
         : null;
     const attemptParam =
         typeof query.attempt === 'string' ? Number(query.attempt) : null;
-    const currentAttempt = job.attempts ?? 0;
-    const attemptChanged = shouldResetBackgroundContent(
-        attemptParam,
-        currentAttempt,
-        offset
-    );
+    const canonicalAttempt = job.attempts ?? 0;
     const liveStateRaw = getJobLiveState(jobId);
     // Ignore in-memory live state from a superseded execution attempt.
     const liveState =
         liveStateRaw &&
         (typeof liveStateRaw.attempt !== 'number' ||
-            liveStateRaw.attempt >= currentAttempt)
+            liveStateRaw.attempt >= canonicalAttempt)
             ? liveStateRaw
             : null;
+    const currentAttempt = liveState?.attempt ?? canonicalAttempt;
+    const liveAttemptAdvanced = currentAttempt > canonicalAttempt;
+    const attemptChanged = shouldResetBackgroundContent(
+        attemptParam,
+        currentAttempt,
+        offset
+    );
     const effectiveContent =
-        liveState && liveState.content.length > job.content.length
+        liveState && (liveAttemptAdvanced || liveState.content.length > job.content.length)
             ? liveState.content
             : job.content;
     const jobReasoning = job.reasoning;
     const effectiveReasoning =
-        liveState && liveState.reasoning.length > jobReasoning.length
+        liveState && (liveAttemptAdvanced || liveState.reasoning.length > jobReasoning.length)
             ? liveState.reasoning
             : jobReasoning;
     const effectiveChunks =
-        liveState && liveState.chunksReceived > job.chunksReceived
+        liveState && (liveAttemptAdvanced || liveState.chunksReceived > job.chunksReceived)
             ? liveState.chunksReceived
             : job.chunksReceived;
     const effectiveToolCalls =
-        liveState?.tool_calls !== undefined
-            ? liveState.tool_calls
+        liveAttemptAdvanced || liveState?.tool_calls !== undefined
+            ? liveState?.tool_calls
             : job.tool_calls;
     const effectiveWorkflowState =
-        liveState?.workflow_state !== undefined
-            ? liveState.workflow_state
+        liveAttemptAdvanced || liveState?.workflow_state !== undefined
+            ? liveState?.workflow_state
             : job.workflow_state;
+    const liveUsage = readRequestUsage(liveState?.usage);
+    const canonicalUsage =
+        liveAttemptAdvanced
+            ? undefined
+            : readRequestUsage(job.usage);
+    const effectiveUsage = liveUsage &&
+        (!canonicalUsage || liveUsage.iteration >= canonicalUsage.iteration)
+        ? liveUsage
+        : canonicalUsage;
     const effectiveError =
-        typeof liveState?.error === 'string' ? liveState.error : job.error;
+        liveAttemptAdvanced || typeof liveState?.error === 'string' ? liveState?.error : job.error;
     const effectiveCompletedAt =
-        liveState?.completedAt !== undefined
-            ? liveState.completedAt
+        liveAttemptAdvanced || liveState?.completedAt !== undefined
+            ? liveState?.completedAt
             : job.completedAt;
     const effectiveStatus =
-        liveState && liveState.status !== 'streaming'
+        liveState && (liveAttemptAdvanced || liveState.status !== 'streaming')
             ? liveState.status
             : job.status;
     const shouldLogStatusRequest =
@@ -204,6 +216,7 @@ export default defineEventHandler(async (event) => {
             error: effectiveError,
             tool_calls: effectiveToolCalls,
             workflow_state: effectiveWorkflowState,
+            usage: effectiveUsage,
             content_delta: contentDelta,
             content_length: contentLength,
             content_reset: attemptChanged || undefined,
@@ -243,6 +256,7 @@ export default defineEventHandler(async (event) => {
         error: effectiveError,
         tool_calls: effectiveToolCalls,
         workflow_state: effectiveWorkflowState,
+        usage: effectiveUsage,
         content: effectiveContent,
         reasoning_text: effectiveReasoning,
         reasoning_length: effectiveReasoning.length,

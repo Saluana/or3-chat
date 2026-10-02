@@ -1,4 +1,5 @@
 import { captureUsagePrefix, attachRequestUsage } from '~~/shared/chat/request-usage';
+import { readRequestUsage, type RequestUsage } from '~~/shared/chat/compaction';
 import { countTokensApprox } from './tokens';
 import { normalizeError, presentError, parseRetryAfter } from '~~/shared/errors';
 /**
@@ -559,6 +560,8 @@ export interface BackgroundJobStatus {
     chunksReceived: number;
     /** Durable execution attempt; increments after a worker takeover. */
     attempt?: number;
+    /** Last measured provider request; prompt occupancy is never accumulated. */
+    usage?: RequestUsage;
     startedAt: number;
     completedAt?: number;
     error?: string;
@@ -619,6 +622,12 @@ export type BackgroundJobStreamEvent = {
     event: 'snapshot' | 'delta' | 'status';
     status: BackgroundJobStatus;
 };
+
+function normalizeBackgroundJobUsage(status: BackgroundJobStatus): BackgroundJobStatus {
+    const { usage: candidate, ...rest } = status;
+    const usage = readRequestUsage(candidate);
+    return { ...rest, ...(usage ? { usage } : {}) };
+}
 
 type BackgroundAdmissionError = Error & {
     backgroundAdmissionRetryable?: boolean;
@@ -1010,7 +1019,7 @@ export async function pollJobStatus(
             false
         );
     }
-    return decoded as BackgroundJobStatus;
+    return normalizeBackgroundJobUsage(decoded as BackgroundJobStatus);
 }
 
 /**
@@ -1228,7 +1237,7 @@ export function subscribeBackgroundJobStream(params: {
     es.onmessage = (event) => {
         try {
             const parsed = JSON.parse(event.data) as BackgroundJobStreamEvent;
-            params.onStatus(parsed.status);
+            params.onStatus(normalizeBackgroundJobUsage(parsed.status));
         } catch (err) {
             if (params.onError) {
                 params.onError(

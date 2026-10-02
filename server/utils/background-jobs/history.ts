@@ -2,6 +2,7 @@ import type { BackgroundJob, BackgroundJobProvider } from "./types";
 import { getChatJobExecution } from './types';
 import { getSyncGatewayAdapter } from "../../sync/gateway/registry";
 import type { CanonicalGenerationSnapshot } from "~~/shared/chat/background-history";
+import { readRequestUsage } from '~~/shared/chat/compaction';
 
 function historyAdapterFor(job: BackgroundJob) {
   if (!job.syncProviderId) return null;
@@ -52,6 +53,7 @@ function terminalSnapshot(
     content: job.content,
     reasoning: job.reasoning,
     toolCalls: job.tool_calls,
+    usage: readRequestUsage(job.usage),
     error: job.error,
     completedAt: job.completedAt,
   };

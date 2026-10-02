@@ -3,7 +3,16 @@ import type { BackgroundJobProvider, BackgroundJob, JobUpdate } from '../types';
 import {
     consumeBackgroundStream,
     consumeBackgroundStreamWithTools,
+    executeBackgroundJob,
 } from '../stream-handler';
+import { clearAllJobs, memoryJobProvider } from '../providers/memory';
+import { reconcileBackgroundJobHistory } from '../history';
+import { registerSyncGatewayAdapter } from '../../../sync/gateway/registry';
+import type { SyncGatewayAdapter } from '../../../sync/gateway/types';
+import type { CanonicalGenerationSnapshot, ChatGenerationAdmissionEnvelope } from '~~/shared/chat/background-history';
+import { captureUsagePrefix } from '~~/shared/chat/request-usage';
+import { readRequestUsage } from '~~/shared/chat/compaction';
+import { countTokensApprox } from '~/utils/chat/tokens';
 import {
     registerServerTool,
     unregisterServerTool,
@@ -15,6 +24,8 @@ import { toolResultTranscriptData } from '~/utils/chat/transcript';
 import {
     registerJobStream,
     resetJobViewersForTests,
+    emitJobStatus,
+    getJobLiveState,
 } from '../viewers';
 
 function makeSseStream(chunks: unknown[]): ReadableStream<Uint8Array> {
@@ -770,5 +781,212 @@ describe('consumeBackgroundStreamWithTools', () => {
         ).rejects.toThrow('max iterations');
 
         expect(completeJob).not.toHaveBeenCalled();
+    });
+});
+
+/**
+ * Failure owners: real job storage and real terminal-history reconciliation.
+ * The canonical adapter is the observed external boundary, not a substitute
+ * for provider-source serialization/sync conformance (qualified separately).
+ * Risks: dropped usage, summed prompts, mutated prefix, missing final counters,
+ * duplicate usage, error/abort after a measured iteration, and stale lease writes.
+ */
+describe('background usage through terminal history', () => {
+    const delivered: CanonicalGenerationSnapshot[] = [];
+    const finalize = vi.fn(async (_actor: unknown, input: { snapshot: CanonicalGenerationSnapshot }) => {
+        delivered.push(structuredClone(input.snapshot));
+        return { status: 'committed' as const, replayed: false, serverVersion: 2 };
+    });
+    beforeEach(() => {
+        clearAllJobs();
+        delivered.length = 0;
+        finalize.mockClear();
+        vi.stubGlobal('useRuntimeConfig', () => ({ backgroundJobs: {} }));
+        registerSyncGatewayAdapter({
+            id: 'usage-boundary',
+            create: () => ({
+                capabilities: { backgroundGenerationHistory: 'v1' },
+                admitChatGeneration: async () => ({ status: 'admitted', replayed: false, serverVersion: 1 }),
+                finalizeChatGeneration: finalize,
+            }) as unknown as SyncGatewayAdapter,
+        });
+        registerServerTool(toolDef, ({ value }: { value: string }) => value, { override: true });
+    });
+    afterEach(() => {
+        clearAllJobs();
+        vi.restoreAllMocks();
+        unregisterServerTool('server_echo');
+        resetJobViewersForTests();
+        vi.unstubAllGlobals();
+    });
+
+    async function admitted(withTools = true) {
+        const history: ChatGenerationAdmissionEnvelope = {
+            version: 1, kind: 'new-turn', admissionId: 'admission', generationId: 'generation',
+            workspaceId: 'workspace', threadId: 'thread', messageId: 'assistant',
+            thread: { id: 'thread', clock: 1 },
+            userMessage: { id: 'user', clock: 1, thread_id: 'thread', role: 'user' },
+            assistantMessage: { id: 'assistant', clock: 1, thread_id: 'thread', role: 'assistant' },
+        };
+        const body = {
+            model: 'test-model', messages: [{ role: 'user', content: 'immutable original' }],
+            ...(withTools ? { tools: [toolDef] } : {}),
+            _background: true, _threadId: 'thread', _messageId: 'assistant', _history: history,
+        };
+        const execution = {
+            version: 1 as const, body, workspaceId: 'workspace',
+            referer: 'http://localhost', apiKeyCiphertext: 'unused-by-direct-executor', history,
+        };
+        const jobId = await memoryJobProvider.createJob({
+            userId: 'owner', threadId: 'thread', messageId: 'assistant', model: 'test-model',
+            generationId: 'generation', syncProviderId: 'usage-boundary',
+            historyPhase: 'admission_pending', execution,
+        });
+        expect(await reconcileBackgroundJobHistory(memoryJobProvider, (await memoryJobProvider.getJob(jobId, 'owner'))!)).toBe('ready');
+        const now = Date.now();
+        await memoryJobProvider.claimJob!(jobId, 'worker', now, now + 60000);
+        const context = {
+            body, apiKey: 'fixture-key', userId: 'owner', workspaceId: 'workspace',
+            threadId: 'thread', messageId: 'assistant', referer: 'http://localhost',
+            execution, leaseOwner: 'worker',
+        };
+        return { jobId, context, body };
+    }
+    function response(prompt: number | undefined, tool = false) {
+        const usage = prompt === undefined ? [] : [
+            { id: tool ? 'request-1' : 'request-2', model: 'test-model', choices: [], usage: { prompt_tokens: prompt, completion_tokens: 12 } },
+            { id: tool ? 'request-1' : 'request-2', model: 'test-model', choices: [], usage: { prompt_tokens: prompt, completion_tokens: 12 } },
+            { choices: [], usage: { prompt_tokens: -1, completion_tokens: 12 } },
+        ];
+        return new Response(makeSseStream([
+            { choices: [{ delta: tool ? {
+                tool_calls: [{ index: 0, id: 'call-1', function: { name: 'server_echo', arguments: '{"value":"ok"}' } }],
+            } : { content: 'answer' }, finish_reason: tool ? 'tool_calls' : 'stop' }] },
+            ...usage,
+        ]));
+    }
+    async function terminal(jobId: string) {
+        const job = (await memoryJobProvider.getJob(jobId, 'owner'))!;
+        expect(job.historyPhase).toBe('finalization_pending');
+        expect(await reconcileBackgroundJobHistory(memoryJobProvider, job)).toBe('committed');
+        const reloaded = (await memoryJobProvider.getJob(jobId, 'owner'))!;
+        expect(await reconcileBackgroundJobHistory(memoryJobProvider, reloaded)).toBe('unchanged');
+        expect(finalize).toHaveBeenCalledOnce();
+        expect(delivered[0]?.status).toBe(job.status);
+        return { job: reloaded, snapshot: delivered[0]! };
+    }
+    it.each([400, undefined])('retains the last measured tool request (%s), with immutable submitted provenance', async (lastPrompt) => {
+        const { jobId, context, body } = await admitted();
+        const sent: Record<string, unknown>[] = [];
+        vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
+            sent.push(JSON.parse(init.body));
+            return sent.length === 1 ? response(150, true) : response(lastPrompt);
+        }));
+        const running = executeBackgroundJob(jobId, context, memoryJobProvider);
+        body.messages[0]!.content = 'mutated after start';
+        await running;
+        expect(sent).toHaveLength(2);
+        expect(sent[0]!.messages).toEqual([{ role: 'user', content: 'immutable original' }]);
+        const { job, snapshot } = await terminal(jobId);
+        const usage = readRequestUsage((job as unknown as Record<string, unknown>).usage);
+        expect(usage).toMatchObject({
+            prompt_tokens: lastPrompt ?? 150, completion_tokens: 12,
+            request_id: lastPrompt === undefined ? 'request-1' : 'request-2',
+            iteration: lastPrompt === undefined ? 1 : 2, model: 'test-model',
+        });
+        const measuredBody = sent[lastPrompt === undefined ? 0 : 1]!;
+        const { messages, ...configuration } = measuredBody;
+        const prefix = await captureUsagePrefix({
+            model: 'test-model', messages: messages as [], tools: measuredBody.tools as [],
+            configuration, countText: countTokensApprox,
+        });
+        expect(usage).toMatchObject(prefix);
+        expect((snapshot as unknown as Record<string, unknown>).usage).toEqual(usage);
+        expect(snapshot.toolCalls).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'call-1', status: 'complete', result: 'ok' })]));
+    });
+    it.each(['error', 'aborted'] as const)('preserves a completed measured iteration when a later request is %s', async (status) => {
+        const { jobId, context } = await admitted();
+        let calls = 0;
+        vi.stubGlobal('fetch', vi.fn(async () => {
+            if (++calls === 1) return response(150, true);
+            if (status === 'aborted') {
+                await memoryJobProvider.abortJob(jobId, 'owner');
+                throw Object.assign(new Error('stopped'), { name: 'AbortError' });
+            }
+            throw new Error('fixture transport failed');
+        }));
+        const running = executeBackgroundJob(jobId, context, memoryJobProvider);
+        if (status === 'error') await expect(running).rejects.toThrow('fixture transport failed');
+        else await running;
+        const { job, snapshot } = await terminal(jobId);
+        expect(job.status).toBe(status);
+        expect((job as unknown as Record<string, unknown>).usage).toMatchObject({ prompt_tokens: 150, request_id: 'request-1', iteration: 1 });
+        expect((snapshot as unknown as Record<string, unknown>).usage).toEqual((job as unknown as Record<string, unknown>).usage);
+    });
+    it.each([150, undefined])('persists text-only final usage (%s) without fabricating an absent measurement', async (prompt) => {
+        const { jobId, context, body } = await admitted(false);
+        const sent: Record<string, unknown>[] = [];
+        vi.stubGlobal('fetch', vi.fn(async (_url, init) => { sent.push(JSON.parse(init.body)); return response(prompt); }));
+        const running = executeBackgroundJob(jobId, context, memoryJobProvider);
+        body.messages[0]!.content = 'mutated after start';
+        await running;
+        const { job, snapshot } = await terminal(jobId);
+        expect(sent[0]!.messages).toEqual([{ role: 'user', content: 'immutable original' }]);
+        expect(snapshot.content).toBe('answer');
+        if (prompt === undefined) {
+            expect((job as unknown as Record<string, unknown>).usage).toBeUndefined();
+            expect((snapshot as unknown as Record<string, unknown>).usage).toBeUndefined();
+        } else {
+            expect((job as unknown as Record<string, unknown>).usage).toMatchObject({ prompt_tokens: 150, iteration: 1, prefix_message_count: 1 });
+            expect((snapshot as unknown as Record<string, unknown>).usage).toEqual((job as unknown as Record<string, unknown>).usage);
+        }
+    });
+    it('cannot publish terminal usage after losing the actual memory-provider lease at the snapshot boundary', async () => {
+        const { jobId, context } = await admitted(false);
+        const statuses: string[] = [];
+        registerJobStream(jobId, (event) => { if (event.type === 'status') statuses.push(event.status); });
+        vi.stubGlobal('fetch', vi.fn(async () => response(150)));
+        const save = memoryJobProvider.saveTerminalSnapshot!.bind(memoryJobProvider);
+        vi.spyOn(memoryJobProvider, 'saveTerminalSnapshot').mockImplementation(async (...args) => {
+            const now = Date.now();
+            await memoryJobProvider.claimJob!(jobId, 'new-worker', now + 60001, now + 120000);
+            return save(...args);
+        });
+        await expect(executeBackgroundJob(jobId, context, memoryJobProvider))
+            .rejects.toMatchObject({ name: 'BackgroundJobLeaseLostError' });
+        expect(await memoryJobProvider.getJob(jobId, 'owner')).toMatchObject({ status: 'streaming', attempts: 2, leaseOwner: 'new-worker' });
+        expect((await memoryJobProvider.getJob(jobId, 'owner'))?.usage).toBeUndefined();
+        expect(statuses).not.toContain('complete');
+        expect(finalize).not.toHaveBeenCalled();
+    });
+    it('does not publish completion when its terminal snapshot was never saved', async () => {
+        const { jobId, context } = await admitted(false);
+        const statuses: string[] = [];
+        registerJobStream(jobId, (event) => { if (event.type === 'status') statuses.push(event.status); });
+        vi.stubGlobal('fetch', vi.fn(async () => response(150)));
+        vi.spyOn(memoryJobProvider, 'saveTerminalSnapshot').mockRejectedValue(new Error('fixture storage unavailable'));
+        await expect(executeBackgroundJob(jobId, context, memoryJobProvider)).rejects.toThrow('fixture storage unavailable');
+        expect((await memoryJobProvider.getJob(jobId, 'owner'))?.status).toBe('streaming');
+        expect(statuses).not.toContain('complete');
+        expect(finalize).not.toHaveBeenCalled();
+    });
+    it('fences an old worker live projection after a new attempt has restored its checkpoint', async () => {
+        const { jobId, context } = await admitted();
+        let calls = 0;
+        vi.stubGlobal('fetch', vi.fn(async () => {
+            if (++calls === 1) return response(150, true);
+            const now = Date.now();
+            const current = await memoryJobProvider.claimJob!(jobId, 'new-worker', now + 60001, now + 120000);
+            emitJobStatus(jobId, 'streaming', {
+                content: 'new worker checkpoint', contentLength: 21, chunksReceived: 0,
+                usage: current?.usage, attempt: current?.attempts, content_reset: true,
+            });
+            return response(400);
+        }));
+        await expect(executeBackgroundJob(jobId, context, memoryJobProvider))
+            .rejects.toMatchObject({ name: 'BackgroundJobLeaseLostError' });
+        expect(getJobLiveState(jobId)).toMatchObject({
+            content: 'new worker checkpoint', attempt: 2, usage: { prompt_tokens: 150 },
+        });
     });
 });

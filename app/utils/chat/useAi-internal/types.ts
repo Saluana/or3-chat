@@ -58,6 +58,12 @@ export type BackgroundJobTracker = {
     lastWorkflowFingerprint?: string;
     lastContent: string;
     lastAttempt?: number;
+    /** Last valid request measurement, retained across missing/malformed snapshots. */
+    lastUsage?: RequestUsage;
+    /** Only advances after the usage snapshot is committed locally. */
+    lastPersistedUsageFingerprint?: string;
+    /** Recovery discarded the measured attempt; retry its local removal if needed. */
+    usageResetPending?: boolean;
     lastPersistedLength: number;
     /** Last accepted reasoning snapshot. */
     lastReasoning: string;

@@ -3,7 +3,8 @@ import * as h3 from 'h3';
 import { memoryJobProvider, clearAllJobs } from '../../../utils/background-jobs/providers/memory';
 import { resetJobProvider } from '../../../utils/background-jobs/store';
 import type { BackgroundJobExecution } from '../../../utils/background-jobs/types';
-import { emitJobDelta, hasJobViewers, resetJobViewersForTests } from '../../../utils/background-jobs/viewers';
+import type { RequestUsage } from '../../../../shared/chat/compaction';
+import { emitJobDelta, emitJobStatus, hasJobViewers, resetJobViewersForTests } from '../../../utils/background-jobs/viewers';
 import { createWorkflowServerBridge } from '../../../utils/workflows/plugin-server-bridge';
 import { getScopedAdmissionKey } from '../../../utils/background-jobs/admission-cancels';
 import { registerBackgroundJobProvider, resetBackgroundJobProviders } from '../../../utils/background-jobs/registry';
@@ -21,6 +22,13 @@ import { gunzipSync } from 'node:zlib';
 import * as ts from 'typescript';
 import * as convexValues from 'convex/values';
 import { internalMutationGeneric, internalQueryGeneric } from 'convex/server';
+
+const usage: RequestUsage = {
+    prompt_tokens: 42, completion_tokens: 7, model: 'test/model',
+    request_id: 'request-1', iteration: 0, measured_at: 1,
+    prefix_message_count: 1, prefix_hash: 'prefix', configuration_hash: 'config',
+    input_estimate_tokens: 40,
+};
 
 const identity = vi.hoisted(() => ({ session: {
     authenticated: true, user: { id: 'former-member' },
@@ -66,7 +74,7 @@ describe('background job workspace authorization at the HTTP boundary', () => {
             workspace: { id: 'remaining-workspace' }, role: 'editor',
         };
     });
-    afterEach(() => { clearAllJobs(); resetJobProvider(); resetJobViewersForTests(); resetBackgroundJobProviders(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+    afterEach(() => { vi.restoreAllMocks(); clearAllJobs(); resetJobProvider(); resetJobViewersForTests(); resetBackgroundJobProviders(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
     async function createRevokedWorkspaceJob() {
         return memoryJobProvider.createJob({
@@ -76,6 +84,117 @@ describe('background job workspace authorization at the HTTP boundary', () => {
             execution: { workspaceId: 'revoked-workspace' } as BackgroundJobExecution,
         });
     }
+
+    it.each(['status', 'status?offset=25', 'stream'])(
+        'carries only validated usage through authorized %s snapshots', async (endpoint) => {
+            membership.role = 'viewer';
+            const jobId = await createRevokedWorkspaceJob();
+            await memoryJobProvider.completeJob(jobId, 'private workspace content');
+            const job = (await memoryJobProvider.getJob(jobId, 'former-member'))!;
+            const snapshot = { ...job, usage: { ...usage, apiKey: 'must-not-leak' } };
+            vi.spyOn(memoryJobProvider, 'getJob').mockResolvedValue(snapshot);
+            const route = endpoint.split('?')[0]!;
+            const handler = route === 'status' ? (await import('../[id]/status.get')).default
+                : (await import('../[id]/stream.get')).default;
+            const send = h3.toWebHandler(h3.createApp().use(h3.createRouter().get('/api/jobs/:id/' + route, handler)));
+            const response = await send(new Request(`http://chat.test/api/jobs/${jobId}/${endpoint}`));
+            const body = await response.text();
+            const status = route === 'status' ? JSON.parse(body)
+                : JSON.parse(body.split('\n').find((line) => line.startsWith('data: '))!.slice(6)).status;
+            expect(status.usage).toEqual(usage);
+            expect(body).not.toContain('must-not-leak');
+        }
+    );
+
+    it.each([undefined, { prompt_tokens: 1 }, { ...usage, completion_tokens: -1 }])(
+        'omits missing or malformed canonical usage without damaging text (%j)', async (untrustedUsage) => {
+            membership.role = 'viewer';
+            const jobId = await createRevokedWorkspaceJob();
+            await memoryJobProvider.completeJob(jobId, 'private workspace content');
+            const job = (await memoryJobProvider.getJob(jobId, 'former-member'))!;
+            vi.spyOn(memoryJobProvider, 'getJob').mockResolvedValue({ ...job, usage: untrustedUsage } as typeof job);
+            for (const endpoint of ['status', 'stream']) {
+                const handler = endpoint === 'status' ? (await import('../[id]/status.get')).default
+                    : (await import('../[id]/stream.get')).default;
+                const send = h3.toWebHandler(h3.createApp().use(h3.createRouter().get('/api/jobs/:id/' + endpoint, handler)));
+                const response = await send(new Request(`http://chat.test/api/jobs/${jobId}/${endpoint}`));
+                const body = await response.text();
+                expect(body).toContain('private workspace content');
+                expect(body).not.toContain('"usage"');
+            }
+        }
+    );
+
+    it('prefers live usage for polling but excludes superseded attempt state', async () => {
+        membership.role = 'viewer';
+        const jobId = await createRevokedWorkspaceJob();
+        const job = (await memoryJobProvider.getJob(jobId, 'former-member'))!;
+        const snapshot = { ...job, attempts: 1, usage: undefined as RequestUsage | undefined };
+        vi.spyOn(memoryJobProvider, 'getJob').mockResolvedValue(snapshot);
+        const handler = (await import('../[id]/status.get')).default;
+        const send = h3.toWebHandler(h3.createApp().use(h3.createRouter().get('/api/jobs/:id/status', handler)));
+        emitJobStatus(jobId, 'streaming', {
+            content: job.content, contentLength: job.content.length, chunksReceived: 0,
+            attempt: 1, usage,
+        });
+        expect(await (await send(new Request(`http://chat.test/api/jobs/${jobId}/status`))).json()).toMatchObject({ usage });
+        snapshot.usage = { ...usage, iteration: 1, request_id: 'request-2', prompt_tokens: 64 };
+        expect(await (await send(new Request(`http://chat.test/api/jobs/${jobId}/status`))).json()).toMatchObject({ usage: snapshot.usage });
+        snapshot.attempts = 2;
+        snapshot.usage = undefined;
+        const response = await send(new Request(`http://chat.test/api/jobs/${jobId}/status?attempt=1&offset=25`));
+        expect(await response.json()).toMatchObject({ content_reset: true, attempt: 2 });
+        expect(await (await send(new Request(`http://chat.test/api/jobs/${jobId}/status`))).text()).not.toContain('"usage"');
+    });
+
+    it('blocks usage-only live updates after workspace membership is revoked', async () => {
+        membership.role = 'editor';
+        const jobId = await createRevokedWorkspaceJob();
+        const handler = (await import('../[id]/stream.get')).default;
+        const send = h3.toWebHandler(h3.createApp().use(h3.createRouter().get('/api/jobs/:id/stream', handler)));
+        const response = await send(new Request(`http://chat.test/api/jobs/${jobId}/stream`));
+        const reader = response.body!.getReader();
+        await reader.read();
+        membership.role = null;
+        emitJobStatus(jobId, 'complete', {
+            content: '', contentLength: 0, chunksReceived: 0, usage,
+        });
+        const next = await reader.read();
+        expect(new TextDecoder().decode(next.value)).not.toContain('request-1');
+        expect(next.done).toBe(true);
+        await reader.cancel();
+    });
+
+    it('returns one consistent recovered attempt when recovery wins during the workspace check', async () => {
+        membership.role = 'viewer';
+        const jobId = await createRevokedWorkspaceJob();
+        const job = (await memoryJobProvider.getJob(jobId, 'former-member'))!;
+        vi.spyOn(memoryJobProvider, 'getJob').mockResolvedValue({
+            ...job, attempts: 1, usage, reasoning: 'old reasoning', chunksReceived: 12,
+            tool_calls: [{ id: 'old-tool', name: 'tool', status: 'complete', result: 'old' }],
+        });
+        emitJobStatus(jobId, 'streaming', {
+            content: job.content, contentLength: job.content.length, chunksReceived: 12,
+            attempt: 1, usage,
+        });
+        membership.onLookup = async () => {
+            emitJobStatus(jobId, 'complete', {
+                content: 'new', contentLength: 3, reasoning: 'new reason',
+                reasoningLength: 10, chunksReceived: 1, attempt: 2, content_reset: true,
+            });
+        };
+        const handler = (await import('../[id]/status.get')).default;
+        const send = h3.toWebHandler(h3.createApp().use(h3.createRouter().get('/api/jobs/:id/status', handler)));
+        const response = await send(new Request(`http://chat.test/api/jobs/${jobId}/status?attempt=1&offset=25&reasoning_offset=13`));
+        const status = await response.json();
+        expect(status).toMatchObject({
+            status: 'complete', attempt: 2, content: 'new', content_length: 3,
+            content_reset: true, reasoning_text: 'new reason', reasoning_length: 10,
+            reasoning_reset: true, chunksReceived: 1,
+        });
+        expect(status).not.toHaveProperty('usage');
+        expect(status).not.toHaveProperty('tool_calls');
+    });
 
     it.each(['status', 'stream'] as const)('denies %s reads after the owner loses workspace membership', async (endpoint) => {
         const jobId = await createRevokedWorkspaceJob();

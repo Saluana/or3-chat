@@ -11,6 +11,8 @@
  * - Handles client disconnects.
  */
 import type { BackgroundJob } from '../../../utils/background-jobs/types';
+import { readRequestUsage, type RequestUsage } from '../../../../shared/chat/compaction';
+import { toolCallFingerprint } from '../../../../shared/chat/tool-ledger';
 import { shouldResetBackgroundContent } from '../../../utils/background-jobs/recovery';
 import { requireJobWorkspaceAccess } from '../../../utils/background-jobs/access';
 import { getJobProvider } from '../../../utils/background-jobs/store';
@@ -56,6 +58,7 @@ type StreamEventPayload = {
         reasoning_reset?: boolean;
         tool_calls?: BackgroundJob['tool_calls'];
         workflow_state?: BackgroundJob['workflow_state'];
+        usage?: RequestUsage;
     };
 };
 
@@ -119,6 +122,7 @@ export function serializeJobStatus(
         error: job.error,
         tool_calls: overrides?.tool_calls ?? job.tool_calls,
         workflow_state: overrides?.workflow_state ?? job.workflow_state,
+        usage: readRequestUsage(job.usage),
         content_reset: overrides?.content_reset,
         content_delta: overrides?.content_delta,
         content_length:
@@ -244,6 +248,8 @@ export default defineEventHandler(async (event) => {
                 : (initialJob.reasoning).length;
             let lastStatus: BackgroundJob['status'] = initialJob.status;
             let lastToolCalls = JSON.stringify(initialJob.tool_calls);
+            let lastMeasuredUsage = readRequestUsage(initialJob.usage);
+            let lastUsage = JSON.stringify(lastMeasuredUsage);
             let lastWorkflowVersion = workflowStateVersionOf(
                 initialJob.workflow_state
             );
@@ -262,6 +268,10 @@ export default defineEventHandler(async (event) => {
             let keepAlive: ReturnType<typeof setInterval> | null = null;
             const isClosed = () => closed;
             let clearPendingUpdates = () => {};
+            let terminalCloseReason: string | null = null;
+            let suppressTerminalWrite = false;
+            let suppressedTerminal: StreamEventPayload['status'] | null = null;
+            let suppressedTerminalBytes = 0;
 
             const closeStream = (reason: string) => {
                 if (isClosed()) return;
@@ -301,6 +311,32 @@ export default defineEventHandler(async (event) => {
 
             const write = (payload: StreamEventPayload) => {
                 if (isClosed()) return;
+                if (suppressedTerminal && (
+                    payload.status.attempt !== suppressedTerminal.attempt ||
+                    payload.status.content_reset
+                )) {
+                    suppressedTerminal = null;
+                    suppressedTerminalBytes = 0;
+                }
+                if (payload.status.status !== 'streaming' && suppressedTerminal) {
+                    payload.status = mergeTerminalProgress(suppressedTerminal, payload.status);
+                }
+                if (suppressTerminalWrite && payload.status.status !== 'streaming') {
+                    // Clients settle on their first terminal frame. Preserve
+                    // all authorized progress while the newer queued terminal
+                    // receives its own access check and supplies final usage.
+                    suppressedTerminal = payload.status;
+                    suppressedTerminalBytes = encoder.encode(JSON.stringify(payload.status)).byteLength;
+                    if (!hasSseQueueCapacity(MAX_SSE_VIEWER_QUEUE_BYTES - pendingBytes, suppressedTerminalBytes)) {
+                        closeStream('terminal_authorization_queue_full');
+                        return;
+                    }
+                    lastMeasuredUsage = payload.status.usage;
+                    lastUsage = JSON.stringify(lastMeasuredUsage);
+                    return;
+                }
+                suppressedTerminal = null;
+                suppressedTerminalBytes = 0;
                 const deltaLength =
                     typeof payload.status.content_delta === 'string'
                         ? payload.status.content_delta.length
@@ -339,6 +375,8 @@ export default defineEventHandler(async (event) => {
                     return;
                 }
                 controller.enqueue(encoded);
+                lastMeasuredUsage = payload.status.usage;
+                lastUsage = JSON.stringify(lastMeasuredUsage);
             };
 
             // Send initial snapshot
@@ -379,6 +417,22 @@ export default defineEventHandler(async (event) => {
                         liveEvent.attempt < lastAttempt)
                 )
                     return;
+                const sameAttempt = liveEvent.attempt === undefined || liveEvent.attempt === lastAttempt;
+                if (terminalCloseReason && sameAttempt &&
+                    (liveEvent.type === 'delta' || liveEvent.status === 'streaming')) return;
+                if (!sameAttempt) terminalCloseReason = null;
+                const liveUsage = readRequestUsage(liveEvent.usage);
+                const retainedUsage = sameAttempt &&
+                    !(liveEvent.type === 'status' && liveEvent.content_reset)
+                    ? lastMeasuredUsage
+                    : undefined;
+                liveEvent = {
+                    ...liveEvent,
+                    usage: liveUsage &&
+                        (!retainedUsage || liveUsage.iteration >= retainedUsage.iteration)
+                        ? liveUsage
+                        : retainedUsage,
+                };
                 const deltaLength =
                     liveEvent.type === 'delta'
                         ? liveEvent.content_delta.length
@@ -418,6 +472,7 @@ export default defineEventHandler(async (event) => {
                     );
                     const hasStateChange =
                         toolCalls !== lastToolCalls ||
+                        JSON.stringify(readRequestUsage(liveEvent.usage)) !== lastUsage ||
                         hasWorkflowStateAdvanced(
                             lastWorkflowVersion,
                             liveEvent.workflow_state
@@ -459,6 +514,7 @@ export default defineEventHandler(async (event) => {
                                 workflow_state:
                                     liveEvent.workflow_state ??
                                     initialJob.workflow_state,
+                                usage: liveEvent.usage,
                             },
                             {
                                 includeContent: false,
@@ -529,6 +585,7 @@ export default defineEventHandler(async (event) => {
                             workflow_state:
                                 liveEvent.workflow_state ??
                                 initialJob.workflow_state,
+                            usage: liveEvent.usage,
                         },
                         {
                             includeContent: true,
@@ -553,7 +610,7 @@ export default defineEventHandler(async (event) => {
                     ),
                 });
                 if (liveEvent.status !== 'streaming') {
-                    closeStream('live_terminal_status');
+                    terminalCloseReason = 'live_terminal_status';
                 }
             };
 
@@ -589,12 +646,23 @@ export default defineEventHandler(async (event) => {
 
                 if ((job.attempts ?? 0) < lastAttempt) return;
                 const attemptChanged = (job.attempts ?? 0) !== lastAttempt;
+                // A terminal live update can beat the durable provider write.
+                // Draining queued terminal metadata must not reopen that attempt
+                // with an older streaming reconciliation snapshot.
+                if (terminalCloseReason && !attemptChanged && job.status === 'streaming') return;
+                if (attemptChanged) terminalCloseReason = null;
+                const canonicalUsage = readRequestUsage(job.usage);
+                if (!attemptChanged && lastMeasuredUsage &&
+                    (!canonicalUsage || canonicalUsage.iteration < lastMeasuredUsage.iteration)) {
+                    job = { ...job, usage: lastMeasuredUsage };
+                }
                 const hasNewContent =
                     job.content.length > lastContentLength;
                 const jobReasoning = job.reasoning;
                 const hasNewReasoning =
                     jobReasoning.length > lastReasoningLength;
                 const statusChanged = job.status !== lastStatus;
+                const usageChanged = JSON.stringify(readRequestUsage(job.usage)) !== lastUsage;
                 const workflowStateAdvanced = hasWorkflowStateAdvanced(
                     lastWorkflowVersion,
                     job.workflow_state
@@ -630,7 +698,9 @@ export default defineEventHandler(async (event) => {
                             reasoning_reset: attemptChanged || undefined,
                         }),
                     });
-                    closeStream('reconcile_terminal_status');
+                    lastStatus = job.status;
+                    lastAttempt = job.attempts ?? 0;
+                    terminalCloseReason = 'reconcile_terminal_status';
                     return;
                 }
                 if (attemptChanged) {
@@ -695,7 +765,7 @@ export default defineEventHandler(async (event) => {
                             reasoning_length: jobReasoning.length,
                         }),
                     });
-                } else if (workflowStateAdvanced) {
+                } else if (workflowStateAdvanced || usageChanged) {
                     // Node lifecycle and reasoning updates may advance while
                     // final workflow content is still empty. Project those
                     // state-only changes instead of waiting for text.
@@ -729,6 +799,8 @@ export default defineEventHandler(async (event) => {
                 pending.length = 0;
                 activeBatch.length = 0;
                 pendingBytes = activeBytes = 0;
+                suppressedTerminal = null;
+                suppressedTerminalBytes = 0;
             };
             const drainUpdates = async () => {
                 try {
@@ -744,15 +816,29 @@ export default defineEventHandler(async (event) => {
                             'workspace.read'
                         );
                         if (isClosed()) return;
-                        for (const update of activeBatch) {
+                        for (const [index, update] of activeBatch.entries()) {
                             if (isClosed()) break;
+                            const terminal = terminalState(update);
+                            if (terminal !== null) {
+                                const followsTerminal = (candidate: StreamUpdate) => {
+                                    const next = terminalState(candidate);
+                                    return next !== null && next.attempt >= terminal.attempt;
+                                };
+                                suppressTerminalWrite = activeBatch.some(
+                                    (candidate, candidateIndex) => candidateIndex > index && followsTerminal(candidate)
+                                ) || pending.some(followsTerminal);
+                            }
                             if (update.kind === 'live')
                                 onLiveEvent(update.live);
                             else onReconciledJob(update.job);
+                            suppressTerminalWrite = false;
                         }
                         activeBatch = [];
                         activeBytes = 0;
                     }
+                    // Later terminal snapshots may carry the final usage after
+                    // identical text. Authorize every queued batch before closing.
+                    if (terminalCloseReason && !isClosed()) closeStream(terminalCloseReason);
                 } catch {
                     closeStream('stream_access_denied');
                 } finally {
@@ -829,7 +915,8 @@ export default defineEventHandler(async (event) => {
                     !hasSseQueueCapacity(
                         MAX_SSE_VIEWER_QUEUE_BYTES -
                             activeBytes -
-                            pendingBytes,
+                            pendingBytes -
+                            suppressedTerminalBytes,
                         next.bytes
                     )
                 ) {
@@ -859,6 +946,7 @@ export default defineEventHandler(async (event) => {
                         workflow_state:
                             liveEvent.workflow_state ??
                             liveState?.workflow_state,
+                        usage: readRequestUsage(liveEvent.usage ?? liveState?.usage),
                         ...(liveEvent.type === 'status'
                             ? {
                                   reasoning:
@@ -875,6 +963,9 @@ export default defineEventHandler(async (event) => {
                     liveState &&
                     (liveState.content.length > lastContentLength ||
                         liveState.reasoning.length > lastReasoningLength ||
+                        liveState.status !== lastStatus ||
+                        (readRequestUsage(liveState.usage) !== undefined &&
+                            JSON.stringify(readRequestUsage(liveState.usage)) !== lastUsage) ||
                         hasWorkflowStateAdvanced(
                             lastWorkflowVersion,
                             liveState.workflow_state
@@ -898,6 +989,7 @@ export default defineEventHandler(async (event) => {
                                 0,
                             tool_calls: liveState.tool_calls,
                             workflow_state: liveState.workflow_state,
+                            usage: readRequestUsage(liveState.usage),
                         }),
                     });
                 }
@@ -963,6 +1055,75 @@ type QueuedUpdate = StreamUpdate & {
     metadata: string;
 };
 
+/** Preserve accepted progress when a later same-attempt terminal lags its live text. */
+function mergeTerminalProgress(
+    previous: StreamEventPayload['status'],
+    next: StreamEventPayload['status']
+): StreamEventPayload['status'] {
+    const hasLongerContent = (previous.content?.length ?? 0) > (next.content?.length ?? 0);
+    const hasLongerReasoning = (previous.reasoning_text?.length ?? 0) > (next.reasoning_text?.length ?? 0);
+    return {
+        ...next,
+        ...(hasLongerContent ? {
+            content: previous.content,
+            content_length: previous.content_length,
+        } : {}),
+        ...(hasLongerReasoning ? {
+            reasoning_text: previous.reasoning_text,
+            reasoning_length: previous.reasoning_length,
+        } : {}),
+        chunksReceived: Math.max(previous.chunksReceived, next.chunksReceived),
+        tool_calls: mergeTerminalToolProgress(previous.tool_calls, next.tool_calls),
+        workflow_state: workflowStateVersionOf(previous.workflow_state) > workflowStateVersionOf(next.workflow_state)
+            ? previous.workflow_state
+            : next.workflow_state ?? previous.workflow_state,
+        content_reset: next.content_reset || previous.content_reset,
+        reasoning_reset: next.reasoning_reset || previous.reasoning_reset,
+    };
+}
+
+type ToolCallState = NonNullable<BackgroundJob['tool_calls']>[number];
+
+function toolStateFingerprint(call: ToolCallState): string | undefined {
+    const computed = call.args === undefined
+        ? undefined
+        : toolCallFingerprint(call.name, call.args);
+    if (call.argument_fingerprint) {
+        if (computed !== undefined && computed !== call.argument_fingerprint) return undefined;
+        return call.argument_fingerprint;
+    }
+    return computed;
+}
+
+function toolStateProgress(call: ToolCallState): number {
+    return call.status === 'pending' ? 0 : call.status === 'loading' ? 1 : 2;
+}
+
+/** Tool settlement is independent of answer length; never transfer results across identities. */
+function mergeTerminalToolProgress(
+    previous: BackgroundJob['tool_calls'],
+    next: BackgroundJob['tool_calls']
+): BackgroundJob['tool_calls'] {
+    if (!next || !previous) return next ?? previous;
+    const remaining = [...next];
+    const merged: ToolCallState[] = [];
+    for (const prior of previous) {
+        const fingerprint = prior.id && prior.name ? toolStateFingerprint(prior) : undefined;
+        if (!fingerprint) continue;
+        const index = remaining.findIndex((call) => call.id === prior.id);
+        if (index < 0) {
+            // A throttled snapshot may not contain this already accepted call.
+            merged.push(prior);
+            continue;
+        }
+        const call = remaining.splice(index, 1)[0]!;
+        const sameIdentity = prior.name === call.name && toolStateFingerprint(call) === fingerprint;
+        merged.push(sameIdentity && toolStateProgress(prior) > toolStateProgress(call) ? prior : call);
+    }
+    // Retain first-seen order, then append genuinely new canonical calls.
+    return [...merged, ...remaining];
+}
+
 function deltaMetadataBytes(live: LiveEvent, encoder: TextEncoder): number {
     return encoder.encode(
         JSON.stringify({ ...live, content_delta: '', reasoning_delta: '' })
@@ -985,6 +1146,7 @@ function queuedUpdate(
         live.attempt,
         live.tool_calls,
         live.workflow_state,
+        readRequestUsage(live.usage),
     ]);
     const deltaBytes =
         live.type === 'delta'
@@ -1033,8 +1195,8 @@ function sameTerminalSnapshot(
         a.content === b.content &&
         a.reasoning === b.reasoning &&
         a.error === b.error &&
-        JSON.stringify([a.tool_calls, a.workflow_state]) ===
-            JSON.stringify([b.tool_calls, b.workflow_state])
+        JSON.stringify([a.tool_calls, a.workflow_state, a.usage]) ===
+            JSON.stringify([b.tool_calls, b.workflow_state, b.usage])
     );
 }
 
@@ -1051,6 +1213,7 @@ function terminalState(update: StreamUpdate) {
                   error: job.error,
                   tool_calls: job.tool_calls,
                   workflow_state: job.workflow_state,
+                  usage: readRequestUsage(job.usage),
               };
     }
     const live = update.live;
@@ -1064,5 +1227,6 @@ function terminalState(update: StreamUpdate) {
               error: live.error,
               tool_calls: live.tool_calls,
               workflow_state: live.workflow_state,
+              usage: readRequestUsage(live.usage),
           };
 }
