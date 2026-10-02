@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
+import { testRuntimeConfig } from '../../../../tests/setup';
 
 const readBodyMock = vi.fn();
 const setResponseHeaderMock = vi.fn();
@@ -43,9 +44,10 @@ vi.mock('../../../utils/storage/is-storage-enabled', () => ({
 
 const checkSyncRateLimitMock = vi.fn();
 const recordSyncRequestMock = vi.fn();
-vi.mock('../../../utils/sync/rate-limiter', () => ({
-    checkSyncRateLimit: checkSyncRateLimitMock as any,
-    recordSyncRequest: recordSyncRequestMock as any,
+vi.mock('../../../utils/sync/rate-limiter', async (importOriginal) => ({
+    ...await importOriginal<typeof import('../../../utils/sync/rate-limiter')>(),
+    checkSyncRateLimit: checkSyncRateLimitMock,
+    recordSyncRequest: recordSyncRequestMock,
 }));
 
 const recordUploadCompleteMock = vi.fn();
@@ -79,7 +81,10 @@ function makeValidBody() {
 }
 
 describe('POST /api/storage/commit', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
+        const { resetSyncRateLimits } = await import('../../../utils/sync/rate-limiter');
+        resetSyncRateLimits();
+        testRuntimeConfig.value.limits.operationRateLimits = {};
         readBodyMock.mockReset();
         setResponseHeaderMock.mockReset();
         setHeaderMock.mockReset();
@@ -99,6 +104,57 @@ describe('POST /api/storage/commit', () => {
             id: 'adapter-1',
             commit: commitMock as any,
         });
+    });
+
+    afterEach(async () => {
+        const { resetSyncRateLimits } = await import('../../../utils/sync/rate-limiter');
+        resetSyncRateLimits();
+        vi.restoreAllMocks();
+    });
+
+    it('admits only the configured parallel commits and allows retry after the window', async () => {
+        const limiter = await vi.importActual<typeof import('../../../utils/sync/rate-limiter')>(
+            '../../../utils/sync/rate-limiter'
+        );
+        checkSyncRateLimitMock.mockImplementation(limiter.checkSyncRateLimit);
+        recordSyncRequestMock.mockImplementation(limiter.recordSyncRequest);
+        testRuntimeConfig.value.limits.operationRateLimits = {
+            'storage:commit': { maxRequests: 2, windowMs: 60_000 },
+        };
+        let now = Date.now();
+        vi.spyOn(Date, 'now').mockImplementation(() => now);
+        readBodyMock.mockResolvedValue(makeValidBody());
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        commitMock.mockImplementation(() => gate);
+        const handler = (await import('../commit.post')).default as (event: H3Event) => Promise<unknown>;
+        const requests = Array.from({ length: 3 }, () => handler(makeEvent()).then(
+            () => 200,
+            (error: { statusCode: number }) => error.statusCode
+        ));
+        try {
+            await vi.waitFor(() => expect(commitMock.mock.calls.length).toBeGreaterThanOrEqual(2));
+        } finally {
+            release();
+        }
+        expect((await Promise.all(requests)).sort()).toEqual([200, 200, 429]);
+        expect(commitMock).toHaveBeenCalledTimes(2);
+        expect(setResponseHeaderMock).toHaveBeenCalledWith(expect.anything(), 'Retry-After', 60);
+
+        // Another subject can work while this subject's configured bucket is full.
+        resolveSessionContextMock.mockResolvedValue({
+            authenticated: true,
+            user: { id: 'user-2' },
+            workspace: { id: 'ws-1' },
+        });
+        await expect(handler(makeEvent())).resolves.toEqual({ ok: true });
+        resolveSessionContextMock.mockResolvedValue({
+            authenticated: true,
+            user: { id: 'user-1' },
+            workspace: { id: 'ws-1' },
+        });
+        now += 60_000;
+        await expect(handler(makeEvent())).resolves.toEqual({ ok: true });
     });
 
     it('returns 404 when auth or storage is disabled', async () => {
@@ -213,7 +269,7 @@ describe('POST /api/storage/commit', () => {
         expect(commitMock).not.toHaveBeenCalled();
     });
 
-    it('records metrics and sync accounting only on success', async () => {
+    it('records successful upload metrics and does not charge denied rate checks', async () => {
         const handler = (await import('../commit.post')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue(makeValidBody());
 
