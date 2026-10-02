@@ -160,6 +160,12 @@ function installDeterministicFetch(): void {
                             '',
                             'End of layout sample.',
                         ].join('\n')));
+                    } else if (text.includes('journey:multitab')) {
+                        enqueue(sseChunk('Partial response shared across tabs.'));
+                        await delay(20_000);
+                        enqueue(sseChunk(' Owner made progress.'));
+                        await delay(60_000);
+                        enqueue(sseChunk(' Late response after the owner closed.'));
                     } else if (text.includes('journey:refresh')) {
                         enqueue(sseChunk('Partial response before refresh.'));
                         await delay(650);

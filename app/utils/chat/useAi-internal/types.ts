@@ -85,6 +85,8 @@ export type BackgroundJobTracker = {
     /** Content/replace semantics captured for terminal persistence retries. */
     terminalContent?: string;
     terminalReplace?: boolean;
+    terminalReasoning?: string;
+    terminalReasoningReplace?: boolean;
     /** True once terminal callbacks/notifications fired (must only fire once). */
     terminalNotified?: boolean;
     /** Bounded retry bookkeeping for terminal persistence. */

@@ -35,6 +35,37 @@ async function send(page: Page, message: string): Promise<void> {
     await expect(page.getByText(message, { exact: true })).toBeVisible();
 }
 
+async function waitForDurableReply(page: Page, content: string): Promise<void> {
+    const threadId = (await page.getByTestId('chat-journey-thread-id').textContent())?.trim();
+    // Rendering a delta is not a storage receipt. Refresh the isolated fixture
+    // only after its real IndexedDB row crosses the existing batching window.
+    await expect.poll(() => page.evaluate(async ({ threadId, content }) => {
+        const names = (await indexedDB.databases()).flatMap(({ name }) => name ? [name] : []);
+        const matches = await Promise.all(names.map((name) => new Promise<boolean>((resolve) => {
+            const open = indexedDB.open(name);
+            open.onerror = () => resolve(false);
+            open.onsuccess = () => {
+                const db = open.result;
+                if (!db.objectStoreNames.contains('messages')) {
+                    db.close();
+                    resolve(false);
+                    return;
+                }
+                let found = false;
+                const tx = db.transaction('messages', 'readonly');
+                const rows = tx.objectStore('messages').getAll();
+                rows.onsuccess = () => {
+                    found = rows.result.some((row: { role?: string; thread_id?: string; data?: { content?: unknown } }) =>
+                        row.role === 'assistant' && row.thread_id === threadId && row.data?.content === content);
+                };
+                tx.oncomplete = () => { db.close(); resolve(found); };
+                tx.onabort = () => { db.close(); resolve(false); };
+            };
+        })));
+        return matches.some(Boolean);
+    }, { threadId, content }), { timeout: 5_000 }).toBe(true);
+}
+
 test.describe('production chat journey', () => {
     for (const theme of ['blank', 'retro', 'cyberpunk']) {
         test(`${theme} responsive messages preserve rich content and touch editing`, async ({ browser }, info) => {
@@ -107,6 +138,7 @@ test.describe('production chat journey', () => {
         await openChat(page);
         await send(page, 'journey:refresh');
         await expect(page.getByText('Partial response before refresh. Ready to recover.')).toBeVisible();
+        await waitForDurableReply(page, 'Partial response before refresh. Ready to recover.');
         await page.reload();
         await expect(page.getByText('Partial response before refresh. Ready to recover.')).toBeVisible();
         await expect(page.getByRole('button', { name: 'Continue generation', exact: true }).last()).toBeVisible({ timeout: 35_000 });
@@ -128,6 +160,38 @@ test.describe('production chat journey', () => {
         await expect(
             page.getByText('Hello from deterministic stream.')
         ).toHaveCount(0);
+    });
+
+    test('recovers in a second tab after the streaming owner renews its lease then closes', async ({ context, page }, info) => {
+        test.setTimeout(100_000);
+        await openChat(page);
+        await send(page, 'journey:multitab');
+        await expect(page.getByText('Partial response shared across tabs.')).toBeVisible();
+        await waitForDurableReply(page, 'Partial response shared across tabs.');
+        const viewer = await context.newPage();
+        try {
+            await openChat(viewer);
+            await expect(viewer.getByText('Partial response shared across tabs.')).toBeVisible();
+            await expect(page.getByText('Partial response shared across tabs. Owner made progress.'))
+                .toBeVisible({ timeout: 25_000 });
+            await waitForDurableReply(page, 'Partial response shared across tabs. Owner made progress.');
+            await page.close();
+            await expect(viewer.getByRole('button', { name: 'Continue generation', exact: true }).last())
+                .toBeVisible({ timeout: 35_000 });
+            await expect(viewer.getByRole('button', { name: 'Send message' })).toBeVisible();
+            await viewer.getByRole('textbox', { name: 'Message input' }).fill('follow-up ready');
+            await expect(viewer.getByRole('button', { name: 'Send message' })).toBeEnabled();
+            await expect(viewer.getByText('journey:multitab', { exact: true })).toHaveCount(1);
+            await expect(viewer.getByText(/Late response after the owner closed/)).toHaveCount(0);
+            const path = info.outputPath('second-tab-recovery.png');
+            await viewer.screenshot({ path, animations: 'disabled' });
+            await info.attach('second-tab-recovery', { path, contentType: 'image/png' });
+            await viewer.reload();
+            await expect(viewer.getByText('journey:multitab', { exact: true })).toHaveCount(1);
+            await expect(viewer.getByRole('button', { name: 'Continue generation', exact: true }).last()).toBeVisible();
+        } finally {
+            await viewer.close();
+        }
     });
 
     test('retains the durable user turn and settles when filters remove model input', async ({

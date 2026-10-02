@@ -200,7 +200,14 @@ export async function persistBackgroundTrackingInterruption(
                 error: 'stream_interrupted',
             },
         },
-        existing
+        existing,
+        (latest) => {
+            const latestData = latest?.data as Record<string, unknown> | null;
+            return latest?.pending === true && !latest.deleted &&
+                latestData?.background_job_id === tracker.jobId &&
+                typeof latestData.superseded_by !== 'string' &&
+                (!tracker.generationId || latestData.generation_id === tracker.generationId);
+        }
     );
 }
 
@@ -215,6 +222,10 @@ export async function persistBackgroundJobUpdate(
     persisted: boolean;
     /** The target row no longer exists (deleted/superseded). */
     missing?: boolean;
+    /** The row was deleted or transferred to another generation/job. */
+    superseded?: boolean;
+    /** Another tab already projected a newer server execution attempt. */
+    staleAttempt?: boolean;
     workflowState?: BackgroundJobStatus['workflow_state'];
 }> {
     if (!isClientRuntime()) {
@@ -286,6 +297,8 @@ export async function persistBackgroundJobUpdate(
           }))
         : undefined;
     const currentDb = tracker.originDb ?? getDb();
+    let staleAttempt = false;
+    let superseded = false;
     const persistedResult = await currentDb.transaction(
         'rw',
         getWriteTxTableNames(currentDb, 'messages'),
@@ -305,22 +318,39 @@ export async function persistBackgroundJobUpdate(
             const existing = (await currentDb.messages.get(
                 tracker.messageId
             )) as StoredMessage | undefined;
-            if (!existing) return null;
+            if (!existing) {
+                superseded = true;
+                return null;
+            }
 
             const baseData =
                 existing.data && typeof existing.data === 'object'
                     ? (existing.data as Record<string, unknown>)
                     : {};
             if (
-                tracker.canonicalHistory &&
-                ((typeof baseData.background_job_id === 'string' &&
+                existing.deleted ||
+                typeof baseData.superseded_by === 'string' ||
+                baseData.generation_state === 'superseded' ||
+                (typeof baseData.background_job_id === 'string' &&
                     baseData.background_job_id !== tracker.jobId) ||
-                    (tracker.generationId &&
-                        baseData.generation_id !== tracker.generationId) ||
-                    existing.pending !== true)
+                (tracker.generationId &&
+                    typeof baseData.generation_id === 'string' &&
+                    baseData.generation_id !== tracker.generationId) ||
+                (tracker.canonicalHistory && tracker.generationId &&
+                    baseData.generation_id !== tracker.generationId)
             ) {
+                superseded = true;
                 return null;
             }
+            if (
+                typeof baseData.background_job_attempt === 'number' &&
+                typeof status.attempt === 'number' &&
+                baseData.background_job_attempt > status.attempt
+            ) {
+                staleAttempt = true;
+                return null;
+            }
+            if (tracker.canonicalHistory && existing.pending !== true) return null;
             const incomingWorkflowState =
                 status.workflow_state &&
                 typeof status.workflow_state === 'object'
@@ -381,7 +411,9 @@ export async function persistBackgroundJobUpdate(
             };
         }
     );
-    if (!persistedResult) return { persisted: false, missing: true };
+    if (!persistedResult) return staleAttempt
+        ? { persisted: false, staleAttempt: true }
+        : { persisted: false, missing: true, superseded };
 
     tracker.status = status.status;
     tracker.lastPersistAt = now;
