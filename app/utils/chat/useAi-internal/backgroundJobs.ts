@@ -614,7 +614,6 @@ async function handleBackgroundStatus(
         });
         return true;
     }
-    dispatchPendingClientTools(tracker, status);
     let nextStatus = status;
     if (nextStatus.status !== 'streaming') {
         nextStatus = await ensureFullBackgroundStatus(tracker, nextStatus);
@@ -684,6 +683,7 @@ async function handleBackgroundStatus(
         });
         return false;
     }
+    dispatchPendingClientTools(tracker, nextStatus);
     tracker.lastContent = safeContent;
     tracker.lastReasoning = safeReasoning;
     if (nextStatus.workflow_state && typeof nextStatus.workflow_state === 'object') {

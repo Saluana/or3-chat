@@ -434,6 +434,9 @@ describe('backgroundJobs reattach + notifications', () => {
         const onUpdate = vi.fn();
         const onComplete = vi.fn();
         mod.subscribeBackgroundJob(tracker, { onUpdate, onComplete });
+        const journalKey = 'or3:bg-client-tool:job-1:current-call';
+        const journal = JSON.stringify({ state: 'running', createdAt: Date.now() });
+        localStorage.setItem(journalKey, journal);
         streamParams!.onStatus(makeStatus('complete', {
             content: 'old terminal answer', content_length: 19, attempt: 1,
             workflow_state: {
@@ -446,6 +449,7 @@ describe('backgroundJobs reattach + notifications', () => {
         expect(onUpdate).not.toHaveBeenCalled();
         expect(onComplete).not.toHaveBeenCalled();
         expect(tracker.active).toBe(true);
+        expect(localStorage.getItem(journalKey)).toBe(journal);
 
         streamParams!.onStatus(makeStatus('complete', {
             content: 'new terminal answer', content_length: 19, content_reset: true, attempt: 2,
@@ -454,6 +458,7 @@ describe('backgroundJobs reattach + notifications', () => {
         expect(onComplete).toHaveBeenCalledTimes(1);
         expect(onComplete.mock.lastCall?.[0]).toMatchObject({ content: 'new terminal answer' });
         expect(onComplete.mock.lastCall?.[0].status.workflow_state).toBeUndefined();
+        expect(localStorage.getItem(journalKey)).toBeNull();
         expect(mod.backgroundJobTrackers.has('job-1')).toBe(false);
         mod.stopBackgroundJobTracking(tracker);
     });
