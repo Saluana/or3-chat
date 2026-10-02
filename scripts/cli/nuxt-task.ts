@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import crossSpawn from 'cross-spawn';
+import { configDotenv as loadDotenv } from 'dotenv';
 import { dirname, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -41,7 +42,13 @@ export async function runNuxtTask(
     env: NodeJS.ProcessEnv = process.env
 ): Promise<void> {
     const packageManager = detectPackageManager();
-    const taskEnv = { ...env };
+    const fileEnv: Record<string, string> = {};
+    // CLI defaults must be available before runtime and heap selection. Keep
+    // explicit environment maps isolated and never mutate the caller's env.
+    if (env === process.env) {
+        loadDotenv({ processEnv: fileEnv, quiet: true });
+    }
+    const taskEnv = { ...fileEnv, ...env };
     const nuxtArgs =
         task === 'build'
             ? ['build']
