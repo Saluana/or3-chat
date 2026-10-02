@@ -506,6 +506,43 @@ describe('useChat background detach race', () => {
         messagesByThreadMock.mockResolvedValue([]);
     });
 
+    it.each(['missing', 'wrong-role', 'wrong-source', 'pending', 'deleted', 'future-version', 'wrong-anchor'] as const)('rejects a partial or mismatched compacted summary (%s) before native turn writes', async (failure) => {
+        const { Or3DB } = await vi.importActual<typeof import('~/db/client')>('~/db/client');
+        const origin = new Or3DB(`native-summary-${crypto.randomUUID()}`); await origin.open();
+        await origin.threads.put({ id: 'comp-child', branch_mode: 'compacted', parent_thread_id: 'source', anchor_message_id: 'source-last', summary_message_id: 'summary',
+            status: 'ready', deleted: false, pinned: false, forked: true, clock: 1, created_at: 1, updated_at: 1 });
+        if (failure !== 'missing') await origin.messages.put({ id: 'summary', thread_id: 'comp-child', role: failure === 'wrong-role' ? 'assistant' : 'system',
+            index: 0, data: { kind: 'compaction', content: 'Historical reference', compaction: { version: failure === 'future-version' ? 2 : 1, compaction_id: 'operation',
+                source_thread_id: failure === 'wrong-source' ? 'foreign' : 'source', anchor_message_id: failure === 'wrong-anchor' ? 'other' : 'source-last', anchor_index: 0,
+                generated_at: 1, model: 'test-model', message_count: 4, prior_message_count: 0, summary_markdown: 'Historical reference', landmarks: [], history_scope: { version: 1, segments: [] } } },
+            pending: failure === 'pending', deleted: failure === 'deleted', clock: 1, created_at: 1, updated_at: 1 });
+        activeDb = origin as unknown as typeof dbMock;
+        runtimeConfigRef.value.public.backgroundStreaming.enabled = false;
+        const { useChat } = await import('~/composables/chat/useAi');
+        const scope = effectScope();
+        try {
+            const chat = scope.run(() => useChat([], 'comp-child'))!;
+            const originalCount = await origin.messages.count();
+            const result = await chat.sendMessage('Draft and attachments must remain', { model: 'test-model', file_hashes: ['draft-file'] });
+            expect(appendMessageMock.mock.calls.length, JSON.stringify(result)).toBe(0);
+            expect(result).toMatchObject({ status: 'rejected', reason: 'unavailable' });
+            expect(appendMessageMock).not.toHaveBeenCalled(); expect(runForegroundStreamLoopMock).not.toHaveBeenCalled(); expect(startBackgroundStreamMock).not.toHaveBeenCalled();
+            expect(await origin.messages.count()).toBe(originalCount); expect(await origin.threads.count()).toBe(1);
+            expect('userMessageId' in result).toBe(false);
+            // Eventual sync of a valid pair enables admission in the same warm
+            // view, without a remount or an original source row.
+            await origin.messages.put({ id: 'summary', thread_id: 'comp-child', role: 'system', index: 0,
+                data: { kind: 'compaction', content: 'Historical reference', compaction: { version: 1, compaction_id: 'operation',
+                    source_thread_id: 'source', anchor_message_id: 'source-last', anchor_index: 0, generated_at: 1, model: 'test-model',
+                    message_count: 4, prior_message_count: 0, summary_markdown: 'Historical reference', landmarks: [], history_scope: { version: 1, segments: [] } } },
+                pending: false, deleted: false, clock: 2, created_at: 1, updated_at: 2 });
+            const synced = await chat.sendMessage('Preserved draft', { model: 'test-model', file_hashes: ['draft-file'] });
+            expect('reason' in synced ? synced.reason : undefined).not.toBe('unavailable');
+            expect(appendMessageMock).toHaveBeenCalledTimes(2);
+            expect(appendMessageMock.mock.calls[0]?.[0]).toMatchObject({ data: { content: 'Preserved draft' }, file_hashes: JSON.stringify(['draft-file']) });
+
+        } finally { scope.stop(); activeDb = dbMock; origin.close(); await origin.delete(); }
+    });
     it('abandons a public retry after switching away and back while its preparation hook waits', async () => {
         runtimeConfigRef.value.public.backgroundStreaming.enabled = false;
         const rows = [

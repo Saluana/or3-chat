@@ -1,4 +1,5 @@
 import { presentError, errorDiagnostics } from '~~/shared/errors';
+import { resolveThreadProjection } from '~/utils/chat/compaction/history';
 /**
  * @module app/composables/chat/useAi.ts
  *
@@ -2171,6 +2172,27 @@ export function useChat(
                 (t): t is string => typeof t === 'string' && t.trim() !== ''
             )
             .join('\n\n');
+        // Recheck the persisted boundary for every admission, even if this view's
+        // history cache is warm. A partial sync must not create a new turn without
+        // the compacted summary, or resume an incomplete reference lineage.
+        const admissionThread = await requestScope.originDb.threads.get(requestThreadId);
+        if (isRequestCancelled(requestScope) || !requestScope.ownsView()) {
+            return { status: 'aborted', requestId, reason: 'aborted' };
+        }
+        if (admissionThread?.branch_mode === 'compacted' || admissionThread?.branch_mode === 'reference') {
+            try {
+                await resolveThreadProjection(requestThreadId, requestScope.originDb);
+            } catch (error) {
+                if (isRequestCancelled(requestScope) || !requestScope.ownsView()) {
+                    return { status: 'aborted', requestId, reason: 'aborted' };
+                }
+                toast.add({ title: 'Conversation unavailable', description: presentError(error).message, color: 'warning' });
+                return { status: 'rejected', requestId, reason: 'unavailable' };
+            }
+            if (isRequestCancelled(requestScope) || !requestScope.ownsView()) {
+                return { status: 'aborted', requestId, reason: 'aborted' };
+            }
+        }
         const nextUserMessageId = newId();
         const userDbMsg = await appendMessageToDb(requestScope.originDb, {
             id: nextUserMessageId,

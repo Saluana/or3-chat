@@ -23,6 +23,7 @@ const dbState = vi.hoisted(() => {
     return {
         db: {
             tables,
+            threads: { get: vi.fn(async (id: string) => ({ id })) },
             transaction,
             messages: {
                 get: messagesGet,

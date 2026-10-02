@@ -15,7 +15,26 @@ import {
 } from './errors';
 import { createRuntimeUuid } from '../runtime-id';
 
+export interface ProviderRequestUsage {
+    prompt_tokens: number;
+    completion_tokens: number;
+    model?: string;
+    response_id?: string;
+}
+
+/** Missing or malformed counters remain absent rather than becoming a zero measurement. */
+export function normalizeProviderRequestUsage(value: unknown): ProviderRequestUsage | undefined {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    const row = value as Record<string, unknown>;
+    const validCounter = (counter: unknown): counter is number => typeof counter === 'number' && Number.isSafeInteger(counter) && counter >= 0;
+    if (!validCounter(row.prompt_tokens) || !validCounter(row.completion_tokens)) return undefined;
+    return { prompt_tokens: row.prompt_tokens, completion_tokens: row.completion_tokens,
+        ...(typeof row.model === 'string' && row.model.trim() ? { model: row.model } : {}),
+        ...(typeof row.response_id === 'string' && row.response_id.trim() ? { response_id: row.response_id } : {}) };
+}
+
 export type ORStreamEvent =
+    | { type: 'usage'; usage: ProviderRequestUsage }
     | { type: 'text'; text: string }
     | { type: 'image'; url: string; final?: boolean; index?: number }
     | { type: 'reasoning'; text: string }
@@ -78,6 +97,9 @@ interface Choice {
     error?: ProviderErrorEnvelope | string;
 }
 interface ParsedChunk {
+    id?: unknown;
+    model?: unknown;
+    usage?: unknown;
     choices?: Choice[];
     error?: ProviderErrorEnvelope | string;
 }
@@ -145,6 +167,9 @@ export async function* parseOpenRouterSSE(
      * Held in an object so closure mutation survives TypeScript narrowing.
      */
     const termination = { verified: false };
+    let responseModel: string | undefined;
+    let responseId: string | undefined;
+    let lastUsageIdentity: string | undefined;
 
     const extractImageUrl = (part: ContentPart): string | null => {
         if (typeof part !== 'object') return null;
@@ -184,6 +209,14 @@ export async function* parseOpenRouterSSE(
         if (parsed.error) throwProviderError(parsed.error);
 
         const events: ORStreamEvent[] = [];
+        if (typeof parsed.model === 'string' && parsed.model.trim()) responseModel = parsed.model;
+        if (typeof parsed.id === 'string' && parsed.id.trim()) responseId = parsed.id;
+        const measured = normalizeProviderRequestUsage(parsed.usage);
+        if (measured) {
+            const usage = { ...measured, ...(responseModel ? { model: responseModel } : {}), ...(responseId ? { response_id: responseId } : {}) };
+            const identity = JSON.stringify(usage);
+            if (identity !== lastUsageIdentity) { events.push({ type: 'usage', usage }); lastUsageIdentity = identity; }
+        }
         const choices = parsed.choices ?? [];
         for (let choiceIndex = 0; choiceIndex < choices.length; choiceIndex += 1) {
             const choice = choices[choiceIndex];

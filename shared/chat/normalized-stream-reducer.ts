@@ -1,4 +1,4 @@
-import type { ORStreamEvent } from '../openrouter/parseOpenRouterSSE';
+import { normalizeProviderRequestUsage, type ORStreamEvent, type ProviderRequestUsage } from '../openrouter/parseOpenRouterSSE';
 import {
     CANONICAL_MESSAGE_FIXED_BYTES,
     MAX_STREAM_OUTPUT_BYTES,
@@ -18,6 +18,8 @@ export type NormalizedToolState = {
 
 export type NormalizedStreamState = {
     iteration: number;
+    /** Last measured provider request, never a sum of tool-loop prompt occupancy. */
+    usage?: ProviderRequestUsage & { iteration: number };
     cumulativeText: string;
     iterationText: string;
     reasoningText: string;
@@ -134,6 +136,12 @@ export function reduceNormalizedStreamEvent(
     event: ORStreamEvent
 ): NormalizedStreamState {
     if (state.terminal !== 'active' || event.type === 'done') return state;
+    if (event.type === 'usage') {
+        const measurement = normalizeProviderRequestUsage(event.usage);
+        if (!measurement) return state;
+        const usage = { ...measurement, iteration: state.iteration };
+        return JSON.stringify(state.usage) === JSON.stringify(usage) ? state : { ...state, usage };
+    }
     if (event.type === 'text') {
         return {
             ...state,
