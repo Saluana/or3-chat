@@ -24,7 +24,7 @@ export const CompactionDataSchema = z.object({
     generated_at: counter, model: identifier, message_count: counter, prior_message_count: counter,
     summary_markdown: z.string().min(1),
     landmarks: z.array(z.object({ message_id: identifier,
-        kind: z.enum(['topic', 'decision', 'code', 'file', 'constraint', 'open-question', 'tool-result']),
+        kind: z.enum(['decision', 'code', 'file', 'constraint', 'open-question', 'tool-result']),
         summary: z.string().min(1).refine((value) => Array.from(value).length <= 200, 'Landmark description exceeds 200 characters.'),
         index: z.number().int().safe(), role: z.enum(['user', 'assistant', 'system', 'tool']), thread_id: identifier,
     })).max(30),

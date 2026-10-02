@@ -108,6 +108,7 @@ export async function createThreadInDb(
     });
     await db.transaction('rw', getWriteTxTableNames(db, 'threads'), async () => {
         rejectGenericCompactionTransition(value);
+        rejectGenericCompactionTransition(value, await db.threads.get(value.id));
         await dbTry(
             () => db.threads.put(value),
             { op: 'write', entity: 'threads', action: 'create' },
@@ -428,6 +429,7 @@ export async function forkThread(
             fork,
         });
         rejectGenericCompactionTransition(fork);
+        rejectGenericCompactionTransition(fork, await db.threads.get(fork.id));
         if (fork.parent_thread_id !== src.id || fork.root_thread_id !== rootThreadId || fork.summary_message_id != null
             || fork.fork_reason !== 'manual') throw new Error('Invalid ordinary fork lineage.');
         if (fork.branch_mode === 'reference') {
