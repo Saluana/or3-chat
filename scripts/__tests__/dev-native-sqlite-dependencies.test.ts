@@ -108,11 +108,18 @@ describe('dev launcher runtime', () => {
         expect(result.stdout).not.toContain('NUXT_RECEIPT=');
     });
 
-    it('rejects an incompatible Basic Auth binding before launching Nuxt', async () => {
-        const result = await launch('bun', [], true, 'basic-auth');
+    it.each(['bun', 'bun:sqlite'])('rejects Basic Auth with %s before probing its native binding', async (driver) => {
+        const result = await launch(driver, [], true, 'basic-auth');
         expect(result.status).toBe(1);
-        expect(result.stderr).toContain('incompatible SQLite binding');
+        expect(result.stderr).toMatch(/Basic Auth.*Node 24/);
+        expect(result.stderr).not.toContain('incompatible SQLite binding');
         expect(result.stdout).not.toContain('NUXT_RECEIPT=');
+    });
+
+    it('launches Basic Auth with its default native driver under Node', async () => {
+        const result = await launch('better-sqlite3', [], true, 'basic-auth');
+        expect(result.status, result.stderr).toBe(0);
+        expect(JSON.parse(result.stdout.split('NUXT_RECEIPT=')[1]!).runtime).toBe('node');
     });
 });
 

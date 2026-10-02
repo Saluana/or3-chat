@@ -360,15 +360,25 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
+      - name: Verify the published dashboard source and target artifacts
+        run: |
+          set -euo pipefail
+          node scripts/release/select-dashboard-fixture.mjs > "$RUNNER_TEMP/dashboard-fixture.json"
+          node -e '
+            const fs = require("node:fs");
+            const pair = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            fs.appendFileSync(process.env.GITHUB_ENV, `OR3_DASHBOARD_SOURCE=${pair.source.version}\nOR3_DASHBOARD_TARGET=${pair.target.version}\n`);
+          ' "$RUNNER_TEMP/dashboard-fixture.json"
       - name: Interrupt an exact published dashboard update
         env:
           OR3_DASHBOARD_SMOKE_TIMEOUT_MS: '480000'
         run: |
           set -euo pipefail
-          version="$(node -p "require('./package.json').version")"
-          previous_version="$(node -p "const [major, minor, patch] = process.argv[1].split('.'); major+'.'+minor+'.'+(Number(patch)-1)" "$version")"
+          version="$OR3_DASHBOARD_TARGET"
+          previous_version="$OR3_DASHBOARD_SOURCE"
           managed="$RUNNER_TEMP/or3-cloud-dashboard-interruption"
           timeout --signal=TERM 5m npx --yes "@or3/cloud@$previous_version" init "$managed" --local --port 3019 --admin-email dashboard-interruption@example.com
+          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3019 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
           OR3_DASHBOARD_STATE_PATH="$managed/.or3-cloud/state.json" node scripts/release/smoke-dashboard-update.mjs "$managed/.or3-cloud/operator-ipc/operator.sock" "$version" > "$RUNNER_TEMP/dashboard-interrupted.log" 2>&1 &
           driver_pid=$!
           trap 'kill "$driver_pid" 2>/dev/null || true; wait "$driver_pid" 2>/dev/null || true' EXIT
@@ -410,6 +420,17 @@ jobs:
           (cd "$managed" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$version" recover --restore --yes)
           grep -q "^OR3_VERSION='$previous_version'$" "$managed/.env"
           (cd "$managed" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$previous_version" verify)
+          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3019 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+      - name: Preserve published interruption evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dashboard-recovery-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/dashboard-fixture.json
+            ${{ runner.temp }}/dashboard-interrupted.log
+          if-no-files-found: warn
+          retention-days: 30
       - name: Clean up interruption fixture
         if: always()
         run: |

@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, readFile, mkdir, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import {
     CLOUD_SETUP_ARGS,
     shouldAskModeChoice,
@@ -46,5 +47,19 @@ describe('bun start mode choice', () => {
 
     it('hands cloud setup to the managed local installer', () => {
         expect([...CLOUD_SETUP_ARGS]).toEqual(['init', '--local']);
+    });
+
+    it('returns failure when the launched development process is terminated', async () => {
+        const bin = join(cwd, 'bin');
+        await mkdir(bin);
+        await mkdir(join(cwd, 'node_modules'));
+        await writeFile(join(cwd, '.env'), '');
+        await symlink(process.execPath, join(bin, 'node'));
+        await writeFile(join(bin, 'bun'), '#!/usr/bin/env node\nprocess.kill(process.pid, "SIGTERM");\n', { mode: 0o755 });
+        const result = spawnSync(process.execPath, [resolve('scripts/cli/start.mjs')], {
+            cwd, encoding: 'utf8', timeout: 10_000,
+            env: { PATH: bin, CI: 'true', npm_config_user_agent: 'bun/1.3.14' },
+        });
+        expect(result.status).toBe(1);
     });
 });

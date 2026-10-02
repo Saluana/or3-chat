@@ -26,8 +26,6 @@ export default defineEventHandler(async (event) => {
     requireSession(session);
     const userId = session.user?.id;
     if (!userId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
-    enforceRateLimit(event, checkSyncRateLimit(userId, 'chat-tool:claim'));
-    recordSyncRequest(userId, 'chat-tool:claim');
     const jobId = getRouterParam(event, 'id');
     const body = await readLimitedJsonBody<{
         callId?: unknown;
@@ -45,6 +43,10 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Invalid tool claim' });
     }
 
+    // Reserve the request after validation but before provider work so
+    // concurrent calls cannot share one slot and invalid requests are free.
+    enforceRateLimit(event, checkSyncRateLimit(userId, 'chat-tool:claim'));
+    recordSyncRequest(userId, 'chat-tool:claim');
     const provider = await getJobProvider();
     if (!provider.claimClientToolCall) {
         throw createError({ statusCode: 501, statusMessage: 'Client tool bridge unavailable' });

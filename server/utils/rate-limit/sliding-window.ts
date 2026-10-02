@@ -51,14 +51,18 @@ export function createSlidingWindowRateLimiter(input: {
         record(key: string, config: RateLimitConfig): void {
             const { now, timestamps } = recent(store.get(key), config);
             timestamps.push(now);
-            store.set(key, { timestamps });
+            store.set(key, { timestamps }, {
+                ttl: Math.max(input.entryTtlMs, config.windowMs),
+            });
         },
         checkAndRecord(key: string, config: RateLimitConfig): RateLimitResult {
             const { now, timestamps } = recent(store.get(key), config);
             const current = result(timestamps, now, config);
             if (!current.allowed) return current;
             timestamps.push(now);
-            store.set(key, { timestamps });
+            store.set(key, { timestamps }, {
+                ttl: Math.max(input.entryTtlMs, config.windowMs),
+            });
             return {
                 allowed: true,
                 remaining: config.maxRequests - timestamps.length,

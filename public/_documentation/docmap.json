@@ -41,7 +41,7 @@
                     "category": "Development",
                     "categoryOrder": 1,
                     "order": 0,
-                    "summary": "Install with Bun, choose a development mode, and troubleshoot without losing data."
+                    "summary": "Install with Bun, choose a development mode, set build memory limits, and launch source output with the supported runtime."
                 },
                 {
                     "name": "plugin-quickstart.md",
@@ -611,7 +611,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Cloud login verifies who you are; workspace membership and permissions decide what you can do. OpenRouter authorization and the deployment admin panel use separate credentials. This page explains the distinctions for both Basic Auth/SQLite "
+                    "summary": "Cloud identity, workspace permissions, session refresh and rate admission, and separate OpenRouter and deployment-admin credentials."
                 },
                 {
                     "name": "background-execution.md",
@@ -755,7 +755,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "The OR3 Sync Layer provides offline-first, bidirectional synchronization between a workspace-scoped local Dexie database and the selected sync backend (SQLite or Convex in first-party deployments). It enables users to work offline and have "
+                    "summary": "Offline-first workspace synchronization, consistent snapshots, conflict resolution, and request admission against operator-configured rate limits."
                 },
                 {
                     "name": "storage-layer.md",
@@ -764,7 +764,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 20,
-                    "summary": "Authenticated storage writes (presign upload, commit, delete, and GC) require JSON plus x-or3-cloud-intent: mutation from browser callers. The server checks the exact origin against its effective request origin or OR3_ALLOWED_ORIGINS before"
+                    "summary": "Authenticated object storage, mutation guards, hash validation, signed links, and presign/commit admission against operator-configured rate limits."
                 },
                 {
                     "name": "plugin-access-gating.md",
@@ -857,7 +857,7 @@
                     "category": "Using plugins",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Connect a marketplace account, use acquired releases, request administrator installation, and manage the account link."
+                    "summary": "Connect a marketplace account, page through older purchases and coverage, request administrator installation, and manage the account link."
                 },
                 {
                     "name": "first-plugin.md",

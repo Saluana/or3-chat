@@ -105,6 +105,10 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 500, statusMessage: 'Storage adapter not configured' });
     }
 
+    // Reserve the request before provider work so concurrent calls cannot
+    // all pass the same remaining rate-limit slot.
+    recordSyncRequest(userId, 'storage:commit');
+
     // Check if adapter supports commit
     if (adapter.commit) {
         // Dispatch to adapter
@@ -112,7 +116,6 @@ export default defineEventHandler(async (event) => {
     }
     // If adapter doesn't support commit, it's a no-op (files are committed on upload)
 
-    recordSyncRequest(userId, 'storage:commit');
     recordUploadComplete(body.data.size_bytes);
 
     return { ok: true };

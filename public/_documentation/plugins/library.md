@@ -61,6 +61,19 @@ accounts. Old purchase results clear when the local user or linked account
 changes. Already installed plugins keep running when the link expires or is
 unavailable: download authority and runtime permission are separate.
 
+## Older purchases and coverage
+
+Library loads purchases and plugin coverage in small pages. Choose **Load more
+purchases** to reach older acquired versions and additional covered plugins.
+Loaded purchases stay visible if a later page fails; retry the same button.
+Switching or disconnecting the marketplace account clears the previous list.
+
+Coverage shows one summary per plugin instead of every renewal or refund.
+The underlying grants and purchase history remain on the marketplace.
+An ordinary buyer can request installation of an older acquired version after
+loading it; the server checks that exact release against the buyer's own
+marketplace account before creating the request.
+
 ## Troubleshooting
 
 | Problem | What to do |
