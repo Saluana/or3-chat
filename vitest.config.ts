@@ -116,6 +116,9 @@ export default defineConfig({
                 // existing test alias rather than Node package-import lookup.
                 inline: [
                     /\/@nuxt\/ui\/dist\/runtime\/composables\/useToast\.js$/,
+                    // Exercise the published job provider against the host's
+                    // real store/config alias, including workflow scope fences.
+                    /\/or3-provider-sqlite\/dist\/runtime\/server\/background-jobs\/sqlite-provider\.js$/,
                     // Exercise the installed filesystem download route with the
                     // host's auth aliases at the real HTTP boundary.
                     /\/or3-provider-fs\/dist\/runtime\/server\//,

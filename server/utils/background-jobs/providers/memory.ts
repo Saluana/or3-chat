@@ -26,7 +26,7 @@ import type {
     GenerationHistoryPhase,
     TerminalGenerationSnapshot,
 } from '../types';
-import { AdmissionCancelledError } from '../types';
+import { AdmissionCancelledError, getChatJobExecution } from '../types';
 import { getJobConfig } from '../store';
 
 /**
@@ -111,7 +111,7 @@ async function cleanupExpiredJobs(): Promise<number> {
             job.status = 'error';
             job.error = 'Job timed out';
             job.completedAt = now;
-            if (job.execution?.history && job.historyPhase !== 'admission_pending') {
+            if (getChatJobExecution(job)?.history && job.historyPhase !== 'admission_pending') {
                 job.historyPhase = 'finalization_pending';
             }
             cleaned++;
@@ -184,10 +184,11 @@ function claimJobRecord(
     now: number,
     leaseExpiresAt: number
 ): BackgroundJob | null {
+    const execution = getChatJobExecution(job);
     if (
         job.status !== 'streaming' ||
-        !job.execution ||
-        job.execution.clientToolCall !== undefined ||
+        !execution ||
+        execution.clientToolCall !== undefined ||
         (job.historyPhase ?? 'ready') !== 'ready'
     ) return null;
     if (job.leaseOwner && (job.leaseExpiresAt ?? 0) > now) {
@@ -200,8 +201,8 @@ function claimJobRecord(
     job.attempts = (job.attempts ?? 0) + 1;
     job.abortController = new AbortController();
     if (recovering) {
-        job.content = job.execution.contentBase ?? '';
-        job.reasoning = job.execution.reasoningBase ?? '';
+        job.content = execution.contentBase ?? '';
+        job.reasoning = execution.reasoningBase ?? '';
         job.chunksReceived = 0;
     }
     return toPublicJob(job);
@@ -238,18 +239,18 @@ export const memoryJobProvider: BackgroundJobProvider = {
         // Enforce max concurrent jobs
         const currentJobs = Array.from(jobs.values());
         const activeCount = currentJobs.filter(
-            (j) => j.status === 'streaming' && !j.execution?.clientToolCall
+            (j) => j.status === 'streaming' && !getChatJobExecution(j)?.clientToolCall
         ).length;
         const activeCountForUser = currentJobs.filter(
-            (j) => j.status === 'streaming' && !j.execution?.clientToolCall && j.userId === params.userId
+            (j) => j.status === 'streaming' && !getChatJobExecution(j)?.clientToolCall && j.userId === params.userId
         ).length;
         // Browser handoffs release a worker slot, but parked records still
         // need a separate bound so abandoned browsers cannot grow the queue.
         const waitingCount = currentJobs.filter(
-            (j) => j.status === 'streaming' && Boolean(j.execution?.clientToolCall)
+            (j) => j.status === 'streaming' && Boolean(getChatJobExecution(j)?.clientToolCall)
         ).length;
         const waitingCountForUser = currentJobs.filter(
-            (j) => j.status === 'streaming' && Boolean(j.execution?.clientToolCall) && j.userId === params.userId
+            (j) => j.status === 'streaming' && Boolean(getChatJobExecution(j)?.clientToolCall) && j.userId === params.userId
         ).length;
 
         if (activeCount >= config.maxConcurrentJobs) {
@@ -339,7 +340,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
                 job.status = 'aborted';
                 job.error = 'Cancelled by user';
                 job.completedAt = Date.now();
-                if (job.execution?.history && job.historyPhase !== 'admission_pending') {
+                if (getChatJobExecution(job)?.history && job.historyPhase !== 'admission_pending') {
                     job.historyPhase = 'finalization_pending';
                 }
                 cancelledAdmissions.set(
@@ -445,7 +446,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
         job.abortController.abort();
         job.status = 'aborted';
         job.completedAt = Date.now();
-        if (job.execution?.history && job.historyPhase !== 'admission_pending') {
+        if (getChatJobExecution(job)?.history && job.historyPhase !== 'admission_pending') {
             job.historyPhase = 'finalization_pending';
         }
         return true;
@@ -518,7 +519,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
         claimExpiresAt
     ) {
         const job = jobs.get(jobId);
-        const pending = job?.execution?.clientToolCall;
+        const pending = job ? getChatJobExecution(job)?.clientToolCall : undefined;
         if (
             !job ||
             job.userId !== userId ||
@@ -544,7 +545,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
         toolCalls
     ) {
         const job = jobs.get(jobId);
-        const pending = job?.execution?.clientToolCall;
+        const pending = job ? getChatJobExecution(job)?.clientToolCall : undefined;
         if (
             !job ||
             job.userId !== userId ||
@@ -622,7 +623,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
 
     async getActiveJobCount(): Promise<number> {
         return Array.from(jobs.values()).filter(
-            (j) => j.status === 'streaming' && !j.execution?.clientToolCall
+            (j) => j.status === 'streaming' && !getChatJobExecution(j)?.clientToolCall
         ).length;
     },
 };

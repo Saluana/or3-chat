@@ -13,7 +13,10 @@ const startBackgroundStreamMock = vi.fn();
 const monitorForegroundStreamForClientMock = vi.fn((params) => params.stream);
 const backgroundStreamingAvailableMock = vi.fn();
 
-vi.mock('h3', () => ({
+vi.mock('#imports', () => ({ useRuntimeConfig: () => runtimeConfig }));
+
+vi.mock('h3', async (importOriginal) => ({
+    ...await importOriginal<typeof import('h3')>(),
     defineEventHandler: (handler: unknown) => handler,
     getRequestIP: vi.fn(() => '127.0.0.1'),
     setResponseHeader: vi.fn(),
@@ -39,7 +42,8 @@ vi.mock('../../../utils/rate-limit/store', () => ({
     getRateLimitProvider: vi.fn(() => null),
 }));
 
-vi.mock('../../../utils/net/request-identity', () => ({
+vi.mock('../../../utils/net/request-identity', async (importOriginal) => ({
+    ...await importOriginal<typeof import('../../../utils/net/request-identity')>(),
     getClientIp: vi.fn(() => '127.0.0.1'),
     getProxyRequestProtocol: vi.fn(() => 'https'),
     normalizeProxyTrustConfig: vi.fn(() => ({ trustProxy: false })),
@@ -72,10 +76,11 @@ let runtimeConfig: Record<string, unknown>;
 
 function makeEvent(headers: Record<string, string> = {}): H3Event {
     return {
+        method: 'POST',
         context: {},
         node: {
             req: {
-                headers,
+                headers: { host: 'chat.test', origin: 'https://chat.test', 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation', ...headers },
                 on: vi.fn(),
             },
         },
@@ -124,7 +129,7 @@ describe('POST /api/openrouter/stream credential authorization', () => {
                 requestsPerMinute: 0,
                 maxMessagesPerDay: 0,
             },
-            security: { proxy: {} },
+            security: { proxy: {}, allowedOrigins: [] },
         };
         readBodyMock.mockReset().mockResolvedValue({ model: 'test/model' });
         getHeaderMock.mockReset().mockImplementation(
@@ -344,6 +349,44 @@ describe('POST /api/openrouter/stream credential authorization', () => {
         await handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }));
         expect(fetchMock).toHaveBeenCalledTimes(2);
         expect(sendStreamMock).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+        { label: 'simple cross-origin body', origin: 'https://untrusted.example.test', intent: false, callerKey: false, trusted: false, status: 403 },
+        { label: 'untrusted origin with intent', origin: 'https://untrusted.example.test', intent: true, callerKey: false, trusted: false, status: 403 },
+        { label: 'same-origin managed request', origin: 'https://chat.example.test', intent: true, callerKey: false, trusted: false, status: 200 },
+        { label: 'configured browser origin', origin: 'https://trusted.example.test', intent: true, callerKey: false, trusted: true, status: 200 },
+        { label: 'originless guest with personal key', origin: '', intent: false, callerKey: true, trusted: false, status: 200 },
+    ])('enforces mutation protection without breaking $label', async ({ origin, intent, callerKey, trusted, status }) => {
+        const h3 = await vi.importActual<typeof import('h3')>('h3');
+        const auth = await vi.importActual<typeof import('../../../auth/can')>('../../../auth/can');
+        requireCanMock.mockImplementation(auth.requireCan);
+        if (callerKey) resolveSessionContextMock.mockResolvedValue({ authenticated: false });
+        if (trusted) runtimeConfig.security = { proxy: {}, allowedOrigins: [origin] };
+        vi.stubGlobal('readBody', h3.readBody);
+        vi.stubGlobal('getHeader', h3.getHeader);
+        vi.stubGlobal('setResponseStatus', h3.setResponseStatus);
+        vi.stubGlobal('setHeader', h3.setHeader);
+        vi.stubGlobal('sendStream', h3.sendStream);
+        const app = h3.createApp().use('/api/openrouter/stream', h3.defineEventHandler(handler));
+        const headers: Record<string, string> = { host: 'chat.example.test' };
+        if (origin) { headers.origin = origin; headers.cookie = 'or3-auth=test-session'; }
+        if (intent) { headers['x-or3-cloud-intent'] = 'mutation'; headers['content-type'] = 'application/json'; }
+        if (callerKey) headers['x-or3-openrouter-key'] = 'personal-key';
+        const request = new Request('https://chat.example.test/api/openrouter/stream', {
+            method: 'POST', headers,
+            // A byte-array fetch body sends no implicit Content-Type or CORS preflight.
+            body: new TextEncoder().encode(JSON.stringify({
+                model: 'test/model', messages: [{ role: 'user', content: 'hello' }], stream: true,
+            })),
+        });
+        const response = await h3.toWebHandler(app)(request);
+        await response.text();
+        expect(response.status).toBe(status);
+        if (status === 403) expect(fetch).not.toHaveBeenCalled();
+        else expect(fetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+            headers: expect.objectContaining({ Authorization: `Bearer ${callerKey ? 'personal-key' : 'managed-key'}` }),
+        }));
     });
 
     it('does not forward OR3 background metadata when using the foreground fallback', async () => {

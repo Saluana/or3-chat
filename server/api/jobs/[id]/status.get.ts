@@ -4,6 +4,7 @@
  * Purpose:
  * Polls the current state and content of a background job.
  */
+import { requireJobWorkspaceAccess } from '../../../utils/background-jobs/access';
 import { getJobProvider } from '../../../utils/background-jobs/store';
 import { resolveSessionContext } from '../../../auth/session';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
@@ -44,8 +45,9 @@ export default defineEventHandler(async (event) => {
 
     // Resolve user ID for authorization
     let userId: string | null = null;
+    let session: Awaited<ReturnType<typeof resolveSessionContext>> | null = null;
     if (isSsrAuthEnabled(event)) {
-        const session = await resolveSessionContext(event);
+        session = await resolveSessionContext(event);
         if (session.authenticated && session.user?.id) {
             userId = session.user.id;
         }
@@ -70,6 +72,8 @@ export default defineEventHandler(async (event) => {
         setResponseStatus(event, 404);
         return { error: 'Job not found or unauthorized' };
     }
+
+    await requireJobWorkspaceAccess(event, session, job.execution?.workspaceId, 'workspace.read');
 
     const query = getQuery(event);
     const offsetParam = typeof query.offset === 'string' ? query.offset : null;

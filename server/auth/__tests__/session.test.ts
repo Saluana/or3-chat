@@ -549,6 +549,45 @@ describe('resolveSessionContext provisioning and caching', () => {
         await expect(resolveSessionContext(makeEvent())).rejects.toThrow('missing-store');
     });
 
+    it.each(['identity', 'store', 'global'] as const)('an in-flight resolution cannot restore a revoked role after %s invalidation', async (scope) => {
+        testRuntimeConfig.value.sync = { provider: 'convex' } as any;
+        let resume!: () => void;
+        let reached!: () => void;
+        const paused = new Promise<void>((resolve) => { reached = resolve; });
+        const barrier = new Promise<void>((resolve) => { resume = resolve; });
+        adminCheckerMock.checkDeploymentAdmin.mockImplementationOnce(async () => {
+            reached();
+            await barrier;
+            return false;
+        });
+        const inFlight = resolveSessionContext(makeEvent());
+        await paused; // The old owner role has been read; cache publication is pending.
+        authWorkspaceStoreMock.getWorkspaceRole.mockResolvedValue('viewer');
+        invalidateSharedSessionCacheForIdentity(scope === 'identity'
+            ? { provider: PROVIDER_ID, providerUserId: 'user-1', storeId: 'convex' }
+            : scope === 'store' ? { storeId: 'convex' } : {});
+        const newer = await resolveSessionContext(makeEvent());
+        expect(newer.role).toBe('viewer');
+        resume();
+        expect((await inFlight).role).toBe('viewer');
+        const freshRequest = await resolveSessionContext(makeEvent());
+        expect(freshRequest.role).toBe('viewer');
+        expect(freshRequest.authorizationRevision).toBe(newer.authorizationRevision);
+    });
+
+    it('bounds retries during authorization churn without treating it as logout', async () => {
+        testRuntimeConfig.value.sync = { provider: 'convex' } as any;
+        testRuntimeConfig.value.auth.sessionProvisioningFailure = 'unauthenticated';
+        adminCheckerMock.checkDeploymentAdmin.mockImplementation(async () => {
+            invalidateSharedSessionCacheForIdentity({ storeId: 'convex' });
+            return false;
+        });
+        await expect(resolveSessionContext(makeEvent())).rejects.toMatchObject({ statusCode: 503 });
+        expect(adminCheckerMock.checkDeploymentAdmin.mock.calls.length).toBeLessThanOrEqual(3);
+        adminCheckerMock.checkDeploymentAdmin.mockResolvedValue(false);
+        expect((await resolveSessionContext(makeEvent())).authenticated).toBe(true);
+    });
+
     it('handles deployment admin checker failures via provisioning policy', async () => {
         adminCheckerMock.checkDeploymentAdmin.mockRejectedValueOnce(new Error('admin check failed'));
 

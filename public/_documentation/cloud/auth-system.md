@@ -35,6 +35,8 @@ Entitlements are separate plan/feature flags resolved by a registered backend re
 
 The core server resolver in `server/auth/session.ts` verifies a registered provider session, maps the external identity through `AuthWorkspaceStore`, resolves active membership and role, and checks deployment-admin status. The result is cached on the current request. It does not directly hard-code a Convex workspace mutation.
 
+Permission invalidation also fences in-flight resolution: an older lookup cannot restore a revoked role in the shared cache. Resolution retries against the current revision and returns `503` if permissions keep changing during the bounded retries.
+
 `GET /api/auth/session` reserves its existing per-IP `auth:session` rate allowance before
 resolving identity or entitlements, so concurrent lookups share the configured
 bucket. A rate-limited response includes `Retry-After`; all session responses
@@ -58,6 +60,8 @@ Direct sync providers acquire provider-specific JWTs through `AuthTokenBroker`. 
 Connect OpenRouter with OAuth PKCE or paste a supported key. Source code must use `persistUserApiKey()` to save browser keys in Dexie `kv`, update reactive state, and emit the connection signal.
 
 Local mode can use the browser key directly. SSR mode forwards the key per request to the server stream route, unless the host supplies an instance key under its override policy. Plaintext user keys are not persisted as ordinary server configuration; durable background jobs can keep an encrypted credential envelope so work continues after detachment. Keep its encryption secret server-only. See [background execution](/documentation/cloud/background-execution) and [configuration](/documentation/cloud/config-reference#servicesllmopenrouter).
+
+Managed-key streaming and background admission require `Content-Type: application/json`, `x-or3-cloud-intent: mutation`, and an exact same-origin `Origin` or `Referer`, or an explicitly configured browser origin. Separately authenticated bearer clients may omit origin only when they send no cookies. The browser helpers supply the required intent header. Guest foreground requests using a personal key retain their existing behavior.
 
 ## Deployment administration
 

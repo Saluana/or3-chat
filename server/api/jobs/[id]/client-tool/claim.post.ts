@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { getChatJobExecution } from '../../../../utils/background-jobs/types';
 import { createError, defineEventHandler, setHeader } from 'h3';
-import { requireCan, requireSession } from '../../../../auth/can';
+import { requireSession } from '../../../../auth/can';
+import { requireJobWorkspaceAccess } from '../../../../utils/background-jobs/access';
 import { resolveSessionContext } from '../../../../auth/session';
 import { getJobProvider } from '../../../../utils/background-jobs/store';
 import { readLimitedJsonBody } from '../../../../utils/security/limited-json-body';
@@ -24,7 +26,6 @@ export default defineEventHandler(async (event) => {
     requireSession(session);
     const userId = session.user?.id;
     if (!userId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
-    enforceRateLimit(event, checkSyncRateLimit(userId, 'chat-tool:claim'));
     const jobId = getRouterParam(event, 'id');
     const body = await readLimitedJsonBody<{
         callId?: unknown;
@@ -44,23 +45,25 @@ export default defineEventHandler(async (event) => {
 
     // Reserve the request after validation but before provider work so
     // concurrent calls cannot share one slot and invalid requests are free.
+    enforceRateLimit(event, checkSyncRateLimit(userId, 'chat-tool:claim'));
     recordSyncRequest(userId, 'chat-tool:claim');
     const provider = await getJobProvider();
     if (!provider.claimClientToolCall) {
         throw createError({ statusCode: 501, statusMessage: 'Client tool bridge unavailable' });
     }
     const current = await provider.getJob(jobId, userId);
-    const workspaceId = current?.execution?.workspaceId;
+    const execution = current ? getChatJobExecution(current) : undefined;
+    const workspaceId = execution?.workspaceId;
     if (!current || !workspaceId) {
         throw createError({ statusCode: 404, statusMessage: 'Job not found' });
     }
-    if (current.execution?.body._clientDeviceId !== deviceId) {
+    if (execution?.body._clientDeviceId !== deviceId) {
         throw createError({
             statusCode: 409,
             statusMessage: 'Tool call belongs to another browser device',
         });
     }
-    requireCan(session, 'workspace.write', { kind: 'workspace', id: workspaceId });
+    await requireJobWorkspaceAccess(event, session, workspaceId, 'workspace.write');
 
     const claimToken = randomUUID();
     const claimed = await provider.claimClientToolCall(
@@ -70,7 +73,7 @@ export default defineEventHandler(async (event) => {
         claimToken,
         Date.now() + CLAIM_TTL_MS
     );
-    const pending = claimed?.execution?.clientToolCall;
+    const pending = claimed ? getChatJobExecution(claimed)?.clientToolCall : undefined;
     if (!claimed || !pending || pending.callId !== callId) {
         throw createError({ statusCode: 409, statusMessage: 'Tool call already claimed' });
     }
