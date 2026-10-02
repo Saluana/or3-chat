@@ -205,7 +205,7 @@ describe('LibraryHome purchases', () => {
         expect(links).toHaveLength(2);
         expect(
             links.some((anchor) =>
-                anchor.attributes('href').includes('plugin=older.plugin&version=1.2.3'),
+                anchor.attributes('href')?.includes('plugin=older.plugin&version=1.2.3'),
             ),
         ).toBe(true);
         expect(
