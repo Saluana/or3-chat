@@ -57,6 +57,11 @@ Each terminal write must retain request/generation identity so late results from
 
 ## Context and tools
 
+Native message preparation snapshots content parts, selected binary attachment
+bytes, canonical tool calls and media options before asynchronous context
+hydration. Hydration appends to the request copy; later edits to the caller's
+messages or media settings do not change that in-flight copy.
+
 Context budgeting uses the selected model's advertised window, reserves response space, and trims history through the existing message helpers. Missing catalog metadata is refreshed; if it remains unavailable the input fallback is 8,000 tokens. Response reserve is bounded at 8,192 tokens. Counts are estimates, particularly for images and files; do not introduce a second fixed context ceiling in a caller.
 
 Source UI token counting uses `app/composables/core/useTokenizer.ts` and a

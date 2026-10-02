@@ -66,7 +66,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C2, C12.
       Requirements: R3.AC1, R3.AC2, R3.AC3, R3.AC5, R3.AC6, R4.AC1, R4.AC2, R4.AC3, R4.AC5, R5.AC1, R5.AC2, R5.AC3, R5.AC4, R16.AC1, R16.AC2, R16.AC3, R16.AC4, R16.AC5.
       Done when: cases cover a 1,000,000-token model with no default cap, input beyond 128k, positive remaining reply capacity, explicit output limits, missing/cached metadata, unset/custom/reset AI preferences, stale usage, tool/media input, initial/loop overflow and changed lossy confirmation. Write settings persistence cases before extending that shape, and assign each case to its strongest existing owner.
-      Status: Partial — shared budget and KV cases cover1M capacity, explicit output, missing metadata, media and nullable/reset/workspace preferences; native initial/loop overflow and changed lossy confirmation cases remain.
+      Status: Partial — shared budget and KV cases cover1M capacity, explicit output, missing metadata, media and nullable/reset/workspace preferences; production builder ownership has four retained pre-change failures and full >128k/near1M/oversized payload controls; native initial/loop overflow and changed lossy confirmation cases remain.
 
 - [ ] 2.7 Extract the shared budget policy and request estimator (3h).
       Components: C2.
