@@ -126,7 +126,7 @@ function createEmptyPane(initialThreadId = ''): PaneState {
 
 type DbMessageRow = Message & {
     content?: string;
-    data?: { content?: string; reasoning_text?: string | null } | null;
+    data?: { content?: string; reasoning_text?: string | null; tool_calls?: unknown } | null;
 };
 
 /**
