@@ -40,6 +40,14 @@ Test-authoring gate: extend the existing mounted composer owner using its public
 
 Tasks1.2/4.6/4.7/8.1 remain partial. Corrected browser, exact remote CI and parent review are still required; reverse-child/human-ordinal presentation and all other unfinished criteria remain open.
 
+### Exact async source-navigation synchronization
+
+Clean d9c9ce1d2f2e48511ab5dbdbb147acb2b27f12d0 configured BasicAuth/SQLite/fs application types EXIT0 `/tmp/task3-tab-draft-configured-types-first.log`. The unchanged lifetime-corrected named browser again EXIT1 at line373, preserving the tool disclosure/durable-row pass and later ordinary-new-chat not reached. Artifacts: `task-3/output/playwright/compaction-draft-first-browser`; preview stopped Ctrl-C EXIT130 and own3211/25211 listeners independently absent before lane release.
+
+Trace inspection corrects the earlier production-failure attribution: post-reload `fill` begins at12416.201ms, before View-original host binding begins at12426.759ms with the old compacted-child thread. The empty-input assertion also matches that child. This setup therefore creates a child draft, then incorrectly expects it on the source; it does not prove fresh source draft loss. Both mounted settings/capture regressions remain independent valid fail-before proofs. No additional production change is justified by this browser result.
+
+The journey now waits for the visible source anchor and selected source tab before the empty-input check/fresh fill. These observable conditions retain every existing assertion and introduce no sleep, timeout extension, retry or persistence redesign. Named-case collection PASS `/tmp/task3-compaction-source-lifetime-collect.log`; actual synchronized browser/remote CI/parent review remain pending.
+
 The six plan files match upstream exactly at the inspected default base `6ee4450b`.
 This branch is separate from assistant/Files and starts on the temporary reviewed
 integration base containing PR179 `40b7aef6`, PR181 `bb86066c`, and PR182 `07b235b2`.
