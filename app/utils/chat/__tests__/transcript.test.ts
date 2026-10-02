@@ -35,7 +35,13 @@ describe('canonical transcript projections', () => {
             row({ id: 'summary', role: 'system', index: 0, data: { kind: 'compaction', content: 'Historical summary and landmarks', compaction } }),
             row({ id: 'answer', role: 'assistant', index: 1, data: { content: 'New answer', usage } }),
             row({ id: 'malformed', role: 'assistant', index: 2, data: { content: 'Still readable', usage: { ...usage, prompt_tokens: -1 } } }),
+            row({ id: 'ordinary', role: 'user', index: 3, data: { kind: 'compaction', content: 'Ordinary user content', compaction } }),
         ]);
+        const ui = projectTranscriptForUi(records);
+        expect(ui[0]).toMatchObject({ role: 'system', compaction });
+        expect(ui[1]?.compaction).toBeUndefined();
+        expect(ui[3]).toMatchObject({ role: 'user', text: 'Ordinary user content' });
+        expect(ui[3]?.compaction).toBeUndefined();
         const projected = projectTranscriptForOpenRouter(records);
         expect(projected[0]?.data).toMatchObject({ kind: 'compaction', compaction });
         expect(projected[1]?.data).toMatchObject({ usage });

@@ -14,6 +14,9 @@
             :is="customMessageRenderer"
             v-if="customMessageRenderer"
             :message="props.message"
+            :thread-id="props.threadId"
+            @view-compaction-source="emit('view-compaction-source', $event)"
+            @content-resize="emit('content-resize')"
         />
 
         <section v-else-if="props.message.isWorkflow" class="space-y-2" aria-label="Workflow run">
@@ -474,6 +477,7 @@ const emit = defineEmits<{
     (e: 'cancel-edit', id: string): void;
     (e: 'save-edit', id: string): void;
     (e: 'content-resize'): void;
+    (e: 'view-compaction-source', target: { threadId: string; messageId: string; originThreadId: string }): void;
 }>();
 
 const copyIcon = useIcon('chat.message.copy');

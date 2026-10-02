@@ -295,3 +295,66 @@ test.describe('production chat journey', () => {
             .toHaveCount(0);
     });
 });
+
+// Uses the gated route's scripted transport and real controller/writer. The
+// fixture buttons are not product compaction actions; PageShell/card/navigation
+// are the installed production path under qualification.
+test('PageShell compaction summary reload and original landmark navigation', async ({ page }, info) => {
+    test.setTimeout(120_000);
+    await page.route('**/api/__or3-e2e/models*', (route) => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));
+    await page.route('**openrouter.ai/**', (route) => route.abort());
+    await page.goto(`${chatPage}?compaction=1`);
+    await expect(page.getByTestId('fixture-compact')).toBeVisible({ timeout: 45_000 });
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 45_000 });
+    await page.reload();
+    await expect(page.getByTestId('fixture-compact')).toBeVisible();
+    const source = await page.evaluate(() => localStorage.getItem('or3:e2e:compaction-source'));
+    expect(source).toBeTruthy();
+    const readRows = () => page.evaluate(async (source) => {
+        const names = (await indexedDB.databases()).flatMap(({ name }) => name ? [name] : []);
+        for (const name of names) {
+            const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+            if (!db.objectStoreNames.contains('messages') || !db.objectStoreNames.contains('threads')) { db.close(); continue; }
+            const tx = db.transaction(['threads', 'messages'], 'readonly');
+            const read = <T>(store: string) => new Promise<T[]>((resolve, reject) => { const request = tx.objectStore(store).getAll(); request.onsuccess = () => resolve(request.result as T[]); request.onerror = () => reject(request.error); });
+            const [threads, messages] = await Promise.all([
+                read<{ id: string; parent_thread_id?: string; summary_message_id?: string; branch_mode?: string }>('threads'),
+                read<{ id: string; thread_id: string; role: string; pending?: boolean; data: { content?: unknown; kind?: string; compaction?: { model: string; anchor_message_id: string } } }>('messages'),
+            ]);
+            db.close();
+            if (threads.some((row) => row.id === source)) return { sourceRows: messages.filter((row) => row.thread_id === source), children: threads.filter((row) => row.parent_thread_id === source), summaries: messages.filter((row) => row.data.kind === 'compaction'), totalMessages: messages.length };
+        }
+        throw new Error('The isolated fixture source was not found in IndexedDB');
+    }, source);
+    const original = await readRows(); expect(original.sourceRows).toHaveLength(4); expect(original.children).toHaveLength(0);
+    const input = page.getByRole('textbox', { name: 'Message input' }); await input.fill('Keep this unsent source draft.');
+    const before = info.outputPath('compaction-original-before.png'); await page.screenshot({ path: before, animations: 'disabled' }); await info.attach('original-before', { path: before, contentType: 'image/png' });
+    await page.getByTestId('fixture-hold-summary').check(); await page.getByTestId('fixture-compact').click();
+    await expect(page.getByTestId('fixture-compaction-state')).toHaveText('generating');
+    await page.getByTestId('fixture-cancel-compaction').click();
+    await expect(page.getByTestId('fixture-compaction-state')).toHaveText('failed');
+    await expect(input).toHaveText('Keep this unsent source draft.');
+    expect(await readRows()).toEqual(original);
+    await page.getByTestId('fixture-hold-summary').uncheck(); await page.getByTestId('fixture-compact').click();
+    await expect(page.getByTestId('fixture-compaction-state')).toHaveText('complete');
+    const card = page.locator('[data-compaction-card]'); await expect(card).toBeVisible();
+    const saved = await readRows(); expect(saved.sourceRows).toEqual(original.sourceRows); expect(saved.children).toHaveLength(1); expect(saved.summaries).toHaveLength(1); expect(saved.totalMessages).toBe(original.totalMessages + 1);
+    expect(saved.children[0]).toMatchObject({ branch_mode: 'compacted', summary_message_id: saved.summaries[0]!.id });
+    expect(saved.summaries[0]).toMatchObject({ role: 'system', pending: false, data: { compaction: { model: 'scripted-compaction-model:exact-route', anchor_message_id: `${source}-anchor` } } });
+    await page.reload(); await expect(card).toBeVisible(); expect(await readRows()).toEqual(saved);
+    await expect(card.locator('details')).not.toHaveAttribute('open');
+    await card.locator('summary').click(); await expect(card.locator('details')).toHaveAttribute('open', '');
+    await expect(card.getByText('Historical reference generated by scripted-compaction-model:exact-route. Verify details in the original conversation.')).toBeVisible();
+    await expect(card.locator('[data-compaction-summary]')).toContainText('app/example.ts');
+    await expect(card.getByRole('button', { name: /Edit|Retry|Continue/ })).toHaveCount(0);
+    const after = info.outputPath('compaction-summary-after.png'); await page.screenshot({ path: after, animations: 'disabled' }); await info.attach('summary-after', { path: after, contentType: 'image/png' });
+    await card.getByRole('button', { name: 'View original', exact: true }).click();
+    const anchor = page.locator(`[data-msg-id="${source}-anchor"]`); await expect(anchor).toBeVisible(); await expect(anchor).toContainText('Original anchor: implementation is pending.');
+    const anchorBounds = await anchor.boundingBox(); expect(anchorBounds!.y + anchorBounds!.height).toBeGreaterThan(0); expect(anchorBounds!.y).toBeLessThan(720);
+    expect(await readRows()).toEqual(saved);
+    await page.reload(); await expect(card).toBeVisible(); await card.locator('summary').click();
+    await card.getByRole('button', { name: 'Preserve the exact source path', exact: true }).click();
+    await expect(page.locator(`[data-msg-id="${source}-decision"]`)).toBeVisible();
+    expect(await readRows()).toEqual(saved);
+    const originalNavigation = info.outputPath('compaction-original-navigation.png'); await page.screenshot({ path: originalNavigation, animations: 'disabled' }); await info.attach('original-navigation', { path: originalNavigation, contentType: 'image/png' });
+});
