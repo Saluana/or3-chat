@@ -54,7 +54,7 @@ it('uses history-first guarded same-model inference with no send hooks, placehol
     expect(request).toMatchObject({ model: 'large-model', modalities: ['text'], apiKey: 'scripted' });
     expect(request.tools).toBeUndefined(); expect(request.threadId).toBeUndefined(); expect(request.messageId).toBeUndefined();
     expect(request.maxCompletionTokens).toBeGreaterThan(0); expect(request.maxCompletionTokens).toBeLessThanOrEqual(8192);
-    expect(request.orMessages).toHaveLength(2); expect(request.orMessages[0].role).toBe('system');
+    expect(request.orMessages).toHaveLength(2); expect(request.orMessages[0]!.role).toBe('system');
     const body = bodyAt();
     expect(body).toContain('\\u003c/conversation-reference\\u003e'); expect(body).not.toContain('PRIVATE_REASONING_EXCLUDE');
     expect(body.indexOf('TASK_SYSTEM_REFERENCE')).toBeLessThan(body.indexOf('End of conversation history.'));
