@@ -9,6 +9,8 @@ import { countTokensApprox } from '~/utils/chat/tokens';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine, useHooks } from '~/core/hooks/useHooks';
+import type { StoredMessage } from '../types';
+import type { openRouterStream } from '~/utils/chat/openrouterStream';
 import type { ORStreamEvent } from '~~/shared/openrouter/parseOpenRouterSSE';
 const provider = vi.hoisted(() => vi.fn());
 vi.mock('~/utils/chat/openrouterStream', () => ({ openRouterStreamWithRetry: provider }));
@@ -22,9 +24,9 @@ beforeEach(async () => {
 });
 afterEach(async () => { const db = getDb(); setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name); setHookEngine(null); });
 it.each([true, false])('persists the last measured request across the actual tool-loop and canonical reload (final usage %s)', async (finalUsage) => {
-    const db = getDb(); const initial = (await db.messages.get('assistant'))!; const persist = makeAssistantPersister(db, initial, [], 'generation');
+    const db = getDb(); const initial = (await db.messages.get('assistant'))! as StoredMessage; const persist = makeAssistantPersister(db, initial, [], 'generation');
     let requestNumber = 0;
-    provider.mockImplementation(async function* (request: { model: string; orMessages: ForegroundStreamContext['orMessages']; tools: unknown[] }): AsyncGenerator<ORStreamEvent> {
+    provider.mockImplementation(async function* (request: Parameters<typeof openRouterStream>[0]): AsyncGenerator<ORStreamEvent> {
         requestNumber += 1;
         const prefix = await captureUsagePrefix({ model: request.model, messages: request.orMessages, tools: request.tools, countText: countTokensApprox });
         if (requestNumber === 1) yield { type: 'tool_call', tool_call: { id: 'call', type: 'function', function: { name: 'lookup', arguments: '{}' } } };
@@ -37,7 +39,7 @@ it.each([true, false])('persists the last measured request across the actual too
         yield { type: 'done' };
     });
     const executeTool = vi.fn(async () => ({ result: 'Accepted tool result', toolName: 'lookup', timedOut: false }));
-    const ctx: ForegroundStreamContext = { apiKey: 'scripted', modelId: 'model', orMessages: [{ role: 'user', content: 'Task' }], modalities: ['text'],
+    const ctx: ForegroundStreamContext = { apiKey: 'scripted', modelId: 'model', orMessages: [{ role: 'user', content: [{ type: 'text', text: 'Task' }] }], modalities: ['text'],
         tools: [{ type: 'function', function: { name: 'lookup', description: 'Lookup', parameters: { type: 'object', properties: {} } } }],
         abortSignal: new AbortController().signal, assistantId: 'assistant', streamId: 'generation', threadId: 'thread', workspaceId: workspace, originDb: db,
         streamAcc: { append: vi.fn() }, hooks: useHooks(), toolRegistry: { executeTool }, persistAssistant: persist, assistantFileHashes: [], activeToolCalls: new Map(),
@@ -51,14 +53,14 @@ it.each([true, false])('persists the last measured request across the actual too
     expect((await db.messages.where('thread_id').equals('thread').toArray()).filter((item) => item.role === 'tool')).toHaveLength(1);
 });
 it('flushes measured usage before a provider interruption without bypassing the generation lease', async () => {
-    const db = getDb(); const initial = (await db.messages.get('assistant'))!; const persist = makeAssistantPersister(db, initial, [], 'generation');
-    provider.mockImplementation(async function* (request: { model: string; orMessages: ForegroundStreamContext['orMessages'] }): AsyncGenerator<ORStreamEvent> {
+    const db = getDb(); const initial = (await db.messages.get('assistant'))! as StoredMessage; const persist = makeAssistantPersister(db, initial, [], 'generation');
+    provider.mockImplementation(async function* (request: Parameters<typeof openRouterStream>[0]): AsyncGenerator<ORStreamEvent> {
         const prefix = await captureUsagePrefix({ model: request.model, messages: request.orMessages, countText: countTokensApprox });
         const usage = { prompt_tokens: 77, completion_tokens: 0, response_id: 'interrupted' };
         yield { type: 'usage', usage, requestUsage: attachRequestUsage(prefix, usage, { requestId: 'host', iteration: 1, measuredAt: 123 }) };
         throw new Error('Scripted interruption after measurement');
     });
-    const ctx: ForegroundStreamContext = { apiKey: 'scripted', modelId: 'model', orMessages: [{ role: 'user', content: 'Task' }], modalities: ['text'], tools: [],
+    const ctx: ForegroundStreamContext = { apiKey: 'scripted', modelId: 'model', orMessages: [{ role: 'user', content: [{ type: 'text', text: 'Task' }] }], modalities: ['text'], tools: [],
         abortSignal: new AbortController().signal, assistantId: 'assistant', streamId: 'generation', threadId: 'thread', workspaceId: workspace, originDb: db,
         streamAcc: { append: vi.fn() }, hooks: useHooks(), toolRegistry: { executeTool: vi.fn() }, persistAssistant: persist, assistantFileHashes: [], activeToolCalls: new Map(),
         tailAssistant: { value: null }, rawMessages: { value: [] } };
