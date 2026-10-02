@@ -138,7 +138,7 @@ describe('useAiSettings', () => {
         const pending = new Promise<void>((resolve) => { entered = resolve; });
         const gate = new Promise<void>((resolve) => { release = resolve; });
         const hold: Parameters<typeof hooks.addFilter<'db.kv.upsertByName:filter:input'>>[1] = async (row) => {
-            if (row.value?.includes('"masterSystemPrompt":"first"')) { entered(); await gate; }
+            if (typeof row.value === 'string' && row.value.includes('"masterSystemPrompt":"first"')) { entered(); await gate; }
             return row;
         };
         hooks.addFilter('db.kv.upsertByName:filter:input', hold);
@@ -208,7 +208,7 @@ describe('useAiSettings', () => {
         const gate = new Promise<void>((resolve) => { release = resolve; });
         const hooks = useHooks();
         const hold: Parameters<typeof hooks.addFilter<'db.kv.upsertByName:filter:input'>>[1] = async (row) => {
-            if (row.value?.includes('"masterSystemPrompt":"delayed"')) { entered(); await gate; }
+            if (typeof row.value === 'string' && row.value.includes('"masterSystemPrompt":"delayed"')) { entered(); await gate; }
             return row;
         };
         hooks.addFilter('db.kv.upsertByName:filter:input', hold);
