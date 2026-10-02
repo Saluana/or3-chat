@@ -150,7 +150,7 @@
             <span class="mx-1.5 opacity-40">·</span>
             <span>Need help? See the
                 <a
-                    href="https://github.com/or3-chat/or3-chat"
+                    href="https://github.com/Saluana/or3-chat/blob/or3-cloud/public/_documentation/cloud/or3-cloud-wizard.md"
                     target="_blank"
                     rel="noopener"
                     class="underline hover:text-[var(--md-primary)]"

@@ -3,7 +3,7 @@ import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { isAbsolute, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
-import { chmod, readFile, writeFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import crossSpawn from 'cross-spawn';
 import { fileURLToPath } from 'node:url';
 import { Or3CloudWizardApi } from '../../shared/cloud/wizard/api';
@@ -21,6 +21,7 @@ import {
     WIZARD_OWNED_ENV_KEYS,
 } from '../../shared/cloud/wizard/catalog';
 import { getWizardSteps } from '../../shared/cloud/wizard/steps';
+import { createWizardUiHost } from '../../shared/cloud/wizard/ui-host';
 import { buildCheatSheetLines } from '../../shared/cloud/wizard/next-steps';
 import { readEnvFile } from '../../server/admin/config/env-file';
 import {
@@ -820,81 +821,7 @@ function printDeployResult(result: WizardDeployResult): void {
     }
 }
 
-type InitialCredentials = {
-    bootstrapEmail?: string;
-    bootstrapPassword?: string;
-    adminUsername?: string;
-    adminPassword?: string;
-};
-
-export function serializeInitialCredentials(
-    credentials: InitialCredentials
-): string | null {
-    const lines = ['# OR3 first-run credentials — move to a password manager, then delete this file.'];
-    if (credentials.bootstrapEmail) {
-        lines.push(
-            `OR3_BASIC_AUTH_BOOTSTRAP_EMAIL=${serializeCredentialValue(credentials.bootstrapEmail)}`
-        );
-    }
-    if (credentials.bootstrapPassword) {
-        lines.push(
-            `OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD=${serializeCredentialValue(credentials.bootstrapPassword)}`
-        );
-    }
-    if (credentials.adminUsername) {
-        lines.push(`OR3_ADMIN_USERNAME=${serializeCredentialValue(credentials.adminUsername)}`);
-    }
-    if (credentials.adminPassword) {
-        lines.push(`OR3_ADMIN_PASSWORD=${serializeCredentialValue(credentials.adminPassword)}`);
-    }
-    return lines.length === 1 ? null : `${lines.join('\n')}\n`;
-}
-
-function serializeCredentialValue(value: string): string {
-    if (value.includes('\0') || /\r|\n/.test(value)) {
-        throw new Error('Credential values may not contain NUL or newline characters.');
-    }
-    if (/^[A-Za-z0-9._:@%+=/-]+$/.test(value)) return value;
-    return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
-}
-
-/**
- * Writes generated first-run credentials without exposing them in terminal
- * scrollback or redirected setup logs. Callers must tell the user where the
- * file is; they must never print its contents.
- */
-export async function writeInitialCredentialsFile(
-    instanceDir: string,
-    credentials: InitialCredentials
-): Promise<string | null> {
-    const content = serializeInitialCredentials(credentials);
-    if (!content) return null;
-
-    const path = resolve(instanceDir, '.or3-initial-credentials');
-    await writeFile(path, content, { mode: 0o600 });
-    await chmod(path, 0o600);
-    return path;
-}
-
-function generatedLoginCredentials(
-    answers: WizardAnswers,
-    generatedSecrets: Array<{ key: string; value: string }>
-): InitialCredentials {
-    const bootstrapPassword = generatedSecrets.find(
-        (secret) => secret.key === 'basicAuthBootstrapPassword'
-    )?.value;
-    const adminPassword = generatedSecrets.find(
-        (secret) => secret.key === 'adminPassword'
-    )?.value;
-    return {
-        bootstrapEmail: bootstrapPassword
-            ? answers.basicAuthBootstrapEmail
-            : undefined,
-        bootstrapPassword,
-        adminUsername: adminPassword ? answers.adminUsername : undefined,
-        adminPassword,
-    };
-}
+export { serializeInitialCredentials, writeInitialCredentialsFile } from '../../shared/cloud/wizard/initial-credentials';
 
 function printCheatSheet(answers: WizardAnswers): void {
     const lines = ['', '  ┌─ Next steps ──────────────────────────────'];
@@ -936,9 +863,9 @@ function resolveUiHostDir(instanceDir: string): string {
 }
 
 async function runUiInit(flags: CliFlags): Promise<void> {
-    const instanceDir = toStringFlag(flags, 'instance-dir') ?? process.cwd();
+    const instanceDir = resolve(toStringFlag(flags, 'instance-dir') ?? process.cwd());
     const packageManager = resolvePackageManagerFlag(flags);
-    const uiHostDir = resolveUiHostDir(instanceDir);
+    const uiSourceDir = resolveUiHostDir(instanceDir);
     const explicitPort = toStringFlag(flags, 'ui-port') ?? toStringFlag(flags, 'port');
 
     let port: number;
@@ -995,10 +922,9 @@ async function runUiInit(flags: CliFlags): Promise<void> {
     // without going through SSR auth middleware and cannot redirect-loop.
     const healthUrl = `${baseUrl}/_nuxt/`;
 
-    if (uiHostDir !== instanceDir) {
-        console.log(`\nHosting wizard UI from ${uiHostDir}`);
-        console.log(`Target instance: ${instanceDir}`);
-    }
+    const uiHostDir = await createWizardUiHost(uiSourceDir);
+    console.log('\nHosting setup in a temporary workspace.');
+    console.log(`Target instance: ${instanceDir}`);
 
     console.log('\nStarting wizard server...');
 
@@ -1018,21 +944,33 @@ async function runUiInit(flags: CliFlags): Promise<void> {
             HOST: '127.0.0.1',
             OR3_WIZARD_UI_ENABLED: 'true',
             OR3_WIZARD_UI_TOKEN: wizardToken,
+            OR3_LOCAL_PROVIDERS: 'false',
+            OR3_USE_LOCAL_PACKAGES: 'false',
         },
         stdio: 'inherit',
+        detached: process.platform !== 'win32',
     });
     const uiServerExit = waitForChildExit(uiServer);
+    let interrupted = false;
 
     const shutdown = () => {
         try {
-            uiServer.kill();
+            if (process.platform !== 'win32' && uiServer.pid) {
+                process.kill(-uiServer.pid, 'SIGTERM');
+            } else {
+                uiServer.kill();
+            }
         } catch {
             // Best-effort shutdown.
         }
     };
 
-    process.once('SIGINT', shutdown);
-    process.once('SIGTERM', shutdown);
+    const onSignal = () => {
+        interrupted = true;
+        shutdown();
+    };
+    process.once('SIGINT', onSignal);
+    process.once('SIGTERM', onSignal);
 
     try {
         await waitForHttpReady(healthUrl);
@@ -1041,7 +979,7 @@ async function runUiInit(flags: CliFlags): Promise<void> {
         console.log('┌──────────────────────────────────────────────────────┐');
         console.log('│  OR3 Cloud Wizard                                    │');
         console.log(`│  ${wizardUrl.padEnd(52)} │`);
-        console.log('│  This server closes after setup completes            │');
+        console.log('│  Keep this terminal open while using setup           │');
         console.log('└──────────────────────────────────────────────────────┘');
         console.log('');
 
@@ -1057,13 +995,15 @@ async function runUiInit(flags: CliFlags): Promise<void> {
         }
 
         const exitCode = await uiServerExit;
-        if (exitCode !== 0) {
+        if (exitCode !== 0 && !interrupted) {
             throw new Error(`Wizard UI server exited with code ${exitCode}.`);
         }
     } finally {
         shutdown();
-        process.off('SIGINT', shutdown);
-        process.off('SIGTERM', shutdown);
+        process.off('SIGINT', onSignal);
+        process.off('SIGTERM', onSignal);
+        await uiServerExit;
+        await rm(uiHostDir, { recursive: true, force: true });
     }
 }
 
@@ -1176,12 +1116,7 @@ async function runFastInit(flags: CliFlags): Promise<void> {
     }
 
     if (!isPersonal) {
-        const credentialsPath = await writeInitialCredentialsFile(instanceDir, {
-            bootstrapEmail,
-            bootstrapPassword,
-            adminUsername,
-            adminPassword,
-        });
+        const credentialsPath = applyResult.credentialsPath;
         console.log(
             `  First-run credentials were written with mode 0600 to ${credentialsPath}. Move them to a password manager, then delete that file.`
         );
@@ -1347,7 +1282,6 @@ async function runInit(flags: CliFlags): Promise<void> {
         let stepIndex = 0;
         let finalAnswers: WizardAnswers | null = null;
         let validationWarnings: string[] = [];
-        const generatedSecrets: Array<{ key: string; value: string }> = [];
         while (true) {
             while (true) {
                 const latestSession = await api.getSession(session.id, {
@@ -1501,10 +1435,6 @@ async function runInit(flags: CliFlags): Promise<void> {
                                 field.key === 'basicAuthBootstrapPassword'
                                     ? generateAdminPassword(24)
                                     : api.generateSecureSecret();
-                            generatedSecrets.push({
-                                key: field.key as string,
-                                value: nextValue as string,
-                            });
                             console.log(
                                 `Generated secure value for "${field.label}".`
                             );
@@ -1716,10 +1646,7 @@ async function runInit(flags: CliFlags): Promise<void> {
                 }
             }
 
-            const credentialsPath = await writeInitialCredentialsFile(
-                answers.instanceDir,
-                generatedLoginCredentials(answers, generatedSecrets)
-            );
+            const credentialsPath = applyResult.credentialsPath;
             if (credentialsPath) {
                 console.log(
                     `  Generated first-run credentials were written with mode 0600 to ${credentialsPath}. Move them to a password manager, then delete that file.`

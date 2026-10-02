@@ -27,7 +27,7 @@
  * @see types.ts for WizardProviderDescriptor shape
  * @see planning/or3-cloud-launch-wizard/design.md for catalog design rationale
  */
-import { resolve as resolvePath } from 'node:path';
+import { resolve as resolvePath } from 'pathe';
 import {
     ENV_ALIASES,
     parseEnvBoolean,
@@ -40,7 +40,7 @@ import type {
     WizardPreset,
     WizardProviderDescriptor,
 } from './types';
-import { detectPackageManager } from './package-manager';
+import { detectPackageManager } from './detect-package-manager';
 import { resolveEffectiveConnectProvider } from './connect-provider';
 
 /** Recommended self-hosted modes. The legacy fast mode stays readable. */
@@ -150,6 +150,8 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 type: 'text',
                 label: 'Your admin email',
                 help: 'This will be the first admin account. You\'ll use it to log in after setup.',
+                validate: (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value ?? '').trim())
+                    ? null : 'Enter a valid admin email (for example, you@example.com).',
                 required: true,
                 tier: 'core',
             },
@@ -157,7 +159,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 key: 'basicAuthBootstrapPassword',
                 type: 'password',
                 label: 'Your admin password (leave blank to auto-generate)',
-                help: 'Leave blank and OR3 generates a strong password. You\'ll see it on the review screen after setup.',
+                help: 'Leave blank and OR3 generates a strong password. After setup, save it from the browser review screen or the private .or3-initial-credentials file.',
                 required: true,
                 secret: true,
                 autoGenerate: true,
@@ -1150,7 +1152,7 @@ export function createDefaultAnswers(
         presetName?: string;
         existingEnv?: Record<string, string>;
     } = {
-        instanceDir: process.cwd(),
+        instanceDir: typeof process !== 'undefined' && typeof process.cwd === 'function' ? process.cwd() : '/',
     }
 ): WizardAnswers {
     const presetName = input.presetName ?? 'recommended';

@@ -36,6 +36,7 @@ export async function captureWizardRollbackSnapshots(
     const paths = new Set<string>([
         resolve(answers.instanceDir, answers.envFile),
         getProviderModuleFilePath(answers.instanceDir),
+        resolve(answers.instanceDir, '.or3-initial-credentials'),
     ]);
 
     if (

@@ -1,8 +1,10 @@
 import { defineComponent, h } from "vue";
 import { mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import WizardStepGeneric from "../WizardStepGeneric.vue";
 import WizardStepPreset from "../WizardStepPreset.vue";
+import WizardStepReview from "../WizardStepReview.vue";
+import { createDefaultAnswers } from "~~/shared/cloud/wizard/catalog";
 import type {
   WizardAnswers,
   WizardStep,
@@ -54,6 +56,39 @@ const presetStep = {
 } as WizardStep;
 
 describe("wizard accessibility", () => {
+  it("shows and copies the login after Save Settings without requiring deployment", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    try {
+      const wrapper = mount(WizardStepReview, {
+        props: {
+          step: { id: "review", title: "Review", fields: [] } as unknown as WizardStep,
+          answers: {
+            ...createDefaultAnswers({ instanceDir: "/opt/or3" }),
+            basicAuthBootstrapEmail: "admin@example.com",
+            basicAuthBootstrapPassword: "ExamplePassword123",
+          },
+          deployResponse: {
+            ok: true,
+            validation: { ok: true, errors: [], warnings: [], issues: [], derived: { env: {}, convexEnv: {}, providerModules: [] } },
+            applyResult: { dryRun: false, writtenFiles: ["/opt/or3/.env"], backupFiles: [], envUpdates: {}, providerModules: [] },
+          },
+        },
+        global: { stubs: { UButton: ButtonStub } },
+      });
+      expect(wrapper.text()).toContain("Save your admin login now");
+      expect(wrapper.text()).toContain("admin@example.com");
+      expect(wrapper.text()).toContain("ExamplePassword123");
+      await wrapper.get('button[label="Copy login"]').trigger("click");
+      expect(writeText).toHaveBeenCalledWith("OR3 admin login\nEmail: admin@example.com\nPassword: ExamplePassword123");
+      await wrapper.setProps({ deployResponse: { ...wrapper.props("deployResponse")!, applyResult: { ...wrapper.props("deployResponse")!.applyResult!, dryRun: true } } });
+      expect(wrapper.text()).not.toContain("Save your admin login now");
+      wrapper.unmount();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("uses a native named radio group with a visible selected indicator", async () => {
     const wrapper = mount(WizardStepPreset, {
       props: {
