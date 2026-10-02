@@ -43,8 +43,6 @@ export default defineEventHandler(async (event) => {
     requireSession(session);
     const userId = session.user?.id;
     if (!userId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
-    enforceRateLimit(event, checkSyncRateLimit(userId, 'chat-tool:result'));
-    recordSyncRequest(userId, 'chat-tool:result');
     const jobId = getRouterParam(event, 'id');
     // JSON escaping can expand a valid 256 KiB result by up to six bytes per
     // character (for example, control characters encoded as \u00xx).
@@ -62,6 +60,7 @@ export default defineEventHandler(async (event) => {
 
     // Reserve the request after validation but before provider work so
     // concurrent calls cannot share one slot and invalid requests are free.
+    enforceRateLimit(event, checkSyncRateLimit(userId, 'chat-tool:result'));
     recordSyncRequest(userId, 'chat-tool:result');
     const provider = await getJobProvider();
     if (!provider.settleClientToolCall) {
