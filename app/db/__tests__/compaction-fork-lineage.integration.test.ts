@@ -49,7 +49,7 @@ describe('ordinary forks after compaction', () => {
         const hooks = useHooks();
         hooks.addAction('db.threads.create:action:before', ({ entity }) => { entity.branch_mode = 'compacted'; });
         await expect(createThread({ title: 'Forged' })).rejects.toThrow(/atomic|validated/i);
-        hooks.addAction('db.threads.fork:action:before', ({ fork }) => { fork.branch_mode = 'compacted'; });
+        hooks.addAction('db.threads.fork:action:before', (payload) => { (payload as { fork: { branch_mode?: string | null } }).fork.branch_mode = 'compacted'; });
         await expect(ordinaryFork('legacy')).rejects.toThrow(/atomic|validated/i);
         expect(await getDb().threads.count()).toBe(count);
     });
@@ -61,7 +61,7 @@ describe('ordinary forks after compaction', () => {
             status: 'ready', deleted: false, pinned: false, forked: true, created_at: 1, updated_at: 1, clock: 1 });
         await expect(upsertThread(forged)).rejects.toThrow(/atomic|validated/i);
         const hooks = useHooks();
-        hooks.addFilter('branch.fork:filter:options', (options) => ({ ...options, mode: 'compacted' }));
+        hooks.addFilter('branch.fork:filter:options', (options) => ({ ...options, mode: 'compacted' as const }));
         await expect(anchoredFork({ sourceThreadId: 'compacted', anchorMessageId: 'own-anchor' })).rejects.toThrow(/atomic|validated/i);
         expect(await getDb().threads.count()).toBe(count);
     });

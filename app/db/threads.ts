@@ -410,7 +410,6 @@ export async function forkThread(
             ...src,
             id: forkId,
             forked: true,
-            parent_thread_id: src.id,
             created_at: now,
             updated_at: now,
             last_message_at: null,
