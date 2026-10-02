@@ -26,6 +26,20 @@ The one unchanged named PageShell journey EXIT1 on this source. Canonical tool d
 
 Parent approved a narrow lifetime correction: keep original cancellation and successful-compaction draft assertions; explicitly assert empty source draft after reload; create a fresh source draft; then exercise child -> tool landmark -> source and retain the exact draft, durable-row and normal-new-chat assertions. No product persistence change or assertion removal. The first failure remains evidence of the invalid expectation; the corrected browser, exact remote CI and parent review are still pending.
 
+### Fresh post-reload draft navigation failure and correction
+
+The lifetime-corrected e739f820 journey EXIT1 at line373: explicitly empty after reload, fresh source draft entered, child switch, canonical tool landmark/disclosure and unchanged durable rows PASS; the fresh source draft is then missing. Later ordinary-new-chat assertions were not reached. This is a production navigation failure, distinct from the prior invalid reload-persistence expectation. Original trace/screenshots/logs remain at `task-3/output/playwright/compaction-pane-lifetime-first-browser`; own preview stopped and3211/25211 listeners were absent before release. No assertions or timeouts were removed or extended.
+
+Actual composer capture suppressed outgoing saves while asynchronous settings restoration held `restoringDraft`. A delayed older restoration could also apply default settings to the destination tab. The correction captures the visible outgoing composer even while metadata is pending, retains reactive restoration suppression, and fences asynchronous completion by restoration revision, tab identity and disposal. In-memory lifetime, attachments and ordinary navigation stay on the existing draft store; no public API, inference, durable writes or persistence extension is added.
+
+Test-authoring gate: extend the existing mounted composer owner using its public setText/triggerSend and the real in-memory draft store. The distinct observable contracts are preserving newly typed source text across an overlapping tab switch and preserving the destination's saved model variant after an earlier settings request finishes. Both have real deferred-metadata fail-before proofs; existing draft-store/transition tests do not exercise the component's async restoration boundary. External settings load and send result alone are scripted, with no test-only production seam.
+
+- Intended baseline missing outgoing draft: `/tmp/task3-tab-draft-restore-public-baseline.log`; delayed settings replacing nitro with off: `/tmp/task3-tab-draft-stale-settings-baseline.log`. The first combined name filter did not independently qualify the stale-settings case; its separate exact-name run does.
+- Composer candidate7 cases PASS `/tmp/task3-tab-draft-candidate-focused.log`; composer/draft-store/tab-transition/workspace-tab siblings31 cases/4 owners PASS `/tmp/task3-tab-draft-siblings.log`. Final coherent31-case run PASS `/tmp/task3-tab-draft-final-focused.log`; explicit changed-test lint with max-warnings0 PASS `/tmp/task3-tab-draft-lint-final-typed.log`. Exact configured/browser gates are recorded separately when run.
+- Initial lint invocation found ignored files; explicit test lint exposed preexisting untyped VueUse callback assignments. Those casts were narrowed without changing test behavior. First failures remain `/tmp/task3-tab-draft-lint.log`, `/tmp/task3-tab-draft-lint-explicit.log`, `/tmp/task3-tab-draft-lint-final.log`. Vue files are excluded by repository ESLint and require the configured application gate. Compatibility ledger/snapshots PASS `/tmp/task3-tab-draft-compatibility.log`, public signatures unchanged.
+
+Tasks1.2/4.6/4.7/8.1 remain partial. Corrected browser, exact remote CI and parent review are still required; reverse-child/human-ordinal presentation and all other unfinished criteria remain open.
+
 The six plan files match upstream exactly at the inspected default base `6ee4450b`.
 This branch is separate from assistant/Files and starts on the temporary reviewed
 integration base containing PR179 `40b7aef6`, PR181 `bb86066c`, and PR182 `07b235b2`.
