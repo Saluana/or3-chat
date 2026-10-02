@@ -83,7 +83,7 @@ describe('useServerRestart', () => {
 
         expect(mockToastAdd).toHaveBeenCalledWith({
             title: 'Error',
-            description: 'Network error',
+            description: 'Restart failed',
             color: 'error',
         });
     });

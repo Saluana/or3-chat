@@ -1,3 +1,4 @@
+import { presentError, errorDiagnostics } from '~~/shared/errors';
 /**
  * @module app/composables/chat/useAi.ts
  *
@@ -69,7 +70,7 @@ import {
     createForegroundGenerationLease,
 } from '~/utils/chat/generation-lease';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
-import { reportError, err } from '~/utils/errors';
+import { reportError, err, asAppError } from '~/utils/errors';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import {
     buildParts,
@@ -1270,8 +1271,11 @@ export function useChat(
                 outcome === 'aborted'
                     ? 'stopped'
                     : outcome === 'failed'
-                      ? update.status.error || 'Background response failed'
+                      ? presentError(update.status.error, { code: 'ERR_STREAM_FAILURE' }).message
                       : null;
+            if (outcome === 'failed' && request.ownsView()) reportError(update.status.error, {
+                code: 'ERR_STREAM_FAILURE', tags: { domain: 'chat', stage: 'background' },
+            });
             reportFinalization(
                 await finalizeRequest(request, {
                     outcome,
@@ -1782,7 +1786,7 @@ export function useChat(
                 error: message,
             };
             if (import.meta.dev) {
-                console.warn('[useChat] sendMessage threw', error);
+                console.warn('[useChat] sendMessage threw', errorDiagnostics(error));
             }
             reportError(
                 err('ERR_INTERNAL', message || 'Failed to send message', {
@@ -2185,7 +2189,7 @@ export function useChat(
                     }),
                     { toast: true }
                 );
-                if (import.meta.dev) console.warn('[useChat] retry persistence callback failed', error);
+                if (import.meta.dev) console.warn('[useChat] retry persistence callback failed', errorDiagnostics(error));
             }
         }
         const rawUser: ChatMessage = {
@@ -2213,7 +2217,7 @@ export function useChat(
             }
         } catch (e) {
             if (import.meta.dev) {
-                console.warn('[useChat] pane hook failed', e);
+                console.warn('[useChat] pane hook failed', errorDiagnostics(e));
             }
         }
 
@@ -2903,7 +2907,7 @@ export function useChat(
                         if (import.meta.dev) {
                             console.warn(
                                 '[useChat] turn writeback failed',
-                                writebackError
+                                errorDiagnostics(writebackError)
                             );
                         }
                     }
@@ -3011,13 +3015,16 @@ export function useChat(
                     assistantMessageId: requestScope.assistantMessageId,
                 };
             }
-            const visibleError = isStaleDevModuleError(err)
+            const rawError = isStaleDevModuleError(err)
                 ? new Error(
                       'The development server reloaded while this message was starting. Reload OR3, then resend the message.'
                   )
                 : err instanceof Error
                   ? err
                   : new Error(String(err));
+            const visibleError = asAppError(rawError, { code: 'ERR_STREAM_FAILURE',
+                ...(isStaleDevModuleError(err) ? { fallbackMessage: 'The development server reloaded. Reload OR3, then resend your message.' } : {}),
+            });
             if (stopped) {
                 terminalResult = {
                     status: 'aborted',
@@ -3468,7 +3475,7 @@ export function useChat(
                 if (import.meta.dev) {
                     console.warn(
                         '[useChat] abort controller cleanup failed',
-                        e
+                        errorDiagnostics(e)
                     );
                 }
             }
@@ -3541,7 +3548,7 @@ export function useChat(
     if (threadIdRef.value) {
         void reconcileForegroundGenerations().catch((error) => {
             if (import.meta.dev) {
-                console.warn('[useChat] attach-time recovery failed', error);
+                console.warn('[useChat] attach-time recovery failed', errorDiagnostics(error));
             }
         });
     }

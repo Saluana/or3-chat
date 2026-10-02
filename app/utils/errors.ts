@@ -12,50 +12,45 @@
  * - `simpleRetry` provides a small retry helper for transient failures
  *
  * Constraints:
- * - Scrubbing only targets obvious token-like strings
+ * - Primary copy comes from shared classification and app-owned fallbacks
  * - Logging is best-effort and should not throw
  *
  * Non-Goals:
  * - Full telemetry pipeline
- * - Deep data redaction or structured error serialization
+ * - Uploading diagnostic causes or response bodies to telemetry
  */
 
 import { tryGetHooks, useHooks } from '~/core/hooks/useHooks';
+import {
+    normalizeError,
+    presentError,
+    errorDiagnostics,
+    redactErrorText,
+    type ErrorMetadata,
+    type ErrorContext,
+    type RecoveryAction,
+    type ErrorCode,
+} from '~~/shared/errors';
+export type { ErrorCode } from '~~/shared/errors';
 
 export type ErrorSeverity = 'info' | 'warn' | 'error' | 'fatal';
 
-export type ErrorCode =
-    | 'ERR_INTERNAL'
-    | 'ERR_STREAM_ABORTED'
-    | 'ERR_STREAM_FAILURE'
-    | 'ERR_NETWORK'
-    | 'ERR_TIMEOUT'
-    | 'ERR_DB_WRITE_FAILED'
-    | 'ERR_DB_READ_FAILED'
-    | 'ERR_DB_QUOTA_EXCEEDED'
-    | 'ERR_FILE_VALIDATION'
-    | 'ERR_FILE_PERSIST'
-    | 'ERR_STORAGE_UPLOAD_FAILED'
-    | 'ERR_STORAGE_DOWNLOAD_FAILED'
-    | 'ERR_STORAGE_QUOTA_EXCEEDED'
-    | 'ERR_STORAGE_FILE_NOT_FOUND'
-    | 'ERR_STORAGE_PROVIDER_ERROR'
-    | 'ERR_FILE_TOO_LARGE'
-    | 'ERR_VALIDATION'
-    | 'ERR_AUTH'
-    | 'ERR_RATE_LIMIT'
-    | 'ERR_UNSUPPORTED_MODEL'
-    | 'ERR_HOOK_FAILURE';
-
-export interface AppError extends Error {
+export interface AppError extends Error, ErrorMetadata {
     code: ErrorCode;
     severity: ErrorSeverity; // default 'error'
-    retryable?: boolean;
+    retryable: boolean;
     tags?: Record<string, string | number | boolean | undefined>;
     timestamp: number; // ms epoch
 }
 
 export type StandardError = AppError; // alias for wording continuity
+
+// Only explicit app-owned presentation context can survive another boundary.
+// Exception messages and objects claiming to be AppErrors never establish trust.
+const trustedErrorContexts = new WeakMap<
+    Error,
+    Pick<ErrorContext, 'fallbackMessage' | 'operation'>
+>();
 
 /**
  * `err`
@@ -66,17 +61,17 @@ export type StandardError = AppError; // alias for wording continuity
 export function err(
     code: ErrorCode,
     message: string,
-    o: {
+    o: Partial<Omit<ErrorMetadata, 'code'>> & {
         severity?: ErrorSeverity;
         retryable?: boolean;
         tags?: Record<string, string | number | boolean | undefined>;
         cause?: unknown;
-    } = {}
+    } = {},
 ): AppError {
     const e = new Error(message) as AppError;
     e.code = code;
     e.severity = o.severity || 'error';
-    e.retryable = o.retryable;
+    Object.assign(e, normalizeError({ ...o, code }));
     e.tags = o.tags;
     e.timestamp = Date.now();
     if (o.cause && e.cause === undefined) e.cause = o.cause;
@@ -101,31 +96,56 @@ export function isAppError(v: unknown): v is AppError {
  */
 export function asAppError(
     v: unknown,
-    fb: { code?: ErrorCode; message?: string } = {}
+    fb: ErrorContext & { message?: string } = {},
 ): AppError {
-    if (isAppError(v)) return v;
-    if (v instanceof Error)
-        return err(
-            fb.code || 'ERR_INTERNAL',
-            v.message || fb.message || 'Error',
-            { cause: v.cause }
-        );
-    if (typeof v === 'string') return err(fb.code || 'ERR_INTERNAL', v);
-    return err(fb.code || 'ERR_INTERNAL', fb.message || 'Unknown error');
+    const inherited =
+        v instanceof Error ? trustedErrorContexts.get(v) : undefined;
+    const context = {
+        ...fb,
+        fallbackMessage:
+            fb.message ?? fb.fallbackMessage ?? inherited?.fallbackMessage,
+        operation: fb.operation ?? inherited?.operation,
+    };
+    const metadata = normalizeError(v, context);
+    const presentation = presentError(metadata, context);
+    const original = v && typeof v === 'object' ? (v as Partial<AppError>) : {};
+    const e = err(metadata.code, presentation.message, {
+        ...metadata,
+        severity: original.severity,
+        tags: original.tags,
+        cause: v,
+    });
+    if (
+        context.fallbackMessage !== undefined ||
+        context.operation !== undefined
+    ) {
+        trustedErrorContexts.set(e, {
+            fallbackMessage:
+                context.fallbackMessage === undefined
+                    ? undefined
+                    : redactErrorText(context.fallbackMessage),
+            operation: context.operation,
+        });
+    }
+    if (isAppError(v) && v.timestamp) e.timestamp = v.timestamp;
+    return e;
 }
 
-// Lightweight secret scrub (only obvious tokens, not error messages)
-// Only redact values that look like actual API keys/tokens:
-// - Contains secret-related keywords AND
-// - Is long enough AND
-// - Looks like a token (alphanumeric, no spaces - error messages have spaces)
-function scrubValue(val: unknown): unknown {
-    if (typeof val !== 'string') return val;
-    // Only scrub if: has keyword, length > 20, AND looks like a token (no spaces, mostly alphanumeric)
-    const hasKeyword = /(api|key|secret|token)/i.test(val);
-    const looksLikeToken = val.length > 20 && !/\s/.test(val) && /^[A-Za-z0-9_\-.:]+$/.test(val);
-    if (hasKeyword && looksLikeToken) return '***';
-    return val.length > 8192 ? val.slice(0, 8192) + '…' : val;
+const LOG_TAGS = new Set(['domain', 'stage', 'op', 'entity', 'rw', 'attempt']);
+function safeLogTags(tags: AppError['tags']) {
+    return Object.fromEntries(
+        Object.entries(tags ?? {})
+            .filter(
+                ([key, value]) =>
+                    LOG_TAGS.has(key) &&
+                    (typeof value !== 'string' ||
+                        /^[a-z_:-]{1,64}$/.test(value)),
+            )
+            .map(([key, value]) => [
+                key,
+                typeof value === 'string' ? redactErrorText(value, 80) : value,
+            ]),
+    );
 }
 
 // Duplicate suppression (code|message within window)
@@ -169,6 +189,13 @@ export type ErrorToastApi = {
 };
 
 let errorToastApi: ErrorToastApi | null = null;
+type ErrorRecoveryApi = Partial<Record<RecoveryAction, () => void>> & {
+    details?: (error: ErrorMetadata) => void;
+};
+let errorRecoveryApi: ErrorRecoveryApi = {};
+export function setErrorRecoveryApi(api: ErrorRecoveryApi): void {
+    errorRecoveryApi = api;
+}
 
 /**
  * Registers the Nuxt UI toast instance captured while a client plugin has an
@@ -184,24 +211,50 @@ function pushToast(error: AppError, retry?: () => void) {
     const toast = errorToastApi;
     if (!toast) return;
     try {
+        const presentation = presentError(error, {
+            ...trustedErrorContexts.get(error),
+            fallbackMessage: error.message,
+        });
+        const actions: ToastAction[] = [];
+        const labels = {
+            update_key: 'Update API key',
+            sign_in: 'Sign in',
+            add_credits: 'Add credits',
+        };
+        if (presentation.action && errorRecoveryApi[presentation.action]) {
+            const recover = errorRecoveryApi[presentation.action]!;
+            actions.push({
+                label: labels[presentation.action],
+                onClick: recover,
+            });
+        }
+        if (
+            retry &&
+            error.retryable &&
+            Date.now() >= error.timestamp + (error.retryAfterMs ?? 0)
+        )
+            actions.push({
+                label: 'Retry',
+                onClick: () => {
+                    try {
+                        retry();
+                    } catch {
+                        /* reporting is best effort */
+                    }
+                },
+            });
+        if (errorRecoveryApi.details)
+            actions.push({
+                label: 'Details',
+                onClick: () => {
+                    errorRecoveryApi.details?.(errorDiagnostics(error));
+                },
+            });
         toast.add({
-            id: error.timestamp + '-' + error.code,
-            title: error.code,
-            description: error.message,
-            actions: retry
-                ? [
-                      {
-                          label: 'Retry',
-                          onClick: () => {
-                              try {
-                                  retry();
-                              } catch {
-                                  /* ignore */
-                              }
-                          },
-                      },
-                  ]
-                : undefined,
+            title: presentation.title,
+            description: presentation.message,
+            actions: actions.length ? actions : undefined,
+            duration: presentation.action ? 0 : 8000,
             color:
                 error.severity === 'fatal'
                     ? 'error'
@@ -216,7 +269,7 @@ function pushToast(error: AppError, retry?: () => void) {
     }
 }
 
-export interface ReportOptions {
+export interface ReportOptions extends ErrorContext {
     code?: ErrorCode;
     message?: string;
     tags?: Record<string, string | number | boolean | undefined>;
@@ -240,24 +293,18 @@ export interface ReportOptions {
  */
 export function reportError(
     input: unknown,
-    opts: ReportOptions = {}
+    opts: ReportOptions = {},
 ): AppError {
     let e: AppError;
     try {
-        e = asAppError(input, { code: opts.code, message: opts.message });
+        e = asAppError(input, opts);
         if (opts.severity) e.severity = opts.severity;
-        if (opts.retryable !== undefined) e.retryable = opts.retryable;
+        if (opts.retryable !== undefined)
+            e.retryable = normalizeError({
+                ...e,
+                retryable: opts.retryable,
+            }).retryable;
         if (opts.tags) e.tags = { ...(e.tags || {}), ...opts.tags };
-        // Scrub shallow string fields
-        e.message = scrubValue(e.message) as string;
-        if (e.tags) {
-            for (const k in e.tags)
-                e.tags[k] = scrubValue(e.tags[k]) as
-                    | string
-                    | number
-                    | boolean
-                    | undefined;
-        }
         if (shouldLog(e.code, e.message)) {
             const level =
                 e.severity === 'warn'
@@ -266,11 +313,10 @@ export function reportError(
                       ? 'info'
                       : 'error';
             console[level]('[err]', {
-                code: e.code,
                 msg: e.message,
                 severity: e.severity,
-                retryable: !!e.retryable,
-                tags: e.tags,
+                tags: safeLogTags(e.tags),
+                ...errorDiagnostics(e),
             });
         }
         // Prefer inject-free cache; fall back to useHooks only on SSR where
@@ -304,7 +350,7 @@ export function reportError(
         return e;
     } catch (inner) {
         try {
-            console.error('[reportError-fallback]', inner, input);
+            console.error('[reportError-fallback]', errorDiagnostics(inner));
         } catch {
             /* ignore */
         }
@@ -322,7 +368,7 @@ export function reportError(
 export async function simpleRetry<T>(
     fn: () => Promise<T>,
     attempts = 2,
-    delayMs = 400
+    delayMs = 400,
 ): Promise<T> {
     let lastErr: unknown;
     for (let i = 0; i < attempts; i++) {

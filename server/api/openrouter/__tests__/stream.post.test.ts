@@ -335,7 +335,7 @@ describe('POST /api/openrouter/stream credential authorization', () => {
 
         await expect(
             handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }))
-        ).resolves.toBe('Failed to reach OpenRouter');
+        ).resolves.toMatchObject({ error: { code: 'ERR_PROVIDER', status: 502, source: 'provider', retryable: true, message: 'The AI provider could not complete the request. Please try again later.' } });
         expect(setResponseStatusMock).toHaveBeenLastCalledWith(
             expect.anything(),
             502

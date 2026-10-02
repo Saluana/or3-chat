@@ -140,12 +140,13 @@ describe('createGatewayStorageProvider', () => {
         });
     });
 
-    it('includes endpoint and status text in error message', async () => {
+    it('preserves status while excluding gateway response text', async () => {
         vi.stubGlobal(
             'fetch',
             vi.fn(async () => ({
                 ok: false,
                 status: 500,
+                headers: new Headers(),
                 text: vi.fn(async () => 'Boom'),
             }))
         );
@@ -159,7 +160,7 @@ describe('createGatewayStorageProvider', () => {
                 mimeType: 'image/png',
                 sizeBytes: 100,
             })
-        ).rejects.toThrow('[gateway-storage] /api/storage/presign-upload failed: 500 Boom');
+        ).rejects.toMatchObject({ status: 500, source: 'storage', retryable: true, message: 'The service could not complete the request. Please try again later.' });
     });
 
     it('isolates a transient S3/R2 gateway outage to one request', async () => {
@@ -168,6 +169,7 @@ describe('createGatewayStorageProvider', () => {
             .mockResolvedValueOnce({
                 ok: false,
                 status: 503,
+                headers: new Headers(),
                 text: vi.fn(async () => 'object storage unavailable'),
             } as unknown as Response)
             .mockResolvedValueOnce(okJson({
@@ -188,7 +190,7 @@ describe('createGatewayStorageProvider', () => {
                 mimeType: 'image/png',
                 sizeBytes: 3,
             })
-        ).rejects.toThrow('503 object storage unavailable');
+        ).rejects.toMatchObject({ status: 503, source: 'storage', retryable: true });
 
         await expect(
             provider.getPresignedDownloadUrl({

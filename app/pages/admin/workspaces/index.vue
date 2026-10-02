@@ -202,9 +202,7 @@ async function refreshWorkspaces() {
         workspaces.value = [];
         total.value = 0;
         error.value =
-            err instanceof Error
-                ? err
-                : new Error(getMessage(err, 'Unable to load workspaces'));
+            new Error(getMessage(err, 'Unable to load workspaces'));
     } finally {
         hasLoaded.value = true;
         pending.value = false;

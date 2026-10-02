@@ -204,7 +204,7 @@ async function handleLogin() {
 
         await router.push('/admin');
     } catch (err: unknown) {
-        error.value = getMessage(err, 'Login failed');
+        error.value = getMessage(err, 'Login failed', { source: 'admin', operation: 'login' });
     } finally {
         isLoading.value = false;
     }

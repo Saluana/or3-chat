@@ -1,3 +1,4 @@
+import { presentError } from '~~/shared/errors';
 /**
  * Atomic, workspace-bound persistence for background job projections.
  */
@@ -261,7 +262,7 @@ export async function persistBackgroundJobUpdate(
 
     const nextError =
         status.status === 'error'
-            ? status.error || 'Background response failed'
+            ? presentError(status.error, { code: 'ERR_STREAM_FAILURE' }).message
             : status.status === 'aborted'
               ? 'Background response aborted'
               : null;

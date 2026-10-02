@@ -1,3 +1,4 @@
+import type { ErrorMetadata } from '../errors';
 export type FileTransferDirection = 'upload' | 'download';
 
 export type FileTransferState =
@@ -25,6 +26,7 @@ export interface FileTransfer {
     lease_expires_at?: number;
     retry_at?: number;
     last_error?: string;
+    last_error_details?: ErrorMetadata;
     created_at: number;
     updated_at: number;
 }

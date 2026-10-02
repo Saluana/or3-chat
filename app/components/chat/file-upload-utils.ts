@@ -1,3 +1,4 @@
+import { presentError } from '~~/shared/errors';
 import { reportError, err } from '~/utils/errors';
 import { createOrRefFile } from '~/db/files';
 import { useHooks } from '~/core/hooks/useHooks';
@@ -105,7 +106,7 @@ export async function persistAttachment(att: AttachmentLike) {
         await persist();
     } catch (e: unknown) {
         att.status = 'error';
-        att.error = e instanceof Error ? e.message : 'failed';
+        att.error = presentError(e, { code: 'ERR_FILE_PERSIST' }).message;
         reportError(e, {
             code: 'ERR_FILE_PERSIST',
             toast: true,
@@ -113,7 +114,7 @@ export async function persistAttachment(att: AttachmentLike) {
                 att.status = 'pending';
                 persist().catch((err2) => {
                     att.status = 'error';
-                    att.error = err2 instanceof Error ? err2.message : 'failed';
+                    att.error = presentError(err2, { code: 'ERR_FILE_PERSIST' }).message;
                 });
             },
             tags: { domain: 'files', stage: 'persist', name: att.name },

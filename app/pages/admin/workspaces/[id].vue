@@ -306,9 +306,7 @@ async function refreshWorkspace() {
     } catch (err: unknown) {
         workspace.value = null;
         error.value =
-            err instanceof Error
-                ? err
-                : new Error(getMessage(err, 'Unable to load workspace'));
+            new Error(getMessage(err, 'Unable to load workspace'));
     } finally {
         pending.value = false;
     }

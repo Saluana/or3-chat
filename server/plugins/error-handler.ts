@@ -1,3 +1,4 @@
+import { presentError, errorDiagnostics } from '~~/shared/errors';
 /**
  * @module server/plugins/error-handler
  *
@@ -23,20 +24,6 @@ interface ErrorLogEntry {
     stack?: string;
 }
 
-function getErrorMessage(error: unknown): string {
-    if (error instanceof Error && error.message) {
-        return error.message;
-    }
-    if (typeof error === 'string' && error.length > 0) {
-        return error;
-    }
-    return 'Internal server error';
-}
-
-function getErrorStack(error: unknown): string | undefined {
-    return error instanceof Error ? error.stack : undefined;
-}
-
 function getErrorStatus(error: unknown): number {
     if (!error || typeof error !== 'object') {
         return 500;
@@ -55,7 +42,7 @@ export default defineNitroPlugin((nitro) => {
     nitro.hooks.hook('error', (error, { event }) => {
         if (!event) {
             // Non-HTTP error (e.g., startup error)
-            console.error('[error]', error);
+            console.error('[error]', errorDiagnostics(error));
             return;
         }
 
@@ -66,17 +53,14 @@ export default defineNitroPlugin((nitro) => {
 
         const logEntry: ErrorLogEntry = {
             level: 'error',
-            message: getErrorMessage(error),
+            message: presentError(error).message,
             status,
             method,
             path,
             timestamp: new Date().toISOString(),
         };
 
-        // Only include stack traces in non-production environments
-        if (process.env.NODE_ENV !== 'production') {
-            logEntry.stack = getErrorStack(error);
-        }
+
 
         // Log as structured JSON
         console.error(JSON.stringify(logEntry));

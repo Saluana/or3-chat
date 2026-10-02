@@ -584,7 +584,8 @@ describe('OutboxManager', () => {
         expect(stored?.status).toBe('failed_permanent');
         expect(stored?.failureKind).toBe('permanent');
         expect((stored?.payload as { content: string }).content).toBe(content);
-        expect(stored?.lastError).toMatch(/Payload too large for messages/);
+        expect(stored?.lastError).toBe('This change exceeds sync limits. Reduce its size before trying again.');
+        expect(stored?.lastErrorDetails).toMatchObject({ code: 'ERR_SYNC_PAYLOAD_TOO_LARGE', retryable: false });
     });
 
     it('recovers legacy syncing and current in-flight ops once per start cycle', async () => {

@@ -1,3 +1,4 @@
+import { normalizeError, presentError, type ErrorSource, type CredentialSource } from '../errors';
 // shared/openrouter/errors.ts
 // Centralized error handling for OpenRouter SDK
 // Maps SDK errors to user-friendly normalized errors
@@ -18,19 +19,8 @@ import {
     UnprocessableEntityResponseError,
 } from '@openrouter/sdk/models/errors';
 
-export type ErrorCode =
-    | 'ERR_AUTH'
-    | 'ERR_CREDITS'
-    | 'ERR_FORBIDDEN'
-    | 'ERR_RATE_LIMIT'
-    | 'ERR_BAD_REQUEST'
-    | 'ERR_NOT_FOUND'
-    | 'ERR_TIMEOUT'
-    | 'ERR_SERVER'
-    | 'ERR_PROVIDER'
-    | 'ERR_OVERLOADED'
-    | 'ERR_ABORTED'
-    | 'ERR_UNKNOWN';
+export type { ErrorCode } from '../errors';
+import type { ErrorCode } from '../errors';
 
 export interface NormalizedError {
     code: ErrorCode;
@@ -38,6 +28,10 @@ export interface NormalizedError {
     status: number;
     retryable: boolean;
     raw?: unknown;
+    source?: ErrorSource;
+    credentialSource?: CredentialSource;
+    providerCode?: string | number;
+    retryAfterMs?: number;
 }
 
 export type OpenRouterStreamFailureKind =
@@ -50,6 +44,9 @@ export type OpenRouterStreamFailureKind =
  * Carries enough metadata for the caller to decide whether to retry.
  */
 export class OpenRouterStreamError extends Error {
+    code?: ErrorCode;
+    source: ErrorSource;
+    credentialSource?: CredentialSource;
     status: number;
     retryAfterMs: number | undefined;
     retryable: boolean;
@@ -60,14 +57,20 @@ export class OpenRouterStreamError extends Error {
     constructor(
         message: string,
         {
+            code,
             status,
+            source = 'provider',
+            credentialSource,
             retryAfterMs,
             retryable,
             kind = 'transport',
             providerCode,
             finishReason,
         }: {
+            code?: ErrorCode;
             status: number;
+            source?: ErrorSource;
+            credentialSource?: CredentialSource;
             retryAfterMs?: number;
             retryable: boolean;
             kind?: OpenRouterStreamFailureKind;
@@ -77,7 +80,10 @@ export class OpenRouterStreamError extends Error {
     ) {
         super(message);
         this.name = 'OpenRouterStreamError';
+        this.code = code;
         this.status = status;
+        this.source = source;
+        this.credentialSource = credentialSource;
         this.retryAfterMs = retryAfterMs;
         this.retryable = retryable;
         this.kind = kind;
@@ -124,7 +130,7 @@ export class OpenRouterProviderError extends OpenRouterStreamError {
  * Map SDK error classes to normalized error objects.
  * This enables consistent error handling across all SDK calls.
  */
-export function normalizeSDKError(error: unknown): NormalizedError {
+function classifySDKError(error: unknown): NormalizedError {
     // SDK typed errors
     if (error instanceof UnauthorizedResponseError) {
         return {
@@ -275,4 +281,17 @@ export function normalizeSDKError(error: unknown): NormalizedError {
         retryable: true,
         raw: error,
     };
+}
+
+export function normalizeSDKError(error: unknown): NormalizedError {
+    const classified = classifySDKError(error);
+    const metadata = normalizeError({
+        ...(error && typeof error === 'object' ? error : {}),
+        name: error instanceof Error ? error.name : undefined,
+        message: error instanceof Error ? error.message : undefined,
+        code: classified.code, status: classified.status || (error as { status?: number } | null)?.status,
+        source: 'provider', retryable: classified.code === 'ERR_UNKNOWN' ? undefined : classified.retryable,
+    });
+    return { ...metadata, status: metadata.status ?? 0,
+        message: presentError(metadata).message, raw: error };
 }

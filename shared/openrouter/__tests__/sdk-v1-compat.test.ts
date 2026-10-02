@@ -124,6 +124,7 @@ describe('openrouter sdk v1 compat helpers', () => {
     it('normalizeSDKError still handles unknown errors without ChatError', () => {
         const normalized = normalizeSDKError(new Error('boom'));
         expect(normalized.code).toBe('ERR_UNKNOWN');
-        expect(normalized.message).toBe('boom');
+        expect(normalized.message).toBe('The operation could not be completed. Please try again.');
+        expect(normalized.raw).toBeInstanceOf(Error);
     });
 });

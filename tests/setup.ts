@@ -68,17 +68,10 @@ class ResizeObserver {
 (globalThis as any).ResizeObserver = ResizeObserver;
 
 // Mock errors utility globally for all tests
-vi.mock('~/utils/errors', () => ({
-    reportError: vi.fn(),
-    err: vi.fn(
-        (code: string, message: string, meta?: Record<string, unknown>) => {
-            const e = new Error(message) as Error & { code: string; tags?: unknown };
-            e.code = code;
-            if (meta?.tags) e.tags = meta.tags;
-            return e;
-        }
-    ),
-}));
+vi.mock('~/utils/errors', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('~/utils/errors')>();
+    return { ...actual, reportError: vi.fn(), err: vi.fn(actual.err) };
+});
 
 // Mock useChat globally for tests (can be overridden in individual test files)
 vi.mock('~/composables/chat/useAi', () => {

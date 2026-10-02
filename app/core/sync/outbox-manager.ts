@@ -1,3 +1,4 @@
+import { errorDiagnostics, presentError, type ErrorMetadata } from '~~/shared/errors';
 /**
  * @module app/core/sync/outbox-manager
  *
@@ -707,7 +708,7 @@ export class OutboxManager {
             const message = error instanceof Error ? error.message : String(error);
             let failCount = 0;
             for (const op of batch) {
-                await this.handleFailedOp(op, message);
+                await this.handleFailedOp(op, message, undefined, errorDiagnostics(error, { source: 'sync' }));
                 failCount += 1;
             }
             await hooks.doAction('sync.push:action:after', {
@@ -822,12 +823,13 @@ export class OutboxManager {
     private async handleFailedOp(
         op: PendingOp,
         error?: string,
-        errorCode?: string
+        errorCode?: string,
+        details?: ErrorMetadata
     ): Promise<void> {
         const hooks = useHooks();
-        if (errorCode === 'RATE_LIMITED' || this.isRateLimitMessage(error)) {
+        if (details?.code === 'ERR_RATE_LIMIT' || errorCode === 'RATE_LIMITED' || this.isRateLimitMessage(error)) {
             const rateLimitDelayMs =
-                this.parseRetryAfterFromMessage(error) ??
+                details?.retryAfterMs ?? this.parseRetryAfterFromMessage(error) ??
                 this.config.retryDelays[0] ??
                 DEFAULT_RETRY_DELAYS[0] ??
                 250;
@@ -855,7 +857,8 @@ export class OutboxManager {
                 ...op,
                 status: isPermanent ? 'failed_permanent' as const : 'failed_retryable' as const,
                 attempts,
-                lastError: error,
+                lastError: details ? presentError(details).message : error,
+                lastErrorDetails: details,
                 lastErrorCode: errorCode as PendingOp['lastErrorCode'],
                 failureKind: isPermanent
                     ? 'permanent' as const
@@ -874,11 +877,11 @@ export class OutboxManager {
                     pk: op.pk,
                     operation: op.operation,
                     payloadSizeBytes: payloadSize,
-                    error,
+                    error: details ?? errorDiagnostics(error, { source: 'sync' }),
                 }
             );
             
-            await hooks.doAction('sync.error:action', { op: updatedOp, error, permanent: isPermanent });
+            await hooks.doAction('sync.error:action', { op: updatedOp, error: details ?? error, permanent: isPermanent });
         } else {
             // Schedule retry
             const delay = this.config.retryDelays[attempts - 1] ?? 0;

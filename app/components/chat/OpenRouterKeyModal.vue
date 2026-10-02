@@ -58,6 +58,7 @@
 </template>
 
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import AppModal from '~/components/ui/AppModal.vue';
 import { ref } from 'vue';
 import { useToast } from '#imports';
@@ -100,9 +101,7 @@ async function onSave(): Promise<void> {
         emit('update:open', false);
     } catch (error) {
         errorMessage.value =
-            error instanceof Error
-                ? error.message
-                : 'Could not save that key. Please try again.';
+            presentError(error, { code: 'ERR_DB_WRITE_FAILED', fallbackMessage: 'Your API key could not be saved. Please try again.' }).message;
     } finally {
         isSaving.value = false;
     }

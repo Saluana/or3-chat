@@ -1,3 +1,5 @@
+import { serializeError, normalizeError, presentError, parseRetryAfter } from '~~/shared/errors';
+import { OpenRouterStreamError } from '~~/shared/openrouter/errors';
 /**
  * @module server/utils/background-jobs/stream-handler
  *
@@ -175,6 +177,7 @@ async function assertJobNotAborted(params: {
 export interface BackgroundStreamParams {
     body: Record<string, unknown>;
     apiKey: string;
+    credentialSource?: 'personal' | 'server';
     userId: string;
     workspaceId: string;
     threadId: string;
@@ -379,6 +382,7 @@ export async function startBackgroundStream(
     delete executionBody._history;
     const execution: BackgroundJobExecution = {
         version: 1,
+        credentialSource: params.credentialSource,
         body: executionBody,
         workspaceId: params.workspaceId,
         referer: params.referer,
@@ -834,8 +838,7 @@ export async function consumeBackgroundStream(params: {
         }
 
         const failedAt = Date.now();
-        const failureMessage =
-            err instanceof Error ? err.message : String(err);
+        const failureMessage = serializeError(err, { code: 'ERR_STREAM_FAILURE', source: 'provider', credentialSource: params.context.credentialSource ?? params.context.execution?.credentialSource });
         await persistTerminalGenerationSnapshot(
             params.provider,
             params.jobId,
@@ -888,7 +891,7 @@ export async function consumeBackgroundStream(params: {
                     params.context.userId,
                     params.context.threadId,
                     params.jobId,
-                    err instanceof Error ? err.message : String(err)
+                    presentError(err, { code: 'ERR_STREAM_FAILURE', source: 'provider', credentialSource: params.context.credentialSource ?? params.context.execution?.credentialSource }).message
                 );
                 logBgStream('server-consume-background-notify-error-sent', {
                     jobId: params.jobId,
@@ -1377,7 +1380,10 @@ export async function consumeBackgroundStreamWithTools(params: {
                     status: upstream.status,
                     responseMetadata: sensitiveValueMetadata(errorText),
                 });
-                throw new Error(`OpenRouter error ${upstream.status}`);
+                const metadata = normalizeError({ status: upstream.status,
+            retryAfterMs: parseRetryAfter(upstream.headers.get('retry-after')), providerCode: upstream.status },
+            { source: 'provider', credentialSource: params.context.credentialSource ?? params.context.execution?.credentialSource });
+        throw new OpenRouterStreamError(presentError(metadata).message, { ...metadata, status: upstream.status });
             }
 
             const pendingToolCalls: ToolCall[] = [];
@@ -1623,8 +1629,7 @@ export async function consumeBackgroundStreamWithTools(params: {
         }
 
         const toolFailedAt = Date.now();
-        const toolFailureMessage =
-            err instanceof Error ? err.message : String(err);
+        const toolFailureMessage = serializeError(err, { code: 'ERR_STREAM_FAILURE', source: 'provider', credentialSource: params.context.credentialSource ?? params.context.execution?.credentialSource });
         await persistTerminalGenerationSnapshot(
             params.provider,
             params.jobId,
@@ -1821,7 +1826,8 @@ export async function executeBackgroundJob(
             status: upstream.status,
             responseMetadata: sensitiveValueMetadata(errorText),
         });
-        throw new Error(`OpenRouter error ${upstream.status}`);
+        const metadata = normalizeError({ status: upstream.status, providerCode: upstream.status, retryAfterMs: parseRetryAfter(upstream.headers.get('retry-after')) }, { source: 'provider', credentialSource: params.credentialSource ?? params.execution?.credentialSource });
+        throw new OpenRouterStreamError(presentError(metadata).message, { ...metadata, status: upstream.status });
     }
 
     await consumeBackgroundStream({

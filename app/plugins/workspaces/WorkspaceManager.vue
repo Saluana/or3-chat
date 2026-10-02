@@ -196,6 +196,7 @@
 </template>
 
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { computed, onMounted, ref } from 'vue';
 import { useWorkspaceApi } from '~/core/workspace/composables';
 import type { WorkspaceSummary } from '~/core/workspace/types';
@@ -299,7 +300,7 @@ async function importLocalData() {
     } catch (error) {
         toast.add({
             title: 'Import failed',
-            description: error instanceof Error ? error.message : String(error),
+            description: presentError(error, { source: 'session', fallbackMessage: 'The workspace operation could not be completed.' }).message,
             color: 'error',
         });
     } finally {
@@ -318,7 +319,7 @@ async function fetchWorkspaces() {
     } catch (error) {
         toast.add({
             title: 'Failed to load workspaces',
-            description: error instanceof Error ? error.message : String(error),
+            description: presentError(error, { source: 'session', fallbackMessage: 'The workspace operation could not be completed.' }).message,
             color: 'error',
         });
     } finally {
@@ -417,7 +418,7 @@ async function createWorkspace() {
     } catch (error) {
         toast.add({
             title: 'Failed to create workspace',
-            description: error instanceof Error ? error.message : String(error),
+            description: presentError(error, { source: 'session', fallbackMessage: 'The workspace operation could not be completed.' }).message,
             color: 'error',
         });
     } finally {
@@ -456,7 +457,7 @@ async function selectWorkspace(workspace: WorkspaceSummary) {
     } catch (error) {
         toast.add({
             title: 'Failed to switch workspace',
-            description: error instanceof Error ? error.message : String(error),
+            description: presentError(error, { source: 'session', fallbackMessage: 'The workspace operation could not be completed.' }).message,
             color: 'error',
         });
     } finally {
@@ -490,7 +491,7 @@ async function saveEdit(workspace: WorkspaceSummary) {
     } catch (error) {
         toast.add({
             title: 'Failed to update workspace',
-            description: error instanceof Error ? error.message : String(error),
+            description: presentError(error, { source: 'session', fallbackMessage: 'The workspace operation could not be completed.' }).message,
             color: 'error',
         });
     } finally {
@@ -534,7 +535,7 @@ async function deleteWorkspace(workspace: WorkspaceSummary) {
     } catch (error) {
         toast.add({
             title: 'Failed to delete workspace',
-            description: error instanceof Error ? error.message : String(error),
+            description: presentError(error, { source: 'session', fallbackMessage: 'The workspace operation could not be completed.' }).message,
             color: 'error',
         });
     } finally {

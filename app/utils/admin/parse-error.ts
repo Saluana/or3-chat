@@ -1,3 +1,4 @@
+import { presentError } from '~~/shared/errors';
 /**
  * @module app/utils/admin/parse-error
  *
@@ -29,7 +30,7 @@ const StandardErrorSchema = z.object({
  * Purpose:
  * Returns the most useful message available from an unknown error.
  */
-export function parseErrorMessage(error: unknown, fallback = 'An error occurred'): string {
+function extractErrorMessage(error: unknown, fallback = 'An error occurred'): string {
     // Try parsing as fetch error (Nuxt/H3 format)
     const fetchError = FetchErrorSchema.safeParse(error);
     if (fetchError.success && fetchError.data.data?.statusMessage) {
@@ -53,6 +54,11 @@ export function parseErrorMessage(error: unknown, fallback = 'An error occurred'
  * Checks if the parsed error message includes a substring (case-insensitive).
  */
 export function errorContains(error: unknown, substring: string): boolean {
-    const message = parseErrorMessage(error, '');
+    const message = extractErrorMessage(error, '');
     return message.toLowerCase().includes(substring.toLowerCase());
+}
+
+/** App-owned fallback and classified guidance only; keep raw extraction internal. */
+export function parseErrorMessage(error: unknown, fallback = 'The operation could not be completed.'): string {
+    return presentError(error, { source: 'admin', fallbackMessage: fallback }).message;
 }

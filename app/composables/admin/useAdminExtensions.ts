@@ -5,7 +5,7 @@
 
 import { ref } from 'vue';
 import { useConfirmDialog } from './useConfirmDialog';
-import { parseErrorMessage } from '~/utils/admin/parse-error';
+import { errorContains } from '~/utils/admin/parse-error';
 
 /**
  * Standard admin intent header for admin API calls.
@@ -94,9 +94,8 @@ export async function installExtension(options: ExtensionInstallOptions): Promis
         if (onSuccess) await onSuccess();
         return result;
     } catch (error: unknown) {
-        const message = parseErrorMessage(error, '');
         
-        if (message.toLowerCase().includes('already installed')) {
+        if (errorContains(error, 'already installed')) {
             const { confirm } = useConfirmDialog();
             const label = extensionKindLabel(options.kind);
             const confirmed = await confirm({
@@ -147,9 +146,7 @@ export async function installExtensionFromUrl(
         if (onSuccess) await onSuccess();
         return result;
     } catch (error: unknown) {
-        const message = parseErrorMessage(error, '');
-
-        if (message.toLowerCase().includes('already installed')) {
+        if (errorContains(error, 'already installed')) {
             const { confirm } = useConfirmDialog();
             const label = extensionKindLabel(options.kind);
             const confirmed = await confirm({
