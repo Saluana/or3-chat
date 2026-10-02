@@ -2796,7 +2796,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "3a7cab0e261c95af20da3e902438ca1b77a828c4ebac055764d2ffea0af225f8",
+      "apiSha256": "bbe185c805515791c25c8d7520da35eafbbd2520934663cab7c4b4b9cd42547a",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2895,7 +2895,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 78,
+              "line": 80,
               "syntaxKind": "VariableDeclaration",
               "text": "AI_SETTINGS_STORAGE_KEY = LEGACY_STORAGE_KEY"
             }
@@ -2911,7 +2911,7 @@
               "source": "app/composables/chat/useAiSettings.ts",
               "line": 66,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface AiSettingsV1 {\n    version: 1;\n    masterSystemPrompt: string;\n    defaultModelMode: 'lastSelected' | 'fixed';\n    fixedModelId: string | null;\n    defaultModelVariant: OpenRouterModelVariant;\n}"
+              "text": "export interface AiSettingsV1 {\n    version: 1;\n    masterSystemPrompt: string;\n    defaultModelMode: 'lastSelected' | 'fixed';\n    fixedModelId: string | null;\n    defaultModelVariant: OpenRouterModelVariant;\n    /** Null means the full advertised model capacity; values remain independent of model selection. */\n    maxContextTokens: number | null;\n}"
             }
           ]
         },
@@ -3209,9 +3209,9 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 80,
+              "line": 82,
               "syntaxKind": "VariableDeclaration",
-              "text": "DEFAULT_AI_SETTINGS: AiSettingsV1 = {\n    version: 1,\n    masterSystemPrompt: '',\n    defaultModelMode: 'lastSelected',\n    fixedModelId: null,\n    defaultModelVariant: DEFAULT_MODEL_VARIANT,\n}"
+              "text": "DEFAULT_AI_SETTINGS: AiSettingsV1 = {\n    version: 1,\n    masterSystemPrompt: '',\n    defaultModelMode: 'lastSelected',\n    fixedModelId: null,\n    defaultModelVariant: DEFAULT_MODEL_VARIANT,\n    maxContextTokens: null,\n}"
             }
           ]
         },
@@ -4007,7 +4007,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 76,
+              "line": 78,
               "syntaxKind": "VariableDeclaration",
               "text": "LEGACY_STORAGE_KEY = 'or3.ai.settings.v1'"
             }
@@ -5483,7 +5483,7 @@
               "resolvedReturnType": "AiSettingsV1",
               "declaration": {
                 "source": "app/composables/chat/useAiSettings.ts",
-                "line": 105,
+                "line": 109,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function sanitizeAiSettings(\n    input: unknown,\n    defaults: AiSettingsV1 = DEFAULT_AI_SETTINGS\n): AiSettingsV1;"
               }
@@ -5492,7 +5492,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 105,
+              "line": 109,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function sanitizeAiSettings(\n    input: unknown,\n    defaults: AiSettingsV1 = DEFAULT_AI_SETTINGS\n): AiSettingsV1;"
             }
@@ -6327,7 +6327,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAiSettings.ts",
-                "line": 217,
+                "line": 208,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAiSettings();"
               }
@@ -6336,7 +6336,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 217,
+              "line": 208,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAiSettings();"
             }
