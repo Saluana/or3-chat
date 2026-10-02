@@ -135,7 +135,7 @@ describe('POST /api/sync/snapshot', () => {
             statusCode: 426,
             message: 'Update OR3 Chat to use general files',
         });
-        expect(recordSyncRequestMock).not.toHaveBeenCalled();
+        expect(recordSyncRequestMock).toHaveBeenCalledWith('user-1', 'sync:snapshot');
     });
 
     it('rejects malformed adapter output', async () => {
@@ -144,7 +144,7 @@ describe('POST /api/sync/snapshot', () => {
         snapshotMock.mockResolvedValue({ highWatermark: -1 });
 
         await expect(handler(event())).rejects.toMatchObject({ statusCode: 502 });
-        expect(recordSyncRequestMock).not.toHaveBeenCalled();
+        expect(recordSyncRequestMock).toHaveBeenCalledWith('user-1', 'sync:snapshot');
     });
 
     it.each([
@@ -191,7 +191,7 @@ describe('POST /api/sync/snapshot', () => {
         await expect(handler(event())).rejects.toMatchObject({
             statusCode: 502,
         });
-        expect(recordSyncRequestMock).not.toHaveBeenCalled();
+        expect(recordSyncRequestMock).toHaveBeenCalledWith('user-1', 'sync:snapshot');
     });
 
     it('returns Retry-After when snapshot paging is rate limited', async () => {

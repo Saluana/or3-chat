@@ -174,7 +174,11 @@ For backend-specific credentials, persistence, URL lifetime, and limitations, us
 *   **Empty files**: Zero-byte generic files are valid and remain hash checked.
 *   **Size Limits**: Enforced at the Gateway level (default 100MB).
 *   **Permissions**: `requireCan(session, 'workspace.write')` checks on all operations.
-*   **Rate Limiting**: Per-user limits on upload/download generation endpoints.
+*   **Rate Limiting**: Existing per-user operation limits reserve each admitted
+    presign or commit request before asynchronous provider work. Parallel calls
+    share the configured allowance, including provider attempts that later fail;
+    denied rate checks do not consume another slot. HTTP 429 includes
+    `Retry-After`. Cache expiry respects operator-configured rate windows.
 *   **Hash Verification**: Files verified against SHA-256 hash after download.
 *   **Presigned URLs**: Upload and download URLs are capped at one hour; provider
     defaults are shorter. Download signing also checks the provider's commit

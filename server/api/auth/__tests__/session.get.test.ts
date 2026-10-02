@@ -1,5 +1,6 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
+import { testRuntimeConfig } from '../../../../tests/setup';
 
 const setResponseHeaderMock = vi.fn();
 const resolveSessionContextMock = vi.fn();
@@ -40,10 +41,11 @@ vi.mock('../../../utils/auth/is-ssr-auth-enabled', () => ({
     isSsrAuthEnabled: isSsrAuthEnabledMock as any,
 }));
 
-vi.mock('../../../utils/sync/rate-limiter', () => ({
-    checkSyncRateLimit: checkSyncRateLimitMock as any,
-    recordSyncRequest: recordSyncRequestMock as any,
-    getSyncRateLimitStats: getSyncRateLimitStatsMock as any,
+vi.mock('../../../utils/sync/rate-limiter', async (importOriginal) => ({
+    ...await importOriginal<typeof import('../../../utils/sync/rate-limiter')>(),
+    checkSyncRateLimit: checkSyncRateLimitMock,
+    recordSyncRequest: recordSyncRequestMock,
+    getSyncRateLimitStats: getSyncRateLimitStatsMock,
 }));
 
 vi.mock('../../../utils/net/request-identity', () => ({
@@ -76,9 +78,7 @@ beforeAll(async () => {
     if (!globalAny.defineEventHandler) {
         globalAny.defineEventHandler = (handler) => handler;
     }
-    globalAny.useRuntimeConfig = () => ({
-        security: { proxy: {} },
-    });
+    globalAny.useRuntimeConfig = () => testRuntimeConfig.value;
 
     const mod = await import('../session.get');
     SESSION_CACHE_CONTROL = mod.SESSION_CACHE_CONTROL;
@@ -86,7 +86,10 @@ beforeAll(async () => {
 });
 
 describe('GET /api/auth/session', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
+        const { resetSyncRateLimits } = await import('../../../utils/sync/rate-limiter');
+        resetSyncRateLimits();
+        testRuntimeConfig.value.limits.operationRateLimits = {};
         setResponseHeaderMock.mockReset();
         resolveSessionContextMock.mockReset().mockResolvedValue({ authenticated: false });
         isSsrAuthEnabledMock.mockReset().mockReturnValue(true);
@@ -99,6 +102,48 @@ describe('GET /api/auth/session', () => {
         normalizeProxyTrustConfigMock.mockReset().mockReturnValue({});
         canMock.mockReset().mockReturnValue({ allowed: true });
         resolveEntitlementsMock.mockReset().mockResolvedValue([]);
+    });
+
+    afterEach(async () => {
+        const { resetSyncRateLimits } = await import('../../../utils/sync/rate-limiter');
+        resetSyncRateLimits();
+        vi.restoreAllMocks();
+    });
+
+    it('bounds concurrent anonymous session lookups and permits retry after expiry', async () => {
+        const limiter = await vi.importActual<typeof import('../../../utils/sync/rate-limiter')>(
+            '../../../utils/sync/rate-limiter'
+        );
+        checkSyncRateLimitMock.mockImplementation(limiter.checkSyncRateLimit);
+        recordSyncRequestMock.mockImplementation(limiter.recordSyncRequest);
+        getSyncRateLimitStatsMock.mockImplementation(limiter.getSyncRateLimitStats);
+        testRuntimeConfig.value.limits.operationRateLimits = {
+            'auth:session': { maxRequests: 2, windowMs: 60_000 },
+        };
+        let now = Date.now();
+        vi.spyOn(Date, 'now').mockImplementation(() => now);
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        resolveSessionContextMock.mockImplementation(async () => {
+            await gate;
+            return { authenticated: false };
+        });
+        const requests = Array.from({ length: 3 }, () => handler(makeEvent()).then(
+            () => 200,
+            (error: { statusCode: number }) => error.statusCode
+        ));
+        try {
+            await vi.waitFor(() => expect(resolveSessionContextMock.mock.calls.length).toBeGreaterThanOrEqual(2));
+        } finally {
+            release();
+        }
+        expect((await Promise.all(requests)).sort()).toEqual([200, 200, 429]);
+        expect(resolveSessionContextMock).toHaveBeenCalledTimes(2);
+        expect(setResponseHeaderMock).toHaveBeenCalledWith(expect.anything(), 'Retry-After', 60);
+        expect(setResponseHeaderMock).toHaveBeenCalledWith(expect.anything(), 'X-RateLimit-Remaining', '0');
+
+        now += 60_000;
+        await expect(handler(makeEvent())).resolves.toEqual({ session: null, appAccessAllowed: false });
     });
 
     it('never allows caching session responses', () => {
