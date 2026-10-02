@@ -782,7 +782,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 22,
-                    "summary": "> This is an advanced source-development path. Managed Cloud intentionally > withholds remote Connect until its operator and staging proof are complete; > use Set up Cloud for supported beginner routes."
+                    "summary": "Advanced source CLI and browser setup: provider selection, private first-run credentials, validation, and deployment. Use Set up Cloud for supported beginner routes."
                 },
                 {
                     "name": "or3-connect.md",

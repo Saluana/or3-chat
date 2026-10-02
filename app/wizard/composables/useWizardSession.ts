@@ -473,6 +473,22 @@ export function useWizardSession() {
         });
     }
 
+    function validateStepFields(step: WizardStep): boolean {
+        const errors: FieldErrorMap = {};
+        for (const field of getVisibleFields(step, answers.value)) {
+            const error = field.validate?.(answers.value[field.key] as never, answers.value);
+            if (error) errors[field.key] = error;
+        }
+        if (Object.keys(errors).length === 0) {
+            statusMessage.value = '';
+            return true;
+        }
+        fieldErrors.value = { ...fieldErrors.value, ...errors };
+        invalidStepIds.value = [...new Set([...invalidStepIds.value, step.id])];
+        statusMessage.value = 'Check the highlighted fields before continuing.';
+        return false;
+    }
+
     function getFurthestVisitedIndex(): number {
         let maxIndex = -1;
         for (const stepId of visitedStepIds.value) {
@@ -493,6 +509,9 @@ export function useWizardSession() {
 
     async function goToStep(stepId: string): Promise<boolean> {
         if (!canNavigateToStep(stepId)) return false;
+        const active = currentStep.value;
+        if (active && (stepIndexMap.value.get(stepId) ?? 0) > (stepIndexMap.value.get(active.id) ?? 0)
+            && !validateStepFields(active)) return false;
         const saved = await saveStep();
         if (!saved) return false;
         currentStepId.value = stepId;
@@ -504,6 +523,7 @@ export function useWizardSession() {
     async function goToNextStep(): Promise<boolean> {
         const active = currentStep.value;
         if (!active) return false;
+        if (!validateStepFields(active)) return false;
         const saved = await saveStep(active);
         if (!saved) return false;
         const index = stepIndexMap.value.get(active.id) ?? 0;
@@ -704,10 +724,11 @@ export function useWizardSession() {
             }
             if (
                 !input.skipDeploy &&
-                answers.value.deploymentTarget === 'local-dev'
+                answers.value.deploymentTarget === 'local-dev' &&
+                !(answers.value.ssrAuthEnabled && answers.value.authProvider === 'basic-auth')
             ) {
                 void redirectToAccessUrl(response.deployResult?.accessUrl);
-            } else if (!input.dryRun && !input.skipDeploy) {
+            } else if (!input.dryRun && !input.skipDeploy && answers.value.deploymentTarget !== 'local-dev') {
                 await shutdownWizardUiBestEffort();
             }
             return response;

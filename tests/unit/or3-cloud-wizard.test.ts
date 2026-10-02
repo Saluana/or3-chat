@@ -1,6 +1,9 @@
+// @vitest-environment node
 import { chmod, mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
+import { runInNewContext } from 'node:vm';
+import { build, transform } from 'esbuild';
 import { describe, expect, it } from 'vitest';
 import { generateAdminPassword } from '../../shared/cloud/wizard/admin-dashboard';
 import { createDefaultAnswers } from '../../shared/cloud/wizard/catalog';
@@ -58,6 +61,29 @@ function visibleFieldKeys(step: WizardStep, answers: WizardAnswers): string[] {
 }
 
 describe('or3 cloud wizard validation', () => {
+    it('loads default wizard answers in a browser without Node globals', async () => {
+        const bundle = await build({
+            stdin: {
+                contents: `import { createDefaultAnswers } from './shared/cloud/wizard/catalog';
+                    globalThis.answers = createDefaultAnswers({ instanceDir: '/opt/or3' });`,
+                resolveDir: process.cwd(),
+                loader: 'ts',
+            },
+            bundle: true,
+            platform: 'browser',
+            format: 'iife',
+            write: false,
+            logLevel: 'silent',
+        });
+        const browser: Record<string, unknown> = {};
+        runInNewContext(bundle.outputFiles[0]!.text, browser);
+        expect(browser.answers).toMatchObject({
+            instanceDir: '/opt/or3',
+            fsRoot: '/opt/or3/.data/or3-storage',
+            packageManager: 'npm',
+        });
+    });
+
     it('validates recommended stack with required secrets', () => {
         const result = validateAnswers(validRecommendedAnswers(), { strict: true });
         expect(result.errors, result.errors.join('\n')).toHaveLength(0);
@@ -438,10 +464,11 @@ describe('or3 cloud wizard validation', () => {
         );
     });
 
-    it('hides provider detail fields when provider features are disabled', () => {
+    it('hides workspace store detail fields when accounts and sync are disabled', () => {
         const answers = {
             ...validRecommendedAnswers(),
             targetAdvancedEnabled: true,
+            ssrAuthEnabled: false,
             syncEnabled: false,
         };
         const syncStep = getStepById(getWizardSteps(answers), 'provider-sync');
@@ -677,7 +704,34 @@ describe('or3 cloud wizard apply', () => {
             'or3-provider-basic-auth@0.0.10'
         );
         expect(plan.commands.npm).toContain('or3-provider-fs@0.0.9');
-        expect(plan.commands.npm).toContain('or3-provider-sqlite@0.0.11');
+        expect(plan.commands.npm).toContain('or3-provider-sqlite@0.0.12');
+    });
+
+    it('keeps installed release-qualified provider plugins valid JavaScript', async () => {
+        const instanceDir = await mkdtemp(resolve(tmpdir(), 'or3-wizard-plugin-'));
+        const packageDir = resolve(instanceDir, 'node_modules/or3-provider-fs');
+        const pluginDir = resolve(packageDir, 'dist/runtime/server/plugins');
+        await mkdir(pluginDir, { recursive: true });
+        await writeFile(resolve(instanceDir, 'package.json'), JSON.stringify({
+            dependencies: { 'or3-provider-fs': '0.0.9' },
+        }));
+        await writeFile(resolve(packageDir, 'package.json'), JSON.stringify({
+            name: 'or3-provider-fs', version: '0.0.9',
+        }));
+        const plugin = await readFile(
+            resolve(process.cwd(), 'node_modules/or3-provider-fs/dist/runtime/server/plugins/register.js'),
+            'utf8'
+        );
+        const pluginPath = resolve(pluginDir, 'register.js');
+        await writeFile(pluginPath, plugin);
+        const answers = { ...validRecommendedAnswers(), instanceDir };
+        const plan = createDependencyInstallPlan(answers);
+        await executeDependencyInstallPlan(answers, {
+            ...plan, packages: ['or3-provider-fs'],
+        }, { enabled: true, packageManager: 'bun' });
+        await expect(transform(await readFile(pluginPath, 'utf8'), {
+            loader: 'js', logLevel: 'silent',
+        })).resolves.toBeDefined();
     });
 
     it('uses local provider package specs when sibling workspaces exist', async () => {

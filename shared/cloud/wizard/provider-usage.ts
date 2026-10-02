@@ -15,13 +15,13 @@ type ProviderUsageAnswers = Pick<
 >;
 
 type ProviderUsageOptions = {
-    /** Treat sync as inactive unless SSR auth is enabled. */
+    /** Validate sync/workspace storage only when SSR auth is enabled. */
     requireSsrAuthForSync?: boolean;
 };
 
 export function usesConvexProvider(answers: ProviderUsageAnswers): boolean {
     return (
-        (answers.syncEnabled && answers.syncProvider === 'convex') ||
+        ((answers.syncEnabled || answers.ssrAuthEnabled) && answers.syncProvider === 'convex') ||
         (answers.storageEnabled && answers.storageProvider === 'convex') ||
         (answers.connectEnabled &&
             resolveEffectiveConnectProvider(answers) === 'convex')
@@ -33,7 +33,7 @@ export function usesSqliteProvider(
     options: ProviderUsageOptions = {}
 ): boolean {
     return (
-        (answers.syncEnabled &&
+        ((answers.syncEnabled || answers.ssrAuthEnabled) &&
             answers.syncProvider === 'sqlite' &&
             (!options.requireSsrAuthForSync || answers.ssrAuthEnabled)) ||
         (answers.connectEnabled &&

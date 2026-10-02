@@ -568,6 +568,8 @@ export interface WizardValidationIssue {
 export interface WizardApplyResult {
     /** Absolute paths of files that were written or updated. */
     writtenFiles: string[];
+    /** Private first-run login file, absent for dry runs and configurations without a login. */
+    credentialsPath?: string;
     /** Absolute paths of backup files created before overwriting. */
     backupFiles: string[];
     /** Env var updates applied. `null` values indicate keys that were cleared. */

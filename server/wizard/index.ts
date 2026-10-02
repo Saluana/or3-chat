@@ -23,6 +23,7 @@ import {
     parseInstallPackageManager,
 } from '../../shared/cloud/wizard/install-plan';
 import { createCleanWizardDeployEnv } from '../../shared/cloud/wizard/runtime-env';
+import { usesConvexProvider } from '../../shared/cloud/wizard/provider-usage';
 import {
     parsePackageManager,
     runScriptCommand,
@@ -187,13 +188,10 @@ function normalizeErrorMessage(error: unknown): string {
 }
 
 function shouldApplyConvexEnv(answers: WizardAnswers): boolean {
-    if (answers.authProvider !== 'clerk') {
-        return false;
-    }
-
     return (
-        (answers.syncEnabled && answers.syncProvider === 'convex') ||
-        (answers.storageEnabled && answers.storageProvider === 'convex')
+        answers.ssrAuthEnabled &&
+        answers.authProvider === 'clerk' &&
+        usesConvexProvider(answers)
     );
 }
 

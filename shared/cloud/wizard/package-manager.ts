@@ -1,4 +1,6 @@
 import crossSpawn from 'cross-spawn';
+import { detectPackageManager } from './detect-package-manager';
+export { detectPackageManager } from './detect-package-manager';
 
 /**
  * Package-manager command resolution shared by the creator, CLI, and web wizard.
@@ -17,11 +19,6 @@ export function isPackageManager(value: unknown): value is PackageManager {
     return value === 'bun' || value === 'npm';
 }
 
-export function detectPackageManager(
-    userAgent = process.env.npm_config_user_agent
-): PackageManager {
-    return userAgent?.trim().toLowerCase().startsWith('bun/') ? 'bun' : 'npm';
-}
 
 export function parsePackageManager(
     value?: string,
