@@ -214,7 +214,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C7.
       Requirements: R8.AC4, R9.AC4, R13.AC2.
       Done when: View original reaches the correct stored message with a human ordinal, reverse links list actual children, missing content shows unavailable, and a stale pane never receives late forced navigation.
-      Status: Partial — origin/destination pane navigation and canonical tool-parent mapping implemented with104 focused cases. Inherited corrected browser reached source/draft but tool-evidence disclosure assertion failed. Fresh-owner actual-DB regression proves the pane seed bypassed canonical tool-result reconciliation; narrow repair passes63 focused/sibling cases. New browser/types/CI/review remain pending; reverse-child links and human-ordinal UI remain absent.
+      Status: Partial — origin/destination pane navigation and canonical tool-parent mapping implemented with104 focused cases. Fresh-owner pane repair passes63 focused/sibling cases and configured types. New browser55feadda passes the inherited tool-disclosure assertion and unchanged rows, then fails a later unsupported reload-persistent draft expectation. Parent approved the narrow fixture-lifetime correction; corrected browser/CI/review remain pending. Reverse-child links and human-ordinal UI remain absent.
 
 ## 5. Phase C — browser retrieval and authorization contracts
 

@@ -18,6 +18,14 @@ Test-authoring gate: the distinct contract is real Dexie -> default pane loader 
 
 Runtime regression rollback is a normal revert of this coherent pane correction; no stored-data migration is involved.
 
+### First fresh-owner configured and browser gates
+
+Frozen clean `55feadda4b0d0ddd09bcfcf379ee2ad40e08c83b`: configured BasicAuth/SQLite/filesystem application types EXIT0 `/tmp/task3-pane-tool-configured-types-ipc.log`. First launcher attempt EXIT1 on sandbox tsx IPC listenEPERM before validation, retained `/tmp/task3-pane-tool-configured-types-first.log`; the same profile ran with normal approved IPC access.
+
+The one unchanged named PageShell journey EXIT1 on this source. Canonical tool disclosure (line363) and unchanged durable rows (line364) now PASS. Line365 then expected an unsent draft after two complete reloads, while the established public lifecycle explicitly keeps drafts in memory and loses them on reload. The normal-new-chat assertions after this point were not reached. Retained trace/error context/screenshots/logs: `task-3/output/playwright/compaction-pane-first-browser`; failure screenshot was visually inspected and shows actual canonical evidence and an empty composer. Preview stopped with Ctrl-C EXIT130; own3211/25211 listeners independently absent before release.
+
+Parent approved a narrow lifetime correction: keep original cancellation and successful-compaction draft assertions; explicitly assert empty source draft after reload; create a fresh source draft; then exercise child -> tool landmark -> source and retain the exact draft, durable-row and normal-new-chat assertions. No product persistence change or assertion removal. The first failure remains evidence of the invalid expectation; the corrected browser, exact remote CI and parent review are still pending.
+
 The six plan files match upstream exactly at the inspected default base `6ee4450b`.
 This branch is separate from assistant/Files and starts on the temporary reviewed
 integration base containing PR179 `40b7aef6`, PR181 `bb86066c`, and PR182 `07b235b2`.
