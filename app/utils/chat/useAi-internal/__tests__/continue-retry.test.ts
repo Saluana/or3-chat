@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ref, computed } from 'vue';
 import type { ChatMessage, SendMessageParams } from '~/utils/chat/types';
+import type { AssistantPersister } from '../types';
 
 const reportErrorSpy = vi.fn();
 const openRouterStreamSpy = vi.fn();
@@ -122,7 +123,8 @@ vi.mock('../messageBuild', () => ({
     enforceOpenRouterMessageTokenBudget: vi.fn(async (messages) => messages),
 }));
 
-vi.mock('../persistence', () => ({
+vi.mock('../persistence', async (importOriginal) => ({
+    startForegroundGenerationHeartbeat: (await importOriginal<typeof import('../persistence')>()).startForegroundGenerationHeartbeat,
     makeAssistantPersister: (...args: unknown[]) =>
         makeAssistantPersisterSpy(...args),
     updateMessageRecord: (...args: unknown[]) => updateMessageRecordSpy(...args),
@@ -186,103 +188,131 @@ describe('continue/retry regressions', () => {
         );
     });
 
-    it('continue keeps existing assistant message in list while streaming', async () => {
-        const target = {
-            id: 'a1',
-            thread_id: 't1',
-            role: 'assistant',
-            index: 2,
-            content: 'Hello',
-            data: { content: 'Hello' },
-            file_hashes: null,
-            stream_id: null,
-            error: null,
-            created_at: 1,
-            updated_at: 1,
-            deleted: false,
-            clock: 1,
-        };
-        dbState.messagesGet.mockResolvedValue(target);
-        const whereChain = {
-            between: vi.fn().mockReturnThis(),
-            filter: vi.fn().mockReturnThis(),
-            toArray: vi.fn().mockResolvedValue([target]),
-        };
-        dbState.where.mockReturnValue(whereChain);
-
-        makeAssistantPersisterSpy.mockReturnValue(
-            vi.fn(async () => null)
-        );
-        openRouterStreamSpy.mockReturnValue(
-            (async function* () {
-                yield { type: 'text', text: '>> world' };
-            })()
-        );
-
-        const messages = ref([
-            {
+    it.each(['text', 'reasoning'] as const)('continue flushes quiet %s before the model completes and keeps the existing reply', async (type) => {
+        vi.useFakeTimers();
+        let release!: () => void;
+        let consumed!: () => void;
+        const providerPending = new Promise<void>((resolve) => { release = resolve; });
+        const chunkConsumed = new Promise<void>((resolve) => { consumed = resolve; });
+        let continuation: Promise<void> | undefined;
+        try {
+            const target = {
                 id: 'a1',
+                thread_id: 't1',
                 role: 'assistant',
-                text: 'Hello',
-                pending: false,
-                error: null,
-                reasoning_text: null,
-            },
-        ]);
-        const rawMessages = ref([
-            {
-                id: 'a1',
-                role: 'assistant',
+                index: 2,
                 content: 'Hello',
+                data: { content: 'Hello' },
+                file_hashes: null,
+                stream_id: null,
                 error: null,
-            },
-        ]);
-        const tailAssistant = ref<{
-            id: string;
-            role: string;
-            text: string;
-            pending: boolean;
-            error: string | null;
-            reasoning_text: string | null;
-            file_hashes?: string[];
-            toolCalls?: unknown[] | null;
-        } | null>(null);
-        const streamAccAppend = vi.fn();
+                created_at: 1,
+                updated_at: 1,
+                deleted: false,
+                clock: 1,
+            };
+            dbState.messagesGet.mockResolvedValue(target);
+            const whereChain = {
+                between: vi.fn().mockReturnThis(),
+                filter: vi.fn().mockReturnThis(),
+                toArray: vi.fn().mockResolvedValue([target]),
+            };
+            dbState.where.mockReturnValue(whereChain);
 
-        await continueMessageImpl(
-            {
-                loading: ref(false),
-                aborted: ref(false),
-                abortController: ref(null),
-                threadIdRef: ref('t1'),
-                tailAssistant: tailAssistant as any,
-                rawMessages: rawMessages as any,
-                messages: messages as any,
-                streamId: ref<string | undefined>(undefined),
-                streamAcc: {
-                    reset: vi.fn(),
-                    append: streamAccAppend,
-                    finalize: vi.fn(),
-                    state: { finalized: false },
-                },
-                streamState: { finalized: false },
-                hooks: {
-                    applyFilters: vi.fn(async (_name, value) => value),
-                },
-                effectiveApiKey: ref('k'),
-                hasInstanceKey: ref(false),
-                defaultModelId: 'model-a',
-                getSystemPromptContent: async () => null,
-                useAiSettings: () => ({ settings: ref(undefined) }),
-                resetStream: vi.fn(),
-            },
-            'a1'
-        );
+            const persistAssistant = vi.fn<AssistantPersister>(async () => null);
+            makeAssistantPersisterSpy.mockReturnValue(persistAssistant);
+            openRouterStreamSpy.mockReturnValue(
+                (async function* () {
+                    yield { type, text: type === 'text' ? '>> world' : 'new reasoning' };
+                    consumed();
+                    await providerPending;
+                })()
+            );
 
-        expect(messages.value.some((m) => m.id === 'a1')).toBe(true);
-        expect(tailAssistant.value?.text).toBe('Hello world');
-        expect(streamAccAppend).toHaveBeenCalled();
-        expect(reportErrorSpy).not.toHaveBeenCalled();
+            const messages = ref([
+                {
+                    id: 'a1',
+                    role: 'assistant',
+                    text: 'Hello',
+                    pending: false,
+                    error: null,
+                    reasoning_text: null,
+                },
+            ]);
+            const rawMessages = ref([
+                {
+                    id: 'a1',
+                    role: 'assistant',
+                    content: 'Hello',
+                    error: null,
+                },
+            ]);
+            const tailAssistant = ref<{
+                id: string;
+                role: string;
+                text: string;
+                pending: boolean;
+                error: string | null;
+                reasoning_text: string | null;
+                file_hashes?: string[];
+                toolCalls?: unknown[] | null;
+            } | null>(null);
+            const streamAccAppend = vi.fn();
+
+            continuation = continueMessageImpl(
+                {
+                    loading: ref(false),
+                    aborted: ref(false),
+                    abortController: ref(null),
+                    threadIdRef: ref('t1'),
+                    tailAssistant: tailAssistant as any,
+                    rawMessages: rawMessages as any,
+                    messages: messages as any,
+                    streamId: ref<string | undefined>(undefined),
+                    streamAcc: {
+                        reset: vi.fn(),
+                        append: streamAccAppend,
+                        finalize: vi.fn(),
+                        state: { finalized: false },
+                    },
+                    streamState: { finalized: false },
+                    hooks: {
+                        applyFilters: vi.fn(async (_name, value) => value),
+                    },
+                    effectiveApiKey: ref('k'),
+                    hasInstanceKey: ref(false),
+                    defaultModelId: 'model-a',
+                    getSystemPromptContent: async () => null,
+                    useAiSettings: () => ({ settings: ref(undefined) }),
+                    resetStream: vi.fn(),
+                },
+                'a1'
+            );
+
+            await chunkConsumed;
+            const content = type === 'text' ? 'Hello world' : 'Hello';
+            const reasoning = type === 'reasoning' ? 'new reasoning' : null;
+            expect(tailAssistant.value).toMatchObject({ text: content, reasoning_text: reasoning });
+            expect(messages.value.map((m) => m.id)).toEqual(['a1']);
+            await vi.advanceTimersByTimeAsync(500);
+            expect(persistAssistant).toHaveBeenCalledTimes(1);
+            expect(persistAssistant.mock.calls[0]?.[0]).toMatchObject({ content, reasoning });
+            expect(persistAssistant.mock.calls[0]?.[0].finalize).not.toBe(true);
+
+            release();
+            await continuation;
+            expect(messages.value.map((m) => m.id)).toEqual(['a1']);
+            expect(tailAssistant.value?.text).toBe(content);
+            expect(streamAccAppend).toHaveBeenCalled();
+            expect(reportErrorSpy).not.toHaveBeenCalled();
+            const writes = persistAssistant.mock.calls.length;
+            await vi.advanceTimersByTimeAsync(1_000);
+            expect(persistAssistant).toHaveBeenCalledTimes(writes);
+        } finally {
+            release();
+            await continuation;
+            vi.useRealTimers();
+        }
     });
 
     it('continue marks stream interruption on the target message when stream throws', async () => {
@@ -932,6 +962,41 @@ describe('continue/retry regressions', () => {
         expect(result).toEqual(accepted);
         expect(updateMessageRecordSpy.mock.calls.map((call) => call[1]).sort()).toEqual(['a1', 'u1']);
         expect(reportErrorSpy).toHaveBeenCalledWith(expect.any(Error), expect.anything());
+    });
+
+    it.each(['thread-switch', 'round-trip-switch', 'another-send'])('abandons a retry when %s supersedes its pending preparation hook', async (change) => {
+        const rows = [
+            { id: 'u1', role: 'user', thread_id: 't1', index: 1, data: { content: 'old prompt' }, deleted: false },
+            { id: 'a1', role: 'assistant', thread_id: 't1', index: 2, data: { content: 'old answer' }, deleted: false },
+        ];
+        dbState.messagesGet.mockResolvedValue(rows[0]);
+        messagesByThreadSpy.mockResolvedValue(rows);
+        parseFileHashesSpy.mockReturnValue([]);
+        let release!: () => void;
+        const hookPending = new Promise<void>((resolve) => { release = resolve; });
+        const hook = vi.fn(() => hookPending);
+        const rawMessages = ref<ChatMessage[]>([{ id: 'current', role: 'user', content: 'current chat' }]);
+        const messages = ref([{ id: 'current', role: 'user', text: 'current chat' }]) as any;
+        const threadIdRef = ref('t1');
+        const loading = ref(false);
+        let navigationRevision = 0;
+        const sendMessage = vi.fn(async () => ({ status: 'rejected' as const, requestId: 'r', reason: 'busy' as const }));
+        const retry = retryMessageImpl({
+            loading, threadIdRef, tailAssistant: ref(null), rawMessages, messages,
+            hooks: { doAction: hook }, sendMessage, defaultModelId: 'model', suppressNextTailFlush: vi.fn(),
+            ownsView: () => navigationRevision === 0,
+        }, 'u1');
+        await vi.waitFor(() => expect(hook).toHaveBeenCalled());
+        if (change === 'thread-switch') threadIdRef.value = 't2';
+        else if (change === 'round-trip-switch') navigationRevision += 2;
+        else loading.value = true;
+        release();
+        await retry;
+
+        expect(sendMessage).not.toHaveBeenCalled();
+        expect(rawMessages.value).toEqual([{ id: 'current', role: 'user', content: 'current chat' }]);
+        expect(messages.value[0]).toMatchObject({ id: 'current', text: 'current chat' });
+        expect(updateMessageRecordSpy).not.toHaveBeenCalled();
     });
 
     it('keeps later tool rows in context and restores the selected pair if resend is rejected', async () => {

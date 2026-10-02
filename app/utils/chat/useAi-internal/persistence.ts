@@ -17,7 +17,52 @@ import type { Or3DB } from '~/db/client';
 import { patchMessageInDb } from '~/db/messages';
 import { serializeFileHashes } from '~/db/files-util';
 import type { StoredMessage, AssistantPersister } from './types';
-import { createForegroundGenerationLease } from '~/utils/chat/generation-lease';
+import {
+    createForegroundGenerationLease,
+    FOREGROUND_GENERATION_LEASE_MS,
+} from '~/utils/chat/generation-lease';
+
+/** Keep a live request owned even while the model or a tool is quiet. */
+export function startForegroundGenerationHeartbeat(
+    db: Or3DB,
+    messageId: string,
+    leaseId: string,
+    signal: AbortSignal
+): () => void {
+    let stopped = signal.aborted;
+    let writing = false;
+    const timer = setInterval(() => {
+        if (stopped || writing) return;
+        writing = true;
+        void updateMessageRecord(
+            db,
+            messageId,
+            { data: createForegroundGenerationLease(leaseId) },
+            null,
+            (latest) => {
+                const data = latest?.data as Record<string, unknown> | null;
+                return !stopped && latest?.pending === true && !latest.deleted &&
+                    data?.generation_lease_id === leaseId &&
+                    data.generation_state !== 'superseded' &&
+                    typeof data.background_job_id !== 'string' &&
+                    typeof data.superseded_by !== 'string';
+            }
+        ).catch(() => {
+            // Retry on the next heartbeat. A transient local write failure
+            // must not cancel a healthy provider request.
+        }).finally(() => {
+            writing = false;
+        });
+    }, FOREGROUND_GENERATION_LEASE_MS / 3);
+    const stop = () => {
+        stopped = true;
+        clearInterval(timer);
+        signal.removeEventListener('abort', stop);
+    };
+    signal.addEventListener('abort', stop, { once: true });
+    if (stopped) stop();
+    return stop;
+}
 
 /**
  * `makeAssistantPersister`
@@ -91,7 +136,16 @@ export function makeAssistantPersister(
             assistantDbMsg.id,
             patch as Partial<StoredMessage>,
             assistantDbMsg,
-            ifCurrent
+            generationLeaseId && !finalize
+                ? (latest) => {
+                    const data = latest?.data as Record<string, unknown> | null;
+                    return latest?.pending === true && !latest.deleted &&
+                        data?.generation_lease_id === generationLeaseId &&
+                        data.generation_state !== 'superseded' &&
+                        typeof data.superseded_by !== 'string' &&
+                        (ifCurrent?.(latest) ?? true);
+                }
+                : ifCurrent
         );
         if (ownedSerialized !== undefined) {
             lastSerialized = ownedSerialized;

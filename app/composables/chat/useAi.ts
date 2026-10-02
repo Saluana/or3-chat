@@ -143,6 +143,7 @@ import {
     projectCanonicalBackgroundMessage,
     reloadTurnIntoRawMessages,
 } from '~/utils/chat/useAi-internal';
+import { startForegroundGenerationHeartbeat } from '~/utils/chat/useAi-internal/persistence';
 import {
     assistantTranscriptData,
     userTranscriptData,
@@ -502,8 +503,15 @@ export function useChat(
      * an A -> B -> A switch cannot be mistaken for "still on the same thread".
      */
     let navigationRevision = 0;
+    const foregroundReconcileTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    function clearForegroundReconcileTimers(): void {
+        for (const timer of foregroundReconcileTimers.values()) clearTimeout(timer);
+        foregroundReconcileTimers.clear();
+    }
+    cleanupFns.push(clearForegroundReconcileTimers);
     function bumpNavigationRevision(): void {
         navigationRevision += 1;
+        clearForegroundReconcileTimers();
     }
     /**
      * True only while this request still owns the visible conversation. Used to
@@ -1307,7 +1315,7 @@ export function useChat(
                 attachedAlready: attachedBackgroundJobs.has(params.jobId),
             });
             const subscriber: BackgroundJobSubscriber = {
-                onUpdate: ({ content, delta, replace, reasoning, status }) => {
+                onUpdate: ({ content, delta, replace, reasoning, reasoningReplace, status }) => {
                     if (
                         request.finalization ||
                         !request.ownsView() ||
@@ -1326,7 +1334,7 @@ export function useChat(
 
                     if (
                         typeof reasoning === 'string' &&
-                        reasoning.length > 0 &&
+                        (reasoning.length > 0 || reasoningReplace === true) &&
                         reasoning !== target.reasoning_text
                     ) {
                         target.reasoning_text = reasoning;
@@ -1486,7 +1494,6 @@ export function useChat(
      * Constraints:
      * - No-op when background streaming is disabled
      */
-    const reconcileTimersScheduled = new Set<string>();
     async function reconcileForegroundGenerations(): Promise<void> {
         const reconcileThreadId = threadIdRef.value;
         if (!reconcileThreadId) return;
@@ -1495,16 +1502,14 @@ export function useChat(
         const reconcileDb = getDb();
         const reconcileWorkspaceId = getActiveWorkspaceId() ?? 'local';
         const reconcileRevision = navigationRevision;
+        const ownsReconcileView = () => !disposed &&
+            navigationRevision === reconcileRevision &&
+            getDb() === reconcileDb && threadIdRef.value === reconcileThreadId;
         const persisted = (await messagesByThread(reconcileThreadId)) as
             | StoredMessage[]
             | undefined;
         // Stale query results must never touch a newer thread's view.
-        if (
-            navigationRevision !== reconcileRevision ||
-            getDb() !== reconcileDb ||
-            threadIdRef.value !== reconcileThreadId
-        )
-            return;
+        if (!ownsReconcileView()) return;
         for (const row of persisted ?? []) {
             const rowData = row.data as Record<string, unknown> | null;
             if (
@@ -1515,11 +1520,23 @@ export function useChat(
                 continue;
 
             const interrupt = async () => {
-                reconcileTimersScheduled.delete(row.id);
+                if (!ownsReconcileView()) return;
+                foregroundReconcileTimers.delete(row.id);
                 const latest = (await reconcileDb.messages.get(row.id)) as
                     | StoredMessage
                     | undefined;
                 if (!latest) return;
+                if (
+                    latest.role === 'assistant' &&
+                    latest.pending === true &&
+                    typeof latest.data?.background_job_id !== 'string' &&
+                    !isStaleForegroundGeneration(latest)
+                ) {
+                    // Another tab renewed the lease after this check was
+                    // scheduled. Keep watching until it settles or expires.
+                    if (!disposed) scheduleCheck(remainingForegroundLeaseMs(latest));
+                    return;
+                }
                 let finalizedHere = false;
                 if (isStaleForegroundGeneration(latest)) {
                     const recovery = createChatRequest({
@@ -1536,10 +1553,7 @@ export function useChat(
                         typeof latest.data?.generation_id === 'string'
                             ? latest.data.generation_id
                             : undefined;
-                    recovery.ownsView = () =>
-                        navigationRevision === reconcileRevision &&
-                        threadIdRef.value === reconcileThreadId &&
-                        getDb() === reconcileDb;
+                    recovery.ownsView = ownsReconcileView;
                     recovery.projectTerminal = (result) =>
                         projectTerminalMessages(recovery, result, {
                             messages,
@@ -1565,12 +1579,7 @@ export function useChat(
                 // Project the durable terminal state even when a concurrent
                 // recovery already finalized the row, so an older pending
                 // projection (e.g. seeded history) never strands the UI.
-                if (
-                    navigationRevision !== reconcileRevision ||
-                    getDb() !== reconcileDb ||
-                    threadIdRef.value !== reconcileThreadId
-                )
-                    return;
+                if (!ownsReconcileView()) return;
                 const terminalError =
                     latest.error ??
                     (finalizedHere ? 'stream_interrupted' : undefined);
@@ -1594,14 +1603,18 @@ export function useChat(
                 }
             };
 
+            const scheduleCheck = (delay: number) => {
+                if (!ownsReconcileView()) return;
+                const timer = setTimeout(() => void interrupt(), delay);
+                foregroundReconcileTimers.set(row.id, timer);
+            };
+
             const remaining = remainingForegroundLeaseMs(row);
             if (remaining === 0 || isStaleForegroundGeneration(row)) {
                 await interrupt();
                 if (threadIdRef.value !== reconcileThreadId) return;
-            } else if (!reconcileTimersScheduled.has(row.id)) {
-                reconcileTimersScheduled.add(row.id);
-                const timer = setTimeout(() => void interrupt(), remaining);
-                cleanupFns.push(() => clearTimeout(timer));
+            } else if (!foregroundReconcileTimers.has(row.id)) {
+                scheduleCheck(remaining);
             }
         }
     }
@@ -2228,6 +2241,7 @@ export function useChat(
 
         let currentModelId: string | undefined;
         let terminalResult: SendResult | undefined;
+        let stopForegroundHeartbeat: (() => void) | undefined;
         try {
             const startedAt = Date.now();
             const modelIdPromise = hooks.applyFilters(
@@ -2842,6 +2856,10 @@ export function useChat(
             requestScope.abortController = new AbortController();
             abortController.value = requestScope.abortController;
 
+            stopForegroundHeartbeat = startForegroundGenerationHeartbeat(
+                requestScope.originDb, assistantDbMsg.id, requestId,
+                requestScope.abortController.signal
+            );
             await runForegroundStreamLoop({
                 apiKey: effectiveApiKey.value,
                 modelId,
@@ -2870,6 +2888,7 @@ export function useChat(
                 toolLedger: requestScope.toolLedger,
                 outputLimitBytes: canonicalOutputLimitBytes,
             });
+            stopForegroundHeartbeat();
 
             const current = tailAssistant.value!;
             const fullText = current.text;
@@ -2983,6 +3002,7 @@ export function useChat(
                 assistantMessageId: assistantDbMsg.id,
             };
         } catch (err) {
+            stopForegroundHeartbeat?.();
             if (err instanceof Error && err.name === 'AbortError') {
                 if (isDetached()) {
                     return {
@@ -3098,6 +3118,7 @@ export function useChat(
                 );
             }
         } finally {
+            stopForegroundHeartbeat?.();
             // CRITICAL: Ensure abort controller is cleaned up to prevent memory leak
             if (activeRequestScope === requestScope) {
                 if (abortController.value) {
@@ -3131,8 +3152,10 @@ export function useChat(
      * - No-op if message or thread context is missing
      */
     async function retryMessage(messageId: string, modelOverride?: string) {
+        const retryRevision = navigationRevision;
         return await retryMessageImpl(
             {
+                ownsView: () => !disposed && navigationRevision === retryRevision,
                 loading,
                 threadIdRef,
                 tailAssistant,

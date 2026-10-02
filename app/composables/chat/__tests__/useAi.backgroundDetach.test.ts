@@ -24,7 +24,7 @@ const hookDoActionMock = vi.fn(async (_name: string, ..._args: unknown[]) => {})
 const hookApplyFiltersMock = vi.fn(
     async (_name: string, value: unknown) => value
 );
-const messagesByThreadMock = vi.fn<() => Promise<any[]>>(async () => []);
+const messagesByThreadMock = vi.fn<(threadId: string, db?: unknown) => Promise<any[]>>(async () => []);
 const backgroundJobTrackers = new Map<string, any>();
 const messageStore = new Map<string, any>();
 let consumeWorkflowSend = false;
@@ -125,7 +125,8 @@ const dbMock = {
 };
 let activeDb = dbMock;
 
-vi.mock('~/db/files-util', () => ({
+vi.mock('~/db/files-util', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('~/db/files-util')>()),
     serializeFileHashes: (hashes: string[]) => JSON.stringify(hashes),
 }));
 
@@ -147,7 +148,8 @@ vi.mock('~/utils/files/attachments', () => ({
     mergeAssistantFileHashes: (_prev: string[], next: string[]) => next || [],
 }));
 
-vi.mock('~/db/messages', () => ({
+vi.mock('~/db/messages', async (importOriginal) => ({
+    compareMessageOrder: (await importOriginal<typeof import('~/db/messages')>()).compareMessageOrder,
     patchMessageInDb: async (_db: unknown, id: string, patch: any) => {
         const existing = messageStore.get(id);
         if (existing)
@@ -177,6 +179,7 @@ vi.mock('~/utils/chat/uiMessages', () => ({
 
 vi.mock('~/utils/chat/messages', async (importOriginal) => ({
     resolveChatInputTokenBudget: (await importOriginal<typeof import('~/utils/chat/messages')>()).resolveChatInputTokenBudget,
+    normalizeStreamingMessage: (await importOriginal<typeof import('~/utils/chat/messages')>()).normalizeStreamingMessage,
     buildParts: (text: string) => [{ type: 'text', text }],
     deriveMessageContent: ({
         content,
@@ -302,7 +305,7 @@ vi.mock('~/utils/chat/history', () => ({
     ensureThreadHistoryLoaded: vi.fn(async () => undefined),
 }));
 
-vi.mock('~/utils/chat/useAi-internal', () => ({
+vi.mock('~/utils/chat/useAi-internal', async () => ({
     backgroundJobTrackers,
     primeBackgroundJobUpdate: vi.fn(),
     stopBackgroundJobTracking: stopBackgroundJobTrackingMock,
@@ -313,7 +316,7 @@ vi.mock('~/utils/chat/useAi-internal', () => ({
     buildSystemPromptMessage: vi.fn(async () => null),
     buildOpenRouterMessagesForSend: buildOpenRouterMessagesForSendMock,
     enforceOpenRouterMessageTokenBudget: vi.fn(async (messages) => messages),
-    retryMessageImpl: vi.fn(),
+    retryMessageImpl: (await import('~/utils/chat/useAi-internal/retry')).retryMessageImpl,
     continueMessageImpl: vi.fn(),
     makeAssistantPersister:
         (_db: unknown, message: any) => async (patch: any) => {
@@ -501,6 +504,65 @@ describe('useChat background detach race', () => {
         );
 
         messagesByThreadMock.mockResolvedValue([]);
+    });
+
+    it('abandons a public retry after switching away and back while its preparation hook waits', async () => {
+        runtimeConfigRef.value.public.backgroundStreaming.enabled = false;
+        const rows = [
+            { id: 'retry-user', role: 'user', thread_id: 'thread-1', index: 0, data: { content: 'old prompt' }, deleted: false },
+            { id: 'retry-assistant', role: 'assistant', thread_id: 'thread-1', index: 1, data: { content: 'old reply' }, deleted: false },
+        ];
+        for (const row of rows) messageStore.set(row.id, row);
+        messagesByThreadMock.mockImplementation(async (threadId) =>
+            [...messageStore.values()].filter((row) => row.thread_id === threadId)
+        );
+        let release!: () => void;
+        const preparation = new Promise<void>((resolve) => { release = resolve; });
+        hookDoActionMock.mockImplementation(async (name) => {
+            if (name === 'ai.chat.retry:action:before') {
+                await preparation;
+            }
+        });
+
+        vi.resetModules();
+        const { useChat } = await import('~/composables/chat/useAi');
+        const scope = effectScope();
+        const chat = scope.run(() => useChat([], 'thread-1'))!;
+        let retry: ReturnType<typeof chat.retryMessage> | undefined;
+        try {
+            retry = chat.retryMessage('retry-user');
+            await vi.waitFor(() => expect(hookDoActionMock).toHaveBeenCalledWith(
+                'ai.chat.retry:action:before', expect.objectContaining({ originalUserId: 'retry-user' })
+            ));
+            await chat.switchThread('thread-2', {
+                seedMessages: [{ id: 'other-turn', role: 'user', content: 'other chat' }],
+                historyAlreadyLoaded: true,
+            });
+            await chat.switchThread('thread-1', {
+                seedMessages: [
+                    { id: 'retry-user', role: 'user', content: 'fresh prompt' },
+                    { id: 'retry-assistant', role: 'assistant', content: 'fresh reply' },
+                ],
+                historyAlreadyLoaded: true,
+            });
+            const saved = [...messageStore.entries()];
+            release();
+            await retry;
+
+            expect(appendMessageMock).not.toHaveBeenCalled();
+            expect(startBackgroundStreamMock).not.toHaveBeenCalled();
+            expect(runForegroundStreamLoopMock).not.toHaveBeenCalled();
+            expect(chat.messages.value.map(({ id, text }) => ({ id, text }))).toEqual([
+                { id: 'retry-user', text: 'fresh prompt' },
+                { id: 'retry-assistant', text: 'fresh reply' },
+            ]);
+            expect([...messageStore.entries()]).toEqual(saved);
+        } finally {
+            release();
+            await retry;
+            chat.dispose();
+            scope.stop();
+        }
     });
 
     it('cancels synchronously admitted work while its outgoing filter is awaiting', async () => {
@@ -1161,15 +1223,19 @@ describe('useChat background detach race', () => {
         subscriber?.onUpdate?.({
             content: 'old partial',
             delta: 'old partial',
+            reasoning: 'old reasoning',
             status: { status: 'streaming' },
         });
         subscriber?.onUpdate?.({
             content: '',
             delta: '',
             replace: true,
+            reasoning: '',
+            reasoningReplace: true,
             status: { status: 'streaming', content_reset: true, attempt: 2 },
         });
         expect(chat.streamState.text).toBe('');
+        expect(chat.tailAssistant.value?.reasoning_text ?? '').toBe('');
 
         subscriber?.onUpdate?.({
             content: 'new',
@@ -1419,6 +1485,140 @@ describe('useChat background detach race', () => {
             pending: false,
             error: 'stream_interrupted',
         });
+    });
+
+    it('keeps a quiet foreground generation alive when another tab reconciles history', async () => {
+        vi.useFakeTimers();
+        let owner: ReturnType<typeof import('~/composables/chat/useAi').useChat> | undefined;
+        let viewer: typeof owner;
+        let send: Promise<unknown> | undefined;
+        let finish!: () => void;
+        let releaseIncoming: (() => void) | undefined;
+        try {
+            vi.setSystemTime(100_000);
+            runtimeConfigRef.value.public.backgroundStreaming.enabled = false;
+            runForegroundStreamLoopMock.mockImplementationOnce(({ tailAssistant }: any) => {
+                tailAssistant.value = { id: 'assistant-msg-1', role: 'assistant', text: '', pending: true };
+                return new Promise<void>((resolve) => { finish = resolve; });
+            });
+            vi.resetModules();
+            const { useChat } = await import('~/composables/chat/useAi');
+            owner = useChat([], 'thread-1');
+            send = owner.sendMessage('quiet model', { model: 'test-model' });
+            await vi.waitFor(() => expect(runForegroundStreamLoopMock).toHaveBeenCalled());
+            const pending = messageStore.get('assistant-msg-1');
+            messagesByThreadMock.mockResolvedValue([pending]);
+            viewer = useChat([{ id: pending.id, role: 'assistant', content: '', pending: true }],
+                'thread-1', undefined, { historyAlreadyLoaded: true });
+            await viewer.ensureHistorySynced();
+
+            await vi.advanceTimersByTimeAsync(35_000);
+            expect(messageStore.get(pending.id).pending).toBe(true);
+            expect(messageStore.get(pending.id).error ?? null).toBeNull();
+            expect(viewer.messages.value[0]).toMatchObject({ pending: true });
+
+            // An admitted request survives view disposal, then releases its
+            // heartbeat once it settles without reviving the durable row.
+            hookApplyFiltersMock.mockImplementation(async (name, value) =>
+                name === 'ui.chat.message:filter:incoming'
+                    ? new Promise((resolve) => { releaseIncoming = () => resolve(value); })
+                    : value);
+            owner.dispose();
+            finish();
+            await vi.waitFor(() => expect(releaseIncoming).toBeTypeOf('function'));
+            const streamEnded = structuredClone(messageStore.get(pending.id));
+            await vi.advanceTimersByTimeAsync(10_000);
+            expect(messageStore.get(pending.id)).toEqual(streamEnded);
+            releaseIncoming!();
+            await send;
+            const settled = structuredClone(messageStore.get(pending.id));
+            expect(settled.pending).toBe(false);
+            await vi.advanceTimersByTimeAsync(35_000);
+            expect(messageStore.get(pending.id)).toEqual(settled);
+        } finally {
+            finish?.();
+            releaseIncoming?.();
+            await send;
+            owner?.dispose();
+            viewer?.dispose();
+            vi.useRealTimers();
+        }
+    });
+
+    it('keeps watching a foreground lease renewed by another tab until that tab stops', async () => {
+        vi.useFakeTimers();
+        let chat: ReturnType<typeof import('~/composables/chat/useAi').useChat> | undefined;
+        try {
+            vi.setSystemTime(100_000);
+            const row = {
+                id: 'assistant-other-tab', role: 'assistant', thread_id: 'thread-1',
+                pending: true, error: null, index: 1, created_at: 1, updated_at: 1, clock: 1,
+                data: { content: 'partial', generation_id: 'generation-other-tab',
+                    generation_lease_id: 'other-tab', generation_heartbeat_at: Date.now() },
+            };
+            messageStore.set(row.id, row);
+            messagesByThreadMock.mockResolvedValue([row]);
+            vi.resetModules();
+            const { useChat } = await import('~/composables/chat/useAi');
+            chat = useChat([{ id: row.id, role: 'assistant', content: 'partial', pending: true }],
+                'thread-1', undefined, { historyAlreadyLoaded: true });
+            await chat.ensureHistorySynced();
+
+            await vi.advanceTimersByTimeAsync(20_000);
+            messageStore.set(row.id, { ...row, data: { ...row.data, generation_heartbeat_at: Date.now() } });
+            await vi.advanceTimersByTimeAsync(10_000);
+            expect(messageStore.get(row.id).pending).toBe(true);
+
+            // The first tab closes here. Recovery must check the renewed lease
+            // again without navigation or a second explicit history load.
+            await vi.advanceTimersByTimeAsync(20_000);
+            expect(messageStore.get(row.id)).toMatchObject({
+                pending: false, error: 'stream_interrupted',
+                data: { content: 'partial', generation_state: 'interrupted' },
+            });
+            expect(chat.messages.value[0]).toMatchObject({ pending: false, error: 'stream_interrupted' });
+        } finally {
+            chat?.dispose();
+            vi.useRealTimers();
+        }
+    });
+
+    it('ignores a recovery projection that resolves after view disposal', async () => {
+        vi.useFakeTimers();
+        let chat: ReturnType<typeof import('~/composables/chat/useAi').useChat> | undefined;
+        let release: ((row: unknown) => void) | undefined;
+        const get = vi.spyOn(dbMock.messages, 'get');
+        try {
+            vi.setSystemTime(100_000);
+            const row = {
+                id: 'assistant-disposed', role: 'assistant', thread_id: 'thread-1',
+                pending: true, error: null, index: 1, created_at: 1, updated_at: 1, clock: 1,
+                data: { content: 'partial', generation_lease_id: 'other-tab', generation_heartbeat_at: Date.now() },
+            };
+            messageStore.set(row.id, row);
+            messagesByThreadMock.mockResolvedValue([row]);
+            vi.resetModules();
+            const { useChat } = await import('~/composables/chat/useAi');
+            chat = useChat([{ id: row.id, role: 'assistant', content: 'partial', pending: true }],
+                'thread-1', undefined, { historyAlreadyLoaded: true });
+            await chat.ensureHistorySynced();
+            get.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+            await vi.advanceTimersByTimeAsync(30_000);
+            expect(release).toBeTypeOf('function');
+            chat.dispose();
+            const previousView = chat.messages.value.map((message) => ({ ...message }));
+            const terminal = { ...row, pending: false, error: 'stopped' };
+            messageStore.set(row.id, terminal);
+            release!(terminal);
+            await vi.advanceTimersByTimeAsync(30_000);
+            expect(chat.messages.value).toEqual(previousView);
+            expect(messageStore.get(row.id)).toEqual(terminal);
+        } finally {
+            release?.(undefined);
+            chat?.dispose();
+            get.mockRestore();
+            vi.useRealTimers();
+        }
     });
 
     it('disposes hook listeners when its Vue scope stops during background tracking', async () => {

@@ -351,20 +351,22 @@ export async function runForegroundStreamLoop(
         const current = ctx.tailAssistant.value || ensureUiMessage(rawAssistant);
         // Provider context is iteration-local. `current.text` remains cumulative
         // for the UI and durable assistant row across the whole tool loop.
-        const writeCoalescer = createStreamWriteCoalescer();
+        const writeCoalescer = createStreamWriteCoalescer({
+            onIdleFlush: () => flushProgress(),
+        });
         const pendingToolCalls: ToolCall[] = [];
 
         const flushProgress = async () => {
-            if (!writeCoalescer.hasDirty()) return;
-            await ctx.persistAssistant({
-                content: current.text,
-                reasoning: current.reasoning_text ?? null,
-                toolCalls: current.toolCalls ?? undefined,
+            await writeCoalescer.flush(async () => {
+                await ctx.persistAssistant({
+                    content: current.text,
+                    reasoning: current.reasoning_text ?? null,
+                    toolCalls: current.toolCalls ?? undefined,
+                });
+                if (ctx.assistantFileHashes.length) {
+                    current.file_hashes = ctx.assistantFileHashes;
+                }
             });
-            if (ctx.assistantFileHashes.length) {
-                current.file_hashes = ctx.assistantFileHashes;
-            }
-            writeCoalescer.flushed();
         };
 
         try {
@@ -702,6 +704,8 @@ export async function runForegroundStreamLoop(
                 console.warn('[useChat] Stream error during tool loop', streamError);
             }
             throw streamError;
+        } finally {
+            await writeCoalescer.dispose();
         }
     }
 }
