@@ -47,7 +47,8 @@ describe('canonical lineage history and summary readiness', () => {
         await thread('original');
         await message('assistant', 'original', 0, { role: 'assistant', data: {
             content: 'Inspecting source', plugin_receipt: { retained: true },
-            tool_calls: [{ id: 'lookup', name: 'read_source_evidence', args: '{}', status: 'complete' }],
+            tool_calls: [{ id: 'lookup', name: 'read_source_evidence', label: 'Read source evidence', runtime: 'client', completedAt: 123, args: '{}',
+                status: 'error', result: 'Stale embedded result', error: 'Stale embedded error' }],
         } });
         await message('tool-evidence', 'original', 1, { role: 'tool', data: {
             content: 'Canonical tool evidence: preserve app/example.ts exactly.',
@@ -59,8 +60,26 @@ describe('canonical lineage history and summary readiness', () => {
         expect(seed.map((row) => row.id)).toEqual(['assistant', 'tool-evidence']);
         expect(seed[0]?.data).toMatchObject({ plugin_receipt: { retained: true } });
         expect(ensureUiMessage(seed[0]!)).toMatchObject({ toolCalls: [{
-            id: 'lookup', status: 'complete', result: 'Canonical tool evidence: preserve app/example.ts exactly.',
+            id: 'lookup', label: 'Read source evidence', runtime: 'client', completedAt: 123, status: 'complete',
+            result: 'Canonical tool evidence: preserve app/example.ts exactly.', error: undefined,
         }] });
+        expect(await getDb().messages.toArray()).toEqual(stored);
+    });
+    it('preserves pending tool presentation metadata by call identity without a separate result row', async () => {
+        await thread('original');
+        await message('assistant', 'original', 0, { role: 'assistant', data: {
+            content: '', tool_calls: [
+                { id: 'lookup', name: 'opaque_lookup', label: 'Inspect source', runtime: 'client', status: 'pending', completedAt: 123 },
+                { id: 'server', name: 'opaque_lookup', label: 'Search shared lists', runtime: 'server', status: 'loading' },
+            ],
+        } });
+        const stored = await getDb().messages.toArray();
+        const { useMultiPane } = await import('~/composables/core/useMultiPane');
+        const seed = await useMultiPane().loadMessagesFor('original');
+        expect(ensureUiMessage(seed[0]!)).toMatchObject({ toolCalls: [
+            { id: 'lookup', label: 'Inspect source', runtime: 'client', status: 'pending', completedAt: 123 },
+            { id: 'server', label: 'Search shared lists', runtime: 'server', status: 'loading' },
+        ] });
         expect(await getDb().messages.toArray()).toEqual(stored);
     });
     it('loads two anchored reference generations by ID with canonical tool roles and excludes superseded/deleted rows', async () => {
