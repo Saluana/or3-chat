@@ -62,6 +62,20 @@ describe('openrouterStream', () => {
         vi.useRealTimers();
     });
 
+    it.each(['server-key', 'personal-static'] as const)('sends an admitted auxiliary reply maximum through the existing %s auth route', async (route) => {
+        runtimeConfigMock.public.ssrAuthEnabled = route === 'server-key';
+        const fetchMock = vi.fn();
+        if (route === 'personal-static') fetchMock.mockResolvedValueOnce(new Response('', { status: 404 }));
+        fetchMock.mockResolvedValue(createStreamResponse()); vi.stubGlobal('fetch', fetchMock);
+        for await (const _event of openRouterStream({ apiKey: route === 'server-key' ? null : 'scripted', model: 'captured-model',
+            orMessages: [{ role: 'user', content: 'Summary reference' }], modalities: ['text'], maxCompletionTokens: 512 })) { /* drain */ }
+        const request = fetchMock.mock.calls.at(-1)!;
+        expect(request[0]).toBe(route === 'server-key' ? '/api/openrouter/stream' : 'https://openrouter.ai/api/v1/chat/completions');
+        expect(JSON.parse(request[1].body)).toMatchObject({ max_tokens: 512, model: 'captured-model', modalities: ['text'] });
+        expect(JSON.parse(request[1].body)).not.toHaveProperty('tools'); expect(JSON.parse(request[1].body)).not.toHaveProperty('_background');
+        expect(fetchMock).toHaveBeenCalledTimes(route === 'server-key' ? 1 : 2);
+    });
+
     it('binds final usage to the actual provider payload without leaking internal provenance into the request', async () => {
         const fetchMock = vi.fn().mockResolvedValue(createStreamResponse()); vi.stubGlobal('fetch', fetchMock);
         parseMock.mockImplementationOnce(async function* () {

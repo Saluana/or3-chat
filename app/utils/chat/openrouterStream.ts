@@ -100,6 +100,7 @@ type OpenRouterRequestBody = {
     messages: ORMessage[];
     modalities?: string[];
     stream: true;
+    max_tokens?: number;
     reasoning?: OpenRouterReasoningConfig;
     cache_control?: OpenRouterCacheControl;
     tools?: ToolDefinition[];
@@ -201,6 +202,7 @@ export async function* openRouterStream(params: {
     threadId?: string;
     messageId?: string;
     tools?: ToolDefinition[];
+    maxCompletionTokens?: number;
     toolChoice?: ToolChoice;
     signal?: AbortSignal;
     reasoning?: OpenRouterReasoningConfig;
@@ -234,6 +236,10 @@ export async function* openRouterStream(params: {
         stream: true,
     };
     if (modalities?.length) body.modalities = modalities;
+    if (params.maxCompletionTokens !== undefined) {
+        if (!Number.isSafeInteger(params.maxCompletionTokens) || params.maxCompletionTokens <= 0) throw new Error('Reply maximum must be a positive integer.');
+        body.max_tokens = params.maxCompletionTokens;
+    }
 
     if (params.threadId) {
         body._threadId = params.threadId;

@@ -47,7 +47,7 @@ export type ORStreamEvent =
               function: { name: string; arguments: string };
           };
       }
-    | { type: 'done' };
+    | { type: 'done'; truncated?: true; refused?: true };
 
 /**
  * Standard OpenAI-compatible providers send deltas. A small number of adapters
@@ -77,6 +77,7 @@ interface ToolCallDelta {
 }
 interface ReasoningDetail { type?: string; text?: string; summary?: string }
 interface Delta {
+    refusal?: string;
     reasoning?: string;
     reasoning_details?: ReasoningDetail[];
     content?: string | ContentPart[];
@@ -84,7 +85,7 @@ interface Delta {
     tool_calls?: ToolCallDelta[];
     images?: ImagePart[];
 }
-interface Message { images?: ImagePart[]; content?: string | ContentPart[] }
+interface Message { images?: ImagePart[]; content?: string | ContentPart[]; refusal?: string }
 interface ProviderErrorEnvelope {
     message?: string;
     code?: string | number;
@@ -167,7 +168,7 @@ export async function* parseOpenRouterSSE(
      * without one means the transport ended early and the output is partial.
      * Held in an object so closure mutation survives TypeScript narrowing.
      */
-    const termination = { verified: false };
+    const termination = { verified: false, truncated: false, refused: false };
     let responseModel: string | undefined;
     let responseId: string | undefined;
     let lastUsageIdentity: string | undefined;
@@ -232,9 +233,11 @@ export async function* parseOpenRouterSSE(
             }
             if (finishReason) {
                 termination.verified = true;
+                if (finishReason === 'length') termination.truncated = true;
             }
 
             const delta = choice.delta ?? {};
+            if (typeof delta.refusal === 'string' && delta.refusal.trim() || typeof choice.message?.refusal === 'string' && choice.message.refusal.trim()) termination.refused = true;
             let reasoningYielded = false;
             if (Array.isArray(delta.reasoning_details)) {
                 for (const detail of delta.reasoning_details) {
@@ -432,7 +435,7 @@ export async function* parseOpenRouterSSE(
                 if (payload === null) continue;
                 const result = parsePayload(payload);
                 if (result === 'done') {
-                    yield { type: 'done' };
+                    yield { type: 'done', ...(termination.truncated ? { truncated: true as const } : {}), ...(termination.refused ? { refused: true as const } : {}) };
                     return;
                 }
                 for (const event of result) yield event;
@@ -443,7 +446,7 @@ export async function* parseOpenRouterSSE(
                     const result = parsePayload(dataLines.join('\n'));
                     dataLines = [];
                     if (result === 'done') {
-                        yield { type: 'done' };
+                        yield { type: 'done', ...(termination.truncated ? { truncated: true as const } : {}), ...(termination.refused ? { refused: true as const } : {}) };
                         return;
                     }
                     for (const event of result) yield event;
@@ -456,7 +459,7 @@ export async function* parseOpenRouterSSE(
                         'OpenRouter stream ended before a terminal finish reason'
                     );
                 }
-                yield { type: 'done' };
+                yield { type: 'done', ...(termination.truncated ? { truncated: true as const } : {}), ...(termination.refused ? { refused: true as const } : {}) };
                 return;
             }
         }
