@@ -89,17 +89,34 @@ for (const [name, viewport] of [
     });
 }
 
+async function waitForFunctionalChat(page: Page): Promise<void> {
+    // Dev imports can still be optimizing after load; interact with the mounted
+    // editor only after its visible DOM and dependency graph are ready.
+    await page.waitForFunction(() =>
+        (window as typeof window & { __OR3_APP_INIT_FIRED__?: boolean }).__OR3_APP_INIT_FIRED__ === true
+    );
+    const input = page.getByRole('textbox', { name: 'Message input' });
+    await input.waitFor({ state: 'visible' });
+    await page.waitForLoadState('networkidle');
+    await expect(input).toBeVisible();
+    // The existing public preview makes the real welcome layer deterministic,
+    // including after reload, without racing its asynchronous preference read.
+    const dismiss = page.getByRole('button', { name: 'Dismiss welcome' });
+    await dismiss.waitFor({ state: 'visible' });
+    await dismiss.click();
+    await expect(page.locator('[data-welcome-backdrop]')).toBeHidden();
+}
+
 test('client error recovery remains visible and dismissible after shell sizing', async ({ page }, testInfo) => {
     await page.route(/(?:openrouter\.ai\/|\/api\/openrouter\/)/, (route) =>
         route.request().method() === 'POST'
             ? route.abort('blockedbyclient')
             : route.fulfill({ json: { data: [] } })
     );
-    await page.goto('/chat');
+    await page.goto('/chat?welcome=1');
+    await waitForFunctionalChat(page);
     const input = page.getByRole('textbox', { name: 'Message input' });
     await expect(input).toBeVisible();
-    const dismiss = page.getByRole('button', { name: 'Dismiss welcome' });
-    if (await dismiss.isVisible()) await dismiss.click();
     const chooserPromise = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
     const chooser = await chooserPromise;
@@ -131,18 +148,18 @@ test('sidebar resizing persists through collapse and responsive changes', async 
             ? route.abort('blockedbyclient')
             : route.fulfill({ json: { data: [] } })
     );
-    await page.goto('/chat');
+    await page.goto('/chat?welcome=1');
+    await waitForFunctionalChat(page);
     const sidebar = page.getByTestId('sidebar');
     const handle = page.getByRole('separator', { name: 'Resize sidebar', exact: true });
     await expect(handle).toHaveAttribute('aria-valuenow', '320');
-    const dismiss = page.getByRole('button', { name: 'Dismiss welcome' });
-    if (await dismiss.isVisible()) await dismiss.click();
     await handle.focus();
     await handle.press('ArrowRight');
     await expect(handle).toBeFocused();
     await expect(handle).toHaveAttribute('aria-valuenow', '336');
     await expect(sidebar).toHaveCSS('width', '336px');
     await page.reload();
+    await waitForFunctionalChat(page);
     await expect(handle).toHaveAttribute('aria-valuenow', '336');
     await expect(sidebar).toHaveCSS('width', '336px');
     await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
