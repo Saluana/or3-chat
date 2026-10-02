@@ -1,4 +1,5 @@
 import Dexie from 'dexie';
+import type { Thread } from '../schema';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
 import { getWriteTxTableNames } from '../util';
 import { getDb, setActiveWorkspaceDb, evictWorkspaceDb } from '../client';
@@ -72,7 +73,7 @@ describe('atomic compacted fork', () => {
     });
     it('cancels during the actual child write and rejects A→B→A with the same DB handle', async () => {
         const value = await prepared(); const controller = new AbortController();
-        const cancelWrite = (_key: unknown, row: { branch_mode?: string }) => { if (row.branch_mode === 'compacted') controller.abort(); };
+        const cancelWrite = (_key: unknown, row: Thread) => { if (row.branch_mode === 'compacted') controller.abort(); };
         getDb().threads.hook('creating', cancelWrite);
         await expect(createCompactedFork({ ...value, signal: controller.signal })).rejects.toThrow(/cancel|abort/i);
         getDb().threads.hook('creating').unsubscribe(cancelWrite);
