@@ -485,32 +485,33 @@ function forwardResize(payload: ResizePayload) {
 
 }
 
-/* A desktop split pane can be as narrow as a phone. Keep the draft above
-   the controls instead of squeezing it between three buttons. */
-@container (max-width: 480px) {
-    :deep(.blank2-chat-dropper .chat-input-inner-container) {
-        padding: 0.5rem 0.75rem !important;
-        gap: 0.5rem !important;
-    }
+/* Keep narrow desktop split panes usable without changing blank's mobile pill. */
+@media (min-width: 768px) {
+    @container (max-width: 480px) {
+        :deep(.blank2-chat-dropper .chat-input-inner-container) {
+            padding: 0.5rem 0.75rem !important;
+            gap: 0.5rem !important;
+        }
 
-    :deep(.blank2-chat-dropper .chat-input-editor-container) {
-        padding: 0 !important;
-    }
+        :deep(.blank2-chat-dropper .chat-input-editor-container) {
+            padding: 0 !important;
+        }
 
-    :deep(.blank2-chat-dropper .chat-input-bottom-controls) {
-        position: static !important;
-        height: auto;
-        min-height: 44px;
-        pointer-events: auto;
-    }
+        :deep(.blank2-chat-dropper .chat-input-bottom-controls) {
+            position: static !important;
+            height: auto;
+            min-height: 44px;
+            pointer-events: auto;
+        }
 
-    :deep(.blank2-chat-dropper .chat-input-bottom-controls-left),
-    :deep(.blank2-chat-dropper .chat-input-bottom-controls-right) {
-        position: static !important;
-    }
+        :deep(.blank2-chat-dropper .chat-input-bottom-controls-left),
+        :deep(.blank2-chat-dropper .chat-input-bottom-controls-right) {
+            position: static !important;
+        }
 
-    :deep(.blank2-chat-dropper .chat-input-bottom-controls-left) {
-        flex: 1 !important;
+        :deep(.blank2-chat-dropper .chat-input-bottom-controls-left) {
+            flex: 1 !important;
+        }
     }
 }
 

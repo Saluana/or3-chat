@@ -20,6 +20,22 @@ tuples. The importer writes only each tuple's value and ignores its explicit
 key, so this stream does not round-trip custom tables with out-of-line primary
 keys. Current OR3 workspace tables use inline key paths.
 
+Before writing the terminal marker or committing the destination, export checks
+its SHA-256 fingerprint against a second read in one database transaction.
+The fingerprint covers table declarations, row counts, records, and each
+blob's hash, MIME type, length, and bytes; only the informational export time
+is excluded. Validation reads blobs without repeating base64 encoding and uses
+native WebCrypto when available. It retains bounded batches, not a second
+database or a complete in-memory backup.
+
+Destination writes occur outside the validation transaction, so a slow download
+does not hold a database read lock. Validation briefly delays concurrent writes
+while reading the local snapshot. If content changed, export reports a retryable
+error and aborts the destination without an `end` marker. A destination that
+cannot retract bytes can leave an incomplete download; import rejects it.
+Read, write, cancellation, and destination-close failures propagate to the
+existing error/cancelled flow instead of reporting success.
+
 ## Import guarantees and boundaries
 
 The importer targets the database passed by the caller. It rejects an

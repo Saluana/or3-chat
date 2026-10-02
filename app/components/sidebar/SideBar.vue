@@ -176,6 +176,7 @@ import {
 } from 'vue';
 import { useHooks } from '~/core/hooks/useHooks';
 import { liveQuery } from 'dexie';
+import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import {
     db,
     upsert,
@@ -340,6 +341,7 @@ function onEscapeClear() {
 }
 let sub: { unsubscribe: () => void } | null = null;
 let subProjects: { unsubscribe: () => void } | null = null;
+let stopWorkspaceSubscription: (() => void) | null = null;
 
 // Virtualization removed — always render the simple list for chats.
 
@@ -392,29 +394,38 @@ if (topHeaderHeightInjected) {
     watch(topHeaderHeightInjected, recomputeListHeight);
 }
 
-onMounted(async () => {
-    await nextTick();
-    recomputeListHeight();
+function bindWorkspaceQueries() {
+    sub?.unsubscribe();
+    subProjects?.unsubscribe();
+    subDocs?.unsubscribe();
+    items.value = [];
+    projects.value = [];
+    docs.value = [];
+    const workspaceDb = getDb();
+    const generation = getWorkspaceGeneration();
     // Threads subscription (sorted by last opened, excluding deleted)
     sub = liveQuery(() =>
-        db.threads
+        workspaceDb.threads
             .orderBy('updated_at')
             .reverse()
             .filter((t) => !t.deleted)
             .toArray()
     ).subscribe({
-        next: (results) => (items.value = results),
+        next: (results) => {
+            if (generation === getWorkspaceGeneration()) items.value = results;
+        },
         error: (err) => console.error('liveQuery error', err),
     });
     // Projects subscription (most recently updated first)
     subProjects = liveQuery(() =>
-        db.projects
+        workspaceDb.projects
             .orderBy('updated_at')
             .reverse()
             .filter((p: any) => !p.deleted)
             .toArray()
     ).subscribe({
         next: (res) => {
+            if (generation !== getWorkspaceGeneration()) return;
             projects.value = res.map((p: Project) => ({
                 ...p,
                 data: normalizeProjectData(p.data),
@@ -425,13 +436,14 @@ onMounted(async () => {
     if (documentsEnabled.value) {
         // Documents subscription (docs only, excluding deleted)
         subDocs = liveQuery(() =>
-            db.posts
+            workspaceDb.posts
                 .where('postType')
                 .equals('doc')
                 .and((r) => !r.deleted)
                 .toArray()
         ).subscribe({
             next: (res) => {
+                if (generation !== getWorkspaceGeneration()) return;
                 docs.value = res.map((d: any) => ({ ...d }));
             },
             error: (err) => console.error('documents liveQuery error', err),
@@ -439,6 +451,13 @@ onMounted(async () => {
     } else {
         docs.value = [];
     }
+}
+
+onMounted(async () => {
+    await nextTick();
+    recomputeListHeight();
+    bindWorkspaceQueries();
+    stopWorkspaceSubscription = subscribeActiveWorkspaceDb(bindWorkspaceQueries);
 });
 
 // Re-measure bottom pad when data that can change nav size or list height updates (debounced by nextTick)
@@ -495,6 +514,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+    stopWorkspaceSubscription?.();
     sub?.unsubscribe();
     subProjects?.unsubscribe();
     subDocs?.unsubscribe();

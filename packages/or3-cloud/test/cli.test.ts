@@ -1,8 +1,9 @@
 import { expect, test } from 'bun:test';
-import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { createHash, createHmac } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
+import { gzipSync } from 'node:zlib';
 import {
   STATE_SCHEMA_COMPATIBILITY,
   assertCommandFlags,
@@ -128,6 +129,143 @@ test('restore and rollback recovery still require their separate pre-mutation sn
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test.each(
+  ['restore', 'recover'].flatMap((operation) =>
+    ['missing', 'foreign-project', 'foreign-deployment'].map(
+      (labelCase) => [operation, labelCase] as const
+    )
+  )
+)(
+  '%s refuses %s volume labels before any destructive Docker request',
+  async (operation, labelCase) => {
+    const directory = await realpath(await mkdtemp(join(tmpdir(), 'or3-restore-volume-binding-')));
+    try {
+      const { path, manifest } = await authenticatedBackupFixture(directory, 'backup-bound-volume');
+      const digest = `sha256:${'a'.repeat(64)}`;
+      const env = buildEnv({
+        mode: 'local',
+        version: manifest.appVersion,
+        directory,
+        image: manifest.image,
+        email: 'fixture@example.invalid',
+        password: 'FixturePassword123!',
+        port: 3197,
+      });
+      const state = stateFromEnv(directory, env, 'local', 'init', digest);
+      if (operation === 'recover') {
+        state.incompleteOperation = {
+          id: 'update-volume-binding',
+          operation: 'update',
+          phase: 'target-mutating',
+          startedAt: new Date().toISOString(),
+          message: 'Fixture interrupted update',
+          backupId: manifest.backupId,
+          backupPath: path,
+          previousRootOwnership: { uid: 0, gid: 0 },
+        };
+      }
+      const config = serializeEnv(env);
+      const data = gzipSync(Buffer.from('fixture archive bytes'));
+      const contents = JSON.stringify({
+        ...manifest,
+        mode: state.mode,
+        composeProject: state.composeProject,
+        volumeName: state.volumeName,
+        deploymentId: state.deploymentId,
+        port: state.port,
+        dataSha256: createHash('sha256').update(data).digest('hex'),
+        configSha256: createHash('sha256').update(config).digest('hex'),
+      });
+      await writeFile(join(path, 'data.tgz'), data);
+      await writeFile(join(path, 'config.env'), config);
+      await writeFile(join(path, 'manifest.json'), contents);
+      await writeFile(
+        join(path, 'manifest.auth'),
+        createHmac('sha256', Buffer.from('ab'.repeat(32), 'hex'))
+          .update(contents)
+          .digest('hex')
+      );
+      await writeFile(join(directory, '.env'), config);
+      await writeFile(join(directory, '.or3-cloud', 'state.json'), JSON.stringify(state));
+      const bin = join(directory, 'bin');
+      const trace = join(directory, 'docker-requests.jsonl');
+      const labels =
+        labelCase === 'missing'
+          ? {}
+          : {
+              'com.docker.compose.project':
+                labelCase === 'foreign-project' ? 'another-project' : state.composeProject,
+              'com.docker.compose.volume': 'or3-data',
+              'io.or3.cloud.deployment-id':
+                labelCase === 'foreign-deployment' ? 'another-deployment' : state.deploymentId,
+            };
+      await mkdir(bin);
+      // This executable records requests and NEVER invokes Docker or a shell.
+      // The unsafe clear/removal paths are audited without executing them.
+      await writeFile(
+        join(bin, 'docker'),
+        `#!/usr/bin/env bun
+import { appendFileSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
+const args = process.argv.slice(2);
+appendFileSync(${JSON.stringify(trace)}, JSON.stringify(args) + '\\n');
+if (args.includes('-i')) await Bun.stdin.bytes();
+const text = args.join(' ');
+if (text.includes('tar czf')) { await Bun.stdout.write(gzipSync(Buffer.from('fixture archive bytes'))); }
+else if (args[0] === 'volume' && args[1] === 'inspect') {
+  console.log(text.includes('.Labels') ? ${JSON.stringify(JSON.stringify(labels))} : ${JSON.stringify(state.volumeName)});
+} else if (text.includes('.RepoDigests')) console.log(JSON.stringify([${JSON.stringify(manifest.image)}]));
+else if (text.includes('.Architecture')) console.log(args[0] === 'image' ? 'arm64' : 'aarch64');
+else if (text.includes('imagetools inspect')) console.log(JSON.stringify({architecture:'arm64',manifests:[{platform:{architecture:'arm64'}},{platform:{architecture:'amd64'}}]}));
+else if (text.includes('df -Pk')) console.log('1000000');
+else if (text.includes('du -sb')) console.log('1000');
+else if (text.includes('stat -c')) console.log('0:0');
+else if (args[0] === 'compose' && args.includes('config')) {
+  console.log(JSON.stringify({services:{or3:{image:${JSON.stringify(manifest.image)},labels:{'io.or3.cloud.deployment-id':${JSON.stringify(env.OR3_DEPLOYMENT_ID)}},ports:[{target:3000,published:3197,host_ip:'127.0.0.1',protocol:'tcp'}],volumes:[{type:'volume',source:'or3-data',target:'/data'}]}},volumes:{'or3-data':{name:${JSON.stringify(state.volumeName)},labels:{'io.or3.cloud.deployment-id':${JSON.stringify(env.OR3_DEPLOYMENT_ID)}}}}}));
+} else if (args[0] === 'compose' && args.includes('up')) { console.error('Fixture refuses runtime start'); process.exit(1); }
+`,
+        { mode: 0o755 }
+      );
+      const command =
+        operation === 'restore' ? ['restore', path, '--yes'] : ['recover', '--restore', '--yes'];
+      const child = Bun.spawn(
+        [process.execPath, join(import.meta.dir, '../src/cli.ts'), ...command],
+        {
+          cwd: directory,
+          env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+          stdout: 'pipe',
+          stderr: 'pipe',
+        }
+      );
+      const [exitCode, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      const requests = (
+        await readFile(trace, 'utf8').catch(() => {
+          throw new Error(stdout + stderr);
+        })
+      )
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as string[]);
+      expect(
+        requests.some(
+          (args) =>
+            args.includes('find /data -mindepth 1 -delete') ||
+            args.some((arg) => arg.startsWith('chown ')) ||
+            (args[0] === 'volume' && args[1] === 'rm')
+        )
+      ).toBe(false);
+      expect(exitCode).toBe(1);
+      expect(stdout + stderr).toContain('expected managed deployment labels');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
+);
 
 test('retention preserves legacy adoption directories without trusting them as backups', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'or3-legacy-retention-'));

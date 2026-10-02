@@ -65,6 +65,8 @@ export default defineEventHandler(async (event) => {
         });
     }
 
+    recordSyncRequest(session.user.id, 'sync:snapshot');
+
     const response = SnapshotResponseSchema.safeParse(
         await adapter.snapshot(event, request.data)
     );
@@ -84,6 +86,5 @@ export default defineEventHandler(async (event) => {
         requireFileKindCapability(request.data.fileKindCapability);
     }
 
-    recordSyncRequest(session.user.id, 'sync:snapshot');
     return response.data;
 });

@@ -314,9 +314,9 @@ test('updates rebuild legacy-owned data from the checksummed backup without recu
   expect(cli).toContain("'--cap-drop', 'ALL', '--cap-add', 'CHOWN'");
   expect(cli).not.toContain('chown -R');
   const update = cli.slice(cli.indexOf('async function updateCommand'), cli.indexOf('async function resolveBackup'));
-  expect(update).toContain('await setManagedVolumeRootOwnership(targetImage, state.volumeName, {');
+  expect(update).toContain('await setManagedVolumeRootOwnership(loaded.directory, state, oldEnv, targetImage, {');
   expect(update).toContain('await restoreVolumeArchive(loaded.directory, state.mode, nextEnv, backup.backupDir);');
-  expect(update).toContain('await setManagedVolumeRootOwnership(targetImage, state.volumeName, previousRootOwnership);');
+  expect(update).toContain('await setManagedVolumeRootOwnership(loaded.directory, state, oldEnv, targetImage, previousRootOwnership);');
   expect(update.indexOf('await stopProject(loaded.directory, state.mode);')).toBeLessThan(update.indexOf('uid: MANAGED_RUNTIME_UID'));
 });
 
