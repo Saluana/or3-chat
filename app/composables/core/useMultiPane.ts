@@ -15,6 +15,7 @@ import {
 import { useLocalStorage } from '@vueuse/core';
 import Dexie from 'dexie';
 import { getDb } from '~/db/client';
+import type { Message } from '~/db/schema';
 import { compareMessageOrder } from '~/db/messages';
 import { useHooks } from '~/core/hooks/useHooks';
 import {
@@ -22,7 +23,11 @@ import {
     setGlobalMultiPaneApi,
 } from '~/utils/multiPaneApi';
 import { deriveMessageContent } from '~/utils/chat/messages';
-import { isSupersededMessage } from '~/utils/chat/transcript';
+import {
+    isSupersededMessage,
+    projectTranscriptForOpenRouter,
+    storedMessagesToCanonicalTranscript,
+} from '~/utils/chat/transcript';
 import { usePaneApps } from './usePaneApps';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 
@@ -119,18 +124,10 @@ function createEmptyPane(initialThreadId = ''): PaneState {
     };
 }
 
-interface DbMessageRow {
-    id: string;
-    role: string;
+type DbMessageRow = Message & {
     content?: string;
-    file_hashes?: string | null;
-    stream_id?: string | null;
     data?: { content?: string; reasoning_text?: string | null } | null;
-    index?: number | null;
-    order_key?: string | null;
-    created_at?: number | null;
-    deleted?: boolean;
-}
+};
 
 /**
  * Fast structural validation for DB message rows.
@@ -183,13 +180,24 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
 
         validRows.sort((left, right) =>
             compareMessageOrder(
-                { id: left.id, index: left.index ?? 0, order_key: left.order_key ?? '' },
-                { id: right.id, index: right.index ?? 0, order_key: right.order_key ?? '' }
+                { id: left.id, index: Number.isFinite(left.index) ? left.index : 0, order_key: left.order_key ?? '' },
+                { id: right.id, index: Number.isFinite(right.index) ? right.index : 0, order_key: right.order_key ?? '' }
             )
+        );
+        // Pane seeds skip the controller's history reload. Reconcile their
+        // separate tool rows through the same canonical projection first.
+        const canonicalById = new Map(
+            projectTranscriptForOpenRouter(
+                storedMessagesToCanonicalTranscript(validRows)
+            ).map((message) => [message.id, message])
         );
         const result: MultiPaneMessage[] = [];
         for (const row of validRows) {
-            const data = row.data;
+            const canonicalCalls = canonicalById.get(row.id)?.data?.tool_calls;
+            // Retain plugin-owned metadata while merging the host-owned calls.
+            const data = Array.isArray(canonicalCalls) && canonicalCalls.length
+                ? { ...row.data, tool_calls: canonicalCalls }
+                : row.data;
             const content = deriveMessageContent({
                 content: row.content,
                 data,

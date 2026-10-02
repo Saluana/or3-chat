@@ -1,5 +1,23 @@
 # Implementation and acceptance evidence
 
+## Fresh-owner presentation recovery
+
+Ownership was released explicitly and the clean handoff commit `8f5c8941ae2c95458fe3318e35065cdb45927dc5` was cloned without hardlinks into task-3. The task-16 checkout and its artifacts remain frozen. Origin is the existing Saluana/or3-chat repository; remote `feat/manual-context-compaction` was independently verified at that same SHA before new work. Dependencies are a private physical copy, with fresh configured Nuxt preparation in the new checkout.
+
+The last inherited browser run FAILED at production-chat-journey.spec.ts:363: source/landmark selection and visible assistant scrolling passed, but canonical tool evidence was absent. Later durable-row, post-reload draft and ordinary new-chat assertions were not reached. The original failure remains at `task-16/evidence/compaction-navigation-correction-first-browser`; this correction does not erase it.
+
+The production pane loader passed raw stored assistant calls to a controller marked historyAlreadyLoaded. That bypassed canonical reconciliation of separate tool rows, leaving only arguments visible. The correction reuses the existing canonical transcript projection before returning pane seeds, merges only host-owned tool calls and retains other message metadata. Configuration, themes, plugins and providers cannot repair this host loading boundary. No new hook, public API or production test seam is added; existing PageShell/ChatContainer pane consumers benefit.
+
+Test-authoring gate: the distinct contract is real Dexie -> default pane loader -> UI tool evidence with unchanged durable rows and plugin metadata. A raw seed losing the separate tool result is the credible regression. Existing transcript tests only exercise the canonical projector, while the inherited browser supplies the end-to-end failure; the new case extends the existing actual-DB history owner to diagnose the bypass, without mocking projection or creating another seam.
+
+- First fresh-checkout attempt could not load `.nuxt/tsconfig.app.json`; retained `/tmp/task3-pane-tool-baseline.log` as setup failure, not a product regression. Fresh configured `bunx nuxt prepare` succeeded: `/tmp/task3-nuxt-prepare-first.log`.
+- Intended fail-before proof: `/tmp/task3-pane-tool-baseline-prepared.log` reports absent result text through the real pane seed.
+- Candidate history/transcript/ToolCallIndicator owners: 16 tests/3 files PASS `/tmp/task3-pane-tool-candidate-focused.log`; pane/resize siblings: 47 tests/2 files PASS `/tmp/task3-pane-siblings.log`. Stored rows and plugin-owned metadata remain intact.
+- Final coherent run: 63 tests/5 files PASS `/tmp/task3-pane-tool-final-focused.log`; explicit changed TypeScript ESLint with max-warnings=0 PASS `/tmp/task3-pane-tool-lint-final.log`. First lint warnings remain `/tmp/task3-pane-tool-lint.log`; finite-index checks preserve runtime fallback for malformed legacy rows. Compatibility first reported a stale ledger; refreshed through the existing generator (public signatures unchanged) and ledger/snapshots PASS `/tmp/task3-pane-tool-compatibility-final.log`.
+- Configured types, exact-head CI, full unchanged named browser journey and parent review remain pending. Task boxes remain unchanged; reverse-child links, human-ordinal presentation and all other incomplete criteria remain open.
+
+Runtime regression rollback is a normal revert of this coherent pane correction; no stored-data migration is involved.
+
 The six plan files match upstream exactly at the inspected default base `6ee4450b`.
 This branch is separate from assistant/Files and starts on the temporary reviewed
 integration base containing PR179 `40b7aef6`, PR181 `bb86066c`, and PR182 `07b235b2`.

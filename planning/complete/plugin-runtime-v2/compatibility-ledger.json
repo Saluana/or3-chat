@@ -2796,7 +2796,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "1996357378e6d732201d950f895981da76af2601f99af6fad605acbf5e15ac95",
+      "apiSha256": "9190542070ff4de2f2f5f42491d79f7c3fcd51ad0a4a70e652d918c30ef63bd6",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -4571,7 +4571,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 35,
+              "line": 40,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type MultiPaneMessage = {\n    role: 'user' | 'assistant' | 'system' | 'tool';\n    content: string;\n    file_hashes?: string | null;\n    id?: string;\n    stream_id?: string;\n    data?: Record<string, unknown> | null;\n    reasoning_text?: string | null;\n    index?: number | null;\n    order_key?: string | null;\n    created_at?: number | null;\n};"
             }
@@ -4585,7 +4585,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 48,
+              "line": 53,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface PaneState {\n    id: string;\n    mode: PaneMode;\n    threadId: string; // '' indicates unsaved/new chat\n    /** Target thread while an async workspace-tab activation is in flight. */\n    pendingThreadId?: string;\n    documentId?: string;\n    messages: MultiPaneMessage[];\n    validating: boolean;\n}"
             }
@@ -4653,7 +4653,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 32,
+              "line": 37,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type PaneMode = 'chat' | 'doc' | (string & { _brand?: 'pane-mode' });"
             }
@@ -4667,7 +4667,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 48,
+              "line": 53,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface PaneState {\n    id: string;\n    mode: PaneMode;\n    threadId: string; // '' indicates unsaved/new chat\n    /** Target thread while an async workspace-tab activation is in flight. */\n    pendingThreadId?: string;\n    documentId?: string;\n    messages: MultiPaneMessage[];\n    validating: boolean;\n}"
             }
@@ -6939,7 +6939,7 @@
               "resolvedReturnType": "UseMultiPaneApi",
               "declaration": {
                 "source": "app/composables/core/useMultiPane.ts",
-                "line": 265,
+                "line": 273,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useMultiPane(\n    options: UseMultiPaneOptions = {}\n): UseMultiPaneApi;"
               }
@@ -6948,7 +6948,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 265,
+              "line": 273,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useMultiPane(\n    options: UseMultiPaneOptions = {}\n): UseMultiPaneApi;"
             }
@@ -6962,7 +6962,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 70,
+              "line": 75,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UseMultiPaneApi {\n    panes: Ref<PaneState[]>;\n    activePaneIndex: Ref<number>;\n    activePaneId: ComputedRef<string | null>;\n    canAddPane: ComputedRef<boolean>;\n    newWindowTooltip: ComputedRef<string>;\n    addPane: () => string | null;\n    closePane: (index: number) => Promise<void> | void;\n    swapAdjacentPanes: (leftIndex: number) => void;\n    setActive: (index: number) => void;\n    focusPrev: (current: number) => void;\n    focusNext: (current: number) => void;\n    setPaneThread: (index: number, threadId: string) => Promise<void>;\n    loadMessagesFor: (id: string) => Promise<MultiPaneMessage[]>;\n    ensureAtLeastOne: () => void;\n    newPaneForApp: (\n        appId: string,\n        opts?: { initialRecordId?: string }\n    ) => Promise<void>;\n    setPaneApp: (\n        index: number,\n        appId: string,\n        opts?: { recordId?: string }\n    ) => Promise<void>;\n    updatePane: (index: number, updates: Partial<PaneState>) => void;\n    getPaneIndexById: (paneId: string) => number;\n    getPaneById: (paneId: string) => PaneState | undefined;\n    getPaneWidth: (index: number) => string;\n    handleResize: (\n        paneIndex: number,\n        deltaX: number,\n        persist?: boolean\n    ) => void;\n    persistPaneWidths: () => void;\n    recalculateWidthsForContainer: (newContainerWidth: number) => void;\n    paneWidths: Ref<number[]>;\n}"
             }
@@ -6976,7 +6976,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 59,
+              "line": 64,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UseMultiPaneOptions {\n    initialThreadId?: string;\n    maxPanes?: MaybeRefOrGetter<number>; // default 3\n    onFlushDocument?: (id: string) => void | Promise<void>;\n    loadMessagesFor?: (id: string) => Promise<MultiPaneMessage[]>; // override for tests\n    minPaneWidth?: number; // minimum width per pane in pixels (default 280)\n    maxPaneWidth?: number; // maximum width per pane in pixels (default 2000)\n    storageKey?: string; // localStorage key for persisting widths (default 'pane-widths')\n    allowMultiplePanes?: MaybeRefOrGetter<boolean>; // responsive or policy-level pane creation guard\n}"
             }
