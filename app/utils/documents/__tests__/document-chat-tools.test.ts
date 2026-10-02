@@ -405,6 +405,23 @@ describe('chat document tools', () => {
         expect(stale.error).toMatch(/changed/i);
         expect(await getDb().posts.count()).toBe(1);
     });
+    it.each(['Project A', '  Project A  '])('replays project creation with name %j without duplicating storage', async (name) => {
+        disposers.push(registerWorkspaceChatTools());
+        const registry = useToolRegistry();
+        const tool = registry.getTool('workspace_update_project')!;
+        const context = { subject: null, workspaceId: 'workspace-a', threadId: 'thread-a',
+            messageId: null, callId: 'create-project', requestId: 'create-project-request',
+            abortSignal: new AbortController().signal };
+        const args = JSON.stringify({ operation: 'create', name });
+        const first = await registry.executeTool('workspace_update_project', args, context, { definition: tool.definition });
+        expect(first.error).toBeUndefined();
+        const receipt = JSON.parse(first.result!);
+        const replay = await registry.executeTool('workspace_update_project', args, context, { definition: tool.definition });
+        expect(replay.error).toBeUndefined();
+        expect(JSON.parse(replay.result!)).toMatchObject({ replay: true, source: { id: receipt.source.id } });
+        expect(await getDb().projects.count()).toBe(1);
+        expect((await getDb().projects.get(receipt.source.id))?.name).toBe('Project A');
+    });
     it('updates a project by read revision and removes association without deleting its document', async () => {
         disposers.push(registerWorkspaceChatTools());
         const registry = useToolRegistry();

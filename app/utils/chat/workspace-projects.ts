@@ -88,7 +88,7 @@ export async function updateWorkspaceProject(args: Record<string, unknown>, cont
         scope.assertCurrent('write');
         const prior = await scope.db.projects.get(id);
         if (prior) {
-            if (prior.deleted || prior.name !== args.name || (prior.description ?? '') !== (args.description ?? '')) {
+            if (prior.deleted || prior.name !== args.name.trim() || (prior.description ?? '') !== (args.description ?? '')) {
                 throw new Error('This execution already saved a different project.');
             }
             const loaded = await readWorkspaceItem(scope, { kind: 'project', id });
