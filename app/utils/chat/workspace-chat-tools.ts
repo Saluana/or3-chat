@@ -113,7 +113,7 @@ async function searchWorkspace(args: Record<string, unknown>, context: ToolExecu
     const found = await coordinator.searchOnce({ term: query, sourceIds: selected, limit,
         signal: scope.signal, accepts: (resource) => !members || members.has(`${resource.sourceId}:${resource.recordId}`) });
     scope.assertCurrent();
-    const indexed = new Map(found.results.map((hit) => [hit.key, coordinator.getResource(hit.sourceId, hit.key)]));
+    const indexed = found.snapshots;
     const results = [];
     let unavailableHits = 0;
     for (const hit of found.results) {

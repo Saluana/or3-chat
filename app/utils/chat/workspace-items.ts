@@ -93,6 +93,10 @@ export async function workspaceRead(scope: WorkspaceOperationScope, item: Worksp
         const { readWorkspaceDocumentPage } = await import('./workspace-document-read');
         return readWorkspaceDocumentPage(scope, { row: loaded.row as Post, source: loaded.source }, continuation, context);
     }
+    // A write revision belongs to the project row; read pagination also includes
+    // visible child membership, which can change without that row being updated.
+    const readRevision = await workspaceRevision({ revision: loaded.source.revision, content: loaded.content });
+    scope.assertCurrent();
     let offset = 0;
     if (continuation) {
         let cursor: { id?: unknown; kind?: unknown; revision?: unknown; offset?: unknown };
@@ -101,7 +105,7 @@ export async function workspaceRead(scope: WorkspaceOperationScope, item: Worksp
             if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
             cursor = parsed as typeof cursor;
         } catch { throw new Error('Invalid read continuation.'); }
-        if (cursor.id !== item.id || cursor.kind !== item.kind || cursor.revision !== loaded.source.revision
+        if (cursor.id !== item.id || cursor.kind !== item.kind || cursor.revision !== readRevision
             || !Number.isSafeInteger(cursor.offset) || Number(cursor.offset) < 0 || Number(cursor.offset) > loaded.content.length) {
             throw new Error('This source changed. Read it again from the beginning.');
         }
@@ -122,7 +126,7 @@ export async function workspaceRead(scope: WorkspaceOperationScope, item: Worksp
         source: loaded.source, content, offset,
         coverage: next < loaded.content.length ? 'partial' : 'complete',
         continuation: next < loaded.content.length
-            ? JSON.stringify({ ...item, revision: loaded.source.revision, offset: next }) : null,
+            ? JSON.stringify({ ...item, revision: readRevision, offset: next }) : null,
         referenceOnly: true,
     };
 }

@@ -65,7 +65,7 @@ export interface PaletteCoordinator {
         limit: number;
         signal?: AbortSignal;
         accepts?: (resource: PaletteResource) => boolean;
-    }): Promise<{ results: PaletteResult[]; statuses: PaletteSourceStatus[] }>;
+    }): Promise<{ results: PaletteResult[]; statuses: PaletteSourceStatus[]; snapshots: ReadonlyMap<string, PaletteResource> }>;
     hydratePreview(
         result: PaletteResult,
         options?: { signal?: AbortSignal }
@@ -355,7 +355,7 @@ export function createPaletteCoordinator(options?: {
     async function searchOnce(options: {
         term: string; sourceIds: readonly string[]; limit: number;
         signal?: AbortSignal; accepts?: (resource: PaletteResource) => boolean;
-    }): Promise<{ results: PaletteResult[]; statuses: PaletteSourceStatus[] }> {
+    }): Promise<{ results: PaletteResult[]; statuses: PaletteSourceStatus[]; snapshots: ReadonlyMap<string, PaletteResource> }> {
         const generation = workspaceGeneration;
         const assertCurrent = () => {
             options.signal?.throwIfAborted();
@@ -368,6 +368,7 @@ export function createPaletteCoordinator(options?: {
         else if (options.sourceIds.some((id) => !bound.get(id)?.ready)) await ensureWarm();
         assertCurrent();
         const queryResults: PaletteResult[] = [];
+        const snapshots = new Map<string, PaletteResource>();
         const queryStatuses: PaletteSourceStatus[] = [];
         for (const sourceId of options.sourceIds) {
             const entry = bound.get(sourceId);
@@ -382,6 +383,7 @@ export function createPaletteCoordinator(options?: {
                 });
                 assertCurrent();
                 queryResults.push(...response.results);
+                for (const [key, resource] of response.snapshots) snapshots.set(key, resource);
                 queryStatuses.push({ ...entry.status, usingFallback: response.usingFallback });
             } catch (error) {
                 assertCurrent();
@@ -391,7 +393,7 @@ export function createPaletteCoordinator(options?: {
         assertCurrent();
         queryResults.sort((a, b) => (b.score ?? 0) - (a.score ?? 0)
             || (b.updatedAt ?? 0) - (a.updatedAt ?? 0) || a.key.localeCompare(b.key));
-        return { results: queryResults.slice(0, options.limit), statuses: queryStatuses };
+        return { results: queryResults.slice(0, options.limit), statuses: queryStatuses, snapshots };
     }
 
     function setQuery(raw: string): void {

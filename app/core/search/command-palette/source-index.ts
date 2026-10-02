@@ -38,6 +38,8 @@ export interface PaletteSourceIndexSearchOptions {
 
 export interface PaletteSourceIndexSearchResult {
     results: PaletteResult[];
+    /** Immutable title/body provenance captured when these results were scored. */
+    snapshots: ReadonlyMap<string, PaletteResource>;
     usingFallback: boolean;
     oramaFailed: boolean;
 }
@@ -52,6 +54,7 @@ export class PaletteSourceIndex {
     private readonly resources = new Map<string, PaletteResource>();
     private readonly tracker = new ResourceChunkTracker();
     private disposed = false;
+    private revision = 0;
 
     constructor(sourceId: string) {
         this.sourceId = sourceId;
@@ -90,6 +93,7 @@ export class PaletteSourceIndex {
             onBatchComplete?: (durationMs: number, count: number) => void;
         }
     ): Promise<void> {
+        this.revision += 1;
         this.resources.clear();
         this.tracker.clear();
         this.db = null;
@@ -125,6 +129,7 @@ export class PaletteSourceIndex {
     ): Promise<void> {
         throwIfAborted(options?.signal);
         await this.removeResource(resource.key);
+        this.revision += 1;
         this.resources.set(resource.key, resource);
         const docs = resourceToIndexDocuments(resource);
         this.tracker.set(
@@ -164,6 +169,7 @@ export class PaletteSourceIndex {
     }
 
     async removeResource(resourceKey: string): Promise<void> {
+        this.revision += 1;
         this.resources.delete(resourceKey);
         const chunkIds = this.tracker.remove(resourceKey);
         const db = this.db;
@@ -180,10 +186,22 @@ export class PaletteSourceIndex {
     async search(
         options: PaletteSourceIndexSearchOptions
     ): Promise<PaletteSourceIndexSearchResult> {
+        const revision = this.revision;
+        const assertIndexCurrent = () => {
+            throwIfAborted(options.signal);
+            if (this.disposed || this.revision !== revision) throw new Error('Search source changed while scoring. Retry the query.');
+        };
+        const finish = (result: Omit<PaletteSourceIndexSearchResult, 'snapshots'>): PaletteSourceIndexSearchResult => {
+            assertIndexCurrent();
+            return { ...result, snapshots: new Map(result.results.flatMap((hit) => {
+                const resource = this.resources.get(hit.key);
+                return resource ? [[hit.key, { ...resource }] as const] : [];
+            })) };
+        };
         const term = options.term.trim();
         const limit = options.limit ?? PALETTE_ORAMA_LIMIT;
         if (!term) {
-            return {
+            return finish({
                 results: this.getResources()
                     .filter((resource) => !options.accepts || options.accepts(resource))
                     .sort(
@@ -193,11 +211,12 @@ export class PaletteSourceIndex {
                     .map((resource) => resourceToResult(resource)),
                 usingFallback: false,
                 oramaFailed: false,
-            };
+            });
         }
 
         if (!options.forceFallback && this.oramaAvailable) {
             const db = await this.ensureDb();
+            assertIndexCurrent();
             if (db) {
                 try {
                     const tolerance = term.length >= 4 ? 1 : 0;
@@ -224,6 +243,7 @@ export class PaletteSourceIndex {
                             tolerance,
                             offset,
                         });
+                        assertIndexCurrent();
                         const pageHits = normalizeOramaHits(raw.hits);
                         hits.push(...pageHits);
                         grouped = groupHitsByResource(
@@ -237,12 +257,13 @@ export class PaletteSourceIndex {
                         if (raw.hits.length < pageSize) break;
                         offset += raw.hits.length;
                     }
-                    return {
+                    return finish({
                         results: grouped.slice(0, limit),
                         usingFallback: false,
                         oramaFailed: false,
-                    };
+                    });
                 } catch (error) {
+                    assertIndexCurrent();
                     if (isAbortError(error)) throw error;
                     this.oramaAvailable = false;
                     this.db = null;
@@ -250,11 +271,11 @@ export class PaletteSourceIndex {
             }
         }
 
-        return {
+        return finish({
             results: this.fallbackSearch(term, limit, options.accepts),
             usingFallback: true,
             oramaFailed: !this.oramaAvailable || Boolean(options.forceFallback),
-        };
+        });
     }
 
     dispose(): void {

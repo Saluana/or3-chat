@@ -233,6 +233,71 @@ describe('chat document tools', () => {
         expect(JSON.parse(stale.result!).partial).toBe(true);
         expect(stale.result).not.toContain('launch budget approved');
     });
+    it('does not reuse an earlier scored hit after that source and DB refresh while a later source search is delayed', async () => {
+        const { registerPaletteSource } = await import('~/core/search/command-palette/registry');
+        const { createDocumentPaletteSource } = await import('~/core/search/command-palette/sources/document-source');
+        const { createProjectPaletteSource } = await import('~/core/search/command-palette/sources/project-source');
+        const { PaletteSourceIndex } = await import('~/core/search/command-palette/source-index');
+        const { useCommandPalette, disposeCommandPalette } = await import('~/composables/search/useCommandPalette');
+        const doc = registerPaletteSource(createDocumentPaletteSource());
+        const project = registerPaletteSource(createProjectPaletteSource());
+        disposers.push(() => { disposeCommandPalette(); doc.dispose(); project.dispose(); });
+        disposers.push(registerWorkspaceChatTools());
+        await getDb().posts.put({ id: 'changing-search', title: 'Planning', postType: 'doc',
+            content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'launch budget approved' }] }] }),
+            created_at: 1, updated_at: 1, deleted: false, clock: 1 });
+        const palette = useCommandPalette(); await palette.warm();
+        const coordinator = palette.getCoordinator()!;
+        let entered!: () => void; let release!: () => void;
+        const pending = new Promise<void>((resolve) => { entered = resolve; });
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        const realSearch = PaletteSourceIndex.prototype.search;
+        const spy = vi.spyOn(PaletteSourceIndex.prototype, 'search').mockImplementation(async function (this: InstanceType<typeof PaletteSourceIndex>, options) {
+            if (this.sourceId === 'project') { entered(); await gate; }
+            return realSearch.call(this, options);
+        });
+        const registry = useToolRegistry();
+        const request = registry.executeTool('workspace_search', JSON.stringify({ query: 'budget launch', kinds: ['document', 'project'] }),
+            { subject: null, workspaceId: 'workspace-a', threadId: 'thread-a', messageId: null,
+                requestId: 'refresh-search', callId: 'refresh-call', abortSignal: new AbortController().signal },
+            { definition: registry.getTool('workspace_search')!.definition });
+        try {
+            await pending;
+            await getDb().posts.update('changing-search', { content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Unrelated replacement' }] }] }), clock: 2 });
+            await coordinator.refreshSources(['document']);
+            expect((await coordinator.searchSource('document', 'budget launch', 20)).map((hit) => hit.recordId)).not.toContain('changing-search');
+            release();
+            const reply = await request;
+            expect(reply.error).toBeUndefined();
+            expect(JSON.parse(reply.result!).results).toEqual([]);
+            expect(JSON.parse(reply.result!).partial).toBe(true);
+            expect(reply.result).not.toContain('launch budget approved');
+            expect(reply.result).not.toContain('Unrelated replacement');
+        } finally { release(); await request; spy.mockRestore(); }
+    });
+    it.each(['legacy reassociation', 'child deletion'])('refuses a paginated project continuation after %s without changing its write revision', async (change) => {
+        disposers.push(registerWorkspaceChatTools());
+        await getDb().projects.put({ id: 'paged-project', name: 'Paged', description: 'Description '.repeat(2_000),
+            data: [{ kind: 'doc', id: 'paged-child' }], deleted: false, created_at: 1, updated_at: 1, clock: 1 });
+        await getDb().posts.put({ id: 'paged-child', title: 'Child', postType: 'doc', content: '{"type":"doc","content":[]}',
+            deleted: false, created_at: 1, updated_at: 1, clock: 1 });
+        await getDb().threads.put({ id: 'paged-legacy', title: 'Legacy', project_id: 'paged-project', status: 'ready',
+            deleted: false, pinned: false, forked: false, created_at: 1, updated_at: 1, clock: 1 });
+        const registry = useToolRegistry();
+        const tool = registry.getTool('workspace_read')!;
+        const context = { subject: null, workspaceId: 'workspace-a', threadId: 'thread-a', messageId: null,
+            requestId: 'paged-project-read', callId: 'page-one', abortSignal: new AbortController().signal };
+        const first = await registry.executeTool('workspace_read', '{"item":{"kind":"project","id":"paged-project"}}', context, { definition: tool.definition });
+        expect(first.error).toBeUndefined();
+        const receipt = JSON.parse(first.result!);
+        expect(receipt.continuation).toEqual(expect.any(String));
+        if (change === 'legacy reassociation') await getDb().threads.update('paged-legacy', { project_id: null, clock: 2 });
+        else await getDb().posts.update('paged-child', { deleted: true, clock: 2 });
+        expect(await workspaceRevision(await getDb().projects.get('paged-project'))).toBe(receipt.source.revision);
+        const next = await registry.executeTool('workspace_read', JSON.stringify({ item: { kind: 'project', id: 'paged-project' }, continuation: receipt.continuation }),
+            { ...context, callId: 'page-two' }, { definition: tool.definition });
+        expect(next.error).toMatch(/changed.*beginning/i);
+    });
     it.each(['document', 'project'].flatMap((operation) => ['abort', 'workspace', 'authorization'].map((interruption) => ({ operation, interruption }))))
     ('rolls back $operation creation when $interruption changes during the transaction read', async ({ operation, interruption }) => {
         const sessionModule = await import('~/composables/auth/useSessionContext');
@@ -255,7 +320,7 @@ describe('chat document tools', () => {
         };
         const table = operation === 'document' ? db.posts : db.projects;
         const get = table.get.bind(table);
-        const spy = vi.spyOn(table, 'get').mockImplementation((...args: Parameters<typeof get>) => get(...args).then((row) => {
+        const spy = vi.spyOn(table, 'get').mockImplementation((key) => get(key).then((row) => {
             interrupt(); return row;
         }));
         try {

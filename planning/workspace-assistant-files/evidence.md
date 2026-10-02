@@ -117,3 +117,10 @@ documentation/contracts/builds/final gates) are unfinished.
 The bounded review/apply/undo browser journey passes; broader Files/Trash, provider admission,
 mobile/zoom/performance and cloud recovery are not yet qualified. No task box
 represents proof without the command, source revision and observed artifact.
+
+## Residual correction controls
+
+- Correction head97026949 passed5047 tests/634 files and Contracts, but Core typecheck failed TS2556 in the six-case DB interruption fixture at258. The spread into an overloaded union get() was replaced by the actual single key call; timing and persistence assertions remain. Run36980987036 retained as first failure.
+- A real later-source delay plus earlier-source DB/index refresh reproduced a nonmatching replacement falsely returned as a valid hit. `/tmp/task16-scored-snapshot-baseline.log`. Scored title/body provenance now travels from the index result through stateless search; index mutation during asynchronous scoring fails closed with partial source coverage. Shared token/fuzzy semantics remain.
+- Two paginated project baselines accepted an old continuation after legacy thread reassociation or child deletion changed visible membership while Project stayed identical. `/tmp/task16-project-continuation-baseline.log`. Continuations now bind the read content digest separately from the Project revision used for writes.
+- Residual candidate38 tests/four owners pass in `/tmp/task16-assistant-residual-candidate.log`; refreshed configured types and new-head CI still required.
