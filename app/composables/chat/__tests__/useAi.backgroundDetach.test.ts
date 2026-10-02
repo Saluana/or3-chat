@@ -24,7 +24,7 @@ const hookDoActionMock = vi.fn(async (_name: string, ..._args: unknown[]) => {})
 const hookApplyFiltersMock = vi.fn(
     async (_name: string, value: unknown) => value
 );
-const messagesByThreadMock = vi.fn<() => Promise<any[]>>(async () => []);
+const messagesByThreadMock = vi.fn<(threadId: string, db?: unknown) => Promise<any[]>>(async () => []);
 const backgroundJobTrackers = new Map<string, any>();
 const messageStore = new Map<string, any>();
 let consumeWorkflowSend = false;
@@ -125,7 +125,8 @@ const dbMock = {
 };
 let activeDb = dbMock;
 
-vi.mock('~/db/files-util', () => ({
+vi.mock('~/db/files-util', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('~/db/files-util')>()),
     serializeFileHashes: (hashes: string[]) => JSON.stringify(hashes),
 }));
 
@@ -147,7 +148,8 @@ vi.mock('~/utils/files/attachments', () => ({
     mergeAssistantFileHashes: (_prev: string[], next: string[]) => next || [],
 }));
 
-vi.mock('~/db/messages', () => ({
+vi.mock('~/db/messages', async (importOriginal) => ({
+    compareMessageOrder: (await importOriginal<typeof import('~/db/messages')>()).compareMessageOrder,
     patchMessageInDb: async (_db: unknown, id: string, patch: any) => {
         const existing = messageStore.get(id);
         if (existing)
@@ -177,6 +179,7 @@ vi.mock('~/utils/chat/uiMessages', () => ({
 
 vi.mock('~/utils/chat/messages', async (importOriginal) => ({
     resolveChatInputTokenBudget: (await importOriginal<typeof import('~/utils/chat/messages')>()).resolveChatInputTokenBudget,
+    normalizeStreamingMessage: (await importOriginal<typeof import('~/utils/chat/messages')>()).normalizeStreamingMessage,
     buildParts: (text: string) => [{ type: 'text', text }],
     deriveMessageContent: ({
         content,
@@ -302,7 +305,7 @@ vi.mock('~/utils/chat/history', () => ({
     ensureThreadHistoryLoaded: vi.fn(async () => undefined),
 }));
 
-vi.mock('~/utils/chat/useAi-internal', () => ({
+vi.mock('~/utils/chat/useAi-internal', async () => ({
     backgroundJobTrackers,
     primeBackgroundJobUpdate: vi.fn(),
     stopBackgroundJobTracking: stopBackgroundJobTrackingMock,
@@ -313,7 +316,7 @@ vi.mock('~/utils/chat/useAi-internal', () => ({
     buildSystemPromptMessage: vi.fn(async () => null),
     buildOpenRouterMessagesForSend: buildOpenRouterMessagesForSendMock,
     enforceOpenRouterMessageTokenBudget: vi.fn(async (messages) => messages),
-    retryMessageImpl: vi.fn(),
+    retryMessageImpl: (await import('~/utils/chat/useAi-internal/retry')).retryMessageImpl,
     continueMessageImpl: vi.fn(),
     makeAssistantPersister:
         (_db: unknown, message: any) => async (patch: any) => {
@@ -501,6 +504,65 @@ describe('useChat background detach race', () => {
         );
 
         messagesByThreadMock.mockResolvedValue([]);
+    });
+
+    it('abandons a public retry after switching away and back while its preparation hook waits', async () => {
+        runtimeConfigRef.value.public.backgroundStreaming.enabled = false;
+        const rows = [
+            { id: 'retry-user', role: 'user', thread_id: 'thread-1', index: 0, data: { content: 'old prompt' }, deleted: false },
+            { id: 'retry-assistant', role: 'assistant', thread_id: 'thread-1', index: 1, data: { content: 'old reply' }, deleted: false },
+        ];
+        for (const row of rows) messageStore.set(row.id, row);
+        messagesByThreadMock.mockImplementation(async (threadId) =>
+            [...messageStore.values()].filter((row) => row.thread_id === threadId)
+        );
+        let release!: () => void;
+        const preparation = new Promise<void>((resolve) => { release = resolve; });
+        hookDoActionMock.mockImplementation(async (name) => {
+            if (name === 'ai.chat.retry:action:before') {
+                await preparation;
+            }
+        });
+
+        vi.resetModules();
+        const { useChat } = await import('~/composables/chat/useAi');
+        const scope = effectScope();
+        const chat = scope.run(() => useChat([], 'thread-1'))!;
+        let retry: ReturnType<typeof chat.retryMessage> | undefined;
+        try {
+            retry = chat.retryMessage('retry-user');
+            await vi.waitFor(() => expect(hookDoActionMock).toHaveBeenCalledWith(
+                'ai.chat.retry:action:before', expect.objectContaining({ originalUserId: 'retry-user' })
+            ));
+            await chat.switchThread('thread-2', {
+                seedMessages: [{ id: 'other-turn', role: 'user', content: 'other chat' }],
+                historyAlreadyLoaded: true,
+            });
+            await chat.switchThread('thread-1', {
+                seedMessages: [
+                    { id: 'retry-user', role: 'user', content: 'fresh prompt' },
+                    { id: 'retry-assistant', role: 'assistant', content: 'fresh reply' },
+                ],
+                historyAlreadyLoaded: true,
+            });
+            const saved = [...messageStore.entries()];
+            release();
+            await retry;
+
+            expect(appendMessageMock).not.toHaveBeenCalled();
+            expect(startBackgroundStreamMock).not.toHaveBeenCalled();
+            expect(runForegroundStreamLoopMock).not.toHaveBeenCalled();
+            expect(chat.messages.value.map(({ id, text }) => ({ id, text }))).toEqual([
+                { id: 'retry-user', text: 'fresh prompt' },
+                { id: 'retry-assistant', text: 'fresh reply' },
+            ]);
+            expect([...messageStore.entries()]).toEqual(saved);
+        } finally {
+            release();
+            await retry;
+            chat.dispose();
+            scope.stop();
+        }
     });
 
     it('cancels synchronously admitted work while its outgoing filter is awaiting', async () => {

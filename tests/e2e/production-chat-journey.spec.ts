@@ -178,6 +178,9 @@ test.describe('production chat journey', () => {
             await page.close();
             await expect(viewer.getByRole('button', { name: 'Continue generation', exact: true }).last())
                 .toBeVisible({ timeout: 35_000 });
+            const latestReply = viewer.getByText('Partial response shared across tabs. Owner made progress.', { exact: true });
+            await expect(latestReply).toHaveCount(1);
+            await expect(latestReply).toBeVisible();
             await expect(viewer.getByRole('button', { name: 'Send message' })).toBeVisible();
             await viewer.getByRole('textbox', { name: 'Message input' }).fill('follow-up ready');
             await expect(viewer.getByRole('button', { name: 'Send message' })).toBeEnabled();
@@ -189,6 +192,8 @@ test.describe('production chat journey', () => {
             await viewer.reload();
             await expect(viewer.getByText('journey:multitab', { exact: true })).toHaveCount(1);
             await expect(viewer.getByRole('button', { name: 'Continue generation', exact: true }).last()).toBeVisible();
+            await expect(latestReply).toHaveCount(1);
+            await expect(latestReply).toBeVisible();
         } finally {
             await viewer.close();
         }
