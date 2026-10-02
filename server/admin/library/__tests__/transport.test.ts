@@ -518,6 +518,26 @@ describe('library entitlements transport', () => {
         expect((calls()[0]?.init.headers as Record<string, string>)['x-or3-library-token']).toBe(TOKEN);
     });
 
+    it('forwards opaque page cursors and exact-release lookups without exposing the token in the URL', async () => {
+        const transport = createHttpLibraryLinkTransport(CONFIG);
+        const acquiredCursor = '2026-09-17T12:00:00.000Z|rel_fixture_100';
+        const pluginCoverageCursor = 'com.fixture.paid-plugin';
+        respond(200, { ...LISTING, acquiredCursor, pluginCoverageCursor });
+        const result = await transport.entitlements(TOKEN, {
+            acquiredCursor,
+            pluginCoverageCursor,
+            releaseId: 'rel_fixture_100',
+        });
+        expect(result).toMatchObject({ ok: true, value: { acquiredCursor, pluginCoverageCursor } });
+        const url = new URL(calls()[0]!.url);
+        expect(Object.fromEntries(url.searchParams)).toEqual({
+            acquiredCursor,
+            pluginCoverageCursor,
+            releaseId: 'rel_fixture_100',
+        });
+        expect(url.href).not.toContain(TOKEN);
+    });
+
     it('refuses a structurally wrong listing instead of showing an empty Library', async () => {
         const transport = createHttpLibraryLinkTransport(CONFIG);
         respond(200, { ...LISTING, acquired: [{ releaseId: 'rel_only' }] });

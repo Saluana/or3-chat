@@ -193,7 +193,7 @@ describe('library entitlements route', () => {
         const result = (await entitlementsRoute(event() as never)) as LibraryEntitlementsView & {
             token?: unknown;
         };
-        expect(entitlementsMock).toHaveBeenCalledWith('user-1');
+        expect(entitlementsMock).toHaveBeenCalledWith('user-1', {});
         expect(result.linked).toBe(true);
         expect(result.acquired?.[0]?.releaseId).toBe('rel_fixture_100');
         expect(result).not.toHaveProperty('token');

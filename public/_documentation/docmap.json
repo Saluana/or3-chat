@@ -857,7 +857,7 @@
                     "category": "Using plugins",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Connect a marketplace account, use acquired releases, request administrator installation, and manage the account link."
+                    "summary": "Connect a marketplace account, page through older purchases and coverage, request administrator installation, and manage the account link."
                 },
                 {
                     "name": "first-plugin.md",

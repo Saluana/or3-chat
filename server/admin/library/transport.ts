@@ -126,6 +126,12 @@ export interface RemoteAcquiredRelease {
     readonly acquiredAt: string;
 }
 
+export interface LibraryEntitlementsOptions {
+    readonly acquiredCursor?: string;
+    readonly pluginCoverageCursor?: string;
+    readonly releaseId?: string;
+}
+
 export interface RemoteLibraryEntitlements {
     readonly plus: { readonly status: 'active' | 'none' | 'ended'; readonly until: string | null };
     readonly pluginCoverage: readonly {
@@ -135,6 +141,7 @@ export interface RemoteLibraryEntitlements {
     }[];
     readonly acquired: readonly RemoteAcquiredRelease[];
     readonly acquiredCursor: string | null;
+    readonly pluginCoverageCursor: string | null;
 }
 
 /**
@@ -311,7 +318,7 @@ export interface LibraryLinkTransport {
     verify(token: string): Promise<TransportResult<LinkedSessionPayload>>;
     revoke(token: string): Promise<TransportResult<{ readonly revoked: true }>>;
     /** The linked account's purchases, for the local Library view (task 10.1). */
-    entitlements(token: string): Promise<TransportResult<RemoteLibraryEntitlements>>;
+    entitlements(token: string, options?: LibraryEntitlementsOptions): Promise<TransportResult<RemoteLibraryEntitlements>>;
     /**
      * Record (idempotently) an acquisition for one exact release and return the
      * path its bytes may be fetched from. Never a download itself.
@@ -579,14 +586,19 @@ export function parseLibraryEntitlements(value: unknown): RemoteLibraryEntitleme
         });
     }
 
+    const coverageCursor = value.pluginCoverageCursor;
+    if (coverageCursor !== null && coverageCursor !== undefined &&
+        (typeof coverageCursor !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,127}$/.test(coverageCursor))) return null;
     const cursor = value.acquiredCursor;
-    if (cursor !== null && cursor !== undefined && typeof cursor !== 'string') return null;
+    if (cursor !== null && cursor !== undefined &&
+        (typeof cursor !== 'string' || !cursor || cursor.length > 200)) return null;
 
     return {
         plus: { status: plus.status as 'active' | 'none' | 'ended', until: plus.until as string | null },
         pluginCoverage: coverage,
         acquired,
         acquiredCursor: typeof cursor === 'string' ? cursor : null,
+        pluginCoverageCursor: typeof coverageCursor === 'string' ? coverageCursor : null,
     };
 }
 
@@ -738,8 +750,12 @@ export function createHttpLibraryLinkTransport(
             return { ok: true, value: parsed };
         },
 
-        async entitlements(token) {
-            const result = await request('/api/v1/library/entitlements', {
+        async entitlements(token, options = {}) {
+            const query = new URLSearchParams();
+            for (const name of ['acquiredCursor', 'pluginCoverageCursor', 'releaseId'] as const) {
+                if (options[name]) query.set(name, options[name]);
+            }
+            const result = await request(`/api/v1/library/entitlements${query.size ? `?${query}` : ''}`, {
                 method: 'GET',
                 headers: { 'x-or3-library-token': token },
             });
