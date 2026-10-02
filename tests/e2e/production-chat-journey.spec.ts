@@ -449,6 +449,14 @@ test('PageShell compaction summary reload and original landmark navigation', asy
     const anchorBounds = await anchor.boundingBox(); expect(anchorBounds!.y + anchorBounds!.height).toBeGreaterThan(0); expect(anchorBounds!.y).toBeLessThan(720);
     expect(await readRows()).toEqual(saved);
     await page.reload(); await expect(card).toBeVisible(); await card.locator('summary').click();
+    // Drafts live in memory: reload clears them. Re-establish the source draft
+    // before checking preservation across child/landmark navigation.
+    await card.getByRole('button', { name: 'View original', exact: true }).click();
+    await expect(input).toHaveText('');
+    await input.fill('Keep this unsent source draft.');
+    await page.getByRole('tab', { name: 'Compaction original evidence — compacted', exact: true }).click();
+    await expect(card).toBeVisible();
+    if (await card.locator('details').getAttribute('open') === null) await card.locator('summary').click();
     await card.getByRole('button', { name: 'Preserve the exact source path', exact: true }).click();
     await expect(anchor).toBeVisible();
     await anchor.locator('.tool-call-indicator summary').click();
