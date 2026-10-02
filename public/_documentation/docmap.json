@@ -620,7 +620,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "OR3 supports SSR background jobs for chat streaming, tool execution, and workflows so work can continue when the user detaches or navigates away."
+                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers originating workspace authorization, scoped admission cancellation, durable recovery and retention."
                 },
                 {
                     "name": "notifications.md",

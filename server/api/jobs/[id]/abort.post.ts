@@ -4,6 +4,8 @@
  * Purpose:
  * Cancels a running background streaming job.
  */
+import { requireCloudMutation } from '../../../utils/security/cloud-mutation';
+import { requireJobWorkspaceAccess } from '../../../utils/background-jobs/access';
 import { getJobProvider } from '../../../utils/background-jobs/store';
 import { resolveSessionContext } from '../../../auth/session';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
@@ -43,6 +45,7 @@ function stoppedWorkflowState(state: WorkflowMessageData | undefined): WorkflowM
  * - Only the job owner can abort their job.
  */
 export default defineEventHandler(async (event) => {
+    requireCloudMutation(event);
     const jobId = getRouterParam(event, 'id');
 
     if (!jobId) {
@@ -52,8 +55,9 @@ export default defineEventHandler(async (event) => {
 
     // Resolve user ID for authorization
     let userId: string | null = null;
+    let session: Awaited<ReturnType<typeof resolveSessionContext>> | null = null;
     if (isSsrAuthEnabled(event)) {
-        const session = await resolveSessionContext(event);
+        session = await resolveSessionContext(event);
         if (session.authenticated && session.user?.id) {
             userId = session.user.id;
         }
@@ -69,6 +73,7 @@ export default defineEventHandler(async (event) => {
     if (!job) {
         return { aborted: false, message: 'Job not found or already complete' };
     }
+    await requireJobWorkspaceAccess(event, session, job.execution?.workspaceId, 'workspace.write');
     const workflowState = stoppedWorkflowState(job.workflow_state);
     if (workflowState !== job.workflow_state) {
         await provider.updateJob(jobId, { workflow_state: workflowState });

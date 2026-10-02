@@ -27,6 +27,7 @@ import { publicErrorEnvelope, parseRetryAfter } from '~~/shared/errors';
  */
 import { getRequestIP, setResponseHeader } from 'h3';
 import { resolveSessionContext } from '../../auth/session';
+import { requireCloudMutation } from '../../utils/security/cloud-mutation';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import {
@@ -138,6 +139,12 @@ export default defineEventHandler(async (event) => {
         : allowUserOverride
           ? clientKey
           : undefined;
+
+    // Caller-owned foreground requests remain usable without a cookie session.
+    // Managed credentials and persisted background jobs require mutation intent.
+    if (backgroundRequested || (!selectedClientKey && managedKey && !requireUserKey)) {
+        requireCloudMutation(event);
+    }
 
     let apiKey = selectedClientKey;
     if (!apiKey && managedKey && !requireUserKey) {

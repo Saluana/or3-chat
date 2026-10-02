@@ -10,6 +10,7 @@ import {
     runClaimedBackgroundJob,
 } from '../lifecycle';
 import { startBackgroundStream } from '../stream-handler';
+import { getChatJobExecution } from '../types';
 
 const config = vi.hoisted(() => ({
     maxConcurrentJobs: 2,
@@ -172,7 +173,7 @@ describe('memory background job admission and lifecycle', () => {
             'token-1',
             Date.now() + 30_000
         );
-        expect(claimed?.execution?.clientToolCall?.claimToken).toBe('token-1');
+        expect(claimed && getChatJobExecution(claimed)?.clientToolCall?.claimToken).toBe('token-1');
         await expect(
             memoryJobProvider.claimClientToolCall?.(
                 jobId,

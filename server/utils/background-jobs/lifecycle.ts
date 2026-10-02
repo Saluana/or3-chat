@@ -1,6 +1,7 @@
 import { serializeError } from '~~/shared/errors';
 import { randomUUID } from 'node:crypto';
 import type { BackgroundJob, BackgroundJobProvider, JobUpdate } from './types';
+import { getChatJobExecution } from './types';
 import type { BackgroundStreamParams } from './stream-handler';
 import { decryptBackgroundCredential } from './crypto';
 import { emitJobStatus } from './viewers';
@@ -50,7 +51,7 @@ function supportsDurableClaims(provider: BackgroundJobProvider): boolean {
 
 function hasUnsafeInterruptedTool(job: BackgroundJob): boolean {
     if ((job.attempts ?? 0) <= 1) return false;
-    const checkpointed = new Set(job.execution?.checkpointedToolCallIds ?? []);
+    const checkpointed = new Set(getChatJobExecution(job)?.checkpointedToolCallIds ?? []);
     return (job.tool_calls ?? []).some(
         (call) =>
             call.status !== 'pending' &&
@@ -60,7 +61,7 @@ function hasUnsafeInterruptedTool(job: BackgroundJob): boolean {
 
 function pendingToolCleanup(job: BackgroundJob): JobUpdate | null {
     if ((job.attempts ?? 0) <= 1 || !job.tool_calls?.length) return null;
-    const checkpointed = new Set(job.execution?.checkpointedToolCallIds ?? []);
+    const checkpointed = new Set(getChatJobExecution(job)?.checkpointedToolCallIds ?? []);
     const retained = job.tool_calls.filter(
         (call) => call.id && checkpointed.has(call.id)
     );
@@ -76,7 +77,7 @@ export async function runClaimedBackgroundJob(
 ): Promise<void> {
     const workerId = job.leaseOwner;
     const renew = dependencies.provider.renewJobLease;
-    const execution = job.execution;
+    const execution = getChatJobExecution(job);
     if (!workerId || !renew || !execution) {
         return;
     }
@@ -188,9 +189,10 @@ export async function runClaimedBackgroundJob(
             latest.leaseOwner === workerId &&
             !abortController.signal.aborted
         ) {
-            const message = serializeError(error, { code: 'ERR_STREAM_FAILURE', source: 'provider', credentialSource: latest.execution?.credentialSource });
+            const execution = getChatJobExecution(latest);
+            const message = serializeError(error, { code: 'ERR_STREAM_FAILURE', source: 'provider', credentialSource: execution?.credentialSource });
             if (
-                latest.execution?.history &&
+                execution?.history &&
                 dependencies.provider.saveTerminalSnapshot
             ) {
                 const saved = await dependencies.provider.saveTerminalSnapshot(
