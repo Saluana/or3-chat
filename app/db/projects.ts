@@ -11,7 +11,7 @@
  * Non-responsibilities:
  * - Workspace management or authorization
  */
-import { getDb } from './client';
+import { getDb, type Or3DB } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import { parseOrThrow, nowSec, nextClock, getWriteTxTableNames } from './util';
@@ -31,29 +31,13 @@ import { ProjectSchema, type Project } from './schema';
  * - Does not create associated threads.
  */
 export async function createProject(input: Project): Promise<Project> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.projects.create:filter:input',
-        input
-    );
-    const value = parseOrThrow(ProjectSchema, filtered);
-    const next = { ...value, clock: nextClock(value.clock) };
-    await hooks.doAction('db.projects.create:action:before', {
-        entity: next,
-        tableName: 'projects',
-    });
     const db = getDb();
+    const prepared = await prepareProjectWrite(input, 'create');
+    const next = prepared.row;
     await db.transaction('rw', getWriteTxTableNames(db, 'projects'), async () => {
-        await dbTry(
-            () => db.projects.put(next),
-            { op: 'write', entity: 'projects', action: 'create' },
-            { rethrow: true }
-        );
+        await dbTry(() => db.projects.put(next), { op: 'write', entity: 'projects', action: 'create' }, { rethrow: true });
     });
-    await hooks.doAction('db.projects.create:action:after', {
-        entity: next,
-        tableName: 'projects',
-    });
+    await prepared.afterCommit(next);
     return next;
 }
 
@@ -70,38 +54,35 @@ export async function createProject(input: Project): Promise<Project> {
  * Non-Goals:
  * - Does not merge partial updates.
  */
-export async function upsertProject(value: Project): Promise<void> {
+/** Run project hooks before entering a caller's atomic workspace transaction. */
+export async function prepareProjectWrite(value: Project, operation: 'create' | 'upsert') {
     const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.projects.upsert:filter:input',
-        value
-    );
-    await hooks.doAction('db.projects.upsert:action:before', {
-        entity: filtered,
-        tableName: 'projects',
-    });
-    const db = getDb();
+    const filtered = operation === 'create'
+        ? await hooks.applyFilters('db.projects.create:filter:input', value)
+        : await hooks.applyFilters('db.projects.upsert:filter:input', value);
+    const validated = parseOrThrow(ProjectSchema, filtered);
+    const row = operation === 'create' ? { ...validated, clock: nextClock(validated.clock) } : validated;
+    if (operation === 'create') await hooks.doAction('db.projects.create:action:before', { entity: row, tableName: 'projects' });
+    else await hooks.doAction('db.projects.upsert:action:before', { entity: row, tableName: 'projects' });
+    return { row: parseOrThrow(ProjectSchema, row), afterCommit: async (saved: Project) => {
+        if (operation === 'create') await hooks.doAction('db.projects.create:action:after', { entity: saved, tableName: 'projects' });
+        else await hooks.doAction('db.projects.upsert:action:after', { entity: saved, tableName: 'projects' });
+    } };
+}
+
+export async function upsertProject(value: Project): Promise<void> {
+    return upsertProjectInDb(getDb(), value);
+}
+
+export async function upsertProjectInDb(db: Or3DB, value: Project): Promise<void> {
+    const prepared = await prepareProjectWrite(value, 'upsert');
+    let saved = prepared.row;
     await db.transaction('rw', getWriteTxTableNames(db, 'projects'), async () => {
-        const validated = parseOrThrow(ProjectSchema, filtered);
-        const existing = await dbTry(() => db.projects.get(validated.id), {
-            op: 'read',
-            entity: 'projects',
-            action: 'get',
-        });
-        const next = {
-            ...validated,
-            clock: nextClock(existing?.clock ?? validated.clock),
-        };
-        await dbTry(
-            () => db.projects.put(next),
-            { op: 'write', entity: 'projects', action: 'upsert' },
-            { rethrow: true }
-        );
-        await hooks.doAction('db.projects.upsert:action:after', {
-            entity: next,
-            tableName: 'projects',
-        });
+        const existing = await db.projects.get(prepared.row.id);
+        saved = { ...prepared.row, clock: nextClock(existing?.clock ?? prepared.row.clock) };
+        await dbTry(() => db.projects.put(saved), { op: 'write', entity: 'projects', action: 'upsert' }, { rethrow: true });
     });
+    await prepared.afterCommit(saved);
 }
 
 /**

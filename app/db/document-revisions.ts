@@ -140,26 +140,17 @@ export async function listCompleteDocumentRevisions(
     return complete.filter((value): value is CompleteDocumentRevision => Boolean(value));
 }
 
-export async function createDocumentRevision(input: {
+export async function prepareDocumentRevision(input: {
     documentId: string;
     title: string;
     content: TipTapDocument;
     source: DocumentRevisionSource;
-}, db = getDb()): Promise<DocumentRevisionManifest | null> {
+}): Promise<{ manifest: DocumentRevisionManifest; rows: Post[] }> {
     const snapshot: DocumentRevisionSnapshot = {
         title: input.title,
         content: input.content,
     };
     const encoded = await encodeRevisionInWorker(snapshot);
-    const newest = (await manifestRows(input.documentId, db))
-        .map(parseManifest)
-        .filter((value): value is DocumentRevisionManifest => Boolean(value))
-        .sort((left, right) => right.createdAt - left.createdAt
-            || right.revisionId.localeCompare(left.revisionId))[0];
-    if (newest?.titleContentHash === encoded.hash && await readDocumentRevision(newest, db)) {
-        return null;
-    }
-
     const revisionId = newId();
     const createdAt = nowSec();
     const chunkIds = encoded.chunks.map((_, index) => `${revisionId}:chunk:${index}`);
@@ -195,12 +186,29 @@ export async function createDocumentRevision(input: {
         }),
     ];
     rows.forEach(assertRevisionSyncPayloadSize);
+    return { manifest, rows };
+}
 
+export async function createDocumentRevision(input: {
+    documentId: string;
+    title: string;
+    content: TipTapDocument;
+    source: DocumentRevisionSource;
+}, db = getDb()): Promise<DocumentRevisionManifest | null> {
+    const prepared = await prepareDocumentRevision(input);
+    const newest = (await manifestRows(input.documentId, db))
+        .map(parseManifest)
+        .filter((value): value is DocumentRevisionManifest => Boolean(value))
+        .sort((left, right) => right.createdAt - left.createdAt
+            || right.revisionId.localeCompare(left.revisionId))[0];
+    if (newest?.titleContentHash === prepared.manifest.titleContentHash && await readDocumentRevision(newest, db)) {
+        return null;
+    }
     await db.transaction('rw', getWriteTxTableNames(db, 'posts'), async () => {
-        await db.posts.bulkPut(rows);
+        await db.posts.bulkPut(prepared.rows);
     });
     await pruneDocumentRevisions(input.documentId, db);
-    return manifest;
+    return prepared.manifest;
 }
 
 function utcDay(timestamp: number): string {

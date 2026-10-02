@@ -59,6 +59,13 @@ export interface PaletteCoordinator {
         resourceKey: string
     ): PaletteResource | undefined;
     searchSource(sourceId: string, term: string, limit: number): Promise<PaletteResult[]>;
+    searchOnce(options: {
+        term: string;
+        sourceIds: readonly string[];
+        limit: number;
+        signal?: AbortSignal;
+        accepts?: (resource: PaletteResource) => boolean;
+    }): Promise<{ results: PaletteResult[]; statuses: PaletteSourceStatus[]; snapshots: ReadonlyMap<string, PaletteResource> }>;
     hydratePreview(
         result: PaletteResult,
         options?: { signal?: AbortSignal }
@@ -343,6 +350,50 @@ export function createPaletteCoordinator(options?: {
             throw new Error('The workspace changed during search.');
         }
         return search.results.slice(0, limit);
+    }
+
+    async function searchOnce(options: {
+        term: string; sourceIds: readonly string[]; limit: number;
+        signal?: AbortSignal; accepts?: (resource: PaletteResource) => boolean;
+    }): Promise<{ results: PaletteResult[]; statuses: PaletteSourceStatus[]; snapshots: ReadonlyMap<string, PaletteResource> }> {
+        const generation = workspaceGeneration;
+        const assertCurrent = () => {
+            options.signal?.throwIfAborted();
+            if (isDisposed() || generation !== workspaceGeneration) {
+                throw new Error('The workspace changed during search.');
+            }
+        };
+        assertCurrent();
+        if (warmPromise) await warmPromise;
+        else if (options.sourceIds.some((id) => !bound.get(id)?.ready)) await ensureWarm();
+        assertCurrent();
+        const queryResults: PaletteResult[] = [];
+        const snapshots = new Map<string, PaletteResource>();
+        const queryStatuses: PaletteSourceStatus[] = [];
+        for (const sourceId of options.sourceIds) {
+            const entry = bound.get(sourceId);
+            if (!entry?.ready) {
+                queryStatuses.push(entry?.status ?? { sourceId, state: 'error', error: { code: 'load-failed', message: 'Source unavailable.' } });
+                continue;
+            }
+            try {
+                const response = await entry.index.search({
+                    term: options.term, limit: options.limit,
+                    signal: options.signal, accepts: options.accepts,
+                });
+                assertCurrent();
+                queryResults.push(...response.results);
+                for (const [key, resource] of response.snapshots) snapshots.set(key, resource);
+                queryStatuses.push({ ...entry.status, usingFallback: response.usingFallback });
+            } catch (error) {
+                assertCurrent();
+                queryStatuses.push({ sourceId, state: 'error', error: { code: 'search-failed', message: error instanceof Error ? error.message : 'Search failed.' } });
+            }
+        }
+        assertCurrent();
+        queryResults.sort((a, b) => (b.score ?? 0) - (a.score ?? 0)
+            || (b.updatedAt ?? 0) - (a.updatedAt ?? 0) || a.key.localeCompare(b.key));
+        return { results: queryResults.slice(0, options.limit), statuses: queryStatuses, snapshots };
     }
 
     function setQuery(raw: string): void {
@@ -645,6 +696,7 @@ export function createPaletteCoordinator(options?: {
         },
         ensureWarm,
         searchSource,
+        searchOnce,
         refreshSources,
         retrySource,
         getResource,

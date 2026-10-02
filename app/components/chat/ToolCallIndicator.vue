@@ -80,13 +80,31 @@
                 </div>
             </div>
         </component>
+        <div v-if="sources.length" class="mt-1 flex max-w-full flex-wrap items-center gap-2">
+            <button
+                v-for="receipt in visibleSources"
+                :key="`${receipt.workspaceId}:${receipt.source.kind}:${receipt.source.id}`"
+                type="button"
+                :aria-label="`Open source: ${receipt.source.title}`"
+                class="min-h-11 max-w-full rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] px-3 text-left text-xs text-[var(--md-on-surface)] focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
+                @click="openSource(receipt)"
+            >{{ receipt.action === 'created' ? 'Open document · ' : '' }}{{ receipt.source.title }}</button>
+            <button v-if="sources.length > 3" type="button" class="min-h-11 px-2 text-xs" @click="showAllSources = !showAllSources">
+                {{ showAllSources ? 'Show fewer' : `Show all (${sources.length})` }}
+            </button>
+        </div>
+        <p v-if="sourceError || hasPartialSources" role="status" class="mt-1 text-xs text-[var(--md-on-surface-variant)]">
+            {{ sourceError || 'Partial source coverage · Read the next page for more.' }}
+        </p>
+        <WorkspaceDocumentChangeCard v-for="receipt in documentChanges" :key="receipt.changeId" :receipt="receipt" @resize="emit('resize')" />
     </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, defineAsyncComponent, ref } from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
+import { workspaceDocumentChangeReceipt, workspaceSourceReceipts, type WorkspaceSourceReceipt } from '~/utils/chat/workspace-source-receipts';
 
 interface ToolCall {
     id?: string;
@@ -108,6 +126,29 @@ const emit = defineEmits<{
     resize: [];
 }>();
 
+const showAllSources = ref(false);
+const WorkspaceDocumentChangeCard = defineAsyncComponent(() => import('./WorkspaceDocumentChangeCard.vue'));
+const documentChanges = computed(() => props.toolCalls.map(workspaceDocumentChangeReceipt).filter((receipt) => receipt !== null));
+const sourceError = ref('');
+const sources = computed(() => {
+    const unique = new Map<string, WorkspaceSourceReceipt>();
+    for (const call of props.toolCalls) for (const receipt of workspaceSourceReceipts(call)) {
+        unique.set(`${receipt.workspaceId}:${receipt.source.kind}:${receipt.source.id}`, receipt);
+    }
+    return [...unique.values()];
+});
+const visibleSources = computed(() => showAllSources.value ? sources.value : sources.value.slice(0, 3));
+const hasPartialSources = computed(() => sources.value.some((receipt) => receipt.partial));
+async function openSource(receipt: WorkspaceSourceReceipt) {
+    sourceError.value = '';
+    try {
+        const { openWorkspaceSource } = await import('~/utils/chat/workspace-source-receipts');
+        await openWorkspaceSource(receipt);
+    } catch (error) {
+        sourceError.value = error instanceof Error ? error.message : 'This source is unavailable.';
+    }
+}
+
 function hasDetails(call: ToolCall): boolean {
     return Boolean(
         call.args?.trim() ||
@@ -117,6 +158,8 @@ function hasDetails(call: ToolCall): boolean {
 }
 
 function toolKind(call: ToolCall): ToolKind {
+    if (call.name === 'workspace_search') return 'search';
+    if (call.name === 'workspace_read') return 'read';
     const hint = `${call.name} ${call.label ?? ''}`
         .toLowerCase()
         .replace(/[_.-]+/g, ' ');
@@ -161,7 +204,11 @@ const groupLabel = computed(() => {
     const count = (kind: ToolKind) => kinds.value.get(kind)?.length ?? 0;
     if (count('edit'))
         labels.push(running ? 'Editing files' : 'Edited files');
-    if (count('read')) labels.push(running ? 'Reading files' : 'Read files');
+    if (count('read')) {
+        const workspace = kinds.value.get('read')?.every((call) => call.name === 'workspace_read');
+        labels.push(workspace ? running ? 'Reading workspace sources' : 'Read workspace sources'
+            : running ? 'Reading files' : 'Read files');
+    }
     if (count('command')) {
         const total = count('command');
         labels.push(
@@ -182,7 +229,10 @@ const groupLabel = computed(() => {
     const other = kinds.value.get('other') ?? [];
     labels.push(
         ...other
-            .map((call) => call.label || call.name)
+            .map((call) => call.name === 'workspace_create_document' ? running ? 'Creating document' : 'Created document'
+                : call.name === 'workspace_update_project' ? running ? 'Updating project' : 'Updated project'
+                : call.name === 'workspace_propose_document_edit' ? running ? 'Preparing document changes' : 'Document changes ready for review'
+                : call.label || call.name)
             .filter((label, index, all) => all.indexOf(label) === index)
     );
     return labels.join(', ') || (running ? 'Working' : 'Completed activity');

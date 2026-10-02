@@ -143,7 +143,9 @@ async function flushInDb(db: Or3DB, id: string) {
         if (st.pendingContent !== undefined) patch.content = st.pendingContent;
         st.status = 'saving';
         try {
-            const updated = await updateDocumentInDb(db, id, patch);
+            const expected = { title: st.record!.title,
+                content: st.record!.content ? JSON.parse(JSON.stringify(st.record!.content)) as TipTapDocument : null };
+            const updated = await updateDocumentInDb(db, id, patch, expected);
             if (updated) {
                 st.record = updated;
                 st.status = 'saved';
@@ -248,6 +250,20 @@ export async function loadDocument(id: string, db = getDb()) {
         useToast().add({ color: 'error', title: 'Document: load failed' });
     }
     return st.record;
+}
+
+/** Accept a committed host write only after its existing buffers have been settled. */
+export function acceptCommittedDocument(record: Document, db: Or3DB): void {
+    const st = ensure(record.id, db);
+    if (st.flushPromise || st.pendingTitle !== undefined || st.pendingContent !== undefined) {
+        throw new Error('An unsaved document buffer must be reconciled before accepting this change.');
+    }
+    if (st.debouncedSave?.cancel) st.debouncedSave.cancel();
+    pendingSaves.delete(st);
+    st.record = record;
+    st.status = 'saved';
+    st.lastError = undefined;
+    forgetRetainedDocument(db, record.id, st);
 }
 
 /**

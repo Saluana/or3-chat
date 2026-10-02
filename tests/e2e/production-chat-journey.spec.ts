@@ -32,7 +32,7 @@ async function send(page: Page, message: string): Promise<void> {
     const input = page.getByRole('textbox', { name: 'Message input' });
     await input.fill(message);
     await page.getByRole('button', { name: 'Send message' }).click();
-    await expect(page.getByText(message, { exact: true })).toBeVisible();
+    await expect(page.locator('.cm-text-user').getByText(message, { exact: true })).toBeVisible();
 }
 
 async function waitForDurableReply(page: Page, content: string): Promise<void> {
@@ -67,6 +67,98 @@ async function waitForDurableReply(page: Page, content: string): Promise<void> {
 }
 
 test.describe('production chat journey', () => {
+    test('workspace search/read sources use the production navigation', async ({ page }, info) => {
+        test.setTimeout(90_000);
+        await page.route('**/api/__or3-e2e/models*', (route) => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));
+        await page.goto(`${chatPage}?workspace=1`);
+        await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 45_000 });
+        await send(page, 'journey:workspace-find');
+        await expect(page.getByText(/Verified workspace evidence:.*saffron decision/)).toBeVisible({ timeout: 30_000 });
+        const source = page.getByRole('button', { name: 'Open source: Workspace evidence', exact: true });
+        await expect(source).toBeVisible();
+        await expect(page.getByRole('textbox', { name: 'Document body' })).toHaveCount(0);
+        const path = info.outputPath('workspace-search-read-receipt.png');
+        await page.screenshot({ path, animations: 'disabled' });
+        await info.attach('workspace-search-read-receipt', { path, contentType: 'image/png' });
+        await source.click();
+        await expect(page.getByRole('textbox', { name: 'Document body' })).toBeVisible({ timeout: 30_000 });
+        await expect(page.getByRole('textbox', { name: 'Document body' })).toContainText('The saffron decision');
+        await page.reload();
+        await expect(page.getByRole('textbox', { name: 'Document body' })).toBeVisible({ timeout: 30_000 });
+    });
+    test('workspace edits require review and preserve durable Apply Undo across reload', async ({ page }, info) => {
+        test.setTimeout(90_000);
+        await page.route('**/api/__or3-e2e/models*', (route) => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));
+        await page.goto(`${chatPage}?workspace=1`);
+        await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 45_000 });
+        const storedContent = () => page.evaluate(async () => {
+            const id = localStorage.getItem('or3:e2e:workspace-document');
+            const names = (await indexedDB.databases()).flatMap(({ name }) => name ? [name] : []);
+            for (const name of names) {
+                const value = await new Promise<string | null>((resolve) => {
+                    const request = indexedDB.open(name);
+                    request.onerror = () => resolve(null);
+                    request.onsuccess = () => {
+                        const db = request.result;
+                        if (!db.objectStoreNames.contains('posts') || !id) { db.close(); resolve(null); return; }
+                        const tx = db.transaction('posts', 'readonly');
+                        const get = tx.objectStore('posts').get(id);
+                        let value: string | null = null;
+                        get.onsuccess = () => { value = get.result?.content ?? null; };
+                        tx.oncomplete = () => { db.close(); resolve(value); };
+                        tx.onabort = () => { db.close(); resolve(null); };
+                    };
+                });
+                if (value) return value;
+            }
+            return null;
+        });
+        await send(page, 'journey:workspace-edit');
+        await expect(page.getByText('Workspace edit staged for review.', { exact: true })).toBeVisible({ timeout: 30_000 });
+        const card = page.getByRole('region', { name: 'Document changes' });
+        await expect(card.getByRole('button', { name: 'Review changes', exact: true })).toBeVisible();
+        await expect.poll(storedContent).toContain('preserve the original source');
+        await card.getByRole('button', { name: 'Review changes', exact: true }).click();
+        const dialog = page.getByRole('dialog', { name: 'Review document changes' });
+        await expect(dialog).toBeVisible();
+        await expect(dialog).toContainText('includes review and recovery');
+        await expect.poll(storedContent).toContain('preserve the original source');
+        const before = info.outputPath('workspace-proposal-before-apply.png');
+        await page.screenshot({ path: before, animations: 'disabled' });
+        await info.attach('workspace-proposal-before-apply', { path: before, contentType: 'image/png' });
+        await dialog.getByRole('button', { name: 'Apply changes', exact: true }).click();
+        await expect(card.getByText('Changes saved locally', { exact: true })).toBeVisible();
+        await expect.poll(storedContent).toContain('includes review and recovery');
+        await page.reload();
+        await expect(card.getByText('Changes saved locally', { exact: true })).toBeVisible({ timeout: 30_000 });
+        await card.getByRole('button', { name: 'Undo', exact: true }).click();
+        await expect(card.getByText('Change undone locally', { exact: true })).toBeVisible();
+        await expect.poll(storedContent).toContain('preserve the original source');
+        await page.reload();
+        await expect(card.getByText('Change undone locally', { exact: true })).toBeVisible({ timeout: 30_000 });
+        const after = info.outputPath('workspace-proposal-after-undo.png');
+        await page.screenshot({ path: after, animations: 'disabled' });
+        await info.attach('workspace-proposal-after-undo', { path: after, contentType: 'image/png' });
+        await card.getByRole('button', { name: 'Open document', exact: true }).click();
+        await expect(page.getByRole('textbox', { name: 'Document body' })).toContainText('preserve the original source', { timeout: 30_000 });
+    });
+    test('workspace native creation opens durable content after reload', async ({ page }, info) => {
+        test.setTimeout(90_000);
+        await page.route('**/api/__or3-e2e/models*', (route) => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));
+        await page.goto(`${chatPage}?workspace=1`);
+        await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 45_000 });
+        await send(page, 'journey:workspace-create');
+        await expect(page.getByText('Native workspace document saved.', { exact: true })).toBeVisible({ timeout: 30_000 });
+        const source = page.getByRole('button', { name: 'Open source: Workspace saved result', exact: true });
+        await expect(source).toBeVisible();
+        const path = info.outputPath('workspace-created-document-receipt.png');
+        await page.screenshot({ path, animations: 'disabled' });
+        await info.attach('workspace-created-document-receipt', { path, contentType: 'image/png' });
+        await source.click();
+        await expect(page.getByRole('textbox', { name: 'Document body' })).toContainText('Durable saffron result from chat.', { timeout: 30_000 });
+        await page.reload();
+        await expect(page.getByRole('textbox', { name: 'Document body' })).toContainText('Durable saffron result from chat.', { timeout: 30_000 });
+    });
     for (const theme of ['blank', 'retro', 'cyberpunk']) {
         test(`${theme} responsive messages preserve rich content and touch editing`, async ({ browser }, info) => {
             const context = await browser.newContext({

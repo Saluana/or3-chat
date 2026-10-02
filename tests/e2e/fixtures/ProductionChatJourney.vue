@@ -6,8 +6,9 @@
         <span class="sr-only" data-testid="chat-journey-thread-id">
             {{ threadId || 'new-thread' }}
         </span>
+        <PageShell v-if="ready && workspaceJourney" />
         <ChatContainer
-            v-if="ready"
+            v-else-if="ready"
             :thread-id="threadId || undefined"
             :message-history="messageHistory"
             pane-id="production-chat-journey"
@@ -17,12 +18,17 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useRoute } from '#imports';
 import ChatContainer from '~/components/chat/ChatContainer.vue';
 import { persistUserApiKey } from '~/core/auth/useUserApiKey';
 import { useHooks } from '~/core/hooks/useHooks';
 import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
 import type { ChatMessage } from '~/utils/chat/types';
+import { createDocument, getDocument } from '~/db/documents';
+
+const PageShell = defineAsyncComponent(() => import('~/components/PageShell.vue'));
+const workspaceJourney = useRoute().query.workspace === '1';
 
 const THREAD_KEY = 'or3:e2e:production-chat-thread';
 const TEST_API_KEY = 'sk-or-v1-production-journey-test-key';
@@ -144,7 +150,49 @@ function installDeterministicFetch(): void {
                     new Promise((resolve) => setTimeout(resolve, ms));
 
                 try {
-                    if (text.includes('journey:responsive')) {
+                    if (text.includes('journey:workspace-find') || text.includes('journey:workspace-create') || text.includes('journey:workspace-edit')) {
+                        const userIndex = messages.findLastIndex((message) => message && typeof message === 'object' && (message as { role?: unknown }).role === 'user');
+                        const replies = messages.slice(userIndex + 1).filter((message) => message && typeof message === 'object' && (message as { role?: unknown }).role === 'tool');
+                        const readReply = replies.find((message) => (message as { name?: unknown }).name === 'workspace_read');
+                        const createReply = replies.find((message) => (message as { name?: unknown }).name === 'workspace_create_document');
+                        const proposalReply = replies.find((message) => (message as { name?: unknown }).name === 'workspace_propose_document_edit');
+                        const searchReply = replies.find((message) => (message as { name?: unknown }).name === 'workspace_search');
+                        let name: string;
+                        let args: Record<string, unknown>;
+                        if (proposalReply || createReply || readReply && !text.includes('journey:workspace-edit')) {
+                            const receipt = JSON.parse(messageText(proposalReply ?? readReply ?? createReply)) as { content?: string; error?: string };
+                            enqueue(sseChunk(receipt.error ? `Workspace action failed: ${receipt.error}`
+                                : proposalReply ? 'Workspace edit staged for review.' : readReply ? `Verified workspace evidence: ${receipt.content ?? ''}` : 'Native workspace document saved.'));
+                            enqueue(encoder.encode('data: [DONE]\n\n')); controller.close(); return;
+                        } else if (readReply) {
+                            const receipt = JSON.parse(messageText(readReply)) as { readId?: string; source?: { id: string }; blocks?: Array<{ ref?: string | null }> };
+                            name = 'workspace_propose_document_edit';
+                            args = { documentId: receipt.source?.id, readId: receipt.readId, operations: [{ kind: 'replace_block', ref: receipt.blocks?.[0]?.ref, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'The saffron decision now includes review and recovery.' }] }] }] };
+                        } else if (text.includes('journey:workspace-create')) {
+                            name = 'workspace_create_document';
+                            args = { title: 'Workspace saved result', content: { type: 'doc', content: [
+                                { type: 'paragraph', content: [{ type: 'text', text: 'Durable saffron result from chat.' }] },
+                            ] } };
+                        } else if (searchReply) {
+                            const receipt = JSON.parse(messageText(searchReply)) as { results?: Array<{ source: { kind: string; id: string } }> };
+                            const source = receipt.results?.[0]?.source;
+                            if (!source) {
+                                enqueue(sseChunk('Workspace search returned no accessible evidence.'));
+                                enqueue(encoder.encode('data: [DONE]\n\n')); controller.close(); return;
+                            }
+                            name = 'workspace_read'; args = { item: { kind: source.kind, id: source.id } };
+                        } else {
+                            name = 'workspace_search'; args = { query: 'saffron decision', kinds: ['document'] };
+                        }
+                        const tools = Array.isArray(body.tools) ? body.tools : [];
+                        if (!tools.some((tool) => tool && typeof tool === 'object' && (tool as { function?: { name?: string } }).function?.name === name)) {
+                            enqueue(sseChunk('Workspace tools unavailable in this fixture.'));
+                        } else {
+                            enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{
+                                index: 0, id: `journey-${name}-${attempt}`, type: 'function', function: { name, arguments: JSON.stringify(args) },
+                            }] }, finish_reason: 'tool_calls' }] })}\n\n`));
+                        }
+                    } else if (text.includes('journey:responsive')) {
                         enqueue(sseChunk([
                             '## Responsive reply',
                             '',
@@ -224,6 +272,16 @@ onMounted(async () => {
     hooks.addFilter('ui.chat.message:filter:outgoing', pauseAdmission);
     hooks.addFilter('ai.chat.messages:filter:before_send', emptyInput);
     installDeterministicFetch();
+    if (workspaceJourney) {
+        const key = 'or3:e2e:workspace-document';
+        const remembered = localStorage.getItem(key);
+        if (!remembered || !(await getDocument(remembered))) {
+            const document = await createDocument({ title: 'Workspace evidence', content: { type: 'doc', content: [
+                { type: 'paragraph', content: [{ type: 'text', text: 'The saffron decision is to preserve the original source.' }] },
+            ] } });
+            localStorage.setItem(key, document.id);
+        }
+    }
     localStorage.setItem(
         'or3:server-route-available',
         JSON.stringify({ available: false, timestamp: Date.now() })
