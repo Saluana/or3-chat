@@ -42,11 +42,11 @@ function reference(capture: CompactionCapture, taskSystemPrompt: string | null |
     const blocks: string[] = ['<conversation-reference>'];
     if (taskSystemPrompt) blocks.push(quoted({ role: 'system', task_system_prompt: taskSystemPrompt }));
     if (prior?.compaction) blocks.push('<previous-summary>', quoted({ summary_markdown: prior.compaction.summary_markdown, landmarks: prior.compaction.landmarks }), '</previous-summary>');
-    for (const row of capture.messages) {
+    for (const [position, row] of capture.messages.entries()) {
         if (row === prior) continue;
         const raw = getTextFromContent(row.content).replace(/data:(?:image|audio)\/[^;,\s]+;base64,[A-Za-z0-9+/=]+|data:application\/(?:pdf|octet-stream);base64,[A-Za-z0-9+/=]+/g, '[Media payload omitted]');
         const media = row.fileHashes.length > 0 || Array.isArray(row.content) && row.content.some((part) => part.type !== 'text');
-        const record = { message_id: row.id, display_index: row.index + 1, role: row.role, thread_id: row.threadId,
+        const record = { message_id: row.id, display_index: position + 1, role: row.role, thread_id: row.threadId,
             content: row.role === 'tool' ? excerpt(raw, toolLimit) : raw,
             ...(media ? { file_hashes: row.fileHashes, media_note: 'Image/PDF/audio contents omitted; only available text and file hashes are included.' } : {}),
             ...(row.callId ? { tool_call_id: row.callId, tool_name: row.toolName, tool_state: row.error ? 'error' : 'complete', error: excerpt(row.error ?? undefined, 2000) } : {}),

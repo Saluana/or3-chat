@@ -92,6 +92,7 @@ it('serializes canonical tools once with explicit Unicode excerpt/media omission
     expect(body).not.toContain('DUPLICATE_EMBEDDED_OUTPUT'); expect(body).not.toContain('PRIVATE_REASONING_EXCLUDE'); expect(body).not.toContain('base64,AAAA');
     expect(body).toContain('Media caption'); expect(body).toContain('owned-hash'); expect(body).toContain('Image/PDF/audio contents omitted');
     const record = body.split('\n').map((line: string) => { try { return JSON.parse(line); } catch { return null; } }).find((row: { message_id?: string } | null) => row?.message_id === 'tool');
+    expect(record.display_index).toBe(3);
     expect(Array.from(record.content)).toHaveLength(8000);
 });
 it('rejects explicit provider length termination even if the partial JSON appears complete', async () => {

@@ -142,3 +142,7 @@ The auxiliary uses the captured model and existing authenticated openRouterStrea
 - Explicit provider refusal was lost by parser and caused an unnecessary corrective call:2 intended failures `/tmp/task16-summary-explicit-refusal-baseline.log`. Additive terminal metadata prevents auxiliary correction without changing normal text consumers. Repeated non-JSON output separately stops after2calls.
 
 Configured types, new exact CI and source review pending. Controller, action/card/browser integration, native zero-write budget/lossy/usage-meter, server/provider/retrieval/sidebar/deletion, scale/build/docs/live quality remain open.
+
+### Auxiliary display ordinal correction
+
+The generator's display index now follows the captured canonical human ordinal, rather than mutable/sparse/fractional storage `index + 1`. Extending the existing canonical-tool serializer case failed on auxiliary0f9e54 with2.5 ratherthan3 (`/tmp/task16-summary-display-index-baseline.log`), then passed with the correction. IDs, captured ordering, anchor metadata, scope membership and persisted source indexes remain unchanged. The subsequent26-case controller+generator run passed, and55 cases with the atomic writer also passed. This is a narrow followup to auxiliary0f9e54's exactCore/Contracts/configuredtypes proof; newer source still requires its own exact-head qualification.
