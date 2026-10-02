@@ -1,3 +1,4 @@
+import type { RequestUsage } from '../chat/compaction';
 /**
  * Isomorphic OpenRouter SSE parser shared by foreground and background paths.
  * Framing follows the EventSource processing model; payload interpretation is
@@ -34,7 +35,7 @@ export function normalizeProviderRequestUsage(value: unknown): ProviderRequestUs
 }
 
 export type ORStreamEvent =
-    | { type: 'usage'; usage: ProviderRequestUsage }
+    | { type: 'usage'; usage: ProviderRequestUsage; requestUsage?: RequestUsage }
     | { type: 'text'; text: string }
     | { type: 'image'; url: string; final?: boolean; index?: number }
     | { type: 'reasoning'; text: string }

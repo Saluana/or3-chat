@@ -1,3 +1,4 @@
+import type { ORStreamEvent } from '~~/shared/openrouter/parseOpenRouterSSE';
 import { OpenRouterProviderError } from '~~/shared/openrouter/errors';
 import { presentError } from '~~/shared/errors';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -21,11 +22,12 @@ const runtimeConfigMock = {
     },
 };
 
-const parseMock = vi.fn(async function* (..._args: unknown[]) {
+const parseMock = vi.fn(async function* (..._args: unknown[]): AsyncGenerator<ORStreamEvent> {
     yield { type: 'text', text: 'hello' };
 });
 
-vi.mock('~~/shared/openrouter/parseOpenRouterSSE', () => ({
+vi.mock('~~/shared/openrouter/parseOpenRouterSSE', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('~~/shared/openrouter/parseOpenRouterSSE')>()),
     parseOpenRouterSSE: (...args: unknown[]) => parseMock(...args),
 }));
 
@@ -58,6 +60,23 @@ describe('openrouterStream', () => {
 
     afterEach(() => {
         vi.useRealTimers();
+    });
+
+    it('binds final usage to the actual provider payload without leaking internal provenance into the request', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(createStreamResponse()); vi.stubGlobal('fetch', fetchMock);
+        parseMock.mockImplementationOnce(async function* () {
+            yield { type: 'text', text: 'Answer' };
+            yield { type: 'usage', usage: { prompt_tokens: 180000, completion_tokens: 42, model: 'resolved-model', response_id: 'provider-response' } };
+            yield { type: 'done' };
+        });
+        const events: ORStreamEvent[] = [];
+        for await (const event of openRouterStream({ apiKey: 'not-in-provenance', model: 'model-1', orMessages: [{ role: 'user', content: 'Task' }], modalities: ['text'] })) events.push(event);
+        const usage = events.find((event) => event.type === 'usage');
+        expect(usage).toMatchObject({ requestUsage: { prompt_tokens: 180000, completion_tokens: 42, model: 'resolved-model', request_id: 'provider-response',
+            prefix_message_count: 1, prefix_hash: expect.any(String), configuration_hash: expect.any(String), input_estimate_tokens: expect.any(Number) } });
+        expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).not.toHaveProperty('requestUsage');
+        expect(JSON.stringify(usage)).not.toContain('not-in-provenance');
+        expect(events.filter((event) => event.type !== 'usage')).toEqual([{ type: 'text', text: 'Answer' }, { type: 'done' }]);
     });
 
     it.each(['personal', 'server'] as const)('preserves canonical auth guidance from a %s HTTP error envelope', async (owner) => {
