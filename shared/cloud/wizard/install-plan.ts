@@ -175,9 +175,26 @@ function isDependencySpecSatisfied(
         || requestedSpec.slice(requestedSpec.lastIndexOf('@') + 1) === existingSpec;
 }
 
-function isPackageInstalled(instanceDir: string, packageName: string): boolean {
+function isPackageInstalled(
+    instanceDir: string,
+    packageName: string,
+    requestedSpec: string
+): boolean {
     const packageJsonPath = resolve(instanceDir, 'node_modules', packageName, 'package.json');
-    return existsSync(packageJsonPath);
+    if (!existsSync(packageJsonPath)) return false;
+
+    // File dependencies keep their local version; bare requests only require presence.
+    const versionPrefix = `${packageName}@`;
+    if (!requestedSpec.startsWith(versionPrefix)) return true;
+    const requestedVersion = requestedSpec.slice(versionPrefix.length);
+    try {
+        const installed = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
+            version?: unknown;
+        };
+        return installed.version === requestedVersion;
+    } catch {
+        return false;
+    }
 }
 
 export function isInstallPackageManager(
@@ -334,7 +351,7 @@ export async function executeDependencyInstallPlan(
     const specsToInstall = installSpecs.filter((spec, index) => {
         const packageName = plan.packages[index];
         if (!packageName) return true;
-        if (!isPackageInstalled(answers.instanceDir, packageName)) return true;
+        if (!isPackageInstalled(answers.instanceDir, packageName, spec)) return true;
         return !isDependencySpecSatisfied(existingSpecs.get(packageName), spec);
     });
     if (specsToInstall.length === 0) {
