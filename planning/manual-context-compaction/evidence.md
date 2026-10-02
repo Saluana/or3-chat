@@ -60,6 +60,8 @@ Test-authoring gate: extend the existing realDexie pane-seed/UI owner at the cha
 - Correction merges original call metadata by stable callID, then overlays canonical fields including undefined stale error. Canonical result reconciliation and untouched stored rows remain asserted.64 cases/5 history/transcript/indicator/pane/resize owners PASS `/tmp/task3-pane-metadata-candidate-focused.log`; explicit changed TS lint/max-warnings0 PASS `/tmp/task3-pane-metadata-lint.log`.
 - Compatibility first stale ledger failure retained `/tmp/task3-pane-metadata-compatibility-first.log`; existing generator refresh `/tmp/task3-pane-metadata-ledger-refresh.log` only changes digest/source line entries, no public signatures. Final ledger/snapshots PASS `/tmp/task3-pane-metadata-compatibility-final.log`; configured/application/browser/exactCI/parent re-review remain required on the new candidate.
 
+Clean5dcaafc661d23a962c44dd0d01530153db6ea455 configured application gate EXIT1 with TS2339 at useMultiPane198: the private DbMessageRow.data narrowing omitted tool_calls. Actual first log `/tmp/task3-pane-metadata-configured-types-first.log` remains. Its declaration now includes the existing field as unknown; runtime merge and assertions are unchanged.64 affected cases/5 owners and changed TS lint/max-warnings0 pass again `/tmp/task3-pane-metadata-typed-focused.log`, `/tmp/task3-pane-metadata-typed-lint.log`; corrected configured run still required. This failure is a typing omission, not a completed qualification.
+
 The six plan files match upstream exactly at the inspected default base `6ee4450b`.
 This branch is separate from assistant/Files and starts on the temporary reviewed
 integration base containing PR179 `40b7aef6`, PR181 `bb86066c`, and PR182 `07b235b2`.
