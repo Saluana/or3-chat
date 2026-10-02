@@ -66,6 +66,9 @@ let inFlight: Promise<OpenRouterModel[]> | null = null;
 // Retain the latest existing request identity after settlement. A delayed
 // cache read must not regain ownership when inFlight becomes null again.
 let latestCatalogRequest: Promise<OpenRouterModel[]> | null = null;
+// Request identity alone cannot detect completion of the same owner while
+// a cache read is held. Capture live publication too before awaiting KV.
+let catalogPublication = 0;
 let inFlightForced = false;
 let catalogSource: 'openrouter-live' | 'openrouter-cache' = 'openrouter-cache';
 let catalogFetchedAt: number | null = null;
@@ -145,9 +148,10 @@ export function useModelStore() {
     ): Promise<OpenRouterModel[] | null> {
         if (!canUseDexie()) return null;
         const requestOwner = latestCatalogRequest;
+        const publication = catalogPublication;
         try {
             const rec = await kv.get(MODELS_CACHE_KEY);
-            if (requestOwner !== latestCatalogRequest) return inFlight ?? catalog.value;
+            if (requestOwner !== latestCatalogRequest || publication !== catalogPublication) return inFlight ?? catalog.value;
             if (!rec) return null;
             // rec.updated_at is seconds in Kv schema; convert to ms
             const updatedAtMs = rec.updated_at
@@ -282,6 +286,7 @@ export function useModelStore() {
             try {
                 const result = await modelsService.fetchModelCatalog(opts);
                 const list = result.data;
+                catalogPublication += 1;
                 catalog.value = list;
                 lastLoadedAt.value = result.fetchedAt ?? undefined;
                 catalogSource = result.source;

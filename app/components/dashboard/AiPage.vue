@@ -294,6 +294,7 @@
                 :disabled="savingContext"
                 >Reset to defaults</UButton
             >
+            <p v-if="resetError" id="ai-reset-error" class="basis-full text-sm text-error" role="alert">{{ resetError }}</p>
         </section>
 
         <p class="ai-settings-note">
@@ -319,6 +320,7 @@ const settings = computed(() => settingsRef.value!);
 
 const contextInput = ref(settings.value.maxContextTokens?.toString() ?? '');
 const contextError = ref('');
+const resetError = ref('');
 const savingContext = ref(false);
 const contextDirty = computed(() => contextInput.value.trim() !== (settings.value.maxContextTokens?.toString() ?? ''));
 watch(() => settings.value.maxContextTokens, (value) => {
@@ -326,6 +328,7 @@ watch(() => settings.value.maxContextTokens, (value) => {
     contextError.value = '';
 });
 const stopWorkspace = subscribeActiveWorkspaceDb(() => {
+    resetError.value = '';
     contextInput.value = '';
     contextError.value = '';
     savingContext.value = false;
@@ -417,6 +420,7 @@ async function onReset() {
     const generation = getWorkspaceGeneration();
     savingContext.value = true;
     contextError.value = '';
+    resetError.value = '';
     try {
         await reset();
         if (generation !== getWorkspaceGeneration()) return;
@@ -426,7 +430,7 @@ async function onReset() {
         promptSaved.value = true;
         if (liveStatus.value) liveStatus.value.textContent = 'AI settings reset to defaults';
     } catch {
-        if (generation === getWorkspaceGeneration()) contextError.value = 'Could not reset AI preferences. Retry.';
+        if (generation === getWorkspaceGeneration()) resetError.value = 'Could not reset AI preferences. Retry.';
     } finally {
         if (generation === getWorkspaceGeneration()) savingContext.value = false;
     }

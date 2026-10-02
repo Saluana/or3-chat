@@ -112,6 +112,27 @@ describe('dormant Dashboard context maximum through real KV', () => {
         expect(input().element.value).toBe('');
     });
 
+    it('announces a failed visible Reset and allows retry without exposing the dormant maximum', async () => {
+        await useAiSettings().set({ maxContextTokens: 175_000, masterSystemPrompt: 'Keep this prompt' });
+        await openPage();
+        const failure = vi.spyOn(getDb().kv, 'put').mockRejectedValueOnce(new Error('Scripted Reset write failure'));
+        await wrapper!.get('#dashboard-ai-reset-btn').trigger('click');
+        await vi.waitFor(() => {
+            const alert = wrapper!.get('#dashboard-ai-reset-section [role="alert"]');
+            expect(alert.isVisible()).toBe(true);
+            expect(alert.text()).toMatch(/could not reset.*retry/i);
+        });
+        expect(failure).toHaveBeenCalled();
+        expect(await savedMaximum()).toBe(175_000);
+        expect(wrapper!.get('#dashboard-ai-context-section').isVisible()).toBe(false);
+        expect(wrapper!.get('#dashboard-ai-reset-btn').attributes('disabled')).toBeUndefined();
+        failure.mockRestore();
+        await wrapper!.get('#dashboard-ai-reset-btn').trigger('click');
+        await vi.waitFor(async () => expect(await savedMaximum()).toBeNull());
+        expect(wrapper!.find('#dashboard-ai-reset-section [role="alert"]').exists()).toBe(false);
+        expect(useAiSettings().settings.value.masterSystemPrompt).toBe('');
+    });
+
     it('shows accessible validation and preserves the saved value for invalid input', async () => {
         await useAiSettings().set({ maxContextTokens: 175_000 });
         await openPage();

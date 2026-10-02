@@ -12,7 +12,7 @@
   },
   "coverage": {
     "moduleCount": 39,
-    "exportCount": 592,
+    "exportCount": 594,
     "callableExportCount": 273,
     "nuxtAutoImportCount": 308
   },
@@ -2796,7 +2796,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "23d39d93e22762cb13060a3f522f619e8feac32eb762540c9db343cdcf0b0850",
+      "apiSha256": "cf7bdcb8f3431aa81c567cd9cbece6942d5de79e786dda3f2e4ccabe4567e74c",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2921,7 +2921,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 78,
+              "line": 87,
               "syntaxKind": "VariableDeclaration",
               "text": "AI_SETTINGS_STORAGE_KEY = LEGACY_STORAGE_KEY"
             }
@@ -2937,7 +2937,7 @@
               "source": "app/composables/chat/useAiSettings.ts",
               "line": 66,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface AiSettingsV1 {\n    version: 1;\n    masterSystemPrompt: string;\n    defaultModelMode: 'lastSelected' | 'fixed';\n    fixedModelId: string | null;\n    defaultModelVariant: OpenRouterModelVariant;\n}"
+              "text": "export interface AiSettingsV1 {\n    version: 1;\n    masterSystemPrompt: string;\n    defaultModelMode: 'lastSelected' | 'fixed';\n    fixedModelId: string | null;\n    defaultModelVariant: OpenRouterModelVariant;\n    /** Null means the full advertised model capacity; values remain independent of model selection. */\n    maxContextTokens: number | null;\n}"
             }
           ]
         },
@@ -2978,6 +2978,20 @@
               "line": 22,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function buildDocumentAiSystemPrompt(\n    editingPreference: string\n): string;"
+            }
+          ]
+        },
+        {
+          "name": "CapturedContextPreference",
+          "kind": "type",
+          "nuxtAutoImport": false,
+          "signatures": [],
+          "declarations": [
+            {
+              "source": "app/composables/chat/useAiSettings.ts",
+              "line": 77,
+              "syntaxKind": "InterfaceDeclaration",
+              "text": "export interface CapturedContextPreference {\n    readonly db: Or3DB;\n    readonly workspaceGeneration: number;\n    readonly maxContextTokens: number | null;\n}"
             }
           ]
         },
@@ -3100,6 +3114,20 @@
               "line": 113,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ComposerActionEntry {\n    /** The composer action definition */\n    action: ComposerAction;\n    /** Whether the action is currently disabled based on context */\n    disabled: boolean;\n}"
+            }
+          ]
+        },
+        {
+          "name": "ContextModelReadiness",
+          "kind": "type",
+          "nuxtAutoImport": false,
+          "signatures": [],
+          "declarations": [
+            {
+              "source": "app/composables/chat/useModelStore.ts",
+              "line": 76,
+              "syntaxKind": "TypeAliasDeclaration",
+              "text": "export type ContextModelReadiness =\n    | { ok: false; code: 'model_metadata_unavailable' }\n    | { ok: true; selectedModelId: string; modelId: string; source: ModelCatalogResult['source'];\n        fetchedAt: number | null; metadata: ContextModelMetadata };"
             }
           ]
         },
@@ -3235,9 +3263,9 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 80,
+              "line": 89,
               "syntaxKind": "VariableDeclaration",
-              "text": "DEFAULT_AI_SETTINGS: AiSettingsV1 = {\n    version: 1,\n    masterSystemPrompt: '',\n    defaultModelMode: 'lastSelected',\n    fixedModelId: null,\n    defaultModelVariant: DEFAULT_MODEL_VARIANT,\n}"
+              "text": "DEFAULT_AI_SETTINGS: AiSettingsV1 = {\n    version: 1,\n    masterSystemPrompt: '',\n    defaultModelMode: 'lastSelected',\n    fixedModelId: null,\n    defaultModelVariant: DEFAULT_MODEL_VARIANT,\n    maxContextTokens: null,\n}"
             }
           ]
         },
@@ -4059,7 +4087,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 76,
+              "line": 85,
               "syntaxKind": "VariableDeclaration",
               "text": "LEGACY_STORAGE_KEY = 'or3.ai.settings.v1'"
             }
@@ -4595,7 +4623,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useModelStore.ts",
-              "line": 64,
+              "line": 109,
               "syntaxKind": "VariableDeclaration",
               "text": "MODELS_CACHE_KEY = 'MODELS_CATALOG'"
             }
@@ -4609,7 +4637,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useModelStore.ts",
-              "line": 65,
+              "line": 110,
               "syntaxKind": "VariableDeclaration",
               "text": "MODELS_TTL_MS = 48 * 60 * 60 * 1000"
             }
@@ -4623,7 +4651,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 35,
+              "line": 40,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type MultiPaneMessage = {\n    role: 'user' | 'assistant' | 'system' | 'tool';\n    content: string;\n    file_hashes?: string | null;\n    id?: string;\n    stream_id?: string;\n    data?: Record<string, unknown> | null;\n    reasoning_text?: string | null;\n    index?: number | null;\n    order_key?: string | null;\n    created_at?: number | null;\n};"
             }
@@ -4637,7 +4665,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 48,
+              "line": 53,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface PaneState {\n    id: string;\n    mode: PaneMode;\n    threadId: string; // '' indicates unsaved/new chat\n    /** Target thread while an async workspace-tab activation is in flight. */\n    pendingThreadId?: string;\n    documentId?: string;\n    messages: MultiPaneMessage[];\n    validating: boolean;\n}"
             }
@@ -4705,7 +4733,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 32,
+              "line": 37,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type PaneMode = 'chat' | 'doc' | (string & { _brand?: 'pane-mode' });"
             }
@@ -4719,7 +4747,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 48,
+              "line": 53,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface PaneState {\n    id: string;\n    mode: PaneMode;\n    threadId: string; // '' indicates unsaved/new chat\n    /** Target thread while an async workspace-tab activation is in flight. */\n    pendingThreadId?: string;\n    documentId?: string;\n    messages: MultiPaneMessage[];\n    validating: boolean;\n}"
             }
@@ -5535,7 +5563,7 @@
               "resolvedReturnType": "AiSettingsV1",
               "declaration": {
                 "source": "app/composables/chat/useAiSettings.ts",
-                "line": 105,
+                "line": 118,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function sanitizeAiSettings(\n    input: unknown,\n    defaults: AiSettingsV1 = DEFAULT_AI_SETTINGS\n): AiSettingsV1;"
               }
@@ -5544,7 +5572,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 105,
+              "line": 118,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function sanitizeAiSettings(\n    input: unknown,\n    defaults: AiSettingsV1 = DEFAULT_AI_SETTINGS\n): AiSettingsV1;"
             }
@@ -6405,7 +6433,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAiSettings.ts",
-                "line": 217,
+                "line": 276,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAiSettings();"
               }
@@ -6414,7 +6442,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 217,
+              "line": 276,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAiSettings();"
             }
@@ -6457,7 +6485,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAi.ts",
-                "line": 214,
+                "line": 215,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
               }
@@ -6466,7 +6494,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAi.ts",
-              "line": 214,
+              "line": 215,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
             }
@@ -6991,7 +7019,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useModelStore.ts",
-                "line": 95,
+                "line": 140,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useModelStore();"
               }
@@ -7000,7 +7028,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useModelStore.ts",
-              "line": 95,
+              "line": 140,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useModelStore();"
             }
@@ -7017,7 +7045,7 @@
               "resolvedReturnType": "UseMultiPaneApi",
               "declaration": {
                 "source": "app/composables/core/useMultiPane.ts",
-                "line": 265,
+                "line": 286,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useMultiPane(\n    options: UseMultiPaneOptions = {}\n): UseMultiPaneApi;"
               }
@@ -7026,7 +7054,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 265,
+              "line": 286,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useMultiPane(\n    options: UseMultiPaneOptions = {}\n): UseMultiPaneApi;"
             }
@@ -7040,7 +7068,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 70,
+              "line": 75,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UseMultiPaneApi {\n    panes: Ref<PaneState[]>;\n    activePaneIndex: Ref<number>;\n    activePaneId: ComputedRef<string | null>;\n    canAddPane: ComputedRef<boolean>;\n    newWindowTooltip: ComputedRef<string>;\n    addPane: () => string | null;\n    closePane: (index: number) => Promise<void> | void;\n    swapAdjacentPanes: (leftIndex: number) => void;\n    setActive: (index: number) => void;\n    focusPrev: (current: number) => void;\n    focusNext: (current: number) => void;\n    setPaneThread: (index: number, threadId: string) => Promise<void>;\n    loadMessagesFor: (id: string) => Promise<MultiPaneMessage[]>;\n    ensureAtLeastOne: () => void;\n    newPaneForApp: (\n        appId: string,\n        opts?: { initialRecordId?: string }\n    ) => Promise<void>;\n    setPaneApp: (\n        index: number,\n        appId: string,\n        opts?: { recordId?: string }\n    ) => Promise<void>;\n    updatePane: (index: number, updates: Partial<PaneState>) => void;\n    getPaneIndexById: (paneId: string) => number;\n    getPaneById: (paneId: string) => PaneState | undefined;\n    getPaneWidth: (index: number) => string;\n    handleResize: (\n        paneIndex: number,\n        deltaX: number,\n        persist?: boolean\n    ) => void;\n    persistPaneWidths: () => void;\n    recalculateWidthsForContainer: (newContainerWidth: number) => void;\n    paneWidths: Ref<number[]>;\n}"
             }
@@ -7054,7 +7082,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 59,
+              "line": 64,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UseMultiPaneOptions {\n    initialThreadId?: string;\n    maxPanes?: MaybeRefOrGetter<number>; // default 3\n    onFlushDocument?: (id: string) => void | Promise<void>;\n    loadMessagesFor?: (id: string) => Promise<MultiPaneMessage[]>; // override for tests\n    minPaneWidth?: number; // minimum width per pane in pixels (default 280)\n    maxPaneWidth?: number; // maximum width per pane in pixels (default 2000)\n    storageKey?: string; // localStorage key for persisting widths (default 'pane-widths')\n    allowMultiplePanes?: MaybeRefOrGetter<boolean>; // responsive or policy-level pane creation guard\n}"
             }

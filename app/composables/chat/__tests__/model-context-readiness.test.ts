@@ -154,6 +154,43 @@ describe('existing catalog context readiness', () => {
         }
     });
 
+    it('fences held KV hydration when its already-started forced refresh completes first', async () => {
+        await kv.set(MODELS_CACHE_KEY, JSON.stringify({ version: 1,
+            data: [sdkModelToLocal(sdkModel(32_000))], fetchedAt: Date.now() - 1000 }));
+        let releaseSdk!: () => void; let sdkEntered!: () => void;
+        let releaseKv!: () => void; let kvEntered!: () => void; let held = false;
+        const sdkGate = new Promise<void>((resolve) => { releaseSdk = resolve; });
+        const sdkStarted = new Promise<void>((resolve) => { sdkEntered = resolve; });
+        const kvGate = new Promise<void>((resolve) => { releaseKv = resolve; });
+        const kvStarted = new Promise<void>((resolve) => { kvEntered = resolve; });
+        list.mockImplementation(async () => { sdkEntered(); await sdkGate; return pages(); });
+        const hooks = useHooks();
+        const hold: Parameters<typeof hooks.addFilter<'db.kv.getByName:filter:output'>>[1] = async (row) => {
+            if (!held && row?.name === MODELS_CACHE_KEY) { held = true; kvEntered(); await kvGate; }
+            return row;
+        };
+        hooks.addFilter('db.kv.getByName:filter:output', hold);
+        try {
+            const refresh = useModelStore().fetchModels({ force: true });
+            await sdkStarted;
+            const hydration = useModelStore().fetchModels();
+            await kvStarted;
+            releaseSdk(); await refresh;
+            const live = await useModelStore().resolveContextModel('catalog/model');
+            expect(live).toMatchObject({ ok: true, source: 'openrouter-live', metadata: { context_length: 1_000_000 } });
+            await vi.waitFor(async () => {
+                const row = await kv.get(MODELS_CACHE_KEY);
+                expect(JSON.parse(row!.value as string).data[0].context_length).toBe(1_000_000);
+            });
+            releaseKv();
+            expect((await hydration)[0]?.context_length).toBe(1_000_000);
+            expect(await useModelStore().resolveContextModel('catalog/model')).toEqual(live);
+            expect(list).toHaveBeenCalledOnce();
+        } finally {
+            releaseSdk(); releaseKv(); hooks.removeFilter('db.kv.getByName:filter:output', hold);
+        }
+    });
+
     it('keeps legacy KV catalogs usable with an unknown actual fetch time', async () => {
         await kv.set(MODELS_CACHE_KEY, JSON.stringify([sdkModelToLocal(sdkModel())]));
         expect(await useModelStore().resolveContextModel('catalog/model')).toMatchObject({
