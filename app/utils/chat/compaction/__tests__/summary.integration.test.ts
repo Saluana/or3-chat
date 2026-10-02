@@ -88,6 +88,24 @@ it('does not retry network errors and rejects late cancellation before validatio
     await expect(generate({ signal: controller.signal })).rejects.toMatchObject({ code: 'cancelled' }); expect(transport).toHaveBeenCalledOnce();
     expect(await getDb().threads.count()).toBe(1);
 });
+it('aborts a held transport from the capture-only signal and releases its iterator', async () => {
+    const capturedController = new AbortController(); const source = await capture(capturedController.signal);
+    let enter!: () => void; const entered = new Promise<void>((resolve) => { enter = resolve; });
+    let release!: () => void; let requestSignal: AbortSignal | undefined; let cleaned = false;
+    transport.mockImplementation(async function* (request): AsyncGenerator<ORStreamEvent> {
+        requestSignal = request.signal;
+        const held = new Promise<void>((resolve) => { release = resolve; });
+        const abort = () => release(); request.signal?.addEventListener('abort', abort, { once: true }); enter();
+        try { await held; yield { type: 'text', text: envelope() }; yield { type: 'done' }; }
+        finally { request.signal?.removeEventListener('abort', abort); cleaned = true; }
+    });
+    const outcome = generateCompactionSummary(source, { modelMetadata }).then(() => undefined, (error: unknown) => error);
+    await entered; capturedController.abort();
+    try { expect(requestSignal?.aborted).toBe(true); }
+    finally { release(); await outcome; }
+    expect(await outcome).toMatchObject({ code: 'cancelled' }); expect(cleaned).toBe(true);
+    expect(transport).toHaveBeenCalledOnce(); expect(await getDb().threads.count()).toBe(1); expect(await getDb().messages.count()).toBe(4);
+});
 it('does not re-expand original rows during a rolling summary', async () => {
     const first = await capture(); const created = await createCompactedFork({ capture: first, summary: await generateCompactionSummary(first, { modelMetadata }) });
     for (let index = 0; index < 4; index += 1) await getDb().messages.put({ id: `new${index}`, thread_id: created.thread.id, role: index % 2 ? 'assistant' : 'user', index: index + 1,

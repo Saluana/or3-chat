@@ -1,4 +1,4 @@
-import { CompactionError, assertCompactionCaptureCurrent, validateCompactionSummary, type CompactionCapture, type ValidatedCompactionSummary } from '~/db/compaction';
+import { CompactionError, assertCompactionCaptureCurrent, subscribeCompactionCancellation, validateCompactionSummary, type CompactionCapture, type ValidatedCompactionSummary } from '~/db/compaction';
 import { getTextFromContent } from '~/utils/chat/messages';
 import { openRouterStream } from '~/utils/chat/openrouterStream';
 import { countTokensApprox } from '~/utils/chat/tokens';
@@ -97,9 +97,13 @@ export async function generateCompactionSummary(capture: CompactionCapture, opti
         if (!prepared.admission.ok) throw new CompactionError('summary_input_too_large',
             'Summary input does not fit this model and active maximum. Choose an earlier anchor, raise the user maximum, or use the explicit lossy-send alternative.');
         options.onPhase?.(attempt === 0 ? 'generating' : 'correcting'); ensureCurrent();
-        const controller = new AbortController(); const abort = () => controller.abort(); options.signal?.addEventListener('abort', abort, { once: true });
+        const controller = new AbortController(); const abort = () => controller.abort();
+        const unsubscribeCapture = subscribeCompactionCancellation(capture, abort);
+        options.signal?.addEventListener('abort', abort, { once: true });
+        if (options.signal?.aborted) abort();
         let response = ''; let responseBytes = 0;
         try {
+            ensureCurrent();
             for await (const event of openRouterStream({ apiKey: options.apiKey, model: capture.model, orMessages: prepared.messages,
                 modalities: ['text'], signal: controller.signal, maxCompletionTokens: outputMaximum })) {
                 ensureCurrent();
@@ -115,7 +119,7 @@ export async function generateCompactionSummary(capture: CompactionCapture, opti
                     throw new CompactionError('invalid_summary', 'The summary response was truncated by the provider.');
                 }
             }
-        } finally { controller.abort(); options.signal?.removeEventListener('abort', abort); }
+        } finally { controller.abort(); unsubscribeCapture(); options.signal?.removeEventListener('abort', abort); }
         ensureCurrent();
         try {
             const summary = await validateCompactionSummary(capture, response, { targetTokens, countText: countTokensApprox });

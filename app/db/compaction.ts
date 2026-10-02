@@ -147,6 +147,16 @@ export function assertCompactionCaptureCurrent(capture: CompactionCapture): void
     requireCurrent(state);
 }
 
+/** Bind request lifetime to the captured operation without exposing its private state. */
+export function subscribeCompactionCancellation(capture: CompactionCapture, onAbort: () => void): () => void {
+    const state = captures.get(capture);
+    if (!state) throw new CompactionError('invalid_capture', 'Use a valid captured compaction operation.');
+    const signal = state.options.signal;
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) onAbort();
+    return () => signal?.removeEventListener('abort', onAbort);
+}
+
 /** Captures IDs and clocks; inference happens after the read transaction has ended. */
 export async function captureCompaction(options: CaptureOptions): Promise<CompactionCapture> {
     const db = options.db ?? getDb(); const generation = getWorkspaceGeneration();
