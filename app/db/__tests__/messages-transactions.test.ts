@@ -25,6 +25,7 @@ vi.mock('../../core/hooks/useHooks', () => ({
 }));
 
 import { Or3DB } from '../client';
+import { makeAssistantPersister, startForegroundGenerationHeartbeat } from '~/utils/chat/useAi-internal/persistence';
 import {
     appendMessage,
     copyMessage,
@@ -335,6 +336,59 @@ describe('message transaction and ordering contracts', () => {
                 tool_calls: [],
             },
         });
+    });
+
+    it.each(['new-owner', 'cancel'] as const)('fences an in-flight foreground heartbeat after %s', async (change) => {
+        const db = testState.db!;
+        const initial = makeMessage('assistant', 'thread', 1, {
+            role: 'assistant', pending: true,
+            data: { content: 'partial', generation_lease_id: 'owner', generation_heartbeat_at: Date.now() },
+        });
+        await db.messages.put(initial);
+        const controller = new AbortController();
+        let release!: () => void;
+        testState.doAction.mockImplementation((name: string) => name === 'db.messages.upsert:action:before'
+            ? new Promise<void>((resolve) => { release = resolve; }) : Promise.resolve());
+        const stop = startForegroundGenerationHeartbeat(db, initial.id, 'owner', controller.signal);
+        try {
+            await vi.advanceTimersByTimeAsync(10_000);
+            await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+            const latest = change === 'new-owner'
+                ? { ...initial, clock: 2, data: { content: 'replacement', generation_lease_id: 'new-owner', generation_heartbeat_at: Date.now() } }
+                : initial;
+            if (change === 'new-owner') await db.messages.put(latest);
+            else controller.abort();
+            release();
+            await vi.advanceTimersByTimeAsync(1);
+            // Allow the prepared write to enter its real Dexie transaction.
+            await db.transaction('rw', db.messages, async () => {});
+            expect(await db.messages.get(initial.id)).toEqual(latest);
+        } finally {
+            stop();
+        }
+    });
+
+    it.each(['new-owner', 'finalized'] as const)('preserves %s against a prepared foreground progress write', async (change) => {
+        const db = testState.db!;
+        const initial = makeMessage('assistant', 'thread', 1, {
+            role: 'assistant', pending: true,
+            data: { content: 'partial', generation_lease_id: 'owner' },
+        });
+        await db.messages.put(initial);
+        let release!: () => void;
+        testState.doAction.mockImplementation((name: string) => name === 'db.messages.upsert:action:before'
+            ? new Promise<void>((resolve) => { release = resolve; }) : Promise.resolve());
+        const persist = makeAssistantPersister(db, initial, [], 'owner');
+        const write = persist({ content: 'old progress', reasoning: 'old reasoning' });
+        await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+        const latest = {
+            ...initial, clock: 2, pending: change === 'new-owner',
+            data: { content: 'accepted answer', generation_lease_id: change === 'new-owner' ? 'new-owner' : 'owner' },
+        };
+        await db.messages.put(latest);
+        release();
+        await write;
+        expect(await db.messages.get(initial.id)).toEqual(latest);
     });
 
     it('rolls back both message and thread writes when an in-transaction hook fails', async () => {

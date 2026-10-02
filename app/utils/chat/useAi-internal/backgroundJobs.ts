@@ -620,11 +620,9 @@ async function handleBackgroundStatus(
         nextStatus = await ensureFullBackgroundStatus(tracker, nextStatus);
     }
     if (
-        nextStatus.workflow_state &&
-        typeof nextStatus.workflow_state === 'object'
+        (!nextStatus.workflow_state || typeof nextStatus.workflow_state !== 'object') &&
+        nextStatus.status !== 'streaming' && tracker.lastWorkflowState
     ) {
-        tracker.lastWorkflowState = nextStatus.workflow_state;
-    } else if (nextStatus.status !== 'streaming' && tracker.lastWorkflowState) {
         nextStatus = {
             ...nextStatus,
             workflow_state: normalizeTerminalWorkflowState(
@@ -664,9 +662,6 @@ async function handleBackgroundStatus(
             streaming: tracker.streaming,
         });
     }
-    tracker.lastContent = safeContent;
-    tracker.lastReasoning = safeReasoning;
-
     const persistence = await persistBackgroundJobUpdate(
         tracker,
         nextStatus,
@@ -682,6 +677,18 @@ async function handleBackgroundStatus(
         });
         return { persisted: false as const, missing: false as const };
     });
+    if ('staleAttempt' in persistence && persistence.staleAttempt) return true;
+    if ('superseded' in persistence && persistence.superseded) {
+        await interruptBackgroundTracking(tracker, 'Background response was superseded', {
+            interrupt: false, kind: 'protocol',
+        });
+        return false;
+    }
+    tracker.lastContent = safeContent;
+    tracker.lastReasoning = safeReasoning;
+    if (nextStatus.workflow_state && typeof nextStatus.workflow_state === 'object') {
+        tracker.lastWorkflowState = nextStatus.workflow_state;
+    }
     if (!persistence.persisted) {
         // Local projection failures must never cancel a valid server job. The
         // next status will retry persistence while subscribers keep receiving
@@ -725,6 +732,8 @@ async function handleBackgroundStatus(
         tracker.terminalStatus = nextStatus;
         tracker.terminalContent = safeContent;
         tracker.terminalReplace = replace;
+        tracker.terminalReasoning = safeReasoning;
+        tracker.terminalReasoningReplace = replaceReasoning;
         if (!tracker.terminalNotified) {
             tracker.terminalNotified = true;
             notifyBackgroundSubscribers(
@@ -823,7 +832,9 @@ async function retryTerminalPersistence(
         tracker,
         status,
         content,
-        tracker.terminalReplace === true
+        tracker.terminalReplace === true,
+        tracker.terminalReasoning,
+        tracker.terminalReasoningReplace === true
     ).catch((error) => {
         bgStreamWarn('terminal-persist-retry-error', {
             jobId: tracker.jobId,

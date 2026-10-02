@@ -86,6 +86,8 @@ export type RetryMessageContext = {
     sendMessage: (text: string, params: SendMessageParams) => Promise<SendResult>;
     defaultModelId: string;
     suppressNextTailFlush: (assistantId: string) => void;
+    /** Navigation ownership captured before asynchronous retry preparation. */
+    ownsView?: () => boolean;
 };
 
 /**
@@ -212,6 +214,9 @@ export async function retryMessageImpl(
     try {
         const db = getDb();
         const threadId = ctx.threadIdRef.value;
+        const ownsRetry = () => !ctx.loading.value &&
+            ctx.threadIdRef.value === threadId && getDb() === db &&
+            (ctx.ownsView?.() ?? true);
         const target = await db.messages.get(messageId);
         if (!target || target.thread_id !== threadId) return undefined;
 
@@ -250,7 +255,7 @@ export async function retryMessageImpl(
                             (positionById.get(message.id) ?? -1) < targetPos
                     );
         }
-        if (!userMsg || ctx.threadIdRef.value !== threadId) return undefined;
+        if (!userMsg || !ownsRetry()) return undefined;
 
         const userPos = positionById.get(userMsg.id) ?? -1;
         const userTurnId = turnIdOf(userMsg as StoredMessage);
@@ -286,6 +291,10 @@ export async function retryMessageImpl(
             originalAssistantId: assistant?.id,
             triggeredBy: target.role as 'user' | 'assistant',
         });
+
+        // Hooks may await while navigation or another send takes ownership.
+        // Never bind the old turn's prompt/history into that newer view.
+        if (!ownsRetry()) return undefined;
 
         // Store original text and hashes before hiding the selected turn.
         // extractUserText handles both string content and ContentPart[] arrays,
@@ -358,7 +367,7 @@ export async function retryMessageImpl(
         }
 
         const restoreOriginalTurn = () => {
-            if (ctx.threadIdRef.value !== threadId) return;
+            if (!ownsRetry()) return;
             ctx.rawMessages.value = originalHistory;
             ctx.messages.value = originalUi;
             if (previousTail && selectedIds.has(previousTail.id)) {

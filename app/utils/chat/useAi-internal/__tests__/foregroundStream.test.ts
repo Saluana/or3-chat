@@ -43,6 +43,69 @@ vi.mock('~/utils/chat/uiMessages', () => ({
 }));
 
 describe('runForegroundStreamLoop', () => {
+    it.each(['text', 'reasoning'] as const)('durably flushes quiet %s and serializes progress arriving during a slow write', async (type) => {
+        vi.useFakeTimers();
+        const nextChunk = deferred<void>();
+        const finish = deferred<void>();
+        const firstWrite = deferred<void>();
+        const consumed = deferred<void>();
+        let run: Promise<void> | undefined;
+        try {
+            openRouterStreamMock.mockImplementation(async function* () {
+                yield { type, text: 'early' };
+                consumed.resolve();
+                await nextChunk.promise;
+                yield { type, text: ' later' };
+                await finish.promise;
+            });
+            const { runForegroundStreamLoop } = await import('~/utils/chat/useAi-internal/foregroundStream');
+            let durable: Record<string, unknown> | undefined;
+            const persistAssistant = vi.fn(async (patch: Record<string, unknown>) => {
+                if (persistAssistant.mock.calls.length === 1) await firstWrite.promise;
+                durable = patch;
+                return null;
+            });
+            const ctx = {
+                apiKey: 'key', modelId: 'model',
+                orMessages: [{ role: 'user' as const, content: [{ type: 'text' as const, text: 'go' }] }],
+                modalities: ['text'], abortSignal: new AbortController().signal,
+                assistantId: 'assistant-quiet', streamId: 'stream-quiet', threadId: 'thread-1',
+                streamAcc: { append: vi.fn() }, hooks: { doAction: vi.fn(async () => {}) },
+                toolRegistry: { executeTool: vi.fn() }, persistAssistant,
+                assistantFileHashes: [], activeToolCalls: new Map(),
+                tailAssistant: { value: null as any }, rawMessages: { value: [] as any[] },
+            };
+            run = runForegroundStreamLoop(ctx);
+            await consumed.promise;
+            await vi.advanceTimersByTimeAsync(500);
+            expect(persistAssistant).toHaveBeenCalledTimes(1);
+            expect(persistAssistant.mock.calls[0]?.[0]).toMatchObject({
+                [type === 'text' ? 'content' : 'reasoning']: 'early',
+            });
+
+            nextChunk.resolve();
+            await vi.waitFor(() => expect(ctx.streamAcc.append).toHaveBeenCalledTimes(2));
+            await vi.advanceTimersByTimeAsync(500);
+            expect(persistAssistant).toHaveBeenCalledTimes(1);
+            firstWrite.resolve();
+            await vi.advanceTimersByTimeAsync(500);
+            expect(durable).toMatchObject({
+                [type === 'text' ? 'content' : 'reasoning']: 'early later',
+            });
+            finish.resolve();
+            await run;
+            const writes = persistAssistant.mock.calls.length;
+            await vi.advanceTimersByTimeAsync(5_000);
+            expect(persistAssistant).toHaveBeenCalledTimes(writes);
+        } finally {
+            nextChunk.resolve();
+            finish.resolve();
+            firstWrite.resolve();
+            await run;
+            vi.useRealTimers();
+        }
+    });
+
     it('coalesces 500 text events and terminally persists all content', async () => {
         openRouterStreamMock.mockImplementation(async function* () {
             for (let index = 0; index < 500; index += 1) yield { type: 'text', text: 'x' };

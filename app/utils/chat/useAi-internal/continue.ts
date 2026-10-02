@@ -49,7 +49,7 @@ import { dataUrlToBlob, fetchImageBlob } from '~/utils/chat/files';
 import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
 import { asAppError, reportError, err } from '~/utils/errors';
 import type { StoredMessage, OpenRouterMessage } from './types';
-import { makeAssistantPersister, updateMessageRecord } from './persistence';
+import { makeAssistantPersister, updateMessageRecord, startForegroundGenerationHeartbeat } from './persistence';
 import { createForegroundGenerationLease } from '~/utils/chat/generation-lease';
 import {
     buildOpenRouterMessagesForSend,
@@ -231,6 +231,7 @@ export async function continueMessageImpl(
     let continuationAbortController: AbortController | null = null;
     let innerStreamLifecycleStarted = false;
     let backgroundAdmissionStarted = false;
+    let stopHeartbeat: (() => void) | undefined;
 
     try {
         const target = (await originDb.messages.get(messageId)) as StoredMessage | undefined;
@@ -625,6 +626,9 @@ export async function continueMessageImpl(
             return;
         }
 
+        stopHeartbeat = startForegroundGenerationHeartbeat(
+            originDb, messageId, newStreamId, ctx.abortController.value.signal
+        );
         const stream = openRouterStreamWithRetry({
             apiKey: ctx.effectiveApiKey.value,
             model: modelId,
@@ -640,17 +644,19 @@ export async function continueMessageImpl(
             CONTINUATION_PREFIX
         );
 
-        const writeCoalescer = createStreamWriteCoalescer();
+        const writeCoalescer = createStreamWriteCoalescer({
+            onIdleFlush: () => flushProgress(),
+        });
 
         const flushProgress = async () => {
-            if (!writeCoalescer.hasDirty()) return;
-            await persistAssistant({
-                content: current.text,
-                reasoning: current.reasoning_text ?? null,
-                toolCalls: current.toolCalls ?? undefined,
+            await writeCoalescer.flush(async () => {
+                await persistAssistant({
+                    content: current.text,
+                    reasoning: current.reasoning_text ?? null,
+                    toolCalls: current.toolCalls ?? undefined,
+                });
+                if (assistantFileHashes.length) current.file_hashes = assistantFileHashes;
             });
-            if (assistantFileHashes.length) current.file_hashes = assistantFileHashes;
-            writeCoalescer.flushed();
         };
 
         const appendTextDelta = (delta: string) => {
@@ -710,6 +716,7 @@ export async function continueMessageImpl(
                 if (writeCoalescer.shouldFlush()) await flushProgress();
             }
 
+            stopHeartbeat();
             appendTextDelta(continuationNormalizer.finish());
             await flushProgress();
 
@@ -731,6 +738,8 @@ export async function continueMessageImpl(
                     }
                 );
         } catch (streamError) {
+            stopHeartbeat();
+            await writeCoalescer.dispose();
             const ownershipLost = streamError instanceof ContinuationOwnershipLost;
             const e = asAppError(streamError, { code: 'ERR_STREAM_FAILURE' });
             const stopped =
@@ -759,6 +768,7 @@ export async function continueMessageImpl(
                     toast: true,
                 });
         } finally {
+            await writeCoalescer.dispose();
             if (ctx.abortController.value === continuationAbortController) {
                 ctx.abortController.value = null;
             }
@@ -809,6 +819,7 @@ export async function continueMessageImpl(
             });
     } finally {
         // Covers setup failures that happen before the inner stream finally.
+        stopHeartbeat?.();
 
         if (ctx.abortController.value === continuationAbortController) {
             ctx.abortController.value = null;

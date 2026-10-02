@@ -416,6 +416,48 @@ describe('backgroundJobs reattach + notifications', () => {
         backgroundJobTrackers.clear();
     });
 
+    it('does not publish an old terminal snapshot after another tab persisted a newer attempt', async () => {
+        let streamParams: { onStatus: (status: any) => void } | undefined;
+        subscribeBackgroundJobStreamMock.mockImplementation((params) => {
+            streamParams = params;
+            return () => {};
+        });
+        dbMock.messages.get.mockResolvedValue({
+            id: 'msg-1', role: 'assistant', thread_id: 'thread-1', pending: true,
+            data: { content: 'new partial', background_job_id: 'job-1', background_job_attempt: 2 },
+        });
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({
+            jobId: 'job-1', userId: 'user-1', threadId: 'thread-1', messageId: 'msg-1',
+            initialContent: 'old partial', initialAttempt: 1, useSse: true,
+        });
+        const onUpdate = vi.fn();
+        const onComplete = vi.fn();
+        mod.subscribeBackgroundJob(tracker, { onUpdate, onComplete });
+        streamParams!.onStatus(makeStatus('complete', {
+            content: 'old terminal answer', content_length: 19, attempt: 1,
+            workflow_state: {
+                type: 'workflow-execution', workflowId: 'old-workflow', workflowName: 'Old workflow',
+                prompt: 'old prompt', executionState: 'completed', nodeStates: {}, executionOrder: [],
+                currentNodeId: null, finalOutput: 'old output', version: 1,
+            },
+        }));
+        await tracker.streamChain;
+        expect(onUpdate).not.toHaveBeenCalled();
+        expect(onComplete).not.toHaveBeenCalled();
+        expect(tracker.active).toBe(true);
+
+        streamParams!.onStatus(makeStatus('complete', {
+            content: 'new terminal answer', content_length: 19, content_reset: true, attempt: 2,
+        }));
+        await tracker.streamChain;
+        expect(onComplete).toHaveBeenCalledTimes(1);
+        expect(onComplete.mock.lastCall?.[0]).toMatchObject({ content: 'new terminal answer' });
+        expect(onComplete.mock.lastCall?.[0].status.workflow_state).toBeUndefined();
+        expect(mod.backgroundJobTrackers.has('job-1')).toBe(false);
+        mod.stopBackgroundJobTracking(tracker);
+    });
+
     it('clears stale persisted error fields when a job resumes streaming', async () => {
         let streamParams: {
             onStatus: (status: ReturnType<typeof makeStatus>) => void;
@@ -1068,7 +1110,7 @@ describe('backgroundJobs reattach + notifications', () => {
         expect(dbMock.messages.put).not.toHaveBeenCalled();
     });
 
-    it('retains a completed tracker and retries when the terminal write fails', async () => {
+    it.each(['final reasoning', ''])('retains the full terminal snapshot including reasoning %j when the final write fails', async (reasoning) => {
         vi.useFakeTimers();
         try {
             const {
@@ -1076,7 +1118,12 @@ describe('backgroundJobs reattach + notifications', () => {
                 primeBackgroundJobUpdate,
                 backgroundJobTrackers,
             } = await import('~/utils/chat/useAi-internal/backgroundJobs');
-            pollJobStatusMock.mockResolvedValue(makeStatus('complete'));
+            pollJobStatusMock.mockResolvedValue(makeStatus('complete', {
+                content: 'final answer',
+                content_length: 12,
+                reasoning_text: reasoning,
+                reasoning_reset: true,
+            }));
             subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
             dbMock.messages.put.mockRejectedValueOnce(
                 new Error('indexeddb unavailable')
@@ -1088,6 +1135,7 @@ describe('backgroundJobs reattach + notifications', () => {
                 threadId: 'thread-1',
                 messageId: 'msg-1',
                 initialContent: 'partial',
+                initialReasoning: 'old reasoning',
                 useSse: true,
             });
 
@@ -1105,6 +1153,10 @@ describe('backgroundJobs reattach + notifications', () => {
 
             expect(backgroundJobTrackers.has('job-1')).toBe(false);
             expect(dbMock.messages.put).toHaveBeenCalledTimes(2);
+            expect(dbMock.messages.put.mock.lastCall?.[0]).toMatchObject({
+                pending: false,
+                data: { content: 'final answer', reasoning_text: reasoning },
+            });
         } finally {
             vi.useRealTimers();
         }

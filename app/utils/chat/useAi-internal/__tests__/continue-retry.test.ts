@@ -122,7 +122,8 @@ vi.mock('../messageBuild', () => ({
     enforceOpenRouterMessageTokenBudget: vi.fn(async (messages) => messages),
 }));
 
-vi.mock('../persistence', () => ({
+vi.mock('../persistence', async (importOriginal) => ({
+    startForegroundGenerationHeartbeat: (await importOriginal<typeof import('../persistence')>()).startForegroundGenerationHeartbeat,
     makeAssistantPersister: (...args: unknown[]) =>
         makeAssistantPersisterSpy(...args),
     updateMessageRecord: (...args: unknown[]) => updateMessageRecordSpy(...args),
@@ -932,6 +933,41 @@ describe('continue/retry regressions', () => {
         expect(result).toEqual(accepted);
         expect(updateMessageRecordSpy.mock.calls.map((call) => call[1]).sort()).toEqual(['a1', 'u1']);
         expect(reportErrorSpy).toHaveBeenCalledWith(expect.any(Error), expect.anything());
+    });
+
+    it.each(['thread-switch', 'round-trip-switch', 'another-send'])('abandons a retry when %s supersedes its pending preparation hook', async (change) => {
+        const rows = [
+            { id: 'u1', role: 'user', thread_id: 't1', index: 1, data: { content: 'old prompt' }, deleted: false },
+            { id: 'a1', role: 'assistant', thread_id: 't1', index: 2, data: { content: 'old answer' }, deleted: false },
+        ];
+        dbState.messagesGet.mockResolvedValue(rows[0]);
+        messagesByThreadSpy.mockResolvedValue(rows);
+        parseFileHashesSpy.mockReturnValue([]);
+        let release!: () => void;
+        const hookPending = new Promise<void>((resolve) => { release = resolve; });
+        const hook = vi.fn(() => hookPending);
+        const rawMessages = ref<ChatMessage[]>([{ id: 'current', role: 'user', content: 'current chat' }]);
+        const messages = ref([{ id: 'current', role: 'user', text: 'current chat' }]) as any;
+        const threadIdRef = ref('t1');
+        const loading = ref(false);
+        let navigationRevision = 0;
+        const sendMessage = vi.fn(async () => ({ status: 'rejected' as const, requestId: 'r', reason: 'busy' as const }));
+        const retry = retryMessageImpl({
+            loading, threadIdRef, tailAssistant: ref(null), rawMessages, messages,
+            hooks: { doAction: hook }, sendMessage, defaultModelId: 'model', suppressNextTailFlush: vi.fn(),
+            ownsView: () => navigationRevision === 0,
+        }, 'u1');
+        await vi.waitFor(() => expect(hook).toHaveBeenCalled());
+        if (change === 'thread-switch') threadIdRef.value = 't2';
+        else if (change === 'round-trip-switch') navigationRevision += 2;
+        else loading.value = true;
+        release();
+        await retry;
+
+        expect(sendMessage).not.toHaveBeenCalled();
+        expect(rawMessages.value).toEqual([{ id: 'current', role: 'user', content: 'current chat' }]);
+        expect(messages.value[0]).toMatchObject({ id: 'current', text: 'current chat' });
+        expect(updateMessageRecordSpy).not.toHaveBeenCalled();
     });
 
     it('keeps later tool rows in context and restores the selected pair if resend is rejected', async () => {
