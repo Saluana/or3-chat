@@ -317,8 +317,11 @@ the next model request, so reload cannot repeat an already completed side effect
 - Status and stream require current read membership in the originating workspace;
   Stop and client-tool claim/result require current write membership. Switching the
   active workspace does not remove access to a job's original workspace. Live SSE
-  output is reauthorized before delivery, and a stalled authorization backlog closes
-  the connection at the existing transport capacity so clients can reconnect.
+  updates are frozen into ordered batches and freshly authorized before delivery.
+  Adjacent compatible text/reasoning deltas coalesce while a store lookup is pending;
+  reset, attempt, tool/workflow, and terminal transitions retain their order. A
+  stalled authorization backlog closes the connection at the existing transport
+  capacity so clients can reconnect from durable content.
 - Jobs without a recorded workspace scope fail closed. Older workflow jobs must be
   retried through the scoped host bridge before they can be observed or stopped.
 - Chat background start requires `workspace.write`; viewers cannot launch paid

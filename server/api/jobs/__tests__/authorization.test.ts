@@ -254,9 +254,14 @@ describe('background job workspace authorization at the HTTP boundary', () => {
             await reader.read();
             emitJobDelta(jobId, ' first', { contentLength: 31, chunksReceived: 1 });
             emitJobDelta(jobId, ' second', { contentLength: 38, chunksReceived: 2 });
-            const first = new TextDecoder().decode((await reader.read()).value);
-            const second = new TextDecoder().decode((await reader.read()).value);
-            expect(first).toContain(' first'); expect(second).toContain(' second');
+            let delivered = '';
+            while (!delivered.includes(' second')) {
+                const next = await reader.read();
+                expect(next.done).toBe(false);
+                delivered += new TextDecoder().decode(next.value);
+            }
+            expect(delivered.indexOf(' first')).toBeGreaterThanOrEqual(0);
+            expect(delivered.indexOf(' first')).toBeLessThan(delivered.indexOf(' second'));
         } finally { await reader.cancel(); }
     });
 
