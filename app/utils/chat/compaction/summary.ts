@@ -107,7 +107,7 @@ export async function generateCompactionSummary(capture: CompactionCapture, opti
         const unsubscribeCapture = subscribeCompactionCancellation(capture, abort);
         options.signal?.addEventListener('abort', abort, { once: true });
         if (options.signal?.aborted) abort();
-        let response = ''; let responseBytes = 0;
+        let response = ''; let responseBytes = 0; let responseFailure: CompactionError | undefined; let refused = false;
         try {
             ensureCurrent();
             for await (const event of openRouterStream({ apiKey: options.apiKey, model: capture.model, orMessages: prepared.messages,
@@ -122,14 +122,21 @@ export async function generateCompactionSummary(capture: CompactionCapture, opti
                 } else if (event.type === 'tool_call' || event.type === 'image') {
                     throw new CompactionError('invalid_summary', 'The auxiliary summary must return text JSON without tools or media.');
                 } else if (event.type === 'done' && event.refused) {
+                    refused = true;
                     throw new CompactionError('invalid_summary', 'The captured model refused the auxiliary summary request.');
                 } else if (event.type === 'done' && event.truncated) {
                     throw new CompactionError('invalid_summary', 'The summary response was truncated by the provider.');
                 }
             }
+        } catch (error) {
+            // Artifact failures share the one corrective attempt. Transport,
+            // authentication and cancellation failures never repeat inference.
+            if (!refused && error instanceof CompactionError && ['invalid_summary', 'summary_too_large'].includes(error.code)) responseFailure = error;
+            else throw error;
         } finally { controller.abort(); unsubscribeCapture(); options.signal?.removeEventListener('abort', abort); }
         ensureCurrent();
         try {
+            if (responseFailure) throw responseFailure;
             const summary = await validateCompactionSummary(capture, response, { targetTokens, countText: countTokensApprox });
             ensureCurrent(); return summary;
         }

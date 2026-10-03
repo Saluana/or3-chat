@@ -1,10 +1,9 @@
 import type { ToolExecutionContext } from '~/utils/chat/types';
 import { historyToolDefinitions } from '~~/shared/chat/history-tools';
 import { createHistoryRetrievalService, type GetHistoryMessageArgs, type SearchParentArgs } from '~~/shared/chat/history-retrieval';
-import { getSyncGatewayAdapter } from '../../sync/gateway/registry';
-import { getAuthWorkspaceStore } from '../../auth/store/registry';
-import { requireCan } from '../../auth/can';
+import { canonicalHistoryContext } from './canonical-history-context';
 import { getJobProvider } from '../background-jobs/store';
+import { getChatJobExecution } from '../background-jobs/types';
 import { registerServerTool } from './tool-registry';
 
 /** Job storage identifies execution; only the selected sync adapter supplies history. */
@@ -13,34 +12,12 @@ async function executionContext(execution: ToolExecutionContext) {
     if (!subject || !workspaceId || !threadId || !messageId || !requestId) throw new Error('Trusted history execution context is required.');
     const jobs = await getJobProvider();
     const job = await jobs.getJob(requestId, subject);
-    const checkpoint = job?.execution;
+    const checkpoint = job && getChatJobExecution(job);
     if (!job || job.kind === 'workflow' || job.userId !== subject || job.threadId !== threadId || job.messageId !== messageId
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Verify durable checkpoint version at the runtime authorization boundary.
         || !checkpoint || !('version' in checkpoint) || checkpoint.version !== 1 || checkpoint.workspaceId !== workspaceId
         || !job.syncProviderId) throw new Error('The original history execution is unavailable.');
-    const adapter = getSyncGatewayAdapter(job.syncProviderId);
-    const store = getAuthWorkspaceStore(job.syncProviderId);
-    if (adapter?.capabilities?.canonicalChatHistory !== 'v1' || !adapter.readChatHistory || !store) throw new Error('Canonical history reader is unavailable.');
-    const authorize = async () => {
-        abortSignal.throwIfAborted();
-        const membership = (await store.listUserWorkspaces(subject)).find((row) => row.id === workspaceId);
-        if (!membership) throw new Error('Workspace access is unavailable.');
-        requireCan({ authenticated: true, user: { id: subject }, workspace: { id: workspaceId, name: membership.name }, role: membership.role },
-            'workspace.read', { kind: 'workspace', id: workspaceId });
-        abortSignal.throwIfAborted();
-    };
-    const actor = { userId: subject, workspaceId };
-    return { subject, workspaceId, threadId, signal: abortSignal, authorize,
-        read: (query: Parameters<NonNullable<typeof adapter.readChatHistory>>[1]) => adapter.readChatHistory!(actor, query, abortSignal),
-        revision: async (threadIds?: readonly string[]) => {
-            await authorize();
-            const revisions: Array<[string, string]> = [];
-            for (const id of threadIds ?? [threadId]) {
-                const result = await adapter.readChatHistory!(actor, { kind: 'thread', thread_id: id }, abortSignal);
-                if (result.status !== 'ok' || result.revision === undefined) throw new Error('Canonical revision is unavailable.');
-                revisions.push([id, result.revision]);
-            }
-            await authorize(); return JSON.stringify(revisions);
-        } };
+    return canonicalHistoryContext({ subject, workspaceId, threadId, syncProviderId: job.syncProviderId, signal: abortSignal });
 }
 
 export function registerServerHistoryTools(): () => void {

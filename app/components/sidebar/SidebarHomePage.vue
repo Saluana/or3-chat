@@ -11,6 +11,7 @@
                 mutation-mode="arbitrary"
                 :maintain-bottom="false"
                 class="flex-1 min-h-0 sidebar-scroll"
+                @reach-bottom="loadMore"
             >
                 <template #default="{ item }">
                     <!-- Custom Top Sections -->
@@ -97,13 +98,13 @@
                     />
 
                     <!-- Unified Item -->
-                    <SidebarUnifiedItem
+                    <SidebarFamilyItem
                         v-else-if="item.type === 'time-group-item'"
                         :item="item.item"
                         :active="allActiveIds.includes(item.item.id)"
                         :time-display="
                             formatTimeDisplay(
-                                item.item.updatedAt,
+                                item.item.lastMessageAt ?? item.item.updatedAt,
                                 item.groupKey
                             )
                         "
@@ -115,6 +116,10 @@
                         @rename="() => onItemRename(item.item)"
                         @delete="() => onItemDelete(item.item)"
                         @add-to-project="() => onItemAddToProject(item.item)"
+                        @toggle-family="toggleFamily"
+                        @load-more-members="loadMoreMembers"
+                        @latest-compaction="goToLatestCompaction"
+                        @navigate="emit('select-thread', $event)"
                     />
 
                     <!-- Empty State -->
@@ -246,7 +251,7 @@ import SidebarProjectsSection from './SidebarProjectsSection.vue';
 import SidebarPageLink from './SidebarPageLink.vue';
 import SidebarEmptyState from './SidebarEmptyState.vue';
 import SidebarGroupHeader from './SidebarGroupHeader.vue';
-import SidebarUnifiedItem from './SidebarUnifiedItem.vue';
+import SidebarFamilyItem from './SidebarFamilyItem.vue';
 import { useIcon } from '~/composables/useIcon';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import type { SidebarFooterActionEntry } from '~/composables/sidebar/useSidebarSections';
@@ -376,10 +381,16 @@ const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 
 // Paginated items
 const sidebarQuery = computed(() => props.sidebarQuery.trim());
-const { items, loading } = usePaginatedSidebarItems({
+const { items, loading, loadMore, toggleFamily, loadMoreMembers, latestCompaction } = usePaginatedSidebarItems({
     query: sidebarQuery,
     type: documentsEnabled.value ? 'all' : 'thread',
 });
+const familyToast = useToast();
+async function goToLatestCompaction(rootId: string) {
+    const id = await latestCompaction(rootId);
+    if (id) emit('select-thread', id);
+    else familyToast.add({ title: 'No available compaction', description: 'This family has no available compacted conversation in this view.', color: 'neutral' });
+}
 
 const iconChats = useIcon('sidebar.page.messages');
 const iconDocs = useIcon('sidebar.note');
@@ -395,7 +406,7 @@ const groupedItems = computed(() => {
     const groups = new Map<TimeGroup, UnifiedSidebarItem[]>();
 
     for (const item of items.value) {
-        const groupKey = computeTimeGroup(item.updatedAt);
+        const groupKey = computeTimeGroup(item.family?.groupUpdatedAt ?? item.updatedAt);
         if (!groups.has(groupKey)) {
             groups.set(groupKey, []);
         }
@@ -516,7 +527,7 @@ const combinedItems = computed(() => {
         if (!collapsedGroups.has(groupKey)) {
             for (const item of groupItems) {
                 result.push({
-                    key: `time-group-item-${item.id}`,
+                    key: item.family?.key ?? `time-group-item-${item.id}`,
                     type: 'time-group-item',
                     item,
                     groupKey,

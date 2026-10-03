@@ -23,12 +23,12 @@
                     />
 
                     <!-- Unified Item -->
-                    <SidebarUnifiedItem
+                    <SidebarFamilyItem
                         v-else-if="item.type === 'time-group-item'"
                         :item="item.item"
                         :active="activeIds.includes(item.item.id)"
                         :time-display="
-                            formatTimeDisplay(item.item.updatedAt, item.groupKey)
+                            formatTimeDisplay(item.item.lastMessageAt ?? item.item.updatedAt, item.groupKey)
                         "
                         :class="[
                             'mb-0.5',
@@ -38,6 +38,10 @@
                         @rename="() => emit('rename', item.item)"
                         @delete="() => emit('delete', item.item)"
                         @add-to-project="() => emit('add-to-project', item.item)"
+                        @toggle-family="toggleFamily"
+                        @load-more-members="loadMoreMembers"
+                        @latest-compaction="goToLatestCompaction"
+                        @navigate="navigateThread"
                     />
                 </template>
             </Or3Scroll>
@@ -86,12 +90,14 @@ import { computeTimeGroup, getTimeGroupLabel, formatTimeDisplay } from '~/utils/
 import type { TimeGroup } from '~/utils/sidebar/sidebarTimeUtils';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import SidebarGroupHeader from './SidebarGroupHeader.vue';
-import SidebarUnifiedItem from './SidebarUnifiedItem.vue';
+import SidebarFamilyItem from './SidebarFamilyItem.vue';
 import SidebarEmptyState from './SidebarEmptyState.vue';
 
 const props = defineProps<{
     activeIds: string[];
     type?: 'all' | 'thread' | 'document';
+    projectId?: string;
+    pinned?: boolean;
     emptyMessage?: string;
     emptyDescription?: string;
     emptyIcon?: string;
@@ -109,10 +115,21 @@ const emit = defineEmits<{
 const { getSidebarQuery } = useSidebarEnvironment();
 const query = getSidebarQuery();
 
-const { items, hasMore, loading, loadMore, reset } = usePaginatedSidebarItems({
+const { items, hasMore, loading, loadMore, reset, toggleFamily, loadMoreMembers, latestCompaction } = usePaginatedSidebarItems({
     type: props.type || 'all',
-    query
+    query,
+    projectId: computed(() => props.projectId),
+    pinned: computed(() => props.pinned),
 });
+function navigateThread(id: string) {
+    emit('select', { id, type: 'thread', title: '', updatedAt: 0 });
+}
+const familyToast = useToast();
+async function goToLatestCompaction(rootId: string) {
+    const id = await latestCompaction(rootId);
+    if (id) navigateThread(id);
+    else familyToast.add({ title: 'No available compaction', description: 'This family has no available compacted conversation in this view.', color: 'neutral' });
+}
 
 const resolvedEmptyDescription = computed(() => {
     if (props.emptyDescription) return props.emptyDescription;
@@ -161,7 +178,7 @@ const groupedItemsList = computed(() => {
     const groups = new Map<TimeGroup, UnifiedSidebarItem[]>();
 
     for (const item of items.value) {
-        const group = computeTimeGroup(item.updatedAt);
+        const group = computeTimeGroup(item.family?.groupUpdatedAt ?? item.updatedAt);
         if (!groups.has(group)) {
             groups.set(group, []);
         }
@@ -179,7 +196,7 @@ const groupedItemsList = computed(() => {
         if (!collapsedGroups.value.has(groupKey)) {
             for (const item of groupItems) {
                 result.push({
-                    key: `time-group-item-${item.id}`,
+                    key: item.family?.key ?? `time-group-item-${item.id}`,
                     type: 'time-group-item' as const,
                     item,
                     groupKey,

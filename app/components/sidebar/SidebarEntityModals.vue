@@ -29,7 +29,7 @@
     >
         <template #default>
             <p class="text-sm opacity-70">
-                This will permanently remove the thread and its messages.
+                {{ threadHasDescendants ? 'This conversation has branches. Move it to Trash to preserve their original links.' : 'This will permanently remove the thread and its messages.' }}
             </p>
         </template>
         <template #footer>
@@ -40,7 +40,10 @@
             >
                 Cancel
             </UButton>
-            <UButton color="error" size="modal" @click="emit('deleteThread')">
+            <UButton v-if="threadHasDescendants" color="error" size="modal" @click="emit('softDeleteThread')">
+                Move to Trash
+            </UButton>
+            <UButton v-else color="error" size="modal" @click="emit('deleteThread')">
                 Delete
             </UButton>
         </template>
@@ -117,6 +120,7 @@ defineProps<{
 
     deleteThreadModalProps: Record<string, unknown>;
     showDeleteModal: boolean;
+    threadHasDescendants?: boolean;
 
     deleteDocumentModalProps: Record<string, unknown>;
     showDeleteDocumentModal: boolean;
@@ -136,6 +140,7 @@ const emit = defineEmits<{
 
     (e: 'update:showDeleteModal', value: boolean): void;
     (e: 'deleteThread'): void;
+    (e: 'softDeleteThread'): void;
 
     (e: 'update:showDeleteDocumentModal', value: boolean): void;
     (e: 'deleteDocument'): void;

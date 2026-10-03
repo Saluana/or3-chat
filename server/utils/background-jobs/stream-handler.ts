@@ -104,6 +104,9 @@ import {
     reconcileBackgroundJobHistory,
 } from './history';
 import { createContinuationDeltaNormalizer } from '~~/shared/chat/continuation';
+import { canonicalHistoryContext } from '../chat/canonical-history-context';
+import { createHistoryRetrievalService } from '~~/shared/chat/history-retrieval';
+import { HISTORY_TOOL_NAMES } from '~~/shared/chat/history-tools';
 
 function logBgStream(
     _stage: string,
@@ -413,6 +416,18 @@ export async function startBackgroundStream(
         throw new Error('Invalid background history scope');
     }
     assertBackgroundHistoryProvider(syncProviderId);
+    const hints = params.body._toolRuntime && typeof params.body._toolRuntime === 'object'
+        ? params.body._toolRuntime as Record<string, unknown> : {};
+    const definitions = Array.isArray(params.body.tools) ? params.body.tools as ToolDefinition[] : [];
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Request tool definitions have not yet passed runtime validation.
+    if (definitions.some((tool) => HISTORY_TOOL_NAMES.some((name) => tool.function?.name === name) && hints[tool.function.name] !== 'client')) {
+        const context = canonicalHistoryContext({ subject: params.userId, workspaceId: params.workspaceId,
+            threadId: params.threadId, syncProviderId, signal: AbortSignal.timeout(10_000) });
+        if ((await createHistoryRetrievalService().inspect(context)).status !== 'ok') {
+            const error = new Error('Canonical compaction scope is unavailable. Use the browser bridge or foreground retrieval.');
+            error.name = 'BackgroundHistoryUnsupportedError'; throw error;
+        }
+    }
     const executionBody = { ...params.body };
     delete executionBody._history;
     const execution: BackgroundJobExecution = {

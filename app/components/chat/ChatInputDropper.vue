@@ -15,7 +15,18 @@
         @click="handleContainerClick"
     >
         <div class="chat-input-inner-container flex flex-col gap-3.5 m-3.5">
-            <ChatContextMeter :state="contextPreview.state.value" @refresh="contextPreview.refresh()" />
+            <div class="flex flex-wrap items-center justify-between gap-2 px-1" data-context-actions>
+                <ChatContextMeter :state="contextPreview.state.value" @refresh="contextPreview.refresh()" />
+                <UTooltip v-for="entry in contextComposerActions" :key="entry.action.id"
+                    :text="props.compactionBlockedReason || entry.action.tooltip" :delay-duration="0">
+                    <UButton size="xs" variant="ghost" color="neutral"
+                        :aria-label="entry.action.tooltip || entry.action.label"
+                        :disabled="entry.disabled" @click.stop="handleComposerAction(entry)">
+                        <UIcon :name="entry.action.icon" class="w-3.5 h-3.5" />
+                        {{ entry.action.label }}
+                    </UButton>
+                </UTooltip>
+            </div>
             <div v-if="sendBlock" role="status" aria-live="polite" class="space-y-2 text-xs">
                 <p>{{ sendBlock.error || 'Context full. Compact, edit the request, or choose a larger model.' }}</p>
                 <div class="flex flex-wrap gap-2">
@@ -165,10 +176,10 @@
 
                 <div
                     class="chat-input-composer-actions order-first flex w-full min-w-0 flex-wrap items-center gap-1"
-                    v-if="composerActions.length"
+                    v-if="toolbarComposerActions.length"
                 >
                     <UTooltip
-                        v-for="entry in composerActions"
+                        v-for="entry in toolbarComposerActions"
                         :key="`composer-action-${entry.action.id}`"
                         :delay-duration="0"
                         :text="entry.action.tooltip || entry.action.label"
@@ -374,6 +385,9 @@
 <script setup lang="ts">
 import ChatContextMeter from './ChatContextMeter.vue';
 import { useContextPreview } from '~/composables/chat/useContextPreview';
+import { useModelStore } from '~/composables/chat/useModelStore';
+import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
+import { appendModelVariant } from '~~/shared/openrouter/model-variants';
 import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import {
     computed,
@@ -791,6 +805,10 @@ const composerActionContext = (): ComposerActionContext => ({
 });
 
 const composerActions = useComposerActions(composerActionContext);
+// Keep the host's context action beside its meter. Theme wrappers may hide
+// optional toolbar contributions while retaining this native recovery path.
+const contextComposerActions = computed(() => composerActions.value.filter((entry) => entry.action.id === 'or3:compact-thread'));
+const toolbarComposerActions = computed(() => composerActions.value.filter((entry) => entry.action.id !== 'or3:compact-thread'));
 
 async function handleComposerAction(entry: ComposerActionEntry) {
     if (entry.disabled) return;
@@ -843,10 +861,18 @@ const imageSettings = ref<ImageSettings>({
     numResults: 2,
     size: '1024x1024',
 });
-const contextPreview = useContextPreview({ threadId: () => props.threadId, model: selectedModel,
+const previewModels = useModelStore();
+const previewModel = computed(() => appendModelVariant(selectedModel.value.replace(/:thinking$/, ''), modelVariant.value));
+const previewReasoning = computed(() => {
+    const id = selectedModel.value.replace(/:thinking$/, '');
+    const metadata = previewModels.catalog.value.find((row) => row.id === id || row.canonical_slug === id)
+        ?? previewModels.favoriteModels.value.find((row) => row.id === id || row.canonical_slug === id);
+    return thinkingEnabled.value && modelSupportsThinking.value ? resolveReasoningConfig({ model: metadata, enabled: true, effort: reasoningEffort.value }) : undefined;
+});
+const contextPreview = useContextPreview({ threadId: () => props.threadId, model: previewModel,
     text: promptText, extraText: () => largeTextBlocks.value.map((block) => block.text).join('\n\n'),
     hasMedia: () => attachments.value.length > 0, promptSelection: stagedPromptId,
-    revision: () => props.contextRevision });
+    revision: () => props.contextRevision, reasoning: previewReasoning });
 const compactionInProgress = computed(() => props.compactionState && ['capturing', 'generating', 'correcting', 'committing'].includes(props.compactionState.status));
 const compactionModel = computed(() => props.compactionState && 'model' in props.compactionState ? props.compactionState.model : '');
 const tabDrafts = useWorkspaceTabDrafts();
@@ -1124,8 +1150,7 @@ const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfi
             // Silently handle editor JSON dispatch failure
         }
 
-        let sendResult: Promise<SendResult> | null = null;
-        let durableAcceptance: Promise<SendResult> | null = null;
+        const submission: { result: Promise<SendResult> | null; acceptance: Promise<SendResult> | null } = { result: null, acceptance: null };
         emit('send', {
             ...decision,
             editorDoc: submittedEditorDoc,
@@ -1143,11 +1168,12 @@ const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfi
                     ? reasoningEffort.value ?? null
                     : null,
             registerResult: (result, acceptance = result) => {
-                sendResult = result;
-                durableAcceptance = acceptance;
+                submission.result = result;
+                submission.acceptance = acceptance;
             },
         });
         // A parent that cannot accept the request leaves the draft untouched.
+        const sendResult = submission.result;
         if (!sendResult) {
             return {
                 status: 'failed',
@@ -1158,7 +1184,7 @@ const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfi
         }
         let acceptance: SendResult;
         try {
-            acceptance = await (durableAcceptance ?? sendResult);
+            acceptance = await (submission.acceptance ?? sendResult);
         } catch (error) {
             return {
                 status: 'failed',

@@ -16,21 +16,24 @@ export function registerHistoryTools(): () => void {
     let subscription: { unsubscribe(): void } | undefined;
     let scopedRevisions: ReturnType<typeof trackHistoryRevisions> | undefined;
     function observe() {
-        subscription?.unsubscribe(); scopedRevisions?.dispose(); eligible.value = new Set(); revision++;
+        subscription?.unsubscribe(); eligible.value = new Set(); revision++;
         const db = getDb(); const generation = getWorkspaceGeneration();
         scopedRevisions = trackHistoryRevisions(db);
         subscription = liveQuery(async () => {
             // Metadata only: no history content is loaded to advertise tools.
             const rows = await db.threads.toArray(); const byId = new Map(rows.map((row) => [row.id, row]));
-            const ready = new Set<string>();
+            const ready = new Set<string>(); const resolved = new Map<string, boolean>();
             for (const row of rows) {
                 let current = row; const visited = new Set<string>();
-                for (let links = 0; links < 128 && !current.deleted; links++) {
+                let available = false;
+                while (!current.deleted) {
                     if (visited.has(current.id)) break; visited.add(current.id);
-                    if (current.branch_mode === 'compacted' && current.summary_message_id) { ready.add(row.id); break; }
+                    const cached = resolved.get(current.id); if (cached !== undefined) { available = cached; break; }
+                    if (current.branch_mode === 'compacted' && current.summary_message_id) { available = true; break; }
                     if (!current.parent_thread_id) break;
                     const parent = byId.get(current.parent_thread_id); if (!parent) break; current = parent;
                 }
+                for (const id of visited) { resolved.set(id, available); if (available) ready.add(id); }
             }
             return ready;
         }).subscribe({ next: (ready) => { if (getDb() === db && getWorkspaceGeneration() === generation) eligible.value = ready; },
@@ -41,16 +44,16 @@ export function registerHistoryTools(): () => void {
     try {
         for (const definition of historyToolDefinitions) handles.push(registry.registerTool(definition, async (args, execution) => {
             const capturedRevisions = scopedRevisions!;
-            const context = capturedHistoryContext(execution, (ids) => ids ? capturedRevisions.revision(ids) : `${getWorkspaceGeneration()}:${revision}`);
+            const context = capturedHistoryContext(execution, (ids) => ids ? `${getWorkspaceGeneration()}:${capturedRevisions.revision(ids)}` : `${getWorkspaceGeneration()}:${revision}`);
             return JSON.stringify(definition.function.name === 'get_message'
                 ? await service.getMessage(context, args as unknown as GetHistoryMessageArgs)
                 : await service.searchParent(context, args as unknown as SearchParentArgs));
         }, { runtime: 'client', available: ({ workspaceId, threadId }) => Boolean(threadId && eligible.value.has(threadId)
             && workspaceId === (getActiveWorkspaceId() ?? 'local')) }));
     } catch (error) {
-        handles.forEach((handle) => handle.dispose()); subscription?.unsubscribe(); scopedRevisions?.dispose(); stopWorkspace();
+        handles.forEach((handle) => handle.dispose()); subscription?.unsubscribe(); stopWorkspace();
         Dexie.on.storagemutated.unsubscribe(changed); throw error;
     }
-    return () => { handles.forEach((handle) => handle.dispose()); subscription?.unsubscribe(); scopedRevisions?.dispose(); stopWorkspace();
+    return () => { handles.forEach((handle) => handle.dispose()); subscription?.unsubscribe(); stopWorkspace();
         Dexie.on.storagemutated.unsubscribe(changed); };
 }

@@ -14,6 +14,8 @@
  * - Remote sync orchestration
  */
 import Dexie, { type Table } from 'dexie';
+import { installHistoryRevisionTracking } from '~/utils/chat/history-revisions';
+import type { NativeRecoveryCheckpoint } from '~/utils/chat/native-recovery';
 import { LRUCache } from 'lru-cache';
 import type {
     Attachment,
@@ -95,6 +97,7 @@ export class Or3DB extends Dexie {
     posts!: Table<Post, string>;
     file_transfers!: Table<FileTransfer, string>;
     notifications!: Table<Notification, string>;
+    chat_request_recoveries!: Table<NativeRecoveryCheckpoint, string>;
 
     // Sync tables (added in v7)
     pending_ops!: Table<PendingOp, string>;
@@ -336,9 +339,20 @@ export class Or3DB extends Dexie {
             messages: 'id, [thread_id+index+order_key+id], [thread_id+index+order_key], [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at, data.type, [data.type+data.executionState]',
         });
 
+        // Family metadata pages use the same deterministic activity ordering
+        // as rendered rows. Existing indexes remain available to old readers.
+        this.version(23).stores({
+            threads: 'id, project_id, [project_id+updated_at], parent_thread_id, [parent_thread_id+anchor_index], [parent_thread_id+anchor_message_id+created_at+id], root_thread_id, [root_thread_id+updated_at+id], [root_thread_id+updated_at+created_at+id], [root_thread_id+branch_mode+created_at+id], [updated_at+created_at+id], status, pinned, deleted, last_message_at, clock, created_at, updated_at',
+            posts: 'id, title, postType, [postType+title], document_reference_key, deleted, created_at, updated_at, [updated_at+created_at+id]',
+        });
+
+        // Final payload recovery is local-only; never enters the sync table list.
+        this.version(24).stores({ chat_request_recoveries: 'thread_id' });
+
         // Derived-key maintenance must run on every instance, including
         // workspace DBs, and independently of sync capture suppression.
         installDerivedIndexHooks(this);
+        installHistoryRevisionTracking(this);
     }
 }
 

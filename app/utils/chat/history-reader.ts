@@ -2,8 +2,9 @@ import Dexie from 'dexie';
 import { getActiveWorkspaceId, getDb, getWorkspaceGeneration, type Or3DB } from '~/db/client';
 import type { ToolExecutionContext } from './types';
 import type { CanonicalHistoryRecord } from '~~/shared/chat/background-history';
-import { validateCanonicalChatQuery, type CanonicalChatQuery, type CanonicalChatReadResult } from '~~/shared/chat/history-reader';
+import { validateCanonicalChatQuery, encodeCanonicalChatSeek, parseCanonicalChatSeek, type CanonicalChatQuery, type CanonicalChatReadResult } from '~~/shared/chat/history-reader';
 import type { HistoryRetrievalContext } from '~~/shared/chat/history-retrieval';
+import { compareMessageOrder } from '~/db/messages';
 
 type Position = [number, string, string];
 function decodePosition(cursor: string, threadId: string): Position {
@@ -37,12 +38,36 @@ export async function readCapturedHistory(db: Or3DB, query: CanonicalChatQuery):
     if (query.kind === 'thread') return { status: 'ok', thread: await db.threads.get(query.thread_id) as CanonicalHistoryRecord | undefined };
     if (query.kind === 'messages') return { status: 'ok', messages: (await db.messages.bulkGet(query.message_ids))
         .filter((row): row is NonNullable<typeof row> => Boolean(row)) as CanonicalHistoryRecord[] };
-    const lower = query.cursor ? [query.thread_id, ...decodePosition(query.cursor, query.thread_id)]
-        : [query.thread_id, Dexie.minKey, Dexie.minKey, Dexie.minKey];
-    const page = await db.messages.where('[thread_id+index+order_key+id]')
-        .between(lower, [query.thread_id, Dexie.maxKey, Dexie.maxKey, Dexie.maxKey], !query.cursor, true)
-        .limit(query.limit).toArray();
-    const messages = page.slice(0, query.limit); const last = messages.at(-1);
-    return { status: 'ok', messages: messages as CanonicalHistoryRecord[], next_cursor: page.length === query.limit && last
-        ? JSON.stringify([query.thread_id, last.index, last.order_key, last.id]) : undefined };
+    const seek = parseCanonicalChatSeek(query.cursor, query.thread_id);
+    const backward = seek?.backward ?? false;
+    const key = seek?.key ?? (query.cursor && !seek ? decodePosition(query.cursor, query.thread_id) : undefined);
+    // Legacy rows may have no order_key. The index-only range includes them;
+    // canonical comparison resolves ties without silently losing old evidence.
+    const indexed = db.messages.where('[thread_id+index]').between([query.thread_id, Dexie.minKey], [query.thread_id, Dexie.maxKey], true, true);
+    const [total, indexedTotal] = await Promise.all([db.messages.where('thread_id').equals(query.thread_id).count(), indexed.count()]);
+    if (total !== indexedTotal) return { status: 'scope_incomplete' };
+    const keyBucketCount = key ? await db.messages.where('[thread_id+index]').equals([query.thread_id, key[0]]).count() : 0;
+    const range = db.messages.where('[thread_id+index]').between(
+        [query.thread_id, !backward && key ? key[0] : Dexie.minKey],
+        [query.thread_id, backward && key ? key[0] : Dexie.maxKey],
+        !(key && !backward && keyBucketCount === 1), !(key && backward && keyBucketCount === 1));
+    const candidates = await (backward ? range.reverse() : range).limit(query.limit).toArray();
+    const boundary = candidates.at(-1)?.index;
+    // A pathologically large tie group is an explicit incomplete page, not
+    // a false absence or an unbounded content read.
+    const bounded = candidates.length === query.limit;
+    const boundaryCount = bounded && boundary !== undefined
+        ? await db.messages.where('[thread_id+index]').equals([query.thread_id, boundary]).count() : 0;
+    const incompleteBoundary = bounded && candidates.filter((row) => row.index === boundary).length < boundaryCount;
+    const complete = incompleteBoundary ? candidates.filter((row) => row.index !== boundary) : candidates;
+    const ordered = complete.sort(compareMessageOrder); if (backward) ordered.reverse();
+    const eligible = key ? ordered.filter((row) => {
+        const order = compareMessageOrder(row, { index: key[0], order_key: key[1], id: key[2] });
+        return backward ? order < 0 : order > 0;
+    }) : ordered;
+    const messages = eligible.slice(0, query.limit); const last = messages.at(-1);
+    if (!messages.length && bounded) return { status: 'scope_incomplete' };
+    return { status: 'ok', messages: messages as CanonicalHistoryRecord[], examined_rows: candidates.length, next_cursor: last
+        && (eligible.length > messages.length || bounded)
+        ? encodeCanonicalChatSeek({ thread_id: query.thread_id, backward, key: [last.index, last.order_key ?? '', last.id] }) : undefined };
 }

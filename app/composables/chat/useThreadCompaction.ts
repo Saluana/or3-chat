@@ -5,6 +5,7 @@ import { generateCompactionSummary } from '~/utils/chat/compaction/summary';
 import { resolveThreadProjection, CompactionHistoryError } from '~/utils/chat/compaction/history';
 import { newId } from '~/db/util';
 import type { ContextModelMetadata } from '~~/shared/chat/context-budget';
+import { errorDiagnostics } from '~~/shared/errors';
 
 type Committed = Awaited<ReturnType<typeof createCompactedFork>>;
 type ErrorCode = CompactionError['code'] | 'generation_failed';
@@ -47,6 +48,7 @@ async function prepareCapture(options: Omit<Parameters<typeof captureCompaction>
     return captureCompaction({ ...options, anchorMessageId: anchor });
 }
 function boundaryError(error: unknown): { code: ErrorCode; message: string } {
+    if (import.meta.dev) console.warn('[compaction] boundary failure', errorDiagnostics(error));
     const code = error instanceof CompactionError ? error.code : error instanceof CompactionHistoryError ? 'scope_incomplete' : 'generation_failed';
     // Provider/DB errors can contain request bodies or credentials. Only
     // host-authored finite boundary errors may supply display text.

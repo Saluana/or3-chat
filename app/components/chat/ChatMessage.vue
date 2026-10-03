@@ -15,8 +15,10 @@
             v-if="customMessageRenderer"
             :message="props.message"
             :thread-id="props.threadId"
+            :retrieval-available="props.historyRetrievalAvailable"
             @view-compaction-source="emit('view-compaction-source', $event)"
             @content-resize="emit('content-resize')"
+            @view-related-thread="emit('view-related-thread', $event)"
         />
 
         <section v-else-if="props.message.isWorkflow" class="space-y-2" aria-label="Workflow run">
@@ -400,7 +402,7 @@
                     <template v-for="action in extraActions" :key="action.id">
                         <UTooltip
                             :delay-duration="500"
-                            :text="action.tooltip"
+                            :text="action.disabledReason?.(messageActionContext()) || action.tooltip"
                             :teleport="true"
                         >
                             <UButton
@@ -415,10 +417,13 @@
                 </UFieldGroup>
             </div>
         </template>
+        <ThreadChildLinks v-if="props.message.id && !props.message.pending" :thread-id="props.threadId" :message-id="props.message.id"
+            @navigate="emit('view-related-thread', $event)" />
     </div>
 </template>
 
 <script setup lang="ts">
+import ThreadChildLinks from './ThreadChildLinks.vue';
 import {
     computed,
     ref,
@@ -460,6 +465,7 @@ const props = withDefaults(
         interactive?: boolean;
         retryDisabled?: boolean;
         compactionAction?: { start: (anchorMessageId?: string) => Promise<void>; blockedReason?: string };
+        historyRetrievalAvailable?: boolean;
     }>(),
     { interactive: true },
 );
@@ -480,6 +486,7 @@ const emit = defineEmits<{
     (e: 'save-edit', id: string): void;
     (e: 'content-resize'): void;
     (e: 'view-compaction-source', target: { threadId: string; messageId: string; originThreadId: string; scrollMessageId?: string }): void;
+    (e: 'view-related-thread', target: { threadId: string; originThreadId: string; anchorMessageId: string; generation: number }): void;
 }>();
 
 const copyIcon = useIcon('chat.message.copy');

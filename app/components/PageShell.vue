@@ -351,6 +351,7 @@
                                 : undefined
                         "
                         @view-compaction-source="onCompactionSourceSelected($event, i)"
+                        @view-related-thread="onCompactionSourceSelected({ ...$event, messageId: '' }, i)"
                         @tab-status="
                             (status: WorkspaceTabStatus) => onPaneTabStatus(pane.id, status)
                         "
@@ -1687,7 +1688,7 @@ async function onCompactionSourceSelected(target: { threadId: string; messageId:
     await nextTick();
     const destination = panes.value[activePaneIndex.value];
     if (getWorkspaceGeneration() !== target.generation || destination?.mode !== 'chat' || destination.threadId !== target.threadId) return;
-    paneComponentRefs.get(destination.id)?.scrollToMessage?.({ threadId: target.threadId,
+    if (target.messageId) paneComponentRefs.get(destination.id)?.scrollToMessage?.({ threadId: target.threadId,
         messageId: target.scrollMessageId ?? target.messageId, generation: target.generation });
     closeSidebarIfMobile();
 }
@@ -2292,5 +2293,33 @@ function handleDocumentShortcut(e: KeyboardEvent) {
 
 // Use VueUse's useEventListener for automatic cleanup and HMR safety
 useEventListener(window, 'keydown', handleDocumentShortcut);
+let compactionRequestRevision = 0;
+useEventListener(window, 'or3:compact-thread', async (event: Event) => {
+    const target = (event as CustomEvent<{ threadId?: unknown; generation?: unknown }>).detail;
+    if (!target || typeof target.threadId !== 'string' || target.generation !== getWorkspaceGeneration()) return;
+    const request = ++compactionRequestRevision;
+    try {
+        if (workspaceTabsEnabled.value) {
+            if (!await workspaceTabs.openResource({ kind: 'chat', threadId: target.threadId })) throw new Error('Conversation could not be opened.');
+        } else {
+            const index = activePaneIndex.value;
+            await setPaneThread(index, target.threadId);
+            const pane = panes.value[index]; if (pane) { pane.mode = 'chat'; pane.documentId = undefined; }
+            updateUrl();
+        }
+        await nextTick();
+        const destination = panes.value[activePaneIndex.value];
+        if (request !== compactionRequestRevision || getWorkspaceGeneration() !== target.generation
+            || destination?.mode !== 'chat' || destination.threadId !== target.threadId) return;
+        const instance = paneComponentRefs.get(destination.id) as { compactThread?: () => Promise<void> } | undefined;
+        if (!instance?.compactThread) throw new Error('Conversation is still opening. Use Compact when it is ready.');
+        await instance.compactThread();
+        closeSidebarIfMobile();
+    } catch {
+        if (request === compactionRequestRevision && getWorkspaceGeneration() === target.generation) toast.add({
+            title: 'Unable to compact', description: 'Open the conversation and use Compact when its source and model are ready.', color: 'warning',
+        });
+    }
+});
 </script>
 <style scoped src="./PageShell.css"></style>

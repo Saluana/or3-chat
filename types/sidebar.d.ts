@@ -72,6 +72,15 @@ export interface UnifiedSidebarItem {
     type: 'thread' | 'document';
     title: string;
     updatedAt: number; // timestamp in seconds
+    createdAt?: number;
+    lastMessageAt?: number | null;
+    parentThreadId?: string | null;
+    rootThreadId?: string | null;
+    branchMode?: 'reference' | 'copy' | 'compacted' | null;
+    anchorIndex?: number | null;
+    forkReason?: 'manual' | 'retry' | 'compaction' | null;
+    family?: { kind: 'group-header' | 'thread-member' | 'load-more-members'; key: string; rootId: string;
+        expanded: boolean; groupUpdatedAt?: number; searchExpanded?: boolean; damaged?: boolean; label?: string; latestCompactionId?: string; originalId?: string };
     icon?: string;         // optional icon override (e.g. for plugin items)
     forked?: boolean;      // thread only
     postType?: string;     // document only

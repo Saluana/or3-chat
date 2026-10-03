@@ -383,6 +383,15 @@
                     "summary": "Register trusted client and server tools with owned lifecycle, runtime admission, and request authorization."
                 },
                 {
+                    "name": "manual-context-compaction.md",
+                    "path": "/utils/manual-context-compaction",
+                    "title": "Manual context compaction",
+                    "category": "Using tools",
+                    "categoryOrder": 0,
+                    "order": 1,
+                    "summary": "Understand model context, manual compaction, original links, conversation families and historical retrieval boundaries."
+                },
+                {
                     "name": "openrouterStream.md",
                     "path": "/utils/openrouterStream",
                     "title": "Chat streaming",

@@ -63,6 +63,7 @@
                 />
                 <template #content>
                     <div class="p-1 w-44 space-y-1">
+                        <slot name="family-actions" />
                         <UButton
                             v-if="canOpenInNewTab"
                             v-bind="actionButtonProps('open-tab')"

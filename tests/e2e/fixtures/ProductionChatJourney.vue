@@ -7,7 +7,7 @@
         <span class="sr-only" data-testid="chat-journey-thread-id">
             {{ threadId || 'new-thread' }}
         </span>
-        <section v-if="ready && compactionJourney" class="flex flex-wrap items-center gap-2 p-2" aria-label="Scripted compaction fixture controls">
+        <section v-if="ready && compactionJourney && !presentationJourney" class="flex flex-wrap items-center gap-2 p-2" aria-label="Scripted compaction fixture controls">
             <button type="button" data-testid="fixture-compact" :disabled="compactor.active.value" @click="startFixtureCompaction">Generate scripted summary</button>
             <button type="button" data-testid="fixture-cancel-compaction" :disabled="!compactor.active.value" @click="compactor.cancel()">Cancel scripted summary</button>
             <label><input v-model="holdSummary" type="checkbox" data-testid="fixture-hold-summary"> Hold scripted inference</label>
@@ -27,7 +27,7 @@
 </template>
 
 <script setup lang="ts">
-import { defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue';
+import { defineAsyncComponent, onBeforeUnmount, onMounted, onErrorCaptured, ref } from 'vue';
 import { useRoute } from '#imports';
 import { getDb } from '~/db/client';
 import { getWorkspaceResourceNavigationApi } from '~/utils/workspaceResourceNavigation';
@@ -38,11 +38,19 @@ import { useHooks } from '~/core/hooks/useHooks';
 import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
 import type { ChatMessage } from '~/utils/chat/types';
 import { createDocument, getDocument } from '~/db/documents';
+import { useModelStore } from '~/composables/chat/useModelStore';
+import { forkThread } from '~/db/branching';
+import { nowSec } from '~/db/util';
 
 const PageShell = defineAsyncComponent(() => import('~/components/PageShell.vue'));
 const workspaceJourney = useRoute().query.workspace === '1';
 
 const compactionJourney = useRoute().query.compaction === '1';
+const presentationJourney = compactionJourney && useRoute().query.presentation === '1';
+const contextJourney = useRoute().query.context === '1';
+onErrorCaptured((error) => {
+    console.error('[production-chat-journey] captured component error', error instanceof Error ? error.stack : String(error));
+});
 const fixtureSourceThread = ref('');
 const fixtureViewThread = ref('');
 const holdSummary = ref(false);
@@ -53,9 +61,10 @@ const compactor = useThreadCompaction({
     isBusy: false,
     apiKey: 'sk-or-v1-production-journey-test-key',
     getPreferences: async () => ({ maxContextTokens: null }),
-    resolveModelMetadata: async () => ({ context_length: 1_000_000, top_provider: { max_completion_tokens: 65_536 } }),
+    resolveModelMetadata: async () => ({ context_length: presentationJourney ? 32_768 : 1_000_000, top_provider: { max_completion_tokens: presentationJourney ? 8192 : 65_536 } }),
     onCommitted: async ({ thread }) => {
         fixtureViewThread.value = thread.id; localStorage.setItem('or3:e2e:compaction-view', thread.id);
+        if (!ready.value) return;
         if (!await getWorkspaceResourceNavigationApi()?.openResource({ kind: 'chat', threadId: thread.id }, 'new-tab', { reuseExisting: true })) throw new Error('Saved fixture child could not be opened.');
     },
 });
@@ -81,6 +90,48 @@ async function seedCompactionSource() {
     fixtureViewThread.value = localStorage.getItem('or3:e2e:compaction-view') || fixtureSourceThread.value;
 }
 
+/** Real controller/writer + public fork API; presentation runs only in a fresh disposable profile. */
+async function seedCompactionPresentation() {
+    const db = getDb(); const original = fixtureSourceThread.value; const timestamp = nowSec();
+    const source = await db.threads.get(original); if (!source) throw new Error('Presentation original missing.');
+    await db.threads.put({ ...source, title: 'Launch checklist', updated_at: timestamp, created_at: timestamp - 7200 });
+    await useModelStore().addFavoriteModel({ id: 'scripted-compaction-model', name: 'Scripted local model', context_length: 32_768,
+        top_provider: { max_completion_tokens: 8192 }, supported_parameters: ['tools'],
+        architecture: { input_modalities: ['text'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' } });
+    localStorage.setItem('last_selected_model', 'scripted-compaction-model');
+    const existing = localStorage.getItem('or3:e2e:presentation-ready');
+    if (existing && await db.threads.get(existing)) { fixtureViewThread.value = existing; fixtureSourceThread.value = existing; return; }
+    for (let generation = 0; generation < 2; generation++) {
+        if (generation) {
+            const parent = fixtureSourceThread.value;
+            for (let turn = 0; turn < 2; turn++) await db.messages.bulkPut([
+                { id: `${parent}-user-${turn}`, thread_id: parent, role: 'user', index: turn * 2 + 1,
+                    created_at: timestamp + turn, updated_at: timestamp + turn, clock: 1, pending: false, deleted: false,
+                    data: { content: 'Keep the launch constraints and continue the checklist. '.repeat(90) } },
+                { id: `${parent}-assistant-${turn}`, thread_id: parent, role: 'assistant', index: turn * 2 + 2,
+                    created_at: timestamp + turn, updated_at: timestamp + turn, clock: 1, pending: false, deleted: false,
+                    data: { content: 'The launch checks are recorded. Next, verify the integration and deployment evidence. '.repeat(90) } },
+            ]);
+        }
+        const result = await compactor.start(); if (!result.ok) throw new Error(`Presentation generation ${generation + 1}: ${result.code}: ${result.message}`);
+        fixtureSourceThread.value = result.thread_id;
+    }
+    await forkThread({ sourceThreadId: original, anchorMessageId: `${original}-anchor`, mode: 'reference', titleOverride: 'Launch checklist · alternative' });
+    const current = fixtureViewThread.value;
+    await db.messages.bulkPut([
+        { id: `${current}-presentation-user`, thread_id: current, role: 'user', index: 1, created_at: timestamp, updated_at: timestamp, clock: 1, pending: false, deleted: false,
+            data: { content: 'What should we check before the launch?' } },
+        { id: `${current}-presentation-reply`, thread_id: current, role: 'assistant', index: 2, created_at: timestamp, updated_at: timestamp, clock: 1, pending: false, deleted: false,
+            data: { content: 'Verify the integration, review the evidence, and confirm the rollout plan. The original decisions remain linked in the compacted context above. '.repeat(8) } },
+        { id: `${current}-presentation-followup`, thread_id: current, role: 'user', index: 3, created_at: timestamp + 1, updated_at: timestamp + 1, clock: 1, pending: false, deleted: false,
+            data: { content: 'Can we keep the original decisions available while continuing?' } },
+        { id: `${current}-presentation-answer`, thread_id: current, role: 'assistant', index: 4, created_at: timestamp + 1, updated_at: timestamp + 1, clock: 1, pending: false, deleted: false,
+            data: { content: 'Yes. Continue in this conversation and follow the original or landmark links whenever you need the earlier evidence.' } },
+    ]);
+    await createDocument({ title: 'Rollout notes', content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Disposable local presentation notes.' }] }] } });
+    localStorage.setItem('or3:e2e:presentation-ready', current);
+}
+
 const THREAD_KEY = 'or3:e2e:production-chat-thread';
 const TEST_API_KEY = 'sk-or-v1-production-journey-test-key';
 
@@ -89,6 +140,9 @@ const threadId = ref('');
 const messageHistory = ref<ChatMessage[]>([]);
 const attemptsByPrompt = new Map<string, number>();
 const hooks = useHooks();
+const recordNativeError = (event: { error: unknown }) => {
+    console.error('[production-chat-journey] native execution failed', event.error instanceof Error ? event.error.stack : String(event.error));
+};
 const pauseAdmission = async (text: string) => {
     if (text.includes('journey:admission-stop'))
         await new Promise((resolve) => setTimeout(resolve, 2_000));
@@ -98,6 +152,8 @@ const emptyInput = (request: { messages: unknown[] }) => {
     const prompt = [...request.messages].reverse().find((message) =>
         message && typeof message === 'object' && (message as { role?: unknown }).role === 'user'
     );
+    if (contextJourney && messageText(prompt).includes('journey:context-reject'))
+        localStorage.setItem('or3:e2e:context-filter-count', String(Number(localStorage.getItem('or3:e2e:context-filter-count') ?? 0) + 1));
     if (messageText(prompt).includes('journey:empty'))
         return { ...request, messages: [] };
     return request;
@@ -178,6 +234,19 @@ function installDeterministicFetch(): void {
         const text = messageText(prompt);
         const attempt = (attemptsByPrompt.get(text) ?? 0) + 1;
         attemptsByPrompt.set(text, attempt);
+        if (contextJourney) {
+            const bytes = encoder.encode(JSON.stringify(body));
+            const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+            const messagesHash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(JSON.stringify(messages))))].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+            const prior = JSON.parse(localStorage.getItem('or3:e2e:context-requests') ?? '[]') as unknown[];
+            localStorage.setItem('or3:e2e:context-requests', JSON.stringify([...prior, { model: body.model, bytes: bytes.length,
+                sha256: hash, messages_sha256: messagesHash, roles: messages.map((message) => (message as { role?: string }).role) }]));
+            if (text.includes('journey:context-reject')) {
+                const rejected = Number(localStorage.getItem('or3:e2e:context-attempt') ?? 0);
+                localStorage.setItem('or3:e2e:context-attempt', String(rejected + 1));
+                if (rejected === 0) return Response.json({ error: { code: 'context_length_exceeded', message: 'Scripted initial context rejection' } }, { status: 400 });
+            }
+        }
         const signal =
             init?.signal ?? (input instanceof Request ? input.signal : null);
 
@@ -206,9 +275,11 @@ function installDeterministicFetch(): void {
                             if (signal?.aborted) { resolve(); return; }
                             signal?.addEventListener('abort', () => resolve(), { once: true });
                         });
+                        const localAnchor = presentationJourney ? (await getDb().messages.where('thread_id').equals(fixtureSourceThread.value).toArray())
+                            .filter((row) => row.role === 'assistant' && !row.pending && !row.deleted).sort((a, b) => b.index - a.index)[0]?.id : undefined;
                         if (!stopped) enqueue(sseChunk(JSON.stringify({
                             summary_markdown: '## Objective\nContinue the implementation.\n## Important Details\nPreserve app/example.ts exactly.\n## Work State\nImplementation is pending.\n## Next Move\nInspect original evidence.\n## Relevant Files\napp/example.ts',
-                            landmarks: [{ message_id: `${fixtureSourceThread.value}-tool-evidence`, kind: 'tool-result', summary: 'Preserve the exact source path' }],
+                            landmarks: [{ message_id: localAnchor ?? `${fixtureSourceThread.value}-tool-evidence`, kind: localAnchor ? 'decision' : 'tool-result', summary: 'Preserve the exact source path' }],
                         })));
                     } else if (text.includes('journey:workspace-find') || text.includes('journey:workspace-create') || text.includes('journey:workspace-edit')) {
                         const userIndex = messages.findLastIndex((message) => message && typeof message === 'object' && (message as { role?: unknown }).role === 'user');
@@ -329,9 +400,26 @@ function rememberThread(id: string) {
 }
 
 onMounted(async () => {
+    try {
     hooks.addFilter('ui.chat.message:filter:outgoing', pauseAdmission);
     hooks.addFilter('ai.chat.messages:filter:before_send', emptyInput);
+    hooks.addAction('ai.chat.stream:action:error', recordNativeError);
     installDeterministicFetch();
+    // Set scripted routing before seed-time auxiliary compactions, too.
+    localStorage.setItem('or3:server-route-available', JSON.stringify({ available: false, timestamp: Date.now() }));
+    await persistUserApiKey(TEST_API_KEY);
+    if (!contextJourney && !presentationJourney) await useModelStore().addFavoriteModel({
+        id: '~openai/gpt-luna-latest', name: 'Scripted journey model', context_length: 1_000_000,
+        top_provider: { max_completion_tokens: 65_536 }, supported_parameters: ['tools'],
+        architecture: { input_modalities: ['text'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' },
+    });
+    if (contextJourney) {
+        const store = useModelStore();
+        for (const [id, contextLength] of [['context-fixture-small', 32_768], ['context-fixture-large', 1_000_000]] as const)
+            await store.addFavoriteModel({ id, name: id, context_length: contextLength, top_provider: { max_completion_tokens: 8192 },
+                supported_parameters: ['tools'], architecture: { input_modalities: ['text'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' } });
+        if (!localStorage.getItem('or3:e2e:context-attempt')) localStorage.setItem('last_selected_model', 'context-fixture-small');
+    }
     if (workspaceJourney) {
         const key = 'or3:e2e:workspace-document';
         const remembered = localStorage.getItem(key);
@@ -342,11 +430,10 @@ onMounted(async () => {
             localStorage.setItem(key, document.id);
         }
     }
-    if (compactionJourney) await seedCompactionSource();
-    localStorage.setItem(
-        'or3:server-route-available',
-        JSON.stringify({ available: false, timestamp: Date.now() })
-    );
+    if (compactionJourney) {
+        await seedCompactionSource();
+        if (presentationJourney) await seedCompactionPresentation();
+    }
     threadId.value = localStorage.getItem(THREAD_KEY) ?? '';
     if (threadId.value) {
         await ensureThreadHistoryLoaded(
@@ -355,13 +442,17 @@ onMounted(async () => {
             messageHistory
         );
     }
-    await persistUserApiKey(TEST_API_KEY);
     ready.value = true;
+    } catch (error) {
+        console.error('[production-chat-journey] fixture initialization failed', error instanceof Error ? error.stack : String(error));
+        throw error;
+    }
 });
 
 onBeforeUnmount(() => {
     hooks.removeFilter('ui.chat.message:filter:outgoing', pauseAdmission);
     hooks.removeFilter('ai.chat.messages:filter:before_send', emptyInput);
+    hooks.removeAction('ai.chat.stream:action:error', recordNativeError);
     restoreFetch?.();
 });
 </script>

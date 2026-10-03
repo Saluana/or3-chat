@@ -18,6 +18,7 @@ import { getDb, type Or3DB } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import { resolveRootThreadId } from '../utils/chat/compaction/history';
+import { resolveSidebarFamilyId, pruneRetiredFamilyPreference } from '../utils/sidebar/thread-families';
 import {
     newId,
     nowSec,
@@ -299,7 +300,7 @@ export async function softDeleteThread(id: string): Promise<void> {
     const db = getDb();
     await db.transaction(
         'rw',
-        getWriteTxTableNames(db, 'threads', { includeTombstones: true }),
+        getWriteTxTableNames(db, 'threads', { include: ['kv', 'chat_request_recoveries'], includeTombstones: true }),
         async () => {
         const t = await dbTry(() => db.threads.get(id), {
             op: 'read',
@@ -308,6 +309,7 @@ export async function softDeleteThread(id: string): Promise<void> {
         });
         if (!t) return;
         if (t.deleted) return;
+        const rootId = await resolveSidebarFamilyId(db, t);
         await hooks.doAction('db.threads.delete:action:soft:before', {
             entity: t,
             id: t.id,
@@ -325,6 +327,8 @@ export async function softDeleteThread(id: string): Promise<void> {
             id: t.id,
             tableName: 'threads',
         });
+        await db.chat_request_recoveries.delete(id);
+        await pruneRetiredFamilyPreference(db, rootId);
         }
     );
 }
@@ -342,13 +346,21 @@ export async function softDeleteThread(id: string): Promise<void> {
  * Non-Goals:
  * - Does not delete attachments or files referenced by messages.
  */
+export class ThreadHasDescendantsError extends Error {
+    readonly code = 'thread_has_descendants';
+    constructor(readonly threadId: string) {
+        super('This conversation has branches. Move it to Trash to preserve their original links.');
+        this.name = 'ThreadHasDescendantsError';
+    }
+}
+
 export async function hardDeleteThread(id: string): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
     await db.transaction(
         'rw',
         getWriteTxTableNames(db, 'threads', {
-            include: ['messages'],
+            include: ['messages', 'kv', 'chat_request_recoveries'],
             includeTombstones: true,
         }),
         async () => {
@@ -358,18 +370,25 @@ export async function hardDeleteThread(id: string): Promise<void> {
             action: 'get',
         });
         if (!existing) return;
+        const rootId = await resolveSidebarFamilyId(db, existing);
+        // Include soft-deleted children: their retained links still depend on
+        // this parent. The same transaction prevents a concurrent local fork.
+        if (await db.threads.where('parent_thread_id').equals(id).first()) throw new ThreadHasDescendantsError(id);
         await hooks.doAction('db.threads.delete:action:hard:before', {
             entity: existing,
             id,
             tableName: 'threads',
         });
+        if (await db.threads.where('parent_thread_id').equals(id).first()) throw new ThreadHasDescendantsError(id);
         await db.messages.where('thread_id').equals(id).delete();
         await db.threads.delete(id);
+        await db.chat_request_recoveries.delete(id);
         await hooks.doAction('db.threads.delete:action:hard:after', {
             entity: existing,
             id,
             tableName: 'threads',
         });
+        await pruneRetiredFamilyPreference(db, rootId);
     });
 }
 

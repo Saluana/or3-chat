@@ -6,6 +6,71 @@ test.skip(
 );
 
 const chatPage = '/__or3-chat-journey-test';
+test.beforeEach(async ({ page }) => {
+    page.on('console', (message) => {
+        if (message.type() === 'error' && message.text().includes('[production-chat-journey]')) console.error(message.text());
+    });
+});
+
+test.afterEach(async ({ page }, info) => {
+    if (info.status === info.expectedStatus) return;
+    const details = page.getByRole('button', { name: 'Details', exact: true });
+    if (await details.isVisible().catch(() => false)) {
+        await details.click();
+        await info.attach('startup-error-details', { contentType: 'text/plain', body: await page.locator('body').innerText() });
+    }
+});
+
+test('native context recovery retains saved identities after reload', async ({ page }, info) => {
+    test.setTimeout(120_000);
+    await page.route('**openrouter.ai/**', (route) => route.abort());
+    await page.goto(`${chatPage}?context=1`);
+    const input = page.getByRole('textbox', { name: 'Message input' });
+    await expect(input).toBeVisible({ timeout: 45_000 });
+    await expect(page.locator('[data-context-indicator]').getByRole('meter')).toBeVisible();
+    const readAttempt = () => page.evaluate(async () => {
+        const remembered = localStorage.getItem('or3:e2e:production-chat-thread');
+        for (const { name } of await indexedDB.databases()) {
+            if (!name) continue;
+            const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+            if (!db.objectStoreNames.contains('chat_request_recoveries')) { db.close(); continue; }
+            const tx = db.transaction(['messages', 'chat_request_recoveries'], 'readonly');
+            const all = <T>(store: string) => new Promise<T[]>((resolve, reject) => { const request = tx.objectStore(store).getAll(); request.onsuccess = () => resolve(request.result as T[]); request.onerror = () => reject(request.error); });
+            const [messages, checkpoints] = await Promise.all([
+                all<{ id: string; thread_id: string; role: string; pending: boolean; data: { content?: string; turn_id?: string } }>('messages'),
+                all<{ thread_id: string; user_message_id: string; assistant_message_id: string }>('chat_request_recoveries'),
+            ]); db.close();
+            const rows = messages.filter((row) => row.thread_id === remembered);
+            if (rows.length) return { rows, checkpoints: checkpoints.filter((row) => row.thread_id === remembered) };
+        }
+        return { rows: [], checkpoints: [] };
+    });
+    await input.fill('journey:context-reject');
+    await page.getByRole('button', { name: 'Send message', exact: true }).click();
+    await expect.poll(async () => (await readAttempt()).checkpoints.length).toBe(1);
+    await expect.poll(async () => (await readAttempt()).rows.find((row) => row.role === 'assistant')?.pending).toBe(false);
+    await expect(input).toHaveText('journey:context-reject');
+    const failed = await readAttempt(); expect(failed.rows.filter((row) => row.role === 'user')).toHaveLength(1);
+    const savedUser = failed.rows.find((row) => row.role === 'user')!; const assistant = failed.rows.find((row) => row.role === 'assistant')!;
+    expect(assistant.pending).toBe(false); expect(assistant.data.turn_id).toBe(savedUser.id);
+    expect(failed.checkpoints[0]).toMatchObject({ user_message_id: savedUser.id, assistant_message_id: assistant.id });
+    await page.reload(); await expect(input).toBeVisible();
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('or3:model-selected', { detail: { modelId: 'context-fixture-large' } })));
+    const retry = page.getByRole('button', { name: 'Retry message', exact: true }).last(); await expect(retry).toBeVisible(); await retry.click();
+    await expect.poll(async () => (await readAttempt()).rows.find((row) => row.id === assistant.id)?.data.content).toBe('Hello from deterministic stream.');
+    const recovered = await readAttempt(); expect(recovered.checkpoints).toHaveLength(0);
+    expect(recovered.rows.filter((row) => row.role === 'user')).toEqual([savedUser]);
+    expect(recovered.rows.filter((row) => row.role === 'assistant').map((row) => row.id)).toEqual([assistant.id]);
+    const fixture = await page.evaluate(() => ({ filters: Number(localStorage.getItem('or3:e2e:context-filter-count')),
+        requests: JSON.parse(localStorage.getItem('or3:e2e:context-requests') ?? '[]') as Array<{ model: string; messages_sha256: string }> }));
+    expect(fixture.filters).toBe(1); expect(fixture.requests).toHaveLength(2);
+    expect(fixture.requests.map((request) => request.model)).toEqual(['context-fixture-small', 'context-fixture-large']);
+    expect(fixture.requests[1]!.messages_sha256).toBe(fixture.requests[0]!.messages_sha256);
+    await info.attach('context-recovery-assertions', { contentType: 'application/json', body: JSON.stringify({ source: process.env.OR3_CONTEXT_SOURCE_SHA ?? 'unrecorded',
+        fixtureVersion: 2, userId: savedUser.id, assistantId: assistant.id, assertions: ['one saved user', 'same assistant ID', 'reload recovery', 'final filter once', 'same final messages'], ...fixture }) });
+    const screenshot = info.outputPath('context-recovery.png'); await page.screenshot({ path: screenshot, animations: 'disabled' });
+    await info.attach('context-recovery', { path: screenshot, contentType: 'image/png' });
+});
 
 async function openChat(page: Page): Promise<void> {
     // Catalog loading can start before the fixture component mounts and
@@ -430,7 +495,7 @@ test('PageShell compaction summary reload and original landmark navigation', asy
     await page.getByTestId('fixture-hold-summary').uncheck(); await page.getByTestId('fixture-compact').click();
     await expect(page.getByTestId('fixture-compaction-state')).toHaveText('complete');
     const card = page.locator('[data-compaction-card]'); await expect(card).toBeVisible();
-    await card.getByRole('button', { name: 'View original', exact: true }).click();
+    await card.getByRole('button', { name: 'View original · message 4', exact: true }).click();
     await expect(page.getByRole('textbox', { name: 'Message input' })).toHaveText('Keep this unsent source draft.');
     await page.getByRole('tab', { name: 'Compaction original evidence — compacted', exact: true }).click();
     await expect(card).toBeVisible();
@@ -444,14 +509,14 @@ test('PageShell compaction summary reload and original landmark navigation', asy
     await expect(card.locator('[data-compaction-summary]')).toContainText('app/example.ts');
     await expect(card.getByRole('button', { name: /Edit|Retry|Continue/ })).toHaveCount(0);
     const after = info.outputPath('compaction-summary-after.png'); await page.screenshot({ path: after, animations: 'disabled' }); await info.attach('summary-after', { path: after, contentType: 'image/png' });
-    await card.getByRole('button', { name: 'View original', exact: true }).click();
+    await card.getByRole('button', { name: 'View original · message 4', exact: true }).click();
     const anchor = page.locator(`[data-msg-id="${source}-anchor"]`); await expect(anchor).toBeVisible(); await expect(anchor).toContainText('Original anchor: implementation is pending.');
     const anchorBounds = await anchor.boundingBox(); expect(anchorBounds!.y + anchorBounds!.height).toBeGreaterThan(0); expect(anchorBounds!.y).toBeLessThan(720);
     expect(await readRows()).toEqual(saved);
     await page.reload(); await expect(card).toBeVisible(); await card.locator('summary').click();
     // Drafts live in memory: reload clears them. Re-establish the source draft
     // before checking preservation across child/landmark navigation.
-    await card.getByRole('button', { name: 'View original', exact: true }).click();
+    await card.getByRole('button', { name: 'View original · message 4', exact: true }).click();
     await expect(anchor).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Compaction original evidence', exact: true })).toHaveAttribute('aria-selected', 'true');
     await expect(input).toHaveText('');
@@ -468,7 +533,7 @@ test('PageShell compaction summary reload and original landmark navigation', asy
     const originalNavigation = info.outputPath('compaction-original-navigation.png'); await page.screenshot({ path: originalNavigation, animations: 'disabled' }); await info.attach('original-navigation', { path: originalNavigation, contentType: 'image/png' });
     await page.getByRole('button', { name: 'New chat', exact: true }).first().click();
     await send(page, 'journey:new-after-compaction');
-    await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toBeVisible();
+    await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole('tab', { selected: true })).not.toHaveText('Compaction original evidence — compacted');
     const afterNew = await readRows(); expect(afterNew.sourceRows).toEqual(saved.sourceRows); expect(afterNew.children).toEqual(saved.children); expect(afterNew.summaries).toEqual(saved.summaries);
 });

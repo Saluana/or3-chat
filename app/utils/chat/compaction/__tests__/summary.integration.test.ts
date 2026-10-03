@@ -9,7 +9,10 @@ import { setHookEngine, useHooks } from '~/core/hooks/useHooks';
 import type { ORStreamEvent } from '~~/shared/openrouter/parseOpenRouterSSE';
 import type { openRouterStream } from '~/utils/chat/openrouterStream';
 const transport = vi.hoisted(() => vi.fn<typeof openRouterStream>());
-vi.mock('~/utils/chat/openrouterStream', () => ({ openRouterStream: transport }));
+vi.mock('~/utils/chat/openrouterStream', async (original) => ({
+    ...await original<typeof import('~/utils/chat/openrouterStream')>(),
+    openRouterStream: transport,
+}));
 let workspace: string;
 const markdown = '## Objective\nFinish implementation.\n## Important Details\nKeep exact paths.\n## Work State\nTwo turns settled.\n## Next Move\nContinue safely.\n## Relevant Files\nNone.';
 const envelope = (id = 'm0') => JSON.stringify({ summary_markdown: markdown, landmarks: [{ message_id: id, kind: 'decision', summary: 'Source evidence' }] });

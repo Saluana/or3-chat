@@ -74,6 +74,7 @@ export interface ChatMessageAction {
     /** Read-only availability, evaluated in the owning pane. */
     visible?: (ctx: MessageActionContext) => boolean;
     disabled?: (ctx: MessageActionContext) => boolean;
+    disabledReason?: (ctx: MessageActionContext) => string | undefined;
     /** Optional plugin id used for workspace policy lookup. */
     pluginId?: string;
     /** Optional access policy for this action. */

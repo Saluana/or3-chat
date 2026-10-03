@@ -16,20 +16,23 @@
                     </UButton>
                 </li>
             </ul>
+            <p v-if="retrievalAvailable === false" class="mt-2 text-sm text-[var(--md-on-surface-variant)]">Historical retrieval tools are unavailable for this model or tool selection. You can still follow the original and landmark links.</p>
         </details>
-        <UButton color="neutral" variant="soft" class="min-h-11" :disabled="opening" @click="openTarget(compaction.source_thread_id, compaction.anchor_message_id)">View original</UButton>
+        <UButton color="neutral" variant="soft" class="min-h-11" :disabled="opening" @click="openTarget(compaction.source_thread_id, compaction.anchor_message_id)">View original<span v-if="sourceOrdinal"> · message {{ sourceOrdinal }}</span></UButton>
         <p v-if="unavailable" role="status" class="text-sm text-[var(--md-on-surface-variant)]">{{ unavailable }}</p>
     </section>
 </template>
 
 <script setup lang="ts">
 import { computed, shallowRef, watch, onBeforeUnmount } from 'vue';
+import Dexie, { liveQuery, type Subscription } from 'dexie';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { storedMessagesToCanonicalTranscript, isSupersededMessage } from '~/utils/chat/transcript';
+import { compareMessageOrder } from '~/db/messages';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import type { CompactionData } from '~~/shared/chat/compaction';
 
-const props = defineProps<{ message: UiChatMessage & { compaction: CompactionData }; threadId?: string }>();
+const props = defineProps<{ message: UiChatMessage & { compaction: CompactionData }; threadId?: string; retrievalAvailable?: boolean }>();
 const emit = defineEmits<{
     (e: 'view-compaction-source', target: { threadId: string; messageId: string; originThreadId: string; scrollMessageId?: string }): void;
     (e: 'content-resize'): void;
@@ -38,14 +41,52 @@ const compaction = computed(() => props.message.compaction);
 const coveredCount = computed(() => (BigInt(compaction.value.message_count) + BigInt(compaction.value.prior_message_count)).toLocaleString());
 const opening = shallowRef(false);
 const unavailable = shallowRef<string>();
+const sourceOrdinal = shallowRef<number>();
+let ordinalSubscription: Subscription | undefined;
 let revision = 0;
 let renderedDb = getDb();
 let disposed = false;
-function invalidate() { revision += 1; opening.value = false; unavailable.value = undefined; }
+function invalidate() { revision += 1; opening.value = false; unavailable.value = undefined; bindOrdinal(); }
 watch(() => props.threadId, invalidate, { flush: 'sync' });
 watch([() => props.message, () => props.message.compaction], () => { renderedDb = getDb(); invalidate(); }, { flush: 'sync' });
 const unsubscribe = subscribeActiveWorkspaceDb(invalidate);
-onBeforeUnmount(() => { disposed = true; revision += 1; unsubscribe(); });
+onBeforeUnmount(() => { disposed = true; revision += 1; unsubscribe(); ordinalSubscription?.unsubscribe(); });
+
+function bindOrdinal() {
+    ordinalSubscription?.unsubscribe(); sourceOrdinal.value = undefined;
+    if (getDb() !== renderedDb) return;
+    const db = renderedDb; const generation = getWorkspaceGeneration(); const token = revision;
+    const source = compaction.value.source_thread_id; const anchorId = compaction.value.anchor_message_id;
+    ordinalSubscription = liveQuery(async () => {
+        let thread = await db.threads.get(source); let anchor = await db.messages.get(anchorId);
+        if (!thread || thread.deleted || !anchor || anchor.deleted || anchor.thread_id !== source || isSupersededMessage(anchor)) return undefined;
+        if (anchor.role === 'tool') {
+            const tool = storedMessagesToCanonicalTranscript([anchor])[0];
+            const parent = tool?.parentAssistantId ? await db.messages.get(tool.parentAssistantId) : undefined;
+            const parentRecord = parent && storedMessagesToCanonicalTranscript([parent, anchor]).find((row) => row.id === parent.id);
+            if (!parent || parent.deleted || parent.role !== 'assistant' || parent.thread_id !== source || isSupersededMessage(parent)
+                || !tool?.callId || !parentRecord?.toolCalls.some((call) => call.callId === tool.callId)) return undefined;
+            anchor = parent;
+        }
+        let ordinal = 0; const visited = new Set<string>();
+        for (;;) {
+            if (!thread || thread.deleted || visited.has(thread.id)) return undefined;
+            visited.add(thread.id);
+            const boundary = anchor;
+            ordinal += await db.messages.where('[thread_id+index]')
+                .between([thread.id, Dexie.minKey], [thread.id, boundary.index], true, true)
+                .filter((row) => compareMessageOrder(row, boundary) <= 0 && !row.deleted && row.role !== 'tool' && !isSupersededMessage(row)).count();
+            if (thread.branch_mode !== 'reference') return ordinal;
+            if (!thread.parent_thread_id || !thread.anchor_message_id) return undefined;
+            anchor = await db.messages.get(thread.anchor_message_id);
+            if (!anchor || anchor.deleted || anchor.thread_id !== thread.parent_thread_id) return undefined;
+            thread = await db.threads.get(thread.parent_thread_id);
+        }
+    }).subscribe({ next: (ordinal) => {
+        if (!disposed && token === revision && db === getDb() && generation === getWorkspaceGeneration()) sourceOrdinal.value = ordinal;
+    }, error: () => { if (token === revision) sourceOrdinal.value = undefined; } });
+}
+bindOrdinal();
 
 async function openTarget(threadId: string, messageId: string) {
     if (opening.value) return;

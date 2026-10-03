@@ -29,17 +29,36 @@ export async function prepareLossyRequest(params: OpenRouterStreamParams, scope:
     const body = buildOpenRouterRequestBody(params); const latestUser = body.messages.findLastIndex((row) => row.role === 'user');
     if (latestUser < 0) throw new Error('An explicit lossy request must contain its latest user message.');
     const groups: { positions: number[]; protected: boolean }[] = [];
+    let turn: { positions: number[]; protected: boolean } | undefined;
     for (let position = 0; position < body.messages.length; position++) {
         const row = body.messages[position]!;
         if (row.role === 'system' || position >= latestUser) {
             groups.push({ positions: [position], protected: true });
-        } else if (row.role === 'user' || !groups.length || groups.at(-1)!.protected) {
-            groups.push({ positions: [position], protected: false });
-        } else groups.at(-1)!.positions.push(position);
+        } else if (row.role === 'user') {
+            turn = { positions: [position], protected: false }; groups.push(turn);
+        } else if (turn) turn.positions.push(position);
+        else groups.push({ positions: [position], protected: true });
     }
+    // A system row between a call and result is protected independently; it
+    // must not split their containing user turn into separate omissions.
+    const owners = new Map(groups.flatMap((group) => group.positions.map((position) => [position, group] as const)));
+    const calls = new Map<string, number[]>(); const results = new Map<string, number[]>();
+    for (let position = 0; position < body.messages.length; position++) {
+        const row = body.messages[position]!;
+        for (const call of Array.isArray(row.tool_calls) ? row.tool_calls : []) if (typeof call.id === 'string') calls.set(call.id, [...calls.get(call.id) ?? [], position]);
+        if (row.role === 'tool' && typeof row.tool_call_id === 'string') results.set(row.tool_call_id, [...results.get(row.tool_call_id) ?? [], position]);
+    }
+    for (const id of new Set([...calls.keys(), ...results.keys()])) {
+        const positions = [...calls.get(id) ?? [], ...results.get(id) ?? []];
+        const associated = [...new Set(positions.map((position) => owners.get(position)!))];
+        // Unmatched or cross-turn evidence remains protected. This never
+        // creates an orphan call/result merely to make a candidate fit.
+        if (calls.get(id)?.length !== 1 || results.get(id)?.length !== 1 || associated.length !== 1) associated.forEach((group) => { group.protected = true; });
+    }
+    for (const group of groups) if (!group.protected && !group.positions.some((position) => body.messages[position]?.role === 'assistant')) group.protected = true;
     // Apply the existing complete-turn remover to group envelopes. Protected
     // groups include every system/summary and the entire latest user suffix.
-    const envelopes = groups.map((group) => ({ role: group.protected ? 'system' : 'assistant',
+    const envelopes = groups.map((group) => ({ role: group.positions.includes(latestUser) || !group.protected ? 'user' : 'system',
         content: JSON.stringify(group.positions.map((position) => body.messages[position])) }));
     let retained = envelopes.slice(); let budget = (await Promise.all(envelopes.map((row) => countTokensApprox(row.content)))).reduce((a, b) => a + b, 0);
     for (;;) {
@@ -49,7 +68,7 @@ export async function prepareLossyRequest(params: OpenRouterStreamParams, scope:
         try {
             await prepareOpenRouterRequest({ ...params, orMessages: messages });
             const omitted = body.messages.flatMap((row, position) => selected.has(position) ? [] : [{ position, role: row.role,
-                excerpt: Array.from(typeof row.content === 'string' ? row.content : JSON.stringify(row.content) ?? '').slice(0, 200).join('') }]);
+                excerpt: Array.from(typeof row.content === 'string' ? row.content : JSON.stringify(row.content)).slice(0, 200).join('') }]);
             if (!omitted.length) throw new Error('This request fits without omissions. Send the full request.');
             const [originalDigest, candidateDigest, protectedDigest] = await Promise.all([digest(body), digest(messages),
                 digest(groups.filter((group) => group.protected).flatMap((group) => group.positions.map((position) => body.messages[position])))]);

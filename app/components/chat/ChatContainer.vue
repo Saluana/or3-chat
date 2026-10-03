@@ -45,11 +45,13 @@
                             :message="item"
                             :thread-id="props.threadId"
                             :retry-disabled="retryPending || loading"
-                            :compaction-action="compactionAction"
+                            :compaction-action="compactionActionFor(item)"
+                            :history-retrieval-available="historyRetrievalAvailable"
                             @retry="onRetry"
                             @continue="onContinue"
                             @branch="onBranch"
                             @view-compaction-source="onViewCompactionSource(item, $event)"
+                            @view-related-thread="onViewRelatedThread(item, $event)"
                             @edited="onEdited"
                             @begin-edit="onBeginEdit(item.id)"
                             @cancel-edit="onEndEdit(item.id)"
@@ -133,7 +135,7 @@
                     :tab-id="tabId"
                     :context-revision="allMessages"
                     :compact-thread="compactThread"
-                    :compaction-blocked-reason="compaction.blockedReason.value"
+                    :compaction-blocked-reason="threadCompactionBlockedReason"
                     :compaction-state="compaction.state.value"
                     @cancel-compaction="compaction.cancel()"
                     @send="onSend"
@@ -192,10 +194,13 @@ import { useIcon } from '~/composables/useIcon';
 import { useToast, useHooks, useChat, useRuntimeConfig, useRoute, useState } from '#imports';
 import { getMaxMessageFileHashes } from '~/db/files-util';
 import { kv } from '~/db';
-import { getWorkspaceGeneration } from '~/db/client';
+import { getDb, getActiveWorkspaceId, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
+import { liveQuery, type Subscription } from 'dexie';
 import { useThreadCompaction } from '~/composables/chat/useThreadCompaction';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
 import { useModelStore } from '~/composables/chat/useModelStore';
+import { useToolRegistry } from '~/utils/chat/tool-registry';
+import { stripModelVariantSuffix } from '~~/shared/openrouter/model-variants';
 import { resolveSystemPromptText } from '~/utils/chat/useAi-internal/messageBuild';
 import {
     hydrateUserApiKeyFromKv,
@@ -294,6 +299,7 @@ const props = defineProps<{
 const emit = defineEmits<{
     (e: 'thread-selected', id: string): void;
     (e: 'view-compaction-source', target: { threadId: string; messageId: string; originThreadId: string; scrollMessageId?: string; generation: number }): void;
+    (e: 'view-related-thread', target: { threadId: string; originThreadId: string; anchorMessageId: string; generation: number }): void;
     (e: 'reached-top'): void;
     (e: 'reached-bottom'): void;
     (e: 'tab-status', status: WorkspaceTabStatus): void;
@@ -637,9 +643,18 @@ const stableMessageIdentities = computed(() => {
 const allMessages = shallowRef<UiChatMessage[]>([]);
 const compactionPreferences = useAiSettings();
 const compactionModels = useModelStore();
+const historyRegistry = useToolRegistry();
+const historyRetrievalAvailable = computed(() => {
+    const id = stripModelVariantSuffix(model.value.replace(/:thinking$/, ''));
+    const metadata = compactionModels.catalog.value.find((row) => row.id === id || row.canonical_slug === id)
+        ?? compactionModels.favoriteModels.value.find((row) => row.id === id || row.canonical_slug === id);
+    return metadata?.supported_parameters?.includes('tools') === true && historyRegistry.getEnabledDefinitions({
+        workspaceId: getActiveWorkspaceId() ?? 'local', threadId: currentThreadId.value ?? null,
+    }).some((tool) => tool.function.name === 'get_message');
+});
 const compaction = useThreadCompaction({ threadId: currentThreadId, model,
     isBusy: () => inputLoading.value || workflowRunning.value,
-    apiKey, isCurrent: () => props.threadId === currentThreadId.value,
+    apiKey: () => apiKey.value, isCurrent: () => props.threadId === currentThreadId.value,
     getPreferences: async () => { await compactionPreferences.ensureLoaded(); return { ...compactionPreferences.settings.value }; },
     resolveModelMetadata: async (selected) => {
         const result = await compactionModels.resolveContextModel(selected);
@@ -652,7 +667,41 @@ async function compactThread(anchorMessageId?: string) {
     const result = await compaction.start(anchorMessageId);
     if (!result.ok) toast.add({ title: 'Unable to compact', description: result.message, color: 'warning' });
 }
-const compactionAction = computed(() => ({ start: compactThread, blockedReason: compaction.blockedReason.value }));
+const localCompactionIds = shallowRef<Set<string>>();
+let compactionOwnerSubscription: Subscription | undefined;
+let compactionOwnerRevision = 0;
+function bindCompactionOwners() {
+    compactionOwnerSubscription?.unsubscribe(); localCompactionIds.value = undefined;
+    const token = ++compactionOwnerRevision; const db = getDb(); const generation = getWorkspaceGeneration(); const source = currentThreadId.value;
+    if (!source) return;
+    compactionOwnerSubscription = liveQuery(() => db.messages.where('thread_id').equals(source).primaryKeys()).subscribe({
+        next: (ids) => { if (token === compactionOwnerRevision && db === getDb() && generation === getWorkspaceGeneration()) localCompactionIds.value = new Set(ids); },
+        error: () => { if (token === compactionOwnerRevision) localCompactionIds.value = undefined; },
+    });
+}
+watch(currentThreadId, bindCompactionOwners, { immediate: true });
+const stopCompactionOwners = subscribeActiveWorkspaceDb(bindCompactionOwners);
+onBeforeUnmount(() => { compactionOwnerRevision++; compactionOwnerSubscription?.unsubscribe(); stopCompactionOwners(); });
+const anchorCompactionReasons = computed(() => {
+    const reasons = new Map<string, string | undefined>(); let turns = 0; let pendingUser = false;
+    const busy = allMessages.value.some((row) => row.pending || row.toolCalls?.some((call) => !['complete', 'error'].includes(call.status)));
+    for (const row of allMessages.value) {
+        if (row.role === 'user') pendingUser = true;
+        if (row.role === 'assistant' && row.text.trim() && pendingUser) { turns++; pendingUser = false; }
+        reasons.set(row.id, compaction.blockedReason.value || (busy ? 'Wait for pending generation and tools to settle.'
+            : !localCompactionIds.value ? 'Checking the persisted source.' : !localCompactionIds.value.has(row.id)
+                ? 'Open the original conversation to compact this inherited message.'
+                : turns < 2 ? 'Compaction requires at least two settled user/assistant turns.' : undefined));
+    }
+    return reasons;
+});
+function compactionActionFor(message: UiChatMessage) {
+    return { start: compactThread, blockedReason: anchorCompactionReasons.value.get(message.id) ?? compaction.blockedReason.value };
+}
+const threadCompactionBlockedReason = computed(() => {
+    const anchor = [...allMessages.value].reverse().find((row) => localCompactionIds.value?.has(row.id));
+    return compaction.blockedReason.value ?? (anchor ? anchorCompactionReasons.value.get(anchor.id) : 'Choose a persisted conversation with settled turns.');
+});
 const rowContentRevision = ref(0);
 let renderedStableSnapshot: UiChatMessage[] | null = null;
 
@@ -741,6 +790,12 @@ type ScrollApi = {
 };
 const scroller = ref<ScrollApi | null>(null);
 const compactionNavigation = shallowRef<{ threadId: string; messageId: string; generation: number; origin: string | undefined }>();
+function onViewRelatedThread(message: UiChatMessage, target: { threadId: string; originThreadId: string; anchorMessageId: string; generation: number }) {
+    if (currentThreadId.value !== target.originThreadId || props.threadId !== target.originThreadId
+        || getWorkspaceGeneration() !== target.generation || message.id !== target.anchorMessageId
+        || !allMessages.value.some((row) => row.id === message.id)) return;
+    emit('view-related-thread', target);
+}
 function onViewCompactionSource(message: UiChatMessage, target: { threadId: string; messageId: string; originThreadId: string; scrollMessageId?: string }) {
     const data = message.compaction;
     if (currentThreadId.value !== target.originThreadId || props.threadId !== target.originThreadId) return;
@@ -1250,7 +1305,7 @@ onBeforeUnmount(() => {
     } catch {}
 });
 
-defineExpose({ captureViewState, restoreViewState, scrollToMessage });
+defineExpose({ captureViewState, restoreViewState, scrollToMessage, compactThread });
 </script>
 
 <style>

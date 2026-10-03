@@ -1,6 +1,6 @@
 import { readCompactionData, type CompactionData } from './compaction';
 import type { CanonicalHistoryRecord } from './background-history';
-import type { CanonicalChatQuery, CanonicalChatReadResult } from './history-reader';
+import { encodeCanonicalChatSeek, type CanonicalChatQuery, type CanonicalChatReadResult } from './history-reader';
 
 type Row = CanonicalHistoryRecord;
 type Kind = CompactionData['landmarks'][number]['kind'];
@@ -29,6 +29,7 @@ async function hash(value: unknown) {
 async function guard(ctx: HistoryRetrievalContext) {
     if (ctx.signal.aborted) throw new DOMException('History retrieval canceled.', 'AbortError');
     await ctx.authorize();
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- AbortSignal can change during asynchronous authorization.
     if (ctx.signal.aborted) throw new DOMException('History retrieval canceled.', 'AbortError');
 }
 async function read(ctx: HistoryRetrievalContext, query: CanonicalChatQuery) {
@@ -43,7 +44,6 @@ async function scope(ctx: HistoryRetrievalContext) {
     await guard(ctx); const revision = await ctx.revision();
     const path: Row[] = []; const visited = new Set<string>(); let id: string | undefined = ctx.threadId;
     while (id) {
-        if (path.length >= 128) throw new ScopeError('Conversation lineage exceeds the 128-link lookup bound.');
         if (visited.has(id)) throw new ScopeError('Conversation lineage is cyclic.'); visited.add(id);
         const thread: Row | undefined = (await read(ctx, { kind: 'thread', thread_id: id })).thread;
         if (!thread || thread.deleted || thread.id !== id) throw new ScopeError('Conversation ancestry is unavailable.');
@@ -62,18 +62,16 @@ async function scope(ctx: HistoryRetrievalContext) {
     const memberships = new Map<string, Map<string, number>>(); const landmarks = new Map<string, Kind[]>();
     const pointers = new Set<string>(); const recipes: unknown[] = []; let summaryId: string | undefined = boundary.summary_message_id;
     while (summaryId) {
-        if (pointers.size >= 128) throw new ScopeError('Captured scope exceeds the 128-link lookup bound.');
         if (pointers.has(summaryId)) throw new ScopeError('History scope references are cyclic.'); pointers.add(summaryId);
-        const summary = (await rows(ctx, [summaryId]))[0];
+        const summary: Row | undefined = (await rows(ctx, [summaryId]))[0];
         const owner = summary && path.find((thread) => thread.id === summary.thread_id);
-        const metadata = summary && readCompactionData(object(summary.data).compaction);
-        if (!summary || summary.deleted || summary.pending || summary.role !== 'system' || !owner || !metadata
+        const metadata: CompactionData | undefined = summary ? readCompactionData(object(summary.data).compaction) ?? undefined : undefined;
+        if (!summary || summary.deleted || summary.pending || summary.role !== 'system' || object(summary.data).kind !== 'compaction' || !owner || !metadata
             || owner.summary_message_id !== summary.id || owner.branch_mode !== 'compacted'
             || metadata.source_thread_id !== owner.parent_thread_id || metadata.anchor_message_id !== owner.anchor_message_id) {
             throw new ScopeError('A captured scope recipe is unavailable or does not belong to this lineage.');
         }
-        if (bytes(metadata.history_scope) > 128 * 1024
-            || metadata.history_scope.segments.reduce((count, segment) => count + segment.messages.length, 0) > 2048) {
+        if (bytes(metadata.history_scope) > 256 * 1024) {
             throw new ScopeError('A captured scope exceeds its metadata bounds.');
         }
         recipes.push({ summaryId, clock: summary.clock, metadata });
@@ -137,17 +135,18 @@ export function createHistoryRetrievalService() {
         try {
             const state = await scope(ctx); const expanded = args.include_after_compaction === true;
             if (!expanded && !state.refs.some((ref) => ref.messageId === args.message_id)) return { status: 'out_of_scope', requested_message_id: args.message_id };
-            let row = (await rows(ctx, [args.message_id]))[0];
-            if (!row) return { status: expanded ? 'out_of_scope' : 'unavailable', requested_message_id: args.message_id };
+            const initial = (await rows(ctx, [args.message_id]))[0];
+            if (!initial) return { status: expanded ? 'out_of_scope' : 'unavailable', requested_message_id: args.message_id };
+            let row: Row = initial;
             if (!permitted(state, row, expanded)) return { status: 'out_of_scope', requested_message_id: args.message_id };
             if (row.deleted) return { status: 'deleted', requested_message_id: args.message_id };
             const replacements: string[] = []; const visited = new Set<string>();
             for (let step = 0; step < 16; step++) {
                 if (visited.has(row.id)) throw new ScopeError('Replacement history is cyclic.'); visited.add(row.id);
-                const replacement = object(row.data).superseded_by;
+                const replacement: unknown = object(row.data).superseded_by;
                 if (typeof replacement !== 'string' || !replacement) break;
                 replacements.push(replacement);
-                const next = (await rows(ctx, [replacement]))[0];
+                const next: Row | undefined = (await rows(ctx, [replacement]))[0];
                 if (!next || !permitted(state, next, expanded)) return { status: 'superseded', requested_message_id: args.message_id,
                     replacement_message_ids: replacements, reason: 'Replacement content is unavailable in this scope.' };
                 if (next.deleted) return { status: 'deleted', requested_message_id: args.message_id, replacement_message_ids: replacements };
@@ -160,7 +159,30 @@ export function createHistoryRetrievalService() {
             // loading an unbounded conversation to discover the next neighbor.
             let neighborsIncomplete = false;
             for (const direction of [-1, 1]) {
-                if (position < 0) { neighborsIncomplete = expanded; continue; }
+                if (expanded) {
+                    const threadIds = state.path.slice(1).reverse().map((thread) => thread.id);
+                    let threadPosition = threadIds.indexOf(String(row.thread_id)); let visited = 0; let found = false;
+                    let pageCursor: string | undefined = encodeCanonicalChatSeek({ thread_id: String(row.thread_id), backward: direction < 0,
+                        key: [Number(row.index), String(row.order_key ?? ''), row.id] });
+                    while (threadPosition >= 0 && threadPosition < threadIds.length && visited < 500) {
+                        const threadId = threadIds[threadPosition]!;
+                        const page = await read(ctx, { kind: 'thread_page', thread_id: threadId,
+                            cursor: pageCursor ?? encodeCanonicalChatSeek({ thread_id: threadId, backward: direction < 0 }), limit: Math.min(100, 500 - visited) });
+                        visited += page.examined_rows ?? page.messages?.length ?? 0;
+                        for (const neighbor of page.messages ?? []) {
+                            if (neighbor.thread_id !== threadId || neighbor.deleted || object(neighbor.data).superseded_by || !permitted(state, neighbor, true)) continue;
+                            neighbors.push(describe(state, neighbor, 2000)); found = true; break;
+                        }
+                        if (found) break;
+                        if (page.next_cursor) {
+                            if (!(page.messages?.length)) throw new ScopeError('Canonical neighbor paging made no progress.');
+                            pageCursor = page.next_cursor;
+                        } else { threadPosition += direction; pageCursor = undefined; }
+                    }
+                    if (!found && visited >= 500) neighborsIncomplete = true;
+                    continue;
+                }
+                if (position < 0) continue;
                 let found = false; let visited = 0;
                 for (let offset = position + direction; offset >= 0 && offset < state.refs.length && visited < 100; offset += direction) {
                     visited++;
@@ -194,6 +216,7 @@ export function createHistoryRetrievalService() {
             const state = await scope(ctx); const expanded = args.include_after_compaction === true;
             const binding = await hash({ scope: state.identity, query, kinds: args.kinds ?? [], expanded });
             let position = 0; let ancestor = 0; let pageOffset = 0; let providerCursor: string | undefined;
+            let capturedSeen = 0;
             if (args.cursor) {
                 const saved = await openCursor(args.cursor);
                 if (saved.binding !== binding || typeof saved.expires !== 'number' || saved.expires < Date.now()
@@ -202,20 +225,25 @@ export function createHistoryRetrievalService() {
                     || !Number.isSafeInteger(saved.pageOffset) || Number(saved.pageOffset) < 0 || Number(saved.pageOffset) > 100) throw new ScopeError('Scope or query changed. Start a new search.');
                 position = Number(saved.position); ancestor = Number(saved.ancestor); pageOffset = Number(saved.pageOffset);
                 providerCursor = typeof saved.providerCursor === 'string' ? saved.providerCursor : undefined;
+                if (!Number.isSafeInteger(saved.capturedSeen) || Number(saved.capturedSeen) < 0 || Number(saved.capturedSeen) > state.refs.length) throw new ScopeError('History cursor progress is invalid.');
+                capturedSeen = Number(saved.capturedSeen);
             }
-            const terms = [...new Set(query.split(/\s+/))]; let scanned = 0; let scannedBytes = 0; let complete = false;
+            const terms = [...new Set(query.split(/\s+/))]; let scanned = 0; let fetched = 0; let scannedBytes = 0; let complete = false;
             const found: Array<ReturnType<typeof describe> & { score: number; landmark: boolean; proximity: number; orderIndex: number; orderKey: string }> = [];
-            while (scanned < 500 && scannedBytes < 1024 * 1024) {
+            while (fetched < 500 && scannedBytes < 1024 * 1024) {
                 await guard(ctx); let candidates: Row[]; let pageEndCursor: string | undefined; let hitBudget = false;
                 if (expanded) {
                     const thread = state.path.slice(1)[ancestor]; if (!thread) { complete = true; break; }
-                    const page = await read(ctx, { kind: 'thread_page', thread_id: thread.id, cursor: providerCursor, limit: 100 });
+                    const page = await read(ctx, { kind: 'thread_page', thread_id: thread.id, cursor: providerCursor, limit: Math.min(100, 500 - fetched) });
+                    fetched += page.examined_rows ?? page.messages?.length ?? 0;
                     candidates = (page.messages ?? []).slice(pageOffset); pageEndCursor = page.next_cursor;
                     if (!candidates.length && pageEndCursor) throw new ScopeError('Canonical history paging made no progress.');
                 } else {
                     const refs = state.refs.slice(position, position + Math.min(100, 500 - scanned));
                     if (!refs.length) { complete = true; break; }
                     const available = new Map((await rows(ctx, refs.map((ref) => ref.messageId))).map((row) => [row.id, row]));
+                    fetched += refs.length;
+                    if (refs.some((ref) => !available.has(ref.messageId))) throw new ScopeError('Some captured originals are unavailable or not synced. Search coverage is incomplete.');
                     candidates = refs.map((ref) => available.get(ref.messageId)
                         ?? { id: ref.messageId, clock: ref.clock, thread_id: ref.threadId, deleted: true });
                 }
@@ -224,7 +252,10 @@ export function createHistoryRetrievalService() {
                     const text = eligible ? textOf(row) : ''; const size = bytes(text);
                     if (size > 1024 * 1024) throw new ScopeError('A historical row exceeds the bounded search work budget. Use its message lookup instead.');
                     if (scannedBytes + size > 1024 * 1024 || scanned >= 500) { hitBudget = true; break; }
-                    scanned++; scannedBytes += size; if (expanded) pageOffset++; else position++;
+                    scanned++; scannedBytes += size; if (expanded) {
+                        pageOffset++;
+                        if (state.memberships.get(String(row.thread_id))?.has(row.id)) capturedSeen++;
+                    } else position++;
                     if (!eligible) continue;
                     const kinds = [...(state.landmarks.get(row.id) ?? []), ...(row.role === 'tool' ? ['tool-result' as const] : []),
                         ...(typeof row.file_hashes === 'string' && row.file_hashes !== '[]' ? ['file' as const] : [])];
@@ -241,8 +272,9 @@ export function createHistoryRetrievalService() {
                 || a.orderIndex - b.orderIndex || a.orderKey.localeCompare(b.orderKey) || a.message_id.localeCompare(b.message_id));
             const results = found.slice(0, 20).map(({ score: _score, landmark: _landmark, proximity: _proximity,
                 orderIndex: _index, orderKey: _key, ...row }) => row);
-            const result = { status: 'ok', results, scanned_rows: scanned, scan_complete: complete,
-                next_cursor: complete ? undefined : await cursor({ binding, position, ancestor, pageOffset, providerCursor, expires: Date.now() + 10 * 60 * 1000 }) };
+            if (expanded && complete && capturedSeen < state.refs.length) throw new ScopeError('Some captured originals are unavailable or not synced. Search coverage is incomplete.');
+            const result = { status: 'ok', results, scanned_rows: scanned, fetched_rows: fetched, scan_complete: complete,
+                next_cursor: complete ? undefined : await cursor({ binding, position, ancestor, pageOffset, providerCursor, capturedSeen, expires: Date.now() + 10 * 60 * 1000 }) };
             while (bytes(result) > 16 * 1024 && results.length) results.pop();
             await guard(ctx);
             if (await ctx.revision() !== state.revision) throw new ScopeError('History changed during search. Start a new search.');
@@ -253,5 +285,12 @@ export function createHistoryRetrievalService() {
             return { status: 'scope_incomplete', reason: error instanceof ScopeError ? error.message : 'Historical search is unavailable.' };
         }
     }
-    return { getMessage, searchParent };
+    async function inspect(ctx: HistoryRetrievalContext) {
+        try { await scope(ctx); await guard(ctx); return { status: 'ok' as const }; }
+        catch (error) {
+            if (ctx.signal.aborted) throw error;
+            return { status: 'scope_incomplete' as const, reason: 'Canonical compaction scope is unavailable.' };
+        }
+    }
+    return { getMessage, searchParent, inspect };
 }

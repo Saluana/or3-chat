@@ -1,0 +1,13 @@
+# Native rejected-turn recovery
+
+Implementation boundary, pending qualification and parent review:
+
+An initial native context rejection after local admission retains the saved user/assistant identities. The host retains the final native messages in a workspace-local recovery checkpoint. Recovery repeats capacity resolution and route/tool placement, then reuses the existing native execution owner. It does not repeat outgoing, input, prepare, final before-send or real-ID before-send hooks. Those hooks may already have produced side effects. Delegated requests never create these checkpoints.
+
+The local-only checkpoint is separate from synchronized chat rows and is keyed by thread, with one native attempt per thread. It is written before inference; a settled initial `context_full` error and the exact request identity are required before it can recover. It contains no credentials. It binds the submitted input, exact saved turn IDs, canonical source clocks/lineage and tool definitions. Source changes, missing rows, an accepted generation, or incompatible tools prevent recovery. No transaction spans provider execution. A repeated local admission refusal leaves the failed saved attempt intact. Cleanup compares request IDs so an older sender cannot erase a newer checkpoint. Checkpoint storage failure stops before inference.
+
+Changing model, routing, reasoning, reply allowance or the optional context maximum is allowed after a fresh native admission. Changing source history or the submitted input requires explicit new preparation and does not reuse side-effecting filter output. Saved-turn Retry uses the checkpoint rather than inserting another user turn. Reload can retain a checkpoint; ordinary composer drafts still follow existing draft behavior.
+
+The existing private Workflows pure prepare/commit contract remains additive. Legacy final filters retain their once-only post-write order. This recovery capability does not claim universal zero-write legacy final-filter admission. Provider acceptance removes the checkpoint: later tool-loop context failures retain accepted results and use ordinary continuation/compaction, without replaying tools.
+
+Required evidence: real native foreground and background initial refusal followed by a larger model/reply change; same durable IDs and one user row; filters invoked once; reload recovery; cancellation and source/workspace changes; checkpoint persistence failure; unchanged attachments; accepted tool-loop refusal never entering initial recovery; selected provider admission and stale generation fences.

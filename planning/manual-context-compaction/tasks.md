@@ -1,6 +1,6 @@
 # Tasks
 
-Progress snapshot: **12 complete, 27 partial, 16 not started (55 tasks)**. Checked boxes mean the full stated task criteria are implemented and verified at the linked boundary. Partial and unverified work remains unchecked; this is not a full-feature completion claim. Reviewed background-usage runtime is adopted at `e832700f` (tree `82821322afb51b88273a4f8560187bcfb23a4eef`); publication and exact-head CI remain held. Evidence and retained first failures: [evidence.md](./evidence.md). Each task is intended to take roughly 1–4 hours; split a task at its existing component/provider boundary if discovery makes it larger. Dependencies run from top to bottom. Where fixtures are written first, their final assertions become green only when the corresponding production task is complete; do not commit permanently skipped cases as a substitute.
+Progress snapshot: **12 complete, 39 partial, 4 not started (55 tasks)**. Checked boxes mean the full stated task criteria are implemented and verified at the linked boundary. Partial and unverified work remains unchecked; this is not a full-feature completion claim. Reviewed background-usage runtime is adopted at `e832700f` (tree `82821322afb51b88273a4f8560187bcfb23a4eef`); publication and exact-head CI remain held. Evidence and retained first failures: [evidence.md](./evidence.md). Each task is intended to take roughly 1–4 hours; split a task at its existing component/provider boundary if discovery makes it larger. Dependencies run from top to bottom. Where fixtures are written first, their final assertions become green only when the corresponding production task is complete; do not commit permanently skipped cases as a substitute.
 
 This plan changes native chat only. Preserve unrelated working-tree edits. Provider source changes require their owning source checkout and builds; installed `node_modules` files are not implementation targets. No task authorizes publication, a stable release, or production data changes.
 
@@ -22,7 +22,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C12.
       Requirements: R15.AC3.
       Done when: a Bun command selects only context scenarios, saves redacted bodies, screenshots, Playwright report and JSON assertions, records fixture/source versions, and runs against an isolated workspace/profile. Do not run a broad Playwright suite.
-      Status: Not started — test:e2e:context command and complete artifact manifest are not added.
+      Status: Partial — named Bun test:e2e:context selects only context/compaction scenarios, records source/fixture versions, redacted request hashes, screenshots and assertions in disposable profiles. Its two current scenarios pass (context-final, 11.0s); the complete context scenario set remains open.
 
 ## 2. Phase A — usage, estimation and hard admission
 
@@ -96,7 +96,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C2, C4.
       Requirements: R3.AC4, R3.AC6, R4.AC1, R4.AC2, R4.AC4, R4.AC5, R16.AC4.
       Done when: final filtered requests are checked without trimming; rejected send keeps draft/attachments; retry does not supersede existing history on rejection; workflow-handled paths remain correctly delegated.
-      Status: Partial — initial native full-body denial creates no thread/user/assistant rows; refused retry/continue preserves original history. Pure request preparation and acknowledged real-ID commit have actual native/private Workflows qualification, legacy final filter remains once-only post-write, and concurrent sibling sends remain native. Draft/attachment/browser recovery and full route qualification remain. Side-effecting legacy final filters cannot give universal zero-write final-payload admission; no legacy filter was moved or repeated.
+      Status: Partial — native admission/private Workflows controls remain qualified at their committed source. A request-owned local-only final payload checkpoint is durable before initial inference, binds real saved IDs and source/tool identity, and retries after fresh admission without repeating side-effecting filters. The actual reload recovery journey passes with the same user/assistant IDs, same messages hash, a larger model and one final-filter execution. Attachments, storage failure, background and cancellation matrices remain. Legacy filters retain their once-only post-write boundary and cannot provide universal zero-write admission.
 
 - [x] 2.9 Guard every foreground and server tool-loop provider request (3h).
       Components: C2.
@@ -108,13 +108,13 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C2.
       Requirements: R5.AC1, R5.AC2, R5.AC3, R5.AC4.
       Done when: users inspect omitted groups/counts, confirmation binds the exact candidate, protected content and tool pairs remain intact, omission metadata persists, and subsequent iterations cannot increase omissions without a new decision.
-      Status: Partial — explicit inspection builds complete oldest-turn omissions, preserves all system/summary/latest-user suffix content, binds a one-use candidate to DB/workspace generation/thread/source fingerprint/model/catalog/user choices and complete provider bytes, persists context_omission, and freezes omissions through native iteration inputs. Final legacy-filter mutation rejects rather than silently changing the reviewed candidate. Inspection/list/confirmation/cancel UI is wired. Tool-pair edge cases, race/admission failures and next-normal-turn behavior need meaningful final verification; no new tests were run at the user’s direction.
+      Status: Partial — one-use explicit omission inspection preserves system/summary/latest-user content and complete turn groups, binds source/configuration/provider bytes, persists context_omission and freezes omission scope. Tool-call/result grouping now preserves pairs across system rows and protects malformed/cross-turn evidence. Final filter mutation rejects. UI is wired; race/admission/tool-pair and next-normal-turn qualification remains.
 
 - [ ] 2.11 Add the reactive meter and blocking banner to native composer content (3h).
       Components: C2, C7.
       Requirements: R3.AC1, R3.AC2, R3.AC4, R3.AC5, R3.AC6, R4.AC2, R4.AC4, R5.AC1, R16.AC3, R16.AC4.
       Done when: the meter uses the full model window by default (including 1,000,000), labels an active user maximum and reply capacity separately, shows metadata/usage uncertainty honestly, preserves drafts, and responds to settings/model changes after 120 ms without auto-compaction or media hydration. Compact now is not advertised until Phase B is usable.
-      Status: Partial — native composer now has a 120ms-debounced read-only canonical preview with text-count memoization, catalog facts, tool/configuration overhead, 70/90% theme-token thresholds, optional maximum, reply capacity and explicit unknown media cost. It invokes no send hooks or media hydration. Real context errors expose compact/edit/model/lossy recovery. Draft clearing waits for provider acceptance and fences intervening edits/navigation. Final meter/attachments/performance/accessibility/browser and initial-server-rejection same-turn retry qualification remain.
+      Status: Partial — native composer has a 120ms read-only canonical preview with selected route/reasoning, tool overhead, measured-prefix support and explicit media uncertainty. The context popover separates input/reply/model/user limits; draft clearing waits for provider acceptance. Sixteen real PageShell light/dark/desktop/mobile screenshots were inspected, and Compact is visible beside the meter even when the theme hides optional toolbar contributions. Full accessibility, attachments, scale and rejection recovery matrices remain.
 
 ## 3. Phase B — schemas, history boundaries and atomic commit
 
@@ -208,13 +208,13 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C3, C7.
       Requirements: R1.AC1, R1.AC2, R1.AC4, R9.AC2, R9.AC3, R9.AC5, R11.AC5.
       Done when: actions use existing registries, the card survives reload with summary/landmarks/counts, summary edit/retry is unavailable, manual links work without model tools, and the current message-renderer work is accommodated.
-      Status: Partial — composer and message generation actions now use existing registries and the production pane controller. Existing card/reload/manual navigation evidence is retained. Thread-history action, complete eligibility affordances, accessibility and final product-native browser qualification remain; new action code has not been tested per the user instruction.
+      Status: Partial — composer/message/thread-history actions use existing registries and the production pane controller, with per-anchor busy/short-scope reasons and workspace/generation navigation fences. Card keeps read-only summary/details/manual landmarks without requiring model tools. New browser/keyboard/mobile qualification and parent review remain.
 
 - [ ] 4.7 Wire source/anchor and reverse-child navigation through the existing selection flow (2h).
       Components: C7.
       Requirements: R8.AC4, R9.AC4, R13.AC2.
       Done when: View original reaches the correct stored message with a human ordinal, reverse links list actual children, missing content shows unavailable, and a stale pane never receives late forced navigation.
-      Status: Partial — origin/destination pane navigation and canonical tool-parent mapping implemented with104 focused cases. Fresh-owner pane repair passes63 focused cases/types; first browser reveals unsupported reload-persistent draft expectation, later trace reveals a fresh fill on child before async source navigation. Observable source synchronization retains all assertions. Independent composer correction passes31 cases/types; pushed2428129c Core/Contracts pass. Parent's nested tool label/runtime/completedAt regression is reproduced through realDexie and corrected by stable-callID metadata merge with canonical execution precedence.64 cases/lint/compatibility/types pass; unchanged named browser on clean a8e9cd8e passes all draft/tool/DB/ordinary-new-chat assertions. New exactCI/P2 re-review pending. Reverse-child links and human-ordinal UI remain absent.
+      Status: Partial — prior a8e9cd8e navigation/tool/DB/draft evidence remains qualified at that source. Human ordinal labels and keyset-paged reverse-child links now use owned metadata, verified tool-parent mapping and workspace/pane fences. The updated real-app browser journey is running; keyboard/missing-source/reverse-child qualification and parent review remain.
 
 ## 5. Phase C — browser retrieval and authorization contracts
 
@@ -228,7 +228,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C4, C8.
       Requirements: R10.AC1, R10.AC3, R10.AC4, R10.AC5, R10.AC6, R11.AC1.
       Done when: membership/ancestor validation precedes content, bounded lookup returns scoped neighbors and replacement metadata, changed/deleted statuses are truthful, loops terminate, and workspace switches cancel reads.
-      Status: Partial — shared retrieval policy and captured-workspace Dexie reader are written, with explicit ancestry/scope bounds, replacement handling, workspace fences and metadata-only cursor invalidation. Expanded lookup currently reports incomplete neighbors outside captured references; production security/cancellation qualification remains unrun.
+      Status: Partial — shared retrieval policy and captured-workspace Dexie reader use actual ancestry, captured membership, bounded replacements, forward/backward keysets across ancestor boundaries and workspace fences. Per-connection revisions include inactive workspace writers. Cycles terminate without an arbitrary generation cutoff. Configured host type check passes; production security/cancellation/cross-tab qualification remains.
 
 - [ ] 5.3 Implement bounded parent search and continuation cursors (3h).
       Components: C8.
@@ -240,7 +240,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C8.
       Requirements: R10.AC1, R10.AC2, R11.AC1, R11.AC5.
       Done when: names cannot silently override another registration, context identity is captured rather than passed as model arguments, only appropriate chat threads expose the tools, and a no-tool model retains manual landmark navigation.
-      Status: Partial — core get_message/search_parent definitions and browser registrations are written, with collision cleanup and compaction-ancestry availability. Placement remains client-only through the existing browser bridge; no server-ready advertisement is made. Actual registry/model/browser qualification remains unrun.
+      Status: Partial — core get_message/search_parent definitions and browser registrations use collision cleanup and metadata ancestry availability. Canonical readiness now selects hybrid or client placement before catalog freeze. No-tool models retain manual card links. Registry/model/browser qualification remains.
 
 - [ ] 5.5 Add the optional canonical chat-reader capability and provider conformance fixtures (3h).
       Components: C9, C12.
@@ -272,7 +272,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C8, C9.
       Requirements: R11.AC3, R11.AC4, R11.AC5.
       Done when: canonical capability and synced summary/lineage enable hybrid server use, missing support selects the existing browser bridge or foreground path explicitly, and a later gap returns scope-incomplete instead of a false empty search.
-      Status: Not started — canonical-capability versus browser/foreground retrieval placement is not implemented.
+      Status: Partial — authenticated no-write readiness validates selected canonical capability and summary lineage before catalog freeze; missing support selects the existing browser bridge/foreground path. Server independently checks readiness before job creation. Source/type verification is present; missing-capability, partial-sync and reconnect journeys remain.
 
 - [ ] 6.5 Verify provider round trips and background reconnect with rebuilt provider artifacts (3h).
       Components: C1, C7, C9, C12.
@@ -292,25 +292,25 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C4, C10.
       Requirements: R12.AC1, R12.AC2, R12.AC4, R12.AC5, R14.AC1.
       Done when: top-level limits count distinct families/documents, sort keys match DB scanning, both sidebar consumers share one flat row model, and expanded family members page separately without loading messages.
-      Status: Not started — shared family pagination/lazy sidebar root grouping is not implemented.
+      Status: Partial — shared metadata-only family pagination now serves both sidebar consumers, counts distinct families/documents, follows actual parents with cycle/missing-parent handling and pages members separately. Incorrect/legacy root hints remain discoverable. 10k-scale, exact ordering and no-message-read proof remain.
 
 - [ ] 7.3 Render collapsible rows, workspace KV expansion and row-menu navigation (3h).
       Components: C10.
       Requirements: R12.AC1, R12.AC2, R12.AC3, R12.AC6.
       Done when: Original/Compacted/known Retry/Branch labels are truthful, group and exact-member targets differ correctly, latest compaction is separate from latest activity, keyboard focus/aria state work, and expansion survives reload.
-      Status: Not started — family rows/expansion KV/keyboard/menu UI is not implemented.
+      Status: Partial — flat rows, truthful branch labels, workspace KV expansion and original/latest-compaction menus are implemented with theme tokens and aria state. Real light/dark desktop/mobile screenshots and keyboard Enter expansion with four members pass. Preference reload, complete keyboard focus and exact group/member/menu generation targets remain unqualified.
 
 - [ ] 7.4 Integrate filters, child-only matches and damaged lineage UI (3h).
       Components: C10, C11.
       Requirements: R12.AC3, R12.AC5, R13.AC2, R13.AC3.
       Done when: search reveals matching children without altering saved expansion, project/pinned membership stays constrained, and missing/cyclic parents cannot hide otherwise usable local threads.
-      Status: Not started — grouped filter/child-only search/damaged-lineage UI is not implemented.
+      Status: Partial — child-only search reveals matching members without changing saved expansion; thread project/pinned filters and finite damaged-lineage copy are wired. Filtered surface integration, mixed documents and cyclic/missing-parent journeys remain.
 
 - [ ] 7.5 Guard central hard deletion and represent unavailable historical references (2h).
       Components: C11.
       Requirements: R13.AC1, R13.AC2, R13.AC3.
       Done when: known descendants block central hard delete with an explicit soft-delete alternative, deleted content is never returned by tools, and remote purge/missing message cases leave summaries usable without silent reparenting.
-      Status: Partial — card reports missing/deleted/replaced originals; compacted projection remains usable after source deletion. Central descendant hard-delete guard/soft-delete alternative and full remote-purge matrix remain.
+      Status: Partial — central hard deletion checks retained descendants before and after hooks inside the write transaction and exposes a soft-delete alternative. Recovery/retired expansion cleanup participates in deletion. Cards/tools represent unavailable originals without reparenting. Descendant races, full remote-purge/deletion journeys and cleanup scale remain unverified.
 
 ## 8. Complete evidence and documentation
 
@@ -318,7 +318,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C12.
       Requirements: R15.AC1, R15.AC2, R15.AC3.
       Done when: the named harness is green, request-body evidence proves summary-only context and no implicit trimmed sends, failure paths show zero partial children, and report/screenshots/assertions are repeatable from the manifest.
-      Status: Partial — corrected named PageShell navigation journey at a8e9cd8e passes all retained draft/tool/DB/ordinary-new-chat assertions with screenshots/trace. Native admission and paired source fixtures now retain first failures and captured scripted bodies. The named complete context harness, redacted-body manifest and summary/retrieval/sidebar journeys remain.
+      Status: Partial — the named two-scenario context harness passes (context-final, 11.0s), retaining rejected-turn same-ID reload recovery plus cancellation/DB/reload/original tool-anchor/draft/ordinary-new-chat assertions. Sixteen real presentation screenshots were inspected. Summary-only continuation, security/retrieval/sidebar/deletion and the full scenario set remain. Library upload is blocked by unavailable prepare_uploads; local artifacts are retained.
 
 - [ ] 8.2 Measure the documented scale fixture and remove accidental whole-history work (3h).
       Components: C2, C8, C10, C12.
@@ -336,13 +336,13 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C12.
       Requirements: R14.AC3, R14.AC4, R16.AC1, R16.AC2, R16.AC3.
       Done when: `public/_documentation/` includes compaction/context and retrieval guidance registered in `docmap.json`; AI-settings docs explain Use model limit and the optional maximum; model-capacity versus usage-estimation semantics are explicit; branching/chat/sidebar docs and hook type maps match implementation, with no unimplemented prompt hooks advertised.
-      Status: Partial — registered chat lifecycle, AI preference and hook reference documents describe native foreground admission, paired prepare/commit and explicit legacy/server/installed-artifact limits. Generated additive hook API is reviewed against retained baseline; no existing exports/signatures are removed and Nuxt auto-imports stay byte-identical. Full compaction/retrieval/branching/sidebar guidance remains.
+      Status: Partial — registered context/compaction guidance now describes meter semantics, manual actions, recovery, lossy decisions, cards, families, deletion and optional canonical retrieval/provider placement. Recovery host/plugin contract documents once-only side effects and local-only storage. Existing additive hook API evidence remains. Final documentation/source consistency and extension contract qualification remain.
 
 - [ ] 8.5 Verify static/server builds, types, generated contracts and affected lanes (3h).
       Components: C9, C12.
       Requirements: R11.AC1, R14.AC1, R14.AC2, R14.AC3, R15.AC2.
       Done when: narrow owner tests, `bun run test:changed`, affected provider/integration checks, `bun run type-check`, `bun run generate:static` and `bun run build` pass; generated provider host contracts are current; branch/public surface changes pass the applicable compatibility lane or have an explicit resolved compatibility decision.
-      Status: Partial — native phase configured types, production TS lint, generated additive contracts, changed1949/1949, plugin compatibility183/183, static and configured SSR builds pass locally with first setup/type failures retained. Private Workflows source validates/builds/packs. Final provider readers/artifacts, complete browser/integration qualification and all applicable gates after remaining implementation still remain; GitHub/exact-head remote CI is held.
+      Status: Partial — prior committed native/server types, changed suites, compatibility, static and SSR builds remain predecessor evidence. Current narrow admission/summary/budget owners pass 44/44; two named browser journeys pass; final configured host types and strict changed TS lint pass. Private SQLite/Convex standalone types and normal builds pass, with Convex template pack regenerated. Actual reader migrations/auth/scaffold transactions, rebuilt-runtime conformance, final static/SSR/compatibility/changed gates and exact-head CI remain open. GitHub writes remain held.
 
 - [ ] 8.6 Close traceability and record capability/quality limitations (1h).
       Components: C12.
