@@ -136,7 +136,7 @@ IF a final request cannot fit its input and reply within the effective context w
 
 WHEN an initial send is blocked THEN its draft and attachments SHALL remain available, no assistant generation SHALL begin, and no duplicate durable user turn SHALL be produced on retry.
 
-- State: Partial: same-ID recovery and preserved draft/zero native preflight writes pass; actual attachment/background checkpoint-recovery matrix now passes locally. Brendon selected pure Workflows802cca1 adoption; the exact source package is conformant, but archive canary/activation and an immutable fresh version remain outstanding. Generic legacy compatibility does not qualify this criterion.
+- State: Partial: same-ID recovery and preserved draft/zero native preflight writes pass; actual attachment/background checkpoint-recovery matrix passes locally. Brendon selected pure Workflows adoption. Fresh frozen0.1.2/52be3d1 passes the normal protected archive/server/browser canary and both actual installed-package journeys in a disposable local workspace (2/2,17.5s; zero inference requests), beyond the independently qualified802cca1 hooks integration. [Exact identity, first failures and next approval](./PACKAGE_ADOPTION_PREPARATION.md). Named real-target adoption remains unapproved/unqualified; generic legacy compatibility does not qualify this criterion.
 - Owner: useAi.context-admission; stream-handler.tools; native recovery/lossy journeys.
 - Evidence scope: Fresh complete-body admission, preserved accepted tools, provider context errors and same-turn checkpoint recovery. Legacy side-effecting filter boundary is documented.
 
