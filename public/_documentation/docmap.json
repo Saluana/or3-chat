@@ -389,7 +389,7 @@
                     "category": "Using tools",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Understand model context, manual compaction, original links, conversation families and historical retrieval boundaries."
+                    "summary": "Manage Chat memory, compact manually or automatically at 80%, and keep links to the original conversation."
                 },
                 {
                     "name": "openrouterStream.md",

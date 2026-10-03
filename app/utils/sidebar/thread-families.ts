@@ -110,9 +110,19 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
             await Dexie.waitFor(new Promise<void>((resolve) => setTimeout(resolve, 0)));
         }
     }
-    const top = [...families.map(({ member, root }) => ({ record: member, item: { ...threadToSidebar(member),
-        title: member.title || 'Untitled Chat', family: { kind: 'group-header' as const, key: `family:${root.id}`,
-            rootId: root.id, expanded: false, searchExpanded: false, damaged: root.damaged, originalId: root.original?.id } } })),
+    const threads: Array<{ record: Thread; item: UnifiedSidebarItem }> = [];
+    for (const { member, root } of families) {
+        const item = threadToSidebar(member);
+        const related = member.parent_thread_id || member.forked || member.branch_mode === 'compacted'
+            || await db.threads.where('parent_thread_id').equals(member.id).first();
+        if (related) {
+            item.title = root.original?.title || item.title;
+            item.family = { kind: 'group-header', key: `family:${root.id}`,
+            rootId: root.id, expanded: false, searchExpanded: false, damaged: root.damaged, originalId: root.original?.id };
+        }
+        threads.push({ record: member, item });
+    }
+    const top = [...threads,
         ...documents.map((record) => ({ record, item: documentToSidebar(record) }))].sort((a, b) => compare(a.record, b.record));
     return { items: top.slice(0, options.limit).map((row) => row.item), hasMore: top.length > options.limit };
 }

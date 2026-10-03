@@ -1,6 +1,9 @@
 @reference '../../assets/css/main.css';
 
 [data-theme="blank"] {
+    .chat-scroll-to-bottom {
+        border: max(1px, var(--md-border-width-subtle, var(--md-border-width, 1px))) solid var(--md-border-color) !important;
+    }
     --chat-composer-border-radius: 28px;
     --blank-brand-accent: #2a8fd6;
 

@@ -15,23 +15,11 @@
         @click="handleContainerClick"
     >
         <div class="chat-input-inner-container flex flex-col gap-3.5 m-3.5">
-            <div class="flex flex-wrap items-center justify-between gap-2 px-1" data-context-actions>
-                <ChatContextMeter :state="contextPreview.state.value" @refresh="contextPreview.refresh()" />
-                <UTooltip v-for="entry in contextComposerActions" :key="entry.action.id"
-                    :text="props.compactionBlockedReason || entry.action.tooltip" :delay-duration="0">
-                    <UButton size="xs" variant="ghost" color="neutral"
-                        :aria-label="entry.action.tooltip || entry.action.label"
-                        :disabled="entry.disabled" @click.stop="handleComposerAction(entry)">
-                        <UIcon :name="entry.action.icon" class="w-3.5 h-3.5" />
-                        {{ entry.action.label }}
-                    </UButton>
-                </UTooltip>
-            </div>
             <div v-if="sendBlock" role="status" aria-live="polite" class="space-y-2 text-xs">
                 <p v-if="sendBlock.reason === 'context_full'">Context full — compact to continue</p>
                 <p>{{ sendBlock.error || 'Edit the request or choose a larger model.' }}</p>
                 <div class="flex flex-wrap gap-2">
-                    <UButton v-if="props.compactThread" size="xs" variant="soft" color="neutral" :disabled="Boolean(props.compactionBlockedReason) || props.loading" @click.stop="props.compactThread()">Compact now</UButton>
+                    <UButton size="xs" variant="soft" color="neutral" @click.stop="settingsPopoverOpen = true">Chat memory</UButton>
                     <UButton size="xs" variant="ghost" color="neutral" @click.stop="showModelCatalog = true">Choose model</UButton>
                     <UButton v-if="sendBlock.reason === 'context_full' && !('userMessageId' in sendBlock && sendBlock.userMessageId)" size="xs" variant="ghost" color="neutral" :disabled="props.loading" @click.stop="handleSend({ inspectLossyRequest: true })">Inspect lossy send</UButton>
                 </div>
@@ -47,10 +35,6 @@
                         <UButton size="xs" variant="ghost" color="neutral" @click.stop="lossyPreview = undefined">Cancel</UButton>
                     </div>
                 </details>
-            </div>
-            <div v-if="compactionInProgress" role="status" aria-live="polite" class="flex items-center justify-between gap-2 text-xs">
-                <span>{{ props.compactionState?.status }} summary · {{ compactionModel }}</span>
-                <UButton size="xs" variant="ghost" color="neutral" @click.stop="emit('cancel-compaction')">Cancel</UButton>
             </div>
             <!-- Main Input Area -->
             <div class="relative">
@@ -120,7 +104,7 @@
                                     label="Open"
                                     type="button"
                                     aria-label="Settings"
-                                    :disabled="loading"
+                                    :disabled="loading && !compactionInProgress"
                                 >
                                     <UIcon
                                         :name="iconModelSettings"
@@ -140,6 +124,11 @@
                                             modelDefaultReasoningEffort
                                         "
                                         :thread-id="props.threadId"
+                                        :context-state="contextPreview.state.value"
+                                        :compaction-state="props.compactionState"
+                                        :compaction-blocked-reason="props.compactionBlockedReason"
+                                        @compact="compactFromSettings"
+                                        @cancel-compaction="emit('cancel-compaction')"
                                         :pane-id="promptOwnerId"
                                         :prompt-selection-revision="promptSelectionRevision"
                                         v-model:model="selectedModel"
@@ -385,7 +374,7 @@
 </template>
 
 <script setup lang="ts">
-import ChatContextMeter from './ChatContextMeter.vue';
+import { inspectCompactionSource, CompactionError } from '~/db/compaction';
 import { useContextPreview } from '~/composables/chat/useContextPreview';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
@@ -808,9 +797,7 @@ const composerActionContext = (): ComposerActionContext => ({
 });
 
 const composerActions = useComposerActions(composerActionContext);
-// Keep the host's context action beside its meter. Theme wrappers may hide
-// optional toolbar contributions while retaining this native recovery path.
-const contextComposerActions = computed(() => composerActions.value.filter((entry) => entry.action.id === 'or3:compact-thread'));
+// Chat memory owns compaction; other extension actions keep their toolbar slots.
 const toolbarComposerActions = computed(() => composerActions.value.filter((entry) => entry.action.id !== 'or3:compact-thread'));
 
 async function handleComposerAction(entry: ComposerActionEntry) {
@@ -877,10 +864,37 @@ const contextPreview = useContextPreview({ threadId: () => props.threadId, model
     hasMedia: () => attachments.value.length > 0, promptSelection: stagedPromptId,
     revision: () => [props.contextRevision, promptSelectionRevision.value], reasoning: previewReasoning });
 const compactionInProgress = computed(() => props.compactionState && ['capturing', 'generating', 'correcting', 'committing'].includes(props.compactionState.status));
-const compactionModel = computed(() => props.compactionState && 'model' in props.compactionState ? props.compactionState.model : '');
 const tabDrafts = useWorkspaceTabDrafts();
 const { settings: aiSettings, ensureLoaded: ensureAiSettingsLoaded } =
     useAiSettings();
+let autoCompactionAttempt: string | undefined;
+watch(() => [contextPreview.state.value, aiSettings.value.autoCompactContext, props.contextRevision,
+    props.threadId, props.loading, props.streaming, compactionInProgress.value], async () => {
+    if (!import.meta.client || componentDisposed || !aiSettings.value.autoCompactContext || !props.threadId || !props.compactThread
+        || props.loading || props.streaming || compactionInProgress.value || props.compactionBlockedReason) return;
+    const preview = contextPreview.state.value;
+    if (preview.pending || !preview.admission || !('budget' in preview.admission)
+        || preview.admission.estimate.input_tokens / preview.admission.budget.effective_context_tokens < 0.8) return;
+    const threadId = props.threadId; const generation = getWorkspaceGeneration();
+    const history = Array.isArray(props.contextRevision) ? props.contextRevision : [];
+    const anchor = history.at(-1)?.id;
+    if (!anchor) return;
+    const attempt = `${generation}:${threadId}:${anchor}`;
+    if (autoCompactionAttempt === attempt) return;
+    autoCompactionAttempt = attempt;
+    try { await inspectCompactionSource(threadId); }
+    catch (error) {
+        if (!(error instanceof CompactionError)) console.warn('[chat-memory] Could not check automatic compaction eligibility.');
+        return;
+    }
+    if (componentDisposed || props.threadId !== threadId || getWorkspaceGeneration() !== generation || props.loading || props.streaming
+        || !aiSettings.value.autoCompactContext || compactionInProgress.value) return;
+    await compactFromSettings();
+});
+async function compactFromSettings() {
+    clearDraftCaptureTimer(); captureDraft();
+    await props.compactThread?.();
+}
 const restoringDraft = ref(false);
 let draftRestoreRevision = 0;
 let draftCaptureTimer: ReturnType<typeof setTimeout> | undefined;

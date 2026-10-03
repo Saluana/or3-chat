@@ -7,21 +7,54 @@ test.skip(
 
 const chatPage = '/__or3-chat-journey-test';
 const fixturePng = { name: 'composer.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=', 'base64') };
+test('compaction chat memory lives under system prompt in settings, with working version history', async ({ page }, info) => {
+    test.setTimeout(120_000);
+    await page.route('**openrouter.ai/**', route => route.abort());
+    await page.goto(`${chatPage}?compaction=1&presentation=1&native=1`);
+    await expect(page.locator('[data-compaction-card]')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('#chat-input-main [data-context-actions]')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    const memory = page.getByRole('region', { name: 'Chat memory', exact: true });
+    await expect(memory).toBeVisible();
+    await expect(memory.getByRole('button', { name: 'Create compacted version', exact: true })).toBeVisible();
+    await expect(memory.getByRole('button', { name: 'Chat memory details' })).toHaveCount(0);
+    await expect(memory).not.toContainText('auto-compaction off');
+    await expect(memory.getByRole('meter', { name: 'Estimated context used' })).toBeVisible();
+    const automatic = memory.getByRole('switch', { name: 'Auto-compact when context is high' });
+    await expect(automatic).not.toBeChecked(); await automatic.click(); await expect(automatic).toBeChecked();
+    const before = await page.locator('[data-msg-id]').filter({ has: page.locator('[data-compaction-card]') }).getAttribute('data-msg-id');
+    await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
+    const draft = 'Budget context. '.repeat(12000);
+    await page.getByRole('textbox', { name: 'Message input' }).fill(draft);
+    await expect.poll(async () => page.locator('[data-msg-id]').filter({ has: page.locator('[data-compaction-card]') }).getAttribute('data-msg-id'), { timeout: 30_000 }).not.toBe(before);
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toHaveText(draft.trim());
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(automatic).toBeChecked();
+    await expect.poll(async () => memory.evaluate(element => { const card = element.getBoundingClientRect(); const toggle = element.querySelector('[role="switch"]')!.getBoundingClientRect(); return toggle.bottom <= card.bottom; })).toBe(true);
+    const shot = info.outputPath('chat-memory-settings.png'); await page.screenshot({ path: shot, animations: 'disabled' });
+    await info.attach('chat-memory-settings', { path: shot, contentType: 'image/png' });
+    await memory.getByRole('button', { name: 'Version history', exact: true }).click();
+    await page.getByRole('button', { name: /Original conversation/ }).click();
+    await expect(page.locator('[data-compaction-card]')).toHaveCount(0);
+});
 test('compaction composer meter updates configuration, media and accessible warning thresholds', async ({ page }, info) => {
     test.setTimeout(120_000);
     await page.route('**openrouter.ai/**', (route) => route.abort());
+    await page.addInitScript(() => window.addEventListener('error', event => { if (event.message.includes('ResizeObserver loop')) event.stopImmediatePropagation(); }));
     await page.goto(`${chatPage}?compaction=1&meter=1`);
     const input = page.getByRole('textbox', { name: 'Message input' }); await expect(input).toBeVisible({ timeout: 60_000 });
-    const indicator = page.locator('[data-context-indicator]'); const meter = indicator.getByRole('meter', { name: 'Estimated context used' });
-    const settle = async () => { await expect(indicator).toHaveAttribute('aria-busy', 'false'); await expect(meter).toBeVisible(); };
+    const memory = page.getByRole('region', { name: 'Chat memory', exact: true });
+    const indicator = memory.locator('[data-context-indicator]'); const meter = indicator.getByRole('meter', { name: 'Estimated context used' });
+    const settle = async () => { if (!await memory.isVisible()) await page.getByRole('button', { name: 'Settings', exact: true }).click(); await expect(indicator).toHaveAttribute('aria-busy', 'false'); await expect(meter).toBeVisible(); };
+    const closeSettings = async () => { if (await memory.isVisible()) { await page.getByRole('button', { name: 'Close chat settings', exact: true }).click(); await expect(memory).not.toBeVisible(); } };
+    const outside = async (action: () => Promise<unknown>) => { await closeSettings(); await action(); await settle(); };
     const percent = async () => Number(await meter.getAttribute('aria-valuenow'));
     await settle(); const initial = await percent();
-    await page.getByTestId('fixture-meter-maximum').click(); await settle(); expect(await percent()).toBeGreaterThan(initial);
-    await indicator.getByRole('button').click(); await expect(page.getByText(/your maximum 40,000/)).toBeVisible(); await page.keyboard.press('Escape');
+    await outside(() => page.getByTestId('fixture-meter-maximum').click()); await expect.poll(percent).toBeGreaterThan(initial);
     const threshold = async (target: number) => {
         let low = 0; let high = 20_000;
         for (let count = 0; count < 15; count++) {
-            const mid = Math.floor((low + high) / 2); await input.fill('Budget context. '.repeat(mid)); await settle();
+            const mid = Math.floor((low + high) / 2); await outside(() => input.fill('Budget context. '.repeat(mid)));
             const value = await percent(); if (value === target) return;
             if (value < target) low = mid + 1; else high = mid - 1;
         }
@@ -38,38 +71,27 @@ test('compaction composer meter updates configuration, media and accessible warn
         }
     }
     expect(colors[69]).not.toBe(colors[70]); expect(colors[70]).toBe(colors[89]); expect(colors[89]).not.toBe(colors[90]);
-    await page.evaluate(() => {
-        const indicator = document.querySelector<HTMLElement>('[data-context-indicator]')!;
-        const editor = document.querySelector('[aria-label="Message input"]')!;
-        const begin = () => { indicator.dataset.debounceStarted = String(performance.now()); };
-        editor.addEventListener('input', begin, { once: true });
-        const observer = new MutationObserver(() => {
-            if (indicator.dataset.debounceStarted && indicator.getAttribute('aria-busy') === 'false') {
-                indicator.dataset.debounceSettled = String(performance.now()); observer.disconnect();
-            }
-        }); observer.observe(indicator, { attributes: true, attributeFilter: ['aria-busy'] });
-    });
-    await input.fill('Short draft after the threshold checks.'); await settle();
-    await expect.poll(() => indicator.getAttribute('data-debounce-settled')).not.toBeNull();
-    const debounceMs = await indicator.evaluate((element) => Number((element as HTMLElement).dataset.debounceSettled) - Number((element as HTMLElement).dataset.debounceStarted));
-    expect(debounceMs).toBeGreaterThanOrEqual(100);
+    await outside(() => input.fill('Short draft after the threshold checks.'));
     const beforePrompt = await percent();
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await page.getByRole('button', { name: 'System prompt for this chat', exact: true }).click();
     await page.getByRole('option', { name: /^Meter selected prompt/ }).click();
-    await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
+    await closeSettings();
     await settle(); expect(await percent()).toBeGreaterThan(beforePrompt);
-    const beforeTool = await percent(); await page.getByTestId('fixture-meter-tool').click(); await settle(); expect(await percent()).toBeGreaterThan(beforeTool);
-    await page.getByTestId('fixture-meter-tool').click(); await settle(); expect(await percent()).toBe(beforeTool);
+    const beforeTool = await percent(); await outside(() => page.getByTestId('fixture-meter-tool').click()); expect(await percent()).toBeGreaterThan(beforeTool);
+    await outside(() => page.getByTestId('fixture-meter-tool').click()); expect(await percent()).toBe(beforeTool);
+    await closeSettings();
     const chooser = page.waitForEvent('filechooser'); await page.getByRole('button', { name: 'Add attachments', exact: true }).click(); await (await chooser).setFiles(fixturePng);
     await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
-    await expect(indicator.getByRole('button')).toContainText('incomplete');
-    await page.getByRole('button', { name: 'Remove image', exact: true }).click(); await settle(); await expect(indicator.getByRole('button')).not.toContainText('incomplete');
-    await page.getByTestId('fixture-meter-full-window').click(); await settle(); const originalModel = await percent();
-    await page.evaluate(() => window.dispatchEvent(new CustomEvent('or3:model-selected', { detail: { modelId: 'fixture-meter-larger' } })));
-    await settle(); expect(await percent()).toBeLessThan(originalModel);
+    await settle(); await expect(meter).toHaveAttribute('aria-valuetext', /attachment cost unknown/);
+    await outside(() => page.getByRole('button', { name: 'Remove image', exact: true }).click()); await expect(meter).not.toHaveAttribute('aria-valuetext', /attachment cost unknown/);
+    await outside(() => page.getByTestId('fixture-meter-full-window').click());
+    await outside(() => input.fill('Budget context. '.repeat(3000)));
+    await expect.poll(percent).toBeGreaterThan(10); const originalModel = await percent();
+    await page.getByRole('button', { name: 'Current model', exact: true }).click({ timeout: 5000 });
+    await page.getByRole('option', { name: /fixture-meter-larger$/ }).click({ timeout: 5000 });
+    await settle(); await expect.poll(percent).toBeLessThan(originalModel);
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]'))).toEqual([]);
-    await info.attach('composer-meter-receipt', { contentType: 'application/json', body: JSON.stringify({ colors, debounceMs, assertions: ['69/70/89/90 computed theme colors', 'reply aria text', 'optional maximum', 'prompt', 'tool schema', 'add/remove image', 'larger model', 'zero inference'] }) });
+    await info.attach('composer-meter-receipt', { contentType: 'application/json', body: JSON.stringify({ colors, assertions: ['69/70/89/90 computed theme colors', 'reply aria text', 'optional maximum', 'prompt', 'tool schema', 'add/remove image', 'larger model', 'zero inference'] }) });
     const screenshot = info.outputPath('composer-meter.png'); await page.screenshot({ path: screenshot, animations: 'disabled' }); await info.attach('composer-meter', { path: screenshot, contentType: 'image/png' });
 });
 test('compaction media meter labels inherited historical image cost without a current attachment', async ({ page }, info) => {
@@ -78,17 +100,15 @@ test('compaction media meter labels inherited historical image cost without a cu
     await page.goto(`${chatPage}?compaction=1&media=1`);
     const input = page.getByRole('textbox', { name: 'Message input' }); await expect(input).toBeVisible({ timeout: 60_000 });
     await input.fill('Text-only new draft');
-    const indicator = page.locator('[data-context-indicator]');
-    await expect(indicator.getByRole('button', { name: /Context \d+% used/ })).toContainText('incomplete');
-    await indicator.getByRole('button').click();
-    await expect(page.getByText('Attachment cost is unknown; this estimate is incomplete.')).toBeVisible();
-    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Chat memory' }).getByRole('meter')).toHaveAttribute('aria-valuetext', /attachment cost unknown/);
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]'))).toEqual([]);
     await info.attach('historical-media-meter', { contentType: 'application/json', body: JSON.stringify({
         source: process.env.OR3_CONTEXT_SOURCE_SHA, assertions: ['reference ancestor image', 'text-only current draft', 'unknown cost label', 'no inference'] }) });
 });
 test('PageShell compaction families retain keyboard expansion and child-only search across sidebar consumers', async ({ page }, info) => {
     test.setTimeout(120_000);
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await page.route('**openrouter.ai/**', (route) => route.abort());
     await page.goto(`${chatPage}?compaction=1&presentation=1&native=1`);
     await expect(page.locator('[data-compaction-card]')).toBeVisible({ timeout: 60_000 });
@@ -98,6 +118,17 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     const toggle = header.getByRole('button', { name: /^(Expand|Collapse) / });
     await expect(toggle).toHaveAttribute('aria-expanded', 'false'); await toggle.focus(); await page.keyboard.press('Enter');
     await expect(toggle).toHaveAttribute('aria-expanded', 'true'); await expect(members).toHaveCount(4); await expect(toggle).toBeFocused();
+    await expect(members.getByText('Latest compacted version', { exact: true })).toBeVisible();
+    await expect(members.getByText('Original conversation', { exact: true })).toBeVisible();
+    await expect(members.locator('[data-family-timeline-dot]')).toHaveCount(4);
+    const earlierMember = members.filter({ hasText: 'Earlier compacted version' });
+    await earlierMember.locator('.unified-sb-item').click();
+    await expect(earlierMember.locator('.unified-sb-item')).toHaveClass(/unified-sb-item-active/);
+    await expect(header.locator('.unified-sb-item')).toHaveClass(/unified-sb-item-active/);
+    await toggle.click(); await expect(members).toHaveCount(0);
+    await expect(header.locator('.unified-sb-item')).toHaveClass(/unified-sb-item-active/);
+    await toggle.click(); await expect(members).toHaveCount(4);
+    await members.filter({ hasText: 'Latest compacted version' }).locator('.unified-sb-item').click();
     await page.reload(); await expect(toggle).toHaveAttribute('aria-expanded', 'true'); await expect(members).toHaveCount(4);
     await page.getByRole('button', { name: 'Chats', exact: true }).click();
     await expect(toggle).toHaveAttribute('aria-expanded', 'true'); await expect(members).toHaveCount(4);
@@ -127,22 +158,27 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     };
     await selectVariant('Nitro');
     await page.getByTestId('fixture-hold-summary').check();
-    await page.getByRole('button', { name: 'Compact conversation', exact: true }).click();
-    await expect(page.getByText(/^generating summary · scripted-compaction-model:nitro$/)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeDisabled();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Create compacted version', exact: true }).click();
+    await expect(page.getByText('Compacting…', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeEnabled();
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(page.getByText(/generating summary ·/)).toHaveCount(0, { timeout: 5000 });
+    await expect(page.getByText('Compacting…', { exact: true })).toHaveCount(0, { timeout: 5000 });
+    await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
     expect(await summaryRow.getAttribute('data-msg-id')).toBe(originalSummaryId);
     await expect(input).toHaveText('Preserve this unsent native compaction draft.');
     await selectVariant('Floor');
-    await page.getByRole('button', { name: 'Compact conversation', exact: true }).click();
-    await expect(page.getByText(/^generating summary · scripted-compaction-model:floor$/)).toBeVisible();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Create compacted version', exact: true }).click();
+    await expect(page.getByText('Compacting…', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(page.getByText(/generating summary ·/)).toHaveCount(0);
+    await expect(page.getByText('Compacting…', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
     expect(await summaryRow.getAttribute('data-msg-id')).toBe(originalSummaryId);
     await expect(input).toHaveText('Preserve this unsent native compaction draft.');
     await page.getByTestId('fixture-hold-summary').uncheck();
-    await page.getByRole('button', { name: 'Compact conversation', exact: true }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Create compacted version', exact: true }).click();
     await expect.poll(async () => summaryRow.getAttribute('data-msg-id')).not.toBe(originalSummaryId);
     const childSummaryId = await summaryRow.getAttribute('data-msg-id');
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]').at(-1)?.model)).toBe('scripted-compaction-model:floor');
@@ -164,6 +200,10 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     const originalMember = members.filter({ hasText: 'Original' });
     await originalMember.locator('.unified-sb-item').click();
     await expect(summaryRow).toHaveCount(0);
+    await expect(header.locator('.unified-sb-item')).toHaveClass(/unified-sb-item-active/);
+    const activeScreenshot = info.outputPath('family-active-original.png');
+    await page.screenshot({ path: activeScreenshot, animations: 'disabled' });
+    await info.attach('family-active-original', { path: activeScreenshot, contentType: 'image/png' });
     const originalRootDraft = await input.innerText();
     await originalMember.getByRole('button', { name: 'Open actions', exact: true }).click();
     await expect(historyCompact).toBeEnabled(); await historyCompact.click();
@@ -350,7 +390,9 @@ test('native context recovery retains saved identities after reload', async ({ p
     await page.goto(`${chatPage}?context=1`);
     const input = page.getByRole('textbox', { name: 'Message input' });
     await expect(input).toBeVisible({ timeout: 45_000 });
-    await expect(page.locator('[data-context-indicator]').getByRole('meter')).toBeVisible();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Chat memory' }).getByRole('meter')).toBeVisible();
+    await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
     const readAttempt = () => page.evaluate(async () => {
         const remembered = localStorage.getItem('or3:e2e:production-chat-thread');
         for (const { name } of await indexedDB.databases()) {

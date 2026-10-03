@@ -101,7 +101,9 @@
                     <SidebarFamilyItem
                         v-else-if="item.type === 'time-group-item'"
                         :item="item.item"
-                        :active="allActiveIds.includes(item.item.id)"
+                        :active="item.item.family?.kind === 'group-header'
+                            ? activeFamilyIds.has(item.item.family.rootId)
+                            : allActiveIds.includes(item.item.id)"
                         :time-display="
                             formatTimeDisplay(
                                 item.item.lastMessageAt ?? item.item.updatedAt,
@@ -381,9 +383,10 @@ const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 
 // Paginated items
 const sidebarQuery = computed(() => props.sidebarQuery.trim());
-const { items, loading, loadMore, toggleFamily, loadMoreMembers, latestCompaction } = usePaginatedSidebarItems({
+const { items, activeFamilyIds, loading, loadMore, toggleFamily, loadMoreMembers, latestCompaction } = usePaginatedSidebarItems({
     query: sidebarQuery,
     type: documentsEnabled.value ? 'all' : 'thread',
+    activeIds: computed(() => props.activeThreadIds),
 });
 const familyToast = useToast();
 async function goToLatestCompaction(rootId: string) {

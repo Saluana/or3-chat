@@ -23,7 +23,7 @@ export default defineNuxtPlugin(() => {
         disabledReason: (ctx) => ctx.compaction?.blockedReason,
         handler: async (ctx) => { await ctx.compaction?.start(ctx.message.id); } });
     const composer = registerComposerAction({ id: 'or3:compact-thread', icon: 'i-lucide-fold-vertical',
-        tooltip: 'Compact conversation', label: 'Compact', order: 190,
+        tooltip: 'Summarize this chat', label: 'Compact', order: 190,
         visible: (ctx) => Boolean(ctx.threadId && ctx.compactThread),
         disabled: (ctx) => Boolean(ctx.isLoading || ctx.isStreaming || ctx.compactionBlockedReason),
         handler: async (ctx) => { await ctx.compactThread?.(); } });

@@ -80,7 +80,8 @@ export interface UnifiedSidebarItem {
     anchorIndex?: number | null;
     forkReason?: 'manual' | 'retry' | 'compaction' | null;
     family?: { kind: 'group-header' | 'thread-member' | 'load-more-members'; key: string; rootId: string;
-        expanded: boolean; groupUpdatedAt?: number; searchExpanded?: boolean; damaged?: boolean; label?: string; latestCompactionId?: string; originalId?: string };
+        expanded: boolean; groupUpdatedAt?: number; searchExpanded?: boolean; damaged?: boolean; label?: string; latestCompactionId?: string; originalId?: string;
+        firstMember?: boolean; lastMember?: boolean };
     icon?: string;         // optional icon override (e.g. for plugin items)
     forked?: boolean;      // thread only
     postType?: string;     // document only

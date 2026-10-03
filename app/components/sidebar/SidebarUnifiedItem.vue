@@ -15,7 +15,7 @@
         @keydown.space="emit('select', item.id)"
     >
         <!-- Icon -->
-        <UIcon
+        <slot name="icon"><UIcon
             :name="item.icon ?? (item.type === 'thread' ? iconChat : iconNote)"
             class="w-[18px] h-[18px] shrink-0 transition-colors sb-btn-icon"
             :class="{
@@ -23,11 +23,12 @@
                 'text-[color:var(--md-on-surface-variant)]/70 group-hover:text-[color:var(--md-on-surface)]/80':
                     !active,
             }"
-        />
+        /></slot>
 
         <!-- Title -->
+        <span class="flex-1 min-w-0">
         <span
-            class="flex-1 truncate text-sm font-normal leading-tight sb-btn-title"
+            class="block truncate text-sm font-normal leading-tight sb-btn-title"
             :class="
                 active
                     ? 'text-[color:var(--md-primary)] sb-btn-title-active'
@@ -35,6 +36,8 @@
             "
         >
             {{ item.title || 'Untitled' }}
+        </span>
+        <slot name="subtitle" />
         </span>
 
         <!-- Time Label (desktop only - hide on hover, show action button instead) -->

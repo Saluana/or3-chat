@@ -71,6 +71,7 @@ export interface AiSettingsV1 {
     defaultModelVariant: OpenRouterModelVariant;
     /** Null means the full advertised model capacity; values remain independent of model selection. */
     maxContextTokens: number | null;
+    autoCompactContext: boolean;
 }
 
 /** A request-scoped scalar snapshot; the DB handle identifies its captured origin. */
@@ -93,6 +94,7 @@ export const DEFAULT_AI_SETTINGS: AiSettingsV1 = {
     fixedModelId: null,
     defaultModelVariant: DEFAULT_MODEL_VARIANT,
     maxContextTokens: null,
+    autoCompactContext: false,
 };
 
 // Module-level singleton state
@@ -138,6 +140,7 @@ export function sanitizeAiSettings(
         fixedModelId: fixedModelId ?? defaults.fixedModelId,
         maxContextTokens: typeof inObj.maxContextTokens === 'number' && Number.isSafeInteger(inObj.maxContextTokens) && inObj.maxContextTokens > 0
             ? inObj.maxContextTokens : null,
+        autoCompactContext: typeof inObj.autoCompactContext === 'boolean' ? inObj.autoCompactContext : defaults.autoCompactContext,
         defaultModelVariant: sanitizeModelVariant(
             inObj.defaultModelVariant,
             defaults.defaultModelVariant

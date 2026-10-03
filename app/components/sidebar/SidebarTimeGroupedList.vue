@@ -26,7 +26,9 @@
                     <SidebarFamilyItem
                         v-else-if="item.type === 'time-group-item'"
                         :item="item.item"
-                        :active="activeIds.includes(item.item.id)"
+                        :active="item.item.family?.kind === 'group-header'
+                            ? activeFamilyIds.has(item.item.family.rootId)
+                            : activeIds.includes(item.item.id)"
                         :time-display="
                             formatTimeDisplay(item.item.lastMessageAt ?? item.item.updatedAt, item.groupKey)
                         "
@@ -115,11 +117,12 @@ const emit = defineEmits<{
 const { getSidebarQuery } = useSidebarEnvironment();
 const query = getSidebarQuery();
 
-const { items, hasMore, loading, loadMore, reset, toggleFamily, loadMoreMembers, latestCompaction } = usePaginatedSidebarItems({
+const { items, activeFamilyIds, hasMore, loading, loadMore, reset, toggleFamily, loadMoreMembers, latestCompaction } = usePaginatedSidebarItems({
     type: props.type || 'all',
     query,
     projectId: computed(() => props.projectId),
     pinned: computed(() => props.pinned),
+    activeIds: computed(() => props.activeIds),
 });
 function navigateThread(id: string) {
     emit('select', { id, type: 'thread', title: '', updatedAt: 0 });

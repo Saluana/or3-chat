@@ -40,6 +40,7 @@ export function useContextPreview(options: {
         toValue(options.extraText), toValue(options.hasMedia), toValue(options.promptSelection),
         toValue(options.revision), toValue(options.reasoning), tools.listTools.value.map((tool) => [tool.definition, tool.enabled.value]),
         preferences.settings.value, workspaceRevision.value], () => {
+        if (import.meta.server) return;
         const token = ++sequence; controller?.abort(); if (timer) clearTimeout(timer);
         state.value = { ...state.value, pending: true };
         timer = setTimeout(() => { void refresh(token); }, 120);

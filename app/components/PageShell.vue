@@ -1698,6 +1698,19 @@ async function onCompactionCommitted(target: { threadId: string; messageId: stri
     // Completion must not activate a pane the user has since left.
     if (activePaneIndex.value !== paneIndex || !pane || pane.mode !== 'chat'
         || pane.threadId !== target.originThreadId || getWorkspaceGeneration() !== target.generation) return;
+    if (workspaceTabsEnabled.value) {
+        const originTab = workspaceTabs.state.value.paneBindings.get(pane.id);
+        const draft = workspaceTabDrafts.read(originTab);
+        if (draft) {
+            const childTab = await workspaceTabs.openResource({ kind: 'chat', threadId: target.threadId }, { target: 'background' });
+            if (childTab) workspaceTabDrafts.write(childTab, { ...draft,
+                editorJson: draft.editorJson ? structuredClone(draft.editorJson) : undefined,
+                attachments: draft.attachments.map(file => ({ ...file, url: file.url.startsWith('blob:') ? URL.createObjectURL(file.file) : file.url })),
+                largeTextBlocks: draft.largeTextBlocks.map(block => ({ ...block })),
+                composer: draft.composer ? { ...draft.composer, imageSettings: { ...draft.composer.imageSettings } } : undefined,
+            });
+        }
+    }
     try { await onCompactionSourceSelected(target, paneIndex); }
     catch { /* The durable child remains available even if navigation fails. */ }
     if (getWorkspaceGeneration() === target.generation && activePaneIndex.value === paneIndex

@@ -112,7 +112,7 @@
                     <UButton
                         v-bind="scrollToBottomButtonProps"
                         @click="scrollToBottom"
-                        class="pointer-events-auto"
+                        class="pointer-events-auto chat-scroll-to-bottom"
                     />
                 </div>
                 <div

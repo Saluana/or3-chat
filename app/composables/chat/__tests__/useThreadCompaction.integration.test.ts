@@ -45,14 +45,17 @@ beforeEach(async () => {
     getHookBridge(getDb()).start();
 });
 afterEach(async () => { for (const scope of scopes) scope.stop(); _resetHookBridge(); const db = getDb(); setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name); setHookEngine(null); });
-it.each(['openrouter/auto', 'openrouter/auto-beta', 'openrouter/free', 'openrouter/bodybuilder', 'openrouter/pareto-code', 'openrouter/fusion-flash:free', 'typesafe/jev-router', 'nvidia/switchyard', '~openai/gpt-latest', 'openrouter/auto:nitro'])('rejects unresolved router %s before summary inference and recovers with a concrete selection', async selection => {
+it.each(['openrouter/auto', 'openrouter/auto-beta', 'openrouter/free', 'openrouter/bodybuilder', 'openrouter/pareto-code', 'openrouter/fusion-flash:free', 'typesafe/jev-router', 'nvidia/switchyard', '~openai/gpt-luna-latest', 'openrouter/auto:nitro'])('compacts with the current chat selection %s, including routed models', async selection => {
     const service = controller(); service.model.value = selection;
-    expect(await service.start()).toMatchObject({ ok: false, code: 'model_metadata_unavailable' });
-    expect(service.blockedReason.value).toContain('concrete model');
-    expect(await service.inspect()).toMatchObject({ eligible: false, code: 'model_metadata_unavailable' });
-    expect(transport).not.toHaveBeenCalled(); expect(await getDb().threads.count()).toBe(1); expect(await getDb().pending_ops.count()).toBe(0);
-    service.model.value = 'large-model:nitro'; expect((await service.start()).ok).toBe(true);
-    expect(transport).toHaveBeenCalledOnce(); expect(transport.mock.calls[0]![0].model).toBe('large-model:nitro');
+    expect(service.blockedReason.value).toBeUndefined();
+    expect(await service.inspect()).toMatchObject({ eligible: true, model: selection });
+    expect(transport).not.toHaveBeenCalled();
+    const result = await service.start();
+    expect(result.ok).toBe(true);
+    expect(transport).toHaveBeenCalledOnce(); expect(transport.mock.calls[0]![0].model).toBe(selection);
+    if (!result.ok) throw new Error('Expected saved compacted conversation');
+    expect((await getDb().threads.get(result.thread_id))?.branch_mode).toBe('compacted');
+    expect(await getDb().threads.count()).toBe(2);
 });
 it('captures the final settled local anchor and opens the durable child only after commit', async () => {
     const open = vi.fn(async (result: { thread: { id: string }; summary: { id: string } }) => {
