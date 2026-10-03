@@ -117,6 +117,9 @@ async function seedCompactionPresentation() {
     await useModelStore().addFavoriteModel({ id: 'scripted-compaction-model', name: 'Scripted local model', context_length: 32_768,
         top_provider: { max_completion_tokens: 8192 }, supported_parameters: ['tools'],
         architecture: { input_modalities: ['text'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' } });
+    if (nativeCompactionJourney) await useModelStore().addFavoriteModel({ id: 'scripted-no-tools', name: 'Scripted model without tools', context_length: 32_768,
+        top_provider: { max_completion_tokens: 8192 }, supported_parameters: [],
+        architecture: { input_modalities: ['text'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' } });
     localStorage.setItem('last_selected_model', 'scripted-compaction-model');
     const existing = localStorage.getItem('or3:e2e:presentation-ready');
     if (existing && await db.threads.get(existing)) { fixtureViewThread.value = existing; fixtureSourceThread.value = existing; return; }

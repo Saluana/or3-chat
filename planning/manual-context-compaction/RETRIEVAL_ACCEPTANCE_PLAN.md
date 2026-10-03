@@ -46,3 +46,7 @@ Before implementation, require the newly created root tool-anchored compaction a
 ## Historical tool-output labeling (R9.AC5)
 
 Extend the existing positive registered-server lookup assertion before changing output: original text and neighbors/results must carry a host-authored reference_only marker, with tool descriptions explicitly excluding instructions/authorization. This is additive bounded metadata; shared output-byte admission must still account for it. No model-provided text becomes authority.
+
+## No-tool catalog model navigation qualification (4.6,5.4; R11.AC5)
+
+Extend the existing real PageShell family/action journey; seed only external catalog facts for a second model with `supported_parameters: []`. Select it through the existing model-selected event. Failure cases: the pane keeps the previous model's tool availability, hides manual card actions, dispatches model traffic for navigation, or opens the wrong original. Assert the unavailable-tools notice and actual View original navigation while preserving request count and draft. No new unit file or replacement card/controller is introduced.

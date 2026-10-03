@@ -66,6 +66,7 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     const originalMember = members.filter({ hasText: 'Original' });
     await originalMember.locator('.unified-sb-item').click();
     await expect(summaryRow).toHaveCount(0);
+    const originalRootDraft = await input.innerText();
     await originalMember.getByRole('button', { name: 'Open actions', exact: true }).click();
     await expect(historyCompact).toBeEnabled(); await historyCompact.click();
     await expect(summaryRow).toHaveCount(1);
@@ -77,8 +78,17 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await expect(reverseCompactions).toHaveCount(2);
     await reverseCompactions.first().click();
     await expect.poll(async () => summaryRow.getAttribute('data-msg-id')).toBe(historySummaryId);
+    const requestsBeforeManualNavigation = await page.evaluate(() => localStorage.getItem('or3:e2e:compaction-requests'));
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('or3:model-selected', { detail: { modelId: 'scripted-no-tools' } })));
+    const noToolsCard = page.locator('[data-compaction-card]');
+    await noToolsCard.locator('summary').click();
+    await expect(noToolsCard.getByText('Historical retrieval tools are unavailable for this model or tool selection. You can still follow the original and landmark links.')).toBeVisible();
+    await noToolsCard.getByRole('button', { name: /^View original/ }).click();
+    await expect(reverseCompactions).toHaveCount(2);
+    await expect(input).toHaveText(originalRootDraft);
+    expect(await page.evaluate(() => localStorage.getItem('or3:e2e:compaction-requests'))).toBe(requestsBeforeManualNavigation);
     await info.attach('native-composer-compaction-assertions', { contentType: 'application/json', body: JSON.stringify({
-        source: process.env.OR3_CONTEXT_SOURCE_SHA, originalSummaryId, childSummaryId, assertions: ['native registry action', 'progress/model/Cancel', 'new child opened', 'short child history action disabled with reason', 'exact Compact-here anchor', 'registered history-menu action', 'draft retained'] }) });
+        source: process.env.OR3_CONTEXT_SOURCE_SHA, originalSummaryId, childSummaryId, assertions: ['native registry action', 'progress/model/Cancel', 'new child opened', 'short child history action disabled with reason', 'exact Compact-here anchor', 'registered history-menu action', 'no-tool model manual navigation without inference', 'draft retained'] }) });
 });
 
 test('compaction lossy confirmation shows its estimate and preserves full saved history', async ({ page }, info) => {
