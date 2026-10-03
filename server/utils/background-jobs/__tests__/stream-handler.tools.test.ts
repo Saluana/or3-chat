@@ -13,6 +13,7 @@ import type { CanonicalGenerationSnapshot, ChatGenerationAdmissionEnvelope } fro
 import { captureUsagePrefix } from '~~/shared/chat/request-usage';
 import { readRequestUsage } from '~~/shared/chat/compaction';
 import { countTokensApprox } from '~/utils/chat/tokens';
+import type { ContextRequestEnvelope } from '~~/shared/chat/context-budget';
 import {
     registerServerTool,
     unregisterServerTool,
@@ -27,6 +28,20 @@ import {
     emitJobStatus,
     getJobLiveState,
 } from '../viewers';
+
+const contextCatalog = vi.hoisted(() => ({ capacity: 1_000_000, calls: 0 }));
+vi.mock('~~/shared/openrouter', async (original) => ({
+    ...await original<typeof import('~~/shared/openrouter')>(),
+    createOpenRouterClient: () => ({ models: { list: async () => ({
+        async *[Symbol.asyncIterator]() {
+            contextCatalog.calls++;
+            yield { result: { data: [{ id: 'test-model', name: 'Test', contextLength: contextCatalog.capacity,
+                architecture: { inputModalities: ['text'], outputModalities: ['text'] },
+                topProvider: { contextLength: contextCatalog.capacity, maxCompletionTokens: 4096, isModerated: false },
+                pricing: { prompt: '0', completion: '0' }, supportedParameters: ['tools'] }] } };
+        },
+    }) } }),
+}));
 
 function makeSseStream(chunks: unknown[]): ReadableStream<Uint8Array> {
     const encoder = new TextEncoder();
@@ -799,6 +814,7 @@ describe('background usage through terminal history', () => {
     });
     beforeEach(() => {
         clearAllJobs();
+        contextCatalog.capacity = 1_000_000; contextCatalog.calls = 0;
         delivered.length = 0;
         finalize.mockClear();
         vi.stubGlobal('useRuntimeConfig', () => ({ backgroundJobs: {} }));
@@ -820,7 +836,7 @@ describe('background usage through terminal history', () => {
         vi.unstubAllGlobals();
     });
 
-    async function admitted(withTools = true) {
+    async function admitted(withTools = true, contextEnvelope?: ContextRequestEnvelope) {
         const history: ChatGenerationAdmissionEnvelope = {
             version: 1, kind: 'new-turn', admissionId: 'admission', generationId: 'generation',
             workspaceId: 'workspace', threadId: 'thread', messageId: 'assistant',
@@ -832,6 +848,7 @@ describe('background usage through terminal history', () => {
             model: 'test-model', messages: [{ role: 'user', content: 'immutable original' }],
             ...(withTools ? { tools: [toolDef] } : {}),
             _background: true, _threadId: 'thread', _messageId: 'assistant', _history: history,
+            ...(contextEnvelope ? { _context: structuredClone(contextEnvelope) } : {}),
         };
         const execution = {
             version: 1 as const, body, workspaceId: 'workspace',
@@ -875,6 +892,58 @@ describe('background usage through terminal history', () => {
         expect(delivered[0]?.status).toBe(job.status);
         return { job: reloaded, snapshot: delivered[0]! };
     }
+
+    it('rejects a restored oversized captured maximum before reopening the provider', async () => {
+        const { jobId, context } = await admitted(false, { version: 1, user_max_context_tokens: 20, requested_completion_tokens: null });
+        vi.stubGlobal('fetch', vi.fn(async () => response(100)));
+        await expect(executeBackgroundJob(jobId, context, memoryJobProvider)).rejects.toMatchObject({ code: 'context_full' });
+        expect(fetch).not.toHaveBeenCalled(); expect(contextCatalog.calls).toBe(1);
+    });
+
+    it('retains one accepted oversized tool result and stops before the next request or replay', async () => {
+        const { jobId, context } = await admitted(true, { version: 1, user_max_context_tokens: 500, requested_completion_tokens: null });
+        const result = 'durable result '.repeat(500);
+        const tool = vi.fn(() => {
+            context.body._context!.user_max_context_tokens = 1_000_000;
+            return result;
+        });
+        registerServerTool(toolDef, tool, { override: true });
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response(150, true)).mockResolvedValueOnce(response(250)));
+        await expect(executeBackgroundJob(jobId, context, memoryJobProvider)).rejects.toMatchObject({ code: 'context_full' });
+        expect(fetch).toHaveBeenCalledOnce(); expect(tool).toHaveBeenCalledOnce();
+        const job = (await memoryJobProvider.getJob(jobId, 'owner'))!;
+        if (!job.execution || !('body' in job.execution)) throw new Error('Expected native chat checkpoint');
+        expect(job.tool_calls?.[0]).toMatchObject({ id: 'call-1', status: 'complete', result });
+        expect(job.execution?.body._context).toEqual({ version: 1, user_max_context_tokens: 500, requested_completion_tokens: null });
+        const restored = { ...context, body: job.execution!.body, execution: job.execution! };
+        await expect(executeBackgroundJob(jobId, restored, memoryJobProvider)).rejects.toMatchObject({ name: 'BackgroundJobLeaseLostError' });
+        expect(fetch).toHaveBeenCalledOnce(); expect(tool).toHaveBeenCalledOnce();
+        expect(job.error).toContain('ERR_CONTEXT_FULL');
+        const finalized = await terminal(jobId);
+        expect(finalized.snapshot.toolCalls?.[0]).toMatchObject({ id: 'call-1', status: 'complete', result });
+        expect(finalized.snapshot.error).toContain('ERR_CONTEXT_FULL');
+    });
+
+    it('rechecks the persisted maximum after a failed terminal write and worker lease recovery without replaying the accepted tool', async () => {
+        const { jobId, context } = await admitted(true, { version: 1, user_max_context_tokens: 500, requested_completion_tokens: null });
+        const tool = vi.fn(() => 'accepted result '.repeat(500));
+        registerServerTool(toolDef, tool, { override: true });
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response(150, true)).mockResolvedValueOnce(response(250)));
+        vi.spyOn(memoryJobProvider, 'saveTerminalSnapshot').mockRejectedValueOnce(new Error('fixture terminal write interrupted'));
+        await expect(executeBackgroundJob(jobId, context, memoryJobProvider)).rejects.toThrow('fixture terminal write interrupted');
+        const checkpointed = (await memoryJobProvider.getJob(jobId, 'owner'))!;
+        expect(checkpointed.status).toBe('streaming');
+        expect(checkpointed.tool_calls?.[0]?.status).toBe('complete');
+        const recoveredAt = Date.now() + 60_001;
+        expect(await memoryJobProvider.claimJob!(jobId, 'recovered-worker', recoveredAt, recoveredAt + 60_000)).toBeTruthy();
+        const recovered = (await memoryJobProvider.getJob(jobId, 'owner'))!;
+        if (!recovered.execution || !('body' in recovered.execution)) throw new Error('Expected native chat checkpoint');
+        await expect(executeBackgroundJob(jobId, { ...context, body: recovered.execution!.body,
+            execution: recovered.execution!, leaseOwner: 'recovered-worker' }, memoryJobProvider))
+            .rejects.toMatchObject({ code: 'context_full' });
+        expect(fetch).toHaveBeenCalledOnce(); expect(tool).toHaveBeenCalledOnce();
+        expect((await memoryJobProvider.getJob(jobId, 'owner'))!.error).toContain('ERR_CONTEXT_FULL');
+    });
     it.each([400, undefined])('retains the last measured tool request (%s), with immutable submitted provenance', async (lastPrompt) => {
         const { jobId, context, body } = await admitted();
         const sent: Record<string, unknown>[] = [];

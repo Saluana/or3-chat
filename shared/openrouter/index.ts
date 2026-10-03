@@ -30,6 +30,7 @@ export { sdkModelToLocal, type OpenRouterModel } from './types';
 // SDK v1 compatibility helpers (non-workflow: caption, OAuth, model listing)
 export {
     collectModelsFromListPages,
+    fetchOpenRouterCatalog,
     wrapLegacyChatSendArgs,
     wrapLegacyOAuthExchangeArgs,
 } from './sdk-v1-compat';

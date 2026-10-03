@@ -407,7 +407,7 @@
                     "category": "Source integration",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "Use centralized errors, secret scrubbing, reporting hooks, and deliberate retries."
+                    "summary": "Use centralized errors, secret scrubbing, reporting hooks, context admission recovery, and deliberate retries."
                 },
                 {
                     "name": "workspace-backup-stream.md",

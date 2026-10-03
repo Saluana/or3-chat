@@ -12,7 +12,10 @@ import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine, useHooks } from '~/core/hooks/useHooks';
 import type { ORStreamEvent } from '~~/shared/openrouter/parseOpenRouterSSE';
 const provider = vi.hoisted(() => vi.fn());
-vi.mock('~/utils/chat/openrouterStream', () => ({ openRouterStreamWithRetry: provider, startBackgroundStream: vi.fn() }));
+vi.mock('~/utils/chat/openrouterStream', async (original) => ({
+    ...await original<typeof import('~/utils/chat/openrouterStream')>(),
+    openRouterStreamWithRetry: provider, startBackgroundStream: vi.fn(),
+}));
 let workspace: string;
 beforeEach(async () => {
     workspace = `continue-usage-${crypto.randomUUID()}`; await setActiveWorkspaceDb(workspace).open();
@@ -41,7 +44,9 @@ it.each([false, true])('persists measured continuation usage through canonical r
         threadIdRef: ref('thread'), tailAssistant: ref(null), rawMessages: ref([]), messages: ref([]), streamId: ref(undefined),
         streamAcc: accumulator, streamState: accumulator.state, hooks: useHooks(),
         effectiveApiKey: ref('scripted'), hasInstanceKey: ref(false), defaultModelId: 'model', getSystemPromptContent: async () => null,
-        useAiSettings: () => ({ settings: ref(undefined) }), resetStream: vi.fn() };
+        useAiSettings: () => ({ settings: ref(undefined) }), resetStream: vi.fn(),
+        resolveContextPolicy: async () => ({ model: { context_length: 1_000_000 },
+            userMaxContextTokens: null, source: 'openrouter-live' }) };
     await continueMessageImpl(ctx, 'assistant');
     const stored = (await db.messages.get('assistant'))!; const canonical = storedMessagesToCanonicalTranscript([stored])[0]!;
     expect(canonical.content).toBe('Hello world');
@@ -49,4 +54,22 @@ it.each([false, true])('persists measured continuation usage through canonical r
     expect(stored.data).toMatchObject({ plugin_owned: 'preserve' }); expect(stored.pending).toBe(false);
     expect(provider).toHaveBeenCalledOnce(); expect((await db.messages.toArray()).map((row) => row.id).sort()).toEqual(['assistant', 'user']);
     expect(request.phase.value).toBe('terminal');
+});
+
+it('refuses an unbound continuation without model policy before any target mutation or provider call', async () => {
+    provider.mockImplementation(async function* () { yield { type: 'text', text: 'Must not run' }; yield { type: 'done' }; });
+    const db = getDb(); const before = await db.messages.toArray();
+    const accumulator = { reset: vi.fn(), append: vi.fn(), finalize: vi.fn(), state: { finalized: false } };
+    const request = createChatRequest({ requestId: 'missing-policy', kind: 'continue', originDb: db,
+        workspaceId: workspace, threadId: 'thread', accumulator });
+    request.ownsView = () => !request.cancelled;
+    const ctx: ContinueMessageContext = { request, loading: ref(false), aborted: ref(false), abortController: ref(null),
+        threadIdRef: ref('thread'), tailAssistant: ref(null), rawMessages: ref([]), messages: ref([]), streamId: ref(undefined),
+        streamAcc: accumulator, streamState: accumulator.state, hooks: useHooks(), effectiveApiKey: ref('scripted'),
+        hasInstanceKey: ref(false), defaultModelId: 'model', getSystemPromptContent: async () => null,
+        useAiSettings: () => ({ settings: ref(undefined) }), resetStream: vi.fn() };
+    await continueMessageImpl(ctx, 'assistant');
+    expect(await db.messages.toArray()).toEqual(before);
+    expect(provider).not.toHaveBeenCalled();
+    expect(request.publicState.value).toMatchObject({ status: 'terminal', result: { reason: 'model_metadata_unavailable' } });
 });

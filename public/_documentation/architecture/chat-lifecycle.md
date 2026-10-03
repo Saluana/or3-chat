@@ -69,7 +69,13 @@ frozen scalar with its DB handle and workspace generation. A failed read or
 changed workspace rejects capture; retry can recover. These origin fields are
 internal and must not be serialized as provider parameters. Native initial
 send, retry, continuation and foreground tool iterations consume that captured
-value. Independent server admission and background reconnect remain pending.
+value. Native requests send a versioned `_context` envelope containing only
+the nullable user maximum and explicit reply allowance. The server resolves
+capacity independently through the existing OpenRouter SDK catalog path;
+client capacity claims do not authorize a larger window. Background execution
+checkpoints retain the envelope across tool iterations and worker recovery.
+All OR3 routing/context fields are removed from provider input and usage
+fingerprints. Legacy callers without the envelope retain their prior boundary.
 
 Native admission uses the selected model's advertised total window and the
 optional user maximum. Missing capacity is refreshed through the model catalog;

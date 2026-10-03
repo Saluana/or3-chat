@@ -1,8 +1,10 @@
 import { serializeError, normalizeError, presentError, parseRetryAfter } from '~~/shared/errors';
-import { OpenRouterStreamError } from '~~/shared/openrouter/errors';
+import { OpenRouterStreamError, normalizeProviderResponseError } from '~~/shared/openrouter/errors';
 import { attachRequestUsage, captureUsagePrefix, type UsagePrefix } from '~~/shared/chat/request-usage';
 import { readRequestUsage } from '~~/shared/chat/compaction';
-import type { CountableChatMessage } from '~~/shared/chat/context-budget';
+import type { CountableChatMessage, ContextRequestPolicy } from '~~/shared/chat/context-budget';
+import { captureContextEnvelope } from '~~/shared/chat/context-budget';
+import { resolveServerContextPolicy, admitServerProviderBody, withoutOr3RequestMetadata } from '../chat/context-admission';
 import { countTokensApprox } from '~/utils/chat/tokens';
 /**
  * @module server/utils/background-jobs/stream-handler
@@ -195,6 +197,8 @@ export interface BackgroundStreamParams {
     leaseOwner?: string;
     /** Immutable attempt of this worker, also fences process-local projections. */
     attempt?: number;
+    /** Internal, independently resolved facts; never accepted from the wire or persisted as authority. */
+    contextPolicy?: ContextRequestPolicy;
 }
 
 function normalizeStreamedFieldMode(value: unknown): StreamedFieldMode {
@@ -324,6 +328,12 @@ async function captureBackgroundUsagePrefix(body: Record<string, unknown>): Prom
 export async function startBackgroundStream(
     params: BackgroundStreamParams
 ): Promise<BackgroundStreamResult> {
+    // Preserve captured choices and bytes before provider/auth/history awaits.
+    params = { ...params, body: JSON.parse(JSON.stringify(params.body)) as Record<string, unknown> };
+    const contextPolicy = params.contextPolicy ?? await resolveServerContextPolicy(params.body, params.apiKey, useRuntimeConfig().openrouterBaseUrl);
+    const prepared = await admitServerProviderBody(withoutOr3RequestMetadata(params.body), contextPolicy);
+    params.body = { ...params.body, ...prepared };
+    if (contextPolicy) params.body._context = captureContextEnvelope(contextPolicy);
     const provider = await getJobProvider();
     if (
         !provider.claimJob ||
@@ -1007,6 +1017,7 @@ export async function consumeBackgroundStreamWithTools(params: {
     shouldNotify?: () => boolean;
     abortSignal?: AbortSignal;
     streamedFieldMode?: StreamedFieldMode;
+    contextPolicy?: ContextRequestPolicy;
 }): Promise<void> {
     const contentBase = params.context.execution?.contentBase ?? '';
     const reasoningBase = params.context.execution?.reasoningBase ?? '';
@@ -1416,6 +1427,7 @@ export async function consumeBackgroundStreamWithTools(params: {
                         : undefined,
                 stream: true,
             })) as Record<string, unknown>;
+            await admitServerProviderBody(requestBody, params.contextPolicy, params.abortSignal);
             const usagePrefix = await captureBackgroundUsagePrefix(requestBody);
             const usageRequestId = crypto.randomUUID();
 
@@ -1448,9 +1460,9 @@ export async function consumeBackgroundStreamWithTools(params: {
                     status: upstream.status,
                     responseMetadata: sensitiveValueMetadata(errorText),
                 });
-                const metadata = normalizeError({ status: upstream.status,
-            retryAfterMs: parseRetryAfter(upstream.headers.get('retry-after')), providerCode: upstream.status },
-            { source: 'provider', credentialSource: params.context.credentialSource ?? params.context.execution?.credentialSource });
+                const metadata = { ...normalizeProviderResponseError(errorText, upstream.status,
+                    { credentialSource: params.context.credentialSource ?? params.context.execution?.credentialSource }),
+                    retryAfterMs: parseRetryAfter(upstream.headers.get('retry-after')) };
         throw new OpenRouterStreamError(presentError(metadata).message, { ...metadata, status: upstream.status });
             }
 
@@ -1856,6 +1868,7 @@ export async function executeBackgroundJob(
         _clientDeviceId,
         _streamedFieldMode,
         _history,
+        _context,
         ...cleanBody
     } = admittedBody;
     const toolRuntime =
@@ -1890,11 +1903,13 @@ export async function executeBackgroundJob(
             shouldNotify: () => !hasJobViewers(jobId),
             abortSignal: signal,
             streamedFieldMode,
+            contextPolicy: await resolveServerContextPolicy(admittedBody, params.apiKey, useRuntimeConfig().openrouterBaseUrl, signal),
         });
         return;
     }
 
     const openRouterUrl = resolveOpenRouterChatCompletionsUrl();
+    await admitServerProviderBody(cleanBody, await resolveServerContextPolicy(admittedBody, params.apiKey, useRuntimeConfig().openrouterBaseUrl, signal), signal);
     const usagePrefix = await captureBackgroundUsagePrefix(cleanBody);
     const upstream = await fetchWithResponseDeadline(openRouterUrl, {
         method: 'POST',
@@ -1923,7 +1938,9 @@ export async function executeBackgroundJob(
             status: upstream.status,
             responseMetadata: sensitiveValueMetadata(errorText),
         });
-        const metadata = normalizeError({ status: upstream.status, providerCode: upstream.status, retryAfterMs: parseRetryAfter(upstream.headers.get('retry-after')) }, { source: 'provider', credentialSource: params.credentialSource ?? params.execution?.credentialSource });
+        const metadata = { ...normalizeProviderResponseError(errorText, upstream.status,
+            { credentialSource: params.credentialSource ?? params.execution?.credentialSource }),
+            retryAfterMs: parseRetryAfter(upstream.headers.get('retry-after')) };
         throw new OpenRouterStreamError(presentError(metadata).message, { ...metadata, status: upstream.status });
     }
 

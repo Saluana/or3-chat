@@ -76,6 +76,22 @@ function chat(threadId?: string) { scope = effectScope(); return scope.run(() =>
 // hooks and actual foreground transport remain production code; external
 // catalog/network inference and credential UI alone are scripted.
 describe('native context admission at the actual durable boundary', () => {
+    it('reports provider context overflow as context_full while retaining the full durable turn and never replaying it', async () => {
+        const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+            external.bodies.push(JSON.parse(init?.body as string));
+            return new Response(JSON.stringify({ error: { code: 'context_length_exceeded', message: 'private upstream' } }),
+                { status: 400, headers: { 'Content-Type': 'application/json' } });
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        const text = 'Preserve the complete user request.';
+        expect(await chat().sendMessage(text, { model: 'fixture/model' }))
+            .toMatchObject({ status: 'failed', reason: 'context_full' });
+        expect(fetchMock).toHaveBeenCalledOnce();
+        const rows = await getDb().messages.toArray();
+        expect(rows.filter((row) => row.role === 'user')).toHaveLength(1);
+        expect(rows.find((row) => row.role === 'user')?.data).toMatchObject({ content: text });
+        expect(external.bodies[0]?.messages).toEqual(expect.arrayContaining([expect.objectContaining({ role: 'user' })]));
+    });
     it('rejects an over-budget new conversation before any thread/user/assistant write or inference', async () => {
         await useAiSettings().set({ maxContextTokens: 32 });
         const owner = chat();

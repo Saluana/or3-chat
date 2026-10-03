@@ -83,7 +83,8 @@ vi.mock('~/utils/chat/uiMessages', () => ({
     }),
 }));
 
-vi.mock('~/utils/chat/openrouterStream', () => ({
+vi.mock('~/utils/chat/openrouterStream', async (original) => ({
+    ...(await original<typeof import('~/utils/chat/openrouterStream')>()),
     openRouterStream: (...args: unknown[]) => openRouterStreamSpy(...args),
     openRouterStreamWithRetry: async function* (...args: unknown[]) {
         yield* openRouterStreamSpy(...args);
@@ -164,6 +165,8 @@ async function continueMessageImpl(
     await executeContinuation(
         {
             ...ctx,
+            resolveContextPolicy: ctx.resolveContextPolicy ?? (async () => ({ model: { context_length: 1_000_000 },
+                userMaxContextTokens: null, source: 'openrouter-live' as const })),
             request,
             loading: computed(() => request.phase.value !== 'terminal'),
         },

@@ -1,7 +1,7 @@
 import { captureUsagePrefix, attachRequestUsage } from '~~/shared/chat/request-usage';
 import { readRequestUsage, type RequestUsage } from '~~/shared/chat/compaction';
 import { countTokensApprox } from './tokens';
-import { admitChatContext, estimateChatRequest, ChatContextAdmissionError, type ContextRequestPolicy } from '~~/shared/chat/context-budget';
+import { admitProviderRequest, captureContextEnvelope, ChatContextAdmissionError, type ContextRequestPolicy, type ContextRequestEnvelope } from '~~/shared/chat/context-budget';
 import { normalizeError, presentError, parseRetryAfter } from '~~/shared/errors';
 /**
  * @module app/utils/chat/openrouterStream
@@ -28,7 +28,7 @@ import {
     type StreamedFieldMode,
 } from '~~/shared/openrouter/parseOpenRouterSSE';
 import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
-import { OpenRouterStreamError } from '~~/shared/openrouter/errors';
+import { OpenRouterStreamError, normalizeProviderResponseError } from '~~/shared/openrouter/errors';
 import {
     getAnthropicPromptCacheControl,
     type OpenRouterCacheControl,
@@ -114,6 +114,7 @@ type OpenRouterRequestBody = {
     _toolRuntime?: Record<string, string>;
     _clientDeviceId?: string;
     _streamedFieldMode?: StreamedFieldMode;
+    _context?: ContextRequestEnvelope;
 };
 
 // Cache key for detecting static build (no server routes)
@@ -240,21 +241,9 @@ export async function prepareOpenRouterRequest(params: OpenRouterStreamParams): 
             throw new Error('Reply maximum must be a positive integer.');
         return body;
     }
-    const policy = params.contextPolicy;
-    const requested = policy.requestedCompletionTokens ?? params.maxCompletionTokens;
-    // Including max_tokens itself can alter configuration overhead. Recompute
-    // against the actual body until the default fits; this adds no fixed reserve.
-    for (;;) {
-        const { messages, tools, ...configuration } = body;
-        const estimate = await estimateChatRequest({ messages, tools, configuration, countText: countTokensApprox });
-        if (params.signal?.aborted) throw new DOMException('Chat preparation canceled.', 'AbortError');
-        const admission = admitChatContext({ ...policy, inputTokens: estimate.input_tokens, estimate,
-            requestedCompletionTokens: requested });
-        if (!admission.ok) throw new ChatContextAdmissionError(admission);
-        const replyMaximum = requested ?? admission.budget.available_completion_tokens;
-        if (body.max_tokens !== undefined && body.max_tokens <= replyMaximum) return body;
-        body.max_tokens = replyMaximum;
-    }
+    return admitProviderRequest(body, { ...params.contextPolicy,
+        requestedCompletionTokens: params.contextPolicy.requestedCompletionTokens ?? params.maxCompletionTokens },
+        countTokensApprox, params.signal);
 }
 
 export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGenerator<ORStreamEvent, void, unknown> {
@@ -277,6 +266,8 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
     );
 
     const body = await prepareOpenRouterRequest(params);
+    if (params.contextPolicy) body._context = captureContextEnvelope({ ...params.contextPolicy,
+        requestedCompletionTokens: params.contextPolicy.requestedCompletionTokens ?? params.maxCompletionTokens });
 
     if (params.threadId) {
         body._threadId = params.threadId;
@@ -289,7 +280,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
     // before asynchronous provenance work so later view/tool mutations cannot
     // change the sent prefix after its fingerprint was captured.
     const requestSnapshot = JSON.parse(JSON.stringify(body)) as OpenRouterRequestBody;
-    const { messages: _messages, _threadId: _thread, _messageId: _message, _background: _background, ...providerConfiguration } = requestSnapshot;
+    const { messages: _messages, _threadId: _thread, _messageId: _message, _background: _background, _context: _context, ...providerConfiguration } = requestSnapshot;
     const usagePrefix = await captureUsagePrefix({ model, messages: requestSnapshot.messages,
         tools: requestSnapshot.tools, modalities: requestSnapshot.modalities, configuration: providerConfiguration,
         countText: countTokensApprox }).catch(() => undefined);
@@ -394,6 +385,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
     delete fallbackBody._background;
     delete fallbackBody._threadId;
     delete fallbackBody._messageId;
+    delete fallbackBody._context;
 
     let resp: Response;
     try {
@@ -440,10 +432,10 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
             requestMetadata: sensitiveValueMetadata(JSON.stringify(fallbackBody)),
         });
 
-        const retryable = resp.status === 429 || resp.status >= 500;
+        const metadata = normalizeProviderResponseError(respText, resp.status, { credentialSource: 'personal' });
         throw new OpenRouterStreamError(
-            presentError({ status: resp.status, source: 'provider', credentialSource: 'personal' }).message,
-            { status: resp.status, retryable, retryAfterMs: parseRetryAfter(resp.headers.get('retry-after')), credentialSource: 'personal', providerCode: resp.status }
+            presentError(metadata).message,
+            { ...metadata, status: resp.status, retryAfterMs: parseRetryAfter(resp.headers.get('retry-after')) }
         );
     }
 
@@ -785,6 +777,8 @@ export async function startBackgroundStream(params: {
         _clientDeviceId: getDeviceId(),
     };
 
+    if (params.contextPolicy) body._context = captureContextEnvelope({ ...params.contextPolicy,
+        requestedCompletionTokens: params.contextPolicy.requestedCompletionTokens });
     if (params.toolRuntime) {
         body._toolRuntime = params.toolRuntime;
     }

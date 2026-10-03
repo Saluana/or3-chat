@@ -24,11 +24,9 @@
  */
 
 import {
-    collectModelsFromListPages,
+    fetchOpenRouterCatalog,
     createOpenRouterClient,
-    getRequestOptions,
     normalizeSDKError,
-    sdkModelToLocal,
     type OpenRouterModel,
 } from '~~/shared/openrouter';
 import { useRuntimeConfig } from '#imports';
@@ -147,12 +145,7 @@ export async function fetchModelCatalog(opts?: {
     });
 
     try {
-        const pages = await client.models.list({}, getRequestOptions());
-        // SDK v1 returns a PageIterator of { result: { data } }
-        const sdkModels = await collectModelsFromListPages(pages);
-
-        // Map SDK model type to our OpenRouterModel interface
-        const models: OpenRouterModel[] = sdkModels.map(sdkModelToLocal);
+        const models: OpenRouterModel[] = await fetchOpenRouterCatalog(client);
 
         const fetchedAt = Date.now();
         saveCache(models, fetchedAt);

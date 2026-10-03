@@ -131,3 +131,52 @@ export class ChatContextAdmissionError extends Error {
         this.name = 'ChatContextAdmissionError'; this.code = admission.code;
     }
 }
+
+/** Internal OR3 transport envelope. Capacity facts never come from the caller. */
+export interface ContextRequestEnvelope {
+    version: 1;
+    user_max_context_tokens: number | null;
+    requested_completion_tokens: number | null;
+}
+
+export function captureContextEnvelope(policy: ContextRequestPolicy): ContextRequestEnvelope {
+    return { version: 1, user_max_context_tokens: policy.userMaxContextTokens,
+        requested_completion_tokens: policy.requestedCompletionTokens ?? null };
+}
+
+/** Keep provider/SSR classifications aligned with native request outcomes. */
+export function contextAdmissionFailureReason(error: unknown): Exclude<ContextAdmission, { ok: true }>['code'] | undefined {
+    const code = error && typeof error === 'object' ? (error as { code?: unknown }).code : undefined;
+    switch (code) {
+        case 'context_full': case 'ERR_CONTEXT_FULL': return 'context_full';
+        case 'model_metadata_unavailable': case 'ERR_MODEL_METADATA_UNAVAILABLE': return 'model_metadata_unavailable';
+        case 'invalid_context_limit': case 'ERR_CONTEXT_LIMIT_INVALID': return 'invalid_context_limit';
+        case 'invalid_output_limit': case 'ERR_OUTPUT_LIMIT_INVALID': return 'invalid_output_limit';
+        default: return undefined;
+    }
+}
+
+/** Admit the complete provider payload using one policy captured for this generation. */
+export async function admitProviderRequest<T extends {
+    messages: readonly CountableChatMessage[];
+    tools?: readonly unknown[];
+    max_tokens?: number;
+}>(body: T, policy: ContextRequestPolicy, countText: (text: string) => Promise<number>, signal?: AbortSignal): Promise<T> {
+    for (;;) {
+        const { messages, tools, ...configuration } = body;
+        const estimate = await estimateChatRequest({ messages, tools, configuration, countText });
+        if (signal?.aborted) throw new DOMException('Chat preparation canceled.', 'AbortError');
+        if (body.max_tokens !== undefined && (!Number.isSafeInteger(body.max_tokens) || body.max_tokens <= 0)) {
+            const invalid = admitChatContext({ ...policy, inputTokens: estimate.input_tokens, estimate,
+                requestedCompletionTokens: body.max_tokens });
+            if (!invalid.ok) throw new ChatContextAdmissionError(invalid);
+        }
+        const requested = policy.requestedCompletionTokens ?? undefined;
+        const admission = admitChatContext({ ...policy, inputTokens: estimate.input_tokens, estimate,
+            requestedCompletionTokens: requested });
+        if (!admission.ok) throw new ChatContextAdmissionError(admission);
+        const replyMaximum = requested ?? admission.budget.available_completion_tokens;
+        if (body.max_tokens !== undefined && body.max_tokens <= replyMaximum) return body;
+        body.max_tokens = replyMaximum;
+    }
+}

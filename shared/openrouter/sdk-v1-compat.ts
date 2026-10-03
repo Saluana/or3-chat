@@ -13,6 +13,9 @@
 import type { Model as SDKModel } from '@openrouter/sdk/models';
 import type { ExchangeAuthCodeForAPIKeyRequest } from '@openrouter/sdk/models/operations';
 import type { SendChatCompletionRequestRequest } from '@openrouter/sdk/models/operations';
+import type { OpenRouter } from '@openrouter/sdk';
+import { getRequestOptions } from './client';
+import { sdkModelToLocal, type OpenRouterModel } from './types';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -79,4 +82,13 @@ export async function collectModelsFromListPages(
         if (Array.isArray(batch)) models.push(...batch);
     }
     return models;
+}
+
+/** Use the existing SDK pagination and normalization in both browser and server paths. */
+export async function fetchOpenRouterCatalog(client: Pick<OpenRouter, 'models'>, signal?: AbortSignal): Promise<OpenRouterModel[]> {
+    if (signal?.aborted) throw new DOMException('Model preparation canceled.', 'AbortError');
+    const pages = await client.models.list({}, getRequestOptions(signal));
+    const records = await collectModelsFromListPages(pages);
+    if (signal?.aborted) throw new DOMException('Model preparation canceled.', 'AbortError');
+    return records.map(sdkModelToLocal);
 }

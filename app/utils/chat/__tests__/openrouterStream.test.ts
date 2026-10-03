@@ -70,6 +70,46 @@ describe('openrouterStream', () => {
         vi.useRealTimers();
     });
 
+    it.each(['context_length_exceeded', 'context_window_exceeded'] as const)('preserves %s as a permanent actionable context error without retrying', async (providerCode) => {
+        parseMock.mockImplementationOnce(async function* () {
+            throw new OpenRouterProviderError('Untrusted upstream text token=secret', { status: 400, providerCode });
+        });
+        const fetchMock = vi.fn().mockResolvedValue(createStreamResponse());
+        vi.stubGlobal('fetch', fetchMock);
+        await expect((async () => {
+            for await (const _event of openRouterStreamWithRetry({ apiKey: 'key', model: 'model-1',
+                orMessages: [{ role: 'user', content: 'Keep full input' }], modalities: ['text'] })) { /* consume */ }
+        })()).rejects.toMatchObject({ code: 'ERR_CONTEXT_FULL', retryable: false,
+            message: 'Context full — compact, edit the request, or choose a larger supported model.' });
+        expect(fetchMock).toHaveBeenCalledOnce();
+    });
+
+    it('preserves structured server context denial and sends only captured user choices to the host', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({ code: 'context_full', retryable: false }, 400));
+        vi.stubGlobal('fetch', fetchMock);
+        await expect((async () => {
+            for await (const _event of openRouterStream({ apiKey: 'key', model: 'model-1',
+                orMessages: [{ role: 'user', content: 'Keep input' }], modalities: ['text'],
+                contextPolicy: { model: { context_length: 1_000_000 }, userMaxContextTokens: 500,
+                    requestedCompletionTokens: 100, source: 'openrouter-live' } })) { /* consume */ }
+        })()).rejects.toMatchObject({ code: 'ERR_CONTEXT_FULL', retryable: false });
+        const body = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
+        expect(body._context).toEqual({ version: 1, user_max_context_tokens: 500, requested_completion_tokens: 100 });
+    });
+
+    it.each(['server', 'direct'] as const)('classifies provider context HTTP errors on the %s route without retrying or exposing upstream text', async (route) => {
+        if (route === 'direct') localStorage.setItem('or3:server-route-available', JSON.stringify({ available: false, timestamp: Date.now() }));
+        const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({ error: {
+            code: 'context_length_exceeded', message: 'secret=upstream-private' } }, 400));
+        vi.stubGlobal('fetch', fetchMock);
+        await expect((async () => {
+            for await (const _event of openRouterStreamWithRetry({ apiKey: 'key', model: 'model-1',
+                orMessages: [{ role: 'user', content: 'Keep input' }], modalities: ['text'] })) { /* consume */ }
+        })()).rejects.toMatchObject({ code: 'ERR_CONTEXT_FULL', retryable: false,
+            message: 'Context full — compact, edit the request, or choose a larger supported model.' });
+        expect(fetchMock).toHaveBeenCalledOnce();
+    });
+
     it.each(['poll', 'sse'] as const)('validates background request usage at the %s boundary without failing valid text', async (transport) => {
         const payloads = [
             { ...backgroundMeasurement, untrusted: 'drop' },

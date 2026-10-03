@@ -1,7 +1,7 @@
 import { presentError, errorDiagnostics } from '~~/shared/errors';
 import { resolveThreadProjection } from '~/utils/chat/compaction/history';
 import { projectTranscriptForOpenRouter, storedMessagesToCanonicalTranscript } from '~/utils/chat/transcript';
-import { ChatContextAdmissionError, type ContextRequestPolicy } from '~~/shared/chat/context-budget';
+import { ChatContextAdmissionError, contextAdmissionFailureReason, type ContextRequestPolicy } from '~~/shared/chat/context-budget';
 import type { ChatSendPreparation, ChatSendCommit } from '~~/shared/hooks/hook-domain-types';
 /**
  * @module app/composables/chat/useAi.ts
@@ -1757,9 +1757,9 @@ export function useChat(
                 status: error instanceof ChatContextAdmissionError && !requestScope.userMessageId ? 'rejected' : 'failed',
                 requestId,
                 reason:
-                    error instanceof ChatContextAdmissionError ? error.code : error instanceof ToolIterationLimitError
+                    contextAdmissionFailureReason(error) ?? (error instanceof ToolIterationLimitError
                         ? 'tool_iteration_limit'
-                        : 'stream_error',
+                        : 'stream_error'),
                 error: message,
             };
             if (!stopped && import.meta.dev) {
@@ -3047,8 +3047,7 @@ export function useChat(
                     status: 'failed',
                     requestId,
                     reason:
-                        err instanceof ChatContextAdmissionError ? err.code
-                            : err instanceof ToolIterationLimitError ? 'tool_iteration_limit' : 'stream_error',
+                        contextAdmissionFailureReason(visibleError) ?? (err instanceof ToolIterationLimitError ? 'tool_iteration_limit' : 'stream_error'),
                     error: visibleError.message,
                     userMessageId: userDbMsg.id,
                     assistantMessageId: requestScope.assistantMessageId,

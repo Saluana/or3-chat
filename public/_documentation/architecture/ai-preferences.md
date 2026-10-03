@@ -14,7 +14,9 @@ The persisted setting is `maxContextTokens: number | null`. This is a context-wi
 immutable preference capture are implemented. Native initial send, retry,
 continuation and foreground tool iterations apply the captured value without
 fallback capacity, reply reserves or automatic trimming. The control remains
-hidden while independent server admission, background reconnect and the final
-meter are pending. A settings change applies to the next generation, not an
-already admitted foreground loop. See [chat lifecycle](/documentation/architecture/chat-lifecycle)
+hidden while the final meter and product/browser qualification are pending.
+Native server admission resolves capacity independently and durable job
+checkpoints retain the captured maximum during tool iterations and reconnect.
+A settings change applies to the next generation, not an already admitted
+foreground or background loop. See [chat lifecycle](/documentation/architecture/chat-lifecycle)
 and [model catalog](/documentation/auth/models-service) for those boundaries.

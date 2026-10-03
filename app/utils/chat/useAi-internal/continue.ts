@@ -1,7 +1,7 @@
 import { readMeasuredRequestUsage } from '~~/shared/chat/request-usage';
 import type { RequestUsage } from '~~/shared/chat/compaction';
 import { resolveThreadProjection } from '~/utils/chat/compaction/history';
-import { ChatContextAdmissionError, type ContextRequestPolicy } from '~~/shared/chat/context-budget';
+import { ChatContextAdmissionError, contextAdmissionFailureReason, type ContextRequestPolicy } from '~~/shared/chat/context-budget';
 /**
  * @module app/utils/chat/useAi-internal/continue.ts
  *
@@ -58,11 +58,9 @@ import { makeAssistantPersister, updateMessageRecord, startForegroundGenerationH
 import { createForegroundGenerationLease } from '~/utils/chat/generation-lease';
 import {
     buildOpenRouterMessagesForSend,
-    enforceOpenRouterMessageTokenBudget,
 } from './messageBuild';
 import { createStreamWriteCoalescer } from './streamWriteCoalescer';
 import { utf8Bytes } from '~~/shared/chat/tool-limits';
-import { DEFAULT_MAX_INPUT_TOKENS } from '~/utils/chat/constants';
 import {
     CONTINUATION_PREFIX,
     CONTINUE_TAIL_CHARS,
@@ -117,7 +115,6 @@ export type ContinueMessageContext = {
     defaultModelId: string;
     getSystemPromptContent: () => Promise<string | null>;
     useAiSettings: () => { settings: Ref<ChatSettings | undefined> };
-    resolveInputTokenBudget?: (modelId: string) => number | Promise<number>;
     resolveContextPolicy?: (modelId: string, signal: AbortSignal) => Promise<ContextRequestPolicy>;
     resetStream: () => void;
     backgroundStreamingAllowed?: boolean;
@@ -423,11 +420,7 @@ export async function continueMessageImpl(
             ctx.defaultModelId;
         if (!ownsThread()) return;
         const contextPolicy = await ctx.resolveContextPolicy?.(modelId, continuationAbortController.signal);
-        if (!contextPolicy) orMessages = await enforceOpenRouterMessageTokenBudget(
-            orMessages,
-            (await ctx.resolveInputTokenBudget?.(modelId)) ??
-                DEFAULT_MAX_INPUT_TOKENS
-        );
+        if (!contextPolicy) throw new ChatContextAdmissionError({ ok: false, code: 'model_metadata_unavailable' });
         // Last setup gate: never publish stream state into a new chat.
         if (!ownsThread()) return;
         if (orMessages.length === 0)
@@ -441,7 +434,7 @@ export async function continueMessageImpl(
             modalities.length === 1 &&
             modalities[0] === 'text' &&
             Boolean(ctx.workspaceId && ctx.userId && ctx.attachBackgroundJob);
-        if (contextPolicy) await prepareOpenRouterRequest({ model: modelId, orMessages,
+        await prepareOpenRouterRequest({ model: modelId, orMessages,
             modalities, contextPolicy, signal: continuationAbortController.signal });
         if (!ownsThread()) return;
 
@@ -777,6 +770,7 @@ export async function continueMessageImpl(
             const finalization = await finalizeRequest(request, {
                 outcome: stopped ? 'aborted' : 'failed',
                 error: stopped ? undefined : e,
+                failureReason: contextAdmissionFailureReason(e),
                 messageError: stopped ? 'stopped' : 'stream_interrupted',
                 generationState: stopped ? 'aborted' : 'interrupted',
             });
@@ -828,7 +822,7 @@ export async function continueMessageImpl(
         const finalization = await finalizeRequest(request, {
             outcome: stopped ? 'aborted' : 'failed',
             error: stopped ? undefined : setupError,
-            failureReason: e instanceof ChatContextAdmissionError ? e.code : undefined,
+            failureReason: contextAdmissionFailureReason(e),
             messageError: stopped ? 'stopped' : 'stream_interrupted',
             generationState: stopped ? 'aborted' : 'interrupted',
             persistence:
