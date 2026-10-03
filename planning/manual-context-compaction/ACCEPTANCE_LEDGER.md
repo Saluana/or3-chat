@@ -112,7 +112,7 @@ WHEN model, maximum-context preference, prompt, tools, attachments, thread histo
 
 WHEN model capacity is needed THEN the system SHALL use validated OpenRouter metadata from the existing catalog/cache and refresh it when missing; IF no valid capacity can be obtained THEN it SHALL show a recoverable metadata-unavailable state without inventing an 8k or other fallback capacity.
 
-- State: Partial: cache/refresh/unknown-capacity owners pass; concrete selected-route endpoint facts beyond validated catalog fields remain explicit qualification work.
+- State: Locally verified under approved catalog scope: cache/refresh/unknown-capacity and concrete route owners pass. Brendon accepted catalog-based admission on 2026-10-03; endpoint selection/pinning is separate future work. No independent endpoint guarantee is asserted.
 - Owner: context-budget; request-usage; model-context-readiness; useAi.context-admission; real composer screenshots/lossy journey.
 - Evidence scope: Actual capacity, measured-prefix/full estimates, tool/media accounting, cached readiness and untrimmed600k/3.8M-byte native transport.
 
@@ -136,7 +136,7 @@ IF a final request cannot fit its input and reply within the effective context w
 
 WHEN an initial send is blocked THEN its draft and attachments SHALL remain available, no assistant generation SHALL begin, and no duplicate durable user turn SHALL be produced on retry.
 
-- State: Partial: same-ID recovery and preserved draft/zero native preflight writes pass; actual attachment/background checkpoint-recovery matrix now passes locally. Legacy post-write filters retain compatibility until published pure-contract adoption.
+- State: Partial: same-ID recovery and preserved draft/zero native preflight writes pass; actual attachment/background checkpoint-recovery matrix now passes locally. Brendon selected pure Workflows802cca1 adoption; the exact source package is conformant, but archive canary/activation and an immutable fresh version remain outstanding. Generic legacy compatibility does not qualify this criterion.
 - Owner: useAi.context-admission; stream-handler.tools; native recovery/lossy journeys.
 - Evidence scope: Fresh complete-body admission, preserved accepted tools, provider context errors and same-turn checkpoint recovery. Legacy side-effecting filter boundary is documented.
 

@@ -1,6 +1,6 @@
 # Compaction review repairs and final local qualification
 
-Updated2026-10-03 UTC. **47 tasks complete,7 partial,1 not started;55 total.** All locally feasible repairs and owning-boundary matrices are complete. This is a candidate for final parent review, not all55 acceptance or a release claim. All79 exact criteria remain in [ACCEPTANCE_LEDGER.md](./ACCEPTANCE_LEDGER.md); [tasks.md](./tasks.md) retains IDs/order/Done-when wording. Earlier receipts remain in [evidence.md](./evidence.md), Git history and `task3/output/compaction-review/previous-qualification-packet-31b1e6b3.md`.
+Updated2026-10-03 UTC. **49 tasks complete,5 partial,1 not started;55 total.** All locally feasible repairs and owning-boundary matrices are complete. This is a candidate for final parent review, not all55 acceptance or a release claim. All79 exact criteria remain in [ACCEPTANCE_LEDGER.md](./ACCEPTANCE_LEDGER.md); [tasks.md](./tasks.md) retains IDs/order/Done-when wording. Earlier receipts remain in [evidence.md](./evidence.md), Git history and `task3/output/compaction-review/previous-qualification-packet-31b1e6b3.md`.
 
 ## Exact source and isolation
 
@@ -18,7 +18,7 @@ Only private task3 source and disposable fixtures changed. Main dirty product ch
 |F4 historical media|Shared metadata-only selection marks inherited/stored replayed raster/remote/inline image costs unknown without hydration. Actual ancestor-image/text-only draft and real file chooser/removal pass. Prompt revision and deep attachment/configuration invalidation were also repaired.|
 |F5 ordering|Lookup target/neighbors expose actual finite index/string order_key and truthful legacy absence within existing output caps. Registered server/browser cases reindex37/order37:reindexed and pass.|
 
-These findings are repaired locally, pending final parent acceptance. Original report: `/Users/brendon/Documents/Codex/2026-10-03/task/output/compaction-final-candidate-review.md`.
+Parent accepted F1–F5 closure at4a6883c6; subsequent e13be9c7 only aligned two error-table rows. These receipts qualify the tested c5ab90d4 runtime. Original report: `/Users/brendon/Documents/Codex/2026-10-03/task/output/compaction-final-candidate-review.md`.
 
 Same-model follow-up: documented unresolved Auto/Free/Pareto/Fusion/Jev/Switchyard/BodyBuilder/latest aliases reject before inference/fork/outbox and recover on explicit concrete model selection. Concrete Nitro/Floor remains valid. Public docs link primary OpenRouter definitions; arbitrary future custom routers are not claimed universally discoverable.
 
@@ -69,13 +69,12 @@ Setup failures remain: Blob/tool-event annotations, stale generated Convex histo
 | Tasks | Remaining blocker |
 | --- | --- |
 |2.5b,3.3,6.2,6.5|Compatible provider publication/pins and authorized selected backend/deployed Convex validators/transactions/token-service/second-client/background-retrieval reconnect. Release/deployment/access changes are outside authorization.|
-|2.8|Installed legacy side-effecting filters require compatible adoption of the separately qualified pure Workflows prepare/real-ID commit package for universal zero-write final-payload admission. Do not move/repeat final filters or invent temporary durable IDs. Publication/adoption needs separate ownership/approval.|
-|2.7a|Concrete variant/catalog/cache facts pass. Nitro/Floor choose provider pools without pinning an endpoint; independently guaranteed endpoint constraints require a product decision about explicit endpoint selection/pinning. No guessed quota/minimum cap is introduced.|
-|5.5|Original required failure-fixture-before-provider-implementation chronology was not established. Current conformance/readiness passes cannot restore chronology; parent must disposition this provenance criterion. Acceptance wording stays unchanged.|
+|2.8|Installed legacy side-effecting filters require compatible adoption of the separately qualified pure Workflows prepare/real-ID commit package for universal zero-write final-payload admission. Do not move/repeat final filters or invent temporary durable IDs. Brendon approved this adoption target; exact802cca1 package validates/builds/packs/inspects conformantly. Fresh immutable version, exact-archive canary and reviewed workspace activation still need release/activation approval and evidence.|
+|2.7a,5.5 (resolved dispositions)|Brendon accepted catalog-based admission and the original fixture-chronology limitation on 2026-10-03. Endpoint pinning remains separate future work; retrospective conformance does not restore provenance. Original acceptance wording stays intact.|
 |8.3|Three manual tool-heavy/discussion/mixed quality scorecards, two rolling compactions each, require separately approved live model traffic. No factual-quality pass is fabricated from scripted responses.|
 
 Read-only remote: or3-cloud **a13116e28bd1327eb7e1393b831a791f5eba0310** is an ancestor. PR188 remains OPEN/DRAFT at **0c64775204752837db6e9d7694fe3c88e22c74f5**, reviewed integration base **883358517ae4a8df4a20c7d06c6a9c3fffcbf8c5**. Current candidate Actions lookup returns no runs (connector returns first-page PR-triggered runs only); old successful Checks37024773124 is not attributed to this candidate.
 
-Push/PR writes remain held after an earlier automatic approval rejection. Exact rejected call/reason transcript is unavailable here; no same-call or alternate-route retry occurred. Parent coordination needs that record before a permitted retry. This hold blocked no local repair above.
+Historical push/PR hold: an earlier automatic approval rejection was retained without retry or alternate route. Brendon subsequently authorized draft PR188 push/update and exact-head CI (2026-10-03 15:13:06 UTC). This supersedes that hold for the named branch/PR; provider publication, activation, deployment and live traffic remain excluded. New exact remote/CI receipts will be recorded outside the commit they verify. See [approved decisions and release plan](./APPROVED_DECISIONS_AND_RELEASE_PLAN.md).
 
 Rollback is a revert of coherent local host/provider commits; no deployment/package/pin changed. Portable bundle/patches/configuration/receipt hashes and checkpoint are in task3/output/compaction-review. Final parent review is the next handoff boundary.
