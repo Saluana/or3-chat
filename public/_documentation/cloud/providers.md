@@ -1,5 +1,16 @@
 # Cloud providers
 
+Workspace Files/Trash requires matching host and provider admission contracts.
+Sync requests advertise workspace-item `v1`; affected readers and writers that
+omit it must receive an explicit update boundary. Native SQLite checks incoming
+and canonical posts/projects in its write transaction. D1 does not advertise
+this transactional capability. Convex direct and gateway clients require the
+updated `sync.ts` and `workspaceItemCapability.ts` templates, deployed before
+the updated runtime is used. Review scaffold conflicts using the provider's
+documented update flow. Files is exposed only when the session permits workspace reads and the selected adapter advertises workspace-item `v1`. Local sandbox qualification covers updated Convex gateway and authenticated direct calls, native Convex storage, and Basic Auth with SQLite/filesystem storage. Runtime and template publication is a separate release step; existing installations require the matching provider updates.
+
+Physical storage cleanup additionally requires the matching deletion-coordination contract and updated Convex schema/storage/sync/helper scaffold. Older backends fail closed. Filesystem cleanup remains disabled until cross-backend coordination exists; see [Object Storage Layer](/documentation/cloud/storage-layer).
+
 This guide covers how OR3 discovers provider packages, how to install them, and how the Clerk to Convex token bridge works.
 
 For normal local or VPS operation, use the managed [`@or3/cloud`](/documentation/cloud/setup)

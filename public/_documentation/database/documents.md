@@ -1,5 +1,13 @@
 # Documents
 
+In local mode, native documents also appear in Files. Logical Trash hides them
+from ordinary browsing, project membership, mentions, and assistant tools while
+retaining rows and checkpoints. Open editors become read-only until Restore.
+Permanent removal from Files releases the document's ownership while preserving
+retained history and shared file references. Chat validates native content with
+the same lazy extension/schema loader as the mounted editor, including enabled
+custom nodes.
+
 Document storage built on the shared `posts` table (`postType: 'doc'`) with TipTap JSON payloads and hook integration.
 
 ---

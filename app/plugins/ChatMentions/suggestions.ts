@@ -7,9 +7,10 @@ import {
 
 interface MentionItem {
     id: string;
-    source: 'document' | 'chat';
+    source: 'document' | 'chat' | 'file';
     label: string;
     subtitle?: string;
+    imageHash?: string;
 }
 
 export function createMentionSuggestion(
@@ -23,7 +24,15 @@ export function createMentionSuggestion(
             MentionsPopover,
             (props: SuggestionProps<MentionItem>) => ({
                 items: props.items,
-                command: props.command,
+                command: (item: MentionItem) => {
+                    const attach = props.editor.storage.or3MentionAttachments?.attachImage;
+                    if (item.source === 'file' && item.imageHash && typeof attach === 'function') {
+                        props.editor.chain().focus().deleteRange(props.range).run();
+                        void attach(item.id);
+                    } else {
+                        props.command(item);
+                    }
+                },
                 getReferenceClientRect: props.clientRect,
                 open: true,
                 onClose: () => {

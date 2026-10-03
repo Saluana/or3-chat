@@ -7,6 +7,7 @@
                 <p>Review and restore compressed checkpoints synced with this workspace.</p>
             </div>
             <UButton
+                v-if="!readOnly && createCheckpoint"
                 :icon="plusIcon"
                 color="neutral"
                 variant="outline"
@@ -62,7 +63,7 @@
             <template #footer>
                 <div class="preview-actions">
                     <UButton color="neutral" variant="ghost" size="modal" label="Cancel" @click="closePreview" />
-                    <UButton color="primary" size="modal" label="Restore this version" :disabled="busy || !selected" @click="restoreSelected" />
+                    <UButton v-if="!readOnly" color="primary" size="modal" label="Restore this version" :disabled="busy || !selected" @click="restoreSelected" />
                 </div>
             </template>
         </AppModal>
@@ -82,7 +83,8 @@ import {
 
 const props = defineProps<{
     documentId: string;
-    createCheckpoint: () => Promise<void>;
+    createCheckpoint?: () => Promise<void>;
+    readOnly?: boolean;
 }>();
 const emit = defineEmits<{ restore: [revision: CompleteDocumentRevision] }>();
 const historyIcon = useIcon('editor.history');
@@ -132,6 +134,7 @@ async function checkpoint() {
     busy.value = true;
     error.value = '';
     try {
+        if (props.readOnly || !props.createCheckpoint) return;
         await props.createCheckpoint();
         if (!isCurrent()) return;
         await load();
@@ -157,7 +160,7 @@ function closePreview() {
 }
 
 function restoreSelected() {
-    if (!selected.value) return;
+    if (!selected.value || props.readOnly) return;
     const revision = selected.value;
     closePreview();
     emit('restore', revision);

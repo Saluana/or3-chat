@@ -37,6 +37,118 @@ afterEach(async () => {
 });
 
 describe('chat document tools', () => {
+    it('searches project-scoped catalog excerpts and hides unavailable or trashed file memberships', async () => {
+        const { registerPaletteSource } = await import('~/core/search/command-palette/registry');
+        const { createFilePaletteSource } = await import('~/core/search/command-palette/sources/file-source');
+        const { useCommandPalette, disposeCommandPalette } = await import('~/composables/search/useCommandPalette');
+        const { catalogWorkspaceFile, updateWorkspaceFile } = await import('~/db/workspace-files');
+        const { captureWorkspaceOperation } = await import('~/utils/chat/workspace-access');
+        const handle = registerPaletteSource(createFilePaletteSource());
+        disposers.push(() => { disposeCommandPalette(); handle.dispose(); });
+        disposers.push(registerWorkspaceChatTools());
+        const context = { subject: null, workspaceId: 'workspace-a', threadId: 'thread-a', messageId: null,
+            requestId: 'file-search', callId: 'file-search', abortSignal: new AbortController().signal };
+        const scope = captureWorkspaceOperation(context);
+        const hash = `sha256:${'a'.repeat(64)}`;
+        await getDb().file_meta.put({ hash, name: 'Saffron notes.md', mime_type: 'text/markdown', size_bytes: 100_000,
+            kind: 'file', ref_count: 0, deleted: false, clock: 1, created_at: 1, updated_at: 1 });
+        const saved = await catalogWorkspaceFile(scope, hash, { text: { text: 'Saffron catalog evidence', coverage: 'prefix', indexed_bytes: 24 } });
+        const project = { id: 'file-project', name: 'File project', data: [{ kind: 'file', id: saved.post.id }],
+            deleted: false, clock: 1, created_at: 1, updated_at: 1 };
+        await getDb().projects.put(project);
+        const palette = useCommandPalette(); await palette.warm();
+        const registry = useToolRegistry();
+        const search = () => registry.executeTool('workspace_search', JSON.stringify({ query: 'saffron', kinds: ['file'], projectId: project.id }),
+            context, { definition: registry.getTool('workspace_search')!.definition });
+        const result = await search();
+        expect(result.error).toBeUndefined();
+        expect(JSON.parse(result.result!)).toMatchObject({ partial: true, results: [{ source: { id: saved.post.id }, textCoverage: 'prefix' }] });
+        const trashed = await updateWorkspaceFile(scope, saved.post.id, await workspaceRevision(saved.post), { trashed: true });
+        await palette.getCoordinator()!.refreshSources(['file']);
+        expect(JSON.parse((await search()).result!).results).toEqual([]);
+        await updateWorkspaceFile(scope, saved.post.id, await workspaceRevision(trashed), { trashed: false });
+        await getDb().file_meta.update(hash, { deleted: true });
+        const read = await registry.executeTool('workspace_read', JSON.stringify({ item: { kind: 'project', id: project.id } }),
+            context, { definition: registry.getTool('workspace_read')!.definition });
+        expect(read.error).toBeUndefined();
+        expect(read.result).not.toContain(saved.post.id);
+    });
+
+    it('uses the registered native editor schema for custom-node creation and rejects it after removal', async () => {
+        const { Node, Editor } = await import('@tiptap/core');
+        const { registerEditorNode, unregisterEditorNode } = await import('~/composables/editor/useEditorNodes');
+        const { loadDocumentEditorExtensions } = await import('../document-editor-schema');
+        registerEditorNode({ id: 'workspace-acceptance-node', extension: Node.create({
+            name: 'workspaceAcceptanceNode', group: 'block', content: 'inline*',
+            parseHTML: () => [{ tag: 'workspace-acceptance' }],
+            renderHTML: () => ['workspace-acceptance', 0],
+        }) });
+        disposers.push(() => unregisterEditorNode('workspace-acceptance-node'));
+        disposers.push(registerWorkspaceChatTools());
+        const registry = useToolRegistry();
+        const content = { type: 'doc', content: [{ type: 'workspaceAcceptanceNode', content: [{ type: 'text', text: 'Custom native block' }] }] };
+        const editor = new Editor({ extensions: await loadDocumentEditorExtensions(), content });
+        const context = { subject: null, workspaceId: 'workspace-a', threadId: 'thread-a', messageId: null,
+            callId: 'custom-create', requestId: 'custom-create', abortSignal: new AbortController().signal };
+        try {
+            const result = await registry.executeTool('workspace_create_document', JSON.stringify({ title: 'Custom document', content }),
+                context, { definition: registry.getTool('workspace_create_document')!.definition });
+            expect(result.error).toBeUndefined();
+            const receipt = JSON.parse(result.result!);
+            expect(JSON.parse((await getDb().posts.get(receipt.source.id))!.content)).toEqual(editor.getJSON());
+            await getDb().messages.put({ id: 'custom-change-message', thread_id: 'thread-a', role: 'assistant',
+                data: { content: '' }, created_at: 1, updated_at: 1, deleted: false, clock: 1, index: 0, pending: false });
+            const editContext = { ...context, messageId: 'custom-change-message', callId: 'custom-read' };
+            const read = await registry.executeTool('workspace_read', JSON.stringify({ item: { kind: 'document', id: receipt.source.id } }),
+                editContext, { definition: registry.getTool('workspace_read')!.definition });
+            expect(read.error).toBeUndefined();
+            const operations = [{ kind: 'replace_block' as const, ref: 'b1', content: [
+                { type: 'workspaceAcceptanceNode', content: [{ type: 'text', text: 'Updated custom native block' }] },
+            ] }];
+            const { buildDocumentAiCandidate, freezeDocumentForAi } = await import('../document-ai-operations');
+            const editorCandidate = buildDocumentAiCandidate(editor, freezeDocumentForAi(editor), operations);
+            const proposed = await registry.executeTool('workspace_propose_document_edit', JSON.stringify({
+                documentId: receipt.source.id, readId: JSON.parse(read.result!).readId, operations,
+            }), { ...editContext, callId: 'custom-propose' }, { definition: registry.getTool('workspace_propose_document_edit')!.definition });
+            expect(proposed.error).toBeUndefined();
+            const { loadWorkspaceDocumentChange, prepareWorkspaceDocumentChange, applyWorkspaceDocumentChange } = await import('~/utils/chat/workspace-document-change');
+            const ref = JSON.parse(proposed.result!);
+            const loaded = await loadWorkspaceDocumentChange(ref);
+            expect(loaded.change.status).toBe('pending');
+            if (loaded.change.status !== 'pending') throw new Error('Expected pending custom-node proposal');
+            const prepared = await prepareWorkspaceDocumentChange(loaded.scope, loaded.change, loaded.message.thread_id);
+            expect(prepared.content).toEqual(editorCandidate);
+            await applyWorkspaceDocumentChange(ref);
+            expect(JSON.parse((await getDb().posts.get(receipt.source.id))!.content)).toEqual(editorCandidate);
+            unregisterEditorNode('workspace-acceptance-node');
+            const denied = await registry.executeTool('workspace_create_document', JSON.stringify({ title: 'Unsupported custom document', content }),
+                { ...context, callId: 'removed-create' }, { definition: registry.getTool('workspace_create_document')!.definition });
+            expect(denied.error).toBeTruthy();
+            expect(await getDb().posts.where('title').equals('Unsupported custom document').count()).toBe(0);
+        } finally { editor.destroy(); }
+    });
+
+    it('preserves native document metadata while excluding logical Trash from ordinary lists and reads', async () => {
+        const { updateWorkspaceFile } = await import('~/db/workspace-files');
+        const { listDocuments } = await import('~/db/documents');
+        const { captureWorkspaceOperation } = await import('~/utils/chat/workspace-access');
+        disposers.push(registerWorkspaceChatTools());
+        const context = { subject: null, workspaceId: 'workspace-a', threadId: 'thread-a', messageId: null,
+            callId: 'trash-document', requestId: 'trash-document', abortSignal: new AbortController().signal };
+        const row = { id: 'library-doc', title: 'Library document', postType: 'doc', content: '{"type":"doc","content":[]}',
+            meta: '{"plugin-key":"preserve"}', deleted: false, clock: 1, created_at: 1, updated_at: 1 };
+        await getDb().posts.put(row);
+        const trashed = await updateWorkspaceFile(captureWorkspaceOperation(context), row.id, await workspaceRevision(row), { trashed: true });
+        expect(JSON.parse(trashed.meta as string)['plugin-key']).toBe('preserve');
+        expect(await listDocuments()).toEqual([]);
+        const registry = useToolRegistry();
+        const read = await registry.executeTool('workspace_read', JSON.stringify({ item: { kind: 'document', id: row.id } }),
+            context, { definition: registry.getTool('workspace_read')!.definition });
+        expect(read.error).toMatch(/unavailable/);
+        const restored = await updateWorkspaceFile(captureWorkspaceOperation(context), row.id, await workspaceRevision(trashed), { trashed: false });
+        expect(restored.id).toBe(row.id);
+        expect((await listDocuments()).map(doc => doc.id)).toEqual([row.id]);
+    });
     async function pendingChange() {
         disposers.push(registerWorkspaceChatTools());
         const registry = useToolRegistry();
@@ -422,6 +534,21 @@ describe('chat document tools', () => {
         expect(await getDb().projects.count()).toBe(1);
         expect((await getDb().projects.get(receipt.source.id))?.name).toBe('Project A');
     });
+    it('round-trips file memberships without coercing them into chats', async () => {
+        const { normalizeProjectData } = await import('~/utils/projects/normalizeProjectData');
+        expect(normalizeProjectData([{ kind: 'file', id: 'catalog-file', name: 'Notes' }])).toEqual([
+            { kind: 'file', id: 'catalog-file', name: 'Notes' },
+        ]);
+        expect(normalizeProjectData([{ kind: 'plugin-private', id: 'private-record' }])).toEqual([]);
+    });
+    it('keeps extension memberships when the sidebar saves known project entries', async () => {
+        const { useProjectsCrud } = await import('~/composables/projects/useProjectsCrud');
+        const extension = { kind: 'plugin-private', id: 'private-record', payload: { retain: true } };
+        await getDb().projects.put({ id: 'sidebar-project', name: 'Project', data: [extension, { kind: 'file', id: 'catalog', name: 'Old' }],
+            created_at: 1, updated_at: 1, deleted: false, clock: 1 });
+        await useProjectsCrud().updateProjectEntries('sidebar-project', [{ kind: 'file', id: 'catalog', name: 'New' }]);
+        expect((await getDb().projects.get('sidebar-project'))?.data).toEqual([extension, { kind: 'file', id: 'catalog', name: 'New' }]);
+    });
     it('updates a project by read revision and removes association without deleting its document', async () => {
         disposers.push(registerWorkspaceChatTools());
         const registry = useToolRegistry();
@@ -449,6 +576,18 @@ describe('chat document tools', () => {
         }), { ...context, callId: 'stale-rename' }, { definition: tool!.definition });
         expect(stale.error).toMatch(/changed/i);
         expect((await getDb().projects.get(project.id))?.name).toBe('Project A');
+        const renameBase = (await getDb().projects.get(project.id))!;
+        const renamed = await registry.executeTool('workspace_update_project', JSON.stringify({
+            operation: 'rename', projectId: project.id, revision: await workspaceRevision(renameBase), name: 'Renamed project',
+        }), { ...context, callId: 'current-rename' }, { definition: tool!.definition });
+        expect(renamed.error).toBeUndefined();
+        const descriptionBase = (await getDb().projects.get(project.id))!;
+        const described = await registry.executeTool('workspace_update_project', JSON.stringify({
+            operation: 'set_description', projectId: project.id, revision: await workspaceRevision(descriptionBase), description: 'Requested project description',
+        }), { ...context, callId: 'current-description' }, { definition: tool!.definition });
+        expect(described.error).toBeUndefined();
+        expect(await getDb().projects.get(project.id)).toMatchObject({ name: 'Renamed project', description: 'Requested project description', data: [project.data[0]] });
+        expect((await getDb().posts.get('document-a'))?.deleted).toBe(false);
     });
     it('creates once per host execution and rejects invalid native content without writing', async () => {
         disposers.push(registerWorkspaceChatTools());

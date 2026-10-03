@@ -195,6 +195,8 @@ export const sidebarCssSelectors = {
     },
     '.page-link-btn': {
         style: {
+            border: '0',
+            boxShadow: 'none',
             borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
             minHeight: '54px',
             marginBottom: '0.4rem',

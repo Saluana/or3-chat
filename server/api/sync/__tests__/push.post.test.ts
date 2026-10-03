@@ -263,6 +263,20 @@ describe('POST /api/sync/push', () => {
         );
     });
 
+    it.each([
+        { postType: 'or3:file', meta: '' },
+        { postType: 'doc', meta: JSON.stringify({ 'or3.workspace-item': { version: 1, trashed_at: 1 } }) },
+    ])('rejects workspace item semantics before dispatch for an older writer', async (fields) => {
+        const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
+        const body = makeBaseBody();
+        const op = body.ops[0]!;
+        readBodyMock.mockResolvedValue({ ...body, ops: [{ ...op, tableName: 'posts', pk: 'catalog-item', payload: {
+            id: 'catalog-item', title: 'Notes', content: '', created_at: 1, updated_at: 1, deleted: false, clock: 1, ...fields,
+        } }] });
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 426 });
+        expect(pushMock).not.toHaveBeenCalled();
+    });
+
     it('rejects a batch containing a generic file before dispatch for an older writer', async () => {
         const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue({

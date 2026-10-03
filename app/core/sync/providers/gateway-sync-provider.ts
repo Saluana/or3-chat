@@ -1,3 +1,4 @@
+import { WORKSPACE_ITEM_CAPABILITY } from "~~/shared/posts/workspace-item-capability";
 import { normalizeError, type ErrorCode } from '~~/shared/errors';
 /**
  * @module app/core/sync/providers/gateway-sync-provider
@@ -315,7 +316,7 @@ export function createGatewaySyncProvider(
                         cursor,
                         limit,
                         tables,
-                        fileKindCapability: FILE_KIND_CAPABILITY,
+                        workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY,
                     };
                     const response = await requestJson<PullResponse>(
                         '/api/sync/pull',
@@ -421,7 +422,7 @@ export function createGatewaySyncProvider(
         async pull(request: PullRequest): Promise<PullResponse> {
             const response = await requestJson<PullResponse>(
                 '/api/sync/pull',
-                { ...request, fileKindCapability: FILE_KIND_CAPABILITY },
+                { ...request, workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
                 baseUrl,
                 { schema: PullResponseSchema }
             );
@@ -435,7 +436,7 @@ export function createGatewaySyncProvider(
         async snapshot(request: SnapshotRequest): Promise<SnapshotResponse> {
             const response = await requestJson<SnapshotResponse>(
                 '/api/sync/snapshot',
-                { ...request, fileKindCapability: FILE_KIND_CAPABILITY },
+                { ...request, workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
                 baseUrl,
                 { schema: SnapshotResponseSchema }
             );
@@ -449,7 +450,7 @@ export function createGatewaySyncProvider(
         async push(batch: PushBatch): Promise<PushResult> {
             const response = await requestJson<PushResult>(
                 '/api/sync/push',
-                { ...batch, fileKindCapability: FILE_KIND_CAPABILITY },
+                { ...batch, workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
                 baseUrl,
                 { schema: PushResultSchema }
             );

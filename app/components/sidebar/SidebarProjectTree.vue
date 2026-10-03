@@ -265,7 +265,8 @@ const treeItems = computed<TreeItem[]>(() =>
                     parentId: p.id,
                     onSelect: (e: Event) => {
                         if (kind === 'chat') emit('chatSelected', entry.id);
-                        else emit('documentSelected', entry.id);
+                        else if (kind === 'doc') emit('documentSelected', entry.id);
+                        else void import('~/composables/search/useCommandPalette').then(({ getPaletteHostContext }) => getPaletteHostContext()?.openPaneApp('or3-files', entry.id, 'active'));
                         // Prevent default selection behavior if needed by UTree (not sure), otherwise leave.
                     },
                 };

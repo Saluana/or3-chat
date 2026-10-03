@@ -62,17 +62,29 @@ Normal chat also offers these workspace tools:
 
 | Tool | Behavior |
 | --- | --- |
-| `workspace_search` | Finds visible chats, native documents, and projects. Returns source IDs, excerpts, and index coverage; an optional project filter limits results to its current visible members. |
+| `workspace_search` | Finds visible chats, native documents, projects, and saved-file names/indexed text. Returns source IDs, excerpts, and index coverage; an optional project filter limits results to its current visible members. File results distinguish complete text, a prefix, and filename-only coverage. |
 | `workspace_read` | Reads an identified source in bounded pages. Continuations belong to that source and revision. Document reads provide a `readId` and block references for proposing changes. |
 | `workspace_create_document` | Saves requested output as a native document from validated TipTap JSON. Its receipt appears after storage commits; repeating the same execution returns the same document. An optional project association is committed with the document. |
-| `workspace_update_project` | Creates a project or changes its name, description, or chat/document associations. Updates require the project's current read revision. Removing an association preserves the underlying item. Repeating a create execution returns its saved receipt, including when the supplied name has surrounding whitespace. |
+| `workspace_update_project` | Creates a project or changes its name, description, or chat/document/file associations. Updates require the project's current read revision. Removing an association preserves the underlying item and unknown extension memberships. Repeating a create execution returns its saved receipt. |
 | `workspace_propose_document_edit` | Stages edits using block references from the same execution's document read. The chat review card offers Apply or Discard. Apply saves content, a checkpoint, and its receipt atomically; Undo refuses to overwrite a later edit. |
 
 Source content is reference material and does not authorize actions. Reads and
 writes check the originating workspace and current permissions. Changed sources
 must be read again, and conflicting editor drafts prevent a proposal from silently
-overwriting them. Saved-file reads remain unavailable until the Files catalog is
-enabled.
+overwriting them. Saved files use catalog identities, never model-supplied URLs.
+When a pending proposal becomes stale, **Update proposal** adds the current
+document reference and a fresh-read request to the originating chat draft.
+It preserves your draft and waits for you to send it. If a later edit makes
+Undo unavailable, **View history** opens the retained history without applying
+a revision over the later content.
+Supported UTF-8 files have bounded text pages and explicit continuations;
+filename-only formats return their content limitation. See
+[saved Files](/documentation/utils/file-handling#saved-files).
+
+The Files navigation and catalog upload UI currently run in local mode. Cloud
+exposure remains gated until provider preservation and lifecycle qualification
+is complete. The new provider contracts require matching backend updates;
+installing the host alone does not qualify cloud support.
 
 ## Availability and execution
 

@@ -341,6 +341,7 @@ export default defineTheme({
                 },
                 // Override size variant so padding wins over defaults
                 size: {
+                    workspace: { base: 'h-9! min-h-9! px-3! py-1.5! text-[17px]! leading-5! gap-2! max-md:h-11! max-md:min-h-11!', label: 'tracking-normal!', leadingIcon: 'size-[18px]! shrink-0!', trailingIcon: 'size-4! shrink-0!' },
                     xs: { base: 'h-[24px] px-[8px]! text-[12px]' },
                     sm: {
                         base: 'h-[var(--app-control-height-small,32px)] px-[12px]! text-[15px]',
@@ -405,6 +406,7 @@ export default defineTheme({
                 leading: { true: 'ps-10!' },
                 trailing: { true: 'pe-10!' },
                 size: {
+                    workspace: { base: 'h-10! min-h-10! px-3! py-2! text-[17px]! leading-5! max-md:h-11! max-md:min-h-11! max-md:text-[16px]!', leading: 'ps-3!', trailing: 'pe-3!', leadingIcon: 'size-[18px]!', trailingIcon: 'size-4!' },
                     sm: { base: 'h-[var(--app-control-height-small,32px)] text-[12px]!' },
                     md: { base: 'h-[var(--app-control-height-medium,40px)] text-[14px]!' },
                     lg: { base: 'h-[var(--app-control-height-large,48px)] text-[16px]!' },
@@ -412,6 +414,7 @@ export default defineTheme({
             },
         },
         select: {
+            variants: { size: { workspace: { base: 'h-10! min-h-10! ps-3! pe-9! py-2! gap-2! text-[17px]! leading-5! max-md:h-11! max-md:min-h-11! max-md:text-[16px]!' } } },
             slots: {
                 base: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! focus:outline-none! focus-visible:outline-none! retro-shadow max-lg:text-[16px]!',
                 content: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! theme-shadow',

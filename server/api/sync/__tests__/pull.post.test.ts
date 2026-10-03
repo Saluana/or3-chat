@@ -256,6 +256,25 @@ describe('POST /api/sync/pull', () => {
         expect(pullMock).toHaveBeenCalledTimes(1);
     });
 
+    it.each([
+        ['posts', { id: 'item', postType: 'or3:file' }],
+        ['posts', { id: 'item', meta: JSON.stringify({ 'or3.workspace-item': { version: 1, trashed_at: 10 } }) }],
+        ['projects', { id: 'item', data: JSON.stringify([{ kind: 'file', id: 'file-1' }]) }],
+    ])('admits %s workspace semantics only to a current reader', async (tableName, payload) => {
+        const handler = (await import('../pull.post')).default as (event: H3Event) => Promise<unknown>;
+        const response = {
+            changes: [{ tableName, pk: 'item', op: 'put', payload, serverVersion: 6,
+                stamp: { clock: 1, hlc: '1:1:dev', deviceId: 'dev', opId: 'a1b2c3d4-5678-4abc-8def-123456789010' } }],
+            nextCursor: 6, hasMore: false, oldestRetainedVersion: 0, requiresSnapshot: false,
+        };
+        pullMock.mockResolvedValue(response);
+        const body = { ...makeValidBody(), tables: [tableName] };
+        readBodyMock.mockResolvedValue(body);
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 426 });
+        readBodyMock.mockResolvedValue({ ...body, workspaceItemCapability: 'v1' });
+        await expect(handler(makeEvent())).resolves.toMatchObject({ changes: response.changes, nextCursor: 6 });
+    });
+
     it('returns a generic file change to a reader advertising file-kind v1', async () => {
         const handler = (await import('../pull.post')).default as (event: H3Event) => Promise<unknown>;
         const body = { ...makeValidBody(), fileKindCapability: 'v1' as const };

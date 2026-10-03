@@ -1,3 +1,6 @@
+import { WORKSPACE_ITEM_CAPABILITY } from "~~/shared/posts/workspace-item-capability";
+import { hasWorkspaceItemSemantics } from '~~/shared/posts/workspace-item-capability';
+import { requireWorkspaceItemCapability } from '../../utils/sync/workspace-item-capability';
 /**
  * @module server/api/sync/push.post
  *
@@ -50,6 +53,7 @@ const PushEnvelopeSchema = z.object({
     scope: SyncScopeSchema,
     ops: z.array(z.unknown()).max(MAX_SYNC_PUSH_BATCH_OPS),
     fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
+    workspaceItemCapability: z.literal(WORKSPACE_ITEM_CAPABILITY).optional(),
 });
 
 function serializedPayloadBytes(payload: unknown): number {
@@ -206,14 +210,21 @@ export default defineEventHandler(async (event) => {
         requireFileKindCapability(envelope.data.fileKindCapability);
     }
 
+    if (validOps.some(op => hasWorkspaceItemSemantics(op.tableName, op.payload))) {
+        requireWorkspaceItemCapability(envelope.data.workspaceItemCapability);
+    }
     const adapter = getActiveSyncGatewayAdapter();
     if (!adapter) {
         throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
+    }
+    if (validOps.some(op => hasWorkspaceItemSemantics(op.tableName, op.payload)) && adapter.capabilities?.workspaceItems !== 'v1') {
+        throw createError({ statusCode: 503, statusMessage: 'The selected sync provider needs workspace Files support' });
     }
 
     const normalizedBatch = {
         scope: envelope.data.scope,
         ops: validOps,
+        ...(envelope.data.workspaceItemCapability ? { workspaceItemCapability: envelope.data.workspaceItemCapability } : {}),
     };
 
     const adapterResult = PushResultSchema.safeParse(

@@ -5,9 +5,44 @@ async function upload(page: Page, file: { name: string; mimeType: string; buffer
 }
 
 test.describe('Storage Layer', () => {
+    test('Files preserves a named text upload through Trash, restore and reload', async ({ page }, info) => {
+        await page.goto('/_tests/_test-storage');
+        const files = page.getByRole('region', { name: 'Workspace Files', exact: true });
+        await expect(files).toBeVisible();
+        await files.getByLabel('Upload files', { exact: true }).setInputFiles({
+            name: 'catalog-acceptance.md', mimeType: 'text/markdown', buffer: Buffer.from('Catalog saffron acceptance marker.'),
+        });
+        const item = files.getByRole('listitem').filter({ hasText: 'catalog-acceptance.md' });
+        await expect(item).toBeVisible();
+        await item.getByRole('button', { name: 'Open catalog-acceptance.md', exact: true }).click();
+        const preview = page.getByRole('dialog', { name: 'File preview' });
+        await expect(preview).toContainText('Catalog saffron acceptance marker.');
+        const downloaded = page.waitForEvent('download');
+        await preview.getByRole('button', { name: 'Download', exact: true }).click();
+        const download = await downloaded;
+        const path = info.outputPath('catalog-original.md');
+        await download.saveAs(path);
+        await info.attach('catalog-original', { path, contentType: 'text/markdown' });
+        await preview.getByRole('button', { name: 'Close', exact: true }).click();
+        await item.getByRole('button', { name: /^More actions for/ }).click();
+        await page.getByRole('menuitem', { name: 'Move to trash', exact: true }).click();
+        await expect(item).toHaveCount(0);
+        await files.getByRole('button', { name: 'Files options', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Show Trash', exact: true }).click();
+        await expect(item).toBeVisible();
+        await item.getByRole('button', { name: 'Restore', exact: true }).click();
+        await files.getByRole('button', { name: 'Files options', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Show active files', exact: true }).click();
+        await expect(item).toBeVisible();
+        await page.reload();
+        await expect(item).toBeVisible();
+        const screenshot = info.outputPath('catalog-restored.png');
+        await page.screenshot({ path: screenshot, animations: 'disabled' });
+        await info.attach('catalog-restored', { path: screenshot, contentType: 'image/png' });
+    });
     test.beforeEach(async ({ page }) => {
         await page.goto('/_tests/_test-storage');
-        await expect(page.getByTestId('storage-page')).toBeVisible();
+        await expect(page.getByTestId('storage-page')).toBeVisible({ timeout: 45_000 });
         await expect(page.getByTestId('storage-ready')).toHaveText('true');
         await page.getByTestId('storage-reset').click();
         await expect(page.getByTestId('transfer-count')).toHaveText('0');

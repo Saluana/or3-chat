@@ -26,7 +26,7 @@ import { useSuggestionPopover } from '../shared/suggestion-popover';
 
 interface MentionItem {
     id: string;
-    source: 'document' | 'chat';
+    source: 'document' | 'chat' | 'file';
     label: string;
     subtitle?: string;
     score?: number;

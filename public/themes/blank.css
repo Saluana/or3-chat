@@ -50,6 +50,8 @@
 }
 
 [data-theme="blank"] .page-link-btn {
+  border: 0;
+  box-shadow: none;
   border-radius: var(--md-border-radius-small, var(--md-border-radius));
   min-height: 54px;
   margin-bottom: 0.4rem;

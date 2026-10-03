@@ -128,7 +128,9 @@ export async function setActiveSidebarPage(id: string): Promise<boolean> {
     try {
         if (nextPage.canActivate) {
             try {
-                if (!(await Promise.resolve(nextPage.canActivate(ctx)))) return false;
+                const admission = await Promise.resolve(nextPage.canActivate(ctx));
+                if (admission === 'handled') return true;
+                if (!admission) return false;
             } catch (guardError) {
                 console.error(`[useActiveSidebarPage] canActivate hook failed for ${id}:`, guardError);
                 await hooks.doAction('ui.sidebar.page:action:load-error', {

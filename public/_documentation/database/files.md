@@ -23,7 +23,7 @@ File storage layer that deduplicates blobs by hash, keeps metadata in Dexie, and
 | `kind`           | `'image'`, `'pdf'`, or generic `'file'`; only verified PNG/JPEG/WebP/GIF bytes use image processing. |
 | `size_bytes`     | Blob size in bytes; enforced against a default 20 MB cap.       |
 | `width`/`height` | Optional image dimensions extracted via object URL.             |
-| `ref_count`      | Number of referencing entities (messages).                      |
+| `ref_count`      | Derived local ownership count; canonical retained rows govern deletion. |
 | `deleted`        | Soft delete flag set by `softDeleteFile`/`softDeleteMany`.      |
 
 The max size cap defaults to 20 MB and is configurable via `or3.limits.maxFileSizeBytes` in runtime config.
@@ -74,4 +74,28 @@ These make it easy to inject custom validation, analytics, or audit trails aroun
 -   Use [message-file helpers](/documentation/database/message-files) to remove a reference. They decrement counts themselves; do not call `derefFile` again afterward.
 -   `ref_count` represents unique live message edges, not upload attempts. Use the message-file helpers so duplicate or hook-pruned attachments are reconciled automatically.
 -   Hook into `db.files.create:filter:input` to enforce custom size caps or rename files.
--   `hardDeleteMany` deletes the supplied metadata and blobs without checking live references. Validate references and apply the existing deletion policy first; see [safe changes](/documentation/database/safe-changes#deletion-and-file-ownership).
+-   Local soft/hard deletion refuses hashes retained by live messages, posts, catalog entries, or revisions, including logically trashed items. It rechecks canonical edges inside the write transaction after before-delete hooks. A zero `ref_count` is insufficient authority to delete bytes.
+
+## Catalog ownership
+
+`app/db/workspace-files.ts` uses existing `posts`, `file_meta`, and transfer
+storage. One `or3:file` post has a deterministic hash-derived identity, an
+independent user title, one original `file_hashes` entry, and a bounded text
+excerpt. `meta['or3.workspace-item']` contains versioned logical Trash and text
+coverage; updates preserve unrelated metadata. Native documents without this
+namespace remain visible. Unsupported namespaced states are hidden and refused
+by mutation helpers.
+
+Catalog intake, rename, Trash, Restore, text enablement, and permanent removal
+require a captured workspace operation. Writes compare observed revisions
+inside their transactions. Intake uses the existing attachment policy hook and
+blob persistence. Catalog ownership survives removal of an originating message.
+Item removal tombstones the post, releases its ownership edge, and never
+directly deletes shared bytes or unrelated checkpoints.
+
+Sync requests carry `workspaceItemCapability: 'v1'`. The canonical provider
+must reject old-writer omission against incoming **and stored** posts/projects
+before mutation. Old readers receive an explicit update boundary for affected
+pages. SQLite native support and Convex template/provider updates are separate
+publication dependencies; D1 does not advertise transactional workspace-item
+admission. Cloud UI remains gated pending full provider/live qualification.

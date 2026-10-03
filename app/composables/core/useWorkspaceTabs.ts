@@ -290,19 +290,30 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         return opened.tabId;
     }
 
+    async function openTabInSplit(tabId: string): Promise<string | null> {
+        if (!state.value.tabs.some((tab) => tab.id === tabId)) return null;
+        // Visible tabs already own a pane; focus it without duplicating the tab.
+        if ([...state.value.paneBindings.values()].includes(tabId)) {
+            return await activateTab(tabId, 'command') ? tabId : null;
+        }
+        const paneId = options.host.addPane();
+        if (!paneId) return null;
+        commit(bindTabToPane(state.value, paneId, tabId));
+        return await activateTab(tabId, 'command', true) ? tabId : null;
+    }
+
     async function openInSplit(
         resource: WorkspaceResource,
         options_: { allowDuplicate?: boolean } = {}
     ): Promise<string | null> {
         const opened = openTab(state.value, resource, {
-            allowDuplicate: options_.allowDuplicate ?? true,
+            allowDuplicate: options_.allowDuplicate ?? false,
             reuseActiveBlank: false,
         });
         if (!opened.tabId) return null;
         if (opened.existing) {
             commit(opened.state);
-            await activateTab(opened.tabId, 'command');
-            return opened.tabId;
+            return openTabInSplit(opened.tabId);
         }
         const paneId = options.host.addPane();
         if (!paneId) return null;
@@ -639,6 +650,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         newSplit,
         closeSplit,
         openInSplit,
+        openTabInSplit,
         restore,
         switchScope,
         reconcilePaneResource,

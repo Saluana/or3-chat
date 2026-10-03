@@ -4,6 +4,9 @@ import { createOrRefFile } from '~/db/files';
 import { useHooks } from '~/core/hooks/useHooks';
 import { useRuntimeConfig } from '#imports';
 import type { FilesAttachInputPayload } from '~/core/hooks/hook-types';
+import { captureWorkspaceOperation, workspaceFilesAvailable, type WorkspaceOperationScope } from '~/utils/chat/workspace-access';
+import { getActiveWorkspaceId, getDb, getWorkspaceGeneration } from '~/db/client';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 
 const DEFAULT_MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 
@@ -69,7 +72,21 @@ export interface AttachmentLike {
 }
 
 export async function persistAttachment(att: AttachmentLike) {
+    let scope: WorkspaceOperationScope | undefined;
+    const catalogEnabled = workspaceFilesAvailable();
+    const originDb = getDb();
+    const originGeneration = getWorkspaceGeneration();
+    const originWorkspace = getActiveWorkspaceId();
+    const assertLocalOrigin = () => {
+        if (getDb() !== originDb || getWorkspaceGeneration() !== originGeneration || getActiveWorkspaceId() !== originWorkspace) {
+            throw new Error('The originating workspace is no longer available.');
+        }
+    };
     const persist = async () => {
+        assertLocalOrigin();
+        if (catalogEnabled) scope ??= captureWorkspaceOperation({ subject: null, workspaceId: getActiveWorkspaceId() ?? 'local',
+            threadId: 'chat-upload', messageId: null, requestId: createRuntimeUuid(), callId: createRuntimeUuid(),
+            abortSignal: new AbortController().signal });
         // Apply files.attach:filter:input hook before creating/referencing file
         const hooks = useHooks();
         const payload: FilesAttachInputPayload = {
@@ -84,6 +101,8 @@ export async function persistAttachment(att: AttachmentLike) {
             'files.attach:filter:input',
             payload
         );
+        assertLocalOrigin();
+        scope?.assertCurrent('write');
 
         // If filter returns false, reject the attachment
         if (filtered === false) {
@@ -98,6 +117,15 @@ export async function persistAttachment(att: AttachmentLike) {
 
         // Use filtered values (in case hook transformed them)
         const meta = await createOrRefFile(filtered.file, filtered.name);
+        assertLocalOrigin();
+        scope?.assertCurrent('write');
+        if (catalogEnabled) {
+            if (!workspaceFilesAvailable()) throw new Error('Files access changed. Refresh and try again.');
+            const { catalogWorkspaceFile } = await import('~/db/workspace-files');
+            assertLocalOrigin();
+        scope?.assertCurrent('write');
+            await catalogWorkspaceFile(scope!, meta.hash, { restore: true });
+        }
         att.hash = meta.hash;
         att.meta = meta;
         att.status = 'ready';

@@ -26,6 +26,23 @@ afterEach(async () => {
 });
 
 describe('mounted checkpoint history workspace isolation', () => {
+    it('offers read-only checkpoint previews without write controls', async () => {
+        vi.stubGlobal('CompressionStream', undefined);
+        const id = `history-readonly-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(id);
+        workspaces.push({ id, name: db.name });
+        await createDocumentRevision({ documentId: 'history-document', title: 'Preserved', source: 'manual',
+            content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Earlier content' }] }] } });
+        wrapper = shallowMount(DocumentHistoryPanel, {
+            props: { documentId: 'history-document', readOnly: true },
+            global: { directives: { theme: () => {} }, stubs: { UButton: Button, UBadge: true }, renderStubDefaultSlot: true },
+        });
+        await vi.waitFor(() => expect(wrapper!.findAll('.revision-item')).toHaveLength(1));
+        expect(wrapper.text()).not.toContain('Create checkpoint');
+        await wrapper.get('.revision-item').trigger('click');
+        expect(wrapper.get('.preview-body').text()).toContain('Earlier content');
+        expect(wrapper.emitted('restore')).toBeUndefined();
+    });
     it('clears an A preview and reloads B history in a retained same-ID panel', async () => {
         // Real identity codec for the test DOM's Blob implementation.
         vi.stubGlobal('CompressionStream', undefined);

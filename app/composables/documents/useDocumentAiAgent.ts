@@ -298,6 +298,7 @@ export function useDocumentAiAgent(options: {
     title: Ref<string>;
     contentVersion: Ref<number>;
     persistCurrent: () => Promise<void>;
+    readOnly?: Readonly<Ref<boolean>>;
 }) {
     const status = ref<'idle' | 'estimating' | 'streaming' | 'preview' | 'error'>('idle');
     const error = ref('');
@@ -366,10 +367,13 @@ export function useDocumentAiAgent(options: {
 
     function syncEditorLock() {
         setEditorEditable(!shouldLockDocumentAiEditor({
+            readOnly: options.readOnly?.value,
             status: status.value,
             accepting: accepting.value,
         }));
     }
+
+    watch([options.editor, () => options.readOnly?.value, status, accepting], syncEditorLock, { flush: 'sync' });
 
     function retireChatRuns() {
         if (chatPreviewRequestId) retiredChatRequests.add(chatPreviewRequestId);
@@ -685,6 +689,7 @@ export function useDocumentAiAgent(options: {
     const isEstimating = (): boolean => status.value === 'estimating';
 
     async function estimate(request: DocumentAiEstimateRequest) {
+        if (options.readOnly?.value) return 0;
         const editor = options.editor.value;
         if (!editor) return 0;
         // Never let estimate stomp an in-flight agent run / preview.
@@ -754,6 +759,7 @@ export function useDocumentAiAgent(options: {
     }
 
     async function submit(submission: DocumentAiSubmission) {
+        if (options.readOnly?.value) return;
         const editor = options.editor.value;
         if (!editor || !submission.prompt.trim() || status.value === 'streaming') return;
         const submitDocumentId = options.documentId.value;
@@ -971,6 +977,7 @@ export function useDocumentAiAgent(options: {
     }
 
     async function accept() {
+        if (options.readOnly?.value) return;
         return enqueueAccept(async () => {
             const editor = options.editor.value;
             const current = proposal.value;
@@ -1005,6 +1012,7 @@ export function useDocumentAiAgent(options: {
     }
 
     async function acceptHunk(hunkId: string) {
+        if (options.readOnly?.value) return;
         return enqueueAccept(async () => {
             const editor = options.editor.value;
             const current = proposal.value;

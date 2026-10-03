@@ -7,7 +7,14 @@ import { createDocumentInDb } from '~/db/documents';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine } from '~/core/hooks/useHooks';
+import { testRuntimeConfig } from '~~/tests/setup';
 
+const session = vi.hoisted(() => ({ payload: null as any }));
+vi.mock('~/composables/auth/useSessionContext', () => ({
+    useSessionContext: () => ({ data: computed(() => session.payload) }),
+    getCachedSessionContext: () => session.payload?.session ?? null,
+    getCachedSessionPayload: () => session.payload,
+}));
 // Keep UI-only registries/themes out of the fixture; data subscriptions,
 // workspace switching, search and display projection are production owners.
 vi.mock('~/composables/useIcon', () => ({ useIcon: (name: string) => ref(name) }));
@@ -40,9 +47,62 @@ afterEach(async () => {
         await Dexie.delete(name);
     }
     setHookEngine(null);
+    session.payload = null;
 });
 
 describe('mounted sidebar workspace isolation', () => {
+    it('removes unavailable file metadata from the mounted project projection', async () => {
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        const id = `sidebar-file-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(id);
+        workspaces.push({ id, name: db.name });
+        const hash = `sha256:${'a'.repeat(64)}`;
+        await db.file_meta.put({ hash, name: 'Saved project file', mime_type: 'text/plain', size_bytes: 5,
+            kind: 'file', ref_count: 1, deleted: false, clock: 1, created_at: 1, updated_at: 1 });
+        await db.posts.put({ id: 'project-file', postType: 'or3:file', title: 'Saved project file', content: 'saved',
+            file_hashes: JSON.stringify([hash]), clock: 1, deleted: false, created_at: 1, updated_at: 1 });
+        await db.projects.put({ id: 'file-project', name: 'Retained project', data: [{ kind: 'file', id: 'project-file' }],
+            clock: 1, deleted: false, created_at: 1, updated_at: 1 });
+        wrapper = shallowMount(SideBar, { global: { stubs: {
+            SidebarSideNavContent: Content, SidebarSideNavContentCollapsed: true,
+            SidebarSideMobileBottomNav: true, SidebarEntityModals: true, UModal: true,
+        } } });
+        const view = wrapper.getComponent(Content);
+        await vi.waitFor(() => expect(view.props('projects')[0]?.data).toHaveLength(1));
+        await db.projects.update('file-project', { data: [{ kind: 'file', id: 'project-file', name: 'Project alias' }] });
+        await vi.waitFor(() => expect(view.props('projects')[0]?.data[0]?.name).toBe('Project alias'));
+        await db.file_meta.update(hash, { deleted: true });
+        await vi.waitFor(() => expect(view.props('projects')[0]?.data).toHaveLength(0));
+        expect((await db.projects.get('file-project'))?.data).toEqual([{ kind: 'file', id: 'project-file', name: 'Project alias' }]);
+    });
+
+    it.each([false, true])('moves a supported document to Files Trash (SSR: %s)', async ssr => {
+        const ssrAuth = testRuntimeConfig.value.public.ssrAuthEnabled;
+        testRuntimeConfig.value.public.ssrAuthEnabled = ssr;
+        try {
+            setHookEngine(createTypedHookEngine(createHookEngine()));
+            const id = `sidebar-trash-${crypto.randomUUID()}`;
+            const db = setActiveWorkspaceDb(id);
+            workspaces.push({ id, name: db.name });
+            session.payload = { appAccessAllowed: true, workspaceItemCapability: 'v1', session: { authenticated: true, user: { id: 'owner' }, workspace: { id }, role: 'owner' } };
+            const document = await createDocumentInDb(db, { title: 'Recoverable sidebar document' });
+            wrapper = shallowMount(SideBar, { global: { stubs: {
+                SidebarSideNavContent: Content, SidebarSideNavContentCollapsed: true,
+                SidebarSideMobileBottomNav: true, SidebarEntityModals: true, UModal: true,
+            } } });
+            const view = wrapper.getComponent(Content);
+            await vi.waitFor(() => expect(view.props('docs')).toHaveLength(1));
+            view.vm.$emit('delete-document', { id: document.id, title: document.title });
+            wrapper.getComponent({ name: 'SidebarEntityModals' }).vm.$emit('deleteDocument');
+            await vi.waitFor(async () => {
+                const saved = await db.posts.get(document.id);
+                expect(saved?.deleted).toBe(false);
+                expect(JSON.parse(saved!.meta as string)['or3.workspace-item'].trashed_at).toBeTypeOf('number');
+            });
+            await vi.waitFor(() => expect(view.props('docs')).toHaveLength(0));
+        } finally { testRuntimeConfig.value.public.ssrAuthEnabled = ssrAuth; }
+    });
+
     it('replaces lists and search results immediately when the active workspace switches', async () => {
         setHookEngine(createTypedHookEngine(createHookEngine()));
         const idA = `sidebar-isolation-a-${crypto.randomUUID()}`;

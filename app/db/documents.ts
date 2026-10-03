@@ -27,6 +27,7 @@ import type { TypedHookEngine } from '~/core/hooks/typed-hooks';
 import type { TipTapDocument } from '~/types/database';
 import type { Post } from './schema';
 import { serializeDocumentFileHashes, parseDocumentFileHashes } from '~/utils/documents/document-content';
+import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 
 /**
  * Type guard to check if a post is a document
@@ -400,7 +401,7 @@ export async function getDocumentInDb(
         entity: 'posts',
         action: 'getDocument',
     });
-    if (!isDocumentPost(row)) return undefined;
+    if (!isDocumentPost(row) || !isVisibleWorkspaceItem(row)) return undefined;
     const baseRow: DocumentRow = {
         id: row.id,
         title: row.title,
@@ -442,7 +443,7 @@ export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
             getDb().posts
                 .where('postType')
                 .equals('doc')
-                .and((r) => !r.deleted)
+                .and(isVisibleWorkspaceItem)
                 .reverse()
                 .toArray(),
         { op: 'read', entity: 'posts', action: 'listDocuments' }
@@ -571,7 +572,7 @@ export async function prepareDocumentUpdate(existing: Post, patch: UpdateDocumen
     row: Post; afterCommit: () => Promise<void>;
 }> {
     const hooks = useHooks();
-    if (existing.postType !== 'doc' || existing.deleted) throw new Error('That document is unavailable.');
+    if (existing.postType !== 'doc' || !isVisibleWorkspaceItem(existing)) throw new Error('That document is unavailable. Restore it from Trash before editing.');
     const existingRow: DocumentRow = {
         id: existing.id,
         title: existing.title,

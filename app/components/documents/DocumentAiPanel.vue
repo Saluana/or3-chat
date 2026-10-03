@@ -18,7 +18,7 @@
                     <span class="legend-removed">Removed</span>
                     <span class="legend-added">Added</span>
                 </div>
-                <UButton :icon="icons.close" color="neutral" variant="ghost" size="xs" square aria-label="Discard all changes" :disabled="accepting" @click="$emit('reject')" />
+                <UButton :icon="icons.close" color="neutral" variant="ghost" size="xs" square aria-label="Discard all changes" :disabled="readOnly || accepting" @click="$emit('reject')" />
             </div>
             <p class="review-bar-title">
                 <span class="review-bar-title-num">{{ activeHunkNumber }}</span>
@@ -29,13 +29,13 @@
             </div>
             <div class="review-bar-actions">
                 <div class="review-bar-nav">
-                    <UButton color="neutral" variant="outline" size="sm" label="Previous" :disabled="pendingHunkCount < 2 || accepting" @click="goPrevHunk" />
-                    <UButton color="neutral" variant="outline" size="sm" label="Next" :disabled="pendingHunkCount < 2 || accepting" @click="goNextHunk" />
+                    <UButton color="neutral" variant="outline" size="sm" label="Previous" :disabled="readOnly || pendingHunkCount < 2 || accepting" @click="goPrevHunk" />
+                    <UButton color="neutral" variant="outline" size="sm" label="Next" :disabled="readOnly || pendingHunkCount < 2 || accepting" @click="goNextHunk" />
                 </div>
                 <div class="review-bar-decisions">
-                    <UButton color="neutral" variant="outline" size="sm" label="Reject" :disabled="!activeHunk || accepting" @click="discardActiveHunk" />
-                    <UButton class="review-accept" color="primary" size="sm" label="Accept" :disabled="stale || !activeHunk || accepting" @click="acceptActiveHunk" />
-                    <UButton class="review-accept-all" color="neutral" size="sm" label="Accept all" :disabled="stale || pendingHunkCount === 0 || accepting" @click="$emit('accept')" />
+                    <UButton color="neutral" variant="outline" size="sm" label="Reject" :disabled="readOnly || !activeHunk || accepting" @click="discardActiveHunk" />
+                    <UButton class="review-accept" color="primary" size="sm" label="Accept" :disabled="readOnly || stale || !activeHunk || accepting" @click="acceptActiveHunk" />
+                    <UButton class="review-accept-all" color="neutral" size="sm" label="Accept all" :disabled="readOnly || stale || pendingHunkCount === 0 || accepting" @click="$emit('accept')" />
                 </div>
             </div>
             <p v-if="stale" class="error-message review-bar-error">The document changed. Regenerate from the latest version.</p>
@@ -46,7 +46,7 @@
             <div class="composer-row">
                 <input ref="attachmentInput" class="sr-only" type="file" accept="image/*,application/pdf" multiple @change="onAttachmentInput" />
                 <div class="composer-actions composer-actions-leading">
-                    <UButton :icon="icons.plus" color="neutral" variant="ghost" size="xs" square class="attachment-button max-md:min-h-[1.75rem]! max-md:min-w-[1.75rem]! max-md:max-h-[1.75rem]! max-md:max-w-[1.75rem]! max-md:h-[1.75rem]! max-md:w-[1.75rem]! max-md:p-0!" aria-label="Add image or PDF" title="Add image or PDF" :disabled="status === 'streaming' || attachments.length >= MAX_ATTACHMENTS" @click="attachmentInput?.click()" />
+                    <UButton :icon="icons.plus" color="neutral" variant="ghost" size="xs" square class="attachment-button max-md:min-h-[1.75rem]! max-md:min-w-[1.75rem]! max-md:max-h-[1.75rem]! max-md:max-w-[1.75rem]! max-md:h-[1.75rem]! max-md:w-[1.75rem]! max-md:p-0!" aria-label="Add image or PDF" title="Add image or PDF" :disabled="readOnly || status === 'streaming' || attachments.length >= MAX_ATTACHMENTS" @click="attachmentInput?.click()" />
                     <UButton :icon="icons.settings" color="neutral" :variant="customizeOpen ? 'soft' : 'ghost'" size="xs" square class="settings-button max-md:min-h-[1.75rem]! max-md:min-w-[1.75rem]! max-md:max-h-[1.75rem]! max-md:max-w-[1.75rem]! max-md:h-[1.75rem]! max-md:w-[1.75rem]! max-md:p-0!" :aria-expanded="customizeOpen" aria-label="Document AI settings" @click="customizeOpen = !customizeOpen" />
                 </div>
                 <DocumentAiPromptEditor
@@ -57,13 +57,13 @@
                     :placeholder="selectionAvailable ? 'Describe what to change in the selection…' : 'Describe what you want to change, improve, or create…'"
                     :saved-actions="settings.quickActions"
                     :plugin-actions="pluginActions"
-                    :disabled="status === 'streaming'"
+                    :disabled="readOnly || status === 'streaming'"
                     @update:references="references = $event"
                     @submit="send"
                 />
                 <div class="composer-actions composer-actions-trailing">
                     <UButton v-if="status === 'streaming'" :icon="icons.stop" color="error" size="xs" square class="send-button max-md:min-h-[1.875rem]! max-md:min-w-[1.875rem]! max-md:max-h-[1.875rem]! max-md:max-w-[1.875rem]! max-md:h-[1.875rem]! max-md:w-[1.875rem]! max-md:p-0!" aria-label="Stop AI" @click="$emit('abort')" />
-                    <UButton v-else :icon="icons.send" color="primary" size="xs" square class="send-button max-md:min-h-[1.875rem]! max-md:min-w-[1.875rem]! max-md:max-h-[1.875rem]! max-md:max-w-[1.875rem]! max-md:h-[1.875rem]! max-md:w-[1.875rem]! max-md:p-0!" aria-label="Send to document AI" :disabled="!prompt.trim() || attachments.some((attachment) => attachment.loading)" @click="send" />
+                    <UButton v-else :icon="icons.send" color="primary" size="xs" square class="send-button max-md:min-h-[1.875rem]! max-md:min-w-[1.875rem]! max-md:max-h-[1.875rem]! max-md:max-w-[1.875rem]! max-md:h-[1.875rem]! max-md:w-[1.875rem]! max-md:p-0!" aria-label="Send to document AI" :disabled="readOnly || !prompt.trim() || attachments.some((attachment) => attachment.loading)" @click="send" />
                 </div>
             </div>
 
@@ -133,7 +133,7 @@
                             <strong>Autocomplete</strong>
                             <span>{{ autocomplete.error || 'Suggest completions while you type.' }}</span>
                         </div>
-                        <USwitch :model-value="autocomplete.enabled" :label="autocompleteLabel" :disabled="autocomplete.loading" @update:model-value="setAutocomplete" />
+                        <USwitch :model-value="autocomplete.enabled" :label="autocompleteLabel" :disabled="readOnly || autocomplete.loading" @update:model-value="setAutocomplete" />
                     </section>
 
                     <section class="setting-card">
@@ -206,7 +206,7 @@
                                     <USwitch
                                         :model-value="tool.enabled"
                                         :label="tool.label"
-                                        :disabled="status === 'streaming'"
+                                        :disabled="readOnly || status === 'streaming'"
                                         @update:model-value="(value: boolean) => setToolEnabled(tool.name, value)"
                                     />
                                     <UIcon
@@ -228,7 +228,7 @@
                             <strong>Quick actions</strong>
                             <span>Create and edit reusable document prompts.</span>
                         </div>
-                        <UButton :icon="icons.plus" label="Add action" color="neutral" variant="outline" size="sm" :disabled="settings.quickActions.length >= 12" @click="addQuickAction" />
+                        <UButton :icon="icons.plus" label="Add action" color="neutral" variant="outline" size="sm" :disabled="readOnly || settings.quickActions.length >= 12" @click="addQuickAction" />
                     </div>
 
                     <div v-if="settings.quickActions.length" class="action-list" role="list">
@@ -351,6 +351,7 @@ interface PendingDocumentAiAttachment extends DocumentAiAttachment {
 const MAX_ATTACHMENTS = MAX_DOCUMENT_AI_ATTACHMENTS;
 const props = defineProps<{
     status: string;
+    readOnly?: boolean;
     error: string;
     tokenEstimate: number;
     agentStatus?: string;
@@ -565,6 +566,7 @@ function discardActiveHunk() {
     emit('discard-hunk', activeHunk.value.id);
 }
 function scheduleEstimate() {
+    if (props.readOnly) return;
     if (estimateTimer) clearTimeout(estimateTimer);
     if (!prompt.value.trim()) {
         emit('clear-scope-highlight');
@@ -577,6 +579,7 @@ function scheduleEstimate() {
     }), 250);
 }
 function send() {
+    if (props.readOnly) return;
     if (!prompt.value.trim() || attachments.value.some((attachment) => attachment.loading)) return;
     const payload = {
         prompt: prompt.value,
@@ -599,6 +602,7 @@ watch(
     },
 );
 function runAction(action: DocumentAiAction) {
+    if (props.readOnly) return;
     prompt.value = action.prompt;
     customizeOpen.value = false;
     send();
@@ -622,6 +626,7 @@ function setChunkWordLimit(event: Event) {
     });
 }
 function setAutocomplete(value: boolean) {
+    if (props.readOnly) return;
     if (value !== props.autocomplete.enabled) emit('toggle-autocomplete');
 }
 function updateQuickAction(index: number, field: 'label' | 'prompt', value: string | number | null | undefined) {

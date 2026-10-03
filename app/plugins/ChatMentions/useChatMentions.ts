@@ -53,6 +53,10 @@
 
 import { createDb, buildIndex, searchWithIndex } from '~/core/search/orama';
 import { reportError, err } from '~/utils/errors';
+import { FILE_CATALOG_POST_TYPE, isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
+import { captureWorkspaceOperation } from '~/utils/chat/workspace-access';
+import { getActiveWorkspaceId, getDb } from '~/db/client';
+import { parseFileHashes } from '~/db/files-util';
 
 // ============================================================================
 // Types
@@ -63,10 +67,12 @@ import { reportError, err } from '~/utils/errors';
  */
 export interface MentionItem {
     id: string;
-    source: 'document' | 'chat';
+    source: 'document' | 'chat' | 'file';
     label: string;
     subtitle?: string;
     score?: number;
+    imageHash?: string;
+    imageSizeBytes?: number;
 }
 
 /**
@@ -78,6 +84,8 @@ interface DocPostRow {
     title?: string;
     content?: string | Record<string, unknown>;
     deleted?: boolean;
+    meta?: unknown;
+    file_hashes?: string | null;
 }
 
 /**
@@ -221,8 +229,8 @@ export function initMentionsIndex(): Promise<void> {
 }
 
 async function initializeMentionsIndex(generation: number): Promise<void> {
+    const db = getDb();
     try {
-        const { db } = await import('~/db');
 
         // IMPORTANT: Do not include 'id' in the schema to avoid clashes with Orama's identity field.
         // We'll still pass our own IDs to Orama (so hit.id === our id), but we won't index/store it as a document field.
@@ -232,11 +240,17 @@ async function initializeMentionsIndex(generation: number): Promise<void> {
             snippet: 'string',
         });
 
-        const docs = (await db.posts
+        const candidates = (await db.posts
             .where('postType')
-            .equals('doc')
-            .and((p: DocPostRow) => !p.deleted)
+            .anyOf('doc', FILE_CATALOG_POST_TYPE)
+            .and(isVisibleWorkspaceItem)
             .toArray()) as DocPostRow[];
+        const docs = (await Promise.all(candidates.map(async post => {
+            if (post.postType !== FILE_CATALOG_POST_TYPE) return post;
+            const hashes = parseFileHashes(post.file_hashes);
+            const meta = hashes.length === 1 ? await db.file_meta.get(hashes[0]!) : undefined;
+            return meta && !meta.deleted ? post : null;
+        }))).filter((post): post is DocPostRow => post !== null);
 
         // Some existing rows use numeric flags; fall back to filtering to avoid Dexie key errors
         const threads = (await db.threads
@@ -247,7 +261,7 @@ async function initializeMentionsIndex(generation: number): Promise<void> {
             ...docs.map((d) => ({
                 id: d.id,
                 title: d.title || 'Untitled',
-                source: 'document' as const,
+                source: d.postType === FILE_CATALOG_POST_TYPE ? 'file' as const : 'document' as const,
                 snippet: '',
             })),
             ...threads.map((t) => ({
@@ -259,7 +273,7 @@ async function initializeMentionsIndex(generation: number): Promise<void> {
         ];
 
         await buildIndex(nextDb, records);
-        if (generation !== initGeneration) return;
+        if (generation !== initGeneration || db !== getDb()) return;
 
         mentionsDb = nextDb;
         indexReady = true;
@@ -299,6 +313,8 @@ export async function searchMentions(query: string): Promise<MentionItem[]> {
         return [];
     }
 
+    const origin = getDb();
+    const generation = initGeneration;
     try {
         // Fetch a larger pool, then fairly cap per-group to ensure threads appear
         const results = await searchWithIndex(mentionsDb, query, 50, {
@@ -313,8 +329,8 @@ export async function searchMentions(query: string): Promise<MentionItem[]> {
             results.hits.map(async (hit: unknown) => {
                 const h = hit as { id?: string; document?: { id?: string; source?: string; title?: string; snippet?: string }; score?: number };
                 let id: string | null = h?.id ?? h?.document?.id ?? null;
-                let source: 'document' | 'chat' | null =
-                    (h?.document?.source as 'document' | 'chat') ?? null;
+                let source: 'document' | 'chat' | 'file' | null =
+                    (h?.document?.source as 'document' | 'chat' | 'file') ?? null;
                 let title: string = h?.document?.title ?? '';
                 let subtitle: string | undefined =
                     h?.document?.snippet || undefined;
@@ -324,7 +340,7 @@ export async function searchMentions(query: string): Promise<MentionItem[]> {
                         const stored = await getByID(mentionsDb as unknown as Parameters<typeof getByID>[0], h?.id ?? id!) as unknown as IndexRecord | null;
                         if (stored) {
                             id = id ?? stored.id ?? h?.id ?? null;
-                            source = (source ?? stored.source ?? null) as 'document' | 'chat' | null;
+                            source = (source ?? stored.source ?? null) as 'document' | 'chat' | 'file' | null;
                             title = title || stored.title || '';
                             subtitle =
                                 subtitle ?? (stored.snippet || undefined);
@@ -343,12 +359,12 @@ export async function searchMentions(query: string): Promise<MentionItem[]> {
                             .equals('doc')
                             .and(
                                 (r: DocPostRow) =>
-                                    !r.deleted && (r.title || '') === title
+                                    isVisibleWorkspaceItem(r) && (r.title || '') === title
                             )
                             .first()) as DocPostRow | undefined;
                         if (row) {
                             id = id ?? row.id;
-                            source = (source ?? 'document') as 'document' | 'chat';
+                            source = (source ?? 'document') as 'document' | 'chat' | 'file';
                         }
                     } catch {
                         // ignore fallback failures
@@ -366,13 +382,34 @@ export async function searchMentions(query: string): Promise<MentionItem[]> {
         );
 
         // Normalize and group
-        const items: MentionItem[] = enriched.filter(
+        if (origin !== getDb() || generation !== initGeneration) return [];
+        const visible = await Promise.all(enriched.map(async item => {
+            if (!item.id) return null;
+            if (item.source === 'chat') {
+                const row = await origin.threads.get(item.id);
+                return row && !row.deleted ? item : null;
+            }
+            const row = await origin.posts.get(item.id);
+            if (!row || !isVisibleWorkspaceItem(row) || row.postType !== (item.source === 'file' ? FILE_CATALOG_POST_TYPE : 'doc')) return null;
+            if (item.source === 'file') {
+                const hashes = parseFileHashes(row.file_hashes);
+                const meta = hashes.length === 1 ? await origin.file_meta.get(hashes[0]!) : undefined;
+                if (!meta || meta.deleted) return null;
+                if (meta.mime_type.startsWith('image/')) {
+                    item.imageHash = meta.hash;
+                    item.imageSizeBytes = meta.size_bytes;
+                }
+            }
+            return item;
+        }));
+        if (origin !== getDb() || generation !== initGeneration) return [];
+        const items: MentionItem[] = visible.filter(
             (i): i is MentionItem =>
-                !!i.id && (i.source === 'document' || i.source === 'chat')
+                !!i?.id && (i.source === 'document' || i.source === 'chat' || i.source === 'file')
         );
 
         const docs = ENABLED_SOURCES.documents
-            ? items.filter((i) => i.source === 'document').slice(0, MAX_PER_GROUP)
+            ? items.filter((i) => i.source === 'document' || i.source === 'file').slice(0, MAX_PER_GROUP)
             : [];
         const chats = ENABLED_SOURCES.conversations
             ? items.filter((i) => i.source === 'chat').slice(0, MAX_PER_GROUP)
@@ -420,7 +457,7 @@ export function collectMentions(doc: MentionNode): MentionItem[] {
                 seen.add(key);
                 mentions.push({
                     id: node.attrs.id,
-                    source: node.attrs.source as 'document' | 'chat',
+                    source: node.attrs.source as 'document' | 'chat' | 'file',
                     label: node.attrs.label,
                 });
             }
@@ -471,11 +508,21 @@ export async function resolveMention(
     mention: MentionItem
 ): Promise<string | null> {
     try {
+        if (mention.source === 'file') {
+            const scope = captureWorkspaceOperation({ subject: null, workspaceId: getActiveWorkspaceId() ?? 'local',
+                threadId: 'mention-context', messageId: null, requestId: 'mention-context', callId: mention.id,
+                abortSignal: new AbortController().signal });
+            const { workspaceRead } = await import('~/utils/chat/workspace-items');
+            const read = await workspaceRead(scope, { kind: 'file', id: mention.id });
+            scope.assertCurrent();
+            const coverage = 'textCoverage' in read ? read.textCoverage : 'none';
+            return `(Referenced File: ${read.source.title}; indexed text: ${coverage}; this page: ${read.coverage})\n${read.content}`;
+        }
         const { db } = await import('~/db');
 
         if (mention.source === 'document') {
             const doc = (await db.posts.get(mention.id)) as DocPostRow | undefined;
-            if (!doc || doc.postType !== 'doc' || doc.deleted) return null;
+            if (!doc || doc.postType !== 'doc' || !isVisibleWorkspaceItem(doc)) return null;
 
             let content;
             try {
@@ -555,12 +602,21 @@ export async function resolveMention(
  */
 export async function upsertDocument(doc: Partial<DocPostRow>) {
     if (!mentionsDb || !indexReady) return;
+    if (!isVisibleWorkspaceItem(doc)) { await removeDocument({ id: doc.id }); return; }
     try {
+        const origin = getDb();
+        if (doc.postType === FILE_CATALOG_POST_TYPE) {
+            const hashes = parseFileHashes(doc.file_hashes);
+            const meta = hashes.length === 1 ? await origin.file_meta.get(hashes[0]!) : undefined;
+            if (origin !== getDb()) return;
+            if (!meta || meta.deleted) { await removeDocument({ id: doc.id }); return; }
+        }
         const { insert, update } = await import('@orama/orama');
+        if (origin !== getDb()) return;
         const record = {
             id: doc.id!,
             title: doc.title || 'Untitled',
-            source: 'document',
+            source: doc.postType === FILE_CATALOG_POST_TYPE ? 'file' : 'document',
             snippet: '',
         };
 

@@ -51,3 +51,11 @@ CRUD helpers for project metadata stored in the `projects` Dexie table.
 
 -   Store structured per-project state inside `data`; use hooks to enforce schema or migrate old versions.
 -   Soft delete keeps history for undo flows—run hard deletes during cleanup tasks only.
+
+Core membership entries support `chat`, `doc`, and `file`; legacy string entries
+remain chat references. Known-entry edits preserve unrelated extension entries
+and fields. Workspace assistant operations require an identified project and
+its observed revision, validate current item visibility, and recheck inside the
+write transaction. File members also require live original metadata. Logical
+Trash hides memberships without removing the association, so Restore returns
+the same grouping. Removing an association never deletes the underlying item.

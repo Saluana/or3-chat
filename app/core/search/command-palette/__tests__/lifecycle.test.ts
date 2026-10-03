@@ -48,6 +48,7 @@ describe('bindPaletteLifecycle', () => {
         await vi.advanceTimersByTimeAsync(250);
         expect(refreshSources).toHaveBeenLastCalledWith([
             'document',
+            'file',
             'todo-source',
         ]);
 

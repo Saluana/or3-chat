@@ -158,6 +158,8 @@ export interface SyncGatewayAdapter {
         historyRetention?: 'snapshot-v1';
         /** Atomic canonical chat admission/finalization and durable receipts. */
         backgroundGenerationHistory?: 'v1';
+        /** Transactional preservation/admission for catalog, Trash and file memberships. */
+        workspaceItems?: 'v1';
     };
 
     /**

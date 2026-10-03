@@ -12,6 +12,8 @@ const getClientIpMock = vi.fn(() => '127.0.0.1');
 const normalizeProxyTrustConfigMock = vi.fn(() => ({}));
 const canMock = vi.fn();
 const resolveEntitlementsMock = vi.fn();
+const getActiveSyncGatewayAdapterMock = vi.fn();
+vi.mock('../../../sync/gateway/registry', () => ({ getActiveSyncGatewayAdapter: getActiveSyncGatewayAdapterMock }));
 
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
@@ -102,6 +104,7 @@ describe('GET /api/auth/session', () => {
         normalizeProxyTrustConfigMock.mockReset().mockReturnValue({});
         canMock.mockReset().mockReturnValue({ allowed: true });
         resolveEntitlementsMock.mockReset().mockResolvedValue([]);
+        getActiveSyncGatewayAdapterMock.mockReset().mockReturnValue(null);
     });
 
     afterEach(async () => {
@@ -213,5 +216,17 @@ describe('GET /api/auth/session', () => {
             expect.anything(),
             session
         );
+    });
+
+    it.each([
+        { allowed: true, capability: 'v1', expected: 'v1' },
+        { allowed: true, capability: undefined, expected: undefined },
+        { allowed: false, capability: 'v1', expected: undefined },
+    ])('exposes Files only for an admitted workspace and capable adapter: $allowed/$capability', async ({ allowed, capability, expected }) => {
+        resolveSessionContextMock.mockResolvedValue({ authenticated: true, user: { id: 'user-1' }, workspace: { id: 'workspace-1' }, role: 'viewer' });
+        canMock.mockReturnValue({ allowed });
+        getActiveSyncGatewayAdapterMock.mockReturnValue({ capabilities: { workspaceItems: capability } });
+        const response = await handler(makeEvent()) as { workspaceItemCapability?: string };
+        expect(response.workspaceItemCapability).toBe(expected);
     });
 });

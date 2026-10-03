@@ -45,6 +45,7 @@
                     <!-- Projects Section -->
                     <SidebarProjectsSection
                         v-else-if="item.type === 'projects'"
+                        class="pb-4"
                         :projects="displayProjects"
                         :collapsed="projectsCollapsed"
                         :expanded-projects="expandedProjects"
@@ -74,18 +75,6 @@
                         @select-thread="(id) => emit('select-thread', id)"
                         @select-document="(id) => emit('select-document', id)"
                     />
-
-                    <!-- Recent section label -->
-                    <div
-                        v-else-if="item.type === 'recent-header'"
-                        class="mx-0 mt-4 mb-1 px-2.5 flex items-center justify-between sb-recent-header"
-                    >
-                        <span
-                            class="text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--md-on-surface-variant)]"
-                        >
-                            Recent
-                        </span>
-                    </div>
 
                     <!-- Time Group Header -->
                     <SidebarGroupHeader
@@ -273,7 +262,6 @@ type SidebarCombinedItem =
       }
     | { key: string; type: 'projects' }
     | { key: string; type: 'empty-state' }
-    | { key: string; type: 'recent-header' }
     | {
           key: string;
           type: 'time-group-header';
@@ -496,16 +484,7 @@ const combinedItems = computed(() => {
     }
 
     // Time-grouped items (flattened for true per-item virtualization)
-    let recentHeaderAdded = false;
     for (const [groupKey, groupItems] of groupedItems.value) {
-        if (!recentHeaderAdded) {
-            result.push({
-                key: 'recent-header',
-                type: 'recent-header',
-            });
-            recentHeaderAdded = true;
-        }
-
         result.push({
             key: `time-group-header-${groupKey}`,
             type: 'time-group-header',

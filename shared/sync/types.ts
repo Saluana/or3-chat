@@ -6,6 +6,7 @@ import type { ErrorMetadata } from '../errors';
  * These types define the contract between client sync engine and SyncProviders.
  */
 
+import type { WorkspaceItemCapability } from "../posts/workspace-item-capability";
 import type { FileKindCapability } from '../files/file-capability';
 
 // ============================================================
@@ -101,6 +102,7 @@ export interface PullRequest {
     tables?: string[];
     /** Reader capability required before generic file metadata is returned. */
     fileKindCapability?: FileKindCapability;
+    workspaceItemCapability?: WorkspaceItemCapability;
 }
 
 /**
@@ -137,6 +139,7 @@ export interface SnapshotRequest {
     tables?: string[];
     /** Reader capability required before generic file metadata is returned. */
     fileKindCapability?: FileKindCapability;
+    workspaceItemCapability?: WorkspaceItemCapability;
 }
 
 export interface SnapshotRevision {
@@ -182,6 +185,7 @@ export interface PushBatch {
     ops: PendingOp[];
     /** Writer capability required before generic file metadata is accepted. */
     fileKindCapability?: FileKindCapability;
+    workspaceItemCapability?: WorkspaceItemCapability;
 }
 
 /**

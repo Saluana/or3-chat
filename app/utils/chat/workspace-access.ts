@@ -1,5 +1,5 @@
 import { useRuntimeConfig } from '#imports';
-import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
+import { getCachedSessionContext, getCachedSessionPayload } from '~/composables/auth/useSessionContext';
 import { getActiveWorkspaceId, getDb, getWorkspaceGeneration, type Or3DB } from '~/db/client';
 import type { ToolExecutionContext } from './types';
 
@@ -11,6 +11,13 @@ export interface WorkspaceOperationScope {
     signal: AbortSignal;
     writable: boolean;
     assertCurrent(access?: 'read' | 'write'): void;
+}
+
+/** Cloud intake is enabled only after the selected adapter admits the catalog protocol. */
+export function workspaceFilesAvailable(): boolean {
+    if (useRuntimeConfig().public.ssrAuthEnabled !== true) return true;
+    const payload = getCachedSessionPayload();
+    return payload?.appAccessAllowed === true && payload.workspaceItemCapability === 'v1';
 }
 
 /** Client checks complement the canonical server's workspace authorization. */

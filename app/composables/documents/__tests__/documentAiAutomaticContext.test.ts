@@ -1,12 +1,21 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import {
+    useDocumentAiAgent,
     resolveAutomaticDocumentAiScope,
     seedEditableContext,
 } from '../useDocumentAiAgent';
 import { freezeDocumentForAi } from '~/utils/documents/document-ai-operations';
 
+import { createHookEngine } from '~/core/hooks/hooks';
+import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
+import { setHookEngine } from '~/core/hooks/useHooks';
+import { effectScope, ref, shallowRef } from 'vue';
+vi.mock('~/core/auth/useUserApiKey', () => ({ useUserApiKey: () => ({ apiKey: ref('') }) }));
+vi.mock('~/composables/chat/useModelStore', () => ({ useModelStore: () => ({ catalog: ref([]), fetchModels: vi.fn() }) }));
+vi.mock('~/composables/core/useTokenizer', () => ({ useTokenizer: () => ({ countTokens: vi.fn() }) }));
+vi.mock('../useDocumentAiSettings', () => ({ DEFAULT_DOCUMENT_AI_MAX_ITERATIONS: 8, useDocumentAiSettings: () => ({ settings: ref({}), ensureLoaded: vi.fn() }) }));
 let editor: Editor | undefined;
 
 afterEach(() => {
@@ -23,6 +32,21 @@ function makeEditor(content: Record<string, unknown>) {
 }
 
 describe('automatic Document AI context', () => {
+    it('keeps the real editor locked after AI reset while the document is read-only', () => {
+        const current = makeEditor({ type: 'doc', content: [{ type: 'paragraph' }] });
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        const blocked = ref(true);
+        const scope = effectScope();
+        try {
+            const agent = scope.run(() => useDocumentAiAgent({ editor: shallowRef(current), documentId: ref('trashed-doc'),
+                title: ref('Retained'), contentVersion: ref(0), persistCurrent: async () => {}, readOnly: blocked }));
+            current.setEditable(false, false);
+            agent!.reset();
+            expect(current.isEditable).toBe(false);
+            blocked.value = false;
+            expect(current.isEditable).toBe(true);
+        } finally { scope.stop(); setHookEngine(null); }
+    });
     it('keeps a selection as the strict target while seeding full small-document context', () => {
         const current = makeEditor({
             type: 'doc',

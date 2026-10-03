@@ -1151,8 +1151,7 @@ function activateRelativeWorkspaceTab(direction: 1 | -1): void {
 }
 
 function openWorkspaceTabInSplit(tabId: string): void {
-    const tab = workspaceTabs.state.value.tabs.find((entry) => entry.id === tabId);
-    if (tab) void workspaceTabs.openInSplit(tab.resource, { allowDuplicate: true });
+    void workspaceTabs.openTabInSplit(tabId);
 }
 
 const workspaceCopyableTabIds = computed(
@@ -1723,7 +1722,7 @@ async function openWorkspaceResource(
     if (workspaceTabsEnabled.value) {
         return !!(await workspaceTabs.openResource(resource, {
             target: 'split',
-            allowDuplicate: true,
+            allowDuplicate: false,
         }));
     }
 
@@ -1921,7 +1920,12 @@ onMounted(() => {
             ...(workspaceTabsEnabled.value
                 ? {
                       openWorkspaceResource: (resource: WorkspaceResource, options: { target: 'active' | 'split' }) =>
-                          workspaceTabs.openResource(resource, options),
+                          workspaceTabs.openResource(resource, {
+                              ...options,
+                              // An app must leave an unsent chat available for
+                              // returning with a reference or attachment.
+                              ...(resource.kind === 'app' ? { reuseActiveBlank: false } : {}),
+                          }),
                       activateWorkspaceTab: (tabId: string) =>
                           workspaceTabs.activateTab(tabId, 'command'),
                   }

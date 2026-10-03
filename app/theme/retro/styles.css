@@ -3185,3 +3185,7 @@ html[data-theme='retro'].dark
 	border-radius: var(--md-border-radius);
 	box-shadow: var(--app-elevation-low, 2px 2px 0 0 var(--md-surface-variant));
 }
+
+/* VT323 needs more vertical detail than proportional faces at compact density. */
+[data-theme="retro"] .files-page :is(.files-row, .files-project, .files-muted) { font-size: 17px; }
+[data-theme="retro"] .files-page :is(.files-columns, .files-footer, .files-type-badge, .files-mobile-detail, .files-header p) { font-size: 16px; }

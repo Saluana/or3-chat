@@ -1,3 +1,4 @@
+import { WORKSPACE_ITEM_CAPABILITY } from "../posts/workspace-item-capability";
 /**
  * Zod Schemas for Sync Types
  *
@@ -259,6 +260,7 @@ export const PullRequestSchema = z.object({
         .max(MAX_SYNC_TABLE_FILTERS)
         .optional(),
     fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
+    workspaceItemCapability: z.literal(WORKSPACE_ITEM_CAPABILITY).optional(),
 });
 
 export const PullResponseSchema = z
@@ -308,6 +310,7 @@ export const SnapshotRequestSchema = z.object({
         .max(MAX_SYNC_TABLE_FILTERS)
         .optional(),
     fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
+    workspaceItemCapability: z.literal(WORKSPACE_ITEM_CAPABILITY).optional(),
 });
 
 export const SnapshotRevisionSchema = z.object({
@@ -372,6 +375,7 @@ export const PushBatchSchema = z
         scope: SyncScopeSchema,
         ops: z.array(PendingOpSchema).max(MAX_SYNC_PUSH_BATCH_OPS),
         fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
+    workspaceItemCapability: z.literal(WORKSPACE_ITEM_CAPABILITY).optional(),
     })
     .superRefine((batch, ctx) => {
         if (syncJsonByteLength(batch) > MAX_SYNC_PUSH_BATCH_BYTES) {

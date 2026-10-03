@@ -44,6 +44,8 @@ vi.mock('../client', () => {
 
     const deletedBlobs: string[] = [];
     const mockDb = {
+        messages: { filter: () => ({ first: async () => undefined }) },
+        posts: { filter: () => ({ first: async () => undefined }) },
         file_meta: table,
         file_blobs: {
             __deletedBlobs: deletedBlobs,

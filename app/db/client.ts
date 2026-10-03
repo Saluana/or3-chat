@@ -325,6 +325,13 @@ export class Or3DB extends Dexie {
             snapshot_staging: 'id, [generation+sequence]',
         });
 
+        // Version 21: Files queries only its visible posts/file metadata when
+        // showing cloud state. Captured outbox IDs are UUIDs, so entity lookup
+        // needs this compound index; queued rows and scheduler indexes survive.
+        this.version(21).stores({
+            pending_ops: 'id, status, [status+readyAt+createdAt+id], [tableName+pk]',
+        });
+
         // Derived-key maintenance must run on every instance, including
         // workspace DBs, and independently of sync capture suppression.
         installDerivedIndexHooks(this);

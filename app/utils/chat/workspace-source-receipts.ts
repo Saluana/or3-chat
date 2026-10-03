@@ -1,5 +1,7 @@
 import type { WorkspaceSource } from './workspace-items';
 import type { WorkspaceDocumentChangeRef } from './workspace-document-change';
+import { captureWorkspaceOperation } from './workspace-access';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 
 export interface WorkspaceSourceReceipt {
     workspaceId: string;
@@ -53,14 +55,14 @@ export function workspaceSourceReceipts(call: { name: string; status: string; re
 }
 
 export async function openWorkspaceSource(receipt: WorkspaceSourceReceipt): Promise<void> {
-    const [{ captureWorkspaceOperation }, { readWorkspaceItem }, { getPaletteHostContext }, { createRuntimeUuid }] = await Promise.all([
-        import('./workspace-access'), import('./workspace-items'),
-        import('~/composables/search/useCommandPalette'), import('~~/shared/runtime-id'),
-    ]);
     const scope = captureWorkspaceOperation({
         subject: null, workspaceId: receipt.workspaceId, threadId: 'source-navigation', messageId: null,
         requestId: createRuntimeUuid(), callId: createRuntimeUuid(), abortSignal: new AbortController().signal,
     });
+    const [{ readWorkspaceItem }, { getPaletteHostContext }] = await Promise.all([
+        import('./workspace-items'), import('~/composables/search/useCommandPalette'),
+    ]);
+    scope.assertCurrent();
     // Identity/visibility and workspace access are checked again at click time.
     await readWorkspaceItem(scope, receipt.source);
     scope.assertCurrent();

@@ -19,6 +19,7 @@ import { createPluginPostPaletteSource } from './plugin-post-source';
 import { createProjectPaletteSource } from './project-source';
 import { createPromptPaletteSource } from './prompt-source';
 import { createWorkspaceTabPaletteSource } from './workspace-tab-source';
+import { createFilePaletteSource } from './file-source';
 
 let registered = false;
 const handles: RegistrationHandle[] = [];
@@ -42,6 +43,7 @@ export function registerCorePaletteSources(options?: {
         handles.push(registerPaletteSource(createDocumentPaletteSource()));
     }
     handles.push(registerPaletteSource(createProjectPaletteSource()));
+    handles.push(registerPaletteSource(createFilePaletteSource()));
     handles.push(registerPaletteSource(createPromptPaletteSource()));
     if (isFeatureEnabled('dashboard')) {
         handles.push(registerPaletteSource(createImagePaletteSource()));

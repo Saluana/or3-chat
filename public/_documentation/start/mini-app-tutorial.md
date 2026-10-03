@@ -88,6 +88,12 @@ The `.client.ts` boundary prevents server-side registration. The trusted host ow
 
 A sidebar page changes sidebar content. A pane app supplies a workspace pane mode; registering one does not create a saved record or open a pane. Keep those responsibilities separate.
 
+For a trusted source sidebar entry that navigates to a workspace tab, its
+`canActivate` callback may return `'handled'` after the navigation succeeds.
+This completes activation while preserving the existing sidebar page. Return
+`false` to deny activation, or throw the navigation error so the user can see
+why it failed. Files uses this contract to reuse or open its lazy workspace tab.
+
 ## 3. Verify the surfaces
 
 1. Open the sidebar page named **Example welcome**.

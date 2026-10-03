@@ -167,6 +167,22 @@
         @apply shadow-none;
     }
 
+    .page-link-btn {
+        border: 0 !important;
+        box-shadow: none !important;
+        background: transparent;
+        padding-inline: 12px;
+        gap: 12px;
+    }
+
+    .page-link-btn:hover {
+        background: var(--md-surface-hover);
+    }
+
+    .page-link-btn:active {
+        background: var(--md-surface-active);
+    }
+
     .unified-sb-item {
         @apply mx-1;
     }

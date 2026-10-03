@@ -22,7 +22,7 @@
                     :class="['tab-pill', { active: activeTab === 'document' }]"
                     @click="activeTab = 'document'"
                 >
-                    Docs
+                    Docs & Files
                 </button>
             </div>
 
@@ -90,9 +90,18 @@
                     >
                         <!-- Icon circle -->
                         <div class="item-icon-circle">
+                            <PaletteImageThumb
+                                v-if="item.source === 'file' && item.imageHash"
+                                :hash="item.imageHash"
+                                :size-bytes="item.imageSizeBytes"
+                                alt=""
+                                :fallback-icon="useIcon('ui.notes').value"
+                                class="size-8! rounded-[inherit]! border-0!"
+                            />
                             <UIcon
+                                v-else
                                 :name="
-                                    item.source === 'document'
+                                    item.source !== 'chat'
                                         ? useIcon('ui.notes').value
                                         : useIcon('ui.chat').value
                                 "
@@ -110,7 +119,7 @@
 
                         <!-- Meta -->
                         <div class="item-meta">
-                            <span class="item-type">{{ item.source === 'document' ? 'Doc' : 'Chat' }}</span>
+                            <span class="item-type">{{ item.source === 'document' ? 'Doc' : item.source === 'file' ? 'File' : 'Chat' }}</span>
                             <span v-if="item.timestamp" class="item-time">{{ item.timestamp }}</span>
                         </div>
                     </button>
@@ -156,14 +165,17 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue';
 import { useIcon } from '~/composables/useIcon';
+import PaletteImageThumb from '~/components/search/PaletteImageThumb.vue';
 
 interface MentionItem {
     id: string;
-    source: 'document' | 'chat';
+    source: 'document' | 'chat' | 'file';
     label: string;
     subtitle?: string;
     score?: number;
     timestamp?: string;
+    imageHash?: string;
+    imageSizeBytes?: number;
 }
 
 const props = defineProps<{
@@ -182,6 +194,7 @@ const isSearching = computed(() => normalizedSearch.value.length > 0);
 const filteredBySource = computed(() =>
     props.items.filter((item) => {
         if (activeTab.value === 'all') return true;
+        if (activeTab.value === 'document') return item.source === 'document' || item.source === 'file';
         return item.source === activeTab.value;
     })
 );
@@ -205,7 +218,7 @@ const recommendedItems = computed(() => {
 });
 
 const documentItems = computed(() =>
-    filteredItems.value.filter((i) => i.source === 'document').slice(0, 5)
+    filteredItems.value.filter((i) => i.source === 'document' || i.source === 'file').slice(0, 5)
 );
 
 const chatItems = computed(() =>
@@ -232,7 +245,7 @@ const sections = computed<SectionBucket[]>(() => {
     if (!isSearching.value && documentItems.value.length) {
         list.push({
             key: 'documents',
-            title: 'Documents',
+            title: 'Documents & Files',
             icon: useIcon('ui.notes.multiple').value,
             items: documentItems.value,
         });

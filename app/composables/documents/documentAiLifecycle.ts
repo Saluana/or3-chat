@@ -40,8 +40,9 @@ export function canClearStatusAfterAbort(params: {
 export function shouldLockDocumentAiEditor(params: {
     status: DocumentAiAgentStatus;
     accepting: boolean;
+    readOnly?: boolean;
 }): boolean {
-    return params.status === 'streaming'
+    return params.readOnly === true || params.status === 'streaming'
         || params.status === 'preview'
         || params.accepting;
 }

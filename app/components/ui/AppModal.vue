@@ -39,7 +39,7 @@ const modalUi = computed<ModalProps['ui']>(() => ({
     wrapper: 'min-w-0 flex-1',
     title: [props.ui?.title, 'line-clamp-2 wrap-anywhere text-[20px]! font-semibold! leading-7! text-[var(--md-on-surface)]!'].filter(Boolean).join(' '),
     description: 'sr-only!',
-    close: 'relative! top-auto! end-auto! size-9! min-h-9! min-w-9! shrink-0 p-0! flex items-center justify-center shadow-none! [&_[data-slot=leadingIcon]]:size-5!',
+    close: 'relative! top-auto! end-auto! size-[44px]! min-h-[44px]! min-w-[44px]! shrink-0 p-0! flex items-center justify-center shadow-none! [&_[data-slot=leadingIcon]]:size-5!',
     body: [props.ui?.body, props.size === 'workspace'
         ? 'min-h-0 min-w-0 flex-1 overflow-hidden! p-0! border-0!'
         : 'min-h-0 min-w-0 px-6! pt-7! pb-6! border-0!'].filter(Boolean).join(' '),

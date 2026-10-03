@@ -42,6 +42,7 @@ vi.mock('../../../utils/storage/is-storage-enabled', () => ({
     isStorageEnabled: isStorageEnabledMock as any,
 }));
 
+vi.mock('../../../sync/gateway/registry', () => ({ getActiveSyncGatewayAdapter: () => ({ id: 'test' }) }));
 const gcMock = vi.fn();
 const getActiveStorageGatewayAdapterMock = vi.fn();
 vi.mock('../../../storage/gateway/registry', () => ({
@@ -79,6 +80,7 @@ describe('POST /api/storage/gc/run', () => {
         gcMock.mockReset().mockResolvedValue({ deleted_count: 2 });
         getActiveStorageGatewayAdapterMock.mockReset().mockReturnValue({
             id: 'adapter-1',
+            deletionCoordination: { version: 1, syncProviderId: 'test' },
             gc: gcMock as any,
         });
         useRuntimeConfigMock.mockReset().mockReturnValue({
@@ -89,6 +91,13 @@ describe('POST /api/storage/gc/run', () => {
         });
     });
 
+    it('refuses GC when the adapter cannot coordinate physical deletion with canonical writes', async () => {
+        getActiveStorageGatewayAdapterMock.mockReturnValue({ id: 'legacy', gc: gcMock });
+        readBodyMock.mockResolvedValue(makeBody());
+        const handler = await loadHandler();
+        expect(await handler(makeEvent())).toMatchObject({ deleted_count: 0, status: 'disabled', reason: 'deletion_coordination_required' });
+        expect(gcMock).not.toHaveBeenCalled();
+    });
     it('returns 400 for schema errors', async () => {
         const handler = await loadHandler();
         readBodyMock.mockResolvedValue({});

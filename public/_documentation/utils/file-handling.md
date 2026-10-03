@@ -64,3 +64,44 @@ download, transaction, and deletion behavior.
 Imports such as `~/utils/hash` resolve inside OR3's source tree. They are not
 portable plugin modules. Installable plugins should use the permission-scoped
 file and storage methods documented in the [Plugin SDK](/documentation/plugins/plugin-sdk).
+
+## Saved Files
+
+**Files** opens a lazy workspace tab containing native documents
+and saved uploads. Search names or indexed text, filter by type or project, and
+use **Upload** or **New document**. The **Files options** menu contains **Show Trash** and **Add existing uploads**. Each row has one menu for Rename, project association, original download, and moving to Trash. Click any file or document to inspect it. Wide panes show an adjacent preview and details panel; narrower panes show a scrollable preview inside the Files pane, with Close or Escape returning to the list. Choose **Open document** in the inspector to edit a native document. The list initially
+shows at most 50 rows; **Load more** extends it. Project actions create or remove
+associations without moving or copying content.
+
+In cloud mode, Files is available when the selected sync provider advertises workspace-item `v1`. Read-only members can inspect and download permitted items; upload and management actions require write access. The inspector reports local, queued, uploading, failed, or synced state separately from successful local intake.
+
+New regular chat uploads also create a catalog entry. Supported UTF-8 `.txt`,
+`.md`, and `.csv` uploads insert a removable chat reference. Images and PDFs use
+the existing attachment/model compatibility flow. **Ask in chat** returns to a
+chat and preserves its draft without sending a message.
+
+Uploaded images appear in Files and can be isolated with the **Images** type
+filter. Opening Files with write access also catalogs older image uploads in
+metadata batches, without fetching their bytes or restoring trashed items.
+
+Identical bytes reuse one catalog entry and retain its chosen title. Reuploading
+a trashed entry reports its restoration. Batch failures expose individual retry
+actions. **Add existing uploads** pages through live metadata without fetching
+blobs, preserves existing titles/Trash, and reports progress. **Enable text
+search** explicitly retrieves a supported existing file and indexes its bounded
+excerpt.
+
+Text indexing stores at most 64 KiB of UTF-8 and labels complete text, a prefix,
+or filename-only coverage. Continuations can retrieve the unindexed remainder
+in bounded pages through existing blob retrieval. Invalid encodings and other
+formats remain stored and downloadable. Search never downloads the whole
+workspace's blobs or invokes a model to parse them. Downloads preserve original
+bytes; native documents download as Markdown `.md` files after saving pending editor changes. The row menu and preview both offer **Download**. Previews display plain text or supported raster images and keep active
+content inert.
+
+**Trash** hides an item from ordinary lists, project members, mentions, and
+assistant reads/search while retaining its identity, associations, and file
+references. Open native editors become read-only. **Restore** recovers the same
+item. Permanent removal requires Trash first, releases that item's ownership,
+and preserves shared bytes and retained document history. There is no automatic
+Trash purge or model tool for permanent deletion.
