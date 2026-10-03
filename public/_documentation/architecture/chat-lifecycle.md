@@ -67,10 +67,28 @@ The preparation foundation exposes
 the current durable maximum through the strict KV snapshot API, and returns a
 frozen scalar with its DB handle and workspace generation. A failed read or
 changed workspace rejects capture; retry can recover. These origin fields are
-internal and must not be serialized as provider parameters. Native generation
-and reconnect consumers are still pending.
+internal and must not be serialized as provider parameters. Native initial
+send, retry, continuation and foreground tool iterations consume that captured
+value. Independent server admission and background reconnect remain pending.
 
-Context budgeting uses the selected model's advertised window, reserves response space, and trims history through the existing message helpers. Missing catalog metadata is refreshed; if it remains unavailable the input fallback is 8,000 tokens. Response reserve is bounded at 8,192 tokens. Counts are estimates, particularly for images and files; do not introduce a second fixed context ceiling in a caller.
+Native admission uses the selected model's advertised total window and the
+optional user maximum. Missing capacity is refreshed through the model catalog;
+unavailable capacity rejects the request with an explicit recovery reason. The
+complete provider body includes selected history, system/injected content,
+tool definitions and configuration. Initial native rejection precedes thread,
+user and assistant writes; refused retry/continuation preserves existing rows.
+There is no automatic context trimming, guessed capacity or fixed reply
+reserve. An explicit reply allowance must fit the remaining window and model
+output maximum. Otherwise output uses the actual remainder up to that maximum.
+Counts remain estimates, particularly for images and files.
+
+Each foreground tool request checks the complete accumulated body with the
+generation's captured maximum. An oversized accepted result stays durable,
+ends with `context_full`, and does not cause a tool replay or shortened retry.
+Legacy side-effecting final filters still run once after real rows exist; their
+mutations are checked before native inference, but that legacy contract cannot
+guarantee zero turn writes. The additive pure preparation and acknowledged
+commit contract is described in the [hook reference](/documentation/hooks/reference#native-chat-preparation-and-delegated-commit).
 
 Source UI token counting uses `app/composables/core/useTokenizer.ts` and a
 shared worker. When the worker is unavailable, including during SSR, it falls

@@ -6,6 +6,20 @@ describe.each([
     ['V1', createV1HookEngine],
     ['V2', createHookEngineV2],
 ] as const)('hook-engine-core (%s)', (_runtime, createHookEngine) => {
+    it('captures filter-chain ownership across async preparation including replacement and wildcard changes', () => {
+        const engine = createHookEngine();
+        const filter = (value: unknown) => value;
+        engine.addFilter('prepare:filter:input', filter);
+        const current = engine.captureFilterChain(['prepare:filter:input']);
+        engine.addAction('unrelated:action:event', () => {});
+        expect(current()).toBe(true);
+        engine.removeFilter('prepare:filter:input', filter);
+        engine.addFilter('prepare:filter:input', filter);
+        expect(current()).toBe(false);
+        const next = engine.captureFilterChain(['prepare:filter:input']);
+        engine.addFilter('prepare:*', filter);
+        expect(next()).toBe(false);
+    });
     it('rejects thenables from synchronous filters and keeps prior value', () => {
         const engine = createHookEngine();
         engine.addFilter(

@@ -24,6 +24,13 @@ export interface ContextEstimate {
     basis: 'estimated' | 'measured-prefix';
     media_cost: 'none' | 'estimated' | 'unknown';
 }
+/** Captured once for a generation; never filled from an arbitrary fallback. */
+export interface ContextRequestPolicy {
+    model: ContextModelMetadata;
+    userMaxContextTokens: number | null;
+    requestedCompletionTokens?: number | null;
+    source: ContextBudget['source'];
+}
 export type ContextAdmission =
     | { ok: true; budget: ContextBudget; estimate: ContextEstimate }
     | { ok: false; code: 'context_full' | 'invalid_output_limit' | 'invalid_context_limit'; budget: ContextBudget; estimate: ContextEstimate }
@@ -80,7 +87,7 @@ export function admitChatContext(input: {
 
 export interface CountableChatMessage {
     role: string;
-    content?: string | Array<{ type: string; text?: string; [key: string]: unknown }> | null;
+    content?: string | Array<{ type: string; text?: string } | { type: string; [key: string]: unknown }> | null;
     name?: string;
     tool_call_id?: string;
     tool_calls?: unknown;
@@ -90,6 +97,7 @@ export interface CountableChatMessage {
 export async function estimateChatRequest(input: {
     messages: readonly CountableChatMessage[];
     tools?: readonly unknown[];
+    configuration?: Record<string, unknown>;
     countText: (text: string) => Promise<number>;
 }): Promise<ContextEstimate> {
     let media: ContextEstimate['media_cost'] = 'none';
@@ -109,6 +117,7 @@ export async function estimateChatRequest(input: {
         }
     }
     if (input.tools?.length) total += await input.countText(JSON.stringify(input.tools));
+    if (input.configuration) total += await input.countText(JSON.stringify(input.configuration));
     return { input_tokens: total, basis: 'estimated', media_cost: media };
 }
 

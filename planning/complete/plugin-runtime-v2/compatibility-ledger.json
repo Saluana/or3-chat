@@ -9792,7 +9792,7 @@
     },
     {
       "source": "app/core/hooks/hook-keys.ts",
-      "apiSha256": "070f2daa07cc7e21e73c0fecd9e984f5a58a28e4961137af6092bc002358e0cd",
+      "apiSha256": "229ab9eb6d79eff9edcddd9e8891daba6f03c7ba23d744b236bc164a3cbb04f1",
       "runtime": "client",
       "publicPaths": [
         "~/core/hooks/hook-keys"
@@ -9811,7 +9811,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-keys.ts",
-              "line": 163,
+              "line": 165,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ChatIncomingFilterReturn = string;"
             }
@@ -9825,7 +9825,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-keys.ts",
-              "line": 157,
+              "line": 159,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ChatOutgoingFilterReturn = string | false;"
             }
@@ -9839,7 +9839,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-keys.ts",
-              "line": 96,
+              "line": 98,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbFamily =\n    | 'messages'\n    | 'documents'\n    | 'files'\n    | 'threads'\n    | 'projects'\n    | 'posts'\n    | 'prompts'\n    | 'attachments'\n    | 'kv';"
             }
@@ -9853,7 +9853,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-keys.ts",
-              "line": 114,
+              "line": 116,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbHookKey = `db.${DbFamily}.${string}`;"
             }
@@ -9867,7 +9867,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-keys.ts",
-              "line": 172,
+              "line": 174,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type FilesAttachFilterReturn = FilesAttachInputPayload | false;"
             }
@@ -9881,7 +9881,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-keys.ts",
-              "line": 124,
+              "line": 126,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type HookKey = KnownHookKey | DbHookKey | (string & {});"
             }
@@ -9897,7 +9897,7 @@
               "source": "app/core/hooks/hook-keys.ts",
               "line": 38,
               "syntaxKind": "TypeAliasDeclaration",
-              "text": "export type KnownHookKey =\n    | 'ui.chat.message:filter:outgoing'\n    | 'ui.chat.message:filter:incoming'\n    | 'ai.chat.model:filter:select'\n    | 'ai.chat.messages:filter:input'\n    | 'ai.chat.send:action:before'\n    | 'ai.chat.send:action:after'\n    | 'ai.chat.stream:action:delta'\n    | 'ai.chat.stream:action:reasoning'\n    | 'ai.chat.stream:action:complete'\n    | 'ai.chat.stream:action:error'\n    | 'ai.chat.retry:action:before'\n    | 'ai.chat.retry:action:after'\n    | 'ai.document.edit:filter:request'\n    | 'ai.document.edit:action:before'\n    | 'ai.document.edit:action:after'\n    | 'ai.document.edit:action:error'\n    | 'ui.pane.active:action'\n    | 'ui.pane.blur:action'\n    | 'ui.pane.switch:action'\n    | 'ui.pane.thread:filter:select'\n    | 'ui.pane.thread:action:changed'\n    | 'ui.pane.doc:filter:select'\n    | 'ui.pane.doc:action:changed'\n    | 'ui.pane.doc:action:saved'\n    | 'ui.pane.msg:action:sent'\n    | 'ui.pane.msg:action:received'\n    | 'files.attach:filter:input'\n    | 'sync.bootstrap:action:start'\n    | 'sync.bootstrap:action:progress'\n    | 'sync.bootstrap:action:complete'\n    | 'sync.pull:action:received'\n    | 'sync.pull:action:applied'\n    | 'sync.pull:action:error'\n    | 'sync.pull:action:after'\n    | 'sync.subscription:action:statusChange'\n    | 'sync.conflict:action:detected'\n    | 'sync.op:action:captured'\n    | 'sync.push:action:before'\n    | 'sync.push:action:after'\n    | 'sync.error:action'\n    | 'sync.retry:action'\n    | 'sync.queue:action:full'\n    | 'sync.rescan:action:starting'\n    | 'sync.rescan:action:progress'\n    | 'sync.rescan:action:completed'\n    | 'sync.stats:action'\n    | 'notify:action:push'\n    | 'notify:action:read'\n    | 'notify:action:clicked'\n    | 'notify:action:cleared'\n    | 'notify:filter:before_store';"
+              "text": "export type KnownHookKey =\n    | 'ui.chat.message:filter:outgoing'\n    | 'ui.chat.message:filter:incoming'\n    | 'ai.chat.model:filter:select'\n    | 'ai.chat.messages:filter:input'\n    | 'ai.chat.send:action:before'\n    | 'ai.chat.send:filter:prepare'\n    | 'ai.chat.send:filter:commit'\n    | 'ai.chat.send:action:after'\n    | 'ai.chat.stream:action:delta'\n    | 'ai.chat.stream:action:reasoning'\n    | 'ai.chat.stream:action:complete'\n    | 'ai.chat.stream:action:error'\n    | 'ai.chat.retry:action:before'\n    | 'ai.chat.retry:action:after'\n    | 'ai.document.edit:filter:request'\n    | 'ai.document.edit:action:before'\n    | 'ai.document.edit:action:after'\n    | 'ai.document.edit:action:error'\n    | 'ui.pane.active:action'\n    | 'ui.pane.blur:action'\n    | 'ui.pane.switch:action'\n    | 'ui.pane.thread:filter:select'\n    | 'ui.pane.thread:action:changed'\n    | 'ui.pane.doc:filter:select'\n    | 'ui.pane.doc:action:changed'\n    | 'ui.pane.doc:action:saved'\n    | 'ui.pane.msg:action:sent'\n    | 'ui.pane.msg:action:received'\n    | 'files.attach:filter:input'\n    | 'sync.bootstrap:action:start'\n    | 'sync.bootstrap:action:progress'\n    | 'sync.bootstrap:action:complete'\n    | 'sync.pull:action:received'\n    | 'sync.pull:action:applied'\n    | 'sync.pull:action:error'\n    | 'sync.pull:action:after'\n    | 'sync.subscription:action:statusChange'\n    | 'sync.conflict:action:detected'\n    | 'sync.op:action:captured'\n    | 'sync.push:action:before'\n    | 'sync.push:action:after'\n    | 'sync.error:action'\n    | 'sync.retry:action'\n    | 'sync.queue:action:full'\n    | 'sync.rescan:action:starting'\n    | 'sync.rescan:action:progress'\n    | 'sync.rescan:action:completed'\n    | 'sync.stats:action'\n    | 'notify:action:push'\n    | 'notify:action:read'\n    | 'notify:action:clicked'\n    | 'notify:action:cleared'\n    | 'notify:filter:before_store';"
             }
           ]
         },
@@ -9912,7 +9912,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/core/hooks/hook-keys.ts",
-                "line": 137,
+                "line": 139,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function typedOn(hooks: HookEngine);"
               }
@@ -9921,7 +9921,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-keys.ts",
-              "line": 137,
+              "line": 139,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function typedOn(hooks: HookEngine);"
             }
@@ -9931,7 +9931,7 @@
     },
     {
       "source": "app/core/hooks/hook-types.ts",
-      "apiSha256": "58bde80468a4803bee2fa126b048b6d503d97e19c1bbdef2844ebd4ca6e79f47",
+      "apiSha256": "81e0ce8a2f38354895cfb22785aa7a331f932e5ecd8ced46b87bd732a2be3910",
       "runtime": "client",
       "publicPaths": [
         "~/core/hooks/hook-types"
@@ -9950,7 +9950,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 165,
+              "line": 188,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AccessDecision {\n    allowed: boolean;\n    permission: Permission;\n    reason?:\n        | 'unauthenticated'\n        | 'forbidden'\n        | 'unknown-permission'\n        | (string & {});\n    userId?: string;\n    workspaceId?: string;\n    role?: WorkspaceRole;\n    resource?: { kind: string; id?: string };\n}"
             }
@@ -9964,7 +9964,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 446,
+              "line": 448,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ActionHookName =\n    | CoreActionHookName\n    | DbActionHookName\n    | ExtensionActionHookName\n    | (string & {});"
             }
@@ -9978,7 +9978,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 203,
+              "line": 205,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiRetryAfterPayload {\n    threadId?: string;\n    originalUserId: string;\n    originalAssistantId?: string;\n    newUserId?: string;\n    newAssistantId?: string;\n}"
             }
@@ -9992,7 +9992,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 196,
+              "line": 198,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiRetryBeforePayload {\n    threadId?: string;\n    originalUserId: string;\n    originalAssistantId?: string;\n    triggeredBy: 'user' | 'assistant';\n}"
             }
@@ -10006,7 +10006,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 146,
+              "line": 148,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiSendAfterPayload {\n    threadId?: string;\n    request?: { modelId?: string; userId?: string };\n    response?: { assistantId?: string; length?: number };\n    timings?: AiSendAfterPayloadTimings;\n    aborted?: boolean;\n}"
             }
@@ -10020,7 +10020,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 137,
+              "line": 139,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiSendAfterPayloadTimings {\n    startedAt: number;\n    endedAt: number;\n    durationMs: number;\n}"
             }
@@ -10034,7 +10034,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 128,
+              "line": 130,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiSendBeforePayload {\n    threadId?: string;\n    modelId: string;\n    user: { id: string; length: number };\n    assistant: { id: string; streamId: string };\n    messagesCount?: number;\n}"
             }
@@ -10048,7 +10048,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 173,
+              "line": 175,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiStreamCompleteContext {\n    threadId?: string;\n    assistantId: string;\n    streamId: string;\n    totalLength: number;\n    reasoningLength?: number;\n    fileHashes?: string | null;\n}"
             }
@@ -10062,7 +10062,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 193,
+              "line": 195,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AiStreamCompletePayload = AiStreamCompleteContext;"
             }
@@ -10076,7 +10076,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 155,
+              "line": 157,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiStreamDeltaContext {\n    threadId?: string;\n    assistantId: string;\n    streamId: string;\n    deltaLength: number;\n    totalLength: number;\n    chunkIndex: number;\n}"
             }
@@ -10090,7 +10090,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 191,
+              "line": 193,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AiStreamDeltaPayload = AiStreamDeltaContext;"
             }
@@ -10104,7 +10104,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 183,
+              "line": 185,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiStreamErrorContext {\n    threadId?: string;\n    streamId?: string;\n    error?: unknown;\n    aborted?: boolean;\n}"
             }
@@ -10118,7 +10118,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 194,
+              "line": 196,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AiStreamErrorPayload = AiStreamErrorContext;"
             }
@@ -10132,7 +10132,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 165,
+              "line": 167,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AiStreamReasoningContext {\n    threadId?: string;\n    assistantId: string;\n    streamId: string;\n    reasoningLength: number;\n}"
             }
@@ -10146,7 +10146,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 192,
+              "line": 194,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AiStreamReasoningPayload = AiStreamReasoningContext;"
             }
@@ -10160,7 +10160,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 310,
+              "line": 312,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AppInitPayload {\n    nuxtApp: unknown; // kept opaque to avoid heavy imports\n}"
             }
@@ -10174,7 +10174,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 139,
+              "line": 162,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AttachmentEntity {\n    id: string;\n    message_id?: string;\n    file_hash?: string;\n}"
             }
@@ -10188,7 +10188,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 356,
+              "line": 358,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface BranchContextAfterPayload {\n    threadId: string;\n    mode: BranchMode;\n    ancestorCount: number;\n    localCount: number;\n    finalCount: number;\n}"
             }
@@ -10202,7 +10202,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 349,
+              "line": 351,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface BranchForkBeforePayload {\n    source: ThreadEntity;\n    anchor: MessageEntity;\n    mode: BranchMode;\n    options?: { titleOverride?: string };\n}"
             }
@@ -10216,7 +10216,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 336,
+              "line": 338,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface BranchForkOptions {\n    sourceThreadId: string;\n    anchorMessageId: string;\n    mode?: BranchMode;\n    titleOverride?: string;\n}"
             }
@@ -10230,7 +10230,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 334,
+              "line": 336,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type BranchMode = 'reference' | 'copy' | 'compacted';"
             }
@@ -10244,7 +10244,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 869,
+              "line": 873,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type CallbackMismatch<Expected, Got> =\n    `Callback signature mismatch. Expected ${TypeName<Expected>}, got ${TypeName<Got>}`;"
             }
@@ -10258,7 +10258,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 438,
+              "line": 440,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type CoreActionHookName = Extract<\n    keyof CoreHookPayloadMap,\n    `${string}:action${string}`\n>;"
             }
@@ -10272,7 +10272,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 458,
+              "line": 460,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type CoreFilterHookName = Extract<\n    keyof CoreHookPayloadMap,\n    `${string}:filter${string}`\n>;"
             }
@@ -10286,9 +10286,9 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 481,
+              "line": 483,
               "syntaxKind": "TypeAliasDeclaration",
-              "text": "export type CoreHookPayloadMap = {\n    // AI/Chat Actions\n    'ai.chat.send:action:before': [AiSendBeforePayload];\n    'ai.chat.send:action:after': [AiSendAfterPayload];\n    'ai.chat.stream:action:delta': [string, AiStreamDeltaPayload];\n    'ai.chat.stream:action:reasoning': [string, AiStreamReasoningPayload];\n    'ai.chat.stream:action:complete': [AiStreamCompletePayload];\n    'ai.chat.stream:action:error': [AiStreamErrorPayload];\n    'ai.chat.retry:action:before': [AiRetryBeforePayload];\n    'ai.chat.retry:action:after': [AiRetryAfterPayload];\n    'ai.document.edit:filter:request': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:before': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:after': [DocumentAiEditResultPayload];\n    'ai.document.edit:action:error': [DocumentAiEditResultPayload];\n\n    // Pane Actions (now use named payloads)\n    'ui.pane.active:action': [UiPaneActivePayload];\n    'ui.pane.blur:action': [UiPaneBlurPayload];\n    'ui.pane.switch:action': [UiPaneSwitchPayload];\n    'ui.pane.open:action:after': [UiPaneActivePayload];\n    'ui.pane.close:action:before': [UiPaneActivePayload];\n    'ui.pane.close:action:after': [UiPaneActivePayload];\n    'ui.pane.thread:action:changed': [UiPaneThreadChangedPayload];\n    'ui.pane.doc:action:changed': [UiPaneDocChangedPayload];\n    'ui.pane.doc:action:saved': [UiPaneDocChangedPayload];\n    'ui.pane.msg:action:sent': [UiPaneMsgSentPayload];\n    'ui.pane.msg:action:received': [UiPaneMsgReceivedPayload];\n\n    // Sidebar Actions\n    'ui.sidebar.select:action:before': [UiSidebarSelectPayload];\n    'ui.sidebar.select:action:after': [UiSidebarSelectPayload];\n    'ui.chat.new:action:after': [UiChatNewPayload];\n\n    // App Actions\n    'app.init:action:after': [AppInitPayload];\n\n    // Chat Filters\n    'ui.chat.message:filter:outgoing': [string];\n    'ui.chat.message:filter:incoming': [string, string | undefined];\n    'ai.chat.model:filter:select': [string];\n    'ai.chat.messages:filter:input': [ChatMessage[]];\n\n    // Pane Filters\n    'ui.pane.thread:filter:select': [string, PaneState, string];\n    'ui.pane.doc:filter:select': [string, PaneState, string];\n\n    // Files Filters\n    'files.attach:filter:input': [FilesAttachInputPayload | false];\n\n    // Small, well-known DB-specialized hooks kept explicit\n    'db.messages.files.validate:filter:hashes': [string[]];\n    'db.files.refchange:action:after': [\n        { before: FileEntity; after: FileEntity; delta: number }\n    ];\n    'db.threads.getSystemPrompt:filter:output': [string | null];\n\n    // Editor Lifecycle (Examples/Plugins)\n    'editor.created:action:after': [{ editor: unknown }];\n    'editor.updated:action:after': [{ editor: unknown }];\n    'editor:request-extensions': [void];\n\n    // UI/Chat Extensions\n    'ui.chat.editor:filter:extensions': [unknown[]];\n    'ui.chat.editor:action:before_send': [Record<string, unknown>]; // editor JSON\n    'ai.chat.messages:filter:before_send': [\n        { messages: OpenRouterMessage[] } | { messages: OpenRouterMessage[] }[]\n    ];\n\n    // Branching lifecycle\n    'branch.fork:filter:options': [BranchForkOptions];\n    'branch.fork:action:before': [BranchForkBeforePayload];\n    'branch.fork:action:after': [ThreadEntity];\n    'branch.retry:filter:options': [RetryBranchParams];\n    'branch.retry:action:before': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.retry:action:after': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            newThreadId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.context:filter:messages': [\n        MessageEntity[],\n        string /* threadId */,\n        BranchMode\n    ];\n    'branch.context:action:after': [BranchContextAfterPayload];\n\n    // Documents helpers\n    'db.documents.title:filter': [\n        string,\n        {\n            phase: 'create' | 'update';\n            id: string;\n            rawTitle?: string | null;\n            existing?: DocumentEntity;\n        }\n    ];\n\n    // Workflow Actions\n    'workflow.execution:action:state_update': [\n        { messageId: string; state: unknown }\n    ];\n    'workflow.execution:action:complete': [\n        { messageId: string; workflowId: string; finalOutput?: string }\n    ];\n\n    // Auth hooks\n    'auth.access:filter:decision': [\n        AccessDecision,\n        { session: SessionContext | null }\n    ];\n    'auth.user:action:created': [{ userId: string; provider: string }];\n    'auth.workspace:action:created': [{ workspaceId: string; userId: string }];\n\n    // Storage hooks\n    'storage.files.upload:action:before': [StorageFileUploadBeforePayload];\n    'storage.files.upload:action:after': [StorageFileUploadAfterPayload];\n    'storage.files.download:action:before': [StorageFileDownloadBeforePayload];\n    'storage.files.download:action:after': [StorageFileDownloadAfterPayload];\n    'storage.files.url:filter:options': [StorageFileUrlOptionsPayload];\n    'storage.files.upload:filter:policy': [StorageFileUploadPolicyPayload | false];\n    'storage.files.gc:action:run': [StorageFileGcPayload];\n    'storage:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Sync hooks\n    'sync.op:action:captured': [{ op: SyncPendingOpPayload }];\n    'sync.push:action:before': [{ scope: SyncScopePayload; count: number }];\n    'sync.push:action:after': [\n        { scope: SyncScopePayload; successCount: number; failCount: number }\n    ];\n    'sync.bootstrap:action:start': [{ scope: SyncScopePayload }];\n    'sync.bootstrap:action:progress': [\n        {\n            scope: SyncScopePayload;\n            cursor: number;\n            pulledCount: number;\n            hasMore: boolean;\n        }\n    ];\n    'sync.bootstrap:action:complete': [\n        { scope: SyncScopePayload; cursor: number; totalPulled: number; elapsedMs?: number }\n    ];\n    'sync.pull:action:received': [\n        { scope: SyncScopePayload; changeCount: number }\n    ];\n    'sync.pull:action:applied': [\n        {\n            scope: SyncScopePayload;\n            applied: number;\n            skipped: number;\n            conflicts: number;\n        }\n    ];\n    'sync.pull:action:error': [{ scope: SyncScopePayload; error: string }];\n    'sync.pull:action:after': [\n        { scope: SyncScopePayload; count: number; cursor: number }\n    ];\n    'sync.subscription:action:statusChange': [\n        {\n            scope: SyncScopePayload;\n            previousStatus: string;\n            status: string;\n        }\n    ];\n    'sync.conflict:action:detected': [\n        {\n            tableName: string;\n            pk: string;\n            local: unknown;\n            remote: unknown;\n            winner: 'local' | 'remote';\n        }\n    ];\n    'sync.error:action': [{ op: SyncPendingOpPayload; error: unknown; permanent?: boolean }];\n    'sync.retry:action': [{ op: SyncPendingOpPayload; attempt: number }];\n    'sync.queue:action:full': [{ pendingCount: number; maxSize: number }];\n    'sync.rescan:action:starting': [{ scope: SyncScopePayload }];\n    'sync.rescan:action:progress': [{ scope: SyncScopePayload; progress: number }];\n    'sync.rescan:action:completed': [{ scope: SyncScopePayload }];\n    'sync.stats:action': [\n        { pendingCount: number; cursor: number; lastSyncAt: number }\n    ];\n    'sync:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Notification hooks\n    'notify:action:push': [NotificationCreatePayload];\n    'notify:action:read': [{ id: string; readAt: number }];\n    'notify:action:clicked': [{ notification: NotificationEntity; action?: NotificationAction }];\n    'notify:action:cleared': [{ count: number }];\n    'notify:filter:before_store': [NotificationCreatePayload | false, { source: string }];\n};"
+              "text": "export type CoreHookPayloadMap = {\n    // AI/Chat Actions\n    'ai.chat.send:action:before': [AiSendBeforePayload];\n    'ai.chat.send:action:after': [AiSendAfterPayload];\n    'ai.chat.stream:action:delta': [string, AiStreamDeltaPayload];\n    'ai.chat.stream:action:reasoning': [string, AiStreamReasoningPayload];\n    'ai.chat.stream:action:complete': [AiStreamCompletePayload];\n    'ai.chat.stream:action:error': [AiStreamErrorPayload];\n    'ai.chat.retry:action:before': [AiRetryBeforePayload];\n    'ai.chat.retry:action:after': [AiRetryAfterPayload];\n    'ai.document.edit:filter:request': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:before': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:after': [DocumentAiEditResultPayload];\n    'ai.document.edit:action:error': [DocumentAiEditResultPayload];\n\n    // Pane Actions (now use named payloads)\n    'ui.pane.active:action': [UiPaneActivePayload];\n    'ui.pane.blur:action': [UiPaneBlurPayload];\n    'ui.pane.switch:action': [UiPaneSwitchPayload];\n    'ui.pane.open:action:after': [UiPaneActivePayload];\n    'ui.pane.close:action:before': [UiPaneActivePayload];\n    'ui.pane.close:action:after': [UiPaneActivePayload];\n    'ui.pane.thread:action:changed': [UiPaneThreadChangedPayload];\n    'ui.pane.doc:action:changed': [UiPaneDocChangedPayload];\n    'ui.pane.doc:action:saved': [UiPaneDocChangedPayload];\n    'ui.pane.msg:action:sent': [UiPaneMsgSentPayload];\n    'ui.pane.msg:action:received': [UiPaneMsgReceivedPayload];\n\n    // Sidebar Actions\n    'ui.sidebar.select:action:before': [UiSidebarSelectPayload];\n    'ui.sidebar.select:action:after': [UiSidebarSelectPayload];\n    'ui.chat.new:action:after': [UiChatNewPayload];\n\n    // App Actions\n    'app.init:action:after': [AppInitPayload];\n\n    // Chat Filters\n    'ui.chat.message:filter:outgoing': [string];\n    'ui.chat.message:filter:incoming': [string, string | undefined];\n    'ai.chat.model:filter:select': [string];\n    'ai.chat.messages:filter:input': [ChatMessage[]];\n\n    // Pane Filters\n    'ui.pane.thread:filter:select': [string, PaneState, string];\n    'ui.pane.doc:filter:select': [string, PaneState, string];\n\n    // Files Filters\n    'files.attach:filter:input': [FilesAttachInputPayload | false];\n\n    // Small, well-known DB-specialized hooks kept explicit\n    'db.messages.files.validate:filter:hashes': [string[]];\n    'db.files.refchange:action:after': [\n        { before: FileEntity; after: FileEntity; delta: number }\n    ];\n    'db.threads.getSystemPrompt:filter:output': [string | null];\n\n    // Editor Lifecycle (Examples/Plugins)\n    'editor.created:action:after': [{ editor: unknown }];\n    'editor.updated:action:after': [{ editor: unknown }];\n    'editor:request-extensions': [void];\n\n    // UI/Chat Extensions\n    'ui.chat.editor:filter:extensions': [unknown[]];\n    'ui.chat.editor:action:before_send': [Record<string, unknown>]; // editor JSON\n    'ai.chat.send:filter:prepare': [ChatSendPreparation];\n    'ai.chat.send:filter:commit': [ChatSendCommit];\n    'ai.chat.messages:filter:before_send': [\n        { messages: OpenRouterMessage[] } | { messages: OpenRouterMessage[] }[]\n    ];\n\n    // Branching lifecycle\n    'branch.fork:filter:options': [BranchForkOptions];\n    'branch.fork:action:before': [BranchForkBeforePayload];\n    'branch.fork:action:after': [ThreadEntity];\n    'branch.retry:filter:options': [RetryBranchParams];\n    'branch.retry:action:before': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.retry:action:after': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            newThreadId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.context:filter:messages': [\n        MessageEntity[],\n        string /* threadId */,\n        BranchMode\n    ];\n    'branch.context:action:after': [BranchContextAfterPayload];\n\n    // Documents helpers\n    'db.documents.title:filter': [\n        string,\n        {\n            phase: 'create' | 'update';\n            id: string;\n            rawTitle?: string | null;\n            existing?: DocumentEntity;\n        }\n    ];\n\n    // Workflow Actions\n    'workflow.execution:action:state_update': [\n        { messageId: string; state: unknown }\n    ];\n    'workflow.execution:action:complete': [\n        { messageId: string; workflowId: string; finalOutput?: string }\n    ];\n\n    // Auth hooks\n    'auth.access:filter:decision': [\n        AccessDecision,\n        { session: SessionContext | null }\n    ];\n    'auth.user:action:created': [{ userId: string; provider: string }];\n    'auth.workspace:action:created': [{ workspaceId: string; userId: string }];\n\n    // Storage hooks\n    'storage.files.upload:action:before': [StorageFileUploadBeforePayload];\n    'storage.files.upload:action:after': [StorageFileUploadAfterPayload];\n    'storage.files.download:action:before': [StorageFileDownloadBeforePayload];\n    'storage.files.download:action:after': [StorageFileDownloadAfterPayload];\n    'storage.files.url:filter:options': [StorageFileUrlOptionsPayload];\n    'storage.files.upload:filter:policy': [StorageFileUploadPolicyPayload | false];\n    'storage.files.gc:action:run': [StorageFileGcPayload];\n    'storage:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Sync hooks\n    'sync.op:action:captured': [{ op: SyncPendingOpPayload }];\n    'sync.push:action:before': [{ scope: SyncScopePayload; count: number }];\n    'sync.push:action:after': [\n        { scope: SyncScopePayload; successCount: number; failCount: number }\n    ];\n    'sync.bootstrap:action:start': [{ scope: SyncScopePayload }];\n    'sync.bootstrap:action:progress': [\n        {\n            scope: SyncScopePayload;\n            cursor: number;\n            pulledCount: number;\n            hasMore: boolean;\n        }\n    ];\n    'sync.bootstrap:action:complete': [\n        { scope: SyncScopePayload; cursor: number; totalPulled: number; elapsedMs?: number }\n    ];\n    'sync.pull:action:received': [\n        { scope: SyncScopePayload; changeCount: number }\n    ];\n    'sync.pull:action:applied': [\n        {\n            scope: SyncScopePayload;\n            applied: number;\n            skipped: number;\n            conflicts: number;\n        }\n    ];\n    'sync.pull:action:error': [{ scope: SyncScopePayload; error: string }];\n    'sync.pull:action:after': [\n        { scope: SyncScopePayload; count: number; cursor: number }\n    ];\n    'sync.subscription:action:statusChange': [\n        {\n            scope: SyncScopePayload;\n            previousStatus: string;\n            status: string;\n        }\n    ];\n    'sync.conflict:action:detected': [\n        {\n            tableName: string;\n            pk: string;\n            local: unknown;\n            remote: unknown;\n            winner: 'local' | 'remote';\n        }\n    ];\n    'sync.error:action': [{ op: SyncPendingOpPayload; error: unknown; permanent?: boolean }];\n    'sync.retry:action': [{ op: SyncPendingOpPayload; attempt: number }];\n    'sync.queue:action:full': [{ pendingCount: number; maxSize: number }];\n    'sync.rescan:action:starting': [{ scope: SyncScopePayload }];\n    'sync.rescan:action:progress': [{ scope: SyncScopePayload; progress: number }];\n    'sync.rescan:action:completed': [{ scope: SyncScopePayload }];\n    'sync.stats:action': [\n        { pendingCount: number; cursor: number; lastSyncAt: number }\n    ];\n    'sync:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Notification hooks\n    'notify:action:push': [NotificationCreatePayload];\n    'notify:action:read': [{ id: string; readAt: number }];\n    'notify:action:clicked': [{ notification: NotificationEntity; action?: NotificationAction }];\n    'notify:action:cleared': [{ count: number }];\n    'notify:filter:before_store': [NotificationCreatePayload | false, { source: string }];\n};"
             }
           ]
         },
@@ -10300,7 +10300,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 413,
+              "line": 415,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbActionHookName =\n    | `db.${DbEntityName}.${DbOperation}:action:${DbPhase}`\n    | `db.${DbEntityName}.delete:action:${DbDeleteType}:${DbPhase}`\n    // extra specialized actions seen in docs\n    | `db.files.refchange:action:after`\n    | `db.kv.upsertByName:action:after`\n    | `db.kv.deleteByName:action:hard:${DbPhase}`;"
             }
@@ -10314,7 +10314,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 304,
+              "line": 327,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DbCreatePayload<T = unknown> {\n    entity: T;\n    tableName: string;\n}"
             }
@@ -10328,7 +10328,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 316,
+              "line": 339,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DbDeletePayload<T = unknown> {\n    entity: T;\n    id: string;\n    tableName: string;\n}"
             }
@@ -10342,7 +10342,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 410,
+              "line": 412,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbDeleteType = 'soft' | 'hard';"
             }
@@ -10356,7 +10356,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 385,
+              "line": 387,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbEntityName =\n    | 'messages'\n    | 'threads'\n    | 'documents'\n    | 'files'\n    | 'projects'\n    | 'posts'\n    | 'prompts'\n    | 'attachments'\n    | 'kv';"
             }
@@ -10370,7 +10370,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 422,
+              "line": 424,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbFilterHookName =\n    | `db.${DbEntityName}.${DbOperation}:filter:input`\n    | `db.${DbEntityName}.${DbOperation}:filter:output`\n    // extra specialized filters seen in docs\n    | `db.messages.files.validate:filter:hashes`\n    | `db.kv.getByName:filter:output`\n    | `db.kv.upsertByName:filter:input`\n    | `db.threads.searchByTitle:filter:output`\n    | `db.posts.all:filter:output`;"
             }
@@ -10384,7 +10384,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 396,
+              "line": 398,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbOperation =\n    | 'create'\n    | 'upsert'\n    | 'update'\n    | 'delete'\n    | 'get'\n    | 'search'\n    | 'byProject'\n    | 'children'\n    | 'fork'\n    | 'normalize'\n    | 'list';"
             }
@@ -10398,7 +10398,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 409,
+              "line": 411,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DbPhase = 'before' | 'after';"
             }
@@ -10412,7 +10412,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 309,
+              "line": 332,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DbUpdatePayload<T = unknown> {\n    existing: T;\n    updated: T;\n    patch: Partial<T>;\n    tableName: string;\n}"
             }
@@ -10426,7 +10426,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 211,
+              "line": 213,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentAiEditRequestPayload {\n    documentId: string;\n    modelId: string;\n    prompt: string;\n    scope: 'selection' | 'section' | 'document';\n    context: string;\n    references: Array<{\n        id: string;\n        source: 'document' | 'chat';\n        label: string;\n    }>;\n    referenceContext: string;\n    tokenEstimate: number;\n    maxIterations?: number;\n    chunkWordLimit?: number;\n}"
             }
@@ -10440,7 +10440,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 228,
+              "line": 230,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentAiEditResultPayload {\n    request: DocumentAiEditRequestPayload;\n    operationCount?: number;\n    accepted?: boolean;\n    error?: unknown;\n}"
             }
@@ -10454,7 +10454,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 82,
+              "line": 105,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentEntity {\n    id: string;\n    title?: string;\n    content?: string;\n    file_hashes?: string | null;\n    created_at?: number;\n    updated_at?: number;\n}"
             }
@@ -10468,7 +10468,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 103,
+              "line": 105,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface EditorInstance {\n    commands: Record<string, unknown>;\n    getJSON: () => Record<string, unknown>;\n}"
             }
@@ -10482,7 +10482,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 442,
+              "line": 444,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ExtensionActionHookName = keyof Or3ActionHooks;"
             }
@@ -10496,7 +10496,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 462,
+              "line": 464,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ExtensionFilterHookName = keyof Or3FilterHooks;"
             }
@@ -10510,7 +10510,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 779,
+              "line": 783,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ExtractHookPayload<K extends HookName> =\n    K extends keyof HookPayloadMap ? HookPayloadMap[K][0] : unknown;"
             }
@@ -10524,7 +10524,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 91,
+              "line": 114,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface FileEntity {\n    hash: string;\n    name: string;\n    mime: string;\n    size: number;\n    kind: FileKind;\n    ref_count?: number;\n}"
             }
@@ -10538,7 +10538,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 322,
+              "line": 324,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface FilesAttachInputPayload {\n    file: File;\n    name: string;\n    mime: string;\n    size: number;\n    kind: FileKind;\n}"
             }
@@ -10552,7 +10552,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 314,
+              "line": 316,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface FilesAttachPayload extends FilesAttachInputPayload {\n    accepted: boolean;\n    url?: string;\n    hash?: string;\n}"
             }
@@ -10566,7 +10566,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 466,
+              "line": 468,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type FilterHookName =\n    | CoreFilterHookName\n    | DbFilterHookName\n    | ExtensionFilterHookName\n    | (string & {});"
             }
@@ -10580,7 +10580,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 474,
+              "line": 476,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type HookName = ActionHookName | FilterHookName;"
             }
@@ -10594,7 +10594,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 736,
+              "line": 740,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type HookPayloadMap = CoreHookPayloadMap &\n    DbActionMap &\n    DbFilterMap &\n    Or3ActionHooks &\n    Or3FilterHooks;"
             }
@@ -10608,7 +10608,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 810,
+              "line": 814,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferDbCreateEntity<K extends string> =\n    K extends `db.messages.${string}`\n        ? MessageCreateEntity\n        : K extends `db.posts.${string}`\n        ? PostCreateEntity\n        : K extends `db.threads.${string}`\n        ? ThreadCreateEntity\n        : InferDbEntity<K>;"
             }
@@ -10622,7 +10622,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 789,
+              "line": 793,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferDbEntity<K extends string> = K extends `db.messages.${string}`\n    ? MessageEntity\n    : K extends `db.threads.${string}`\n    ? ThreadEntity\n    : K extends `db.documents.${string}`\n    ? DocumentEntity\n    : K extends `db.files.${string}`\n    ? FileEntity\n    : K extends `db.projects.${string}`\n    ? ProjectEntity\n    : K extends `db.posts.${string}`\n    ? PostEntity\n    : K extends `db.prompts.${string}`\n    ? PromptEntity\n    : K extends `db.attachments.${string}`\n    ? AttachmentEntity\n    : K extends `db.kv.${string}`\n    ? KvEntry\n    : unknown;"
             }
@@ -10636,7 +10636,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 763,
+              "line": 767,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferHookCallback<K extends HookName> = (\n    ...args: InferHookParams<K>\n) => InferHookReturn<K> | Promise<InferHookReturn<K>>;"
             }
@@ -10650,7 +10650,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 748,
+              "line": 752,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferHookParams<K extends HookName> = K extends keyof HookPayloadMap\n    ? HookPayloadMap[K]\n    : unknown[];"
             }
@@ -10664,7 +10664,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 754,
+              "line": 758,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type InferHookReturn<K extends HookName> =\n    K extends `${string}:filter${string}`\n        ? K extends keyof HookPayloadMap\n            ? HookPayloadMap[K][0]\n            : unknown\n        : void;"
             }
@@ -10678,7 +10678,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 769,
+              "line": 773,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type IsAction<K extends HookName> = K extends ActionHookName\n    ? true\n    : false;"
             }
@@ -10692,7 +10692,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 773,
+              "line": 777,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type IsFilter<K extends HookName> = K extends FilterHookName\n    ? true\n    : false;"
             }
@@ -10706,7 +10706,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 145,
+              "line": 168,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface KvEntry {\n    id: string;\n    name: string;\n    value?: string | null;\n    deleted?: boolean;\n    created_at: number;\n    updated_at: number;\n    clock: number;\n}"
             }
@@ -10720,7 +10720,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 365,
+              "line": 367,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface KvUpsertByNameInput {\n    name: string;\n    value: unknown;\n}"
             }
@@ -10734,7 +10734,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 783,
+              "line": 787,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type MatchingHooks<Pattern extends string> = Extract<\n    HookName,\n    `${Pattern}`\n>;"
             }
@@ -10748,7 +10748,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 22,
+              "line": 45,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface MessageCreateEntity {\n    id?: string;\n    thread_id: string;\n    role: string;\n    pending?: boolean;\n    data?: unknown;\n    index?: number;\n    created_at?: number;\n    updated_at?: number;\n    file_hashes?: string | string[] | null;\n    error?: string | null;\n    deleted?: boolean;\n    stream_id?: string | null;\n    clock?: number;\n}"
             }
@@ -10762,7 +10762,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 11,
+              "line": 34,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface MessageEntity {\n    id: string;\n    thread_id: string;\n    role: string;\n    pending?: boolean;\n    data?: unknown;\n    index: number;\n    created_at: number;\n    updated_at?: number;\n}"
             }
@@ -10776,7 +10776,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 225,
+              "line": 248,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface NotificationAction {\n    id: string;\n    label: string;\n    kind: 'navigate' | 'callback';\n    target?: {\n        threadId?: string;\n        documentId?: string;\n        route?: string;\n    };\n    data?: Record<string, unknown>;\n}"
             }
@@ -10790,7 +10790,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 237,
+              "line": 260,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface NotificationCreatePayload {\n    type: string;\n    title: string;\n    body?: string;\n    threadId?: string;\n    documentId?: string;\n    actions?: NotificationAction[];\n}"
             }
@@ -10804,7 +10804,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 246,
+              "line": 269,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface NotificationEntity {\n    id: string;\n    workspace_id?: string;\n    user_id: string;\n    thread_id?: string;\n    document_id?: string;\n    type: string;\n    title: string;\n    body?: string;\n    actions?: NotificationAction[];\n    read_at?: number;\n    deleted: boolean;\n    deleted_at?: number;\n    created_at: number;\n    updated_at: number;\n    clock: number;\n}"
             }
@@ -10818,7 +10818,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 108,
+              "line": 110,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type OpenRouterMessage =\n    | ORMessage\n    | {\n          role: 'tool';\n          [key: string]: unknown;\n      };"
             }
@@ -10832,7 +10832,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 155,
+              "line": 178,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type Permission =\n    | 'workspace.read'\n    | 'workspace.write'\n    | 'workspace.settings.manage'\n    | 'users.manage'\n    | 'plugins.manage'\n    | 'admin.access';"
             }
@@ -10846,7 +10846,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 119,
+              "line": 142,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface PostCreateEntity {\n    id?: string;\n    title: string;\n    content?: string;\n    postType?: string;\n    created_at?: number;\n    updated_at?: number;\n    deleted?: boolean;\n    meta?: unknown;\n    file_hashes?: string | null;\n}"
             }
@@ -10860,7 +10860,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 111,
+              "line": 134,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface PostEntity {\n    id: string;\n    title?: string;\n    body?: string;\n    created_at?: number;\n    updated_at?: number;\n}"
             }
@@ -10874,7 +10874,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 100,
+              "line": 123,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectEntity {\n    id: string;\n    name: string;\n    description?: string | null;\n    data: unknown;\n    created_at: number;\n    updated_at: number;\n    deleted: boolean;\n    clock: number;\n}"
             }
@@ -10888,7 +10888,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 131,
+              "line": 154,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface PromptEntity {\n    id: string;\n    name: string;\n    text: string;\n    tags?: string[];\n    favorite?: boolean;\n}"
             }
@@ -10902,7 +10902,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 343,
+              "line": 345,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RetryBranchParams {\n    assistantMessageId: string;\n    mode?: BranchMode;\n    titleOverride?: string;\n}"
             }
@@ -10916,7 +10916,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 179,
+              "line": 202,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SessionContext {\n    authenticated: boolean;\n    provider?: string;\n    providerUserId?: string;\n    user?: { id: string; email?: string; displayName?: string };\n    workspace?: { id: string; name: string };\n    role?: WorkspaceRole;\n    expiresAt?: string;\n    authorizationRevision?: number;\n    deploymentAdmin?: boolean;\n    /** Host-resolved entitlement ids used by immediate client-side plugin gating. */\n    entitlements?: string[];\n}"
             }
@@ -10930,7 +10930,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 281,
+              "line": 304,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileDownloadAfterPayload {\n    hash: string;\n    workspace_id: string;\n    size_bytes: number;\n}"
             }
@@ -10944,7 +10944,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 276,
+              "line": 299,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileDownloadBeforePayload {\n    hash: string;\n    workspace_id: string;\n}"
             }
@@ -10958,7 +10958,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 299,
+              "line": 322,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileGcPayload {\n    deleted_count: number;\n    workspace_id: string;\n}"
             }
@@ -10972,7 +10972,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 270,
+              "line": 293,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileUploadAfterPayload {\n    hash: string;\n    workspace_id: string;\n    storage_id: string;\n}"
             }
@@ -10986,7 +10986,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 264,
+              "line": 287,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileUploadBeforePayload {\n    hash: string;\n    workspace_id: string;\n    size_bytes: number;\n}"
             }
@@ -11000,7 +11000,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 293,
+              "line": 316,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileUploadPolicyPayload {\n    hash: string;\n    mime_type: string;\n    size_bytes: number;\n}"
             }
@@ -11014,7 +11014,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 287,
+              "line": 310,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StorageFileUrlOptionsPayload {\n    hash: string;\n    expiry_ms: number;\n    disposition?: string;\n}"
             }
@@ -11028,7 +11028,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 833,
+              "line": 837,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type SuggestSimilar<K> = K extends `${infer Prefix}.${string}`\n    ? Extract<HookName, `${Prefix}.${string}`>\n    : HookName;"
             }
@@ -11042,7 +11042,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 198,
+              "line": 221,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SyncPendingOpPayload {\n    id: string;\n    tableName: string;\n    operation: 'put' | 'delete';\n    pk: string;\n    payload?: unknown;\n    stamp: {\n        deviceId: string;\n        opId: string;\n        hlc: string;\n        clock: number;\n    };\n    createdAt: number;\n    attempts: number;\n    nextAttemptAt?: number;\n    status:\n        | 'pending'\n        | 'in_flight'\n        | 'retry_wait'\n        | 'failed_retryable'\n        | 'failed_permanent'\n        | 'applied'\n        | 'discarded'\n        | 'syncing'\n        | 'failed';\n}"
             }
@@ -11056,7 +11056,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 193,
+              "line": 216,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SyncScopePayload {\n    workspaceId: string;\n    projectId?: string;\n}"
             }
@@ -11070,7 +11070,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 820,
+              "line": 824,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type Tail<T extends unknown[]> = T extends [unknown, ...infer Rest]\n    ? Rest\n    : [];"
             }
@@ -11084,7 +11084,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 60,
+              "line": 83,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ThreadCreateEntity {\n    id?: string;\n    title?: string | null;\n    created_at?: number;\n    updated_at?: number;\n    last_message_at?: number | null;\n    parent_thread_id?: string | null;\n    anchor_message_id?: string | null;\n    anchor_index?: number | null;\n    branch_mode?: 'reference' | 'copy' | 'compacted' | null;\n    root_thread_id?: string | null;\n    summary_message_id?: string | null;\n    fork_reason?: 'manual' | 'retry' | 'compaction';\n    status?: string;\n    deleted?: boolean;\n    pinned?: boolean;\n    clock?: number;\n    forked?: boolean;\n    project_id?: string | null;\n    system_prompt_id?: string | null;\n}"
             }
@@ -11098,7 +11098,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 38,
+              "line": 61,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ThreadEntity {\n    id: string;\n    title?: string | null;\n    created_at: number;\n    updated_at: number;\n    last_message_at?: number | null;\n    parent_thread_id?: string | null;\n    anchor_message_id?: string | null;\n    anchor_index?: number | null;\n    branch_mode?: 'reference' | 'copy' | 'compacted' | null;\n    root_thread_id?: string | null;\n    summary_message_id?: string | null;\n    fork_reason?: 'manual' | 'retry' | 'compaction';\n    status: string;\n    deleted: boolean;\n    pinned: boolean;\n    clock: number;\n    forked: boolean;\n    project_id?: string | null;\n    system_prompt_id?: string | null;\n}"
             }
@@ -11112,7 +11112,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 851,
+              "line": 855,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type TypeName<T> = T extends string\n    ? 'string'\n    : T extends number\n    ? 'number'\n    : T extends boolean\n    ? 'boolean'\n    : T extends bigint\n    ? 'bigint'\n    : T extends undefined\n    ? 'undefined'\n    : T extends null\n    ? 'null'\n    : T extends (...args: unknown[]) => unknown\n    ? 'function'\n    : T extends object\n    ? 'object'\n    : 'unknown';"
             }
@@ -11126,7 +11126,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 305,
+              "line": 307,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiChatNewPayload {\n    threadId?: string;\n    createdAt?: number;\n}"
             }
@@ -11140,7 +11140,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 251,
+              "line": 253,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneActivePayload {\n    pane: PaneState;\n    index: number;\n    previousIndex?: number;\n}"
             }
@@ -11154,7 +11154,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 257,
+              "line": 259,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneBlurPayload {\n    pane: PaneState;\n    previousIndex: number;\n}"
             }
@@ -11168,7 +11168,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 276,
+              "line": 278,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneDocChangedPayload {\n    pane: PaneState;\n    oldDocumentId: string;\n    newDocumentId: string;\n    paneIndex: number;\n    meta?: Record<string, unknown>;\n}"
             }
@@ -11182,7 +11182,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 239,
+              "line": 241,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneMsgBase {\n    id: string;\n    threadId?: string;\n    length?: number;\n    fileHashes?: string | null;\n}"
             }
@@ -11196,7 +11196,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 246,
+              "line": 248,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneMsgReceived extends UiPaneMsgBase {\n    reasoningLength?: number;\n}"
             }
@@ -11210,7 +11210,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 291,
+              "line": 293,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneMsgReceivedPayload {\n    pane: PaneState;\n    paneIndex: number;\n    message: UiPaneMsgReceived;\n    meta?: Record<string, unknown>;\n}"
             }
@@ -11224,7 +11224,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 284,
+              "line": 286,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneMsgSentPayload {\n    pane: PaneState;\n    paneIndex: number;\n    message: UiPaneMsgBase;\n    meta?: Record<string, unknown>;\n}"
             }
@@ -11238,7 +11238,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 262,
+              "line": 264,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneSwitchPayload {\n    pane: PaneState;\n    index: number;\n    previousIndex?: number;\n}"
             }
@@ -11252,7 +11252,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 268,
+              "line": 270,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiPaneThreadChangedPayload {\n    pane: PaneState;\n    oldThreadId: string;\n    newThreadId: string;\n    paneIndex: number;\n    messageCount?: number;\n}"
             }
@@ -11266,7 +11266,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 300,
+              "line": 302,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UiSidebarSelectPayload {\n    kind: 'chat' | 'doc';\n    id: string;\n}"
             }
@@ -11280,7 +11280,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hook-types.ts",
-              "line": 840,
+              "line": 844,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ValidateHookName<K> = K extends HookName\n    ? K\n    : `Invalid hook name: ${Extract<\n          K,\n          string\n      >}. Did you mean one of: ${SuggestSimilar<K>}`;"
             }
@@ -11294,7 +11294,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-domain-types.ts",
-              "line": 163,
+              "line": 186,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type WorkspaceRole = 'owner' | 'editor' | 'viewer';"
             }
@@ -11304,7 +11304,7 @@
     },
     {
       "source": "app/core/hooks/hooks.ts",
-      "apiSha256": "90f56d1cb164f826ace879da654e98d4dc3c0d2454179826dbbb7930a7575ee0",
+      "apiSha256": "b7caf2922462443be5792788316945961758914d3b477327c4076b2ff74e3c83",
       "runtime": "client",
       "publicPaths": [
         "~/core/hooks",
@@ -11353,7 +11353,7 @@
               "source": "shared/hooks/hook-engine-core.ts",
               "line": 92,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface HookEngine {\n    addFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;\n    applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;\n\n    addAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    doAction: (name: string, ...args: unknown[]) => Promise<void>;\n    doActionSync: (name: string, ...args: unknown[]) => void;\n\n    hasFilter: (name?: string, fn?: HookFn) => boolean | number;\n    hasAction: (name?: string, fn?: HookFn) => boolean | number;\n    removeAllCallbacks: (priority?: number) => void;\n    currentPriority: () => number | false;\n\n    onceAction: (name: string, fn: HookFn, priority?: number) => () => void;\n    on: (name: string, fn: HookFn, opts?: OnOptions) => () => void;\n    off: (disposer: () => void) => void;\n\n    _diagnostics: {\n        timings: Record<string, number[]>;\n        errors: Record<string, number>;\n        callbacks(actionOrFilter?: HookKind): number;\n    };\n}"
+              "text": "export interface HookEngine {\n    addFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;\n    applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;\n\n    addAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    doAction: (name: string, ...args: unknown[]) => Promise<void>;\n    doActionSync: (name: string, ...args: unknown[]) => void;\n\n    hasFilter: (name?: string, fn?: HookFn) => boolean | number;\n    /** Read-only ownership receipt; dispatching a filter is never part of validation. */\n    captureFilterChain: (names: readonly string[]) => () => boolean;\n    hasAction: (name?: string, fn?: HookFn) => boolean | number;\n    removeAllCallbacks: (priority?: number) => void;\n    currentPriority: () => number | false;\n\n    onceAction: (name: string, fn: HookFn, priority?: number) => () => void;\n    on: (name: string, fn: HookFn, opts?: OnOptions) => () => void;\n    off: (disposer: () => void) => void;\n\n    _diagnostics: {\n        timings: Record<string, number[]>;\n        errors: Record<string, number>;\n        callbacks(actionOrFilter?: HookKind): number;\n    };\n}"
             }
           ]
         },
@@ -11417,7 +11417,7 @@
     },
     {
       "source": "app/core/hooks/typed-hooks.ts",
-      "apiSha256": "15d33c6063cff9a57668004d0b73f78e16a57edbfdebd33c674ad386101e06ee",
+      "apiSha256": "7adabef0a8820cdb36592b1c9da22691c262f101172de6347ae9e60a9899543a",
       "runtime": "client",
       "publicPaths": [
         "~/core/hooks/typed-hooks"
@@ -11440,7 +11440,7 @@
               "resolvedReturnType": "TypedHookEngine",
               "declaration": {
                 "source": "app/core/hooks/typed-hooks.ts",
-                "line": 169,
+                "line": 170,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createTypedHookEngine(engine: HookEngine): TypedHookEngine;"
               }
@@ -11449,7 +11449,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/typed-hooks.ts",
-              "line": 169,
+              "line": 170,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createTypedHookEngine(engine: HookEngine): TypedHookEngine;"
             }
@@ -11465,7 +11465,7 @@
               "source": "app/core/hooks/typed-hooks.ts",
               "line": 41,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface TypedHookEngine {\n    // Actions (registration)\n    /**\n     * Register an action callback for a known hook name.\n     * await hooks.doAction('ui.pane.blur:action', {\n     *   pane,\n     *   index: 0,\n     * });\n     * @example\n     * hooks.addAction('ai.chat.send:action:before', (ctx) => {\n     *   console.log(ctx.modelId);\n     * });\n     */\n    addAction<K extends ActionHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): void;\n\n    removeAction<K extends ActionHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): void;\n\n    // Actions (execution)\n    /**\n     * Execute an action asynchronously.\n     * @example\n     * await hooks.doAction('ui.pane.blur:action', {\n     *   pane,\n     *   index: 0,\n     * });\n     */\n    doAction<K extends ActionHookName>(\n        name: K,\n        ...args: InferHookParams<K>\n    ): Promise<void>;\n\n    doActionSync<K extends ActionHookName>(\n        name: K,\n        ...args: InferHookParams<K>\n    ): void;\n\n    // Filters (registration)\n    /**\n     * Register a filter callback. Must return the value type.\n     * @example\n     * hooks.addFilter('ui.chat.message:filter:outgoing', (value) => value.trim());\n     */\n    addFilter<K extends FilterHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): void;\n\n    removeFilter<K extends FilterHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): void;\n\n    // Filters (execution)\n    /**\n     * Apply filters asynchronously to a value.\n     * @example\n     * const text = await hooks.applyFilters('ui.chat.message:filter:outgoing', input);\n     */\n    applyFilters<K extends FilterHookName>(\n        name: K,\n        value: InferHookParams<K>[0],\n        ...args: Tail<InferHookParams<K>>\n    ): Promise<InferHookReturn<K>>;\n\n    applyFiltersSync<K extends FilterHookName>(\n        name: K,\n        value: InferHookParams<K>[0],\n        ...args: Tail<InferHookParams<K>>\n    ): InferHookReturn<K>;\n\n    // Unified API (typed by hook name)\n    /**\n     * Register either an action or a filter based on the hook name.\n     * @example\n     * const off = hooks.on('files.attach:filter:input', (payload) => payload, { kind: 'filter' });\n     */\n    on<K extends HookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        opts?: OnOptions & {\n            // infer sensible default kind when provided\n            kind?: K extends ActionHookName\n                ? 'action'\n                : K extends FilterHookName\n                ? 'filter'\n                : 'action' | 'filter';\n        }\n    ): () => void;\n\n    off(disposer: () => void): void;\n\n    onceAction<K extends ActionHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): () => void;\n\n    // Diagnostics + passthrough\n    hasAction<K extends ActionHookName>(\n        name?: K,\n        fn?: InferHookCallback<K>\n    ): boolean | number;\n    hasFilter<K extends FilterHookName>(\n        name?: K,\n        fn?: InferHookCallback<K>\n    ): boolean | number;\n    removeAllCallbacks(priority?: number): void;\n    currentPriority(): number | false;\n\n    readonly _engine: HookEngine;\n    readonly _diagnostics: HookEngine['_diagnostics'];\n}"
+              "text": "export interface TypedHookEngine {\n    // Actions (registration)\n    /**\n     * Register an action callback for a known hook name.\n     * await hooks.doAction('ui.pane.blur:action', {\n     *   pane,\n     *   index: 0,\n     * });\n     * @example\n     * hooks.addAction('ai.chat.send:action:before', (ctx) => {\n     *   console.log(ctx.modelId);\n     * });\n     */\n    addAction<K extends ActionHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): void;\n\n    removeAction<K extends ActionHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): void;\n\n    // Actions (execution)\n    /**\n     * Execute an action asynchronously.\n     * @example\n     * await hooks.doAction('ui.pane.blur:action', {\n     *   pane,\n     *   index: 0,\n     * });\n     */\n    doAction<K extends ActionHookName>(\n        name: K,\n        ...args: InferHookParams<K>\n    ): Promise<void>;\n\n    doActionSync<K extends ActionHookName>(\n        name: K,\n        ...args: InferHookParams<K>\n    ): void;\n\n    // Filters (registration)\n    /**\n     * Register a filter callback. Must return the value type.\n     * @example\n     * hooks.addFilter('ui.chat.message:filter:outgoing', (value) => value.trim());\n     */\n    addFilter<K extends FilterHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): void;\n\n    removeFilter<K extends FilterHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): void;\n\n    // Filters (execution)\n    /**\n     * Apply filters asynchronously to a value.\n     * @example\n     * const text = await hooks.applyFilters('ui.chat.message:filter:outgoing', input);\n     */\n    applyFilters<K extends FilterHookName>(\n        name: K,\n        value: InferHookParams<K>[0],\n        ...args: Tail<InferHookParams<K>>\n    ): Promise<InferHookReturn<K>>;\n\n    applyFiltersSync<K extends FilterHookName>(\n        name: K,\n        value: InferHookParams<K>[0],\n        ...args: Tail<InferHookParams<K>>\n    ): InferHookReturn<K>;\n\n    // Unified API (typed by hook name)\n    /**\n     * Register either an action or a filter based on the hook name.\n     * @example\n     * const off = hooks.on('files.attach:filter:input', (payload) => payload, { kind: 'filter' });\n     */\n    on<K extends HookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        opts?: OnOptions & {\n            // infer sensible default kind when provided\n            kind?: K extends ActionHookName\n                ? 'action'\n                : K extends FilterHookName\n                ? 'filter'\n                : 'action' | 'filter';\n        }\n    ): () => void;\n\n    off(disposer: () => void): void;\n\n    onceAction<K extends ActionHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): () => void;\n\n    // Diagnostics + passthrough\n    hasAction<K extends ActionHookName>(\n        name?: K,\n        fn?: InferHookCallback<K>\n    ): boolean | number;\n    hasFilter<K extends FilterHookName>(\n        name?: K,\n        fn?: InferHookCallback<K>\n    ): boolean | number;\n    removeAllCallbacks(priority?: number): void;\n    captureFilterChain(names: readonly string[]): () => boolean;\n    currentPriority(): number | false;\n\n    readonly _engine: HookEngine;\n    readonly _diagnostics: HookEngine['_diagnostics'];\n}"
             }
           ]
         }
@@ -11721,7 +11721,7 @@
     },
     {
       "source": "app/utils/chat/tools-public.ts",
-      "apiSha256": "67ab236d9b57ee6446a8de5d5501bd52373561e58fa657fbceecc7af43fca5d6",
+      "apiSha256": "a8d8e735383acc4cedc92a36310b62c94bd840855fadd9d998a3889fa8d75163",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tools-public"
@@ -11794,7 +11794,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 110,
+              "line": 117,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolCall {\n    id: string;\n    type: 'function';\n    function: {\n        name: string;\n        arguments: string; // JSON string, parsed by consumer\n    };\n}"
             }
@@ -11808,7 +11808,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 148,
+              "line": 155,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolDefinition {\n    type: 'function';\n    function: {\n        name: string;\n        description: string;\n        parameters: import('~~/shared/chat/tool-schema').JsonSchemaObject;\n    };\n    ui?: {\n        label?: string;\n        icon?: string;\n        descriptionHint?: string;\n        defaultEnabled?: boolean;\n        category?: string;\n    };\n    runtime?: ToolRuntime;\n}"
             }
@@ -11822,7 +11822,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 122,
+              "line": 129,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolExecutionContext {\n    subject: string | null;\n    workspaceId: string | null;\n    threadId: string | null;\n    messageId: string | null;\n    callId: string;\n    requestId: string;\n    abortSignal: AbortSignal;\n}"
             }
@@ -11850,7 +11850,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 119,
+              "line": 126,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolRuntime = 'hybrid' | 'client' | 'server';"
             }
@@ -11999,7 +11999,7 @@
     },
     {
       "source": "server/hooks/hook-engine.ts",
-      "apiSha256": "d0b4b7127412ab3c61a592a6d0d2d912100bd9322c37e4437c70c8ca751ef7c2",
+      "apiSha256": "463176f1462341d748209bef68bbca0956b8e74dbbffe720c665b19c9be3e2e2",
       "runtime": "server",
       "publicPaths": [
         "~~/server/hooks/hook-engine"
@@ -12046,7 +12046,7 @@
               "source": "shared/hooks/hook-engine-core.ts",
               "line": 92,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface HookEngine {\n    addFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;\n    applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;\n\n    addAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    doAction: (name: string, ...args: unknown[]) => Promise<void>;\n    doActionSync: (name: string, ...args: unknown[]) => void;\n\n    hasFilter: (name?: string, fn?: HookFn) => boolean | number;\n    hasAction: (name?: string, fn?: HookFn) => boolean | number;\n    removeAllCallbacks: (priority?: number) => void;\n    currentPriority: () => number | false;\n\n    onceAction: (name: string, fn: HookFn, priority?: number) => () => void;\n    on: (name: string, fn: HookFn, opts?: OnOptions) => () => void;\n    off: (disposer: () => void) => void;\n\n    _diagnostics: {\n        timings: Record<string, number[]>;\n        errors: Record<string, number>;\n        callbacks(actionOrFilter?: HookKind): number;\n    };\n}"
+              "text": "export interface HookEngine {\n    addFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;\n    applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;\n\n    addAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    doAction: (name: string, ...args: unknown[]) => Promise<void>;\n    doActionSync: (name: string, ...args: unknown[]) => void;\n\n    hasFilter: (name?: string, fn?: HookFn) => boolean | number;\n    /** Read-only ownership receipt; dispatching a filter is never part of validation. */\n    captureFilterChain: (names: readonly string[]) => () => boolean;\n    hasAction: (name?: string, fn?: HookFn) => boolean | number;\n    removeAllCallbacks: (priority?: number) => void;\n    currentPriority: () => number | false;\n\n    onceAction: (name: string, fn: HookFn, priority?: number) => () => void;\n    on: (name: string, fn: HookFn, opts?: OnOptions) => () => void;\n    off: (disposer: () => void) => void;\n\n    _diagnostics: {\n        timings: Record<string, number[]>;\n        errors: Record<string, number>;\n        callbacks(actionOrFilter?: HookKind): number;\n    };\n}"
             }
           ]
         },
@@ -12517,7 +12517,7 @@
     },
     {
       "source": "shared/hooks/hook-engine-core.ts",
-      "apiSha256": "6df234210391f32df2c3bbb73f7bb856d259fae0739a86d927c7972a0161bfe6",
+      "apiSha256": "b619fa42060fd6e5bc82e6456d0d6256bf3efbf1f51d7a4cf9d3ff666f0ba4e2",
       "runtime": "shared",
       "publicPaths": [
         "~~/shared/hooks/hook-engine-core"
@@ -12539,7 +12539,7 @@
               "resolvedReturnType": "HookEngine",
               "declaration": {
                 "source": "shared/hooks/hook-engine-core.ts",
-                "line": 188,
+                "line": 190,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createHookEngine(options: HookEngineOptions = {}): HookEngine;"
               }
@@ -12548,7 +12548,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-engine-core.ts",
-              "line": 188,
+              "line": 190,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createHookEngine(options: HookEngineOptions = {}): HookEngine;"
             }
@@ -12564,7 +12564,7 @@
               "source": "shared/hooks/hook-engine-core.ts",
               "line": 92,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface HookEngine {\n    addFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;\n    applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;\n\n    addAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    doAction: (name: string, ...args: unknown[]) => Promise<void>;\n    doActionSync: (name: string, ...args: unknown[]) => void;\n\n    hasFilter: (name?: string, fn?: HookFn) => boolean | number;\n    hasAction: (name?: string, fn?: HookFn) => boolean | number;\n    removeAllCallbacks: (priority?: number) => void;\n    currentPriority: () => number | false;\n\n    onceAction: (name: string, fn: HookFn, priority?: number) => () => void;\n    on: (name: string, fn: HookFn, opts?: OnOptions) => () => void;\n    off: (disposer: () => void) => void;\n\n    _diagnostics: {\n        timings: Record<string, number[]>;\n        errors: Record<string, number>;\n        callbacks(actionOrFilter?: HookKind): number;\n    };\n}"
+              "text": "export interface HookEngine {\n    addFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;\n    applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;\n\n    addAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    doAction: (name: string, ...args: unknown[]) => Promise<void>;\n    doActionSync: (name: string, ...args: unknown[]) => void;\n\n    hasFilter: (name?: string, fn?: HookFn) => boolean | number;\n    /** Read-only ownership receipt; dispatching a filter is never part of validation. */\n    captureFilterChain: (names: readonly string[]) => () => boolean;\n    hasAction: (name?: string, fn?: HookFn) => boolean | number;\n    removeAllCallbacks: (priority?: number) => void;\n    currentPriority: () => number | false;\n\n    onceAction: (name: string, fn: HookFn, priority?: number) => () => void;\n    on: (name: string, fn: HookFn, opts?: OnOptions) => () => void;\n    off: (disposer: () => void) => void;\n\n    _diagnostics: {\n        timings: Record<string, number[]>;\n        errors: Record<string, number>;\n        callbacks(actionOrFilter?: HookKind): number;\n    };\n}"
             }
           ]
         },
@@ -12576,7 +12576,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-engine-core.ts",
-              "line": 137,
+              "line": 139,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface HookEngineErrorContext {\n    error: unknown;\n    isFilter: boolean;\n    name: string;\n}"
             }
@@ -12590,7 +12590,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-engine-core.ts",
-              "line": 143,
+              "line": 145,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface HookEngineOptions {\n    logCallbackError?: (context: HookEngineErrorContext) => void;\n    resolveOnKind?: (name: string, explicitKind: HookKind | undefined) => HookKind;\n    onOffError?: (error: unknown) => void;\n}"
             }

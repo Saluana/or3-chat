@@ -41,6 +41,8 @@ export type KnownHookKey =
     | 'ai.chat.model:filter:select'
     | 'ai.chat.messages:filter:input'
     | 'ai.chat.send:action:before'
+    | 'ai.chat.send:filter:prepare'
+    | 'ai.chat.send:filter:commit'
     | 'ai.chat.send:action:after'
     | 'ai.chat.stream:action:delta'
     | 'ai.chat.stream:action:reasoning'

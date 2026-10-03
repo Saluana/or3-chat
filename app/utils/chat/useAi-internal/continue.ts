@@ -1,6 +1,7 @@
 import { readMeasuredRequestUsage } from '~~/shared/chat/request-usage';
 import type { RequestUsage } from '~~/shared/chat/compaction';
 import { resolveThreadProjection } from '~/utils/chat/compaction/history';
+import { ChatContextAdmissionError, type ContextRequestPolicy } from '~~/shared/chat/context-budget';
 /**
  * @module app/utils/chat/useAi-internal/continue.ts
  *
@@ -47,6 +48,7 @@ import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import {
     openRouterStreamWithRetry,
     startBackgroundStream,
+    prepareOpenRouterRequest,
 } from '~/utils/chat/openrouterStream';
 import { dataUrlToBlob, fetchImageBlob } from '~/utils/chat/files';
 import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
@@ -116,6 +118,7 @@ export type ContinueMessageContext = {
     getSystemPromptContent: () => Promise<string | null>;
     useAiSettings: () => { settings: Ref<ChatSettings | undefined> };
     resolveInputTokenBudget?: (modelId: string) => number | Promise<number>;
+    resolveContextPolicy?: (modelId: string, signal: AbortSignal) => Promise<ContextRequestPolicy>;
     resetStream: () => void;
     backgroundStreamingAllowed?: boolean;
     workspaceId?: string;
@@ -235,6 +238,9 @@ export async function continueMessageImpl(
     let innerStreamLifecycleStarted = false;
     let backgroundAdmissionStarted = false;
     let stopHeartbeat: (() => void) | undefined;
+    continuationAbortController = new AbortController();
+    request.abortController = continuationAbortController;
+    ctx.abortController.value = continuationAbortController;
 
     try {
         const target = (await originDb.messages.get(messageId)) as StoredMessage | undefined;
@@ -416,7 +422,8 @@ export async function continueMessageImpl(
             modelOverride ||
             ctx.defaultModelId;
         if (!ownsThread()) return;
-        orMessages = await enforceOpenRouterMessageTokenBudget(
+        const contextPolicy = await ctx.resolveContextPolicy?.(modelId, continuationAbortController.signal);
+        if (!contextPolicy) orMessages = await enforceOpenRouterMessageTokenBudget(
             orMessages,
             (await ctx.resolveInputTokenBudget?.(modelId)) ??
                 DEFAULT_MAX_INPUT_TOKENS
@@ -434,13 +441,15 @@ export async function continueMessageImpl(
             modalities.length === 1 &&
             modalities[0] === 'text' &&
             Boolean(ctx.workspaceId && ctx.userId && ctx.attachBackgroundJob);
+        if (contextPolicy) await prepareOpenRouterRequest({ model: modelId, orMessages,
+            modalities, contextPolicy, signal: continuationAbortController.signal });
+        if (!ownsThread()) return;
 
         ctx.streamAcc.reset();
         const newStreamId = newId();
         ctx.streamId.value = newStreamId;
         request.phase.value = 'streaming';
         ctx.aborted.value = false;
-        continuationAbortController = new AbortController();
         request.abortController = continuationAbortController;
         ctx.abortController.value = continuationAbortController;
 
@@ -549,6 +558,7 @@ export async function continueMessageImpl(
                 model: modelId,
                 orMessages: orMessages as Parameters<typeof startBackgroundStream>[0]['orMessages'],
                 modalities,
+                contextPolicy,
                 threadId: originThreadId,
                 messageId: target.id,
                 admissionId: backgroundAdmissionId,
@@ -643,6 +653,7 @@ export async function continueMessageImpl(
             model: modelId,
             orMessages: orMessages as Parameters<typeof openRouterStreamWithRetry>[0]['orMessages'],
             modalities,
+            contextPolicy,
             threadId: ctx.threadIdRef.value,
             messageId: target.id,
             signal: ctx.abortController.value.signal,
@@ -805,7 +816,7 @@ export async function continueMessageImpl(
             e instanceof Error ? e : new Error(String(e));
         const stopped =
             request.cancelled ||
-            continuationAbortController?.signal.aborted === true;
+            continuationAbortController.signal.aborted;
         if (
             stopped &&
             request.stopConfirmation &&
@@ -817,6 +828,7 @@ export async function continueMessageImpl(
         const finalization = await finalizeRequest(request, {
             outcome: stopped ? 'aborted' : 'failed',
             error: stopped ? undefined : setupError,
+            failureReason: e instanceof ChatContextAdmissionError ? e.code : undefined,
             messageError: stopped ? 'stopped' : 'stream_interrupted',
             generationState: stopped ? 'aborted' : 'interrupted',
             persistence:

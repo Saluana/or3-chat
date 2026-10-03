@@ -110,7 +110,7 @@
                     "category": "Reference",
                     "categoryOrder": 2,
                     "order": 3,
-                    "summary": "This reference covers the host application engine. useHooks() returns a TypedHookEngine; you normally do not create another engine. Installable packages use the SDK, whose permissions and runtime limits are separate."
+                    "summary": "Host hook types, filter ownership, pure native preparation and acknowledged delegated commit; SDK permissions and runtime limits remain separate."
                 },
                 {
                     "name": "hook-catalog.md",
@@ -806,7 +806,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Preserve durable sends, streaming ownership, tool authority, tab sessions, and composer drafts."
+                    "summary": "Preserve durable sends, full-context native admission, captured tool-loop policy, tab sessions and composer drafts."
                 },
                 {
                     "name": "ai-preferences.md",

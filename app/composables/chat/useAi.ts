@@ -1,5 +1,8 @@
 import { presentError, errorDiagnostics } from '~~/shared/errors';
 import { resolveThreadProjection } from '~/utils/chat/compaction/history';
+import { projectTranscriptForOpenRouter, storedMessagesToCanonicalTranscript } from '~/utils/chat/transcript';
+import { ChatContextAdmissionError, type ContextRequestPolicy } from '~~/shared/chat/context-budget';
+import type { ChatSendPreparation, ChatSendCommit } from '~~/shared/hooks/hook-domain-types';
 /**
  * @module app/composables/chat/useAi.ts
  *
@@ -36,7 +39,7 @@ import {
 import { useToast, useAppConfig, useRuntimeConfig } from '#imports';
 import { nowSec, newId, getWriteTxTableNames } from '~/db/util';
 import { type Message } from '~/db';
-import { getDb, getActiveWorkspaceId, type Or3DB } from '~/db/client';
+import { getDb, getActiveWorkspaceId, getWorkspaceGeneration, type Or3DB } from '~/db/client';
 import { serializeFileHashes } from '~/db/files-util';
 import { normalizeFileUrl } from '~/utils/chat/useAi-internal/files';
 import {
@@ -78,11 +81,11 @@ import {
     deriveMessageContent,
     shouldKeepAssistantMessage,
     getChatModalities,
-    resolveChatInputTokenBudget,
 } from '~/utils/chat/messages';
 // getTextFromContent removed for UI messages; raw messages maintain original parts if needed
 import {
     startBackgroundStream,
+    prepareOpenRouterRequest,
     abortBackgroundJob,
     abortBackgroundAdmission,
     pollJobStatus,
@@ -92,10 +95,8 @@ import {
     type OpenRouterReasoningConfig,
 } from '../../utils/chat/openrouterStream';
 import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
-import type { OpenRouterModel } from '~~/shared/openrouter/types';
 import {
     appendModelVariant,
-    stripModelVariantSuffix,
 } from '~~/shared/openrouter/model-variants';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { inferMimeFromUrl } from '~/utils/chat/files';
@@ -136,7 +137,6 @@ import {
     resolveSystemPromptText,
     buildSystemPromptMessage,
     buildOpenRouterMessagesForSend,
-    enforceOpenRouterMessageTokenBudget,
     retryMessageImpl,
     continueMessageImpl,
     makeAssistantPersister,
@@ -251,44 +251,6 @@ export function useChat(
     // from an async send handler triggers Vue's "inject() can only be used
     // inside setup()" warning.
     const toast = useToast();
-    const unresolvedModelIds = new Set<string>();
-    async function resolveModelMetadata(
-        selectedModelId: string
-    ): Promise<OpenRouterModel | undefined> {
-        const modelId = stripModelVariantSuffix(
-            stripThinkingSuffix(selectedModelId)
-        );
-        const { catalog, favoriteModels, fetchModels } = useModelStore();
-        const matches = (candidate: OpenRouterModel) =>
-            candidate.id === modelId || candidate.canonical_slug === modelId;
-        const lookup = () =>
-            catalog.value.find(matches) ?? favoriteModels.value.find(matches);
-        const hasContext = (candidate: OpenRouterModel | undefined) =>
-            [
-                candidate?.top_provider?.context_length,
-                candidate?.context_length,
-            ].some(
-                (value) =>
-                    typeof value === 'number' &&
-                    Number.isFinite(value) &&
-                    value > 0
-            );
-
-        let metadata = lookup();
-        if (hasContext(metadata) || unresolvedModelIds.has(modelId)) return metadata;
-        try {
-            await fetchModels();
-            metadata = lookup();
-            if (!hasContext(metadata)) {
-                await fetchModels({ force: true });
-                metadata = lookup();
-            }
-            if (!hasContext(metadata)) unresolvedModelIds.add(modelId);
-        } catch {
-            // Keep the conservative fallback if catalog metadata is unavailable.
-        }
-        return metadata;
-    }
     const appConfig = useAppConfig() as {
         errors?: { showAbortInfo?: boolean };
     };
@@ -1790,19 +1752,20 @@ export function useChat(
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : String(error);
-            result = {
-                status: 'failed',
+            const stopped = requestScope.cancelled || (error instanceof Error && error.name === 'AbortError');
+            result = stopped ? { status: 'aborted', requestId, reason: 'aborted' } : {
+                status: error instanceof ChatContextAdmissionError && !requestScope.userMessageId ? 'rejected' : 'failed',
                 requestId,
                 reason:
-                    error instanceof ToolIterationLimitError
+                    error instanceof ChatContextAdmissionError ? error.code : error instanceof ToolIterationLimitError
                         ? 'tool_iteration_limit'
                         : 'stream_error',
                 error: message,
             };
-            if (import.meta.dev) {
+            if (!stopped && import.meta.dev) {
                 console.warn('[useChat] sendMessage threw', errorDiagnostics(error));
             }
-            reportError(
+            if (!stopped) reportError(
                 err('ERR_INTERNAL', message || 'Failed to send message', {
                     severity: 'error',
                     tags: { domain: 'chat', stage: 'send' },
@@ -1810,6 +1773,7 @@ export function useChat(
                 { toast: true }
             );
         } finally {
+            if (result.status !== 'detached') requestScope.abortController?.abort();
             if (!requestScope.finalization && result.status !== 'detached') {
                 const finalization = await finalizeRequest(requestScope, {
                     outcome:
@@ -1870,6 +1834,32 @@ export function useChat(
             content = contentOrParams.content;
             sendMessagesParams = contentOrParams;
         }
+
+        // Detach user selections before any plugin/catalog/media await.
+        sendMessagesParams = { ...sendMessagesParams,
+            files: sendMessagesParams.files?.map((file) => ({ ...file })),
+            file_hashes: sendMessagesParams.file_hashes?.slice(),
+            context_hashes: sendMessagesParams.context_hashes?.slice(),
+            extraTextParts: sendMessagesParams.extraTextParts?.slice(),
+            historyOverride: sendMessagesParams.historyOverride ? structuredClone(sendMessagesParams.historyOverride) : undefined,
+            editorDoc: sendMessagesParams.editorDoc ? structuredClone(sendMessagesParams.editorDoc) : undefined,
+        };
+        const workspaceGeneration = getWorkspaceGeneration();
+        const preparationHookNames = ['ui.chat.message:filter:outgoing', 'ai.chat.model:filter:select',
+            'ai.chat.messages:filter:input', 'ai.chat.send:filter:prepare', 'ai.chat.send:filter:commit',
+            'ai.chat.messages:filter:before_send'];
+        const ownsFilterChain = hooks.captureFilterChain(preparationHookNames);
+        const preparationErrors = preparationHookNames.map((name) => hooks._diagnostics.errors[name] ?? 0);
+        requestScope.abortController ??= new AbortController();
+        abortController.value = requestScope.abortController;
+        const preparationSignal = requestScope.abortController.signal;
+        const ownsPreparation = () => !isRequestCancelled(requestScope) && !preparationSignal.aborted
+            && requestScope.ownsView() && getDb() === requestScope.originDb
+            && getWorkspaceGeneration() === workspaceGeneration;
+        const capturedPreference = await useAiSettings().captureContextPreference();
+        if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
+        const newPromptSelection = pendingPromptIdRef.value || DEFAULT_PROMPT_SELECTION;
+        const masterPrompt = useAiSettings().settings.value.masterSystemPrompt;
 
         const hasKey = Boolean(effectiveApiKey.value) || hasInstanceKey.value;
         if (!hasKey) {
@@ -1957,8 +1947,6 @@ export function useChat(
             return { status: 'rejected', requestId, reason: 'client_limit' };
 
         if (!requestScope.threadId) {
-            const effectivePromptId =
-                pendingPromptIdRef.value || DEFAULT_PROMPT_SELECTION;
             try {
                 const { settings } = useAiSettings();
                 const settingsValue = settings.value as
@@ -2011,61 +1999,12 @@ export function useChat(
             } catch {
                 /* intentionally empty */
             }
-            const newThread = await createThreadInDb(
-                requestScope.originDb,
-                {
-                    title:
-                        content.split(' ').slice(0, 6).join(' ') ||
-                        'New Thread',
-                    last_message_at: nowSec(),
-                    parent_thread_id: null,
-                    system_prompt_id: effectivePromptId || null,
-                },
-                {
-                    hooks,
-                    limits: runtimeConfig.public.limits,
-                }
-            );
-            if (isRequestCancelled(requestScope)) {
-                return { status: 'aborted', requestId, reason: 'aborted' };
-            }
-            requestScope.threadId = newThread.id;
-            threadIdRef.value = newThread.id;
-            // Bind thread to active pane immediately (before first user message hook) if multi-pane present.
-            try {
-                const mpApi = (globalThis as GlobalWithPaneApi)
-                    .__or3MultiPaneApi;
-                if (mpApi?.panes.value && mpApi.activePaneIndex.value >= 0) {
-                    const pane = mpApi.panes.value[mpApi.activePaneIndex.value];
-                    if (pane && pane.mode === 'chat' && !pane.threadId) {
-                        if (typeof mpApi.setPaneThread === 'function') {
-                            try {
-                                await mpApi.setPaneThread(
-                                    mpApi.activePaneIndex.value,
-                                    newThread.id
-                                );
-                            } catch {
-                                pane.threadId = newThread.id;
-                            }
-                        } else {
-                            pane.threadId = newThread.id;
-                        }
-                    }
-                }
-            } catch {
-                /* intentionally empty */
-            }
         } // END create-new-thread block
 
-        const requestThreadId = requestScope.threadId;
-        if (!requestThreadId) {
-            return {
-                status: 'failed',
-                requestId,
-                reason: 'stream_error',
-                error: 'No chat thread is available for this request.',
-            };
-        }
+        const preparationThreadId = requestScope.threadId;
+        // Reserve the actual new-thread ID, reused by the existing creator
+        // after admission. No assistant IDs or saved-row hooks run here.
+        const admissionThreadId = preparationThreadId ?? newId();
 
         if (
             tailAssistant.value &&
@@ -2155,7 +2094,7 @@ export function useChat(
         const hydratedFiles = await Promise.all(
             Array.isArray(files) ? files.map(normalizeFileUrl) : []
         );
-        if (isRequestCancelled(requestScope) || threadIdRef.value !== requestThreadId) {
+        if (isRequestCancelled(requestScope) || threadIdRef.value !== preparationThreadId) {
             return { status: 'aborted', requestId, reason: 'aborted' };
         }
 
@@ -2172,27 +2111,127 @@ export function useChat(
                 (t): t is string => typeof t === 'string' && t.trim() !== ''
             )
             .join('\n\n');
-        // Recheck the persisted boundary for every admission, even if this view's
-        // history cache is warm. A partial sync must not create a new turn without
-        // the compacted summary, or resume an incomplete reference lineage.
-        const admissionThread = await requestScope.originDb.threads.get(requestThreadId);
-        if (isRequestCancelled(requestScope) || !requestScope.ownsView()) {
-            return { status: 'aborted', requestId, reason: 'aborted' };
-        }
-        if (admissionThread?.branch_mode === 'compacted' || admissionThread?.branch_mode === 'reference') {
+        let canonicalHistory = sendMessagesParams.historyOverride ?? rawMessages.value.slice();
+        let sourceFingerprint: string | undefined;
+        if (preparationThreadId) {
             try {
-                await resolveThreadProjection(requestThreadId, requestScope.originDb);
+                const projection = await resolveThreadProjection(preparationThreadId, requestScope.originDb);
+                sourceFingerprint = JSON.stringify(projection);
+                if (!sendMessagesParams.historyOverride) canonicalHistory = projectTranscriptForOpenRouter(
+                    storedMessagesToCanonicalTranscript(projection.messages));
             } catch (error) {
-                if (isRequestCancelled(requestScope) || !requestScope.ownsView()) {
-                    return { status: 'aborted', requestId, reason: 'aborted' };
-                }
+                if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
                 toast.add({ title: 'Conversation unavailable', description: presentError(error).message, color: 'warning' });
                 return { status: 'rejected', requestId, reason: 'unavailable' };
             }
-            if (isRequestCancelled(requestScope) || !requestScope.ownsView()) {
+        }
+        const startedAt = Date.now();
+        const modelId = await hooks.applyFilters('ai.chat.model:filter:select', model);
+        const readiness = await useModelStore().resolveContextModel(modelId, { signal: preparationSignal });
+        if (!readiness.ok) throw new ChatContextAdmissionError(readiness);
+        const contextPolicy: ContextRequestPolicy = Object.freeze({ model: readiness.metadata,
+            userMaxContextTokens: capturedPreference.maxContextTokens, source: readiness.source,
+            requestedCompletionTokens: sendMessagesParams.maxCompletionTokens });
+        const systemMessage = await buildSystemPromptMessage({ threadId: preparationThreadId,
+            promptSelection: newPromptSelection, activePromptContent: activePromptContent.value,
+            masterPrompt });
+        const candidateUser: ChatMessage = { role: 'user', content: parts,
+            file_hashes: file_hashes.length ? serializeFileHashes(file_hashes) : undefined };
+        const messagesWithSystemRaw = [...canonicalHistory, candidateUser];
+        if (systemMessage) messagesWithSystemRaw.unshift(systemMessage);
+        const effectiveMessages = await hooks.applyFilters('ai.chat.messages:filter:input', messagesWithSystemRaw);
+        const sanitizedEffectiveMessages = (Array.isArray(effectiveMessages) ? effectiveMessages : []).filter(shouldKeepAssistantMessage);
+        let orMessages = await buildOpenRouterMessagesForSend({ effectiveMessages: sanitizedEffectiveMessages,
+            assistantHashes, prevAssistantId: prevAssistant?.id, contextHashes: context_hashes,
+            fileHashes: Array.isArray(file_hashes) ? file_hashes : [], maxImageInputs: 5, imageInclusionPolicy: 'all' });
+        const preparation: ChatSendPreparation = { requestId, workspaceId: requestScope.workspaceId,
+            workspaceGeneration, model: modelId, messages: JSON.parse(JSON.stringify(orMessages)) as ChatSendPreparation['messages'],
+            editorDoc: sendMessagesParams.editorDoc, signal: preparationSignal };
+        const prepared = await hooks.applyFilters('ai.chat.send:filter:prepare', preparation);
+        if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
+        if (!ownsFilterChain() || preparationHookNames.some((name, index) => (hooks._diagnostics.errors[name] ?? 0) > preparationErrors[index]!))
+            return { status: 'rejected', requestId, reason: 'unavailable', error: 'Request filters changed or failed during preparation. Retry the request.' };
+        if (prepared.error) return { status: 'rejected', requestId, reason: 'unavailable', error: prepared.error.message };
+        if (prepared.requestId !== requestId || prepared.workspaceId !== requestScope.workspaceId
+            || prepared.workspaceGeneration !== workspaceGeneration || prepared.model !== modelId
+            || prepared.signal !== preparationSignal || !Array.isArray(prepared.messages))
+            return { status: 'rejected', requestId, reason: 'unavailable', error: 'Request preparation changed ownership. Retry the request.' };
+        orMessages = JSON.parse(JSON.stringify(prepared.messages)) as OpenRouterMessage[];
+        if (!prepared.delegation && !orMessages.length)
+            return { status: 'rejected', requestId, reason: 'empty_context', error: 'No model input remained after preparation.' };
+        const modalities = getChatModalities(modelId);
+        const toolRegistry = useToolRegistry();
+        const budgetModelMeta = catalog.value.find((entry) => entry.id === readiness.modelId)
+            ?? favoriteModels.value.find((entry) => entry.id === readiness.modelId);
+        const modelSupportsTools = !budgetModelMeta?.supported_parameters || budgetModelMeta.supported_parameters.includes('tools');
+        const enabledToolDefs = JSON.parse(JSON.stringify(modelSupportsTools ? toolRegistry.getEnabledDefinitions({
+            workspaceId: requestScope.workspaceId, threadId: admissionThreadId }) : [])) as import('~/utils/chat/types').ToolDefinition[];
+        const foregroundToolDefs = enabledToolDefs.filter((tool) => tool.runtime !== 'server');
+        const hasBrowserTools = enabledToolDefs.some((tool) => tool.runtime === 'client');
+        const browserToolBridgeAvailable = !hasBrowserTools || !backgroundStreamingAllowed.value
+            || await isBackgroundClientToolBridgeAvailable();
+        const allowBackgroundStreaming = backgroundStreamingAllowed.value && browserToolBridgeAvailable
+            && modalities.length === 1 && modalities[0] === 'text';
+        if (!prepared.delegation) await prepareOpenRouterRequest({ model: modelId, orMessages, modalities, reasoning,
+            tools: (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs).length
+                ? (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs) : undefined,
+            contextPolicy, signal: preparationSignal });
+        if (sourceFingerprint && JSON.stringify(await resolveThreadProjection(preparationThreadId!, requestScope.originDb)) !== sourceFingerprint)
+            return { status: 'rejected', requestId, reason: 'unavailable', error: 'Conversation changed during preparation. Retry the request.' };
+        if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
+        if (!ownsFilterChain() || useAiSettings().settings.value.masterSystemPrompt !== masterPrompt
+            || (!preparationThreadId && (pendingPromptIdRef.value || DEFAULT_PROMPT_SELECTION) !== newPromptSelection)
+            || JSON.stringify(modelSupportsTools ? toolRegistry.getEnabledDefinitions({ workspaceId: requestScope.workspaceId,
+                threadId: admissionThreadId }) : []) !== JSON.stringify(enabledToolDefs))
+            return { status: 'rejected', requestId, reason: 'unavailable', error: 'Request configuration changed during preparation. Retry the request.' };
+        if (!requestScope.threadId) {
+            const newThread = await createThreadInDb(
+                requestScope.originDb,
+                {
+                    id: admissionThreadId,
+                    title:
+                        content.split(' ').slice(0, 6).join(' ') ||
+                        'New Thread',
+                    last_message_at: nowSec(),
+                    parent_thread_id: null,
+                    system_prompt_id: newPromptSelection || null,
+                },
+                {
+                    hooks,
+                    limits: runtimeConfig.public.limits,
+                }
+            );
+            if (isRequestCancelled(requestScope)) {
                 return { status: 'aborted', requestId, reason: 'aborted' };
             }
+            requestScope.threadId = newThread.id;
+            threadIdRef.value = newThread.id;
+            // Bind thread to active pane immediately (before first user message hook) if multi-pane present.
+            try {
+                const mpApi = (globalThis as GlobalWithPaneApi)
+                    .__or3MultiPaneApi;
+                if (mpApi?.panes.value && mpApi.activePaneIndex.value >= 0) {
+                    const pane = mpApi.panes.value[mpApi.activePaneIndex.value];
+                    if (pane && pane.mode === 'chat' && !pane.threadId) {
+                        if (typeof mpApi.setPaneThread === 'function') {
+                            try {
+                                await mpApi.setPaneThread(
+                                    mpApi.activePaneIndex.value,
+                                    newThread.id
+                                );
+                            } catch {
+                                pane.threadId = newThread.id;
+                            }
+                        } else {
+                            pane.threadId = newThread.id;
+                        }
+                    }
+                }
+            } catch {
+                /* intentionally empty */
+            }
         }
+        const requestThreadId = requestScope.threadId!;
         const nextUserMessageId = newId();
         const userDbMsg = await appendMessageToDb(requestScope.originDb, {
             id: nextUserMessageId,
@@ -2265,99 +2304,7 @@ export function useChat(
         let terminalResult: SendResult | undefined;
         let stopForegroundHeartbeat: (() => void) | undefined;
         try {
-            const startedAt = Date.now();
-            const modelIdPromise = hooks.applyFilters(
-                'ai.chat.model:filter:select',
-                model
-            );
-            const historySyncPromise = ensureHistorySynced();
-
-            let masterPrompt = '';
-            try {
-                const { settings } = useAiSettings();
-                const settingsValue = settings.value as
-                    | ChatSettings
-                    | undefined;
-                masterPrompt = settingsValue?.masterSystemPrompt ?? '';
-            } catch {
-                masterPrompt = '';
-            }
-            const systemMessagePromise = buildSystemPromptMessage({
-                threadId: requestThreadId,
-                activePromptContent: activePromptContent.value,
-                masterPrompt,
-            });
-            const [modelId] = await Promise.all([
-                modelIdPromise,
-                historySyncPromise,
-            ]);
             currentModelId = modelId;
-            const systemMessage = await systemMessagePromise;
-            if (
-                isRequestCancelled(requestScope) ||
-                threadIdRef.value !== requestThreadId
-            ) {
-                return {
-                    status: 'aborted',
-                    requestId,
-                    reason: 'aborted',
-                    userMessageId: userDbMsg.id,
-                };
-            }
-
-            const messagesWithSystemRaw = sendMessagesParams.historyOverride
-                ? [...sendMessagesParams.historyOverride, rawUser]
-                : [...rawMessages.value];
-            if (systemMessage) {
-                messagesWithSystemRaw.unshift(systemMessage);
-            }
-
-            const effectiveMessages = await hooks.applyFilters(
-                'ai.chat.messages:filter:input',
-                messagesWithSystemRaw
-            );
-
-            // Remove prior empty assistant placeholder messages
-            const sanitizedEffectiveMessages = (
-                Array.isArray(effectiveMessages) ? effectiveMessages : []
-            ).filter(shouldKeepAssistantMessage);
-
-            const budgetModelMeta = await resolveModelMetadata(modelId);
-            const maxInputTokens = resolveChatInputTokenBudget(budgetModelMeta);
-
-            let orMessages = await buildOpenRouterMessagesForSend({
-                effectiveMessages: sanitizedEffectiveMessages,
-                assistantHashes,
-                prevAssistantId: prevAssistant?.id,
-                contextHashes: context_hashes,
-                fileHashes: Array.isArray(file_hashes) ? file_hashes : [],
-                maxImageInputs: 5,
-                imageInclusionPolicy: 'all',
-                maxInputTokens,
-            });
-            if (
-                isRequestCancelled(requestScope) ||
-                threadIdRef.value !== requestThreadId
-            ) {
-                return {
-                    status: 'aborted',
-                    requestId,
-                    reason: 'aborted',
-                    userMessageId: userDbMsg.id,
-                };
-            }
-            if (orMessages.length === 0) {
-                return {
-                    status: 'failed',
-                    requestId,
-                    reason: 'empty_context',
-                    error: 'No model input remained after message preparation.',
-                    userMessageId: userDbMsg.id,
-                };
-            }
-
-            // modalities controls OUTPUT format, not input capability
-            const modalities = getChatModalities(modelId);
 
             const newStreamId = newId();
             requestScope.streamId = newStreamId;
@@ -2424,23 +2371,10 @@ export function useChat(
                     : undefined,
             });
 
-            const toolRegistry = useToolRegistry();
-            const modelSupportsTools = !budgetModelMeta?.supported_parameters
-                || budgetModelMeta.supported_parameters.includes('tools');
-            const enabledToolDefs = modelSupportsTools ? toolRegistry.getEnabledDefinitions({
-                workspaceId: requestScope.workspaceId,
-                threadId: requestThreadId,
-            }) : [];
-            const foregroundToolDefs = enabledToolDefs.filter(
-                (tool) => tool.runtime !== 'server'
-            );
-
             // Track tool calls across all loop iterations (persists state)
             const activeToolCalls = new Map<string, ToolCallInfo>();
 
             aborted.value = false;
-            requestScope.abortController = null;
-            abortController.value = null;
             backgroundJobId.value = null;
             backgroundJobMode.value = 'none';
             backgroundJobInfo.value = null;
@@ -2465,13 +2399,33 @@ export function useChat(
                     orMessages = candidate;
                 }
             }
-            orMessages = await enforceOpenRouterMessageTokenBudget(
-                orMessages,
-                maxInputTokens
-            );
+            if (prepared.delegation) {
+                const expectedDelegation = { ...prepared.delegation };
+                const commit: ChatSendCommit = { requestId, workspaceId: requestScope.workspaceId,
+                    workspaceGeneration, signal: preparationSignal, delegation: { ...expectedDelegation },
+                    assistant: { id: assistantDbMsg.id, threadId: requestThreadId, streamId: newStreamId }, status: 'pending' };
+                const acknowledgement = await hooks.applyFilters('ai.chat.send:filter:commit', commit);
+                if (!ownsPreparation()) throw new DOMException('Chat request cancelled', 'AbortError');
+                if (acknowledgement.status !== 'handled'
+                    || acknowledgement.requestId !== requestId
+                    || acknowledgement.workspaceId !== requestScope.workspaceId
+                    || acknowledgement.workspaceGeneration !== workspaceGeneration
+                    || acknowledgement.signal !== preparationSignal
+                    // A runtime filter can return an incomplete acknowledgement.
+                    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+                    || acknowledgement.assistant?.id !== assistantDbMsg.id
+                    || acknowledgement.assistant.threadId !== requestThreadId
+                    || acknowledgement.assistant.streamId !== newStreamId
+                    || acknowledgement.delegation?.pluginId !== expectedDelegation.pluginId
+                    || acknowledgement.delegation.generation !== expectedDelegation.generation
+                    || acknowledgement.delegation.intent !== expectedDelegation.intent) {
+                    consumeChatSendHandled();
+                    throw new Error(acknowledgement.error?.message ?? 'The delegated request was not acknowledged. Retry it explicitly.');
+                }
+            }
 
             // Check if a workflow is handling this request - skip AI call
-            if (consumeChatSendHandled()) {
+            if (consumeChatSendHandled() || prepared.delegation) {
                 // Seed UI with assistant placeholder so workflow state can render immediately
                 const workflowAssistant: ChatMessage = {
                     role: 'assistant',
@@ -2542,18 +2496,13 @@ export function useChat(
                 };
             }
 
-            const hasBrowserTools = enabledToolDefs.some(
-                (tool) => tool.runtime === 'client'
-            );
-            const browserToolBridgeAvailable =
-                !hasBrowserTools ||
-                !backgroundStreamingAllowed.value ||
-                await isBackgroundClientToolBridgeAvailable();
-            const allowBackgroundStreaming =
-                backgroundStreamingAllowed.value &&
-                browserToolBridgeAvailable &&
-                modalities.length === 1 &&
-                modalities[0] === 'text';
+            // Old side-effecting final filters retain their once-only post-write
+            // order. Their final native body is still admitted before inference;
+            // universal zero-write admission requires migration to pure prepare.
+            await prepareOpenRouterRequest({ model: modelId, orMessages, modalities, reasoning,
+                tools: (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs).length
+                    ? (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs) : undefined,
+                contextPolicy, signal: preparationSignal });
             if (isRequestCancelled(requestScope) || !ownsCurrentView(requestScope)) {
                 reportFinalization(await finalizeRequest(requestScope, {
                     outcome: 'aborted', messageError: 'stopped', deleteEmpty: true,
@@ -2592,7 +2541,7 @@ export function useChat(
 
                 // Background admission can block before a job ID exists. Keep it
                 // cancellable through the same request-scoped controller as foreground.
-                requestScope.abortController = new AbortController();
+                requestScope.abortController ??= new AbortController();
                 abortController.value = requestScope.abortController;
 
                 // Stable per-send admission identity. Persisted on the request
@@ -2653,6 +2602,7 @@ export function useChat(
                             typeof startBackgroundStream
                         >[0]['orMessages'],
                         modalities,
+                        contextPolicy,
                         threadId: requestThreadId,
                         messageId: assistantDbMsg.id,
                         admissionId: backgroundAdmissionId,
@@ -2875,7 +2825,7 @@ export function useChat(
                 };
             }
 
-            requestScope.abortController = new AbortController();
+            requestScope.abortController ??= new AbortController();
             abortController.value = requestScope.abortController;
 
             stopForegroundHeartbeat = startForegroundGenerationHeartbeat(
@@ -2888,6 +2838,7 @@ export function useChat(
                 orMessages,
                 modalities,
                 reasoning,
+                contextPolicy,
                 tools:
                     foregroundToolDefs.length > 0
                         ? foregroundToolDefs
@@ -3096,9 +3047,8 @@ export function useChat(
                     status: 'failed',
                     requestId,
                     reason:
-                        err instanceof ToolIterationLimitError
-                            ? 'tool_iteration_limit'
-                            : 'stream_error',
+                        err instanceof ChatContextAdmissionError ? err.code
+                            : err instanceof ToolIterationLimitError ? 'tool_iteration_limit' : 'stream_error',
                     error: visibleError.message,
                     userMessageId: userDbMsg.id,
                     assistantMessageId: requestScope.assistantMessageId,
@@ -3233,10 +3183,13 @@ export function useChat(
                     defaultModelId: DEFAULT_AI_MODEL,
                     getSystemPromptContent,
                     useAiSettings,
-                    resolveInputTokenBudget: async (selectedModelId: string) =>
-                        resolveChatInputTokenBudget(
-                            await resolveModelMetadata(selectedModelId)
-                        ),
+                    resolveContextPolicy: async (selectedModelId, signal) => {
+                        const preference = await useAiSettings().captureContextPreference();
+                        const model = await useModelStore().resolveContextModel(selectedModelId, { signal });
+                        if (!model.ok) throw new ChatContextAdmissionError(model);
+                        return Object.freeze({ model: model.metadata, source: model.source,
+                            userMaxContextTokens: preference.maxContextTokens });
+                    },
                     backgroundStreamingAllowed:
                         backgroundStreamingAllowed.value,
                     workspaceId: request.workspaceId,

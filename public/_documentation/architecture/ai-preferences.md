@@ -10,4 +10,11 @@ Clear the field and save to restore Use model limit. Reset to defaults also clea
 
 The persisted setting is `maxContextTokens: number | null`. This is a context-window preference, separate from the provider completion/output parameter. Capacity comes from advertised model metadata; occupancy/token usage can be estimated and must not be presented as authoritative capacity.
 
-**Current implementation boundary:** Dormant Dashboard handlers, KV persistence and immutable preference capture are implemented; the unenforced control is hidden. Native foreground/background/reconnect admission consumption is still pending; saving this control does not yet replace the native fallback, reply reserve or history trimming. The final meter and independent server admission also remain pending. See [chat lifecycle](/documentation/architecture/chat-lifecycle) and [model catalog](/documentation/auth/models-service) for those boundaries.
+**Current implementation boundary:** Dashboard handlers, KV persistence and
+immutable preference capture are implemented. Native initial send, retry,
+continuation and foreground tool iterations apply the captured value without
+fallback capacity, reply reserves or automatic trimming. The control remains
+hidden while independent server admission, background reconnect and the final
+meter are pending. A settings change applies to the next generation, not an
+already admitted foreground loop. See [chat lifecycle](/documentation/architecture/chat-lifecycle)
+and [model catalog](/documentation/auth/models-service) for those boundaries.

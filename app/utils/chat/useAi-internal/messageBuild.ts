@@ -57,6 +57,8 @@ async function getOpenRouterBuildModule(): Promise<OpenRouterBuildModule> {
 export type ResolveSystemPromptParams = {
     threadId: string | null | undefined;
     activePromptContent: unknown | null | undefined;
+    /** Saved selection for a new conversation, before a thread row exists. */
+    promptSelection?: string | null;
 };
 
 /**
@@ -68,16 +70,16 @@ export type ResolveSystemPromptParams = {
 export async function resolveSystemPromptText(
     params: ResolveSystemPromptParams
 ): Promise<string | null> {
-    return (await resolveThreadPrompt(params.threadId)).text;
+    return (await resolveThreadPrompt(params.threadId, params.promptSelection)).text;
 }
 
-async function resolveThreadPrompt(threadId: string | null | undefined): Promise<{
+async function resolveThreadPrompt(threadId: string | null | undefined, promptSelection?: string | null): Promise<{
     disabled: boolean;
     text: string | null;
 }> {
-    if (!threadId) return { disabled: false, text: null };
+    if (!threadId && promptSelection === undefined) return { disabled: false, text: null };
     try {
-        const selection = await getThreadSystemPrompt(threadId);
+        const selection = threadId ? await getThreadSystemPrompt(threadId) : promptSelection;
         if (selection === DISABLED_PROMPT_SELECTION)
             return { disabled: true, text: null };
         const promptId =
@@ -117,7 +119,7 @@ export type BuildSystemPromptParams = ResolveSystemPromptParams & {
 export async function buildSystemPromptMessage(
     params: BuildSystemPromptParams
 ): Promise<ChatMessage | null> {
-    const resolved = await resolveThreadPrompt(params.threadId);
+    const resolved = await resolveThreadPrompt(params.threadId, params.promptSelection);
     if (resolved.disabled) return null;
     const threadSystemText = resolved.text;
     let finalSystem: string | null = null;

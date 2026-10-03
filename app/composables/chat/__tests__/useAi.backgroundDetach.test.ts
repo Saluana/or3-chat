@@ -16,6 +16,9 @@ const fetchModelsMock = vi.fn(async (options?: { force?: boolean }) => {
     return catalogModelsRef.value;
 });
 const catalogModelsRef = ref<any[]>([{ id: 'test-model' }]);
+const resolveContextModelMock = vi.fn(async (selectedModelId: string) => ({ ok: true as const,
+    modelId: selectedModelId, selectedModelId, source: 'openrouter-live' as const,
+    metadata: { context_length: 1_048_576 } }));
 const appendMessageMock = vi.fn();
 const upsertMessageMock = vi.fn();
 const hookOnMock = vi.fn();
@@ -74,6 +77,7 @@ vi.mock('#imports', () => ({
         off: vi.fn(),
         doAction: hookDoActionMock,
         applyFilters: hookApplyFiltersMock,
+        captureFilterChain: () => () => true,
         _diagnostics: { errors: {} as Record<string, number> },
     }),
 }));
@@ -99,6 +103,7 @@ vi.mock('~/db', () => ({
 vi.mock('~/db/client', () => ({
     getDb: () => activeDb,
     getActiveWorkspaceId: () => null,
+    getWorkspaceGeneration: () => 0,
 }));
 
 const dbMock = {
@@ -112,6 +117,8 @@ const dbMock = {
         }),
     },
     messages: {
+        where: () => ({ equals: (threadId: string) => ({ toArray: async () =>
+            [...messageStore.values()].filter((row) => row.thread_id === threadId) }) }),
         get: async (id: string) => messageStore.get(id),
         delete: vi.fn(async (id: string) => {
             messageStore.delete(id);
@@ -200,7 +207,8 @@ vi.mock('~/utils/chat/messages', async (importOriginal) => ({
             : ['text'],
 }));
 
-vi.mock('~/utils/chat/openrouterStream', () => ({
+vi.mock('~/utils/chat/openrouterStream', async (original) => ({
+    ...(await original<typeof import('~/utils/chat/openrouterStream')>()),
     startBackgroundStream: startBackgroundStreamMock,
     abortBackgroundJob: vi.fn(),
     abortBackgroundAdmission: abortAdmissionMock,
@@ -260,6 +268,7 @@ vi.mock('~/composables/chat/useAiSettings', () => ({
             defaultModelMode: 'lastSelected',
             fixedModelId: null,
         }),
+        captureContextPreference: async () => ({ db: activeDb, workspaceGeneration: 0, maxContextTokens: null }),
     }),
 }));
 
@@ -268,6 +277,7 @@ vi.mock('~/composables/chat/useModelStore', () => ({
         catalog: catalogModelsRef,
         favoriteModels: ref([]),
         fetchModels: fetchModelsMock,
+        resolveContextModel: resolveContextModelMock,
     }),
 }));
 
@@ -697,7 +707,7 @@ describe('useChat background detach race', () => {
         ).toBe(true);
     });
 
-    it('refreshes stale catalog metadata before preparing a chat request', async () => {
+    it('uses the reviewed context model owner and builds full input without the old reserved trimming budget', async () => {
         consumeWorkflowSend = true;
         vi.resetModules();
         const { useChat } = await import('~/composables/chat/useAi');
@@ -711,9 +721,9 @@ describe('useChat background detach race', () => {
             context_hashes: [],
         } as any);
 
-        expect(fetchModelsMock).toHaveBeenCalledWith({ force: true });
+        expect(resolveContextModelMock).toHaveBeenCalledWith('xiaomi/mimo-v2.6-pro', { signal: expect.any(AbortSignal) });
         expect(buildOpenRouterMessagesForSendMock.mock.lastCall?.[0].maxInputTokens)
-            .toBe(1_040_384);
+            .toBeUndefined();
     });
 
     it('does not register a late UI subscriber after clear() detaches the chat', async () => {

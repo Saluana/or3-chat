@@ -901,6 +901,7 @@ type UploadedImage = {
 };
 
 type ChatInputSendPayload = {
+    editorDoc?: Record<string, unknown>;
     text: string;
     images: UploadedImage[];
     attachments: UploadedImage[];
@@ -1029,6 +1030,7 @@ function onSend(payload: ChatInputSendPayload) {
     const activeChat = chat.value;
     if (!activeChat) return;
     const result = activeChat.send({
+        editorDoc: payload.editorDoc,
         content: payload.text,
         model: payload.model || model.value,
         files,

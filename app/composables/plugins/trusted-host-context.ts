@@ -667,7 +667,8 @@ export function createTrustedHostContext(
         'ai.chat.send:action:before',
         'workflow.execution:action:state_update',
     ]);
-    const approvedFilterHooks = new Set(['ai.chat.messages:filter:before_send']);
+    const approvedFilterHooks = new Set(['ai.chat.messages:filter:before_send',
+        'ai.chat.send:filter:prepare', 'ai.chat.send:filter:commit']);
     function subscribeHook(
         name: string,
         kind: 'action' | 'filter',

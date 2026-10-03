@@ -711,6 +711,7 @@ const emit = defineEmits<{
             modelVariant: OpenRouterModelVariant;
             thinkingEnabled: boolean;
             reasoningEffort: string | null;
+            editorDoc?: Record<string, unknown>;
             registerResult: RegisterSendResult;
         }
     ): void;
@@ -1048,8 +1049,10 @@ const handleSend = async (): Promise<SendResult> => {
     ) {
         // Provide the current editor JSON to hooks so downstream filters (mentions)
         // can extract structured mentions before the text is flattened.
+        const editorDoc = editor.value?.getJSON?.();
+        const submittedEditorDoc = editorDoc ? structuredClone(editorDoc) : undefined;
         try {
-            const json = editor.value?.getJSON?.();
+            const json = submittedEditorDoc ? structuredClone(submittedEditorDoc) : undefined;
             // Fire as an action to avoid transforming data; listeners can stash it
             if (json) {
                 await hooks.doAction('ui.chat.editor:action:before_send', json);
@@ -1061,6 +1064,7 @@ const handleSend = async (): Promise<SendResult> => {
         let sendResult: Promise<SendResult> | null = null;
         let durableAcceptance: Promise<SendResult> | null = null;
         emit('send', {
+            editorDoc: submittedEditorDoc,
             text: promptText.value,
             images: attachments.value, // backward compatibility
             attachments: attachments.value, // new unified field

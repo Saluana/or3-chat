@@ -63,6 +63,9 @@ export interface SendMessageParams {
     modelVariant?: import('~~/shared/openrouter/model-variants').OpenRouterModelVariant;
     thinking?: boolean;
     reasoningEffort?: string | null;
+    maxCompletionTokens?: number;
+    /** Detached editor document for request-scoped plugin preparation. */
+    editorDoc?: Record<string, unknown>;
     // Optional hashes to include for model context without reattaching to the new UI message.
     context_hashes?: string[];
     /** Visible transcript used for retry; the new user turn is appended to it. */
@@ -81,6 +84,10 @@ export type SendFailureReason =
     | 'filtered'
     | 'client_limit'
     | 'unavailable'
+    | 'context_full'
+    | 'model_metadata_unavailable'
+    | 'invalid_output_limit'
+    | 'invalid_context_limit'
     | 'empty_context'
     | 'tool_iteration_limit'
     | 'stream_error'

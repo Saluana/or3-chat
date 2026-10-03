@@ -35,6 +35,7 @@
  */
 
 import { createOrRefFile } from '~/db/files';
+import type { ContextRequestPolicy } from '~~/shared/chat/context-budget';
 import type { Or3DB } from '~/db/client';
 import type { ChatMessage, ToolCall, ToolDefinition } from '~/utils/chat/types';
 import { dataUrlToBlob, fetchImageBlob } from '~/utils/chat/files';
@@ -200,6 +201,7 @@ export type ForegroundStreamContext = {
     orMessages: OpenRouterMessage[];
     modalities: string[];
     reasoning?: OpenRouterReasoningConfig;
+    contextPolicy?: ContextRequestPolicy;
     tools?: ToolDefinition[];
     abortSignal: AbortSignal;
     assistantId: string;
@@ -327,6 +329,7 @@ export async function runForegroundStreamLoop(
             >[0]['orMessages'],
             modalities: ctx.modalities,
             reasoning: ctx.reasoning,
+            contextPolicy: ctx.contextPolicy,
             threadId: ctx.threadId,
             messageId: ctx.assistantId,
             tools: admittedTools,

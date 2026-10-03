@@ -1,6 +1,7 @@
 import { captureUsagePrefix, attachRequestUsage } from '~~/shared/chat/request-usage';
 import { readRequestUsage, type RequestUsage } from '~~/shared/chat/compaction';
 import { countTokensApprox } from './tokens';
+import { admitChatContext, estimateChatRequest, ChatContextAdmissionError, type ContextRequestPolicy } from '~~/shared/chat/context-budget';
 import { normalizeError, presentError, parseRetryAfter } from '~~/shared/errors';
 /**
  * @module app/utils/chat/openrouterStream
@@ -44,6 +45,7 @@ import {
     withIdleWatchdog,
 } from '~~/shared/openrouter/deadlines';
 import { getDeviceId } from '~/core/sync/hlc';
+import type { ORContentPart, ORMessage as BuiltMessage } from '~/core/auth/openrouter-build';
 
 function parseRetryAfterSeconds(value: string): number {
     const seconds = Number(value);
@@ -77,11 +79,11 @@ export class BackgroundJobPollError extends Error {
 // NOTE: The OpenRouter SDK supports streaming, but this module uses raw fetch
 // so we can keep one shared SSE parser for both direct and proxied/server routes.
 
-type ORMessagePart = { type: string; [key: string]: unknown };
+type ORMessagePart = ORContentPart | { type: string; [key: string]: unknown };
 
 // Permissive message type that accepts both strict ORMessage from openrouter-build
 // and tool messages. Content is optional for tool role messages.
-type ORMessage = {
+type ORMessage = BuiltMessage | {
     role: string;
     content?: string | ORMessagePart[];
     name?: string;
@@ -195,7 +197,7 @@ function stripUiMetadata(tool: ToolDefinition): ToolDefinition {
  * Purpose:
  * Streams OpenRouter responses as SSE events.
  */
-export async function* openRouterStream(params: {
+export type OpenRouterStreamParams = {
     apiKey?: string | null;
     model: string;
     orMessages: ORMessage[];
@@ -212,8 +214,51 @@ export async function* openRouterStream(params: {
     /** Primarily configurable for deterministic tests and constrained runtimes. */
     responseTimeoutMs?: number;
     idleTimeoutMs?: number;
-}): AsyncGenerator<ORStreamEvent, void, unknown> {
-    const { apiKey, model, orMessages, modalities, tools, signal } = params;
+    contextPolicy?: ContextRequestPolicy;
+};
+
+/** Single provider-body constructor used by admission and dispatch. */
+export function buildOpenRouterRequestBody(params: OpenRouterStreamParams): OpenRouterRequestBody {
+    const body: OpenRouterRequestBody = { model: params.model, messages: params.orMessages, stream: true };
+    if (params.modalities?.length) body.modalities = params.modalities;
+    if (params.maxCompletionTokens !== undefined) body.max_tokens = params.maxCompletionTokens;
+    if (params.reasoning) body.reasoning = params.reasoning;
+    const cacheControl = getAnthropicPromptCacheControl(params.model);
+    if (cacheControl) body.cache_control = cacheControl;
+    if (params.tools) {
+        body.tools = params.tools.map(stripUiMetadata);
+        body.tool_choice = params.toolChoice ?? 'auto';
+    }
+    return JSON.parse(JSON.stringify(body)) as OpenRouterRequestBody;
+}
+
+/** Validate the detached, complete provider body; preserve every selected message. */
+export async function prepareOpenRouterRequest(params: OpenRouterStreamParams): Promise<OpenRouterRequestBody> {
+    const body = buildOpenRouterRequestBody(params);
+    if (!params.contextPolicy) {
+        if (body.max_tokens !== undefined && (!Number.isSafeInteger(body.max_tokens) || body.max_tokens <= 0))
+            throw new Error('Reply maximum must be a positive integer.');
+        return body;
+    }
+    const policy = params.contextPolicy;
+    const requested = policy.requestedCompletionTokens ?? params.maxCompletionTokens;
+    // Including max_tokens itself can alter configuration overhead. Recompute
+    // against the actual body until the default fits; this adds no fixed reserve.
+    for (;;) {
+        const { messages, tools, ...configuration } = body;
+        const estimate = await estimateChatRequest({ messages, tools, configuration, countText: countTokensApprox });
+        if (params.signal?.aborted) throw new DOMException('Chat preparation canceled.', 'AbortError');
+        const admission = admitChatContext({ ...policy, inputTokens: estimate.input_tokens, estimate,
+            requestedCompletionTokens: requested });
+        if (!admission.ok) throw new ChatContextAdmissionError(admission);
+        const replyMaximum = requested ?? admission.budget.available_completion_tokens;
+        if (body.max_tokens !== undefined && body.max_tokens <= replyMaximum) return body;
+        body.max_tokens = replyMaximum;
+    }
+}
+
+export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGenerator<ORStreamEvent, void, unknown> {
+    const { apiKey, model, signal } = params;
     const hasApiKey = Boolean(apiKey);
     const runtimeConfig = useRuntimeConfig() as {
         public: {
@@ -231,35 +276,13 @@ export async function* openRouterStream(params: {
         isSsrAuthEnabled && !allowClientFallback
     );
 
-    const body: OpenRouterRequestBody = {
-        model,
-        messages: orMessages,
-        stream: true,
-    };
-    if (modalities?.length) body.modalities = modalities;
-    if (params.maxCompletionTokens !== undefined) {
-        if (!Number.isSafeInteger(params.maxCompletionTokens) || params.maxCompletionTokens <= 0) throw new Error('Reply maximum must be a positive integer.');
-        body.max_tokens = params.maxCompletionTokens;
-    }
+    const body = await prepareOpenRouterRequest(params);
 
     if (params.threadId) {
         body._threadId = params.threadId;
     }
     if (params.messageId) {
         body._messageId = params.messageId;
-    }
-
-    if (params.reasoning) {
-        body.reasoning = params.reasoning;
-    }
-    const cacheControl = getAnthropicPromptCacheControl(model);
-    if (cacheControl) {
-        body.cache_control = cacheControl;
-    }
-
-    if (tools) {
-        body.tools = tools.map(stripUiMetadata);
-        body.tool_choice = params.toolChoice ?? 'auto';
     }
 
     // This is the actual provider request boundary. Freeze the serialized body
@@ -492,6 +515,9 @@ export async function* openRouterStreamWithRetry(
                 yield next.value;
             }
         } catch (e) {
+            // Local admission is a final decision for this exact full payload;
+            // preserve its structured reason and never treat it as transport.
+            if (e instanceof ChatContextAdmissionError) throw e;
             const error =
                 e instanceof OpenRouterStreamError
                     ? e
@@ -732,6 +758,7 @@ export async function startBackgroundStream(params: {
     tools?: ToolDefinition[];
     toolChoice?: ToolChoice;
     toolRuntime?: Record<string, string>;
+    contextPolicy?: ContextRequestPolicy;
     streamedFieldMode?: StreamedFieldMode;
     signal?: AbortSignal;
     responseTimeoutMs?: number;
@@ -744,10 +771,7 @@ export async function startBackgroundStream(params: {
         _backgroundAdmissionId: string;
         _history: import('~~/shared/chat/background-history').ChatGenerationAdmissionEnvelope;
     } = {
-        model: params.model,
-        messages: params.orMessages,
-        modalities: params.modalities,
-        stream: true,
+        ...await prepareOpenRouterRequest(params),
         _background: true,
         _threadId: params.threadId,
         _messageId: params.messageId,
@@ -761,18 +785,6 @@ export async function startBackgroundStream(params: {
         _clientDeviceId: getDeviceId(),
     };
 
-    if (params.reasoning) {
-        body.reasoning = params.reasoning;
-    }
-    const cacheControl = getAnthropicPromptCacheControl(params.model);
-    if (cacheControl) {
-        body.cache_control = cacheControl;
-    }
-
-    if (params.tools) {
-        body.tools = params.tools.map(stripUiMetadata);
-        body.tool_choice = params.toolChoice ?? 'auto';
-    }
     if (params.toolRuntime) {
         body._toolRuntime = params.toolRuntime;
     }
