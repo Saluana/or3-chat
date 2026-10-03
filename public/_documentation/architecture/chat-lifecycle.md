@@ -40,6 +40,17 @@ preload graph; theme-provided message components keep their existing selection.
 
 Render the controller's UI projections rather than raw stream events. Text, reasoning, tool progress, and partial output can arrive independently. Accumulators batch UI updates; persistence and display have separate responsibilities. A transport disconnect does not necessarily mean a server background job stopped.
 
+`createStreamAccumulator()` in `app/composables/chat/useStreamAccumulator.ts`
+buffers text and reasoning separately and batches reactive flushes with animation
+frames, with a microtask fallback when frames are unavailable. `finalize()`
+flushes pending output and seals the accumulator idempotently. Later appends are
+ignored until a reset. This display state is not a durable message receipt.
+
+`ChatContainer.vue` uses the `or3-scroll` package for its message viewport.
+Preserve keyed message anchors and the existing user's scroll intent when
+updating stream projections or restoring a tab. Do not recreate the removed
+`VirtualMessageList.vue` thresholds in another watcher.
+
 `abort()` requests cancellation. `dispose()` releases view listeners/subscriptions and can leave admitted generation tracking detached. It does not delete saved messages. `clearConversation({ persistence: 'preserve' })` clears in-memory projections and preserves durable rows. Do not use teardown as a destructive conversation operation or report it as a completed cancellation.
 
 Each terminal write must retain request/generation identity so late results from an older retry or workspace cannot overwrite current work. Preparation hooks run before final persistence; a callback or notification finishing is not proof that the database write succeeded. Use the existing tracker and persister recovery paths.
@@ -47,6 +58,11 @@ Each terminal write must retain request/generation identity so late results from
 ## Context and tools
 
 Context budgeting uses the selected model's advertised window, reserves response space, and trims history through the existing message helpers. Missing catalog metadata is refreshed; if it remains unavailable the input fallback is 8,000 tokens. Response reserve is bounded at 8,192 tokens. Counts are estimates, particularly for images and files; do not introduce a second fixed context ceiling in a caller.
+
+Source UI token counting uses `app/composables/core/useTokenizer.ts` and a
+shared worker. When the worker is unavailable, including during SSR, it falls
+back to a character heuristic rather than importing the encoder on the main
+thread. A displayed count is not exact provider billing or proof of admission.
 
 Use the admitted tool registry, schema validation, request-scoped authority, and abort signal. Server/client tool execution and background transport are coordinated by the current host implementation. A tool's name or runtime field alone does not authorize execution. [Chat tools](/documentation/utils/chat-tools) preserve frozen editor snapshots and explicit proposal review.
 

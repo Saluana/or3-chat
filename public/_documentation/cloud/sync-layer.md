@@ -139,10 +139,9 @@ Startup recovery resets stale `syncing`/`in_flight` rows to `pending` with no po
 1.  **Subscription**: `SubscriptionManager` listens for changes since the last known cursor (`query: sync.watchChanges`).
 2.  **Receive**: The provider receives a batch of `SyncChange` objects.
 3.  **Conflict Resolution**: `ConflictResolver` applies changes to Dexie:
-    - Compares remote timestamp (`HLC`) with local record.
-    - If remote is newer -> Apply change.
-    - If local is newer -> Ignore remote (Local Wins).
-    - If conflicting timestamps -> `HLC` tie-breaking.
+    - Compares `clock`, then `hlc`, then `op_id` using the shared revision comparator.
+    - Applies a newer remote revision and preserves a newer local revision.
+    - Uses the same deterministic tie-breaking for rows and tombstones.
 4.  **Reactivity**: Dexie live queries update automatically, refreshing the UI.
 
 ---
@@ -282,51 +281,14 @@ Verify duplicate `op_id` replay, rejected identity/workspace fields, monotonic w
 
 ## Troubleshooting Sync Issues
 
-### Sync Not Working
+Use the central [sync diagnostics](/documentation/cloud/troubleshooting#sync-issues)
+for missing changes, slow bootstrap, repeated warnings, and rescan loops. Check
+the selected backend's requirements; a Convex URL is needed only for Convex.
+Recovery follows the [pull retention contract](/documentation/cloud/sync-layer#pull-retention-and-snapshot-recovery),
+not a fixed cursor-age limit for snapshot-capable providers. Preserve pending
+local writes during diagnosis.
 
-**Symptoms:** Changes don't appear on other devices, no sync activity visible.
-
-**Checks:**
-
-```bash
-# 1. Verify environment variables
-echo $SSR_AUTH_ENABLED  # Should be "true"
-echo $OR3_SYNC_ENABLED   # Should be "true"
-echo $VITE_CONVEX_URL    # Should be set
-```
-
-**Solutions:**
-
-- Ensure OR3 Cloud is enabled (see [Configure OR3](/documentation/cloud/configure))
-- Check network connectivity
-- Verify user is authenticated
-- Check browser console for sync errors
-
-### Too Many Conflict Notifications
-
-**Symptoms:** Dozens of "Sync conflict resolved" notifications on first load.
-
-**This is no longer possible.** Conflict events never create notifications. They only produce development logs. Sync error notifications are the only sync-related notification type, and they are:
-
-- Suppressed during bootstrap/rescan
-- Deduplicated within a 15-second window per record and message
-- Burst-limited (more than 5 in 10 seconds triggers a 60-second cooldown)
-
-If you still see repeated sync error notifications:
-
-- Check that `notification-listeners.client.ts` is loaded
-- Look for debug logs: `[notify]` entries in the browser console
-
-### Bootstrap Taking Too Long
-
-**Symptoms:** Initial workspace load is very slow.
-
-**Solutions:**
-
-- This is normal for large workspaces (1000+ records)
-- Snapshot bootstrap is paginated (300 rows per batch by default)
-- Monitor progress via `sync.bootstrap:action:progress` hook
-- Consider implementing a loading indicator
+## Repeatable performance measurements
 
 For repeatable local measurements, run:
 
@@ -355,51 +317,8 @@ workspace fixture with `OR3_BENCH_WORKSPACE_THREADS` and
 `OR3_BENCH_WORKSPACE_MESSAGES_PER_THREAD`; the workspace benchmark stays
 bounded and does not create large browser quota fixtures. CI also builds the
 production application and enforces total/largest compressed and uncompressed
-JavaScript and CSS budgets. All gates retain versioned reports as trend
-artifacts once the standalone dependency publishing blocker described in the
-[provider compatibility matrix](/documentation/cloud/providers#supported-combinations) is resolved.
+JavaScript and CSS budgets. The harnesses retain versioned JSON reports under `output/performance/` for regression review.
 
-### Cursor Reset / Rescan Loop
-
-**Symptoms:** Sync keeps restarting, data re-downloads frequently.
-
-**Causes:**
-
-- Cursor expiration (default 24 hours)
-- Device cursor tracking issues
-
-**Solutions:**
-
-- Check `sync.rescan:action:starting` hook frequency
-- Verify device cursor is being updated via `updateDeviceCursor`
-- Review GC retention settings
-
-### Data Not Appearing After Sync
-
-**Symptoms:** Sync completes but data doesn't show in UI.
-
-**Checks:**
-
-```typescript
-// 1. Verify sync completed
-hooks.addAction("sync.bootstrap:action:complete", (data) => {
-  console.log("Bootstrap complete:", data);
-  // Check totalPulled count
-});
-
-// 2. Check Dexie directly
-const db = getDb();
-const count = await db.messages.count();
-console.log("Local message count:", count);
-```
-
-**Solutions:**
-
-- Verify live queries are set up correctly
-- Check for filter predicates that might exclude data
-- Ensure user_id matches between synced data and queries
-
----
 
 ## Related
 

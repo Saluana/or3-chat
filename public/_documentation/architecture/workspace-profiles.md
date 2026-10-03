@@ -7,7 +7,10 @@ plugins, remove workspace data, or grant permissions. Plugin and theme authors
 can contribute profiles using stable registry IDs.
 
 Profiles are declarative data. The schema rejects unknown fields and cannot
-carry executable code, URLs, styles, or agent instructions.
+carry executable code, URLs, styles, or agent instructions. Import `WorkspaceProfileV1`
+from `app/core/workspace-profiles/schema.ts`; related resolver and inventory types
+live in `app/core/workspace-profiles/types.ts`. Registry registration returns an owned,
+idempotent disposal handle; clean it up during plugin teardown and HMR.
 
 ## Resolution
 
@@ -43,35 +46,10 @@ contributed only by a client plugin is also unavailable to the server, so SSR
 sends the Standard OR3 projection. After that plugin registers, the client
 resolves the saved profile, which can update the layout after hydration.
 
-The [server bootstrap plugin](https://github.com/Saluana/or3-chat/blob/or3-cloud/app/plugins/93.workspace-profiles.server.ts)
-resolves built-in profiles and validated profiles it can load from themes. Its
-[request test](https://github.com/Saluana/or3-chat/blob/or3-cloud/app/plugins/__tests__/workspace-profile-server.test.ts)
-covers request isolation and a theme-provided profile. The
-[rendered hydration test](https://github.com/Saluana/or3-chat/blob/or3-cloud/tests/integration/workspace-profile-hydration-render.integration.test.ts)
-SSR-renders a Vue probe, hydrates it in a DOM, and checks that serialized
-built-in profile markup stays in place without Vue hydration warnings. It does
-not boot a built Nuxt server or load a client package.
-
-A separate local browser check of a built Nuxt app confirmed that applying
-Document Workspace survives a hard reload without hydration warnings. HTTP
-payload checks also confirmed Standard OR3 fallback for an unavailable
-Coding Workspace ID and for a selection cookie scoped to another workspace.
-That check used an isolated Undici 7 override because the installed Undici 8
-requires a worker-thread API missing from Bun. It verifies the built-in
-profile boundary, but does not qualify the normal production build or an
-authenticated client-package transition.
-
-To verify that boundary in a browser, use a disposable SSR-auth workspace with
-External Agents installed and enabled. In the Dashboard's **Workspace Profile**
-settings, apply **Coding Workspace**, then hard-reload the workspace. Capture
-the response payload and browser console: SSR should resolve to Standard OR3
-because Coding Workspace is registered by the client package through the
-[External Agents host bridge](https://github.com/Saluana/or3-chat/blob/or3-cloud/app/composables/plugins/external-agent-host-bridge.ts);
-after the package registers, the client should restore Coding Workspace. Check
-that hydration emits no Vue mismatch warnings and that the profile selector
-settles on Coding Workspace. Repeat in another workspace to check the
-workspace-scoped selection cookie. This authenticated client-package path
-remains unverified.
+The server bootstrap and rendered hydration tests cover request isolation and
+serialized core projections. They do not qualify an authenticated transition
+to a client-package profile in a built Nuxt deployment; that browser path
+remains unverified. Preserve that distinction when checking hydration.
 
 A theme may bundle validated profiles and recommend one, but
 install/activation never applies it; the user must invoke the explicit
@@ -84,5 +62,13 @@ shapes need a new schema version and migration. Profiles contain stable IDs,
 never components, URLs, callbacks, CSS, bindings, data fetching, workflows, or
 agent instructions.
 
-If resolution falls back, inspect diagnostics. Unordered new plugin items are
-intentionally appended. Profiles cannot create missing capabilities.
+If resolution falls back, inspect diagnostics for a missing profile, invalid
+schema, or unsupported version. Unordered new plugin items are intentionally
+appended. Missing Coding Workspace requires its owning External Agents package;
+profiles cannot create missing capabilities. Theme recommendations require an
+explicit apply action.
+
+Standard OR3 is the parity fallback for core navigation, dashboard, commands,
+panes, and mobile defaults. Resolver changes should preserve this parity and
+cover unknown IDs, ordering, hiding, append behavior, pane limits, and cleanup.
+Incompatible schema changes require a new version and explicit migration.

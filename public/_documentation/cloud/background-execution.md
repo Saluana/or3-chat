@@ -6,8 +6,8 @@ This document covers the implementation currently wired in:
 
 - Chat background streaming (`/api/openrouter/stream` with `_background: true`)
 - Background job status/reattach APIs (`/api/jobs/:id/status`, `/api/jobs/:id/stream`, `/api/jobs/:id/abort`)
-- Workflow background execution (`/api/workflows/background`)
-- Workflow HITL responses (`/api/workflows/hitl`)
+- Workflow package background execution (`/api/plugins/or3-workflows/workflows/background`)
+- Workflow package HITL responses (`/api/plugins/or3-workflows/workflows/hitl`)
 
 ## Enablement and Boundaries
 
@@ -210,19 +210,21 @@ When tools are included in the background request, the server switches to `consu
 
 ## Background Workflow Execution
 
-Workflows start with `POST /api/workflows/background`.
+Workflow execution requires the installed and enabled `or3-plugin-workflows`
+package. Its server routes are dispatched through the host's authorized plugin
+API; there are no core `/api/workflows/*` routes.
 
-Server-side behavior:
+The client bridge in `app/composables/plugins/workflow-host-bridge.ts` starts
+work with `POST /api/plugins/or3-workflows/workflows/background`. The package
+owns canonical workflow lookup, the execution engine, node transitions, output,
+and HITL coordination. The host supplies auth, sync, model/tool, job, and
+notification ports through `server/utils/workflows/plugin-server-bridge.ts`.
+That bridge requires SSR auth, enforces `can('workspace.write')`, and checks
+the `workflow:background` rate limit before execution. Workflow jobs use
+`kind: 'workflow'` and publish `workflow_state` snapshots.
 
-1. SSR auth required (`isSsrAuthEnabled`).
-2. `requireCan(session, 'workspace.write', ...)` enforces authorization.
-3. Rate limit `workflow:background` is checked.
-4. Canonical workflow definition is resolved from server catalog (`resolveCanonicalWorkflow`).
-5. Job starts with `kind: 'workflow'`.
-6. `server/utils/workflows/background-execution.ts` runs execution via `OpenRouterExecutionAdapter` and streams:
-   - node state transitions
-   - workflow tokens (`finalOutput`)
-   - `workflow_state` snapshots
+See [Build and run a workflow](/documentation/workflows/editor) for package
+enablement, foreground/background behavior, and checkpoint recovery.
 
 `workflow_state` is persisted on the background job and includes execution state, per-node states, HITL requests, output, and version counter.
 
@@ -242,9 +244,9 @@ do not wait for a refresh or a later poll.
 Workflow HITL requests are persisted in `workflow_state.hitlRequests`.
 
 - Pause occurs when engine emits `onHITLRequest`.
-- Client responds via `POST /api/workflows/hitl`.
+- Client responds via `POST /api/plugins/or3-workflows/workflows/hitl` through the workflow host bridge.
 - Endpoint is SSR-gated, `can()`-gated, and rate-limited (`workflow:hitl`).
-- `resolveHitlRequest(...)` updates persisted `workflow_state` and unblocks waiting execution.
+- The workflow package resolves the persisted request and unblocks its waiting execution.
 
 ## Reattach and Recovery
 
@@ -363,5 +365,6 @@ Deterministic browser harness + Playwright specs cover:
 
 ## Related
 
-- `public/_documentation/utils/tool-runtime.md`
-- `public/_documentation/utils/openrouterStream.md`
+- [Tool runtime](/documentation/utils/tool-runtime)
+- [Chat streaming](/documentation/utils/openrouterStream)
+- [Workflow editor](/documentation/workflows/editor)

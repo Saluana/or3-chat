@@ -58,6 +58,33 @@ put secrets in messages, tags or app-owned fallback copy.
 Background jobs retain their metadata inside the existing error-string field;
 consumers must present it through the shared mapper rather than display it raw.
 
+## Codes and diagnostic tags
+
+Canonical `ErrorCode` values and classification live in
+`shared/errors/index.ts`; the host reporter re-exports the shared contracts.
+Choose the code for the failed operation rather than copying an upstream error
+name. Common groups include:
+
+| Group | Codes |
+| --- | --- |
+| Internal and input | `ERR_INTERNAL`, `ERR_UNKNOWN`, `ERR_VALIDATION`, `ERR_BAD_REQUEST`, `ERR_NOT_FOUND` |
+| Transport and provider | `ERR_NETWORK`, `ERR_TIMEOUT`, `ERR_SERVER`, `ERR_PROVIDER`, `ERR_OVERLOADED`, `ERR_RATE_LIMIT` |
+| Identity and credits | `ERR_AUTH`, `ERR_FORBIDDEN`, `ERR_CREDITS` |
+| Browser persistence | `ERR_DB_READ_FAILED`, `ERR_DB_WRITE_FAILED`, `ERR_DB_QUOTA_EXCEEDED`, `ERR_FILE_VALIDATION`, `ERR_FILE_PERSIST` |
+| Cloud storage | `ERR_STORAGE_UPLOAD_FAILED`, `ERR_STORAGE_DOWNLOAD_FAILED`, `ERR_STORAGE_QUOTA_EXCEEDED`, `ERR_STORAGE_FILE_NOT_FOUND`, `ERR_STORAGE_PROVIDER_ERROR`, `ERR_FILE_TOO_LARGE` |
+| Chat and tools | `ERR_STREAM_ABORTED`, `ERR_STREAM_FAILURE`, `ERR_ABORTED`, `ERR_UNSUPPORTED_MODEL`, `ERR_TOOL_OUTCOME_UNKNOWN` |
+| Extensions and sync | `ERR_HOOK_FAILURE`, `ERR_SYNC_PAYLOAD_TOO_LARGE` |
+
+The code alone does not authorize retry. Preserve normalized retryability,
+credential ownership, and retry delay; uncertain tool outcomes require
+reconciliation before any repeated side effect.
+
+Reporter tags are small, flat string/number/boolean values. Use `domain`
+(chat, db, files, auth), `stage` or `op`, and the relevant record ID where
+needed. `dbTry` adds `rw` and `entity` context for database failures.
+Do not include document content, credentials, or large objects. Tags help local
+diagnostics and domain hook routing; they are not automatically safe UI details.
+
 ## Retry only when safe
 
 `simpleRetry(fn, attempts = 2, delayMs = 400)` runs the function up to

@@ -23,8 +23,8 @@ See [API and types](/documentation/hooks/reference) for engine semantics, lifecy
 | `ui.chat.message:filter:outgoing`     | filter | `[text: string]`                                 | `string` in the typed map; caller also recognizes `false` at runtime (see [boundary](/documentation/hooks/reference#outgoing-chat-cancellation-boundary)) |
 | `ui.chat.message:filter:incoming`     | filter | `[text: string, threadId?: string]`              | `string`                           |
 | `ai.chat.model:filter:select`         | filter | `[modelId: string]`                              | `string` (new model id)            |
-| `ai.chat.messages:filter:input`       | filter | `[messages: any[]]`                              | `any[]`                            |
-| `ai.chat.messages:filter:before_send` | filter | `[payload: { messages: any[] }]`                 | `{ messages: any[] }`              |
+| `ai.chat.messages:filter:input`       | filter | `[messages: ChatMessage[]]`                              | `ChatMessage[]`                    |
+| `ai.chat.messages:filter:before_send` | filter | `[payload: { messages: OpenRouterMessage[] } \| { messages: OpenRouterMessage[] }[]]`                 | `{ messages: OpenRouterMessage[] } \| { messages: OpenRouterMessage[] }[]` |
 | `ai.chat.send:action:before`          | action | `[payload: AiSendBeforePayload]`                 | —                                  |
 | `ai.chat.send:action:after`           | action | `[payload: AiSendAfterPayload]`                  | —                                  |
 | `ai.chat.stream:action:delta`         | action | `[chunk: string, ctx: AiStreamDeltaPayload]`     | —                                  |

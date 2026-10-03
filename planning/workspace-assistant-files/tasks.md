@@ -2,6 +2,8 @@
 
 Implementation progress snapshot (2026-10-02): runtime `5154f48db448b35db6da0401c05a609a83c1a316`. Only fully verified task boundaries are checked. Partial and unstarted tasks remain unchecked; status notes do not replace the full Done when criteria. The initial assistant milestone is reviewed/qualified; the full assistant/Files plan remains unfinished. See [evidence.md](evidence.md) for exact commands, first failures, source revisions and acceptance limits.
 
+Checklist audit (2026-10-02): inspected the current checkout at `10a99316` (merged PR #187), production workspace tool/search/document/project/receipt owners, and the existing acceptance ledger. The seven fully completed parent tasks remain checked. Checked substeps below make completed portions of the 14 partial tasks visible; their parent criteria remain open. Historical verification receipts retain their original source revisions; this audit did not rerun tests.
+
 Read [requirements.md](requirements.md) and [design.md](design.md) first. Component IDs below refer to the design. Estimates are intended task sizes, not delivery guarantees; split a task if its implementation exceeds four hours. Preserve unrelated work already in the checkout.
 
 Work in three increments: sections 0–1 deliver find/read; section 2 adds document/project changes; sections 3–5 deliver Files and qualify the complete feature. File catalog work is not a prerequisite for the first two increments. All test-authoring steps apply during implementation, not this planning task.
@@ -19,6 +21,9 @@ Work in three increments: sections 0–1 deliver find/read; section 2 adds docum
       Requirements: R1, R2, R3, R10, R13.
       Done when: synthetic chats/documents/projects and a scripted model transport exercise real production chat/tool paths; expected failure cases exist before implementation. The setup can retain traces, screenshots, source IDs, and content markers without introducing a test-only production API.
       Status: Partial — scripted transport and synthetic chat/document exercise production PageShell, registry and DB with retained before/after artifacts. Synthetic project browser setup and the full expected-failure journey matrix remain.
+
+  - [x] scripted transport and synthetic chat/document exercise production PageShell, registry and DB with retained before/after artifacts.
+  - [ ] Synthetic project browser setup and the full expected-failure journey matrix remain.
 
 ## 1. Increment one: find and read existing work
 
@@ -40,6 +45,9 @@ Work in three increments: sections 0–1 deliver find/read; section 2 adds docum
       Done when: a one-shot query reuses the existing index host, admits only the four core source kinds when available, filters project membership before limiting, preserves fallback/partial-source status, and leaves an open palette's query and selection untouched.
       Status: Partial — stateless shared-index search preserves palette state, project filtering before limit, fallback/partial status, fuzzy/token matching and captured scored snapshots. Only chat/document/project kinds are admitted; Files source is not implemented.
 
+  - [x] stateless shared-index search preserves palette state, project filtering before limit, fallback/partial status, fuzzy/token matching and captured scored snapshots.
+  - [ ] Only chat/document/project kinds are admitted; Files source is not implemented.
+
 - [x] 1.4 Add bounded core item reads and source references (2–4h)
       Component: C3.
       Requirements: R3, R12.AC1.
@@ -52,17 +60,26 @@ Work in three increments: sections 0–1 deliver find/read; section 2 adds docum
       Done when: `workspace_search` and `workspace_read` work in normal chat with current schema validation, tool enablement, runtime admission, cancellation, output bounds, and client-bridge failure behavior. No additional model call occurs during search.
       Status: Partial — both client tools execute through the existing validated registry and the real scripted PageShell tool loop; search invokes no extra inference. Complete model/tool disablement and unavailable client-bridge/provider journey matrix remains.
 
+  - [x] both client tools execute through the existing validated registry and the real scripted PageShell tool loop; search invokes no extra inference.
+  - [ ] Complete model/tool disablement and unavailable client-bridge/provider journey matrix remains.
+
 - [ ] 1.6 Render compact, verifiable source receipts (2–3h)
       Component: C9.
       Requirements: R1.AC2, R1.AC4, R3.AC3, R10.AC3, R10.AC6.
       Done when: source chips open the actual item through existing navigation, show unavailable items accurately, disclose partial coverage, and preserve composer focus/drafts. The normal view shows concise progress; raw arguments stay in expanded details.
       Status: Partial — concise activity and host-owned source chips use existing navigation; current proposal journey opens the original editor. Complete deleted-source, partial-coverage, draft/focus and unavailable-source browser matrix remains.
 
+  - [x] concise activity and host-owned source chips use existing navigation; current proposal journey opens the original editor.
+  - [ ] Complete deleted-source, partial-coverage, draft/focus and unavailable-source browser matrix remains.
+
 - [ ] 1.7 Qualify the first increment (1–2h)
       Component: C11.
       Requirements: R1, R2, R3, R10, R12, R13.
       Done when: the relevant production chat and command-palette journeys pass with repeatable artifacts, including ambiguous targets, a deleted result, model/tool disablement, and a workspace switch during retrieval. Remaining failures are fixed or identified as unrelated baseline failures with evidence.
       Status: Partial — earlier search/read navigation plus exact5154 proposal tool loop pass with artifacts. Ambiguous/deleted targets, disablement and workspace-change production-browser coverage are not all qualified.
+
+  - [x] earlier search/read navigation plus exact5154 proposal tool loop pass with artifacts.
+  - [ ] Ambiguous/deleted targets, disablement and workspace-change production-browser coverage are not all qualified.
 
 ## 2. Increment two: create documents and make controlled changes
 
@@ -72,11 +89,17 @@ Work in three increments: sections 0–1 deliver find/read; section 2 adds docum
       Done when: the existing production document journey and canonical lifecycle owners cover no-save preview, stale Apply, duplicate execution, delayed autosave, guarded Undo, project-entry preservation, storage failure, and permission loss. Each boundary has one primary test owner.
       Status: Partial — primary actual Dexie/TipTap owners cover no-save preview, stale/concurrent Apply, delayed autosave, guarded Undo, project preservation, rollback and awaited permission changes with intended baselines. Full production-document/provider storage and permission matrix remains.
 
+  - [x] primary actual Dexie/TipTap owners cover no-save preview, stale/concurrent Apply, delayed autosave, guarded Undo, project preservation, rollback and awaited permission changes with intended baselines.
+  - [ ] Full production-document/provider storage and permission matrix remains.
+
 - [ ] 2.2 Share actual document schema and proposal preparation (2–4h)
       Component: C4.
       Requirements: R4.AC1, R5.AC1, R5.AC3, R11.AC1, R11.AC2.
       Done when: the current editor/Document AI and chat can use the same lazy-loaded content schema, frozen block references, operation validation, and diff preparation, including enabled custom nodes. There is no hidden live editor or second AI loop.
       Status: Partial — shared lazy current editor extension/schema loader, native content validation and host frozen blocks/operations are implemented without another editor or inference loop. Explicit enabled-custom-node and complete Document-AI/chat equivalence qualification remains.
+
+  - [x] shared lazy current editor extension/schema loader, native content validation and host frozen blocks/operations are implemented without another editor or inference loop.
+  - [ ] Explicit enabled-custom-node and complete Document-AI/chat equivalence qualification remains.
 
 - [x] 2.3 Add captured-database revision and write support where needed (2–4h)
       Components: C1, C4.
@@ -102,11 +125,17 @@ Work in three increments: sections 0–1 deliver find/read; section 2 adds docum
       Done when: one Apply records the checkpoint, persists the content and host-owned receipt, and updates mounted editors without an old autosave overwriting it. Duplicate Apply in the same local database does not write again; Undo preserves later user edits by offering history when appropriate. Remote sync winners invalidate obsolete controls without claiming distributed exactly-once behavior.
       Status: Partial — atomic checkpoint/content/receipt, duplicate Apply, actual mounted/late panes, second-handle draft protection and guarded Undo pass; exact5154 PageShell Apply/Undo reload passes. Full remote-sync winner/history-offer UX remains.
 
+  - [x] atomic checkpoint/content/receipt, duplicate Apply, actual mounted/late panes, second-handle draft protection and guarded Undo pass; exact5154 PageShell Apply/Undo reload passes.
+  - [ ] Full remote-sync winner/history-offer UX remains.
+
 - [ ] 2.7 Add scoped, revision-aware project operations (2–4h)
       Component: C5.
       Requirements: R6, R12.AC1.
       Done when: create/rename/description/add/remove operations preserve unknown entries and refuse to overwrite newer observed revisions, validate referenced items, and never delete an item's content when removing an association. Existing thread membership conventions remain consistent.
       Status: Partial — scoped create/rename/description/add/remove and revision-aware preserved unknown/legacy membership are implemented; real DB association/removal/stale revision and current visible-member tests pass. Full project operation/browser/provider matrix remains.
+
+  - [x] scoped create/rename/description/add/remove and revision-aware preserved unknown/legacy membership are implemented; real DB association/removal/stale revision and current visible-member tests pass.
+  - [ ] Full project operation/browser/provider matrix remains.
 
 - [ ] 2.8 Register write tools and present one review card (2–4h)
       Components: C9, C10.
@@ -114,11 +143,17 @@ Work in three increments: sections 0–1 deliver find/read; section 2 adds docum
       Done when: the remaining three tools work through the existing registry; saved documents/projects have accurate links; document edits show Review/Apply changes/Discard with the existing diff UI and no extra confirmation per block or focus stealing.
       Status: Partial — five native tools and one host Review/Apply/Discard/Undo card are installed; native create/source and exact5154 review journey pass. Complete saved-project navigation and focus/permission/disablement coverage remains.
 
+  - [x] five native tools and one host Review/Apply/Discard/Undo card are installed; native create/source and exact5154 review journey pass.
+  - [ ] Complete saved-project navigation and focus/permission/disablement coverage remains.
+
 - [ ] 2.9 Qualify the second increment (1–3h)
       Component: C11.
       Requirements: R4, R5, R6, R10, R12, R13.
       Done when: real create/review/apply/undo/project journeys and relevant lifecycle boundary cases pass, artifacts survive reload, and model prose cannot incorrectly mark a pending change as saved.
       Status: Partial — exact5154 real search/read/propose, Review no-save, Apply/reload, Undo/reload and original editor pass; earlier native-create journey and host/model-prose guard pass. Complete current-head create/project and lifecycle browser matrix remains.
+
+  - [x] exact5154 real search/read/propose, Review no-save, Apply/reload, Undo/reload and original editor pass; earlier native-create journey and host/model-prose guard pass.
+  - [ ] Complete current-head create/project and lifecycle browser matrix remains.
 
 ## 3. Increment three: file ownership and content foundations
 
@@ -232,6 +267,9 @@ Work in three increments: sections 0–1 deliver find/read; section 2 adds docum
       Done when: Files, source receipts, and document review pass the specified keyboard/320 px/390 px/200%-zoom journeys, overlays restore focus, touch targets meet 44 px, and existing themes/reduced motion work without new styling systems.
       Status: Partial — earlier three-theme responsive chat/touch and interrupt controls passed; current blank-theme review/Undo screenshots inspected. Files UI does not exist; its keyboard/mobile/zoom/reduced-motion/focus matrix remains.
 
+  - [x] earlier three-theme responsive chat/touch and interrupt controls passed; current blank-theme review/Undo screenshots inspected.
+  - [ ] Files UI does not exist; its keyboard/mobile/zoom/reduced-motion/focus matrix remains.
+
 ## 5. Complete qualification and documentation
 
 - [ ] 5.1 Exercise lifecycle and authorization with the real supported cloud profile (2–4h)
@@ -258,11 +296,17 @@ Work in three increments: sections 0–1 deliver find/read; section 2 adds docum
       Done when: every new table/index/registry/hook/config option/dependency has been removed or justified by an actual first-release caller, one owner exists for each behavior, and the final scoped diff leaves unrelated user work untouched. No dormant parser framework or second agent/search engine remains.
       Status: Partial — parent independently closed initial/residual assistant source review; uses existing search/tools/storage/editor mechanisms without a second agent/search engine or new dependency. Full Files final scoped diff/simplification review remains.
 
+  - [x] parent independently closed initial/residual assistant source review; uses existing search/tools/storage/editor mechanisms without a second agent/search engine or new dependency.
+  - [ ] Full Files final scoped diff/simplification review remains.
+
 - [ ] 5.5 Run one proportionate final verification pass and retain the receipt (2–4h)
       Component: C11.
       Requirements: R1–R13.
       Done when: applicable named E2E lanes, canonical security/storage/sync/document suites, typechecks, docs checks, search performance check, and static-build smoke pass; introduced failures are fixed; unrelated failures are evidenced. The repeatable artifact receipt records source commit, command/profile, fixture IDs, screenshots/traces, and file checksums. Any publication/deployment remains a separate authorized task following release policy.
       Status: Partial — exact5154 Core/Contracts/configured types and the one named production proposal lane pass; focused actual-owner baselines and artifacts retained. Complete applicable storage/sync/provider/static/docs/performance/full acceptance lanes remain.
+
+  - [x] exact5154 Core/Contracts/configured types and the one named production proposal lane pass; focused actual-owner baselines and artifacts retained.
+  - [ ] Complete applicable storage/sync/provider/static/docs/performance/full acceptance lanes remain.
 
 ## Traceability Matrix
 

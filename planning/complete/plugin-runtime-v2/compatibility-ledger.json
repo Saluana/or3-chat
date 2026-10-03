@@ -4,7 +4,7 @@
   "generator": "scripts/plugin-runtime/generate-compatibility-ledger.ts",
   "inputs": {
     "moduleManifest": "planning/complete/plugin-runtime-v2/compatibility-ledger.modules.json",
-    "moduleManifestSha256": "51216706d8863384247da6daba35ca0fcabfaceb11c1b78391cd022732cc1842",
+    "moduleManifestSha256": "605b4e840d28caee7a2f56b75efddae519707fdc50fbbc4abc984881372ca810",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
     "scopedNuxtImportsDeclarationSha256": "312b4e32418c06c1bdc7a02b6d57d568d8de7320aa50d4fc5c1cf5c8b9503876",
     "behaviorProfiles": "planning/complete/plugin-runtime-v2/compatibility-profiles.json",
@@ -9910,7 +9910,7 @@
       ],
       "nuxtAutoImportModule": "#imports",
       "docs": [
-        "public/_documentation/types/hooks.md"
+        "public/_documentation/hooks/reference.md"
       ],
       "behaviorProfileIds": [],
       "exports": [

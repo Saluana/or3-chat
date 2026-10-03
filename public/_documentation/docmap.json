@@ -431,7 +431,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Choose host, SDK, stored-row, parsed-record, and provider contracts."
+                    "summary": "Choose source and SDK types for chat, storage, hooks, and extensions without copying declarations."
                 },
                 {
                     "name": "chat-types.md",
@@ -450,24 +450,6 @@
                     "categoryOrder": 1,
                     "order": 1,
                     "summary": "Create inputs, stored rows, parsed documents, and local derived fields."
-                },
-                {
-                    "name": "hooks.md",
-                    "path": "/types/hooks",
-                    "title": "Hook types",
-                    "category": "Reference",
-                    "categoryOrder": 1,
-                    "order": 2,
-                    "summary": "Source imports and the canonical typed hook/augmentation reference."
-                },
-                {
-                    "name": "plugins.md",
-                    "path": "/types/plugins",
-                    "title": "Plugin types",
-                    "category": "Reference",
-                    "categoryOrder": 1,
-                    "order": 3,
-                    "summary": "Portable SDK contracts versus trusted host registry types."
                 }
             ]
         },
@@ -629,7 +611,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "The OR3 Notification Center provides real-time, in-app notifications for AI completions, system warnings, and custom plugin events. It works offline-first and syncs across devices when OR3 Cloud is enabled."
+                    "summary": "Use the local-first Notification Center, extend it from source, and understand user scoping and completion alerts."
                 },
                 {
                     "name": "webhooks.md",

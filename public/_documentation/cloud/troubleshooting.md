@@ -41,7 +41,7 @@ The code snippets below run in application source with `useHooks`, `getDb`, and 
 
 **Solutions:**
 - Check browser cookies are enabled
-- Verify Clerk session duration settings
+- For Clerk deployments, verify Clerk session duration settings; for Basic Auth, inspect its cookie and session configuration
 - Check for cookie-blocking extensions
 - Look for `SessionContext` errors in console
 
@@ -139,7 +139,8 @@ Sync error warnings are the only sync-related notification type, and they are:
 - Verify `notification-listeners.client.ts` plugin is loaded
 - Look for `[notify]` entries in the browser console
 - Check for AI completion notifications instead: those only fire when no
-  viewer is attached to the job and the thread is not muted
+  visible subscriber is watching the job and the thread is not muted; see the
+  [background notification policy](/documentation/cloud/notifications#background-job-notifications) for the server-preference rule
 
 ### Bootstrap Taking Forever
 
@@ -200,9 +201,11 @@ hooks.addAction('sync.bootstrap:action:complete', (data) => {
 
 2. **Verify Storage Configuration**
    ```bash
-   OR3_STORAGE_ENABLED=true
-   VITE_CONVEX_URL=https://your-project.convex.cloud
+   OR3_CLOUD_STORAGE_ENABLED=true
+   NUXT_PUBLIC_STORAGE_PROVIDER=fs # or convex / s3 for a source deployment
    ```
+
+   Check the selected provider's required settings in the [environment reference](/documentation/cloud/environment-reference#storage-providers). Filesystem storage needs its root and token secret; S3 needs its bucket, endpoint/region, and credentials; a Convex URL is relevant only to Convex. Use doctor and redacted logs rather than printing secrets.
 
 3. **Check Transfer Queue**
    ```typescript
@@ -287,7 +290,9 @@ console.log('Download state and errors:', transfers.map(({ state, last_error }) 
 - Ensure code runs client-side
 - Verify notification was created
 - Check for console errors
-- Ensure user ID is set correctly
+- Compare the active panel scope with `resolveNotificationUserId(session)`. Rows belonging to another internal user will not appear in the panel.
+- A `notify:action:push` event is a creation request, not proof of storage; validation and `notify:filter:before_store` can reject it.
+- For completion alerts, check the [background notification policy](/documentation/cloud/notifications#background-job-notifications), including tab visibility, subscribers, server preference, and thread muting.
 
 ### Duplicate Notifications
 
@@ -300,8 +305,8 @@ console.log('Download state and errors:', transfers.map(({ state, last_error }) 
 
 **Solutions:**
 - Check for duplicate plugin registrations
-- Use idempotency keys when creating notifications
-- Verify singleton pattern in NotificationService
+- Deduplicate the originating event before emitting `notify:action:push`. `NotificationService.create()` generates a new ID and accepts no idempotency key.
+- Verify owned listener cleanup and the shared service lifecycle; do not create a second service for the same active user/workspace.
 
 ### Notifications Not Syncing
 
@@ -309,7 +314,7 @@ console.log('Download state and errors:', transfers.map(({ state, last_error }) 
 
 **Checks:**
 - Verify OR3 Cloud is enabled
-- Check notification was synced (has `clock` field)
+- Confirm successful outbox delivery and observe the row on another device in the same workspace and internal user scope. A local `clock` field does not prove remote delivery.
 - Verify `read_at` updates are syncing
 
 **Solutions:**
@@ -368,12 +373,9 @@ or `OR3_BACKGROUND_MAX_JOBS_PER_USER` (default 5).
 mode is configured.
 
 **Checks:**
-- Is `OR3_BACKGROUND_STREAMING_ENABLED=true` (both
-  `runtimeConfig.backgroundJobs.enabled` and
-  `public.backgroundStreaming.enabled`)?
-- Is the start mode `background` and the model modality text-only
-  (`modalities === ['text']`)?
-- Is the client on a static build or hitting an old dev process?
+- Confirm the eligibility conditions in [background enablement](/documentation/cloud/background-execution#enablement-and-boundaries): background and sync gates, an authenticated SSR workspace, and text-only model output.
+- For browser-only tools, check the selected job provider's durable client-tool bridge capability. Unsupported browser tools use the foreground loop; server tools can run in background jobs.
+- Confirm the client is using the current SSR server. Eligible turns choose background execution automatically; there is no separate start-mode setting.
 
 ### "It Worked Yesterday" Weirdness
 
@@ -522,7 +524,7 @@ If you're still stuck:
 1. **Check the Logs**
    - Browser console for client-side errors
    - Server logs for SSR errors
-   - Convex dashboard for backend errors
+   - Selected provider logs; the Convex dashboard applies only to Convex deployments
 
 2. **Verify Configuration**
    - Run through the Quick Diagnostic Checklist

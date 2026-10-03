@@ -188,15 +188,13 @@ Event Source → Hook Engine → Plugin Listener → NotificationService → Dex
 
 Notifications for detached background chat jobs follow strict creation rules:
 
-- A local notification is created only when the job has **no in-app subscribers**
-  (`tracker.subscribers.size === 0`), the tab is hidden or subscribers are
-  absent, and the thread is not muted.
+- A visible tab with in-app subscribers suppresses local completion alerts.
+  A hidden tab or a tracker without subscribers can notify, provided the thread
+  is not muted.
 - Muting is stored in Dexie `kv` under `notification_muted_threads`
   (scoped per user as `notification_muted_threads:<userId>` with a legacy
   unscoped fallback).
-- When server-side notifications are preferred, the client skips its own
-  notification and the **server** emits one only when no SSE viewers are
-  connected to that instance (`hasJobViewers(jobId)`).
+- When server-side notifications are preferred and the tracker has no subscribers, the client skips its local alert. The **server** emits one only when no SSE viewers are connected to that instance (`hasJobViewers(jobId)`).
 - Viewer tracking is process-local. In multi-instance deployments, a user
   watching on another server is not seen, so server notifications can still
   fire.
@@ -233,66 +231,19 @@ Notification queries are scoped to the resolved internal user ID. A row in Dexie
 
 ## Troubleshooting
 
-### Notifications Not Appearing
+Use the central [notification diagnostics](/documentation/cloud/troubleshooting#notification-issues)
+for missing, duplicate, or unsynced rows, and [sync warning diagnostics](/documentation/cloud/troubleshooting#too-many-conflict-notifications)
+for repeated warnings. Background completion suppression is defined
+[above](/documentation/cloud/notifications#background-job-notifications).
 
-**Check:**
-```typescript
-// 1. Verify client-side execution
-console.log('Is client?', import.meta.client);
-
-// 2. Check database
-const db = getDb();
-const count = await db.notifications.count();
-console.log('Total notifications:', count);
-```
-
-**Solutions:**
-- Ensure code runs client-side (check `import.meta.client`)
-- Verify notification was created successfully
-- Check browser console for errors
-
-### Notifications Not Syncing
-
-**Check:**
-```bash
-# Verify environment variables
-echo $SSR_AUTH_ENABLED  # Should be "true"
-echo $OR3_SYNC_ENABLED   # Should be "true"
-echo $VITE_CONVEX_URL    # Should be set
-```
-
-**Solutions:**
-- Enable OR3 Cloud features
-- Configure the selected sync backend (a Convex URL is only relevant to Convex)
-- Check network connectivity
-- Verify user authentication
-
-### Too Many Sync Notifications
-
-Sync conflict notifications do not exist, so a storm of them cannot happen.
-If you still see repeated sync error or AI notifications:
-
-- Sync error warnings are suppressed during bootstrap/rescan and deduped within
-  a 15-second window
-- AI completion notifications are skipped while a tab is watching the job
-  (subscribers attached) or when the thread is muted
-- Verify the `notification-listeners.client.ts` plugin is loaded
-- Look for console logs starting with `[notify]`
-
-### Debug Mode
-
-There is no `debug:notifications` flag. Relevant logs appear in the browser
-console under these prefixes:
-
-- `[useNotifications]` - query and subscription errors, invalid muted-thread data
-- `[notify]` - sync event logs from `notification-listeners.client.ts`
-- `[NotificationService]` - service lifecycle errors
-
----
+Logs use `[useNotifications]`, `[NotificationService]`, and `[notify]`.
+There is no `debug:notifications` localStorage flag.
 
 ## API Reference
 
 ### NotificationCreatePayload
+
+Import the source contract from `~/core/hooks/hook-types`. Creation generates a new UUID; deduplicate repeated source events before emitting a push request.
 
 ```typescript
 interface NotificationCreatePayload {
