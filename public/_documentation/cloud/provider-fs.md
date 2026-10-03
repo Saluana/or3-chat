@@ -9,7 +9,7 @@ Managed installations use the fixed profile in [Set up Cloud](/documentation/clo
 - Gateway-mode blob storage using local filesystem paths.
 - Presign/commit/download/delete integration for OR3 storage APIs.
 - Hash-addressed blob persistence (`sha256:<hex>` compatible).
-- Canonical reference-driven, retention-bounded blob GC with a fail-closed fallback.
+- Physical deletion and GC fail closed until a coordinated deletion protocol is available.
 
 ## Install
 
@@ -46,8 +46,9 @@ OR3_STORAGE_WORKSPACE_QUOTA_BYTES=optional-quota-bytes
 - Token secret must be set at startup; missing secret should fail fast.
 - Upload endpoints must enforce server-side max file size.
 - Uploaded bytes should pass SHA-256 integrity verification before commit.
-- Delete validates the canonical `workspace_id:hash` storage ID, removes both
-  the blob and commit sidecar, and is safe to retry.
+- Delete validates the canonical `workspace_id:hash` storage ID. In
+  `or3-provider-fs@0.0.10`, existing blobs or sidecars return HTTP 503; an
+  already absent object is an idempotent success.
 - Presigned tokens are user-bound and configuration rejects lifetimes over one hour.
 - Use `PUT` for FS upload URLs (`/api/storage/fs/upload?token=...`).
 
@@ -55,12 +56,10 @@ OR3_STORAGE_WORKSPACE_QUOTA_BYTES=optional-quota-bytes
 
 - Place `OR3_STORAGE_FS_ROOT` on persistent storage.
 - Use separate volumes for DB and blob storage when possible.
-- With a sync provider that implements canonical storage queries, GC keeps blobs
-  found in live materialized `file_meta` or message/post reference edges and
-  rechecks immediately before deletion. Scans and provider pages are bounded.
-- Without that capability, GC returns `deleted_count: 0`, `status: "disabled"`,
-  and `reason: "canonical_reference_state_required"`. It never falls back to
-  retained sync history.
+- GC returns `deleted_count: 0`, `status: "disabled"`, and
+  `reason: "deletion_coordination_required"` without deleting bytes. Independent
+  canonical scans cannot prevent concurrent restore/reference writes, so physical
+  cleanup remains disabled for every sync backend. Logical Trash retains bytes.
 - Keep `Cache-Control: no-store` on presign/upload/download responses.
 - Downloads apply canonical safe response headers: generic files use an
   octet-stream attachment with `X-Content-Type-Options: nosniff`; supported

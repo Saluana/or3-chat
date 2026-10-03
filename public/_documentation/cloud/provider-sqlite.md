@@ -119,6 +119,16 @@ profile.
   and replay verification are incomplete.
 - One cursor per workspace (not per-table cursors).
 
+## Workspace Files and Trash admission
+
+`or3-provider-sqlite@0.0.13` advertises workspace-item capability v1 for native
+synchronous adapters. Writes to posts or projects with catalog, logical Trash,
+or file-membership semantics require a current client, even when the incoming
+write omits those fields. Admission checks incoming and canonical state inside
+the write transaction before allocating versions or changes. Unsupported
+clients receive HTTP 426 with `OR3_WORKSPACE_ITEM_UPDATE_REQUIRED`. D1 does not
+advertise this transactional capability.
+
 ## Operational Notes
 
 - `:memory:` mode is for tests/dev only; production local-file setups should use persistent disk.
