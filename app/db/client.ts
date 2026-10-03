@@ -330,6 +330,12 @@ export class Or3DB extends Dexie {
             threads: 'id, project_id, [project_id+updated_at], parent_thread_id, [parent_thread_id+anchor_index], root_thread_id, [root_thread_id+updated_at+id], status, pinned, deleted, last_message_at, clock, created_at, updated_at',
         });
 
+        // Exact canonical keyset paging, including ties between message keys.
+        // IndexedDB builds the index without rewriting rows or enqueueing sync.
+        this.version(22).stores({
+            messages: 'id, [thread_id+index+order_key+id], [thread_id+index+order_key], [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at, data.type, [data.type+data.executionState]',
+        });
+
         // Derived-key maintenance must run on every instance, including
         // workspace DBs, and independently of sync capture suppression.
         installDerivedIndexHooks(this);

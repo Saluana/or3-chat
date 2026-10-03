@@ -228,25 +228,25 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C4, C8.
       Requirements: R10.AC1, R10.AC3, R10.AC4, R10.AC5, R10.AC6, R11.AC1.
       Done when: membership/ancestor validation precedes content, bounded lookup returns scoped neighbors and replacement metadata, changed/deleted statuses are truthful, loops terminate, and workspace switches cancel reads.
-      Status: Not started — shared retrieval policy/scoped Dexie tool reader is not implemented; manual card links are separate.
+      Status: Partial — shared retrieval policy and captured-workspace Dexie reader are written, with explicit ancestry/scope bounds, replacement handling, workspace fences and metadata-only cursor invalidation. Expanded lookup currently reports incomplete neighbors outside captured references; production security/cancellation qualification remains unrun.
 
 - [ ] 5.3 Implement bounded parent search and continuation cursors (3h).
       Components: C8.
       Requirements: R10.AC2, R10.AC3, R10.AC6.
       Done when: 500-row/1-MiB work caps, 20-result limits and output-byte limits hold, kinds use verified annotations, per-page ordering is deterministic, and partial scans clearly report incomplete coverage.
-      Status: Not started — bounded parent search/cursors/incomplete-scan results are not implemented.
+      Status: Partial — bounded parent search, deterministic page ranking, signed scoped cursors, row/text/output budgets and explicit incomplete coverage are written. Current-thread tool-result writes are separated from ancestor revision invalidation. Cursor, byte-cap and mutation journeys remain unrun.
 
 - [ ] 5.4 Register the core browser tools with shared schemas and availability checks (2h).
       Components: C8.
       Requirements: R10.AC1, R10.AC2, R11.AC1, R11.AC5.
       Done when: names cannot silently override another registration, context identity is captured rather than passed as model arguments, only appropriate chat threads expose the tools, and a no-tool model retains manual landmark navigation.
-      Status: Not started — core historical retrieval tools are not registered.
+      Status: Partial — core get_message/search_parent definitions and browser registrations are written, with collision cleanup and compaction-ancestry availability. Placement remains client-only through the existing browser bridge; no server-ready advertisement is made. Actual registry/model/browser qualification remains unrun.
 
 - [ ] 5.5 Add the optional canonical chat-reader capability and provider conformance fixtures (3h).
       Components: C9, C12.
       Requirements: R11.AC2, R11.AC3, R11.AC4, R14.AC2, R14.AC3.
       Done when: gateway contracts define bounded by-ID/thread-page reads, existing adapters remain valid without the capability, and shared failure cases verify materialized reads, authorization context and incomplete-history status before provider implementations are added.
-      Status: Not started — canonical gateway chat-reader capability/provider conformance fixtures are not added.
+      Status: Partial — optional canonicalChatHistory v1 contract and bounded query validator are written without requiring existing adapters to implement them. Shared provider conformance fixtures and exact build qualification remain.
 
 ## 6. Phase C — provider implementations and background placement
 
@@ -254,19 +254,19 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C9.
       Requirements: R11.AC2, R11.AC4, R14.AC2.
       Done when: exact workspace/thread/message reads and bounded ordered pages exercise real storage; any necessary JSON/query index migration is documented; retained sync logs are never used as content history; provider builds pass.
-      Status: Not started — SQLite provider-source canonical reader/build qualification pending.
+      Status: Partial — private SQLite source now implements workspace/member-constrained materialized history reads, stable ordered pages and migration 022 for an expression index plus per-thread revision triggers. D1 does not advertise this capability. Provider build, migration/query-plan/conformance qualification and release pins remain.
 
 - [ ] 6.2 Implement Convex canonical chat reads in the provider source/scaffold (4h).
       Components: C9.
       Requirements: R11.AC2, R11.AC4, R14.AC2.
       Done when: workspace-constrained queries and indexes support the contract and preserve new fields; direct-provider auth uses existing token/service pathways; scaffold/generated references do not make an unselected Convex provider load in static builds.
-      Status: Not started — Convex provider-source/scaffold canonical reader pending.
+      Status: Partial — private Convex source/scaffold now implements service-authorized canonical history reads, ordered paging, per-thread revisions and additive compaction lineage schema fields. Generated service reference names are updated. Scaffold regeneration, selected/unselected build and real round-trip qualification remain.
 
 - [ ] 6.3 Integrate current authorization and server tool handlers (3h).
       Components: C8, C9.
       Requirements: R11.AC2, R11.AC4, R15.AC2.
       Done when: trusted job context is required, current `can()` workspace-read checks run before content, revoked membership and foreign/sibling IDs are denied through real boundaries, and no raw request-supplied scope becomes authority.
-      Status: Not started — historical server tools/current authorization handlers are not implemented; reviewed security base is only a prerequisite.
+      Status: Partial — server historical handlers require a matching durable chat job, its captured sync-provider identity, fresh membership and can(workspace.read) checks before reads and return. They fail closed to scope_incomplete. Revocation/forged/sibling production-boundary qualification remains unrun.
 
 - [ ] 6.4 Decide retrieval runtime before freezing the admitted tool catalog (3h).
       Components: C8, C9.

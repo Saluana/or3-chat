@@ -418,3 +418,11 @@ After server/recovery commit `69478760f05a54487869b011387151c0895aa9e4`, Brendon
 Implemented code: exact measured-prefix/full estimates in native preparation/continuation/foreground loops and trusted server tool loops; summary complete-provider-body admission with captured server envelope; production ChatContainer controller and registered composer/message actions; native context meter/blocking recovery; one-use inspect/confirm lossy requests with durable omission metadata and fixed reviewed messages; provider-acceptance draft clearing fenced against later edits/navigation. Optional Dashboard maximum is exposed.
 
 Unverified: changed configuration/prefix/media matrices, strict tool-pair omission edge cases, initial server rejection retry retaining the same durable user turn, precise per-anchor affordances, all product/browser/a11y/performance routes. These are partial implementations, not accepted phases. Thread-history generation routing, retrieval/provider readers, family sidebar/deletion, named full context harness and external rollout/live quality remain. GitHub writes remain held after the recorded approval denial; local source commits are allowed.
+
+## Retrieval implementation checkpoint (2026-10-03 UTC)
+
+Tasks 5.2–5.5 and 6.1–6.3 now have private source implementations. No new test, type, lint, browser or build pass is claimed: Brendon requested that execution stop while implementation advances. Parent review and qualification are pending.
+
+Core tools are advertised as client placement, using the existing browser bridge where supported. Server handlers are registered but no hybrid/server readiness is advertised before capability/synced-lineage admission has been qualified. Providers are separate private source patches, not edits to installed node_modules, releases or changed package pins.
+
+Known remaining criteria: expanded-message neighbors beyond captured references, missing/changed/replacement/cursor security matrix, metadata availability scale cost, cross-tab invalidation ordering, provider migration/conformance/builds, transport bounds, runtime readiness and synced-lineage admission, second-client/reconnect/browser journeys. Cursors now bind ancestor revisions separately from ordinary current-thread result writes. The first implementation is unverified and is not acceptance evidence.
