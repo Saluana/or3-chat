@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown, type MarkdownStorage } from 'tiptap-markdown';
+import { documentToMarkdown } from '~/utils/documents/document-to-markdown';
 
 const editors: Editor[] = [];
 
@@ -26,6 +27,16 @@ afterEach(() => {
 });
 
 describe('tiptap-markdown compatibility', () => {
+    it('exports native document JSON with the installed Markdown serializer', async () => {
+        await expect(documentToMarkdown({
+            type: 'doc',
+            content: [
+                { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Document' }] },
+                { type: 'paragraph', content: [{ type: 'text', text: 'Bold text', marks: [{ type: 'bold' }] }] },
+            ],
+        })).resolves.toBe('## Document\n\n**Bold text**');
+    });
+
     it('round-trips the Markdown structures stored by message editing', () => {
         const source = [
             '# Heading',

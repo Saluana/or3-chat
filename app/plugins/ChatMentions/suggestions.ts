@@ -5,6 +5,15 @@ import {
     createSuggestionRenderLifecycle,
 } from '../shared/suggestion-popover';
 
+declare module '@tiptap/core' {
+    interface Storage {
+        /** Installed by the chat composer; other editors omit this bridge. */
+        or3MentionAttachments?: {
+            attachImage: (id: string) => Promise<void>;
+        };
+    }
+}
+
 interface MentionItem {
     id: string;
     source: 'document' | 'chat' | 'file';
