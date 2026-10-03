@@ -31,7 +31,10 @@ export function trackHistoryRevisions(db: Or3DB): HistoryRevisions {
     }
     const messageCreating = (_key: unknown, row: { thread_id: string }, transaction: Transaction) => schedule(transaction, [row.thread_id]);
     const messageUpdating = (changes: object, _key: unknown, row: { thread_id: string }, transaction: Transaction) => schedule(transaction, [row.thread_id, (changes as Record<string, unknown>).thread_id]);
-    const messageDeleting = (_key: unknown, row: { thread_id: string }, transaction: Transaction) => schedule(transaction, [row.thread_id]);
+    const messageDeleting = (_key: unknown, row: { thread_id: string } | undefined, transaction: Transaction) => {
+        // Dexie also invokes deleting hooks for keys that are already absent.
+        if (row) schedule(transaction, [row.thread_id]);
+    };
     const threadCreating = (_key: unknown, row: { id: string }, transaction: Transaction) => schedule(transaction, [row.id]);
     const threadUpdating = (_changes: object, key: string, _row: unknown, transaction: Transaction) => schedule(transaction, [key]);
     const threadDeleting = (key: string, _row: unknown, transaction: Transaction) => schedule(transaction, [key]);
