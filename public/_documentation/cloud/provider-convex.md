@@ -238,6 +238,24 @@ Convex download URLs are issued only for a workspace member whose canonical
 `file_meta` row is live and has a storage ID. Soft-deleted or pending metadata
 returns no URL, including when an older bare SHA-256 hash form is requested.
 
+## Workspace Files, Trash, and storage deletion
+
+`or3-provider-convex@0.0.10` adds workspace-item capability v1 to direct and
+gateway sync. Upgrade the provider and merge the matching scaffold using
+`init --update`; deploy the schema, sync, storage, workspace cleanup,
+`workspaceItemCapability.ts`, and `storageDeletion.ts` together before running
+the updated client. Older argument validators reject the new capability field.
+Legacy clients receive update guidance when workspace-item semantics cross the
+sync boundary.
+
+Native storage writes and cleanup require an owner or editor. Deletion and GC
+retain a private hash claim until a verified re-upload; sync refuses to restore
+references to collected bytes or stale native storage IDs, including legacy
+metadata without a storage provider ID. The gateway refuses cleanup when the
+backend does not advertise deletion coordination. Filesystem storage paired
+with Convex sync cannot join this transaction and remains fail closed for
+coordinated cleanup.
+
 ## Common Issues
 
 ### Provider not loaded

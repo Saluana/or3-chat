@@ -218,9 +218,8 @@ Quota is the sum of canonical live metadata plus active reservations. If the act
 sync provider does not implement this query, quota enforcement fails closed instead
 of undercounting from incomplete history.
 
-Filesystem and S3 GC are available only with the same canonical query capability. They scan
-a bounded number of retained objects, keeps an object when either live metadata or a
-live reference edge exists, and rechecks both immediately before deleting the blob
-and its commit sidecar/marker. Providers without canonical queries continue to report GC as
-disabled. SQLite and Convex implement the same bounded canonical query contract;
-there is no fallback to `pull()`.
+Filesystem and S3 destructive GC remain disabled until they own deletion coordination
+with the canonical backend. Canonical queries and pre-delete rechecks alone cannot
+prevent concurrent restores or new reference writes. They return
+`deletion_coordination_required` without scanning or deleting objects. SQLite and
+Convex implement the bounded canonical query contract; there is no fallback to `pull()`.

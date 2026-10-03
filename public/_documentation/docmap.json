@@ -647,7 +647,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "Configure SQLite sync runtimes, source launcher selection, native-driver prerequisites, and persistence invariants."
+                    "summary": "Configure SQLite sync runtimes, native drivers, workspace Files and Trash admission, and persistence invariants."
                 },
                 {
                     "name": "provider-fs.md",
@@ -656,7 +656,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 10,
-                    "summary": "Setup and operating guide for the default-stack object storage backend."
+                    "summary": "Configure filesystem object storage, signed transfers, and fail-closed physical deletion and garbage collection."
                 },
                 {
                     "name": "provider-clerk.md",
@@ -674,7 +674,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 12,
-                    "summary": "Dedicated install and wiring guide for the Convex sync/storage/backend provider package."
+                    "summary": "Install and upgrade Convex sync/storage, workspace Files and Trash admission, and coordinated native storage deletion."
                 },
                 {
                     "name": "provider-s3.md",
@@ -683,7 +683,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 13,
-                    "summary": "S3-compatible storage provider for OR3 Cloud."
+                    "summary": "S3 storage setup, checksum verification, admin diagnostics, compatibility testing, and coordinated deletion requirements."
                 },
                 {
                     "name": "deployment-operations.md",
