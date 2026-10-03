@@ -14,10 +14,14 @@
             <span data-testid="fixture-compaction-state">{{ compactor.state.value.status }}</span>
             <span class="sr-only" data-testid="fixture-compaction-result">{{ fixtureResult }}</span>
         </section>
-        <PageShell v-if="ready && compactionJourney" :initial-thread-id="fixtureViewThread" :route-sync="false" class="flex-1 min-h-0" />
+        <section v-if="ready && evidenceJourney" aria-label="Production history qualification">
+            <button data-testid="fixture-history-qualify" :disabled="evidenceRunning" @click="qualifyHistory">Qualify history and families</button>
+            <pre data-testid="fixture-history-receipt">{{ evidenceReceipt }}</pre>
+        </section>
+        <PageShell v-if="ready && compactionJourney && !evidenceJourney" :initial-thread-id="fixtureViewThread" :route-sync="false" class="flex-1 min-h-0" />
         <PageShell v-else-if="ready && workspaceJourney" />
         <ChatContainer
-            v-else-if="ready"
+            v-else-if="ready && !evidenceJourney"
             :thread-id="threadId || undefined"
             :message-history="messageHistory"
             pane-id="production-chat-journey"
@@ -47,6 +51,18 @@ const workspaceJourney = useRoute().query.workspace === '1';
 
 const compactionJourney = useRoute().query.compaction === '1';
 const presentationJourney = compactionJourney && useRoute().query.presentation === '1';
+const evidenceJourney = compactionJourney && useRoute().query.history === '1';
+const evidenceRunning = ref(false);
+const evidenceReceipt = ref('');
+async function qualifyHistory() {
+    evidenceRunning.value = true;
+    try {
+        const { qualifyCompactionHistory } = await import('./compactionHistoryQualification');
+        evidenceReceipt.value = JSON.stringify(await qualifyCompactionHistory(fixtureSourceThread.value));
+    } catch (error) {
+        evidenceReceipt.value = JSON.stringify({ failure: error instanceof Error ? error.stack : String(error) });
+    } finally { evidenceRunning.value = false; }
+}
 const contextJourney = useRoute().query.context === '1';
 onErrorCaptured((error) => {
     console.error('[production-chat-journey] captured component error', error instanceof Error ? error.stack : String(error));
@@ -223,6 +239,12 @@ function installDeterministicFetch(): void {
 
         const body = await requestBody(input, init);
         const messages = Array.isArray(body.messages) ? body.messages : [];
+        if (compactionJourney) {
+            const requests = JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]') as unknown[];
+            localStorage.setItem('or3:e2e:compaction-requests', JSON.stringify([...requests, {
+                model: body.model, messages, tools: body.tools, max_tokens: body.max_tokens,
+            }]));
+        }
         const prompt = [...messages]
             .reverse()
             .find(
@@ -275,7 +297,7 @@ function installDeterministicFetch(): void {
                             if (signal?.aborted) { resolve(); return; }
                             signal?.addEventListener('abort', () => resolve(), { once: true });
                         });
-                        const localAnchor = presentationJourney ? (await getDb().messages.where('thread_id').equals(fixtureSourceThread.value).toArray())
+                        const localAnchor = presentationJourney || evidenceJourney ? (await getDb().messages.where('thread_id').equals(fixtureSourceThread.value).toArray())
                             .filter((row) => row.role === 'assistant' && !row.pending && !row.deleted).sort((a, b) => b.index - a.index)[0]?.id : undefined;
                         if (!stopped) enqueue(sseChunk(JSON.stringify({
                             summary_markdown: '## Objective\nContinue the implementation.\n## Important Details\nPreserve app/example.ts exactly.\n## Work State\nImplementation is pending.\n## Next Move\nInspect original evidence.\n## Relevant Files\napp/example.ts',
@@ -432,7 +454,14 @@ onMounted(async () => {
     }
     if (compactionJourney) {
         await seedCompactionSource();
-        if (presentationJourney) await seedCompactionPresentation();
+        if (evidenceJourney) {
+            const source = fixtureSourceThread.value;
+            await getDb().messages.bulkPut(Array.from({ length: 550 }, (_, index) => ({ id: `${source}-history-${index}`,
+                thread_id: source, role: index % 2 ? 'assistant' : 'user', index: index + 5,
+                created_at: 1, updated_at: 1, clock: 1, pending: false, deleted: false,
+                data: { content: `Historical decision ${index}: preserve the source. ` + 'Confirmed evidence remains inspectable. '.repeat(8) } })));
+        }
+        if (presentationJourney || evidenceJourney) await seedCompactionPresentation();
     }
     threadId.value = localStorage.getItem(THREAD_KEY) ?? '';
     if (threadId.value) {

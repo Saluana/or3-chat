@@ -3,11 +3,12 @@ import type { Or3DB } from '~/db/client';
 import type { Thread, Post } from '~/db/schema';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import { getKvByName, tombstoneKvByName } from '~/db/kv';
+import { normalizeProjectData } from '~/utils/projects/normalizeProjectData';
 
 export const FAMILY_PAGE_SIZE = 50;
 export const familyExpansionPreferenceName = (rootId: string) => 'compaction-family:expanded:' + encodeURIComponent(rootId);
 export interface FamilyFilter { query?: string; projectId?: string; pinned?: boolean }
-type Root = { id: string; damaged?: boolean; original?: Thread };
+type Root = { id: string; damaged?: boolean; cyclic?: boolean; original?: Thread };
 const compare = (a: { updated_at: number; created_at: number; id: string }, b: typeof a) =>
     b.updated_at - a.updated_at || b.created_at - a.created_at || b.id.localeCompare(a.id);
 export function threadToSidebar(thread: Thread): UnifiedSidebarItem {
@@ -33,8 +34,10 @@ function rootResolver(db: Or3DB) {
             const path: string[] = []; const visited = new Set<string>(); let row: Thread | undefined = start;
             let result: Root; let standalone = false;
             for (;;) {
-                if (visited.has(row.id)) { standalone = true; result = { id: start.id, damaged: true }; break; }
-                const cached = resolved.get(row.id); if (cached) { result = cached; break; }
+                if (visited.has(row.id)) { standalone = true; result = { id: start.id, damaged: true, cyclic: true }; break; }
+                const cached = resolved.get(row.id);
+                if (cached?.cyclic) { standalone = true; result = { id: start.id, damaged: true, cyclic: true }; break; }
+                if (cached) { result = cached; break; }
                 visited.add(row.id); path.push(row.id);
                 if (!row.parent_thread_id) { result = { id: row.id, original: row.deleted ? undefined : row }; break; }
                 const parent: string = row.parent_thread_id;
@@ -92,12 +95,15 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
         if (families.length > options.limit) break;
     }
     const documents: Post[] = [];
-    if (options.type !== 'thread') {
+    if (options.type !== 'thread' && options.filter.pinned !== true) {
+        const project = options.filter.projectId === undefined ? undefined : await db.projects.get(options.filter.projectId);
+        const projectDocuments = options.filter.projectId === undefined ? undefined : new Set(project && !project.deleted
+            ? normalizeProjectData(project.data).filter((entry) => entry.kind === 'doc').map((entry) => entry.id) : []);
         let before: [number, number, string] | undefined;
         while (documents.length <= options.limit) {
             const query = before ? db.posts.where('[updated_at+created_at+id]').below(before) : db.posts.orderBy('[updated_at+created_at+id]');
             const page = await query.reverse().limit(100).toArray(); if (!page.length) break;
-            for (const row of page) if (row.postType === 'doc' && !row.deleted
+            for (const row of page) if (row.postType === 'doc' && !row.deleted && (!projectDocuments || projectDocuments.has(row.id))
                 && (!options.filter.query || row.title.toLowerCase().includes(options.filter.query.toLowerCase()))) documents.push(row);
             const last = page.at(-1)!; before = [last.updated_at, last.created_at, last.id];
             if (page.length < 100) break;

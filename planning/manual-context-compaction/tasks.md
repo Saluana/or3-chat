@@ -1,6 +1,6 @@
 # Tasks
 
-Progress snapshot: **12 complete, 39 partial, 4 not started (55 tasks)**. Checked boxes mean the full stated task criteria are implemented and verified at the linked boundary. Partial and unverified work remains unchecked; this is not a full-feature completion claim. Reviewed background-usage runtime is adopted at `e832700f` (tree `82821322afb51b88273a4f8560187bcfb23a4eef`); publication and exact-head CI remain held. Evidence and retained first failures: [evidence.md](./evidence.md). Each task is intended to take roughly 1–4 hours; split a task at its existing component/provider boundary if discovery makes it larger. Dependencies run from top to bottom. Where fixtures are written first, their final assertions become green only when the corresponding production task is complete; do not commit permanently skipped cases as a substitute.
+Progress snapshot: **12 complete, 41 partial, 2 not started (55 tasks)**. Checked boxes mean the full stated task criteria are implemented and verified at the linked boundary. Partial and unverified work remains unchecked; this is not a full-feature completion claim. Reviewed background-usage runtime is adopted at `e832700f` (tree `82821322afb51b88273a4f8560187bcfb23a4eef`); publication and exact-head CI remain held. On 2026-10-03 Brendon removed per-phase review gates; locally authorized work continues with final parent review. Evidence and retained first failures: [evidence.md](./evidence.md). Each task is intended to take roughly 1–4 hours; split a task at its existing component/provider boundary if discovery makes it larger. Dependencies run from top to bottom. Where fixtures are written first, their final assertions become green only when the corresponding production task is complete; do not commit permanently skipped cases as a substitute.
 
 This plan changes native chat only. Preserve unrelated working-tree edits. Provider source changes require their owning source checkout and builds; installed `node_modules` files are not implementation targets. No task authorizes publication, a stable release, or production data changes.
 
@@ -222,7 +222,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C4, C8, C9, C12.
       Requirements: R10.AC1, R10.AC2, R10.AC3, R10.AC4, R10.AC5, R10.AC6, R11.AC1, R11.AC2, R11.AC4.
       Done when: fixtures cover T0→T1→T2 landmarks, siblings, forged IDs/cursors, neighbor leakage, late insertion, later replacement, deletion, workspace switch and bounded scan continuation; denials reach the intended authorization/scope guard.
-      Status: Not started — production get_message/search_history scope/security matrix is not added.
+      Status: Partial — registered production get_message/search_parent journey now covers two real rolling compactions, inherited/immediate evidence, sibling/unknown IDs, scoped neighbors, late expansion, changed/deleted/replaced rows, forged/changed cursors, byte/row continuation, cross-connection invalidation and a held-read workspace switch. Missing summary/anchor/captured-row states are finite. Current security subset passes; full authorization/revocation/provider and fail-before audit traceability remains open.
 
 - [ ] 5.2 Implement the shared retrieval policy and captured-workspace Dexie reader (4h).
       Components: C4, C8.
@@ -286,13 +286,13 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C10, C11, C12.
       Requirements: R12.AC1, R12.AC2, R12.AC3, R12.AC4, R12.AC5, R12.AC6, R13.AC1, R13.AC2, R13.AC3.
       Done when: fixtures include siblings, legacy/missing roots, a root outside the first page, matching child-only search, mixed documents, filtered project/pinned views, keyboard expansion and hard-delete with descendants.
-      Status: Not started — grouped-sidebar/deletion journeys are not added.
+      Status: Partial — production DB and real PageShell journeys cover legacy/wrong/missing roots, cycles, child-only search, project/pinned/mixed documents, 10k rows, independently paged members, keyboard/reload through both sidebar consumers and descendant checks before/after hooks. Retained first failures exposed cached cycle collapse and unrelated document leakage. Full deletion/sync audit remains open.
 
 - [ ] 7.2 Implement lazy root resolution and shared family pagination (4h).
       Components: C4, C10.
       Requirements: R12.AC1, R12.AC2, R12.AC4, R12.AC5, R14.AC1.
       Done when: top-level limits count distinct families/documents, sort keys match DB scanning, both sidebar consumers share one flat row model, and expanded family members page separately without loading messages.
-      Status: Partial — shared metadata-only family pagination now serves both sidebar consumers, counts distinct families/documents, follows actual parents with cycle/missing-parent handling and pages members separately. Incorrect/legacy root hints remain discoverable. 10k-scale, exact ordering and no-message-read proof remain.
+      Status: Partial — shared metadata-only pagination serves both actual sidebar consumers and counts distinct families/documents with independently paged members. Real DB checks retain wrong/legacy/missing/cyclic roots and roots beyond the newest page. The 10k browser fixture records collapsed grouping maximum16ms (7 samples), member maximum64.1ms (3 samples), with zero message reads. Keyboard/reload consumer integration passes; final types/contracts are pending.
 
 - [ ] 7.3 Render collapsible rows, workspace KV expansion and row-menu navigation (3h).
       Components: C10.
@@ -304,13 +304,13 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C10, C11.
       Requirements: R12.AC3, R12.AC5, R13.AC2, R13.AC3.
       Done when: search reveals matching children without altering saved expansion, project/pinned membership stays constrained, and missing/cyclic parents cannot hide otherwise usable local threads.
-      Status: Partial — child-only search reveals matching members without changing saved expansion; thread project/pinned filters and finite damaged-lineage copy are wired. Filtered surface integration, mixed documents and cyclic/missing-parent journeys remain.
+      Status: Partial — both real sidebar consumers preserve saved expansion through child-only search; production project/pinned/mixed-document membership checks pass after correcting unrelated document leakage. Cached cyclic roots now keep each usable member standalone, with the retained first failure proving the old collapse. Missing-root rows remain visible. Final type/static qualification is pending.
 
 - [ ] 7.5 Guard central hard deletion and represent unavailable historical references (2h).
       Components: C11.
       Requirements: R13.AC1, R13.AC2, R13.AC3.
       Done when: known descendants block central hard delete with an explicit soft-delete alternative, deleted content is never returned by tools, and remote purge/missing message cases leave summaries usable without silent reparenting.
-      Status: Partial — central hard deletion checks retained descendants before and after hooks inside the write transaction and exposes a soft-delete alternative. Recovery/retired expansion cleanup participates in deletion. Cards/tools represent unavailable originals without reparenting. Descendant races, full remote-purge/deletion journeys and cleanup scale remain unverified.
+      Status: Partial — real central deletion blocks retained descendants, including a child inserted by a before hook, and rolls back that child/deletion atomically. Soft deletion preserves usable compacted prompt context and expansion; final-member deletion tombstones the retired preference. Deleted tools return no content, and missing originals/recipes report incomplete coverage. Full remote-purge/second-client and cleanup scale matrices remain.
 
 ## 8. Complete evidence and documentation
 
@@ -324,7 +324,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C2, C8, C10, C12.
       Requirements: R3.AC4, R3.AC6, R10.AC6, R12.AC4, R15.AC3.
       Done when: the 10k-thread fixture records grouping/refresh durations, bounds per-call retrieval and member reads, performs no sidebar message-content reads, and explains/resolves p95 grouping above 500 ms on the recorded configuration. A separate mocked-inference fixture proves untrimmed requests beyond 128k and near a 1,000,000-token model window traverse native request construction/transport with valid per-message storage sizes; performance fixes do not reintroduce an application context cap.
-      Status: Partial — actual native transport sends every byte of 600,000 and 3,800,000-byte canonical histories under a 1M model window, with valid 100k-byte per-row source content and provider output maximum. 10k-thread grouping timings, bounded retrieval/member reads and sidebar no-content-read evidence remain.
+      Status: Partial — actual native transport sends all 600,000/3,800,000 canonical bytes under a 1M window with valid per-row sizes. The new real-browser 10k-thread fixture records 7 grouping and 3 independent member-page samples, maxima16ms/64.1ms, with zero message reads. Actual registered search proves physical-row/processed-byte/result/output bounds and continuation. Final owner/type/static checks are pending.
 
 - [ ] 8.3 Run and record three manual quality evaluations, including two rolling compactions each (3h, with user-approved model traffic).
       Components: C5, C12.

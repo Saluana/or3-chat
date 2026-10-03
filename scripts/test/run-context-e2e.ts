@@ -11,14 +11,15 @@ if (process.env.PW_SKIP_WEB_SERVER !== 'true') {
 }
 const output = resolve(process.env.OR3_CONTEXT_ARTIFACT_DIR ?? '.qualification/context'); await mkdir(output, { recursive: true });
 const scenario = process.env.OR3_CONTEXT_SCENARIO ?? 'all';
-if (!['all', 'recovery', 'compaction'].includes(scenario)) throw new Error('Unknown context scenario.');
-const selection = scenario === 'all' ? 'compaction|context recovery' : scenario === 'recovery' ? 'native context recovery' : 'PageShell compaction';
+if (!['all', 'recovery', 'compaction', 'history'].includes(scenario)) throw new Error('Unknown context scenario.');
+const selection = scenario === 'all' ? 'compaction|context recovery' : scenario === 'recovery' ? 'native context recovery'
+    : scenario === 'history' ? 'compaction history and families' : 'PageShell compaction';
 const source = Bun.spawnSync(['git', 'rev-parse', 'HEAD'], { stdout: 'pipe', stderr: 'pipe' });
 if (source.exitCode) throw new Error('Cannot identify the context source revision.');
 const sha = source.stdout.toString().trim();
 const dirty = Bun.spawnSync(['git', 'status', '--porcelain'], { stdout: 'pipe', stderr: 'pipe' }).stdout.toString();
-await writeFile(resolve(output, 'source.json'), JSON.stringify({ sha, dirty, fixture: 'production-chat-journey-v2',
-    scope: 'native context recovery and manual compaction', providerTraffic: 'scripted only' }, null, 2));
+await writeFile(resolve(output, 'source.json'), JSON.stringify({ sha, dirty, fixture: 'production-chat-journey-v3',
+    scope: 'native context recovery, manual compaction, history tools and families', providerTraffic: 'scripted only' }, null, 2));
 const child = Bun.spawn(['bunx', 'playwright', 'test', 'tests/e2e/production-chat-journey.spec.ts',
     '--grep', selection, '--workers=1', '--retries=0', '--reporter=line,json', '--output', resolve(output, 'browser')], {
     stdout: 'inherit', stderr: 'inherit', env: { ...process.env, OR3_PRODUCTION_JOURNEY_TEST_HARNESS: 'true',

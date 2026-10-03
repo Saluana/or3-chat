@@ -1,0 +1,30 @@
+# Continuing local compaction qualification
+
+Brendon removed per-phase parent review gates on 2026-10-03. This packet records continuing local evidence for final review. It does not authorize remote publication, live inference or deployed migrations, and does not claim all55 task acceptance.
+
+## Core-entry evidence and boundaries
+
+Configuration, themes and plugins cannot repair the core family resolver's cycle cache or its project/pinned membership query. Providers are irrelevant to this browser metadata defect. The smallest correction is in the existing `thread-families` utility consumed by both sidebar composables; no new public placement contract, cache or service is introduced. The existing retrieval service now reports processed-byte work and builds bounded Unicode excerpts without first allocating the whole historical string. Its registered tool consumers retain the existing workspace/auth/ancestor boundaries.
+
+Provider storage changes stay in the private SQLite source checkout. Migration023 corrects the reader/index expression mismatch and keeps revision bookkeeping compatible with the existing independently retained sync rows and orphan cleanup. Removing that bookkeeping foreign key does not change current workspace membership authorization. The older pinned provider fixture and verifier remain intact; additive canonical qualification configs verify committed current host contract bytes.
+
+## Production browser evidence
+
+- `.qualification/history-second` retains the first real cycle-cache failure. The resolver formerly reused a cyclic standalone member as another member's root, hiding a usable row. The correction keeps cyclic starts standalone.
+- `.qualification/history-filters-first` retains the real unrelated-document leakage failure. Mixed project results now derive document membership from normalized project entries; pinned-only lists omit documents, which have no pinned field.
+- `.qualification/context-expanded-second` passes history and native same-ID recovery. Registered tools cover inherited/immediate rows across two real controller/writer compactions, sibling denial, later expansion, changed/deleted/replaced content, deterministic ranking and verified kinds, empty partial pages, signed cursor tampering/query/ancestor revision changes, current-chat continuation, a second connection's ancestor edit, cancellation and an actual held-read workspace switch. Missing summary/anchor/captured rows fail explicitly. Each expanded page is bounded by500 physical rows,1MiB processed text,20 results and16KiB output.
+- `.qualification/context-continuation-third` passes the real PageShell compaction journey with captured summary-only provider-body evidence. The native continuation sends the saved summary plus one new user input, without raw ancestor assistant/tool/user rows or internal history recipes. All previous cancellation/no-partial-child/source-row/draft/reload/original/tool-navigation/new-chat checks remain. The two earlier new-assertion failures are retained: multipart content required inspecting text parts, and normal continuation legitimately advances child activity/revision fields.
+- `.qualification/context-family-ui-first` passes both real sidebar consumers: Enter/Space expansion, four flat members, workspace KV reload, a matching sibling alone under child-only search, and unchanged saved collapse after search. Its final screenshot was opened and inspected. Existing16 light/dark/mobile Library images remain delivered with their original receipts.
+- The disposable Chromium1280×720/Mac browser holds10,000 metadata threads. Seven fresh grouping samples and three independent member-page samples have maxima16ms and64.1ms (empirical nearest-rank p95 for those sample sizes). A real Dexie reading hook records zero message-table reads during those grouping/member calls. This is local measured evidence, not a claim about every device or a deployed load test.
+
+## Provider evidence
+
+- SQLite `/tmp/task3-sqlite-canonical-first.log` proves the original temporary sort in the real query plan. `/tmp/task3-sqlite-canonical-second.log` retains existing sync/usage owner failures caused by the new revision foreign key. Both were resolved through migration023 without weakening read membership checks.
+- Normal SQLite artifact rebuild passes. `/tmp/task3-sqlite-canonical-current-owners.log` passes112 cases across gateway/background/registration with committed current host contracts. The new owner imports actual built adapter/DB/migration artifacts and verifies materialized reads after log deletion, optional lineage fields, legacy missing-order-key tie pages in both directions, by-ID bounds, cancellation, revision triggers, forbidden workspace and revoked membership, with an index plan free of temporary sorting.
+- `/tmp/task3-convex-canonical-first.log` passes222 existing provider cases, including the new real internal scaffold-handler owner. The configuration initially merged the old broad include; it is now corrected to select only the canonical scaffold owner. The fixture's storage query implementation is not deployed Convex validator/transaction isolation. No live backend, publication or released pin is qualified by this run.
+
+## Permissions, artifacts and rollback
+
+Only private source writes, disposable local DBs and one sequential local validation lane are used. Browser loopback execution required the normal tool escalation after a sandbox EPERM; it was approved. No live model endpoint, credential, real-user deletion or remote write was used. Library receipts are `output/compaction-review/library-screenshots.json`.
+
+Rollback is a revert of the coherent host/provider source commits; no deployment or released dependency was changed. The new migration preserves existing revision counters on upgrade. Final builds/contracts/types and per-task closure follow this packet. Live quality task8.3, compatible provider/Workflows publication/pins, deployed second-client/reconnect qualification and remote exact-head CI remain separate external gates.

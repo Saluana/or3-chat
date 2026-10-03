@@ -21,7 +21,14 @@ const textOf = (row: Row) => {
     return typeof content === 'string' ? content : Array.isArray(content)
         ? content.map((part) => object(part)).filter((part) => part.type === 'text' && typeof part.text === 'string').map((part) => part.text).join('\n') : '';
 };
-const excerpt = (text: string, limit: number) => { const characters = Array.from(text); return { text: characters.slice(0, limit).join(''), truncated: characters.length > limit }; };
+const excerpt = (text: string, limit: number) => {
+    const characters: string[] = [];
+    for (const character of text) {
+        if (characters.length === limit) return { text: characters.join(''), truncated: true };
+        characters.push(character);
+    }
+    return { text: characters.join(''), truncated: false };
+};
 async function hash(value: unknown) {
     const data = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value)));
     return [...new Uint8Array(data)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -273,7 +280,7 @@ export function createHistoryRetrievalService() {
             const results = found.slice(0, 20).map(({ score: _score, landmark: _landmark, proximity: _proximity,
                 orderIndex: _index, orderKey: _key, ...row }) => row);
             if (expanded && complete && capturedSeen < state.refs.length) throw new ScopeError('Some captured originals are unavailable or not synced. Search coverage is incomplete.');
-            const result = { status: 'ok', results, scanned_rows: scanned, fetched_rows: fetched, scan_complete: complete,
+            const result = { status: 'ok', results, scanned_rows: scanned, fetched_rows: fetched, scanned_bytes: scannedBytes, scan_complete: complete,
                 next_cursor: complete ? undefined : await cursor({ binding, position, ancestor, pageOffset, providerCursor, capturedSeen, expires: Date.now() + 10 * 60 * 1000 }) };
             while (bytes(result) > 16 * 1024 && results.length) results.pop();
             await guard(ctx);

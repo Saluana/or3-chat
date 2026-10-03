@@ -6,6 +6,91 @@ test.skip(
 );
 
 const chatPage = '/__or3-chat-journey-test';
+test('PageShell compaction families retain keyboard expansion and child-only search across sidebar consumers', async ({ page }, info) => {
+    test.setTimeout(120_000);
+    await page.route('**openrouter.ai/**', (route) => route.abort());
+    await page.goto(`${chatPage}?compaction=1&presentation=1`);
+    await expect(page.locator('[data-compaction-card]')).toBeVisible({ timeout: 60_000 });
+    const root = await page.evaluate(() => localStorage.getItem('or3:e2e:compaction-source'));
+    const header = page.locator(`[data-thread-family="${root}"][data-family-kind="group-header"]`);
+    const members = page.locator(`[data-thread-family="${root}"][data-family-kind="thread-member"]`);
+    const toggle = header.getByRole('button', { name: /^(Expand|Collapse) / });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false'); await toggle.focus(); await page.keyboard.press('Enter');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true'); await expect(members).toHaveCount(4);
+    await page.reload(); await expect(toggle).toHaveAttribute('aria-expanded', 'true'); await expect(members).toHaveCount(4);
+    await page.getByRole('button', { name: 'Chats', exact: true }).click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true'); await expect(members).toHaveCount(4);
+    await toggle.click(); await expect(toggle).toHaveAttribute('aria-expanded', 'false'); await expect(members).toHaveCount(0);
+    const search = page.getByRole('textbox', { name: 'Search chats, documents, and projects', exact: true });
+    await search.fill('alternative');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true'); await expect(toggle).toBeDisabled(); await expect(members).toHaveCount(1);
+    await expect(members).toContainText('Branch'); await expect(members).toContainText('Launch checklist · alternative');
+    await search.fill(''); await expect(toggle).toHaveAttribute('aria-expanded', 'false'); await expect(members).toHaveCount(0);
+    await page.getByRole('button', { name: 'Home', exact: true }).filter({ hasText: 'Home' }).click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await toggle.focus(); await page.keyboard.press('Space'); await expect(members).toHaveCount(4);
+    await info.attach('family-ui-assertions', { contentType: 'application/json', body: JSON.stringify({
+        source: process.env.OR3_CONTEXT_SOURCE_SHA, root, consumers: ['SidebarHomePage', 'SidebarTimeGroupedList'],
+        assertions: ['Enter and Space', 'four flat members', 'workspace KV reload', 'child-only match', 'search leaves saved expansion unchanged'] }) });
+    const screenshot = info.outputPath('family-keyboard-reload.png'); await page.screenshot({ path: screenshot, animations: 'disabled' });
+    await info.attach('family-keyboard-reload', { path: screenshot, contentType: 'image/png' });
+});
+
+test('compaction history and families use production scope and deletion policies', async ({ page }, info) => {
+    test.setTimeout(180_000);
+    await page.route('**openrouter.ai/**', (route) => route.abort());
+    await page.goto(`${chatPage}?compaction=1&history=1`);
+    const run = page.getByTestId('fixture-history-qualify'); await expect(run).toBeVisible({ timeout: 90_000 });
+    await run.click();
+    const receipt = page.getByTestId('fixture-history-receipt');
+    await expect(receipt).not.toBeEmpty({ timeout: 60_000 });
+    const result = JSON.parse(await receipt.innerText());
+    await info.attach('history-family-assertions', { contentType: 'application/json', body: JSON.stringify({
+        source: process.env.OR3_CONTEXT_SOURCE_SHA ?? 'unrecorded', ...result }) });
+    expect(result.failure).toBeUndefined();
+    expect(result.inherited.status).toBe('ok'); expect(result.immediate.status).toBe('ok');
+    expect(result.inherited.message.thread_id).toBe(result.root); expect(result.immediate.message.thread_id).toBe(result.parent);
+    expect(result.siblingRead.status).toBe('out_of_scope'); expect(result.unknown.status).toBe('out_of_scope');
+    expect(result.laterDefault.status).toBe('out_of_scope'); expect(result.laterExpanded.message.outside_compaction_scope).toBe(true);
+    expect(result.changed.message.changed_since_compaction).toBe(true); expect(result.deleted.status).toBe('deleted');
+    expect(result.deleted.message).toBeUndefined(); expect(result.replacement.status).toBe('superseded');
+    expect(result.first.status).toBe('ok'); expect(result.first.scan_complete).toBe(false);
+    expect(result.first.scanned_rows).toBeLessThanOrEqual(500); expect(result.first.fetched_rows).toBeLessThanOrEqual(500);
+    expect(result.first.results.length).toBeLessThanOrEqual(20); expect(result.second.scan_complete).toBe(true);
+    expect(result.repeated.results).toEqual(result.first.results);
+    expect(result.emptyPartial.results).toEqual([]); expect(result.emptyPartial.scan_complete).toBe(false); expect(result.emptyPartial.next_cursor).toBeTruthy();
+    expect(result.kindResults.results.map((item: { message_id: string }) => item.message_id)).toContain(`${result.root}-tool-evidence`);
+    for (const lookup of [result.inherited, result.immediate, result.laterExpanded])
+        expect(lookup.neighbors.every((item: { thread_id: string }) => [result.root, result.parent].includes(item.thread_id))).toBe(true);
+    expect(result.tampered.status).toBe('scope_incomplete'); expect(result.differentQuery.status).toBe('scope_incomplete');
+    expect(result.currentWriteContinuation.status).toBe('ok'); expect(result.ancestorWriteContinuation.status).toBe('scope_incomplete');
+    expect(result.expandedPages.length).toBeGreaterThan(2);
+    for (const item of result.expandedPages) {
+        expect(item.status).toBe('ok'); expect(item.fetched_rows).toBeLessThanOrEqual(500);
+        expect(item.scanned_rows).toBeLessThanOrEqual(500); expect(item.results.length).toBeLessThanOrEqual(20);
+        expect(item.scanned_bytes).toBeLessThanOrEqual(1024 * 1024);
+        expect(Buffer.byteLength(JSON.stringify(item))).toBeLessThanOrEqual(16 * 1024);
+    }
+    expect(result.expandedPages.at(-1).scan_complete).toBe(true); expect(result.canceled).toBe(true);
+    expect(result.missingSummary.status).toBe('scope_incomplete'); expect(result.missingCaptured.status).toBe('scope_incomplete');
+    expect(result.missingAnchor.status).toBe('scope_incomplete');
+    expect(result.switched.status).toBe('scope_incomplete'); expect(result.switched.message).toBeUndefined();
+    expect(result.crossConnectionContinuation.status).toBe('scope_incomplete');
+    expect(result.filtered.items.map((item: { id: string }) => item.id)).toEqual(['qualification-family-match']);
+    expect(result.filtered.items[0].family.rootId).toBe('qualification-family-root');
+    expect(result.filteredMembers.members.map((item: { id: string }) => item.id)).toEqual(['qualification-family-match']);
+    expect(result.latest).toBe('qualification-family-newest');
+    expect(result.damaged.items.filter((item: { family: { damaged?: boolean } }) => item.family.damaged)).toHaveLength(3);
+    expect(result.mixed.items.some((item: { type: string }) => item.type === 'document')).toBe(true);
+    expect(result.projectMixed.items.filter((item: { type: string }) => item.type === 'document').map((item: { id: string }) => item.id)).toEqual([result.projectDocumentId]);
+    expect(result.pinnedMixed.items.some((item: { type: string }) => item.type === 'document')).toBe(false);
+    expect(result.descendantError).toBe('thread_has_descendants'); expect(result.hookError).toBe('thread_has_descendants');
+    expect(result.hookRollback).toBe(true); expect(result.preferenceRetained).toBe(true); expect(result.retiredPreference).toBe(true);
+    expect(JSON.stringify(result.survivingContext)).toContain('## Objective');
+    expect(result.scale.messageReads).toBe(0); expect(result.scale.p95).toBeLessThan(500);
+    expect(result.scale.memberP95).toBeLessThan(500);
+});
+
 test.beforeEach(async ({ page }) => {
     page.on('console', (message) => {
         if (message.type() === 'error' && message.text().includes('[production-chat-journey]')) console.error(message.text());
@@ -475,7 +560,8 @@ test('PageShell compaction summary reload and original landmark navigation', asy
             const tx = db.transaction(['threads', 'messages'], 'readonly');
             const read = <T>(store: string) => new Promise<T[]>((resolve, reject) => { const request = tx.objectStore(store).getAll(); request.onsuccess = () => resolve(request.result as T[]); request.onerror = () => reject(request.error); });
             const [threads, messages] = await Promise.all([
-                read<{ id: string; parent_thread_id?: string; summary_message_id?: string; branch_mode?: string }>('threads'),
+                read<{ id: string; parent_thread_id?: string; summary_message_id?: string; branch_mode?: string;
+                    clock: number; updated_at: number; last_message_at?: number }>('threads'),
                 read<{ id: string; thread_id: string; role: string; pending?: boolean; data: { content?: unknown; kind?: string; compaction?: { model: string; anchor_message_id: string } } }>('messages'),
             ]);
             db.close();
@@ -499,10 +585,34 @@ test('PageShell compaction summary reload and original landmark navigation', asy
     await expect(page.getByRole('textbox', { name: 'Message input' })).toHaveText('Keep this unsent source draft.');
     await page.getByRole('tab', { name: 'Compaction original evidence — compacted', exact: true }).click();
     await expect(card).toBeVisible();
-    const saved = await readRows(); expect(saved.sourceRows).toEqual(original.sourceRows); expect(saved.children).toHaveLength(1); expect(saved.summaries).toHaveLength(1); expect(saved.totalMessages).toBe(original.totalMessages + 1);
+    let saved = await readRows(); expect(saved.sourceRows).toEqual(original.sourceRows); expect(saved.children).toHaveLength(1); expect(saved.summaries).toHaveLength(1); expect(saved.totalMessages).toBe(original.totalMessages + 1);
     expect(saved.children[0]).toMatchObject({ branch_mode: 'compacted', summary_message_id: saved.summaries[0]!.id });
     expect(saved.summaries[0]).toMatchObject({ role: 'system', pending: false, data: { compaction: { model: 'scripted-compaction-model:exact-route', anchor_message_id: `${source}-tool-evidence` } } });
     await page.reload(); await expect(card).toBeVisible(); expect(await readRows()).toEqual(saved);
+    await send(page, 'journey:summary-only-continuation');
+    await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toBeVisible({ timeout: 30_000 });
+    const continuation = await page.evaluate(() => {
+        const requests = JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]') as Array<{ model: string; messages: Array<{ role: string; content: unknown }> }>;
+        return requests.findLast((request) => request.messages.some((message) => message.role === 'user'
+            && JSON.stringify(message.content).includes('journey:summary-only-continuation')));
+    });
+    expect(continuation).toBeTruthy();
+    const userMessages = continuation!.messages.filter((message) => message.role === 'user'); expect(userMessages).toHaveLength(1);
+    expect(JSON.stringify(userMessages[0]!.content)).toContain('journey:summary-only-continuation');
+    expect(continuation!.messages.some((message) => message.role === 'assistant' || message.role === 'tool')).toBe(false);
+    expect(JSON.stringify(continuation)).toContain('## Objective'); expect(JSON.stringify(continuation)).not.toContain('Original decision:');
+    expect(JSON.stringify(continuation)).not.toContain('history_scope');
+    await info.attach('summary-only-provider-body', { contentType: 'application/json', body: JSON.stringify(continuation) });
+    const savedAfterContinuation = await readRows(); expect(savedAfterContinuation.sourceRows).toEqual(saved.sourceRows);
+    expect(savedAfterContinuation.children).toHaveLength(saved.children.length);
+    for (const child of saved.children) {
+        // Ordinary continuation updates activity/revision, while lineage and
+        // the saved summary identity remain unchanged.
+        const { clock: _clock, updated_at: _updatedAt, last_message_at: _activity, ...lineage } = child;
+        expect(savedAfterContinuation.children.find((row) => row.id === child.id)).toMatchObject(lineage);
+    }
+    expect(savedAfterContinuation.summaries).toEqual(saved.summaries);
+    expect(savedAfterContinuation.totalMessages).toBe(saved.totalMessages + 2); saved = savedAfterContinuation;
     await expect(card.locator('details')).not.toHaveAttribute('open');
     await card.locator('summary').click(); await expect(card.locator('details')).toHaveAttribute('open', '');
     await expect(card.getByText('Historical reference generated by scripted-compaction-model:exact-route. Verify details in the original conversation.')).toBeVisible();
