@@ -60,7 +60,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C1, C9.
       Requirements: R2.AC2, R14.AC2, R15.AC2.
       Done when: contract cases written first prove terminal usage survives canonical persistence and sync through Convex, schema/scaffold changes agree with the host, and rebuilt artifacts are consumed in host verification without editing installed dist.
-      Status: Partial — Convex83583de normal-built gateway and freshly generated scaffold now execute54 existing owner cases through the current selected host; usage/canonical handlers, missing capability, partial delivery and revocation pass. Source build/standalone types/pack and current-host owner types pass. Deployed validators/transaction isolation and actual released-provider second-client/reconnect remain6.5.
+      Status: Partial — Convex83583de normal-built gateway and freshly generated scaffold now execute54 existing owner cases through the current selected host; usage/canonical handlers, missing capability, partial delivery and revocation pass. Source build/standalone types/pack and current-host owner types pass. Draft [Convex3](https://github.com/Saluana/or3-provider-convex/pull/3) at9c7b061 now has54 current-host cases and successful exact-head owning CI; its follow-up changes only qualification setup/README. Deployed validators/transaction isolation and actual released-provider second-client/reconnect remain6.5.
 
 - [x] 2.6 Specify failing budget/admission and lossy-confirmation cases before replacing implicit trimming (3h).
       Components: C2, C12.
@@ -134,7 +134,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C6, C9, C10.
       Requirements: R12.AC4, R14.AC1, R14.AC2.
       Done when: a version upgrade preserves existing data/indexes; Convex host and provider-owned schemas retain all new fields; SQLite JSON round trips are verified; no eager legacy rewrite or startup outbox flood occurs.
-      Status: Partial — Dexie21 preserves legacy indexes/data with no eager outbox. Actual rebuilt SQLite local→canonical→second-client projection/reload/purge retains lineage/summary/usage. Current selected Convex scaffold/runtime agree locally; deployed field validators and released cross-client serialization remain6.2/6.5.
+      Status: Partial — Dexie21 preserves legacy indexes/data with no eager outbox. Actual rebuilt SQLite local→canonical→second-client projection/reload/purge retains lineage/summary/usage. Current selected Convex scaffold/runtime agree locally. Owning [SQLite4](https://github.com/Saluana/or3-provider-sqlite/pull/4)/[Convex3](https://github.com/Saluana/or3-provider-convex/pull/3) draft PRs now have green exact-head CI; deployed field validators and released cross-client serialization remain6.2/6.5.
 
 - [x] 3.4 Implement recursive prompt projection with compacted stopping boundaries (3h).
       Components: C4, C7.
@@ -260,7 +260,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C9.
       Requirements: R11.AC2, R11.AC4, R14.AC2.
       Done when: workspace-constrained queries and indexes support the contract and preserve new fields; direct-provider auth uses existing token/service pathways; scaffold/generated references do not make an unselected Convex provider load in static builds.
-      Status: Partial — Convex83583de actual rebuilt selected gateway→fresh generated internal indexed handler passes current-host scope/partial summary/revocation/later-gap qualification; unselected registry has no active adapter. Normal build/pack, standalone source and current-host owner types pass. Full static/SSR host builds preserve old installed-provider compatibility; they do not adopt this private reader. Deployed validators/transactions and real token/service round trips remain unqualified.
+      Status: Partial — Convex83583de actual rebuilt selected gateway→fresh generated internal indexed handler passes current-host scope/partial summary/revocation/later-gap qualification; unselected registry has no active adapter. Normal build/pack, standalone source and current-host owner types pass. Full static/SSR host builds preserve old installed-provider compatibility; they do not adopt this private reader. Draft [Convex3](https://github.com/Saluana/or3-provider-convex/pull/3) at9c7b061 and its exact-head types/tests/build/archive CI are green; only qualification setup/README changed from83583de. Deployed validators/transactions and real token/service round trips remain unqualified.
 
 - [x] 6.3 Integrate current authorization and server tool handlers (3h).
       Components: C8, C9.
@@ -278,7 +278,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C1, C7, C9, C12.
       Requirements: R2.AC2, R8.AC5, R9.AC2, R11.AC2, R11.AC3, R14.AC2, R15.AC2.
       Done when: summary, scope, branch fields and usage survive local→canonical→second-client reads, partial delivery blocks safely, and background retrieval/usage survives navigation and reconnect on supported providers.
-      Status: Partial — Actual normal-built SQLite adapter/DB/migration plus two disposable Dexie clients prove atomic summary/lineage fields, partial pair rejection, canonical usage finalization/pull, DB reconnect and bounded authoritative snapshot/purge recovery.76 owner cases pass against current host. Selected Convex source-built gateway/scaffold passes54 local owners; Workflows pure source integration passes separately. Compatible release/pins, deployed Convex validators/transactions, second-client background/retrieval reconnect and live backend qualification remain approval/access prerequisites.
+      Status: Partial — Actual normal-built SQLite adapter/DB/migration plus two disposable Dexie clients prove atomic summary/lineage fields, partial pair rejection, canonical usage finalization/pull, DB reconnect and bounded authoritative snapshot/purge recovery.The76-case gateway owner now also passes within113 affected cases across three SQLite files; selected Convex source-built gateway/scaffold passes54 local owners. Draft [SQLite4](https://github.com/Saluana/or3-provider-sqlite/pull/4) at1ea1308/[Convex3](https://github.com/Saluana/or3-provider-convex/pull/3) at9c7b061 have successful exact-head owning CI, publication skipped. Workflows pure integration and complete disposable0.1.2 package canary pass separately. Compatible release/pins, deployed Convex validators/transactions, second-client background/retrieval reconnect and live backend qualification remain approval/access prerequisites.
 
 ## 7. Phase D — flat lineage groups and deletion
 
