@@ -318,7 +318,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C12.
       Requirements: R15.AC1, R15.AC2, R15.AC3.
       Done when: the named harness is green, request-body evidence proves summary-only context and no implicit trimmed sends, failure paths show zero partial children, and report/screenshots/assertions are repeatable from the manifest.
-      Status: Partial — the named two-scenario context harness passes (context-final, 11.0s), retaining rejected-turn same-ID reload recovery plus cancellation/DB/reload/original tool-anchor/draft/ordinary-new-chat assertions. Sixteen real presentation screenshots were inspected. Summary-only continuation, security/retrieval/sidebar/deletion and the full scenario set remain. Library upload is blocked by unavailable prepare_uploads; local artifacts are retained.
+      Status: Partial — the named two-scenario context harness passes (context-final, 11.0s), retaining rejected-turn same-ID reload recovery plus cancellation/DB/reload/original tool-anchor/draft/ordinary-new-chat assertions. Sixteen real presentation screenshots were inspected and saved to Library with verified write receipts. Summary-only continuation, security/retrieval/sidebar/deletion and the full scenario set remain; local artifacts are retained.
 
 - [ ] 8.2 Measure the documented scale fixture and remove accidental whole-history work (3h).
       Components: C2, C8, C10, C12.
