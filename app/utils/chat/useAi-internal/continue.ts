@@ -419,8 +419,10 @@ export async function continueMessageImpl(
             modelOverride ||
             ctx.defaultModelId;
         if (!ownsThread()) return;
-        const contextPolicy = await ctx.resolveContextPolicy?.(modelId, continuationAbortController.signal);
-        if (!contextPolicy) throw new ChatContextAdmissionError({ ok: false, code: 'model_metadata_unavailable' });
+        const resolvedPolicy = await ctx.resolveContextPolicy?.(modelId, continuationAbortController.signal);
+        if (!resolvedPolicy) throw new ChatContextAdmissionError({ ok: false, code: 'model_metadata_unavailable' });
+        const contextPolicy = { ...resolvedPolicy, measuredUsage: target.data && typeof target.data === 'object'
+            ? (target.data as Record<string, unknown>).usage : undefined };
         // Last setup gate: never publish stream state into a new chat.
         if (!ownsThread()) return;
         if (orMessages.length === 0)

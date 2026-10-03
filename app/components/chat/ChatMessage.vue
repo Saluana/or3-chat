@@ -407,6 +407,7 @@
                                 v-bind="pluginActionButtonProps"
                                 :icon="action.icon"
                                 :aria-label="action.tooltip || action.id"
+                                :disabled="action.disabled?.(messageActionContext())"
                                 @click="() => runExtraAction(action)"
                             ></UButton>
                         </UTooltip>
@@ -458,6 +459,7 @@ const props = withDefaults(
         threadId?: string;
         interactive?: boolean;
         retryDisabled?: boolean;
+        compactionAction?: { start: (anchorMessageId?: string) => Promise<void>; blockedReason?: string };
     }>(),
     { interactive: true },
 );
@@ -1041,16 +1043,16 @@ async function onBranch() {
 // Narrow to expected role subset (exclude potential 'system' etc.)
 const actionRole: 'user' | 'assistant' =
     props.message.role === 'assistant' ? 'assistant' : 'user';
-const extraActions = useMessageActions({
+const registeredActions = useMessageActions({
     role: actionRole,
 });
+const messageActionContext = () => ({ message: props.message, threadId: props.threadId, compaction: props.compactionAction });
+const extraActions = computed(() => registeredActions.value.filter((action) => !action.visible || action.visible(messageActionContext())));
 
 async function runExtraAction(action: ChatMessageAction) {
     try {
-        await action.handler({
-            message: props.message,
-            threadId: props.threadId,
-        });
+        if (action.disabled?.(messageActionContext())) return;
+        await action.handler(messageActionContext());
     } catch (e: unknown) {
         const description =
             e instanceof Error ? e.message : 'Error running action';

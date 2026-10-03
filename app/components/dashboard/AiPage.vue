@@ -228,7 +228,6 @@
         <!-- Remains dormant until native context admission consumes the preference. -->
         <section
             id="dashboard-ai-context-section"
-            v-show="false"
             class="section-card space-y-3"
             role="group"
             aria-labelledby="ai-section-context"

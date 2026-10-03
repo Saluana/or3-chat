@@ -49,6 +49,9 @@ export interface ChatMessage {
 }
 
 export interface SendMessageParams {
+    /** Explicit read-only omission inspection, followed by a one-use confirmation. */
+    inspectLossyRequest?: boolean;
+    lossyConfirmation?: import('./lossy-request').LossyRequestPreview;
     files?: { type: string; url: string }[];
     model?: string;
     file_hashes?: string[];
@@ -96,7 +99,7 @@ export type SendFailureReason =
 
 export type SendResult =
     | { status: 'accepted'; requestId: string; userMessageId?: string; assistantMessageId?: string }
-    | { status: 'rejected'; requestId?: string; reason: SendFailureReason; error?: string }
+    | { status: 'rejected'; requestId?: string; reason: SendFailureReason; error?: string; lossyPreview?: import('./lossy-request').LossyRequestPreview }
     | { status: 'failed'; requestId: string; reason: SendFailureReason; error: string; userMessageId?: string; assistantMessageId?: string }
     | { status: 'aborted'; requestId: string; reason: 'aborted'; userMessageId?: string; assistantMessageId?: string }
     | { status: 'complete'; requestId: string; userMessageId: string; assistantMessageId: string }
@@ -106,7 +109,7 @@ export type ChatRequestState =
     | { status: 'idle' }
     | { status: 'admitted'; requestId: string }
     | { status: 'persisted'; requestId: string; userMessageId: string }
-    | { status: 'streaming'; requestId: string; userMessageId: string; assistantMessageId: string }
+    | { status: 'streaming'; requestId: string; userMessageId: string; assistantMessageId: string; providerAccepted?: true }
     | { status: 'terminal'; requestId: string; result: SendResult };
 
 export type RegisterSendResult = (

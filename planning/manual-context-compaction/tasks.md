@@ -1,6 +1,6 @@
 # Tasks
 
-Progress snapshot: **12 complete, 25 partial, 18 not started (55 tasks)**. Checked boxes mean the full stated task criteria are implemented and verified at the linked boundary. Partial and unverified work remains unchecked; this is not a full-feature completion claim. Reviewed background-usage runtime is adopted at `e832700f` (tree `82821322afb51b88273a4f8560187bcfb23a4eef`); publication and exact-head CI remain held. Evidence and retained first failures: [evidence.md](./evidence.md). Each task is intended to take roughly 1–4 hours; split a task at its existing component/provider boundary if discovery makes it larger. Dependencies run from top to bottom. Where fixtures are written first, their final assertions become green only when the corresponding production task is complete; do not commit permanently skipped cases as a substitute.
+Progress snapshot: **12 complete, 27 partial, 16 not started (55 tasks)**. Checked boxes mean the full stated task criteria are implemented and verified at the linked boundary. Partial and unverified work remains unchecked; this is not a full-feature completion claim. Reviewed background-usage runtime is adopted at `e832700f` (tree `82821322afb51b88273a4f8560187bcfb23a4eef`); publication and exact-head CI remain held. Evidence and retained first failures: [evidence.md](./evidence.md). Each task is intended to take roughly 1–4 hours; split a task at its existing component/provider boundary if discovery makes it larger. Dependencies run from top to bottom. Where fixtures are written first, their final assertions become green only when the corresponding production task is complete; do not commit permanently skipped cases as a substitute.
 
 This plan changes native chat only. Preserve unrelated working-tree edits. Provider source changes require their owning source checkout and builds; installed `node_modules` files are not implementation targets. No task authorizes publication, a stable release, or production data changes.
 
@@ -72,7 +72,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C2.
       Requirements: R2.AC4, R3.AC1, R3.AC2, R3.AC3, R3.AC5, R3.AC6, R16.AC3.
       Done when: capacity comes from OpenRouter metadata, native chat has no 128k cap/8k fallback/fixed or percentage reserve, optional user maximum intersects with model capacity, reply allowance uses the actual remainder/model output maximum, and measured-prefix/full-payload checks distinguish estimated occupancy from known capacity.
-      Status: Partial — native useChat and its continuation helper require validated capacity with no fallback/reserve/implicit trim. Browser/server dispatch share complete-body admission with configuration/tool overhead and actual remaining/model output allowance. The old unbound continuation fallback now rejects missing policy without target writes. Measured-prefix/full-payload preview integration remains; no full completion claim.
+      Status: Partial — complete-body admission now uses exact measured wire-prefix/configuration matching and max(full estimate, measured prompt + suffix); native initial/continuation/tool iterations and trusted server tool iterations supply durable usage. Reply allowance is excluded from input-prefix configuration identity; older hashes safely fall back. New product code is unverified per the user instruction to stop incremental tests; meaningful stale/media/prefix and final route qualification remain.
 
 - [ ] 2.7a Integrate existing catalog/cache metadata with budget readiness and refresh (2h).
       Components: C2.
@@ -84,13 +84,13 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C2.
       Requirements: R16.AC1, R16.AC2, R16.AC3, R16.AC5.
       Done when: `AiPage.vue` and `useAiSettings` support `maxContextTokens: number | null`, default/legacy/reset values mean Use model limit, invalid custom input is rejected, an above-model value remains saved for other models, and reload/workspace isolation match existing preferences.
-      Status: Partial — prototype Dashboard maximum handlers persist through existing KV, validate input and fence save/reset/workspace updates; null-to-null Reset explicitly clears unsaved input. Visible Reset now has its own announced error and retry after an actual rejected KV write;10 mounted cases pass. The unenforced maximum remains hidden and the footer no longer advertises it. Programmatic mounted-handler proof is not full product-flow/browser qualification. Actual native consumption, approved exposure and browser/keyboard/theme acceptance remain pending; no full task advances. Rebased onto cloud10a99316; parent independently accepted correction source at c17e5e91; native/UX qualification remains open.
+      Status: Partial — existing optional maximum/KV controls are now exposed alongside the native context meter and product compaction action. Persistence and reset had prior focused evidence. The newly exposed product flow needs final browser/accessibility qualification; no new pass is claimed.
 
 - [ ] 2.7c Capture the optional user maximum in generation admission and reconnect metadata (3h).
       Components: C2, C1.
       Requirements: R16.AC4, R16.AC5.
       Done when: new generations capture the current preference, foreground/background iterations and reconnect retain that value, server admission still resolves the model's actual capacity independently, and internal context metadata never becomes an unrelated provider parameter.
-      Status: Partial — native generations capture durable optional maximum and explicit reply allowance; foreground/server tool requests retain them after caller/settings changes. Versioned OR3 envelope survives real job checkpoints and worker lease recovery, including a failed terminal write, without becoming provider configuration or usage fingerprint input. Server facts come independently from the SDK catalog. Auxiliary compaction transport still needs the same server envelope; product action routing and provider/browser qualification remain. Hidden Dashboard control stays dormant.
+      Status: Partial — auxiliary summary transport now carries the same captured maximum/output envelope and complete-body admission as native transport, including SSR-independent capacity. Prior foreground/server/recovery evidence remains valid for its committed source. New auxiliary/product integration and provider/browser qualification remain unverified.
 
 - [ ] 2.8 Admit native send/retry/continue before durable turn mutations (4h).
       Components: C2, C4.
@@ -108,13 +108,13 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C2.
       Requirements: R5.AC1, R5.AC2, R5.AC3, R5.AC4.
       Done when: users inspect omitted groups/counts, confirmation binds the exact candidate, protected content and tool pairs remain intact, omission metadata persists, and subsequent iterations cannot increase omissions without a new decision.
-      Status: Not started — user-reviewed exact lossy omission candidate/confirmation is not implemented.
+      Status: Partial — explicit inspection builds complete oldest-turn omissions, preserves all system/summary/latest-user suffix content, binds a one-use candidate to DB/workspace generation/thread/source fingerprint/model/catalog/user choices and complete provider bytes, persists context_omission, and freezes omissions through native iteration inputs. Final legacy-filter mutation rejects rather than silently changing the reviewed candidate. Inspection/list/confirmation/cancel UI is wired. Tool-pair edge cases, race/admission failures and next-normal-turn behavior need meaningful final verification; no new tests were run at the user’s direction.
 
 - [ ] 2.11 Add the reactive meter and blocking banner to native composer content (3h).
       Components: C2, C7.
       Requirements: R3.AC1, R3.AC2, R3.AC4, R3.AC5, R3.AC6, R4.AC2, R4.AC4, R5.AC1, R16.AC3, R16.AC4.
       Done when: the meter uses the full model window by default (including 1,000,000), labels an active user maximum and reply capacity separately, shows metadata/usage uncertainty honestly, preserves drafts, and responds to settings/model changes after 120 ms without auto-compaction or media hydration. Compact now is not advertised until Phase B is usable.
-      Status: Not started — native context meter/blocking banner is not implemented.
+      Status: Partial — native composer now has a 120ms-debounced read-only canonical preview with text-count memoization, catalog facts, tool/configuration overhead, 70/90% theme-token thresholds, optional maximum, reply capacity and explicit unknown media cost. It invokes no send hooks or media hydration. Real context errors expose compact/edit/model/lossy recovery. Draft clearing waits for provider acceptance and fences intervening edits/navigation. Final meter/attachments/performance/accessibility/browser and initial-server-rejection same-turn retry qualification remain.
 
 ## 3. Phase B — schemas, history boundaries and atomic commit
 
@@ -196,19 +196,19 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C5.
       Requirements: R1.AC5, R7.AC2, R7.AC7, R11.AC1.
       Done when: direct/static and forced SSR routes work, summarizer tools/background/fallback models are absent, ordinary chat filters do not inject unrelated context, there is at most one corrective call, and abort stops late persistence.
-      Status: Partial — same-model auxiliary transport/options/cancellation and one correction pass; direct/static versus forced-SSR runtime/routing qualification remains.
+      Status: Partial — same-model auxiliary summary now prepares the actual complete provider body before inference and sends captured context policy through authenticated transport; specific tool-excerpt retry and one corrective response remain. Newly integrated direct/static versus forced-SSR runtime/routing qualification is pending; no new pass claimed.
 
 - [ ] 4.5 Implement the compaction controller and eligibility state (3h).
       Components: C3, C4, C5, C6.
       Requirements: R1.AC1, R1.AC2, R1.AC3, R1.AC4, R1.AC5, R6.AC4, R8.AC4, R16.AC2, R16.AC4.
       Done when: all triggers share one workspace-bound cancellable operation with the admitted optional context preference, pending jobs/tools and short scopes disable it, draft is preserved, model/source changes make it stale, and no background threshold initiates compaction. A user maximum that makes summarization too large is explained with explicit recovery choices.
-      Status: Partial — workspace-bound controller/eligibility/cancellation, captured preferences and truthful commit receipt are independently reviewed at da817454. Product triggers/model-catalog/routing and visible recovery choices are not wired.
+      Status: Partial — production ChatContainer now owns the reviewed cancellable workspace/source/model controller, resolves real model facts and durable preferences, and routes successful children through normal thread selection. Composer progress/model/Cancel and failure copy are wired without consuming drafts. Exact per-anchor UI eligibility, all-pane/source-busy routing and final product qualification remain.
 
 - [ ] 4.6 Register composer/message/thread actions and render the compaction card (3h).
       Components: C3, C7.
       Requirements: R1.AC1, R1.AC2, R1.AC4, R9.AC2, R9.AC3, R9.AC5, R11.AC5.
       Done when: actions use existing registries, the card survives reload with summary/landmarks/counts, summary edit/retry is unavailable, manual links work without model tools, and the current message-renderer work is accommodated.
-      Status: Partial — existing renderer/card/reload/counts and read-only controls are implemented; corrected named navigation/card/tool evidence journey passes at a8e9cd8e. Composer/message/thread generation actions and final product-native browser qualification remain absent; earlier browser failures are retained.
+      Status: Partial — composer and message generation actions now use existing registries and the production pane controller. Existing card/reload/manual navigation evidence is retained. Thread-history action, complete eligibility affordances, accessibility and final product-native browser qualification remain; new action code has not been tested per the user instruction.
 
 - [ ] 4.7 Wire source/anchor and reverse-child navigation through the existing selection flow (2h).
       Components: C7.

@@ -1,4 +1,4 @@
-import { captureUsagePrefix, attachRequestUsage } from '~~/shared/chat/request-usage';
+import { captureUsagePrefix, attachRequestUsage, estimateMeasuredChatRequest } from '~~/shared/chat/request-usage';
 import { readRequestUsage, type RequestUsage } from '~~/shared/chat/compaction';
 import { countTokensApprox } from './tokens';
 import { admitProviderRequest, captureContextEnvelope, ChatContextAdmissionError, type ContextRequestPolicy, type ContextRequestEnvelope } from '~~/shared/chat/context-budget';
@@ -216,6 +216,8 @@ export type OpenRouterStreamParams = {
     responseTimeoutMs?: number;
     idleTimeoutMs?: number;
     contextPolicy?: ContextRequestPolicy;
+    /** First valid provider event, after initial admission/error handling. */
+    onProviderAccepted?: () => void;
 };
 
 /** Single provider-body constructor used by admission and dispatch. */
@@ -243,7 +245,12 @@ export async function prepareOpenRouterRequest(params: OpenRouterStreamParams): 
     }
     return admitProviderRequest(body, { ...params.contextPolicy,
         requestedCompletionTokens: params.contextPolicy.requestedCompletionTokens ?? params.maxCompletionTokens },
-        countTokensApprox, params.signal);
+        countTokensApprox, params.signal, async (request) => {
+            const { messages, ...configuration } = request;
+            return estimateMeasuredChatRequest({ model: params.model, messages, tools: request.tools,
+                modalities: request.modalities, configuration, usage: params.contextPolicy?.measuredUsage,
+                countText: countTokensApprox });
+        });
 }
 
 export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGenerator<ORStreamEvent, void, unknown> {
@@ -285,9 +292,12 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
         tools: requestSnapshot.tools, modalities: requestSnapshot.modalities, configuration: providerConfiguration,
         countText: countTokensApprox }).catch(() => undefined);
     const usageRequestId = crypto.randomUUID();
-    const measuredEvent = (event: ORStreamEvent): ORStreamEvent => event.type === 'usage'
-        ? { ...event, requestUsage: attachRequestUsage(usagePrefix, event.usage,
+    let providerAccepted = false;
+    const measuredEvent = (event: ORStreamEvent): ORStreamEvent => {
+        if (!providerAccepted && !signal?.aborted) { providerAccepted = true; params.onProviderAccepted?.(); }
+        return event.type === 'usage' ? { ...event, requestUsage: attachRequestUsage(usagePrefix, event.usage,
             { requestId: usageRequestId, iteration: 1, measuredAt: Date.now() }) } : event;
+    };
 
     // Req 3, 5, 6: Try server route first (/api/openrouter/stream) if available.
     // Only 404/405 and genuine network failures are treated as "route unavailable";

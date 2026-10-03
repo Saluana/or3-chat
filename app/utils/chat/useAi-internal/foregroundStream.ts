@@ -202,6 +202,7 @@ export type ForegroundStreamContext = {
     modalities: string[];
     reasoning?: OpenRouterReasoningConfig;
     contextPolicy?: ContextRequestPolicy;
+    onProviderAccepted?: () => void;
     tools?: ToolDefinition[];
     abortSignal: AbortSignal;
     assistantId: string;
@@ -329,11 +330,13 @@ export async function runForegroundStreamLoop(
             >[0]['orMessages'],
             modalities: ctx.modalities,
             reasoning: ctx.reasoning,
-            contextPolicy: ctx.contextPolicy,
+            contextPolicy: ctx.contextPolicy ? { ...ctx.contextPolicy,
+                measuredUsage: normalizedState.requestUsage ?? ctx.contextPolicy.measuredUsage } : undefined,
             threadId: ctx.threadId,
             messageId: ctx.assistantId,
             tools: admittedTools,
             signal: ctx.abortSignal,
+            onProviderAccepted: ctx.onProviderAccepted,
         });
 
         const rawAssistant: ChatMessage = {

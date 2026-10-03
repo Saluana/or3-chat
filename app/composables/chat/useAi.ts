@@ -27,6 +27,7 @@ import type { ChatSendPreparation, ChatSendCommit } from '~~/shared/hooks/hook-d
  * - Abort always finalizes stream accumulator state
  */
 
+import { prepareLossyRequest, confirmLossyRequest } from '~/utils/chat/lossy-request';
 import {
     ref,
     shallowRef,
@@ -2112,11 +2113,19 @@ export function useChat(
             )
             .join('\n\n');
         let canonicalHistory = sendMessagesParams.historyOverride ?? rawMessages.value.slice();
+        let measuredUsage: unknown;
         let sourceFingerprint: string | undefined;
         if (preparationThreadId) {
             try {
                 const projection = await resolveThreadProjection(preparationThreadId, requestScope.originDb);
                 sourceFingerprint = JSON.stringify(projection);
+                for (const row of [...projection.messages].reverse()) {
+                    if (row.role !== 'assistant') continue;
+                    if (row.data && typeof row.data === 'object' && !Array.isArray(row.data)) {
+                        const usage = (row.data as Record<string, unknown>).usage;
+                        if (usage) { measuredUsage = usage; break; }
+                    }
+                }
                 if (!sendMessagesParams.historyOverride) canonicalHistory = projectTranscriptForOpenRouter(
                     storedMessagesToCanonicalTranscript(projection.messages));
             } catch (error) {
@@ -2131,7 +2140,7 @@ export function useChat(
         if (!readiness.ok) throw new ChatContextAdmissionError(readiness);
         const contextPolicy: ContextRequestPolicy = Object.freeze({ model: readiness.metadata,
             userMaxContextTokens: capturedPreference.maxContextTokens, source: readiness.source,
-            requestedCompletionTokens: sendMessagesParams.maxCompletionTokens });
+            requestedCompletionTokens: sendMessagesParams.maxCompletionTokens, measuredUsage });
         const systemMessage = await buildSystemPromptMessage({ threadId: preparationThreadId,
             promptSelection: newPromptSelection, activePromptContent: activePromptContent.value,
             masterPrompt });
@@ -2172,10 +2181,25 @@ export function useChat(
             || await isBackgroundClientToolBridgeAvailable();
         const allowBackgroundStreaming = backgroundStreamingAllowed.value && browserToolBridgeAvailable
             && modalities.length === 1 && modalities[0] === 'text';
-        if (!prepared.delegation) await prepareOpenRouterRequest({ model: modelId, orMessages, modalities, reasoning,
+        const providerPreparation = { model: modelId, orMessages, modalities, reasoning,
             tools: (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs).length
                 ? (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs) : undefined,
-            contextPolicy, signal: preparationSignal });
+            contextPolicy, signal: preparationSignal };
+        const lossyScope = { db: requestScope.originDb, generation: workspaceGeneration,
+            threadId: preparationThreadId, sourceFingerprint };
+        let lossyPreview: Awaited<ReturnType<typeof prepareLossyRequest>> | undefined;
+        let contextOmission: Awaited<ReturnType<typeof confirmLossyRequest>>['omission'] | undefined;
+        let reviewedLossyMessages: string | undefined;
+        if (sendMessagesParams.inspectLossyRequest || sendMessagesParams.lossyConfirmation) {
+            if (prepared.delegation) return { status: 'rejected', requestId, reason: 'unavailable',
+                error: 'Delegated requests cannot omit native history. Edit the request or compact the conversation.' };
+            if (sendMessagesParams.inspectLossyRequest) lossyPreview = await prepareLossyRequest(providerPreparation, lossyScope);
+            else {
+                const confirmed = await confirmLossyRequest(sendMessagesParams.lossyConfirmation!, providerPreparation, lossyScope);
+                orMessages = confirmed.messages; contextOmission = confirmed.omission;
+                reviewedLossyMessages = JSON.stringify(orMessages);
+            }
+        } else if (!prepared.delegation) await prepareOpenRouterRequest(providerPreparation);
         if (sourceFingerprint && JSON.stringify(await resolveThreadProjection(preparationThreadId!, requestScope.originDb)) !== sourceFingerprint)
             return { status: 'rejected', requestId, reason: 'unavailable', error: 'Conversation changed during preparation. Retry the request.' };
         if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
@@ -2184,6 +2208,8 @@ export function useChat(
             || JSON.stringify(modelSupportsTools ? toolRegistry.getEnabledDefinitions({ workspaceId: requestScope.workspaceId,
                 threadId: admissionThreadId }) : []) !== JSON.stringify(enabledToolDefs))
             return { status: 'rejected', requestId, reason: 'unavailable', error: 'Request configuration changed during preparation. Retry the request.' };
+        if (lossyPreview) return { status: 'rejected', requestId, reason: 'context_full', lossyPreview,
+            error: 'Review the listed omissions before sending this one request.' };
         if (!requestScope.threadId) {
             const newThread = await createThreadInDb(
                 requestScope.originDb,
@@ -2241,6 +2267,7 @@ export function useChat(
                 ...userTranscriptData(nextUserMessageId),
                 content: persistedUserText,
                 attachments: files ?? [],
+                ...(contextOmission ? { context_omission: contextOmission } : {}),
             },
             file_hashes: file_hashes.length
                 ? serializeFileHashes(file_hashes)
@@ -2499,6 +2526,10 @@ export function useChat(
             // Old side-effecting final filters retain their once-only post-write
             // order. Their final native body is still admitted before inference;
             // universal zero-write admission requires migration to pure prepare.
+            if (reviewedLossyMessages && JSON.stringify(orMessages) !== reviewedLossyMessages) {
+                throw Object.assign(new Error('A final request filter changed the reviewed lossy candidate. Inspect the omissions again.'),
+                    { code: 'context_full' });
+            }
             await prepareOpenRouterRequest({ model: modelId, orMessages, modalities, reasoning,
                 tools: (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs).length
                     ? (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs) : undefined,
@@ -2627,6 +2658,9 @@ export function useChat(
                         signal: requestScope.abortController.signal,
                     });
                     requestScope.jobId = result.jobId;
+                    if (ownsCurrentView(requestScope) && !isRequestCancelled(requestScope)) publishRequest(requestScope, {
+                        status: 'streaming', requestId, userMessageId: userDbMsg.id,
+                        assistantMessageId: assistantDbMsg.id, providerAccepted: true });
                     if (isRequestCancelled(requestScope) && requestScope.stopConfirmation) {
                         throw new DOMException('Admission cancelled', 'AbortError');
                     }
@@ -2843,6 +2877,11 @@ export function useChat(
                     foregroundToolDefs.length > 0
                         ? foregroundToolDefs
                         : undefined,
+                onProviderAccepted: () => {
+                    if (ownsCurrentView(requestScope) && !isRequestCancelled(requestScope)) publishRequest(requestScope, {
+                        status: 'streaming', requestId, userMessageId: userDbMsg.id,
+                        assistantMessageId: assistantDbMsg.id, providerAccepted: true });
+                },
                 abortSignal: requestScope.abortController.signal,
                 assistantId: assistantDbMsg.id,
                 parentTurnId: userDbMsg.id,

@@ -3,6 +3,7 @@ import { stripModelVariantSuffix } from '~~/shared/openrouter/model-variants';
 import { admitProviderRequest, ChatContextAdmissionError, type ContextRequestPolicy,
     type CountableChatMessage } from '~~/shared/chat/context-budget';
 import { countTokensApprox } from '~/utils/chat/tokens';
+import { estimateMeasuredChatRequest } from '~~/shared/chat/request-usage';
 
 /** New native requests carry only user choices. Legacy payloads retain their existing boundary. */
 export async function resolveServerContextPolicy(body: Record<string, unknown>, apiKey: string,
@@ -39,7 +40,12 @@ export async function admitServerProviderBody(body: Record<string, unknown>, pol
     signal?: AbortSignal): Promise<Record<string, unknown>> {
     if (!policy) return body;
     return admitProviderRequest(body as Record<string, unknown> & { messages: CountableChatMessage[];
-        tools?: unknown[]; max_tokens?: number }, policy, countTokensApprox, signal);
+        tools?: unknown[]; max_tokens?: number }, policy, countTokensApprox, signal, async (request) => {
+            const { messages, ...configuration } = request;
+            return estimateMeasuredChatRequest({ model: typeof request.model === 'string' ? request.model : '',
+                messages, tools: request.tools, modalities: Array.isArray(request.modalities) ? request.modalities as string[] : undefined,
+                configuration, usage: policy.measuredUsage, countText: countTokensApprox });
+        });
 }
 
 export function contextAdmissionResponse(error: ChatContextAdmissionError) {

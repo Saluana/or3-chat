@@ -30,6 +30,8 @@ export interface ContextRequestPolicy {
     userMaxContextTokens: number | null;
     requestedCompletionTokens?: number | null;
     source: ContextBudget['source'];
+    /** Local provenance only. The transport envelope never treats usage as provider capacity. */
+    measuredUsage?: unknown;
 }
 export type ContextAdmission =
     | { ok: true; budget: ContextBudget; estimate: ContextEstimate }
@@ -161,10 +163,12 @@ export async function admitProviderRequest<T extends {
     messages: readonly CountableChatMessage[];
     tools?: readonly unknown[];
     max_tokens?: number;
-}>(body: T, policy: ContextRequestPolicy, countText: (text: string) => Promise<number>, signal?: AbortSignal): Promise<T> {
+}>(body: T, policy: ContextRequestPolicy, countText: (text: string) => Promise<number>, signal?: AbortSignal,
+    estimateRequest?: (body: T) => Promise<ContextEstimate>): Promise<T> {
     for (;;) {
         const { messages, tools, ...configuration } = body;
-        const estimate = await estimateChatRequest({ messages, tools, configuration, countText });
+        const estimate = estimateRequest ? await estimateRequest(body)
+            : await estimateChatRequest({ messages, tools, configuration, countText });
         if (signal?.aborted) throw new DOMException('Chat preparation canceled.', 'AbortError');
         if (body.max_tokens !== undefined && (!Number.isSafeInteger(body.max_tokens) || body.max_tokens <= 0)) {
             const invalid = admitChatContext({ ...policy, inputTokens: estimate.input_tokens, estimate,

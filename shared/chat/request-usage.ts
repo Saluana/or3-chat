@@ -1,6 +1,6 @@
 import { normalizeProviderRequestUsage } from '../openrouter/parseOpenRouterSSE';
 import { readRequestUsage, type RequestUsage } from './compaction';
-import { estimateChatRequest, type CountableChatMessage } from './context-budget';
+import { estimateChatRequest, type CountableChatMessage, type ContextEstimate } from './context-budget';
 
 export interface UsagePrefix {
     readonly model: string;
@@ -17,6 +17,13 @@ function stable(value: unknown): string {
     }
     return JSON.stringify(value);
 }
+function fingerprintConfiguration(configuration?: Record<string, unknown>): Record<string, unknown> | undefined {
+    if (!configuration) return undefined;
+    // Reply allowance cannot change the already measured input prefix. All
+    // input-affecting routing, tools, cache and reasoning configuration remains.
+    const { max_tokens: _reply, ...rest } = configuration;
+    return rest;
+}
 async function digest(value: string): Promise<string> {
     const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
     return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -31,11 +38,41 @@ export async function captureUsagePrefix(input: {
         modalities: input.modalities, configuration: input.configuration })) as Omit<typeof input, 'countText'>;
     const [prefixHash, configurationHash, estimate] = await Promise.all([
         digest(stable(snapshot.messages)),
-        digest(stable({ model: snapshot.model, tools: snapshot.tools, modalities: snapshot.modalities, configuration: snapshot.configuration })),
-        estimateChatRequest({ messages: snapshot.messages, tools: snapshot.tools, countText: input.countText }),
+        digest(stable({ model: snapshot.model, tools: snapshot.tools, modalities: snapshot.modalities,
+            configuration: fingerprintConfiguration(snapshot.configuration) })),
+        estimateChatRequest({ messages: snapshot.messages, tools: snapshot.tools,
+            configuration: estimateConfiguration(snapshot.configuration), countText: input.countText }),
     ]);
     return Object.freeze({ model: snapshot.model, prefix_message_count: snapshot.messages.length,
         prefix_hash: prefixHash, configuration_hash: configurationHash, input_estimate_tokens: estimate.input_tokens });
+}
+/** Tools are already counted separately; the fingerprint still covers the complete configuration. */
+function estimateConfiguration(configuration?: Record<string, unknown>): Record<string, unknown> | undefined {
+    if (!configuration) return undefined;
+    const { tools: _tools, ...rest } = configuration;
+    return rest;
+}
+
+/** A measured prefix contributes only when its actual bytes and routing configuration still match. */
+export async function estimateMeasuredChatRequest(input: {
+    model: string; messages: readonly CountableChatMessage[]; tools?: readonly unknown[];
+    modalities?: readonly string[]; configuration?: Record<string, unknown>;
+    usage?: unknown; countText: (text: string) => Promise<number>;
+}): Promise<ContextEstimate> {
+    const snapshot = structuredClone({ model: input.model, messages: input.messages, tools: input.tools,
+        modalities: input.modalities, configuration: input.configuration, usage: input.usage });
+    const full = await estimateChatRequest({ messages: snapshot.messages, tools: snapshot.tools,
+        configuration: estimateConfiguration(snapshot.configuration), countText: input.countText });
+    const usage = readRequestUsage(snapshot.usage);
+    if (!usage || usage.model !== snapshot.model || usage.prefix_message_count > snapshot.messages.length
+        || usage.prompt_tokens <= 0) return full;
+    const prefix = await captureUsagePrefix({ ...snapshot,
+        messages: snapshot.messages.slice(0, usage.prefix_message_count), countText: input.countText });
+    if (prefix.prefix_hash !== usage.prefix_hash || prefix.configuration_hash !== usage.configuration_hash) return full;
+    const suffix = await estimateChatRequest({ messages: snapshot.messages.slice(usage.prefix_message_count), countText: input.countText });
+    const empty = await estimateChatRequest({ messages: [], countText: input.countText });
+    return { input_tokens: Math.max(full.input_tokens, usage.prompt_tokens + suffix.input_tokens - empty.input_tokens),
+        basis: 'measured-prefix', media_cost: full.media_cost };
 }
 /** Missing/invalid measurement stays absent; a later request replaces occupancy rather than summing it. */
 export function attachRequestUsage(prefix: UsagePrefix | undefined, measurement: unknown,

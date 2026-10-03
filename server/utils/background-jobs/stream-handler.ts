@@ -1427,7 +1427,8 @@ export async function consumeBackgroundStreamWithTools(params: {
                         : undefined,
                 stream: true,
             })) as Record<string, unknown>;
-            await admitServerProviderBody(requestBody, params.contextPolicy, params.abortSignal);
+            await admitServerProviderBody(requestBody, params.contextPolicy ? { ...params.contextPolicy,
+                measuredUsage: normalizedState.requestUsage } : undefined, params.abortSignal);
             const usagePrefix = await captureBackgroundUsagePrefix(requestBody);
             const usageRequestId = crypto.randomUUID();
 

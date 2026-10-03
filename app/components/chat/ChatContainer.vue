@@ -45,6 +45,7 @@
                             :message="item"
                             :thread-id="props.threadId"
                             :retry-disabled="retryPending || loading"
+                            :compaction-action="compactionAction"
                             @retry="onRetry"
                             @continue="onContinue"
                             @branch="onBranch"
@@ -124,12 +125,17 @@
                 </div>
                 <component
                     :is="resolveCoreChatComponent($theme.activeComponents.value['chat-input'], 'chat-input')"
-                    :loading="inputLoading"
+                    :loading="inputLoading || compaction.active.value"
                     :streaming="streamingActive"
                     :container-width="containerWidth"
                     :thread-id="currentThreadId"
                     :pane-id="paneId"
                     :tab-id="tabId"
+                    :context-revision="allMessages"
+                    :compact-thread="compactThread"
+                    :compaction-blocked-reason="compaction.blockedReason.value"
+                    :compaction-state="compaction.state.value"
+                    @cancel-compaction="compaction.cancel()"
                     @send="onSend"
                     @model-change="onModelChange"
                     @stop-stream="onStopStream"
@@ -187,6 +193,10 @@ import { useToast, useHooks, useChat, useRuntimeConfig, useRoute, useState } fro
 import { getMaxMessageFileHashes } from '~/db/files-util';
 import { kv } from '~/db';
 import { getWorkspaceGeneration } from '~/db/client';
+import { useThreadCompaction } from '~/composables/chat/useThreadCompaction';
+import { useAiSettings } from '~/composables/chat/useAiSettings';
+import { useModelStore } from '~/composables/chat/useModelStore';
+import { resolveSystemPromptText } from '~/utils/chat/useAi-internal/messageBuild';
 import {
     hydrateUserApiKeyFromKv,
     useUserApiKey,
@@ -625,6 +635,24 @@ const stableMessageIdentities = computed(() => {
     return identities;
 });
 const allMessages = shallowRef<UiChatMessage[]>([]);
+const compactionPreferences = useAiSettings();
+const compactionModels = useModelStore();
+const compaction = useThreadCompaction({ threadId: currentThreadId, model,
+    isBusy: () => inputLoading.value || workflowRunning.value,
+    apiKey, isCurrent: () => props.threadId === currentThreadId.value,
+    getPreferences: async () => { await compactionPreferences.ensureLoaded(); return { ...compactionPreferences.settings.value }; },
+    resolveModelMetadata: async (selected) => {
+        const result = await compactionModels.resolveContextModel(selected);
+        return result.ok ? result.metadata : undefined;
+    },
+    getTaskSystemPrompt: (threadId) => resolveSystemPromptText({ threadId, activePromptContent: null }),
+    onCommitted: (result) => { emit('thread-selected', result.thread.id); },
+});
+async function compactThread(anchorMessageId?: string) {
+    const result = await compaction.start(anchorMessageId);
+    if (!result.ok) toast.add({ title: 'Unable to compact', description: result.message, color: 'warning' });
+}
+const compactionAction = computed(() => ({ start: compactThread, blockedReason: compaction.blockedReason.value }));
 const rowContentRevision = ref(0);
 let renderedStableSnapshot: UiChatMessage[] | null = null;
 
@@ -916,6 +944,8 @@ type ChatInputSendPayload = {
     thinkingEnabled: boolean;
     reasoningEffort?: string | null;
     registerResult: RegisterSendResult;
+    inspectLossyRequest?: boolean;
+    lossyConfirmation?: import('~/utils/chat/lossy-request').LossyRequestPreview;
 };
 
 function waitForDurableSendAcceptance(
@@ -942,13 +972,7 @@ function waitForDurableSendAcceptance(
         };
         const inspect = (state: ChatRequestState) => {
             if (state.status === 'idle' || state.requestId !== requestId) return;
-            if (state.status === 'persisted') {
-                finish({
-                    status: 'accepted',
-                    requestId,
-                    userMessageId: state.userMessageId,
-                });
-            } else if (state.status === 'streaming') {
+            if (state.status === 'streaming' && state.providerAccepted) {
                 finish({
                     status: 'accepted',
                     requestId,
@@ -972,7 +996,7 @@ function waitForDurableSendAcceptance(
 }
 
 function onSend(payload: ChatInputSendPayload) {
-    if (loading.value || retryPending.value) return;
+    if (loading.value || retryPending.value || compaction.active.value) return;
     model.value = payload.model || model.value;
     const attachments = payload.attachments?.length
         ? payload.attachments
@@ -1040,6 +1064,8 @@ function onSend(payload: ChatInputSendPayload) {
         thinking: !!payload.thinkingEnabled,
         reasoningEffort: payload.reasoningEffort ?? null,
         context_hashes,
+        inspectLossyRequest: payload.inspectLossyRequest,
+        lossyConfirmation: payload.lossyConfirmation,
     });
     payload.registerResult(
         result,
@@ -1055,7 +1081,7 @@ function onSend(payload: ChatInputSendPayload) {
 
 async function onRetry(messageId: string) {
     const activeChat = chat.value;
-    if (!activeChat || activeChat.loading.value || retryPending.value) return;
+    if (!activeChat || activeChat.loading.value || retryPending.value || compaction.active.value) return;
     retryPending.value = true;
     try {
         // A retry is appended after the remaining conversation. Move the
