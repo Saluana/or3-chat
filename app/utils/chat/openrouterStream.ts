@@ -845,10 +845,11 @@ export async function startBackgroundStream(params: {
                     setServerRouteAvailable(false);
                     setBackgroundStreamingAvailable(false);
                 }
-                const retryable = resp.status >= 500;
-                const error = makeBackgroundAdmissionError(presentError({ status: resp.status }).message, { retryable });
-                Object.assign(error, normalizeError({ status: resp.status, retryable,
-                    retryAfterMs: parseRetryAfter(resp.headers.get('retry-after')) }));
+                const metadata = normalizeError({ data: payload, status: resp.status,
+                    retryAfterMs: parseRetryAfter(resp.headers.get('retry-after')) });
+                const retryable = metadata.retryable === true;
+                const error = makeBackgroundAdmissionError(presentError(metadata).message, { retryable });
+                Object.assign(error, metadata);
                 if (!retryable || attempt === 2) throw error;
                 lastError = error;
             } else {

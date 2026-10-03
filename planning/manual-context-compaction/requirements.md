@@ -100,6 +100,7 @@ Inspected on 2026-09-26: OR3 uses Bun, Nuxt 4/Vue 3, Nuxt UI, workspace-scoped D
 - R6.AC3: WHEN membership is saved THEN it SHALL use message IDs and bounded references to prior scopes; subsequent index normalization, insertion before an anchor, or growth of an ancestor SHALL NOT add messages to that saved membership.
 - R6.AC4: IF a relevant source row, boundary, model selection, workspace identity, or source eligibility changes before commit THEN the operation SHALL abort as stale without creating a fork.
 - R6.AC5: IF ancestry is cyclic, missing for scope capture, or exceeds the documented traversal/reference bounds THEN capture SHALL fail explicitly rather than summarize a silently incomplete history.
+  Current interpretation under Brendon's later constraint (evidence149/design C4): the former2,048-reference/128-link/128-KiB application cutoffs are superseded. Capture retains complete eligible ancestry and fails explicitly for cycles, missing scope, cancellation or exact final-row storage admission. Bounded retrieval/transport work remains a separate protection; no ordinary conversation quota is restored.
 
 ### R7: Bounded, validated summary generation
 

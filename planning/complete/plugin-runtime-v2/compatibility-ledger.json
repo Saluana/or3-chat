@@ -11749,7 +11749,7 @@
     },
     {
       "source": "app/utils/chat/tools-public.ts",
-      "apiSha256": "9528ebd675cc9ad29c1fdc04a96c8376b23a2df4464ae0d8622d91ad8c8b3001",
+      "apiSha256": "674142434b8910567413e5244b42727892f48c38dfbaff8d74f153f05bb11a90",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tools-public"
@@ -11822,7 +11822,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 120,
+              "line": 122,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolCall {\n    id: string;\n    type: 'function';\n    function: {\n        name: string;\n        arguments: string; // JSON string, parsed by consumer\n    };\n}"
             }
@@ -11836,7 +11836,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 158,
+              "line": 160,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolDefinition {\n    type: 'function';\n    function: {\n        name: string;\n        description: string;\n        parameters: import('~~/shared/chat/tool-schema').JsonSchemaObject;\n    };\n    ui?: {\n        label?: string;\n        icon?: string;\n        descriptionHint?: string;\n        defaultEnabled?: boolean;\n        category?: string;\n    };\n    runtime?: ToolRuntime;\n}"
             }
@@ -11850,7 +11850,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 132,
+              "line": 134,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolExecutionContext {\n    subject: string | null;\n    workspaceId: string | null;\n    threadId: string | null;\n    messageId: string | null;\n    callId: string;\n    requestId: string;\n    abortSignal: AbortSignal;\n}"
             }
@@ -11878,7 +11878,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 129,
+              "line": 131,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolRuntime = 'hybrid' | 'client' | 'server';"
             }

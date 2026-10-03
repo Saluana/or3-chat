@@ -1,5 +1,6 @@
 import Dexie from 'dexie';
-import { ref, effectScope, type EffectScope } from 'vue';
+import { ref, computed, effectScope, type EffectScope } from 'vue';
+import { appendModelVariant, type OpenRouterModelVariant } from '~~/shared/openrouter/model-variants';
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { getDb, setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { useThreadCompaction } from '../useThreadCompaction';
@@ -44,6 +45,15 @@ beforeEach(async () => {
     getHookBridge(getDb()).start();
 });
 afterEach(async () => { for (const scope of scopes) scope.stop(); _resetHookBridge(); const db = getDb(); setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name); setHookEngine(null); });
+it.each(['openrouter/auto', 'openrouter/auto-beta', 'openrouter/free', 'openrouter/bodybuilder', 'openrouter/pareto-code', 'openrouter/fusion-flash:free', 'typesafe/jev-router', 'nvidia/switchyard', '~openai/gpt-latest', 'openrouter/auto:nitro'])('rejects unresolved router %s before summary inference and recovers with a concrete selection', async selection => {
+    const service = controller(); service.model.value = selection;
+    expect(await service.start()).toMatchObject({ ok: false, code: 'model_metadata_unavailable' });
+    expect(service.blockedReason.value).toContain('concrete model');
+    expect(await service.inspect()).toMatchObject({ eligible: false, code: 'model_metadata_unavailable' });
+    expect(transport).not.toHaveBeenCalled(); expect(await getDb().threads.count()).toBe(1); expect(await getDb().pending_ops.count()).toBe(0);
+    service.model.value = 'large-model:nitro'; expect((await service.start()).ok).toBe(true);
+    expect(transport).toHaveBeenCalledOnce(); expect(transport.mock.calls[0]![0].model).toBe('large-model:nitro');
+});
 it('captures the final settled local anchor and opens the durable child only after commit', async () => {
     const open = vi.fn(async (result: { thread: { id: string }; summary: { id: string } }) => {
         expect((await getDb().threads.get(result.thread.id))?.summary_message_id).toBe(result.summary.id);
@@ -76,6 +86,16 @@ it.each(['model', 'thread', 'busy', 'dispose'] as const)('rejects late inference
     if (change === 'dispose') service.scope.stop();
     paused.release(); expect(await operation).toMatchObject({ ok: false, code: change === 'busy' ? 'source_busy' : change === 'dispose' ? 'cancelled' : 'stale_source' });
     expect(await getDb().threads.count()).toBe(1); expect(await getDb().messages.count()).toBe(4); expect(await getDb().pending_ops.count()).toBe(0);
+});
+it('invalidates a held captured route when only its routing variant changes', async () => {
+    const variant = ref<OpenRouterModelVariant>('nitro');
+    const model = computed(() => appendModelVariant('large-model', variant.value));
+    const paused = pauseInference(); const service = controller({ model });
+    const operation = service.start(); await paused.entered;
+    expect(transport.mock.calls[0]![0].model).toBe('large-model:nitro');
+    variant.value = 'floor'; paused.release();
+    expect(await operation).toMatchObject({ ok: false, code: 'stale_source' });
+    expect(await getDb().threads.count()).toBe(1); expect(await getDb().pending_ops.count()).toBe(0);
 });
 it('rejects A→B→A even when the original pane/source/model values return', async () => {
     const paused = pauseInference(); const service = controller(); const origin = getDb(); const operation = service.start(); await paused.entered;

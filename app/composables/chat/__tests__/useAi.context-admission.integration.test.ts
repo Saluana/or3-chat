@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, ref, type EffectScope } from 'vue';
 import Dexie from 'dexie';
+import { Blob as NodeBlob } from 'node:buffer';
 import { getDb, setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { setHookEngine, useHooks } from '~/core/hooks/useHooks';
 import { createHookEngine } from '~/core/hooks/hooks';
@@ -8,18 +9,22 @@ import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { useAiSettings } from '../useAiSettings';
 import { useModelStore } from '../useModelStore';
 import { createThreadInDb } from '~/db/threads';
+import { forkThread } from '~/db/branching';
+import { captureCompaction, validateCompactionSummary, createCompactedFork } from '~/db/compaction';
 import { userTranscriptData } from '~/utils/chat/transcript';
 import { consumeChatSendHandled } from '~/utils/chat/send-interception';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
+import { registerHistoryTools } from '~/utils/chat/history-tools';
+import { createOrRefFile } from '~/db/files';
 
 const external = vi.hoisted(() => ({ capacity: 1_000_000, bodies: [] as Record<string, unknown>[],
     catalogGate: undefined as Promise<void> | undefined, catalogEntered: undefined as (() => void) | undefined,
-    toolCall: false }));
+    toolCall: false, background: false }));
 vi.unmock('~/composables/chat/useAi');
 vi.mock('#imports', async (original) => ({
     ...await original<typeof import('#imports')>(),
-    useRuntimeConfig: () => ({ public: { ssrAuthEnabled: false, sync: { enabled: false },
-        backgroundStreaming: { enabled: false }, limits: { enabled: false },
+    useRuntimeConfig: () => ({ public: { ssrAuthEnabled: external.background, sync: { enabled: external.background },
+        backgroundStreaming: { enabled: external.background }, limits: { enabled: false },
         openRouter: { allowUserOverride: true, hasInstanceKey: false, requireUserKey: false } } }),
     useToast: () => ({ add() {} }), useAppConfig: () => ({}),
     useUserApiKey: () => ({ apiKey: ref('scripted-key'), setKey() {} }),
@@ -27,7 +32,8 @@ vi.mock('#imports', async (original) => ({
     useHooks: () => useHooks(),
 }));
 vi.mock('~/core/auth/useOpenrouter', () => ({ useOpenRouterAuth: () => ({ startLogin() {} }) }));
-vi.mock('~/composables/auth/useSessionContext', () => ({ useSessionContext: () => ({ data: ref(null) }) }));
+vi.mock('~/composables/auth/useSessionContext', () => ({ useSessionContext: () => ({ data: ref(external.background
+    ? { session: { authenticated: true, workspace: { id: 'scripted-workspace' } } } : null) }) }));
 vi.mock('~~/shared/openrouter', async (original) => ({
     ...await original<typeof import('~~/shared/openrouter')>(),
     createOpenRouterClient: () => ({ models: { list: async () => ({
@@ -48,7 +54,7 @@ beforeEach(async () => {
     setHookEngine(createTypedHookEngine(createHookEngine()));
     localStorage.clear(); external.capacity = 1_000_000; external.bodies = [];
     external.catalogGate = undefined; external.catalogEntered = undefined;
-    external.toolCall = false;
+    external.toolCall = false; external.background = false;
     await useModelStore().invalidate();
     await useAiSettings().ensureLoaded();
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
@@ -76,6 +82,206 @@ function chat(threadId?: string) { scope = effectScope(); return scope.run(() =>
 // hooks and actual foreground transport remain production code; external
 // catalog/network inference and credential UI alone are scripted.
 describe('native context admission at the actual durable boundary', () => {
+    it.runIf(Boolean(process.env.OR3_WORKFLOWS_SOURCE))('integrates the separately owned Workflows pure source with real host admission and durable commit', async () => {
+        const source = process.env.OR3_WORKFLOWS_SOURCE!;
+        const { registerWorkflowSendHooks } = await import(/* @vite-ignore */ source);
+        const hooks = useHooks(); const lifetime = new AbortController(); const cleanups: Array<() => void> = [];
+        const workflow = { id: 'source-flow', title: 'Flow', updated_at: 12, meta: {
+            meta: { id: 'source-flow', version: '2.0.0', name: 'Flow' },
+            nodes: [{ id: 'start', type: 'start', data: { label: 'Start' }, position: { x: 0, y: 0 } },
+                { id: 'output', type: 'output', data: { label: 'Output', mode: 'combine', sources: ['start'] }, position: { x: 1, y: 0 } }],
+            edges: [{ id: 'edge', source: 'start', target: 'output' }],
+        } };
+        const writes: string[] = []; const starts: Array<{ messageId: string; threadId: string }> = []; let workflowAvailable = false;
+        const register = (action: boolean, name: string, callback: (...args: any[]) => any) => {
+            const engine = hooks as any;
+            engine[action ? 'addAction' : 'addFilter'](name, callback);
+            return { dispose: () => engine[action ? 'removeAction' : 'removeFilter'](name, callback) };
+        };
+        const controller = registerWorkflowSendHooks({ pluginId: 'or3-workflows', generation: 7, signal: lifetime.signal,
+            features: { has: (name: string) => name === 'chat.send.prepare-commit-v1' },
+            hooks: { onFilter: (name: string, callback: (...args: any[]) => any) => register(false, name, callback),
+                onAction: (name: string, callback: (...args: any[]) => any) => register(true, name, callback) },
+            onCleanup: (callback: () => void) => cleanups.push(callback) }, {
+            getApiKey: () => 'scripted-key', requestApiKeyLogin() {}, getWorkflowById: async () => workflow,
+            getWorkflowByName: async () => { expect(await getDb().messages.count()).toBe(0); expect(writes).toEqual([]); expect(starts).toEqual([]); return workflowAvailable ? workflow : null; }, listWorkflowNames: async () => ['Flow'],
+            getMessage: async (id: string) => { const row = await getDb().messages.get(id); return row && { id, threadId: row.thread_id, streamId: row.stream_id ?? '', data: row.data }; },
+            upsertWorkflowMessage: async (input: { id: string; threadId: string; data: Record<string, unknown>; pending: boolean }) => {
+                const saved = await getDb().messages.get(input.id);
+                expect(saved).toMatchObject({ role: 'assistant', thread_id: input.threadId });
+                writes.push(input.id); await getDb().messages.update(input.id, { data: input.data, pending: input.pending });
+            }, markChatSendHandled() { throw new Error('Paired commit must not mark a global send handled'); },
+            emitWorkflowState() {}, emitNodeComplete() {}, emitRunStart() {}, emitRunComplete() {},
+            canStartBackground: () => true, getModelCatalog: () => [], loadModelCatalog: async () => [],
+            startBackground: async (input: { messageId: string; threadId: string }) => { starts.push(input); return { jobId: 'scripted-workflow-job' }; },
+            trackBackground() {}, abortBackground: async () => true, backgroundStatus: async () => 'missing',
+            completeCaption: async () => { throw new Error('No live caption inference'); }, respondBackgroundHitl: async () => false,
+            reportError(error: unknown) { throw error; }, notify() {},
+        }, { slashEnabled: true, executionEnabled: true });
+        try {
+            await useAiSettings().set({ maxContextTokens: 1 });
+            expect(await chat().sendMessage('/Flow unavailable source', { model: 'fixture/model' })).toMatchObject({ status: 'rejected', reason: 'unavailable' });
+            expect(await getDb().messages.count()).toBe(0); expect(await getDb().threads.count()).toBe(0);
+            expect(writes).toEqual([]); expect(starts).toEqual([]); expect(external.bodies).toEqual([]);
+            // Delegated workflows prepare their own node requests; the unused
+            // native model's maximum must not become an unrelated workflow quota.
+            workflowAvailable = true;
+            const result = await chat().sendMessage('/Flow admitted work', { model: 'fixture/model' });
+            expect(result).toMatchObject({ status: 'detached' }); expect(starts).toHaveLength(1); expect(external.bodies).toEqual([]);
+            expect(new Set(writes).size).toBe(1);
+            const rows = await getDb().messages.toArray(); expect(rows).toHaveLength(2);
+            expect(rows.find((row) => row.id === starts[0]!.messageId)).toMatchObject({ role: 'assistant',
+                data: { type: 'workflow-execution', workflowId: 'source-flow', background_job_id: 'scripted-workflow-job' } });
+        } finally { lifetime.abort(); cleanups.forEach((cleanup) => cleanup()); await controller.dispose(); }
+    });
+    it('retains saved image identity and exact hydrated bytes through initial denial, reload and same-ID recovery', async () => {
+        // jsdom's Blob lacks arrayBuffer and does not survive native structuredClone.
+        // Use native binary storage and adapt only the browser FileReader boundary.
+        vi.stubGlobal('FileReader', class {
+            result = ''; onload?: () => void; onerror?: () => void;
+            readAsDataURL(blob: Blob) { void blob.arrayBuffer().then((buffer) => {
+                this.result = `data:${blob.type};base64,${Buffer.from(buffer).toString('base64')}`; this.onload?.();
+            }, () => this.onerror?.()); }
+        });
+        const blob = new NodeBlob([Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF1sAAAAASUVORK5CYII='), (byte) => byte.charCodeAt(0))], { type: 'image/png' });
+        const { hash } = await createOrRefFile(blob as unknown as Blob, 'fixture.png');
+        await useAiSettings().set({ maxContextTokens: 1 });
+        const owner = chat();
+        expect(await owner.sendMessage('Retain attachment', { model: 'fixture/model', file_hashes: [hash] })).toMatchObject({ status: 'rejected', reason: 'context_full' });
+        expect(await getDb().messages.count()).toBe(0); expect(await getDb().file_meta.get(hash)).toBeTruthy(); expect(external.bodies).toEqual([]);
+        await useAiSettings().set({ maxContextTokens: null });
+        vi.mocked(fetch).mockImplementationOnce(async (_url, init) => {
+            external.bodies.push(JSON.parse(init!.body as string));
+            return Response.json({ error: { code: 'context_length_exceeded' } }, { status: 400 });
+        });
+        expect(await owner.sendMessage('Retain attachment', { model: 'fixture/model', file_hashes: [hash] })).toMatchObject({ status: 'failed', reason: 'context_full' });
+        const checkpoint = (await getDb().chat_request_recoveries.toArray())[0]!;
+        expect(JSON.parse((await getDb().messages.get(checkpoint.user_message_id))!.file_hashes!)).toEqual([hash]);
+        scope!.stop(); scope = undefined;
+        expect(await chat(checkpoint.thread_id).retryMessage(checkpoint.assistant_message_id, 'fixture/model')).toMatchObject({ status: 'complete',
+            userMessageId: checkpoint.user_message_id, assistantMessageId: checkpoint.assistant_message_id });
+        expect(external.bodies).toHaveLength(2); expect(external.bodies[1]!.messages).toEqual(external.bodies[0]!.messages);
+        expect(JSON.stringify(external.bodies[1]!.messages)).toContain('data:image/png;base64,');
+        expect(await getDb().messages.count()).toBe(2);
+    });
+    it('retains a compacted reference ancestor in native retry and restores it after rejected retry', async () => {
+        const db = getDb(); const source = await createThreadInDb(db, { title: 'Original' });
+        for (const [index, role] of ['user', 'assistant', 'user', 'assistant'].entries()) await db.messages.add({
+            id: `source-${index}`, thread_id: source.id, role, index, created_at: 1, updated_at: 1, clock: 1,
+            deleted: false, pending: false, data: { content: `Original source turn ${index} `.repeat(100) } });
+        const capture = await captureCompaction({ sourceThreadId: source.id, anchorMessageId: 'source-3', model: 'fixture/model' });
+        const summary = await validateCompactionSummary(capture, JSON.stringify({
+            summary_markdown: '## Objective\nRetain inherited summary.\n## Important Details\nKeep ancestral decisions.\n## Work State\nReady.\n## Next Move\nRetry safely.\n## Relevant Files\nNone.',
+            landmarks: [{ message_id: 'source-3', kind: 'decision', summary: 'Original source decision' }] }),
+            { targetTokens: 4096, countText: async (text) => Math.ceil(text.length / 4) });
+        const parent = await createCompactedFork({ capture, summary });
+        await db.messages.add({ id: 'parent-followup', thread_id: parent.thread.id, role: 'user', index: 1,
+            created_at: 2, updated_at: 2, clock: 1, deleted: false, pending: false, data: { content: 'Inherited later parent decision' } });
+        const child = await forkThread({ sourceThreadId: parent.thread.id, anchorMessageId: 'parent-followup', mode: 'reference' });
+        const owner = chat(child.thread.id);
+        const first = await owner.sendMessage('Local descendant question', { model: 'fixture/model' });
+        if (first.status !== 'complete') throw new Error('Reference fixture send failed');
+        expect(await owner.retryMessage(first.assistantMessageId, 'fixture/model')).toMatchObject({ status: 'complete' });
+        const sent = JSON.stringify(external.bodies.at(-1)?.messages);
+        expect(sent).toContain('Retain inherited summary.'); expect(sent).toContain('Inherited later parent decision');
+        expect(sent).not.toContain('Original source turn');
+        const latest = (await db.messages.where('thread_id').equals(child.thread.id).toArray()).findLast((row) => row.role === 'assistant' && !(row.data as Record<string, unknown>)?.superseded_by)!;
+        await owner.continueMessage(latest.id, 'fixture/model');
+        expect(JSON.stringify(external.bodies.at(-1)?.messages)).toContain('Retain inherited summary.');
+        expect(JSON.stringify(external.bodies.at(-1)?.messages)).toContain('Inherited later parent decision');
+        expect(JSON.stringify(external.bodies.at(-1)?.messages)).not.toContain('Original source turn');
+        const before = await db.messages.toArray(); const calls = external.bodies.length;
+        await useAiSettings().set({ maxContextTokens: 1 });
+        expect(await owner.retryMessage(latest.id, 'fixture/model')).toMatchObject({ status: 'rejected', reason: 'context_full' });
+        expect(await db.messages.toArray()).toEqual(before); expect(external.bodies).toHaveLength(calls);
+        expect(JSON.stringify(owner.messages.value)).toContain('Retain inherited summary.');
+        expect(JSON.stringify(owner.messages.value)).toContain('Inherited later parent decision');
+        await useAiSettings().set({ maxContextTokens: null }); external.bodies = []; external.toolCall = true;
+        const tool = vi.fn(() => 'An accepted canonical tool result');
+        const registration = useToolRegistry().registerTool({ type: 'function', function: { name: 'fixture_context_output', description: 'Read scoped evidence', parameters: { type: 'object', properties: {} } } }, tool, { runtime: 'client' });
+        try {
+            expect(await owner.sendMessage('Use the inherited evidence', { model: 'fixture/model' })).toMatchObject({ status: 'complete' });
+            expect(tool).toHaveBeenCalledOnce(); expect(external.bodies).toHaveLength(2);
+            const loopBody = external.bodies[1]!;
+            expect(JSON.stringify(loopBody.messages)).toContain('Retain inherited summary.'); expect(JSON.stringify(loopBody.messages)).toContain('Inherited later parent decision');
+            expect((loopBody.messages as Array<{ role: string }>).some(row => row.role === 'tool')).toBe(true); expect(JSON.stringify(loopBody.messages)).not.toContain('Original source turn');
+        } finally { registration.dispose(); }
+        scope?.stop(); external.toolCall = false; external.background = true; external.bodies = [];
+        vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+            external.bodies.push(JSON.parse(init?.body as string));
+            return Response.json({ code: 'context_full', error: 'Scripted background refusal before job', retryable: false }, { status: 400 });
+        }));
+        const backgroundOwner = chat(child.thread.id);
+        const backgroundResult = await backgroundOwner.sendMessage('Background inherited evidence', { model: 'fixture/model' });
+        if (backgroundResult.status !== 'failed' || !backgroundResult.assistantMessageId) throw new Error('Expected scripted background refusal');
+        expect(await backgroundOwner.retryMessage(backgroundResult.assistantMessageId, 'fixture/model')).toMatchObject({ status: 'failed', reason: 'context_full' });
+        await backgroundOwner.continueMessage(latest.id, 'fixture/model');
+        expect(external.bodies).toHaveLength(3);
+        for (const body of external.bodies) {
+            expect(body._background).toBe(true); expect(JSON.stringify(body.messages)).toContain('Retain inherited summary.');
+            expect(JSON.stringify(body.messages)).toContain('Inherited later parent decision'); expect(JSON.stringify(body.messages)).not.toContain('Original source turn');
+        }
+    });
+    it.each([{ ready: true, bridge: true, runtime: 'hybrid', background: true },
+        { ready: false, bridge: true, runtime: 'client', background: true },
+        { ready: false, bridge: false, runtime: 'client', background: false }])('freezes actual native history placement for %j', async scenario => {
+        external.background = true; const db = getDb(); const source = await createThreadInDb(db, { title: 'History placement' });
+        for (const [index, role] of ['user', 'assistant', 'user', 'assistant'].entries()) await db.messages.add({
+            id: 'placement-source-' + index, thread_id: source.id, role, index, created_at: 1, updated_at: 1, clock: 1,
+            deleted: false, pending: false, data: { content: ('Placement source ' + index).repeat(100) } });
+        const capture = await captureCompaction({ sourceThreadId: source.id, anchorMessageId: 'placement-source-3', model: 'fixture/model' });
+        const summary = await validateCompactionSummary(capture, JSON.stringify({ summary_markdown: '## Objective\nRead history.\n## Important Details\nKeep scope.\n## Work State\nReady.\n## Next Move\nAnswer.\n## Relevant Files\nNone.', landmarks: [{ message_id: 'placement-source-3', kind: 'decision', summary: 'Read source' }] }),
+            { targetTokens: 4096, countText: async text => Math.ceil(text.length / 4) });
+        const child = await createCompactedFork({ capture, summary }); const dispose = registerHistoryTools();
+        try {
+            await vi.waitFor(() => expect(useToolRegistry().getEnabledDefinitions({ workspaceId: workspace, threadId: child.thread.id }).map(tool => tool.function.name)).toContain('get_message'));
+            const readiness = vi.fn(async (url: string, options: { query: { thread_id: string } }) => {
+                expect(url).toBe('/api/chat/history-readiness'); expect(options.query.thread_id).toBe(child.thread.id); return { ready: scenario.ready };
+            }); vi.stubGlobal('$fetch', readiness);
+            let bridgeChecks = 0;
+            vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+                if (url === '/api/jobs/client-tool/capability') { bridgeChecks++; return Response.json({ available: scenario.bridge }); }
+                external.bodies.push(JSON.parse(init?.body as string));
+                return scenario.background ? Response.json({ code: 'context_full', error: 'Scripted refusal before job', retryable: false }, { status: 400 })
+                    : new Response('data: {"choices":[{"delta":{"content":"Done"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+            }));
+            const result = await chat(child.thread.id).sendMessage('Retrieve original evidence', { model: 'fixture/model' });
+            expect(result.status).toBe(scenario.background ? 'failed' : 'complete'); expect(readiness).toHaveBeenCalledTimes(1);
+            expect(bridgeChecks).toBe(scenario.ready ? 0 : 1); expect(external.bodies).toHaveLength(1);
+            const body = external.bodies[0]!; expect(Boolean(body._background)).toBe(scenario.background);
+            expect((body.tools as Array<{ function: { name: string } }>).map(tool => tool.function.name)).toEqual(['get_message', 'search_parent']);
+            if (scenario.background) expect(body._toolRuntime).toEqual({ get_message: scenario.runtime, search_parent: scenario.runtime });
+            expect(JSON.stringify(body.messages)).toContain('Read history.'); expect(JSON.stringify(body.messages)).not.toContain('Placement source');
+        } finally { dispose(); }
+    });
+    it('recovers an initial background server context rejection after reload with the same durable IDs', async () => {
+        external.background = true;
+        const final = vi.fn((request) => request); useHooks().addFilter('ai.chat.messages:filter:before_send', final);
+        vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+            external.bodies.push(JSON.parse(init?.body as string));
+            return Response.json({ code: 'context_full', error: 'Independent server capacity rejected this request', retryable: false }, { status: 400 });
+        }));
+        const owner = chat(); const rejected = await owner.sendMessage('Preserve background draft and attachments', { model: 'fixture/model' });
+        expect(external.bodies[0]?._background).toBe(true);
+        expect(rejected).toMatchObject({ status: 'failed', reason: 'context_full' });
+        const threadId = owner.threadId.value!; const checkpoint = await getDb().chat_request_recoveries.get(threadId);
+        expect(checkpoint).toBeTruthy(); expect(await getDb().messages.get(checkpoint!.assistant_message_id)).toMatchObject({ error: 'context_full' });
+        const before = await getDb().messages.toArray(); scope?.stop(); external.background = false;
+        await useModelStore().addFavoriteModel({ id: 'fixture/large-model', name: 'Larger scripted model', context_length: 2_000_000,
+            top_provider: { max_completion_tokens: 4096 }, supported_parameters: ['tools'],
+            architecture: { input_modalities: ['text'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' } });
+        vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+            external.bodies.push(JSON.parse(init?.body as string));
+            return new Response('data: {"choices":[{"delta":{"content":"Recovered background request"}}]}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+        }));
+        const recovered = await chat(threadId).retryMessage(checkpoint!.assistant_message_id, 'fixture/large-model');
+        expect(recovered).toMatchObject({ status: 'complete', userMessageId: checkpoint!.user_message_id, assistantMessageId: checkpoint!.assistant_message_id });
+        expect((await getDb().messages.toArray()).map((row) => row.id)).toEqual(before.map((row) => row.id));
+        expect(final).toHaveBeenCalledOnce(); expect(external.bodies).toHaveLength(2);
+        expect(external.bodies[1]?.model).toBe('fixture/large-model');
+        expect(external.bodies[1]?.messages).toEqual(external.bodies[0]?.messages);
+        expect(await getDb().chat_request_recoveries.count()).toBe(0);
+    });
     async function rejectedAttempt() {
         const owner = chat(); const filters = vi.fn((request) => request);
         useHooks().addFilter('ai.chat.messages:filter:before_send', filters);
@@ -271,6 +477,31 @@ describe('native context admission at the actual durable boundary', () => {
         await owner.continueMessage(first.assistantMessageId, 'fixture/model');
         expect(await getDb().messages.toArray()).toEqual(before); expect(external.bodies).toHaveLength(calls);
         expect(owner.requestState.value).toMatchObject({ status: 'terminal', result: { reason: 'context_full' } });
+    });
+    it('keeps a confirmed omission set through a tool iteration and stops rather than omitting additional history', async () => {
+        const db = getDb(); const thread = await createThreadInDb(db, { title: 'Lossy tool continuation' });
+        await db.messages.bulkPut(['user', 'assistant', 'user', 'assistant'].map((role, index) => ({
+            id: `lossy-old-${index}`, thread_id: thread.id, role, index, created_at: 1, updated_at: 1, clock: 1,
+            pending: false, deleted: false, data: { content: `Saved old turn ${index} `.repeat(600) } })));
+        await useAiSettings().set({ maxContextTokens: 1600 }); external.toolCall = true;
+        const output = 'Accepted result that exceeds the fixed candidate. '.repeat(1200);
+        const handler = vi.fn(() => output);
+        useToolRegistry().registerTool({ type: 'function', function: { name: 'fixture_context_output',
+            description: 'Read source.', parameters: { type: 'object', properties: {} } } }, handler, { enabled: true });
+        const before = await db.messages.toArray(); const owner = chat(thread.id);
+        const inspected = await owner.sendMessage('Read source after explicit omissions', { model: 'fixture/model', inspectLossyRequest: true });
+        if (inspected.status !== 'rejected' || !inspected.lossyPreview) throw new Error('The overflowing fixture did not produce an inspection');
+        expect(await db.messages.toArray()).toEqual(before); expect(external.bodies).toEqual([]);
+        expect(await owner.sendMessage('Read source after explicit omissions', { model: 'fixture/model', lossyConfirmation: inspected.lossyPreview }))
+            .toMatchObject({ status: 'failed', reason: 'context_full' });
+        expect(handler).toHaveBeenCalledOnce(); expect(external.bodies).toHaveLength(1);
+        expect(JSON.stringify(external.bodies[0]?.messages)).not.toContain('Saved old turn');
+        const after = await db.messages.toArray();
+        expect(after.filter((row) => row.id.startsWith('lossy-old-'))).toEqual(before);
+        expect(after.find((row) => row.role === 'user' && !row.id.startsWith('lossy-old-'))?.data)
+            .toMatchObject({ context_omission: { version: 1, omitted_positions: expect.any(Array) } });
+        expect(JSON.stringify(after.filter((row) => row.role === 'tool'))).toContain(output);
+        expect(await db.chat_request_recoveries.count()).toBe(0);
     });
     it('stops after an oversized accepted tool result using the captured maximum without repeating the tool', async () => {
         await useAiSettings().set({ maxContextTokens: 1200 });

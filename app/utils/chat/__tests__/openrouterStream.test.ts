@@ -97,6 +97,20 @@ describe('openrouterStream', () => {
         expect(body._context).toEqual({ version: 1, user_max_context_tokens: 500, requested_completion_tokens: 100 });
     });
 
+    it('preserves structured background context denial before job acceptance without transport retry', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({ code: 'context_full', error: 'Scripted capacity rejection', retryable: false }, 400));
+        vi.stubGlobal('fetch', fetchMock);
+        await expect(startBackgroundStream({ apiKey: 'key', model: 'model-1', threadId: 'thread', messageId: 'assistant',
+            history: { version: 1, kind: 'new-turn', admissionId: 'admission', generationId: 'generation', workspaceId: 'workspace',
+                threadId: 'thread', messageId: 'assistant', thread: { id: 'thread', clock: 1 },
+                userMessage: { id: 'user', thread_id: 'thread', role: 'user', clock: 1, data: { content: 'Keep complete request' } },
+                assistantMessage: { id: 'assistant', thread_id: 'thread', role: 'assistant', clock: 1, pending: true,
+                    data: { content: '', generation_id: 'generation' } } },
+            orMessages: [{ role: 'user', content: 'Keep complete request' }], modalities: ['text'] }))
+            .rejects.toMatchObject({ code: 'ERR_CONTEXT_FULL', retryable: false, backgroundAdmissionRetryable: false });
+        expect(fetchMock).toHaveBeenCalledOnce();
+    });
+
     it.each(['server', 'direct'] as const)('classifies provider context HTTP errors on the %s route without retrying or exposing upstream text', async (route) => {
         if (route === 'direct') localStorage.setItem('or3:server-route-available', JSON.stringify({ available: false, timestamp: Date.now() }));
         const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({ error: {

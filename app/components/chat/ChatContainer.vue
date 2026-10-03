@@ -200,7 +200,7 @@ import { useThreadCompaction } from '~/composables/chat/useThreadCompaction';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
-import { stripModelVariantSuffix } from '~~/shared/openrouter/model-variants';
+import { appendModelVariant, stripModelVariantSuffix } from '~~/shared/openrouter/model-variants';
 import { resolveSystemPromptText } from '~/utils/chat/useAi-internal/messageBuild';
 import {
     hydrateUserApiKeyFromKv,
@@ -1059,7 +1059,7 @@ function waitForDurableSendAcceptance(
 
 function onSend(payload: ChatInputSendPayload) {
     if (loading.value || retryPending.value || compaction.active.value) return;
-    model.value = payload.model || model.value;
+    model.value = appendModelVariant((payload.model || model.value).replace(/:thinking$/, ''), payload.modelVariant ?? 'off');
     const attachments = payload.attachments?.length
         ? payload.attachments
         : payload.images;

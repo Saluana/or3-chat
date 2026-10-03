@@ -64,6 +64,33 @@ it('uses history-first guarded same-model inference with no send hooks, placehol
     expect(body.indexOf('Evidence3')).toBeLessThan(body.indexOf('Return only the requested summary JSON.'));
     expect(summary.summaryMarkdown).toBe(markdown); expect(transport).toHaveBeenCalledOnce();
 });
+it.each(['success', 'correction', 'denied', 'abort'] as const)('uses the real forced SSR auxiliary transport with scripted %s', async (scenario) => {
+    const actual = await vi.importActual<typeof import('~/utils/chat/openrouterStream')>('~/utils/chat/openrouterStream');
+    transport.mockImplementation(actual.openRouterStream);
+    const bodies: Record<string, unknown>[] = []; const urls: unknown[] = [];
+    vi.stubGlobal('useRuntimeConfig', () => ({ public: { ssrAuthEnabled: true } }));
+    const controller = new AbortController();
+    vi.stubGlobal('fetch', vi.fn(async (url, init) => {
+        urls.push(url); bodies.push(JSON.parse(init.body as string));
+        if (scenario === 'denied') return Response.json({ error: 'Unauthorized' }, { status: 401 });
+        if (scenario === 'abort') { controller.abort(); throw new DOMException('Aborted', 'AbortError'); }
+        const text = scenario === 'correction' && bodies.length === 1 ? 'MALFORMED_MODEL_RESPONSE' : envelope();
+        return new Response(`data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\ndata: [DONE]\n\n`, { headers: { 'Content-Type': 'text/event-stream' } });
+    }));
+    try {
+        const source = await capture(controller.signal);
+        const result = generateCompactionSummary(source, { modelMetadata, apiKey: null, signal: controller.signal });
+        if (scenario === 'denied' || scenario === 'abort') await expect(result).rejects.toBeTruthy();
+        else expect((await result).summaryMarkdown).toBe(markdown);
+        expect(urls).toEqual(Array(scenario === 'correction' ? 2 : 1).fill('/api/openrouter/stream'));
+        for (const body of bodies) {
+            expect(body.model).toBe('large-model'); expect(body.tools).toBeUndefined(); expect(body._background).toBeUndefined();
+            expect(body._context).toMatchObject({ version: 1, user_max_context_tokens: null });
+            expect(JSON.stringify(body.messages)).toContain('Evidence0');
+        }
+        expect(await getDb().threads.count()).toBe(1); expect(await getDb().messages.count()).toBe(4);
+    } finally { vi.unstubAllGlobals(); }
+});
 it('corrects an invalid envelope once using original bounded history and compact error, then commits the captured summary', async () => {
     let calls = 0;
     transport.mockImplementation(async function* (): AsyncGenerator<ORStreamEvent> { calls += 1; yield { type: 'text', text: calls === 1 ? 'MALFORMED_MODEL_RESPONSE' : envelope() }; yield { type: 'done' }; });
@@ -72,6 +99,24 @@ it('corrects an invalid envelope once using original bounded history and compact
     expect(correction).toContain('Evidence0'); expect(correction).toContain('Validation correction:'); expect(correction).not.toContain('MALFORMED_MODEL_RESPONSE');
     const result = await createCompactedFork({ capture: source, summary });
     expect(result.thread.branch_mode).toBe('compacted'); expect(result.summary.data).toMatchObject({ kind: 'compaction' }); expect(transport).toHaveBeenCalledTimes(2);
+});
+it.each(['sections', 'unknown-landmark', 'long-description', 'nonshrinking', 'tool', 'media'] as const)('routes %s through exactly one corrective transport request without partial writes', async scenario => {
+    let calls = 0;
+    const invalid = scenario === 'sections' ? JSON.stringify({ summary_markdown: '## Objective\nOnly one section.', landmarks: [{ message_id: 'm0', kind: 'decision', summary: 'Source' }] })
+        : scenario === 'unknown-landmark' ? envelope('not-captured')
+        : scenario === 'long-description' ? JSON.stringify({ summary_markdown: markdown, landmarks: [{ message_id: 'm0', kind: 'decision', summary: 'x'.repeat(201) }] })
+        : JSON.stringify({ summary_markdown: markdown + '\n' + 'Exact continuing task facts '.repeat(1500), landmarks: [{ message_id: 'm0', kind: 'decision', summary: 'Source' }] });
+    transport.mockImplementation(async function* (): AsyncGenerator<ORStreamEvent> {
+        calls++;
+        if (calls === 1 && scenario === 'tool') yield { type: 'tool_call', tool_call: { id: 'unexpected', type: 'function', function: { name: 'unexpected', arguments: '{}' } } };
+        else if (calls === 1 && scenario === 'media') yield { type: 'image', url: 'data:image/png;base64,AA==' };
+        else yield { type: 'text', text: calls === 1 ? invalid : envelope() };
+        yield { type: 'done' };
+    });
+    const before = await getDb().messages.toArray(); const result = await generate();
+    expect(result.summaryMarkdown).toBe(markdown); expect(transport).toHaveBeenCalledTimes(2);
+    expect(bodyAt(1)).toContain('Validation correction:'); expect(bodyAt(1)).toContain('Evidence0');
+    expect(bodyAt(1)).not.toContain(invalid); expect(await getDb().messages.toArray()).toEqual(before); expect(await getDb().threads.count()).toBe(1);
 });
 it('does not recursively correct repeated non-JSON output or create any durable child', async () => {
     transport.mockImplementation(async function* (): AsyncGenerator<ORStreamEvent> { yield { type: 'text', text: 'I cannot provide the requested JSON.' }; yield { type: 'done' }; });

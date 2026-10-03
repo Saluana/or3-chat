@@ -32,14 +32,13 @@
 import type { Ref } from 'vue';
 import type { ChatMessage, ContentPart, SendMessageParams, SendResult } from '~/utils/chat/types';
 import { hasDurableSendAcceptance } from '~/utils/chat/types';
-import { SUPERSEDED_BY_KEY, isSupersededMessage } from '~/utils/chat/transcript';
+import { SUPERSEDED_BY_KEY, isSupersededMessage, storedMessagesToCanonicalTranscript, projectTranscriptForOpenRouter, projectTranscriptForUi } from '~/utils/chat/transcript';
+import { resolveThreadProjection } from '~/utils/chat/compaction/history';
 import { updateMessageRecord } from './persistence';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
-import { getDb } from '~/db/client';
+import { getDb, getWorkspaceGeneration } from '~/db/client';
 import { compareMessageOrder, messagesByThread } from '~/db/messages';
 import { parseFileHashes } from '~/db/files-util';
-import { normalizeStreamingMessage } from '~/utils/chat/messages';
-import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { reportError, err } from '~/utils/errors';
 import type { StoredMessage } from './types';
 
@@ -213,9 +212,10 @@ export async function retryMessageImpl(
 
     try {
         const db = getDb();
+        const generation = getWorkspaceGeneration();
         const threadId = ctx.threadIdRef.value;
         const ownsRetry = () => !ctx.loading.value &&
-            ctx.threadIdRef.value === threadId && getDb() === db &&
+            ctx.threadIdRef.value === threadId && getDb() === db && getWorkspaceGeneration() === generation &&
             (ctx.ownsView?.() ?? true);
         const target = await db.messages.get(messageId);
         if (!target || target.thread_id !== threadId) return undefined;
@@ -313,54 +313,18 @@ export async function retryMessageImpl(
             hashes = parseFileHashes(userMsg.file_hashes);
         }
 
-        const toChatMessage = (m: StoredMessage): ChatMessage => {
-            const data = m.data && typeof m.data === 'object'
-                ? (m.data as Record<string, unknown>)
-                : null;
-            const normalized = normalizeStreamingMessage({
-                content: m.content,
-                reasoning_text: m.reasoning_text,
-                data,
-            });
-            return {
-                role: m.role as ChatMessage['role'],
-                content: normalized.text,
-                id: m.id,
-                stream_id: m.stream_id ?? undefined,
-                file_hashes: m.file_hashes ?? undefined,
-                reasoning_text: normalized.reasoningText,
-                data,
-                name:
-                    typeof data?.tool_name === 'string'
-                        ? data.tool_name
-                        : undefined,
-                tool_call_id:
-                    typeof data?.tool_call_id === 'string'
-                        ? data.tool_call_id
-                        : undefined,
-                error: m.error ?? null,
-                index:
-                    typeof m.index === 'number'
-                        ? m.index
-                        : typeof m.index === 'string'
-                        ? Number(m.index) || null
-                        : null,
-                created_at: typeof m.created_at === 'number' ? m.created_at : null,
-            };
-        };
-
-        const toUiMessages = (rows: StoredMessage[]) =>
-            rows
-                .filter((message) => message.role !== 'tool')
-                .map((message) => ensureUiMessage(toChatMessage(message)));
-        const originalHistory = ordered.map(toChatMessage);
-        const originalUi = toUiMessages(ordered);
-        const retainedRows = ordered.filter((message) => !selectedIds.has(message.id));
-        // The retry is a new turn at the end. Keep every unrelated turn in
-        // both the visible conversation and the provider's model context.
-        const retryHistory = retainedRows.map(toChatMessage);
+        const projection = await resolveThreadProjection(threadId, db);
+        if (!ownsRetry()) return undefined;
+        const originalCanonical = storedMessagesToCanonicalTranscript(projection.messages);
+        const originalHistory = projectTranscriptForOpenRouter(originalCanonical);
+        const originalUi = projectTranscriptForUi(originalCanonical);
+        const retainedRows = projection.messages.filter((message) => !selectedIds.has(message.id));
+        // Only the local selected turn is replaced; inherited summary/ancestor
+        // rows and unrelated local turns retain the canonical projection policy.
+        const retainedCanonical = storedMessagesToCanonicalTranscript(retainedRows);
+        const retryHistory = projectTranscriptForOpenRouter(retainedCanonical);
         ctx.rawMessages.value = retryHistory;
-        ctx.messages.value = toUiMessages(retainedRows);
+        ctx.messages.value = projectTranscriptForUi(retainedCanonical);
         const previousTail = ctx.tailAssistant.value;
         if (previousTail && selectedIds.has(previousTail.id)) {
             ctx.tailAssistant.value = null;
@@ -420,6 +384,7 @@ export async function retryMessageImpl(
                 files: [],
                 online: false,
                 historyOverride: retryHistory,
+                retryExcludedMessageIds: [...selectedIds],
                 onUserPersisted: markSelectedTurn,
             });
         } catch (sendError) {

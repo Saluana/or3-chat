@@ -2164,7 +2164,14 @@ export function useChat(
                         if (usage) { measuredUsage = usage; break; }
                     }
                 }
-                if (!sendMessagesParams.historyOverride) canonicalHistory = projectTranscriptForOpenRouter(
+                if (sendMessagesParams.retryExcludedMessageIds) {
+                    const excluded = new Set(sendMessagesParams.retryExcludedMessageIds);
+                    if ([...excluded].some((id) => !projection.messages.some((row) => row.id === id && row.thread_id === preparationThreadId))) {
+                        return { status: 'rejected', requestId, reason: 'unavailable' };
+                    }
+                    canonicalHistory = projectTranscriptForOpenRouter(storedMessagesToCanonicalTranscript(
+                        projection.messages.filter((row) => !excluded.has(row.id))));
+                } else if (!sendMessagesParams.historyOverride) canonicalHistory = projectTranscriptForOpenRouter(
                     storedMessagesToCanonicalTranscript(projection.messages));
             } catch (error) {
                 if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
@@ -3130,17 +3137,19 @@ export function useChat(
                     requestScope.message = ownsView
                         ? resolveUiMessage(assistantDbMsg.id)
                         : requestScope.message;
+                    const failureReason = contextAdmissionFailureReason(error) ?? 'stream_error';
                     reportFinalization(
                         await finalizeRequest(requestScope, {
                             outcome: 'failed',
-                            error: new Error(errMessage),
-                            messageError: errMessage,
+                            error: error instanceof Error ? error : new Error(errMessage),
+                            messageError: failureReason === 'context_full' && !requestScope.jobId ? 'context_full' : errMessage,
+                            failureReason,
                         })
                     );
                     return {
                         status: 'failed',
                         requestId,
-                        reason: contextAdmissionFailureReason(error) ?? 'stream_error',
+                        reason: failureReason,
                         error: errMessage,
                         userMessageId: userDbMsg.id,
                         assistantMessageId: assistantDbMsg.id,

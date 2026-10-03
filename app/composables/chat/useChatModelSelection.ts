@@ -19,6 +19,7 @@ import {
 import type { OpenRouterModel } from '~~/shared/openrouter/types';
 import {
     DEFAULT_MODEL_VARIANT,
+    appendModelVariant,
     type OpenRouterModelVariant,
 } from '~~/shared/openrouter/model-variants';
 
@@ -146,8 +147,10 @@ export function useChatModelSelection(options: {
         },
         { immediate: true }
     );
+    watch([selectedModel, modelVariant], ([modelId, variant]) => {
+        options.onChange(appendModelVariant(stripThinkingSuffix(modelId), variant));
+    }, { immediate: true });
     watch(selectedModel, (modelId) => {
-        options.onChange(modelId);
         if (!process.client) return;
         if (suppressNextPersist.value) {
             suppressNextPersist.value = false;

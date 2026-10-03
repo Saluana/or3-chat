@@ -11,6 +11,8 @@ import { estimateMeasuredChatRequest } from '~~/shared/chat/request-usage';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { buildOpenRouterRequestBody } from '~/utils/chat/openrouterStream';
 import { useRuntimeConfig } from '#imports';
+import { selectOpenRouterImageCandidates } from '~/core/auth/openrouter-build';
+import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 
 /** Read-only advisory preview. It never resolves media bytes or invokes send hooks. */
 export function useContextPreview(options: {
@@ -54,8 +56,23 @@ export function useContextPreview(options: {
             const settings = { ...preferences.settings.value };
             const projection = threadId ? await resolveThreadProjection(threadId, db) : undefined;
             if (!current()) return;
-            const messages: CountableChatMessage[] = projection
+            const history = projection
                 ? projectTranscriptForOpenRouter(storedMessagesToCanonicalTranscript(projection.messages)) : [];
+            const messages: CountableChatMessage[] = history.map((row) => ({ ...row }));
+            // Match native replay's selection policy without loading media or invoking send filters.
+            const { selected, inlineImageCandidates } = await selectOpenRouterImageCandidates(history, {
+                maxImageInputs: 5, imageInclusionPolicy: 'all',
+            });
+            for (const candidate of selected) {
+                const remote = /^(?:https?:|data:|blob:)/i.test(candidate.hash);
+                const meta = !remote && !inlineImageCandidates.has(candidate.hash)
+                    ? await db.file_meta.get(candidate.hash) : undefined;
+                if (!current()) return;
+                if (meta && !isSupportedRasterMimeType(meta.mime_type)) continue;
+                const row = messages[candidate.messageIndex]; if (!row) continue;
+                row.content = [...(typeof row.content === 'string' ? [{ type: 'text', text: row.content }]
+                    : row.content ?? []), { type: 'image_url' }];
+            }
             const system = await buildSystemPromptMessage({ threadId, promptSelection,
                 activePromptContent: null, masterPrompt: settings.masterSystemPrompt });
             if (system) messages.unshift({ role: system.role, content: system.content as CountableChatMessage['content'] });

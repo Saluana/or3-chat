@@ -1,5 +1,5 @@
 <template>
-    <div class="space-y-1 text-xs text-(--md-on-surface-variant)" aria-label="Conversation context" data-context-indicator>
+    <div class="space-y-1 text-xs text-(--md-on-surface-variant)" aria-label="Conversation context" :aria-busy="state.pending" data-context-indicator>
         <template v-if="admission && 'budget' in admission">
             <div class="flex items-center gap-2 tabular-nums">
                 <UPopover>

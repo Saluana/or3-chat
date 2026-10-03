@@ -185,10 +185,23 @@ export function subscribeCompactionCancellation(capture: CompactionCapture, onAb
     return () => signal?.removeEventListener('abort', onAbort);
 }
 
+// These router slugs select another model at request time; they cannot identify
+// the same concrete model for both summary attempts. Provider variants remain valid.
+const unresolvedRouters = new Set(['openrouter/auto', 'openrouter/auto-beta', 'openrouter/free',
+    'openrouter/bodybuilder', 'openrouter/pareto-code', 'openrouter/fusion', 'typesafe/jev-router', 'nvidia/switchyard']);
+export function getCompactionModelUnavailableReason(model: string): string | undefined {
+    const base = model.split(':')[0]!;
+    if (model.startsWith('~') || unresolvedRouters.has(base) || base.startsWith('openrouter/fusion-')) {
+        return 'Choose a concrete model before compacting. This router has not resolved a single model for the summary.';
+    }
+}
+
 /** Captures IDs and clocks; inference happens after the read transaction has ended. */
 export async function captureCompaction(options: CaptureOptions): Promise<CompactionCapture> {
     const db = options.db ?? getDb(); const generation = getWorkspaceGeneration();
     const ownership = { db, generation, options: { ...options } }; requireCurrent(ownership);
+    const modelUnavailable = getCompactionModelUnavailableReason(options.model);
+    if (modelUnavailable) throw new CompactionError('model_metadata_unavailable', modelUnavailable);
     if (!options.model.trim()) throw new CompactionError('invalid_capture', 'Compaction requires its captured chat model.');
     const state = await db.transaction('r', ['threads', 'messages'], () => readCapture(options, db));
     requireCurrent(ownership);

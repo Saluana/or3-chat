@@ -388,6 +388,7 @@
 import ChatContextMeter from './ChatContextMeter.vue';
 import { useContextPreview } from '~/composables/chat/useContextPreview';
 import { useModelStore } from '~/composables/chat/useModelStore';
+import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
 import { appendModelVariant } from '~~/shared/openrouter/model-variants';
 import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
@@ -874,7 +875,7 @@ const previewReasoning = computed(() => {
 const contextPreview = useContextPreview({ threadId: () => props.threadId, model: previewModel,
     text: promptText, extraText: () => largeTextBlocks.value.map((block) => block.text).join('\n\n'),
     hasMedia: () => attachments.value.length > 0, promptSelection: stagedPromptId,
-    revision: () => props.contextRevision, reasoning: previewReasoning });
+    revision: () => [props.contextRevision, promptSelectionRevision.value], reasoning: previewReasoning });
 const compactionInProgress = computed(() => props.compactionState && ['capturing', 'generating', 'correcting', 'committing'].includes(props.compactionState.status));
 const compactionModel = computed(() => props.compactionState && 'model' in props.compactionState ? props.compactionState.model : '');
 const tabDrafts = useWorkspaceTabDrafts();
@@ -1072,9 +1073,14 @@ const stopContextWorkspace = subscribeActiveWorkspaceDb(() => { sendBlock.value 
 onBeforeUnmount(stopContextWorkspace);
 // Compare each source independently; a watch getter returning a new array
 // would also invalidate when a dependency republishes an unchanged value.
+const invalidateContextDecision = () => { sendBlock.value = undefined; lossyPreview.value = undefined; };
+const contextTools = useToolRegistry();
 watch([() => props.threadId, () => props.contextRevision, selectedModel, modelVariant,
-    thinkingEnabled, reasoningEffort, promptText, attachments, largeTextBlocks],
-    () => { sendBlock.value = undefined; lossyPreview.value = undefined; });
+    thinkingEnabled, reasoningEffort, promptText, stagedPromptId, promptSelectionRevision, aiSettings,
+    () => contextTools.listTools.value.map((tool) => [tool.definition, tool.enabled.value])], invalidateContextDecision);
+// Attachment processing mutates the existing array and its pending/hash fields.
+// A shallow ref watch misses those changes and leaves an obsolete decision visible.
+watch([attachments, largeTextBlocks, imageSettings], invalidateContextDecision, { deep: true });
 async function handleSend(decision: { inspectLossyRequest?: boolean; lossyConfirmation?: import('~/utils/chat/lossy-request').LossyRequestPreview } = {}): Promise<SendResult> {
     const result = await performSend(decision);
     if ((result.status === 'rejected' || result.status === 'failed') && ['context_full', 'model_metadata_unavailable', 'invalid_context_limit', 'invalid_output_limit'].includes(result.reason)) {

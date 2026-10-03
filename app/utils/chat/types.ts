@@ -71,8 +71,10 @@ export interface SendMessageParams {
     editorDoc?: Record<string, unknown>;
     // Optional hashes to include for model context without reattaching to the new UI message.
     context_hashes?: string[];
-    /** Visible transcript used for retry; the new user turn is appended to it. */
+    /** Explicit caller-provided history; native Retry instead uses validated exclusions. */
     historyOverride?: ChatMessage[];
+    /** Native Retry's local turn IDs, excluded from a fresh validated recursive projection. */
+    retryExcludedMessageIds?: readonly string[];
     /** Runs after the new user row is durable, before response generation. */
     onUserPersisted?: (userMessageId: string) => void | Promise<void>;
 }

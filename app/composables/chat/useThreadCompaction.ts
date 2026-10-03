@@ -1,6 +1,6 @@
 import { computed, shallowRef, shallowReactive, toValue, watch, getCurrentScope, onScopeDispose, type MaybeRefOrGetter } from 'vue';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb, type Or3DB } from '~/db/client';
-import { captureCompaction, createCompactedFork, CompactionError } from '~/db/compaction';
+import { captureCompaction, createCompactedFork, CompactionError, getCompactionModelUnavailableReason } from '~/db/compaction';
 import { generateCompactionSummary } from '~/utils/chat/compaction/summary';
 import { resolveThreadProjection, CompactionHistoryError } from '~/utils/chat/compaction/history';
 import { newId } from '~/db/util';
@@ -84,6 +84,8 @@ export function useThreadCompaction(options: ControllerOptions) {
     if (getCurrentScope()) onScopeDispose(dispose);
     const blockedReason = computed(() => {
         if (!toValue(options.threadId) || !toValue(options.model)) return 'Open a persisted conversation and choose its model first.';
+        const unavailable = getCompactionModelUnavailableReason(toValue(options.model));
+        if (unavailable) return unavailable;
         if (toValue(options.isBusy)) return 'Wait for chat generation and tools to settle.';
         if (active.value || getSourceLocks(getDb()).has(`${workspaceRevision.value}:${toValue(options.threadId)}`)) return 'A compaction is already active for this conversation.';
         return undefined;
@@ -117,6 +119,8 @@ export function useThreadCompaction(options: ControllerOptions) {
         if (disposed) return failure('cancelled', 'The initiating pane is no longer available.');
         const source = toValue(options.threadId); const model = toValue(options.model);
         if (!source || !model) return failure('not_eligible', 'Open a persisted conversation and choose its model first.');
+        const unavailable = getCompactionModelUnavailableReason(model);
+        if (unavailable) return failure('model_metadata_unavailable', unavailable);
         if (toValue(options.isBusy)) return failure('source_busy', 'Wait for chat generation and tools to settle.');
         const db = getDb(); const generation = getWorkspaceGeneration(); const key = `${generation}:${source}`;
         const locks = getSourceLocks(db);

@@ -28,7 +28,9 @@ const dbState = vi.hoisted(() => {
             messages: {
                 get: messagesGet,
                 delete: messagesDelete,
-                where,
+                where: (index: string, ...args: unknown[]) => index === 'thread_id'
+                    ? { equals: () => ({ toArray: () => messagesByThreadSpy() }) }
+                    : where(index, ...args),
             },
         },
         messagesGet,
@@ -49,6 +51,7 @@ vi.mock('~/utils/errors', () => ({
 
 vi.mock('~/db/client', () => ({
     getDb: () => dbState.db,
+    getWorkspaceGeneration: () => 0,
 }));
 
 vi.mock('~/db/messages', () => ({
@@ -631,7 +634,7 @@ describe('continue/retry regressions', () => {
         dbState.where.mockReturnValue(assistantChain);
         dbState.transaction.mockImplementation(
             async (_mode: string, _tables: string[], cb: () => Promise<void>) => {
-                await cb();
+                return await cb();
             }
         );
 
@@ -662,7 +665,7 @@ describe('continue/retry regressions', () => {
             'override-model'
         );
 
-        expect(dbState.transaction).not.toHaveBeenCalled();
+        expect(dbState.transaction.mock.calls.every(([mode]) => mode === "r")).toBe(true);
         expect(dbState.messagesDelete).not.toHaveBeenCalled();
         expect(sendMessageSpy).toHaveBeenCalledWith('retry this', expect.objectContaining({
             model: 'override-model',
@@ -703,7 +706,7 @@ describe('continue/retry regressions', () => {
         dbState.where.mockReturnValue(assistantChain);
         dbState.transaction.mockImplementation(
             async (_mode: string, _tables: string[], cb: () => Promise<void>) => {
-                await cb();
+                return await cb();
             }
         );
         messagesByThreadSpy.mockResolvedValue([userMsg]);
@@ -730,7 +733,7 @@ describe('continue/retry regressions', () => {
             'u2'
         );
 
-        expect(dbState.transaction).not.toHaveBeenCalled();
+        expect(dbState.transaction.mock.calls.every(([mode]) => mode === "r")).toBe(true);
         expect(dbState.messagesDelete).not.toHaveBeenCalled();
         expect(sendMessageSpy).toHaveBeenCalledWith('retry solo', expect.objectContaining({
             model: 'default-model',
@@ -762,7 +765,7 @@ describe('continue/retry regressions', () => {
         dbState.where.mockReturnValue(assistantChain);
         dbState.transaction.mockImplementation(
             async (_mode: string, _tables: string[], cb: () => Promise<void>) => {
-                await cb();
+                return await cb();
             }
         );
         messagesByThreadSpy.mockResolvedValue([userMsg]);

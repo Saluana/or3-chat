@@ -35,7 +35,7 @@ export async function qualifyCompactionHistory(current: string) {
     await db.messages.put(message(`${root}-later`, root, 1000, 'Later ancestor evidence.'));
     const laterDefault = await call('get_message', { message_id: `${root}-later` });
     const laterExpanded = await call('get_message', { message_id: `${root}-later`, include_after_compaction: true });
-    await db.messages.update(`${root}-decision`, { clock: 2, data: { content: 'Changed decision: preserve app/example.ts.' } });
+    await db.messages.update(`${root}-decision`, { clock: 2, index: 37, order_key: '37:reindexed', data: { content: 'Changed decision: preserve app/example.ts.' } });
     const changed = await call('get_message', { message_id: `${root}-decision` });
     await db.messages.update(`${root}-followup`, { deleted: true, clock: 2 });
     const deleted = await call('get_message', { message_id: `${root}-followup` });
@@ -128,7 +128,12 @@ export async function qualifyCompactionHistory(current: string) {
     const projectMixed = await readFamilyPage(db, { limit: 50, type: 'all', filter: { projectId: 'qualification-project' } });
     const pinnedMixed = await readFamilyPage(db, { limit: 50, type: 'all', filter: { pinned: true } });
     const preference = familyExpansionPreferenceName(familyRoot); await setKvByName(preference, 'true', db);
+    const recovery = (thread_id: string) => ({ thread_id, version: 1 as const, request_id: 'disposable-recovery',
+        user_message_id: 'disposable-user', assistant_message_id: 'disposable-assistant', input: { content: 'Retained draft' },
+        input_fingerprint: 'disposable', source_fingerprint: 'disposable', messages: [], tools: [] });
+    await db.chat_request_recoveries.bulkPut([familyRoot, 'qualification-family-match', 'qualification-family-newest'].map(recovery));
     let descendantError = ''; try { await hardDeleteThread(familyRoot); } catch (error) { descendantError = (error as { code?: string }).code ?? String(error); }
+    const deniedRecoveryRetained = Boolean(await db.chat_request_recoveries.get(familyRoot));
     // Hook-created descendants must roll back both the child and deletion.
     const hookedRoot = 'qualification-hooked-root'; await db.threads.put(thread(hookedRoot));
     const hooks = useHooks(); const createChild = async (payload: { id: string }) => {
@@ -139,8 +144,12 @@ export async function qualifyCompactionHistory(current: string) {
     finally { hooks.removeAction('db.threads.delete:action:hard:before', createChild); }
     const hookRollback = Boolean(await db.threads.get(hookedRoot)) && !await db.threads.get('qualification-hooked-child');
     await softDeleteThread(familyRoot);
+    const softRecoveryCleared = !await db.chat_request_recoveries.get(familyRoot);
     const preferenceRetained = (await getKvByName(preference, db))?.value === 'true';
-    await hardDeleteThread('qualification-family-match'); await hardDeleteThread('qualification-family-newest');
+    await hardDeleteThread('qualification-family-match');
+    const lastMemberPreferenceRetained = (await getKvByName(preference, db))?.value === 'true';
+    await hardDeleteThread('qualification-family-newest');
+    const childRecoveriesCleared = !await db.chat_request_recoveries.get('qualification-family-match') && !await db.chat_request_recoveries.get('qualification-family-newest');
     const retired = await getKvByName(preference, db);
     const retiredPreference = Boolean(retired?.deleted && retired.value === null);
     await softDeleteThread(root);
@@ -187,6 +196,7 @@ export async function qualifyCompactionHistory(current: string) {
         expandedPages, canceled: Boolean(canceledExecution.error) && !canceledExecution.result, missingSummary, missingCaptured, missingAnchor,
         switched, crossConnectionContinuation, filtered, filteredMembers, latest, damaged, mixed, projectMixed, pinnedMixed,
         projectDocumentId: projectDocument.id, descendantError, hookError, hookRollback,
+        deniedRecoveryRetained, softRecoveryCleared, childRecoveriesCleared, lastMemberPreferenceRetained,
         preferenceRetained, retiredPreference, survivingContext, scale: { threads: 10_000, families: 500, expandedMembers: 200, memberPageSize: 50, timings, p95: timings.at(-1),
             memberTimings, memberP95: Math.max(...memberTimings), messageReads } };
 }

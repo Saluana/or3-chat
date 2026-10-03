@@ -114,7 +114,10 @@ function permitted(state: Awaited<ReturnType<typeof scope>>, row: Row, expanded:
 }
 function describe(state: Awaited<ReturnType<typeof scope>>, row: Row, limit: number) {
     const captured = state.memberships.get(String(row.thread_id))?.get(row.id);
-    return { message_id: row.id, thread_id: row.thread_id, role: row.role, reference_only: true as const, ...excerpt(textOf(row), limit),
+    return { message_id: row.id, thread_id: row.thread_id, role: row.role,
+        ...(typeof row.index === 'number' && Number.isFinite(row.index) ? { index: row.index } : {}),
+        ...(typeof row.order_key === 'string' ? { order_key: row.order_key } : {}),
+        reference_only: true as const, ...excerpt(textOf(row), limit),
         changed_since_compaction: captured !== undefined && captured !== row.clock,
         outside_compaction_scope: captured === undefined };
 }

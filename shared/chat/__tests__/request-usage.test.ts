@@ -1,9 +1,51 @@
 import { describe, it, expect } from 'vitest';
-import { captureUsagePrefix, attachRequestUsage, readMeasuredRequestUsage } from '../request-usage';
+import { captureUsagePrefix, attachRequestUsage, readMeasuredRequestUsage, estimateMeasuredChatRequest } from '../request-usage';
+import { estimateChatRequest, type CountableChatMessage } from '../context-budget';
 const countText = async (text: string) => Math.ceil(text.length / 4);
 const request = () => ({ model: 'large-model', messages: [{ role: 'user', content: 'Original task' }],
     tools: [{ type: 'function', function: { name: 'lookup', parameters: { type: 'object' } } }], modalities: ['text'], countText });
 describe('measured request prefix provenance', () => {
+
+    it('uses a matched measured prefix plus the current suffix, never below complete-request estimation', async () => {
+        const input = { ...request(), configuration: { reasoning: { effort: 'medium' }, max_tokens: 4096 } };
+        const prefix = await captureUsagePrefix(input);
+        const messages = [...input.messages, { role: 'assistant', content: 'Prior answer' }, { role: 'user', content: 'New draft' }];
+        const suffix = await estimateChatRequest({ messages: messages.slice(1), countText });
+        const empty = await estimateChatRequest({ messages: [], countText });
+        for (const prompt of [prefix.input_estimate_tokens + 1000, 1]) {
+            const usage = attachRequestUsage(prefix, { prompt_tokens: prompt, completion_tokens: 5 }, { requestId: 'measured', iteration: 1, measuredAt: 1 });
+            const next = { ...input, messages, configuration: { ...input.configuration, max_tokens: 8192 }, usage };
+            const full = await estimateChatRequest(next);
+            expect(await estimateMeasuredChatRequest(next)).toEqual({ ...full, basis: 'measured-prefix',
+                input_tokens: Math.max(full.input_tokens, prompt + suffix.input_tokens - empty.input_tokens) });
+        }
+    });
+
+    it.each(['text', 'model', 'tools', 'reasoning', 'shorter', 'missing', 'zero'] as const)('falls back to complete estimation for %s provenance', async (change) => {
+        const initial = { ...request(), configuration: { reasoning: { effort: 'medium' } } };
+        const prefix = await captureUsagePrefix(initial);
+        const usage = attachRequestUsage(prefix, { prompt_tokens: change === 'zero' ? 0 : 500_000, completion_tokens: 5 }, { requestId: 'measured', iteration: 1, measuredAt: 1 });
+        const next = structuredClone({ ...initial, countText: undefined, usage });
+        if (change === 'text') next.messages[0]!.content = 'Edited prefix';
+        if (change === 'model') next.model = 'large-model:floor';
+        if (change === 'tools') next.tools[0]!.function.name = 'different';
+        if (change === 'reasoning') next.configuration.reasoning.effort = 'high';
+        if (change === 'shorter') next.messages = [];
+        if (change === 'missing') next.usage = undefined;
+        const full = await estimateChatRequest({ ...next, countText });
+        expect(await estimateMeasuredChatRequest({ ...next, countText })).toEqual(full);
+    });
+
+    it('retains media uncertainty in matched hydrated history and invalidates changed image bytes', async () => {
+        const messages: CountableChatMessage[] = [{ role: 'user', content: [{ type: 'text', text: 'Image caption' },
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } }] }];
+        const initial = { ...request(), messages };
+        const usage = attachRequestUsage(await captureUsagePrefix(initial), { prompt_tokens: 1000, completion_tokens: 5 }, { requestId: 'media', iteration: 1, measuredAt: 1 });
+        expect(await estimateMeasuredChatRequest({ ...initial, usage })).toMatchObject({ basis: 'measured-prefix', media_cost: 'unknown' });
+        const edited = { ...initial, messages: [{ role: 'user', content: [{ type: 'text', text: 'Image caption' },
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,BBBB' } }] }], usage };
+        expect(await estimateMeasuredChatRequest(edited)).toEqual(await estimateChatRequest(edited));
+    });
     it('snapshots the actual prefix before asynchronous counting and binds measurement to that request', async () => {
         const input = request(); let release!: () => void;
         const paused = new Promise<void>((resolve) => { release = resolve; });

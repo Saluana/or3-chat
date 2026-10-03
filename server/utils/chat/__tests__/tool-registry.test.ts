@@ -1,3 +1,4 @@
+import { useRuntimeConfig } from '#imports';
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import {
     registerServerTool,
@@ -10,7 +11,14 @@ import { registerSyncGatewayAdapter } from '../../../sync/gateway/registry';
 import type { SyncGatewayAdapter } from '../../../sync/gateway/types';
 import { registerAuthWorkspaceStore } from '../../../auth/store/registry';
 import type { AuthWorkspaceStore } from '../../../auth/store/types';
-import { clearAllJobs, memoryJobProvider } from '../../background-jobs/providers/memory';
+import { clearAllJobs, memoryJobProvider, getJobCount } from '../../background-jobs/providers/memory';
+import { registerAuthProvider } from '../../../auth/registry';
+import { _resetSharedSessionCache } from '../../../auth/session';
+import { createApp, toWebHandler, getHeader } from 'h3';
+import readinessHandler from '../../../api/chat/history-readiness.get';
+import { placeHistoryTools } from '~/utils/chat/history-placement';
+import { getChatJobExecution } from '../../background-jobs/types';
+import { startBackgroundStream } from '../../background-jobs/stream-handler';
 import { resetJobProvider } from '../../background-jobs/store';
 import type { CanonicalHistoryActor, CanonicalHistoryRecord } from '~~/shared/chat/background-history';
 import type { CanonicalChatQuery } from '~~/shared/chat/history-reader';
@@ -204,7 +212,11 @@ describe('registered canonical history authorization', () => {
     let records: Map<string, CanonicalHistoryRecord>;
     let adapter: SyncGatewayAdapter;
     beforeEach(async () => {
-        vi.stubGlobal('useRuntimeConfig', () => ({ backgroundJobs: { storageProvider: 'memory', maxConcurrentPerUser: 20 } }));
+        vi.stubGlobal('useRuntimeConfig', () => ({ auth: { enabled: true, provider: 'history-identity' }, sync: { provider: 'history-owner' }, public: { sync: { provider: 'history-owner' } }, backgroundJobs: { storageProvider: 'memory', maxConcurrentPerUser: 20, encryptionKey: 'disposable-fixture-secret' } }));
+        vi.mocked(useRuntimeConfig).mockImplementation(() => (globalThis as unknown as { useRuntimeConfig(): ReturnType<typeof useRuntimeConfig> }).useRuntimeConfig());
+        _resetSharedSessionCache();
+        registerAuthProvider({ id: 'history-identity', create: () => ({ name: 'history-identity', getSession: async event => getHeader(event, 'authorization') === 'fixture-owner'
+            ? { provider: 'history-identity', user: { id: 'identity-owner' }, expiresAt: new Date(Date.now() + 60000) } : null }) });
         resetJobProvider(); clearAllJobs(); allowed = true; revokeOnOriginal = false; reads = [];
         records = new Map([
             ['original', { id: 'original', clock: 1, thread_id: 'root', role: 'assistant', index: 0, data: { content: 'EXACT_AUTHORIZED_EVIDENCE' } }],
@@ -228,20 +240,24 @@ describe('registered canonical history authorization', () => {
         } } as SyncGatewayAdapter;
         registerSyncGatewayAdapter({ id: 'history-owner', create: () => adapter });
         registerAuthWorkspaceStore({ id: 'history-owner', create: () => ({ listUserWorkspaces: async (subject: string) =>
-            allowed && subject === 'owner' ? [{ id: 'workspace', name: 'Workspace', role: 'viewer' }] : [] }) as AuthWorkspaceStore });
+            allowed && subject === 'owner' ? [{ id: 'workspace', name: 'Workspace', role: 'viewer' }] : [],
+            getUser: async () => ({ userId: 'owner' }), getOrCreateDefaultWorkspace: async () => ({ workspaceId: 'workspace', workspaceName: 'Workspace', created: false }),
+            getWorkspaceRole: async () => 'viewer' }) as unknown as AuthWorkspaceStore });
         const requestId = await memoryJobProvider.createJob({ userId: 'owner', threadId: 'current', messageId: 'assistant', model: 'model',
             syncProviderId: 'history-owner', execution: { version: 1, workspaceId: 'workspace', body: { model: 'model', messages: [] },
                 referer: 'http://localhost', apiKeyCiphertext: 'unused' } });
         context = { subject: 'owner', workspaceId: 'workspace', threadId: 'current', messageId: 'assistant', requestId, callId: 'lookup', abortSignal: new AbortController().signal };
         dispose = registerServerHistoryTools();
     });
-    afterEach(() => { dispose?.(); clearAllJobs(); resetJobProvider(); vi.unstubAllGlobals(); });
+    afterEach(() => { dispose?.(); clearAllJobs(); resetJobProvider(); _resetSharedSessionCache(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
     async function lookup(messageId = 'original', extra: Partial<ToolExecutionContext> = {}) {
         const result = await executeServerTool('get_message', JSON.stringify({ message_id: messageId, include_after_compaction: true }), { ...context, ...extra });
         expect(result.error).toBeUndefined(); return JSON.parse(result.result!);
     }
     it('returns same-workspace evidence and denies sibling/unknown IDs through the registered tool', async () => {
-        expect(await lookup()).toMatchObject({ status: 'ok', message: { text: 'EXACT_AUTHORIZED_EVIDENCE', thread_id: 'root', reference_only: true }, neighbors: [] });
+        records.set('original', { ...records.get('original')!, index: 37, order_key: '37:reindexed', clock: 2 });
+        expect(await lookup()).toMatchObject({ status: 'ok', message: { text: 'EXACT_AUTHORIZED_EVIDENCE', thread_id: 'root', reference_only: true,
+            index: 37, order_key: '37:reindexed', changed_since_compaction: true }, neighbors: [] });
         expect(reads.every(read => read.actor.userId === 'owner' && read.actor.workspaceId === 'workspace')).toBe(true);
         expect(await lookup('private')).toMatchObject({ status: 'out_of_scope' });
         expect(await lookup('unknown')).toMatchObject({ status: 'out_of_scope' });
@@ -260,6 +276,52 @@ describe('registered canonical history authorization', () => {
         adapter.capabilities = {}; expect(await lookup()).toMatchObject({ status: 'scope_incomplete' }); expect(reads).toEqual([]);
         adapter.capabilities = { canonicalChatHistory: 'v1' }; records.delete('summary');
         expect(await lookup()).toMatchObject({ status: 'scope_incomplete' });
+    });
+    it('serves authenticated read-only readiness and places history tools before freezing the catalog', async () => {
+        const app = createApp().use('/api/chat/history-readiness', readinessHandler); const request = toWebHandler(app);
+        const endpoint = 'http://localhost/api/chat/history-readiness?thread_id=current';
+        expect((await request(new Request(endpoint))).status).toBe(401); expect(reads).toEqual([]);
+        const response = await request(new Request(endpoint, { headers: { authorization: 'fixture-owner' } }));
+        expect(response.status).toBe(200); expect(response.headers.get('cache-control')).toContain('no-store');
+        expect(await response.json()).toEqual({ ready: true }); expect(getJobCount()).toBe(1);
+        vi.stubGlobal('$fetch', async (url: string, options: { query: { thread_id: string } }) => {
+            expect(url).toBe('/api/chat/history-readiness'); expect(options.query.thread_id).toBe('current');
+            return (await request(new Request(endpoint, { headers: { authorization: 'fixture-owner' } }))).json();
+        });
+        const definitions = historyToolDefinitions.map(tool => ({ ...tool, runtime: 'client' as const }));
+        const placed = await placeHistoryTools(definitions, { background: true, threadId: 'current', signal: new AbortController().signal });
+        expect(placed.every(tool => tool.runtime === 'hybrid')).toBe(true); expect(definitions.every(tool => tool.runtime === 'client')).toBe(true);
+        adapter.capabilities = {}; reads.length = 0;
+        expect(await (await request(new Request(endpoint, { headers: { authorization: 'fixture-owner' } }))).json()).toEqual({ ready: false });
+        expect(reads).toEqual([]);
+        expect((await placeHistoryTools(definitions, { background: true, threadId: 'current', signal: new AbortController().signal })).every(tool => tool.runtime === 'client')).toBe(true);
+        adapter.capabilities = { canonicalChatHistory: 'v1' }; const summary = records.get('summary')!; records.delete('summary');
+        expect(await (await request(new Request(endpoint, { headers: { authorization: 'fixture-owner' } }))).json()).toEqual({ ready: false });
+        records.set('summary', summary); allowed = false; reads.length = 0;
+        expect(await (await request(new Request(endpoint, { headers: { authorization: 'fixture-owner' } }))).json()).toEqual({ ready: false });
+        expect(reads).toEqual([]); expect(getJobCount()).toBe(1);
+    });
+    it('rejects unavailable canonical execution before job creation and admits explicit browser placement', async () => {
+        adapter.capabilities = { backgroundGenerationHistory: 'v1' };
+        adapter.admitChatGeneration = async () => ({ status: 'admitted', replayed: false, serverVersion: 1 });
+        adapter.finalizeChatGeneration = async () => ({ status: 'committed', replayed: false, serverVersion: 2 });
+        const params = { userId: 'owner', workspaceId: 'workspace', threadId: 'current', messageId: 'new-assistant', apiKey: 'fixture-key', referer: 'http://localhost',
+            body: { model: 'model', messages: [{ role: 'user', content: 'Read history' }], tools: historyToolDefinitions,
+                _history: { version: 1, kind: 'new-turn', admissionId: 'new-assistant', generationId: 'new-generation', workspaceId: 'workspace', threadId: 'current', messageId: 'new-assistant',
+                    thread: { id: 'current', clock: 1 }, userMessage: { id: 'new-user', clock: 1, thread_id: 'current', role: 'user', data: { content: 'Read history' } },
+                    assistantMessage: { id: 'new-assistant', clock: 1, thread_id: 'current', role: 'assistant', data: { content: '' } } } } };
+        const create = vi.spyOn(memoryJobProvider, 'createJob');
+        await expect(startBackgroundStream(params)).rejects.toThrow(); expect(create).not.toHaveBeenCalled(); expect(getJobCount()).toBe(1);
+        adapter.capabilities.canonicalChatHistory = 'v1'; records.delete('summary');
+        await expect(startBackgroundStream(params)).rejects.toMatchObject({ name: 'BackgroundHistoryUnsupportedError' }); expect(create).not.toHaveBeenCalled();
+        const fetch = vi.fn(async () => new Response('data: {"choices":[{"delta":{"content":"Done"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } }));
+        vi.stubGlobal('fetch', fetch); reads.length = 0;
+        const accepted = await startBackgroundStream({ ...params, body: { ...params.body, _toolRuntime: { get_message: 'client', search_parent: 'client' } } });
+        expect(create).toHaveBeenCalledTimes(1); expect(reads).toEqual([]);
+        await vi.waitFor(async () => expect(await memoryJobProvider.getJob(accepted.jobId, 'owner')).toMatchObject({ status: 'complete', content: 'Done' }));
+        expect(fetch).toHaveBeenCalledTimes(1);
+        const saved = await memoryJobProvider.getJob(accepted.jobId, 'owner');
+        expect(getChatJobExecution(saved!)?.body._toolRuntime).toEqual({ get_message: 'client', search_parent: 'client' });
     });
     it('preserves an existing historical tool and cleans a partially registered sibling on collision', () => {
         dispose();

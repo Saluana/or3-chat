@@ -6,6 +6,87 @@ test.skip(
 );
 
 const chatPage = '/__or3-chat-journey-test';
+const fixturePng = { name: 'composer.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=', 'base64') };
+test('compaction composer meter updates configuration, media and accessible warning thresholds', async ({ page }, info) => {
+    test.setTimeout(120_000);
+    await page.route('**openrouter.ai/**', (route) => route.abort());
+    await page.goto(`${chatPage}?compaction=1&meter=1`);
+    const input = page.getByRole('textbox', { name: 'Message input' }); await expect(input).toBeVisible({ timeout: 60_000 });
+    const indicator = page.locator('[data-context-indicator]'); const meter = indicator.getByRole('meter', { name: 'Estimated context used' });
+    const settle = async () => { await expect(indicator).toHaveAttribute('aria-busy', 'false'); await expect(meter).toBeVisible(); };
+    const percent = async () => Number(await meter.getAttribute('aria-valuenow'));
+    await settle(); const initial = await percent();
+    await page.getByTestId('fixture-meter-maximum').click(); await settle(); expect(await percent()).toBeGreaterThan(initial);
+    await indicator.getByRole('button').click(); await expect(page.getByText(/your maximum 40,000/)).toBeVisible(); await page.keyboard.press('Escape');
+    const threshold = async (target: number) => {
+        let low = 0; let high = 20_000;
+        for (let count = 0; count < 15; count++) {
+            const mid = Math.floor((low + high) / 2); await input.fill('Budget context. '.repeat(mid)); await settle();
+            const value = await percent(); if (value === target) return;
+            if (value < target) low = mid + 1; else high = mid - 1;
+        }
+        throw new Error(`Could not reach the observable ${target}% threshold`);
+    };
+    const colors: Record<string, string> = {};
+    for (const target of [69, 70, 89, 90]) {
+        await threshold(target); await expect(meter).toHaveAttribute('aria-valuetext', new RegExp(`^${target}% estimated input; [\\d,]+ reply tokens available$`));
+        const actual = await meter.evaluate((element) => getComputedStyle(element.firstElementChild!).backgroundColor); colors[target] = actual;
+        if (target === 70 || target === 90) {
+            const token = target === 70 ? '--ui-warning' : '--ui-error';
+            const expected = await page.evaluate((token) => { const swatch = document.createElement('div'); swatch.style.backgroundColor = `var(${token})`; document.body.append(swatch); const color = getComputedStyle(swatch).backgroundColor; swatch.remove(); return color; }, token);
+            expect(actual).toBe(expected);
+        }
+    }
+    expect(colors[69]).not.toBe(colors[70]); expect(colors[70]).toBe(colors[89]); expect(colors[89]).not.toBe(colors[90]);
+    await page.evaluate(() => {
+        const indicator = document.querySelector<HTMLElement>('[data-context-indicator]')!;
+        const editor = document.querySelector('[aria-label="Message input"]')!;
+        const begin = () => { indicator.dataset.debounceStarted = String(performance.now()); };
+        editor.addEventListener('input', begin, { once: true });
+        const observer = new MutationObserver(() => {
+            if (indicator.dataset.debounceStarted && indicator.getAttribute('aria-busy') === 'false') {
+                indicator.dataset.debounceSettled = String(performance.now()); observer.disconnect();
+            }
+        }); observer.observe(indicator, { attributes: true, attributeFilter: ['aria-busy'] });
+    });
+    await input.fill('Short draft after the threshold checks.'); await settle();
+    await expect.poll(() => indicator.getAttribute('data-debounce-settled')).not.toBeNull();
+    const debounceMs = await indicator.evaluate((element) => Number((element as HTMLElement).dataset.debounceSettled) - Number((element as HTMLElement).dataset.debounceStarted));
+    expect(debounceMs).toBeGreaterThanOrEqual(100);
+    const beforePrompt = await percent();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'System prompt for this chat', exact: true }).click();
+    await page.getByRole('option', { name: /^Meter selected prompt/ }).click();
+    await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
+    await settle(); expect(await percent()).toBeGreaterThan(beforePrompt);
+    const beforeTool = await percent(); await page.getByTestId('fixture-meter-tool').click(); await settle(); expect(await percent()).toBeGreaterThan(beforeTool);
+    await page.getByTestId('fixture-meter-tool').click(); await settle(); expect(await percent()).toBe(beforeTool);
+    const chooser = page.waitForEvent('filechooser'); await page.getByRole('button', { name: 'Add attachments', exact: true }).click(); await (await chooser).setFiles(fixturePng);
+    await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
+    await expect(indicator.getByRole('button')).toContainText('incomplete');
+    await page.getByRole('button', { name: 'Remove image', exact: true }).click(); await settle(); await expect(indicator.getByRole('button')).not.toContainText('incomplete');
+    await page.getByTestId('fixture-meter-full-window').click(); await settle(); const originalModel = await percent();
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('or3:model-selected', { detail: { modelId: 'fixture-meter-larger' } })));
+    await settle(); expect(await percent()).toBeLessThan(originalModel);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]'))).toEqual([]);
+    await info.attach('composer-meter-receipt', { contentType: 'application/json', body: JSON.stringify({ colors, debounceMs, assertions: ['69/70/89/90 computed theme colors', 'reply aria text', 'optional maximum', 'prompt', 'tool schema', 'add/remove image', 'larger model', 'zero inference'] }) });
+    const screenshot = info.outputPath('composer-meter.png'); await page.screenshot({ path: screenshot, animations: 'disabled' }); await info.attach('composer-meter', { path: screenshot, contentType: 'image/png' });
+});
+test('compaction media meter labels inherited historical image cost without a current attachment', async ({ page }, info) => {
+    test.setTimeout(120_000);
+    await page.route('**openrouter.ai/**', (route) => route.abort());
+    await page.goto(`${chatPage}?compaction=1&media=1`);
+    const input = page.getByRole('textbox', { name: 'Message input' }); await expect(input).toBeVisible({ timeout: 60_000 });
+    await input.fill('Text-only new draft');
+    const indicator = page.locator('[data-context-indicator]');
+    await expect(indicator.getByRole('button', { name: /Context \d+% used/ })).toContainText('incomplete');
+    await indicator.getByRole('button').click();
+    await expect(page.getByText('Attachment cost is unknown; this estimate is incomplete.')).toBeVisible();
+    await page.keyboard.press('Escape');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]'))).toEqual([]);
+    await info.attach('historical-media-meter', { contentType: 'application/json', body: JSON.stringify({
+        source: process.env.OR3_CONTEXT_SOURCE_SHA, assertions: ['reference ancestor image', 'text-only current draft', 'unknown cost label', 'no inference'] }) });
+});
 test('PageShell compaction families retain keyboard expansion and child-only search across sidebar consumers', async ({ page }, info) => {
     test.setTimeout(120_000);
     await page.route('**openrouter.ai/**', (route) => route.abort());
@@ -37,9 +118,25 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     const input = page.getByRole('textbox', { name: 'Message input' }); await input.fill('Preserve this unsent native compaction draft.');
     const summaryRow = page.locator('[data-msg-id]').filter({ has: page.locator('[data-compaction-card]') });
     const originalSummaryId = await summaryRow.getAttribute('data-msg-id');
+    const selectVariant = async (name: string) => {
+        await page.getByRole('button', { name: 'Settings', exact: true }).click();
+        await page.getByRole('button', { name: 'Model variant', exact: true }).click();
+        await page.getByRole('option', { name: new RegExp(`^${name}`) }).click();
+        await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
+        await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toHaveCount(0);
+    };
+    await selectVariant('Nitro');
     await page.getByTestId('fixture-hold-summary').check();
     await page.getByRole('button', { name: 'Compact conversation', exact: true }).click();
-    await expect(page.getByText(/^generating summary · scripted-compaction-model$/)).toBeVisible();
+    await expect(page.getByText(/^generating summary · scripted-compaction-model:nitro$/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeDisabled();
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page.getByText(/generating summary ·/)).toHaveCount(0, { timeout: 5000 });
+    expect(await summaryRow.getAttribute('data-msg-id')).toBe(originalSummaryId);
+    await expect(input).toHaveText('Preserve this unsent native compaction draft.');
+    await selectVariant('Floor');
+    await page.getByRole('button', { name: 'Compact conversation', exact: true }).click();
+    await expect(page.getByText(/^generating summary · scripted-compaction-model:floor$/)).toBeVisible();
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(page.getByText(/generating summary ·/)).toHaveCount(0);
     expect(await summaryRow.getAttribute('data-msg-id')).toBe(originalSummaryId);
@@ -48,6 +145,7 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await page.getByRole('button', { name: 'Compact conversation', exact: true }).click();
     await expect.poll(async () => summaryRow.getAttribute('data-msg-id')).not.toBe(originalSummaryId);
     const childSummaryId = await summaryRow.getAttribute('data-msg-id');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]').at(-1)?.model)).toBe('scripted-compaction-model:floor');
     await page.locator('.unified-sb-item-active').getByRole('button', { name: 'Open actions', exact: true }).last().click();
     const historyCompact = page.getByRole('button', { name: 'Compact conversation', exact: true }).filter({ hasText: 'Compact conversation' });
     await expect(historyCompact).toBeDisabled();
@@ -87,8 +185,31 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await expect(reverseCompactions).toHaveCount(2);
     await expect(input).toHaveText(originalRootDraft);
     expect(await page.evaluate(() => localStorage.getItem('or3:e2e:compaction-requests'))).toBe(requestsBeforeManualNavigation);
+    const latestSummary = await page.evaluate(async (root) => {
+        for (const { name } of await indexedDB.databases()) {
+            if (!name) continue;
+            const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+            if (!db.objectStoreNames.contains('threads')) { db.close(); continue; }
+            const request = db.transaction('threads', 'readonly').objectStore('threads').getAll();
+            const rows = await new Promise<Array<{ id: string; root_thread_id?: string; branch_mode?: string; created_at: number; summary_message_id?: string }>>((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); }); db.close();
+            const compacted = rows.filter((row) => row.root_thread_id === root && row.branch_mode === 'compacted');
+            if (compacted.length) return compacted.sort((a, b) => b.created_at - a.created_at || b.id.localeCompare(a.id))[0]!.summary_message_id;
+        }
+        throw new Error('The fixture has no saved compaction');
+    }, root);
+    await page.getByTestId('fixture-root-activity').click();
+    for (const reload of [false, true]) {
+        if (reload) await page.reload();
+        await expect(header).toBeVisible(); await header.locator('.unified-sb-item').click(); await expect(summaryRow).toHaveCount(0);
+        await header.getByRole('button', { name: 'Open actions', exact: true }).click(); await page.getByRole('button', { name: 'Go to latest compaction', exact: true }).click();
+        await expect.poll(() => summaryRow.getAttribute('data-msg-id')).toBe(latestSummary);
+        await search.fill('Launch checklist'); await expect(header).toBeVisible();
+        await header.locator('.unified-sb-item').click(); await expect(summaryRow).toHaveCount(0);
+        await header.getByRole('button', { name: 'Open actions', exact: true }).click(); await page.getByRole('button', { name: 'Go to latest compaction', exact: true }).click();
+        await expect.poll(() => summaryRow.getAttribute('data-msg-id')).toBe(latestSummary); await search.fill('');
+    }
     await info.attach('native-composer-compaction-assertions', { contentType: 'application/json', body: JSON.stringify({
-        source: process.env.OR3_CONTEXT_SOURCE_SHA, originalSummaryId, childSummaryId, assertions: ['native registry action', 'progress/model/Cancel', 'new child opened', 'short child history action disabled with reason', 'exact Compact-here anchor', 'registered history-menu action', 'no-tool model manual navigation without inference', 'draft retained'] }) });
+        source: process.env.OR3_CONTEXT_SOURCE_SHA, originalSummaryId, childSummaryId, latestSummary, assertions: ['native registry action', 'progress/model/Cancel', 'new child opened', 'short child history action disabled with reason', 'exact Compact-here anchor', 'registered history-menu action', 'no-tool model manual navigation without inference', 'latest activity differs from newest compaction under filter/reload', 'draft retained'] }) });
 });
 
 test('compaction lossy confirmation shows its estimate and preserves full saved history', async ({ page }, info) => {
@@ -121,6 +242,14 @@ test('compaction lossy confirmation shows its estimate and preserves full saved 
     await expect(page.getByRole('list', { name: 'Messages omitted from this request' })).toBeVisible();
     expect(await read()).toEqual(before);
     await input.fill('journey:lossy edited'); await expect(confirm).toHaveCount(0);
+    await page.getByRole('button', { name: 'Send message', exact: true }).click(); await expect(inspect).toBeVisible(); await inspect.click(); await expect(confirm).toBeVisible();
+    const chooser = page.waitForEvent('filechooser'); await page.getByRole('button', { name: 'Add attachments', exact: true }).click(); await (await chooser).setFiles(fixturePng);
+    await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible(); await expect(confirm).toHaveCount(0); expect(await read()).toEqual(before);
+    await page.getByRole('button', { name: 'Remove image', exact: true }).click();
+    await page.getByRole('button', { name: 'Send message', exact: true }).click(); await expect(inspect).toBeVisible(); await inspect.click(); await expect(confirm).toBeVisible();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click(); await page.getByRole('button', { name: 'Model variant', exact: true }).click();
+    await page.getByRole('option', { name: /^Floor/ }).click(); await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
+    await expect(confirm).toHaveCount(0); expect(await read()).toEqual(before);
     await page.getByRole('button', { name: 'Send message', exact: true }).click(); await expect(inspect).toBeVisible();
     await inspect.click(); await expect(confirm).toBeVisible(); await confirm.click();
     await expect.poll(async () => (await read()).requests.length).toBe(1);
@@ -154,7 +283,11 @@ test('compaction history and families use production scope and deletion policies
     expect(result.inherited.message.thread_id).toBe(result.root); expect(result.immediate.message.thread_id).toBe(result.parent);
     expect(result.siblingRead.status).toBe('out_of_scope'); expect(result.unknown.status).toBe('out_of_scope');
     expect(result.laterDefault.status).toBe('out_of_scope'); expect(result.laterExpanded.message.outside_compaction_scope).toBe(true);
-    expect(result.changed.message.changed_since_compaction).toBe(true); expect(result.deleted.status).toBe('deleted');
+    expect(result.changed.message).toMatchObject({ changed_since_compaction: true, index: 37, order_key: '37:reindexed' });
+    expect(result.inherited.message).toHaveProperty('index');
+    expect(result.inherited.message).not.toHaveProperty('order_key');
+    expect(result.changed.neighbors.every((row: { index?: number }) => typeof row.index === 'number')).toBe(true);
+    expect(result.deleted.status).toBe('deleted');
     expect(result.deleted.message).toBeUndefined(); expect(result.replacement.status).toBe('superseded');
     expect(result.first.status).toBe('ok'); expect(result.first.scan_complete).toBe(false);
     expect(result.first.scanned_rows).toBeLessThanOrEqual(500); expect(result.first.fetched_rows).toBeLessThanOrEqual(500);
@@ -188,6 +321,8 @@ test('compaction history and families use production scope and deletion policies
     expect(result.pinnedMixed.items.some((item: { type: string }) => item.type === 'document')).toBe(false);
     expect(result.descendantError).toBe('thread_has_descendants'); expect(result.hookError).toBe('thread_has_descendants');
     expect(result.hookRollback).toBe(true); expect(result.preferenceRetained).toBe(true); expect(result.retiredPreference).toBe(true);
+    expect(result.deniedRecoveryRetained).toBe(true); expect(result.softRecoveryCleared).toBe(true);
+    expect(result.childRecoveriesCleared).toBe(true); expect(result.lastMemberPreferenceRetained).toBe(true);
     expect(JSON.stringify(result.survivingContext)).toContain('## Objective');
     expect(result.scale.families).toBe(500); expect(result.scale.expandedMembers).toBe(200); expect(result.scale.memberPageSize).toBe(50);
     expect(result.scale.messageReads).toBe(0); expect(result.scale.p95).toBeLessThan(500);

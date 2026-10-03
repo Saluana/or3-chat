@@ -14,6 +14,12 @@
             <span data-testid="fixture-compaction-state">{{ compactor.state.value.status }}</span>
             <span class="sr-only" data-testid="fixture-compaction-result">{{ fixtureResult }}</span>
         </section>
+        <section v-if="ready && meterJourney" aria-label="Disposable preview configuration">
+            <button data-testid="fixture-meter-maximum" @click="useAiSettings().set({ maxContextTokens: 40_000 })">Set optional maximum</button>
+            <button data-testid="fixture-meter-full-window" @click="useAiSettings().set({ maxContextTokens: null })">Use full model window</button>
+            <button data-testid="fixture-meter-tool" @click="toggleMeterTool">Toggle preview tool</button>
+        </section>
+        <button v-if="ready && nativeCompactionJourney" data-testid="fixture-root-activity" @click="makeOriginalRecent">Update original activity</button>
         <section v-if="ready && evidenceJourney" aria-label="Production history qualification">
             <button data-testid="fixture-history-qualify" :disabled="evidenceRunning" @click="qualifyHistory">Qualify history and families</button>
             <pre data-testid="fixture-history-receipt">{{ evidenceReceipt }}</pre>
@@ -46,6 +52,9 @@ import { useAiSettings } from '~/composables/chat/useAiSettings';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { forkThread } from '~/db/branching';
 import { nowSec } from '~/db/util';
+import { createOrRefFile } from '~/db/files';
+import { createPrompt } from '~/db/prompts';
+import { useToolRegistry } from '~/utils/chat/tool-registry';
 
 const PageShell = defineAsyncComponent(() => import('~/components/PageShell.vue'));
 const workspaceJourney = useRoute().query.workspace === '1';
@@ -54,6 +63,8 @@ const compactionJourney = useRoute().query.compaction === '1';
 const presentationJourney = compactionJourney && useRoute().query.presentation === '1';
 const nativeCompactionJourney = presentationJourney && useRoute().query.native === '1';
 const lossyJourney = compactionJourney && useRoute().query.lossy === '1';
+const mediaJourney = compactionJourney && useRoute().query.media === '1';
+const meterJourney = compactionJourney && useRoute().query.meter === '1';
 const evidenceJourney = compactionJourney && useRoute().query.history === '1';
 const evidenceRunning = ref(false);
 const evidenceReceipt = ref('');
@@ -88,6 +99,15 @@ const compactor = useThreadCompaction({
     },
 });
 async function startFixtureCompaction() { fixtureResult.value = JSON.stringify(await compactor.start()); }
+function toggleMeterTool() {
+    const registry = useToolRegistry(); const tool = registry.listTools.value.find((row) => row.definition.function.name === 'fixture_preview_tool');
+    registry.setEnabled('fixture_preview_tool', !tool?.enabled.value);
+}
+async function makeOriginalRecent() {
+    const root = localStorage.getItem('or3:e2e:compaction-source');
+    if (!root) throw new Error('Original fixture missing.');
+    await getDb().threads.update(root, { updated_at: nowSec() + 3600 });
+}
 async function seedCompactionSource() {
     const db = getDb();
     const remembered = localStorage.getItem('or3:e2e:compaction-source');
@@ -278,11 +298,13 @@ function installDeterministicFetch(): void {
         const signal =
             init?.signal ?? (input instanceof Request ? input.signal : null);
 
+        let releaseHeldSummary: (() => void) | undefined;
         const stream = new ReadableStream<Uint8Array>({
             async start(controller) {
                 let stopped = false;
                 const abort = () => {
                     stopped = true;
+                    releaseHeldSummary?.();
                     try {
                         controller.error(
                             signal?.reason ??
@@ -300,6 +322,7 @@ function installDeterministicFetch(): void {
                 try {
                     if (compactionJourney && messageText(messages[0]).startsWith('You summarize historical task context')) {
                         if (holdSummary.value) await new Promise<void>((resolve) => {
+                            releaseHeldSummary = resolve;
                             if (signal?.aborted) { resolve(); return; }
                             signal?.addEventListener('abort', () => resolve(), { once: true });
                         });
@@ -411,6 +434,7 @@ function installDeterministicFetch(): void {
                     signal?.removeEventListener('abort', abort);
                 }
             },
+            cancel() { releaseHeldSummary?.(); },
         });
 
         return new Response(stream, {
@@ -464,6 +488,28 @@ onMounted(async () => {
     }
     if (compactionJourney) {
         await seedCompactionSource();
+        if (meterJourney) {
+            await useModelStore().addFavoriteModel({ id: '~openai/gpt-luna-latest', name: 'Scripted meter model', context_length: 65_536,
+                top_provider: { max_completion_tokens: 8192 }, supported_parameters: ['tools'],
+                architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' } });
+            await useModelStore().addFavoriteModel({ id: 'fixture-meter-larger', name: 'Larger meter model', context_length: 1_000_000,
+                top_provider: { max_completion_tokens: 8192 }, supported_parameters: ['tools'],
+                architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' } });
+            await createPrompt({ title: 'Meter selected prompt', content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Selected prompt instructions. '.repeat(400) }] }] } });
+            useToolRegistry().registerTool({ type: 'function', function: { name: 'fixture_preview_tool',
+                description: 'Preview tool schema instructions. '.repeat(400), parameters: { type: 'object', properties: {} } } },
+                () => 'Preview does not execute tools.', { enabled: false, runtime: 'client' });
+        }
+        if (mediaJourney) {
+            const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII='), (char) => char.charCodeAt(0));
+            const image = await createOrRefFile(new Blob([bytes], { type: 'image/png' }), 'historical.png');
+            await getDb().messages.update(`${fixtureSourceThread.value}-decision`, { file_hashes: JSON.stringify([image.hash]) });
+            const reference = await forkThread({ sourceThreadId: fixtureSourceThread.value, anchorMessageId: `${fixtureSourceThread.value}-tool-evidence`, mode: 'reference' });
+            fixtureViewThread.value = reference.thread.id;
+            await useModelStore().addFavoriteModel({ id: '~openai/gpt-luna-latest', name: 'Scripted media meter model', context_length: 32_768,
+                top_provider: { max_completion_tokens: 8192 }, supported_parameters: ['tools'],
+                architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' } });
+        }
         if (lossyJourney) await useAiSettings().set({ maxContextTokens: 6000 });
         if (evidenceJourney) {
             const source = fixtureSourceThread.value;
