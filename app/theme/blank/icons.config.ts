@@ -49,9 +49,9 @@ export default <IconMap>{
 
     // Sidebar
     'sidebar.search': 'tabler:search',
-    'sidebar.new_chat': 'tabler:message-circle',
-    'sidebar.new_folder': 'tabler:folder',
-    'sidebar.new_note': 'tabler:files',
+    'sidebar.new_chat': 'tabler:message-circle-plus',
+    'sidebar.new_folder': 'tabler:folder-plus',
+    'sidebar.new_note': 'tabler:file-plus',
     'sidebar.edit': 'tabler:pencil',
     'sidebar.delete': 'tabler:trash',
     'sidebar.folder': 'tabler:folder',
