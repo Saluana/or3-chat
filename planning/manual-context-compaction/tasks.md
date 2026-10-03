@@ -1,6 +1,6 @@
 # Tasks
 
-Progress snapshot: **35 complete, 18 partial, 2 not started (55 tasks)**. Checked boxes mean the full stated task criteria are implemented and verified at the linked boundary. Partial and unverified work remains unchecked; this is not a full-feature completion claim. Reviewed background-usage runtime is adopted at `e832700f` (tree `82821322afb51b88273a4f8560187bcfb23a4eef`); publication and exact-head CI remain held. On 2026-10-03 Brendon removed per-phase review gates; locally authorized work continues with final parent review. All79 exact criteria and their boundary-specific limits: [ACCEPTANCE_LEDGER.md](./ACCEPTANCE_LEDGER.md). Current local source receipts: [LOCAL_QUALIFICATION_REVIEW_PACKET.md](./LOCAL_QUALIFICATION_REVIEW_PACKET.md). Evidence and retained first failures: [evidence.md](./evidence.md). Each task is intended to take roughly 1–4 hours; split a task at its existing component/provider boundary if discovery makes it larger. Dependencies run from top to bottom. Where fixtures are written first, their final assertions become green only when the corresponding production task is complete; do not commit permanently skipped cases as a substitute.
+Progress snapshot: **47 complete, 7 partial, 1 not started (55 tasks)**. Checked boxes mean the full stated task criteria are implemented and verified at the linked boundary. Partial and unverified work remains unchecked; this is not a full-feature completion claim. Reviewed background-usage runtime is adopted at `e832700f` (tree `82821322afb51b88273a4f8560187bcfb23a4eef`); publication and exact-head CI remain held. On 2026-10-03 Brendon removed per-phase review gates; locally authorized work continues with final parent review. All79 exact criteria and their boundary-specific limits: [ACCEPTANCE_LEDGER.md](./ACCEPTANCE_LEDGER.md). Current local source receipts: [LOCAL_QUALIFICATION_REVIEW_PACKET.md](./LOCAL_QUALIFICATION_REVIEW_PACKET.md). Evidence and retained first failures: [evidence.md](./evidence.md). Each task is intended to take roughly 1–4 hours; split a task at its existing component/provider boundary if discovery makes it larger. Dependencies run from top to bottom. Where fixtures are written first, their final assertions become green only when the corresponding production task is complete; do not commit permanently skipped cases as a substitute.
 
 This plan changes native chat only. Preserve unrelated working-tree edits. Provider source changes require their owning source checkout and builds; installed `node_modules` files are not implementation targets. No task authorizes publication, a stable release, or production data changes.
 
@@ -12,17 +12,17 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Done when: an acceptance ledger lists the design's race, overflow, scope, provider, projection and UI scenarios; isolated tests have a distinct contract and credible regression under the test-audit authoring gate.
       Status: Complete — All79 authoritative ACs have boundary owners, linked packet evidence and explicit unqualified scopes in ACCEPTANCE_LEDGER.md. RETRIEVAL_ACCEPTANCE_PLAN.md and retained first failures distinguish canonical storage, native admission, registered tools, provider conformance and real UI owners; no policy replacement fixtures or new unit files were introduced.
 
-- [ ] 1.2 Extend the existing production chat journey fixtures with long history, deterministic summary JSON and captured SSE requests (3h).
+- [x] 1.2 Extend the existing production chat journey fixtures with long history, deterministic summary JSON and captured SSE requests (3h).
       Components: C12.
       Requirements: R15.AC1, R15.AC3.
       Done when: fixtures exercise production chat/DB code, external inference alone is mocked, a summary-only continuation assertion fails against the pre-feature host, and no real key or paid network is needed.
-      Status: Partial — Actual long-history/controller/writer/PageShell fixtures and captured summary-only continuation pass without paid traffic. The explicit pre-feature summary-only assertion failure required by this task is not established by the retained navigation failures; that proof stays open.
+      Status: Complete — Real DB/controller/native fixtures and captured SSE bodies pass without paid traffic. The retrospective negative control executes byte-identical pre-feature9191c3c0 continue.ts at its original module identity: the actual continuation body fails inherited-summary retention, while the current reference body matrix passes. This is an isolated historical production-boundary proof, not a full historical browser rebuild; its source/hash/config/red receipt is retained.
 
 - [x] 1.3 Add the named `test:e2e:context` harness and artifact manifest (3h).
       Components: C12.
       Requirements: R15.AC3.
       Done when: a Bun command selects only context scenarios, saves redacted bodies, screenshots, Playwright report and JSON assertions, records fixture/source versions, and runs against an isolated workspace/profile. Do not run a broad Playwright suite.
-      Status: Complete — Named Bun test:e2e:context selects only five context scenarios, uses disposable profiles and scripted inference, and emits source/fixture versions, redacted captured bodies, JSON assertions, screenshots and Playwright report. context-final-candidate passes5/5 on d3bea638; final no-tool addition passes the sole changed family scenario on ecea59f2. Full feature acceptance remains distinct from harness completion.
+      Status: Complete — Named Bun test:e2e:context selects only seven compaction/context scenarios and emits source/fixture versions, scripted redacted bodies, assertions, report and screenshots. review-complete-candidate passes7/7 on c5ab90d4, fixturev6, disposable profiles, workers1/retries0. Harness completion does not imply released-provider or live-quality acceptance.
 
 ## 2. Phase A — usage, estimation and hard admission
 
@@ -60,25 +60,25 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C1, C9.
       Requirements: R2.AC2, R14.AC2, R15.AC2.
       Done when: contract cases written first prove terminal usage survives canonical persistence and sync through Convex, schema/scaffold changes agree with the host, and rebuilt artifacts are consumed in host verification without editing installed dist.
-      Status: Partial — Private Convex31940bd normal-built runtime and generated internal scaffold owners qualify local usage/canonical handler contracts;222 existing provider cases and standalone types pass. Scripted scaffold storage does not prove deployed validators/transaction isolation, local→canonical→second-client sync or reconnect. Publication/pins and deployed matrix remain6.5.
+      Status: Partial — Convex83583de normal-built gateway and freshly generated scaffold now execute54 existing owner cases through the current selected host; usage/canonical handlers, missing capability, partial delivery and revocation pass. Source build/standalone types/pack and current-host owner types pass. Deployed validators/transaction isolation and actual released-provider second-client/reconnect remain6.5.
 
-- [ ] 2.6 Specify failing budget/admission and lossy-confirmation cases before replacing implicit trimming (3h).
+- [x] 2.6 Specify failing budget/admission and lossy-confirmation cases before replacing implicit trimming (3h).
       Components: C2, C12.
       Requirements: R3.AC1, R3.AC2, R3.AC3, R3.AC5, R3.AC6, R4.AC1, R4.AC2, R4.AC3, R4.AC5, R5.AC1, R5.AC2, R5.AC3, R5.AC4, R16.AC1, R16.AC2, R16.AC3, R16.AC4, R16.AC5.
       Done when: cases cover a 1,000,000-token model with no default cap, input beyond 128k, positive remaining reply capacity, explicit output limits, missing/cached metadata, unset/custom/reset AI preferences, stale usage, tool/media input, initial/loop overflow and changed lossy confirmation. Write settings persistence cases before extending that shape, and assign each case to its strongest existing owner.
-      Status: Partial — Native owner plus real lossy browser cover1M/no default cap, >128k untrimmed payloads, output/unknown-capacity rejection, cancellation/filter/delegation, durable lossy decisions and draft invalidation. Missing full measured-prefix/media/attachment/UI matrices remain explicit in the per-AC ledger; green generic suites do not close them.
+      Status: Complete — Existing budget/settings/provenance/native owners and actual composer cover1M/no default cap, >128k untrimmed transport, explicit output/unknown-capacity rejection, matched/stale/suffix/media baseline cross-checks, attachment retention/reload, lossy invalidation and initial/accepted-loop overflow. First product failures precede the corresponding repairs; no new unit suite or replacement policy was added.
 
-- [ ] 2.7 Extract the shared budget policy and request estimator (3h).
+- [x] 2.7 Extract the shared budget policy and request estimator (3h).
       Components: C2.
       Requirements: R2.AC4, R3.AC1, R3.AC2, R3.AC3, R3.AC5, R3.AC6, R16.AC3.
       Done when: capacity comes from OpenRouter metadata, native chat has no 128k cap/8k fallback/fixed or percentage reserve, optional user maximum intersects with model capacity, reply allowance uses the actual remainder/model output maximum, and measured-prefix/full-payload checks distinguish estimated occupancy from known capacity.
-      Status: Partial — Shared factual model-window/reply/user-maximum/route policy and complete-body estimator are implemented; current budget/native/server owners pass. The measured-prefix estimator is implemented but its complete matched/stale/media/suffix cross-check acceptance matrix is not fully qualified. No application cap or guessed fallback is present.
+      Status: Complete — Shared policy uses factual catalog capacity, actual positive reply remainder/model output limit and optional user maximum, with no application ceiling/reserve/haircut. request-usage owner now qualifies matching prefix+suffix versus whole-body lower bound, changed text/route/tools/reasoning, missing/zero baseline and hydrated image changes/unknown costs. Live token-count accuracy is not implied by this estimator contract.
 
 - [ ] 2.7a Integrate existing catalog/cache metadata with budget readiness and refresh (2h).
       Components: C2.
       Requirements: R3.AC5, R3.AC6.
       Done when: native browser/server budget preparation uses validated OpenRouter records and route-relevant constraints, valid cached metadata remains usable, a missing record refreshes through the existing catalog path, and failure retains the draft with metadata-unavailable rather than a guessed numeric capacity. No parallel catalog/cache is introduced.
-      Status: Partial — Existing catalog/cache/SDK normalization owners prove valid cached metadata, exact selected identity, refresh/race cancellation and recoverable unknown capacity; independent server readiness rejects forged client capacity. Concrete selected-route endpoint constraints beyond catalog facts and the complete browser recovery matrix remain.
+      Status: Partial — F3 effective concrete routing identity/cancellation and existing catalog/cache refresh/race/unknown-capacity owners pass; unresolved dynamic routers are recoverably disabled for compaction. Nitro/Floor select provider pools rather than pin one endpoint. Independently established endpoint-specific constraints require a product decision about explicit endpoint selection/pinning; no guessed minimum, parallel cache, numeric cap or fallback is introduced.
 
 - [x] 2.7b Add the optional maximum to Dashboard AI settings and existing KV persistence (3h).
       Components: C2.
@@ -86,17 +86,17 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Done when: `AiPage.vue` and `useAiSettings` support `maxContextTokens: number | null`, default/legacy/reset values mean Use model limit, invalid custom input is rejected, an above-model value remains saved for other models, and reload/workspace isolation match existing preferences.
       Status: Complete — AiPage exposes Use model limit/custom optional maximum and the existing settings/KV owner preserves null/legacy/reset, invalid input, above-model saved values, reload and workspace isolation. Current Dashboard owner and preference owners pass in the affected lane. Captured reconnect envelope remains2.7c/6.5.
 
-- [ ] 2.7c Capture the optional user maximum in generation admission and reconnect metadata (3h).
+- [x] 2.7c Capture the optional user maximum in generation admission and reconnect metadata (3h).
       Components: C2, C1.
       Requirements: R16.AC4, R16.AC5.
       Done when: new generations capture the current preference, foreground/background iterations and reconnect retain that value, server admission still resolves the model's actual capacity independently, and internal context metadata never becomes an unrelated provider parameter.
-      Status: Partial — Native/server/auxiliary requests capture the optional maximum in a private envelope and re-admit independently; replay checkpoint owns real saved IDs and exact source/tool identity. Released-provider background iterations/reconnect preference capture is not qualified; remains6.5.
+      Status: Complete — Native/server worker iteration/checkpoint/reclaim owners preserve the admitted optional maximum, resolve provider capacity independently and strip internal envelopes before inference. Actual source-built SQLite durable jobs/usage owners and host recovery complement this local capture qualification. Released/deployed background reconnect remains6.5, not a claimed pass.
 
 - [ ] 2.8 Admit native send/retry/continue before durable turn mutations (4h).
       Components: C2, C4.
       Requirements: R3.AC4, R3.AC6, R4.AC1, R4.AC2, R4.AC4, R4.AC5, R16.AC4.
       Done when: final filtered requests are checked without trimming; rejected send keeps draft/attachments; retry does not supersede existing history on rejection; workflow-handled paths remain correctly delegated.
-      Status: Partial — Real native initial/retry/continue owners and browser preserve zero-write native preflight rejection, same-ID reload recovery, draft and once-only final filter. Current source/tool changes, unsupported checkpoint versions, quota-storage failure and accepted-tool-loop checkpoint cleanup pass. Complete attachment/background recovery matrix remains. Legacy side-effecting filters retain their post-write compatibility boundary until published pure-contract adoption; universal zero-write admission is not claimed.
+      Status: Partial — F1/F2 and real attachment/background rejection/reload/larger-model recovery preserve IDs, draft/files and once-only filters; rejected Retry restores full history. Actual separately built Workflows802cca1 registration/controller integrates pure preparation and durable real-ID commit with zero preparation writes/inference and no native fallthrough. Installed legacy side-effecting filters retain their post-write compatibility boundary until separately approved compatible publication/adoption; universal zero-write final-payload admission remains unclaimed.
 
 - [x] 2.9 Guard every foreground and server tool-loop provider request (3h).
       Components: C2.
@@ -104,17 +104,17 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Done when: oversized tool results terminate with `context_full`, previously accepted results remain durable, no tool repeats, server applies actual model capacity and the captured optional user maximum without an independent application ceiling, and provider context errors never trigger a trimmed retry.
       Status: Complete — actual native foreground and real server job owners retain an oversized accepted tool result, execute it once and stop before the next fetch with context_full under captured choices. Worker recovery rechecks the checkpoint without replay; terminal leases remain fenced. Known provider context HTTP/SSE machine codes preserve permanent actionable ERR_CONTEXT_FULL, with no trimmed retry. Thread-bound tools/schema overhead and malformed reply limits are checked. The terminal-history owner also delivers the same accepted result and structured context failure through canonical reconciliation. Legacy non-native callers without the envelope retain their prior compatibility boundary; global product/provider/browser qualification remains tracked separately below.
 
-- [ ] 2.10 Implement the one-turn lossy projection and confirmation binding (3h).
+- [x] 2.10 Implement the one-turn lossy projection and confirmation binding (3h).
       Components: C2.
       Requirements: R5.AC1, R5.AC2, R5.AC3, R5.AC4.
       Done when: users inspect omitted groups/counts, confirmation binds the exact candidate, protected content and tool pairs remain intact, omission metadata persists, and subsequent iterations cannot increase omissions without a new decision.
-      Status: Partial — Explicit one-use omission inspection, estimate, protected system/summary/latest user, complete tool groups and exact source/configuration/payload binding are implemented. Real browser verifies draft-edit invalidation, zero pre-confirmation writes, saved originals, one send, durable omission and next ordinary full-history block. Complete attachment/model UI races and multi-iteration lossy native tool-loop matrix remain.
+      Status: Complete — Real lossy composer proves exact omission/count/estimate, draft/attachment/effective-route invalidation and untouched originals; actual native tool-loop owner executes an accepted oversized result once and stops before another inference without increasing its confirmed omission set. Protected system/summary/latest input and complete tool groups retain their existing owners.
 
-- [ ] 2.11 Add the reactive meter and blocking banner to native composer content (3h).
+- [x] 2.11 Add the reactive meter and blocking banner to native composer content (3h).
       Components: C2, C7.
       Requirements: R3.AC1, R3.AC2, R3.AC4, R3.AC5, R3.AC6, R4.AC2, R4.AC4, R5.AC1, R16.AC3, R16.AC4.
       Done when: the meter uses the full model window by default (including 1,000,000), labels an active user maximum and reply capacity separately, shows metadata/usage uncertainty honestly, preserves drafts, and responds to settings/model changes after 120 ms without auto-compaction or media hydration. Compact now is not advertised until Phase B is usable.
-      Status: Partial — Production120ms read-only preview includes canonical system/history/draft/tool configuration, measured-prefix support and honest unknown media; input/reply/model/user limits and recovery are separate. Actual meter/Compact, rejection/lossy and16 inspected theme/mobile images pass. Full70%/90% color/screen-reader, prompt/tool/attachment debounce and media/attachment UI matrices remain.
+      Status: Complete — Seven-scenario committed-runtime browser run qualifies69/70/89/90% computed colors, accessible input/reply text,120ms pending/debounce, real prompt/tool/settings/model changes, actual image chooser/removal and inherited historical image uncertainty without preview hydration. Draft/recovery/Compact and optional-vs-model window remain separate; inspected theme/mobile predecessors are preserved.
 
 ## 3. Phase B — schemas, history boundaries and atomic commit
 
@@ -134,13 +134,13 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C6, C9, C10.
       Requirements: R12.AC4, R14.AC1, R14.AC2.
       Done when: a version upgrade preserves existing data/indexes; Convex host and provider-owned schemas retain all new fields; SQLite JSON round trips are verified; no eager legacy rewrite or startup outbox flood occurs.
-      Status: Partial — Dexie21 lineage indexes preserve legacy rows/no eager outbox; source schemas and private SQLite materialized JSON reader retain compaction/usage/lineage fields. Convex deployed schema validators and released cross-client serialization are not qualified;6.2/6.5 remain.
+      Status: Partial — Dexie21 preserves legacy indexes/data with no eager outbox. Actual rebuilt SQLite local→canonical→second-client projection/reload/purge retains lineage/summary/usage. Current selected Convex scaffold/runtime agree locally; deployed field validators and released cross-client serialization remain6.2/6.5.
 
-- [ ] 3.4 Implement recursive prompt projection with compacted stopping boundaries (3h).
+- [x] 3.4 Implement recursive prompt projection with compacted stopping boundaries (3h).
       Components: C4, C7.
       Requirements: R6.AC1, R6.AC2, R9.AC1, R14.AC1.
       Done when: send/history/retry/continue share the same ordering, supersession and branch policy, preserve tool roles, and never re-expand through a compaction summary or silently omit reference ancestors.
-      Status: Partial — Canonical reference/compacted projection and shared retry/continue/history policy are implemented; real browser captured continuation contains one summary plus new user input, no raw ancestor rows. Complete native reference/retry/background/tool-loop captured-body matrix remains unqualified.
+      Status: Complete — F1 repairs ordinary Retry using the validated recursive projection and local selected-turn exclusions; rejected Retry restores full inherited UI. Actual native reference-descendant bodies qualify Send/Retry/Continue, accepted foreground tool loop and background Send/Retry/Continue: inherited summary and later parent evidence remain, raw original ancestry does not re-expand. Legacy caller-provided overrides keep their prior boundary.
 
 - [x] 3.5 Implement bounded capture recipes and snapshot revalidation (4h).
       Components: C3, C4.
@@ -174,11 +174,11 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
 
 ## 4. Phase B — generation, controls and summary presentation
 
-- [ ] 4.1 Add failing summary-generation and rolling fixtures (3h).
+- [x] 4.1 Add failing summary-generation and rolling fixtures (3h).
       Components: C5, C12.
       Requirements: R1.AC5, R7.AC1, R7.AC2, R7.AC3, R7.AC4, R7.AC5, R7.AC6, R7.AC7.
       Done when: mocked transport covers valid JSON, five-section failure, refusal, one correction, unknown/prior IDs, overlong descriptions, nonshrinking output, tool/media omission and an input that remains oversized.
-      Status: Partial — Summary/validator/serializer existing owners cover valid JSON, sections/landmarks/refusal/correction/budget/rolling/tool/media behavior at their distinct boundaries. The full stated mocked-transport failure matrix, including every validator failure routed through generation, remains unclosed.
+      Status: Complete — Actual generator transport owner routes valid/invalid five-section JSON, refusal, one correction, unknown/prior IDs, overlong descriptions, nonshrinking output, unexpected tool/media events, rolling/tool/media omission and still-oversized input through the production state machine.24 generator cases pass; no third corrective call or partial child is accepted. Validator shape permutations remain at their existing owner.
 
 - [x] 4.2 Implement transcript serialization, prior-summary extraction and prompt construction (3h).
       Components: C4, C5.
@@ -192,11 +192,11 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Done when: all headings have bodies, model identity fields cannot spoof stored records, 30/200-character caps hold, inherited IDs are eligible, response-byte and decoded-token limits apply, and invalid IDs produce a discarded count.
       Status: Complete — strict five-section JSON/landmark validation, Unicode30/200 shape, host-owned identities, inherited IDs, discarded counts, decoded target and response/final-row bytes pass in compacted-fork/summary/parser owners; qualifying85422e58/da817454/e604123b Core/Contracts. Live quality remains8.3.
 
-- [ ] 4.4 Integrate the same-model auxiliary request with existing authenticated transport (3h).
+- [x] 4.4 Integrate the same-model auxiliary request with existing authenticated transport (3h).
       Components: C5.
       Requirements: R1.AC5, R7.AC2, R7.AC7, R11.AC1.
       Done when: direct/static and forced SSR routes work, summarizer tools/background/fallback models are absent, ordinary chat filters do not inject unrelated context, there is at most one corrective call, and abort stops late persistence.
-      Status: Partial — Same-model branded auxiliary request uses complete-body admission and captured policy with no ordinary side-effecting chat filters/tools/background/fallback. Local summary/controller/native direct route qualifies cancellation/correction. Forced authenticated SSR summary runtime/routing matrix remains; a green SSR build alone is not that round trip.
+      Status: Complete — Actual auxiliary direct transport and forced-SSR client routing owners qualify success/correction/auth denial/abort; existing actual SSR route owners separately qualify authentication/key/capacity handling. Concrete Nitro/Floor identity is retained and variant-only changes cancel held inference promptly. Documented unresolved routers/latest aliases reject before writes with concrete-model recovery. No tools/background/send filters/fallback or deployed/live-auth round trip is claimed.
 
 - [x] 4.5 Implement the compaction controller and eligibility state (3h).
       Components: C3, C4, C5, C6.
@@ -246,7 +246,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C9, C12.
       Requirements: R11.AC2, R11.AC3, R11.AC4, R14.AC2, R14.AC3.
       Done when: gateway contracts define bounded by-ID/thread-page reads, existing adapters remain valid without the capability, and shared failure cases verify materialized reads, authorization context and incomplete-history status before provider implementations are added.
-      Status: Partial — Optional canonicalChatHistory v1 bounded contract keeps old adapters valid. Current five generated host contracts/public compatibility pass; actual SQLite built reader and Convex scaffold plus registered server missing-capability/scope cases qualify local conformance. Full absent/unavailable executor/readiness/deployed provider matrix and original failure-first fixture ordering remain explicit.
+      Status: Partial — Current optional bounded reader contract, actual H3 absent-capability/readiness/job placement and rebuilt SQLite/selected Convex local conformance now pass. Existing adapters remain valid without the capability. The original required chronology that shared failure fixtures exist before provider implementation is not established; current retrospective/local evidence cannot restore that chronology. Parent disposition of this provenance criterion and deployed provider qualification remain explicit.
 
 ## 6. Phase C — provider implementations and background placement
 
@@ -260,7 +260,7 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C9.
       Requirements: R11.AC2, R11.AC4, R14.AC2.
       Done when: workspace-constrained queries and indexes support the contract and preserve new fields; direct-provider auth uses existing token/service pathways; scaffold/generated references do not make an unselected Convex provider load in static builds.
-      Status: Partial — Private Convex31940bd has service-authorized indexed canonical reads, stable paging/revisions, additive lineage schema and generated references. Normal build/types/template pack and actual internal-handler source owners pass222 cases with scripted storage. Deployed validators/transactions, selected/unselected host rollout and real token/service round trips remain unqualified.
+      Status: Partial — Convex83583de actual rebuilt selected gateway→fresh generated internal indexed handler passes current-host scope/partial summary/revocation/later-gap qualification; unselected registry has no active adapter. Normal build/pack, standalone source and current-host owner types pass. Full static/SSR host builds preserve old installed-provider compatibility; they do not adopt this private reader. Deployed validators/transactions and real token/service round trips remain unqualified.
 
 - [x] 6.3 Integrate current authorization and server tool handlers (3h).
       Components: C8, C9.
@@ -268,17 +268,17 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Done when: trusted job context is required, current `can()` workspace-read checks run before content, revoked membership and foreign/sibling IDs are denied through real boundaries, and no raw request-supplied scope becomes authority.
       Status: Complete — Existing server registry owner uses real memory durable job storage, canonicalHistoryContext, can() and retrieval. It verifies matching captured provider/subject/workspace/thread/message/request identity, zero canonical reads for five forged fields, sibling/unknown denial, pre/post-read revocation, missing capability/summary and collision cleanup. Current16 owner cases pass in the919-case affected lane; scripted external storage does not qualify deployed backend isolation.
 
-- [ ] 6.4 Decide retrieval runtime before freezing the admitted tool catalog (3h).
+- [x] 6.4 Decide retrieval runtime before freezing the admitted tool catalog (3h).
       Components: C8, C9.
       Requirements: R11.AC3, R11.AC4, R11.AC5.
       Done when: canonical capability and synced summary/lineage enable hybrid server use, missing support selects the existing browser bridge or foreground path explicitly, and a later gap returns scope-incomplete instead of a false empty search.
-      Status: Partial — Authenticated read-only readiness and server job creation independently decide canonical/hybrid versus browser/foreground placement before catalog freeze; later gaps fail scope_incomplete. Full absent-capability/partial-sync/browser-executor/reconnect qualification remains; no live provider/bridge round trip is claimed.
+      Status: Complete — Actual H3 readiness/session/can/registry and actual server job creation qualify absent capability, partial summary, revocation and pre-job rejection. Real native core registration captures hybrid, browser bridge and explicit foreground catalogs before inference; later gaps report scope_incomplete. Source-built selected Convex handler/gateway and SQLite second-client partial delivery add independent storage proof. Deployed reconnect remains6.5.
 
 - [ ] 6.5 Verify provider round trips and background reconnect with rebuilt provider artifacts (3h).
       Components: C1, C7, C9, C12.
       Requirements: R2.AC2, R8.AC5, R9.AC2, R11.AC2, R11.AC3, R14.AC2, R15.AC2.
       Done when: summary, scope, branch fields and usage survive local→canonical→second-client reads, partial delivery blocks safely, and background retrieval/usage survives navigation and reconnect on supported providers.
-      Status: Not started — rebuilt-provider second-client round trips/background reconnect matrix is not run.
+      Status: Partial — Actual normal-built SQLite adapter/DB/migration plus two disposable Dexie clients prove atomic summary/lineage fields, partial pair rejection, canonical usage finalization/pull, DB reconnect and bounded authoritative snapshot/purge recovery.76 owner cases pass against current host. Selected Convex source-built gateway/scaffold passes54 local owners; Workflows pure source integration passes separately. Compatible release/pins, deployed Convex validators/transactions, second-client background/retrieval reconnect and live backend qualification remain approval/access prerequisites.
 
 ## 7. Phase D — flat lineage groups and deletion
 
@@ -294,11 +294,11 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Done when: top-level limits count distinct families/documents, sort keys match DB scanning, both sidebar consumers share one flat row model, and expanded family members page separately without loading messages.
       Status: Complete — Both sidebar consumers use metadata-only flat shared family pagination. Final exact10k/500-family/200-member fixture proves cumulative50→100 distinct top-level rows, separate50-member paging through200 unique members, sparse legacy hints/root outside the first page and zero message reads. Final grouping p95/max19.6ms and member53.2ms (7/3 samples); current types/contracts/builds pass.
 
-- [ ] 7.3 Render collapsible rows, workspace KV expansion and row-menu navigation (3h).
+- [x] 7.3 Render collapsible rows, workspace KV expansion and row-menu navigation (3h).
       Components: C10.
       Requirements: R12.AC1, R12.AC2, R12.AC3, R12.AC6.
       Done when: Original/Compacted/known Retry/Branch labels are truthful, group and exact-member targets differ correctly, latest compaction is separate from latest activity, keyboard focus/aria state work, and expansion survives reload.
-      Status: Partial — Flat truthful branch labels, keyboard Enter/Space/focus/aria, workspace KV reload and both consumers are browser-qualified; exact member/anchor/reverse-child actions pass. Actual creation-order policy has DB evidence. Complete group/menu latest-activity-versus-latest-compaction UI target matrix remains unqualified.
+      Status: Complete — Actual family UI makes original activity newest and independently derives creation-ordered latest compaction, then verifies distinct group/exact-member/menu targets after reload/filter. Enter/Space/focus/aria and workspace KV remain qualified across both consumers. Final family screenshot was inspected.
 
 - [x] 7.4 Integrate filters, child-only matches and damaged lineage UI (3h).
       Components: C10, C11.
@@ -306,11 +306,11 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Done when: search reveals matching children without altering saved expansion, project/pinned membership stays constrained, and missing/cyclic parents cannot hide otherwise usable local threads.
       Status: Complete — Both real sidebar consumers reveal matching children without changing persisted expansion. Real DB project/pinned/mixed-document cases retain only constrained membership; missing roots remain visible and cyclic starts stay standalone. Corrected failure-first cases, final browser, types and both builds pass.
 
-- [ ] 7.5 Guard central hard deletion and represent unavailable historical references (2h).
+- [x] 7.5 Guard central hard deletion and represent unavailable historical references (2h).
       Components: C11.
       Requirements: R13.AC1, R13.AC2, R13.AC3.
       Done when: known descendants block central hard delete with an explicit soft-delete alternative, deleted content is never returned by tools, and remote purge/missing message cases leave summaries usable without silent reparenting.
-      Status: Partial — Actual central deletion blocks descendants before and after hooks, rolls back hook-inserted child/deletion atomically, preserves soft-deleted summary context and cleans retired preference only for final member. Registered tools return no deleted content; canonical card missing/deleted/replaced targets stay finite without navigation. Released-provider remote purge/second-client and complete cleanup matrix remain6.5.
+      Status: Complete — Actual central descendant/hook-race refusal, soft deletion, checkpoint clearing and final-member preference retirement pass. Disposable real SQLite canonical purge plus actual second-client authoritative recovery removes originals without reparenting and keeps summary/new turns usable; registered tools/cards report unavailable content. Released/deployed Convex/purge qualification remains6.5.
 
 ## 8. Complete evidence and documentation
 
@@ -318,13 +318,13 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C12.
       Requirements: R15.AC1, R15.AC2, R15.AC3.
       Done when: the named harness is green, request-body evidence proves summary-only context and no implicit trimmed sends, failure paths show zero partial children, and report/screenshots/assertions are repeatable from the manifest.
-      Status: Complete — Five named journeys pass on committed runtime d3bea638 (50.7s, workers1/retries0): native actions/families, lossy confirmation, registered retrieval/deletion/scale, same-ID recovery and summary-only continuation. Captured bodies exclude raw ancestors/internal recipes; refusal/cancellation/DB checks preserve originals and no partial children. Report/assertions/source manifest and screenshots are retained; changed no-tool family passes on ecea59f2.
+      Status: Complete — Seven named journeys pass on committed runtime c5ab90d4 in64.9s, workers1/retries0: meter/media, actions/families, lossy confirmation, registered retrieval/deletion/scale, same-ID recovery and summary-only continuation. Bodies exclude raw ancestors/internal recipes; original/draft/cancellation/partial-child assertions and inspected screenshots are retained with source manifest.
 
 - [x] 8.2 Measure the documented scale fixture and remove accidental whole-history work (3h).
       Components: C2, C8, C10, C12.
       Requirements: R3.AC4, R3.AC6, R10.AC6, R12.AC4, R15.AC3.
       Done when: the 10k-thread fixture records grouping/refresh durations, bounds per-call retrieval and member reads, performs no sidebar message-content reads, and explains/resolves p95 grouping above 500 ms on the recorded configuration. A separate mocked-inference fixture proves untrimmed requests beyond 128k and near a 1,000,000-token model window traverse native request construction/transport with valid per-message storage sizes; performance fixes do not reintroduce an application context cap.
-      Status: Complete — Final actual10k/500-family/200-member browser fixture records7 grouping/3 member samples, nearest-rank p95/max19.6ms/53.2ms and zero message reads; all200 members page independently. Registered retrieval work/output bounds pass. Actual native transport owners send600,000/3,800,000 canonical bytes under a1M model window with valid per-row sizes and no trimming. Current types and static/SSR builds pass.
+      Status: Complete — Final actual10k/500-family/200-member fixture records7 grouping/3 member samples, nearest-rank p95/max18.1ms/47.0ms and zero message reads, distinct50→100 top-level rows and200 members paged independently. Prior19.6/53.2 receipts remain valid for their own run. Actual native600k/3.8M-byte untrimmed transport and registered retrieval bounds still pass without conversation/model caps.
 
 - [ ] 8.3 Run and record three manual quality evaluations, including two rolling compactions each (3h, with user-approved model traffic).
       Components: C5, C12.
@@ -342,13 +342,13 @@ This plan changes native chat only. Preserve unrelated working-tree edits. Provi
       Components: C9, C12.
       Requirements: R11.AC1, R14.AC1, R14.AC2, R14.AC3, R15.AC2.
       Done when: narrow owner tests, `bun run test:changed`, affected provider/integration checks, `bun run type-check`, `bun run generate:static` and `bun run build` pass; generated provider host contracts are current; branch/public surface changes pass the applicable compatibility lane or have an explicit resolved compatibility decision.
-      Status: Complete — Current runtime d3bea638: affected lane919/919 across86 files, configured BasicAuth/SQLite/fs types, strict changed TS plus explicitly nonignored plugin lint, public contracts, refreshed compatibility snapshots/ledger and full static/SSR wrappers pass. Current five provider host contracts are verified; private SQLite112/Convex222 source-built/scaffold owners, provider types/build/template receipts are recorded. New test-only no-tool family passes33.0s on ecea59f2. No exact-head remote CI or deployed-provider pass is claimed.
+      Status: Complete — Runtime c5ab90d4: changed532 cases/38 files, configured BasicAuth/SQLite/fs types, strict changed production TS lint, public contracts, current compatibility39/596/273/309, complete static and SSR wrappers, and seven browser cases pass. SQLite1bdf113 owner76 and Convex83583de owner54 use current host plus normal-built artifacts; provider standalone and current-host owner types pass. Prior unchanged provider/public-contract receipts are retained; no remote exact-head CI or deployed release pass is claimed.
 
 - [x] 8.6 Close traceability and record capability/quality limitations (1h).
       Components: C12.
       Requirements: R14.AC4, R15.AC1, R15.AC2, R15.AC3, R15.AC4.
       Done when: each acceptance criterion links to evidence, provider support and quality limitations are stated, all task boxes reflect actual completion, and no shipping claim depends on unavailable provider code or unrun checks.
-      Status: Complete — ACCEPTANCE_LEDGER.md retains all79 exact authoritative criteria with evidence owners and explicit partial/external limits. This55-task board checks only full local task wording, and the final packet separates source qualification, parent review, remote CI, provider release/deployed reconnect and live quality. First failures/source versions remain; no all55 or release-complete claim.
+      Status: Complete — All79 authoritative criterion texts and55 task IDs/order/Done-when wording are retained. Current board47 complete/7 partial/1 not started distinguishes named local evidence from endpoint/provenance decisions, legacy adoption, released/deployed providers and live quality. Current first failures, source identities, logs and portable final review packet remain; final parent acceptance is pending.
 
 ## Traceability Matrix
 

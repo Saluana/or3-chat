@@ -2,7 +2,7 @@
 
 All 79 authoritative requirement criteria are retained below. “Locally verified” is a boundary-specific source qualification, not a feature release claim. Partial/external rows name the unclosed criterion; task boxes require the full task wording, not merely one related green test. Final local receipt paths and source revisions are in [LOCAL_QUALIFICATION_REVIEW_PACKET.md](./LOCAL_QUALIFICATION_REVIEW_PACKET.md). Earlier failures/reviews remain in [evidence.md](./evidence.md).
 
-The five native journeys use real PageShell/controller/Dexie/writer/registered browser tools. Server authorization uses real job storage/registry/can()/retrieval with external canonical storage and membership scripted. SQLite tests import actual normal-built adapter/DB/migrations. Convex local handler storage is scripted and does not establish deployed validator/transaction isolation. No live inference, publication, merge or deployment has occurred.
+The seven current native journeys use real PageShell/controller/Dexie/writer/registered browser tools. Server authorization uses real job storage/registry/can()/retrieval with external canonical storage and membership scripted. SQLite tests import actual normal-built adapter/DB/migrations. Convex local handler storage is scripted and does not establish deployed validator/transaction isolation. No live inference, publication, merge or deployment has occurred.
 
 ## R1.AC1
 
@@ -80,32 +80,32 @@ IF stored usage belongs to another model or a changed request prefix/configurati
 
 WHEN chat input is available THEN the composer SHALL show estimated input / effective context window and a percentage, using amber from 70% and red from 90%; it SHALL separately expose reply capacity and block when input plus an explicitly requested reply cannot fit or no positive reply capacity remains.
 
-- State: Partial: model-window/reply and displayed meter are proved; full70%/90% color and screen-reader boundary matrix remains unqualified.
-- Owner: context-budget; request-usage; model-context-readiness; useAi.context-admission; real composer screenshots/lossy journey.
+- State: Locally verified: actual composer69/70/89/90% color boundaries and accessible input/reply text pass; final parent review remains pending.
+- Owner: Final seven-scenario browser; context-budget/native admission owners.
 - Evidence scope: Actual capacity, measured-prefix/full estimates, tool/media accounting, cached readiness and untrimmed600k/3.8M-byte native transport.
 
 ## R3.AC2
 
 WHEN the estimate is prepared THEN it SHALL account for the effective system prompt, summary and landmarks, replayed history, draft, injected context, tool definitions, arguments/results, and protocol overhead; unknown media costs SHALL be visibly identified.
 
-- State: Partial: shared complete-body estimator/tool/media owner passes; the full native attachment/injected-context preview UI matrix remains unqualified.
-- Owner: context-budget; request-usage; model-context-readiness; useAi.context-admission; real composer screenshots/lossy journey.
+- State: Locally verified: real prompt/tool/settings/model/draft and chosen/removed/inherited historical media preview pass; unknown costs remain explicit without hydration.
+- Owner: Composer meter/media journeys; actual complete-body native attachment and estimator owners.
 - Evidence scope: Actual capacity, measured-prefix/full estimates, tool/media accounting, cached readiness and untrimmed600k/3.8M-byte native transport.
 
 ## R3.AC3
 
 WHEN a matching usage baseline exists THEN the estimate SHALL include its prompt count and only the replayed suffix not already measured, cross-checked against the whole-payload estimate; otherwise it SHALL show an input-usage estimate with uncertainty, without imposing a blanket percentage haircut on available context.
 
-- State: Partial: exact prefix/configuration and whole-body cross-check owners pass; live measured-media accuracy is not claimed.
-- Owner: context-budget; request-usage; model-context-readiness; useAi.context-admission; real composer screenshots/lossy journey.
+- State: Locally verified: matched prefix+suffix, full-estimate lower bound, changed text/route/tools/reasoning/missing/zero and hydrated-image uncertainty/invalidation pass. Live estimator accuracy is not asserted.
+- Owner: shared/chat/__tests__/request-usage.test.ts; final changed lane.
 - Evidence scope: Actual capacity, measured-prefix/full estimates, tool/media accounting, cached readiness and untrimmed600k/3.8M-byte native transport.
 
 ## R3.AC4
 
 WHEN model, maximum-context preference, prompt, tools, attachments, thread history, or draft changes THEN the preview SHALL update after a 120 ms debounce; actual send SHALL perform a fresh check after all payload-changing filters.
 
-- State: Partial: fresh final admission and source/draft/settings/model invalidation pass; the complete120ms prompt/tool/attachment UI debounce matrix is not closed.
-- Owner: context-budget; request-usage; model-context-readiness; useAi.context-admission; real composer screenshots/lossy journey.
+- State: Locally verified: actual composer pending/debounce observes at least100ms scheduling around the configured120ms interval; prompt/tool/file/model/settings updates and fresh native filtered admission pass.
+- Owner: Final composer meter browser; native admission owners.
 - Evidence scope: Actual capacity, measured-prefix/full estimates, tool/media accounting, cached readiness and untrimmed600k/3.8M-byte native transport.
 
 ## R3.AC5
@@ -136,7 +136,7 @@ IF a final request cannot fit its input and reply within the effective context w
 
 WHEN an initial send is blocked THEN its draft and attachments SHALL remain available, no assistant generation SHALL begin, and no duplicate durable user turn SHALL be produced on retry.
 
-- State: Partial: same-ID recovery and preserved draft/zero native preflight writes pass; full attachment/background checkpoint-recovery matrix remains unqualified. Legacy post-write filters retain compatibility until published pure-contract adoption.
+- State: Partial: same-ID recovery and preserved draft/zero native preflight writes pass; actual attachment/background checkpoint-recovery matrix now passes locally. Legacy post-write filters retain compatibility until published pure-contract adoption.
 - Owner: useAi.context-admission; stream-handler.tools; native recovery/lossy journeys.
 - Evidence scope: Fresh complete-body admission, preserved accepted tools, provider context errors and same-turn checkpoint recovery. Legacy side-effecting filter boundary is documented.
 
@@ -184,16 +184,16 @@ WHEN confirmed THEN trimming SHALL remove only complete oldest conversational gr
 
 IF protected content still exceeds the budget or the candidate payload changes after confirmation THEN the request SHALL remain blocked and require a new decision.
 
-- State: Partial: draft/configuration/source/final-filter invalidation and protected over-budget paths have local owners; all UI attachment/model changes during confirmation are not separately browser-qualified.
-- Owner: lossy native journey; lossy-request and native admission owners.
+- State: Locally verified: actual attachment and routing edits invalidate visible confirmation; source/configuration/filter/protected-content checks pass before inference.
+- Owner: Final lossy browser; lossy/native admission owners.
 - Evidence scope: Estimate/omitted groups, edit invalidation, one explicit provider call, unchanged original rows, durable omission and next full-history block.
 
 ## R5.AC4
 
 WHEN a lossy request is sent THEN its omission metadata SHALL be persisted with that generation; subsequent tool iterations SHALL retain the same omission set and SHALL stop if they need additional omissions.
 
-- State: Partial: durable omission and frozen continuation implementation has owners; full multi-iteration lossy native tool-loop browser matrix remains unqualified.
-- Owner: lossy native journey; lossy-request and native admission owners.
+- State: Locally verified: real native confirmed lossy tool loop saves accepted result once and stops before another request without expanding omissions.
+- Owner: useAi.context-admission.integration; final lossy browser.
 - Evidence scope: Estimate/omitted groups, edit invalidation, one explicit provider call, unchanged original rows, durable omission and next full-history block.
 
 ## R6.AC1
@@ -336,8 +336,8 @@ IF a synced compacted thread arrives before its required summary THEN it SHALL b
 
 WHEN a compacted thread is loaded, continued, retried or sent THEN its initial historical context SHALL be exactly one summary with landmarks, preceded by the current effective system prompt if enabled, followed only by new local messages.
 
-- State: Partial: captured native send/continuation and canonical retry/readiness owners pass; complete background/reference/retry request matrix is not end-to-end qualified.
-- Owner: transcript; native summary-only continuation and family/action journeys; ContextCompactionCard/ThreadChildLinks.
+- State: Locally verified: real recursive reference-descendant Send/Retry/Continue and foreground accepted-tool/background request bodies retain inherited summary/later parent and exclude raw compacted ancestors; rejected Retry restores full UI.
+- Owner: F1 native body matrix; final summary-only browser.
 - Evidence scope: Read-only card/reload, provider-only summary/new-local body, human anchor/tool mapping, actual reverse children and fallible-reference labels.
 
 ## R9.AC2
@@ -440,16 +440,16 @@ WHEN an admitted server tool reads history THEN subject, workspace and current t
 
 WHEN hybrid retrieval is advertised for server execution THEN a compatible provider history-reader capability and required synced lineage SHALL exist; missing capability SHALL select the existing browser-tool path or explicit foreground execution before admission.
 
-- State: Partial/external: readiness/catalog-placement implementation is present; deployed partial-sync/absent-capability/browser-bridge/reconnect matrix remains6.4/6.5.
-- Owner: Server tool-registry authorization owner; canonical-history-context; SQLite actual built storage; Convex actual scaffold handler owner.
+- State: Locally verified at host placement: real readiness/auth/job boundaries and actual native core registration choose hybrid/client/foreground before frozen catalog; source-built partial-pair controls pass. Released/deployed adoption is separately R14.AC2/task6.5.
+- Owner: tool-registry existing owner; actual native placement; SQLite/Convex current-host artifact owners.
 - Evidence scope: Trusted real jobs and fresh can()/membership checks qualify locally. Deployed provider transactions, browser bridge/reconnect and released pins remain separate.
 
 ## R11.AC4
 
 IF canonical history is incomplete, access is revoked, or the browser executor is unavailable THEN the tool SHALL report that limitation; it SHALL NOT scan retained change logs, borrow another workspace, or pretend an empty result proves absence.
 
-- State: Partial/external: registered host revocation/missing-capability/missing-summary fails closed; unavailable browser executor and deployed reconnect/retention matrix remains.
-- Owner: Server tool-registry authorization owner; canonical-history-context; SQLite actual built storage; Convex actual scaffold handler owner.
+- State: Locally verified at registered host/storage boundaries: missing capability/summary, membership revocation, missing executor and later gaps fail explicitly without content/false absence. Deployed reconnect is separately task6.5.
+- Owner: Actual H3 readiness/server job/native placement and source-built provider owners.
 - Evidence scope: Trusted real jobs and fresh can()/membership checks qualify locally. Deployed provider transactions, browser bridge/reconnect and released pins remain separate.
 
 ## R11.AC5
@@ -472,8 +472,8 @@ WHEN related threads are listed THEN each family SHALL occupy one top-level grou
 
 WHEN a group row is selected THEN it SHALL open its most recently active non-deleted member with deterministic tie-breaking; selecting a member SHALL open that exact thread. A separate Go to latest compaction action SHALL use compaction creation order.
 
-- State: Partial: exact member/reverse-child UI and actual creation-order policy pass; all group/menu latest-activity-versus-latest-creation UI targets remain unqualified.
-- Owner: Real two-consumer family/action journey; documented500-family scale fixture; thread-families.
+- State: Locally verified: actual original-latest activity versus creation-latest compaction group/menu targets pass after filter/reload, with exact-member selection retained.
+- Owner: Final PageShell family journey; independent raw IndexedDB creation-order read.
 - Evidence scope: Flat metadata-only grouping, exact targets, keyboard focus/reload/search, independent indexed paging and creation-order latest selection.
 
 ## R12.AC3
@@ -520,8 +520,8 @@ WHEN a thread with local descendants is hard-deleted THEN deletion SHALL be bloc
 
 WHEN a landmark message or source is deleted by another device or retained data is purged THEN the summary SHALL remain usable, affected retrieval/navigation SHALL show unavailable, and no operation SHALL silently reparent the chain.
 
-- State: External: local missing/deleted originals and usable summary projection pass; actual remote purge/second-client deletion propagation remains6.5/7.5.
-- Owner: Registered history/family/deletion journey; threads hard-delete production APIs.
+- State: Locally verified for actual source-built SQLite canonical purge→second-client snapshot recovery and local card/tool unavailable references: summary/new turns remain usable without reparenting. Released/deployed provider propagation remains task6.5.
+- Owner: SQLite real two-client/purge owner; registered history/card browser.
 - Evidence scope: Descendant refusal before/after hooks, rollback, soft-deleted originals, missing scopes/cycles and final-member preference retirement.
 
 ## R13.AC3
@@ -568,8 +568,8 @@ WHEN the feature ships THEN user/developer docs and docmap entries SHALL describ
 
 WHEN deterministic E2E verification runs THEN captured requests and durable reads SHALL prove summary-only continuation, rolling landmarks, scoped retrieval, atomic failure/cancellation, sidebar navigation and zero provider calls on locally detected overflow.
 
-- State: Partial: named five journeys and production failure owners qualify the implemented subset; any remaining per-AC matrix above stays explicit.
-- Owner: Named test:e2e:context manifest/report/body/assertions/screenshots; source-built provider owners; retained failures.
+- State: Locally verified: final seven named committed-runtime journeys retain body/durable/readiness/retrieval/cancellation/navigation/no-inference proofs. Released-provider and live quality criteria below remain distinct.
+- Owner: review-complete-candidate source/report/body/assertions/screenshots.
 - Evidence scope: Deterministic scripted inference only. Live three-conversation/two-roll quality and deployed second-client/reconnect gates are not replaced by schema/test success.
 
 ## R15.AC2
