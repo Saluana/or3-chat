@@ -1,6 +1,9 @@
 @reference '../../assets/css/main.css';
 
 [data-theme="blank"] {
+    .chat-scroll-to-bottom {
+        border: max(1px, var(--md-border-width-subtle, var(--md-border-width, 1px))) solid var(--md-border-color) !important;
+    }
     --chat-composer-border-radius: 28px;
     --blank-brand-accent: #2a8fd6;
 
@@ -377,6 +380,16 @@
         border-color: var(--md-border-color);
         opacity: 0.5;
     }
+}
+
+/* Keep the primary auth action readable when mobile labels need more room. */
+html[data-theme='blank'] .basic-auth-modal-content div:has(> button[type='submit']) {
+    flex-wrap: wrap;
+}
+
+html[data-theme='blank'] .basic-auth-modal-content button[type='submit'] {
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 /* ── Dark mode overrides ── */

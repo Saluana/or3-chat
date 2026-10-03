@@ -131,12 +131,21 @@ export interface ChatMessageAction {
     handler: (ctx: {
         message: UiChatMessage;
         threadId?: string;
+        compaction?: {
+            start: (anchorMessageId?: string) => Promise<void>;
+            blockedReason?: string;
+        };
     }) => void | Promise<void>;
+    /** Read-only availability, evaluated in the owning pane. */
+    visible?: (ctx: MessageActionContext) => boolean;
+    disabled?: (ctx: MessageActionContext) => boolean;
+    disabledReason?: (ctx: MessageActionContext) => string | undefined;
     /** Optional plugin id used for workspace policy lookup. */
     pluginId?: string;
     /** Optional access policy for this action. */
     access?: PluginGatePolicy;
 }
+export type MessageActionContext = Parameters<ChatMessageAction['handler']>[0];
 /**
  * Registers (or replaces) a message action in the global registry.
  *
@@ -1852,6 +1861,9 @@ export interface ComposerActionContext {
     paneId?: string | null;
     /** Whether AI content is currently streaming */
     isStreaming?: boolean;
+    /** Host compaction controller belonging to this composer and pane. */
+    compactThread?: () => Promise<void>;
+    compactionBlockedReason?: string;
     /** Additional context properties for extensibility */
     [key: string]: unknown;
 }
@@ -2439,7 +2451,10 @@ export declare function useSidebarThreads(): Ref<{
     parent_thread_id?: string | null | undefined;
     anchor_message_id?: string | null | undefined;
     anchor_index?: number | null | undefined;
-    branch_mode?: "copy" | "reference" | null | undefined;
+    branch_mode?: "copy" | "reference" | "compacted" | null | undefined;
+    root_thread_id?: string | null | undefined;
+    summary_message_id?: string | null | undefined;
+    fork_reason?: "manual" | "retry" | "compaction" | undefined;
     hlc?: string | undefined;
     op_id?: string | undefined;
     project_id?: string | null | undefined;
@@ -2458,7 +2473,10 @@ export declare function useSidebarThreads(): Ref<{
     parent_thread_id?: string | null | undefined;
     anchor_message_id?: string | null | undefined;
     anchor_index?: number | null | undefined;
-    branch_mode?: "copy" | "reference" | null | undefined;
+    branch_mode?: "copy" | "reference" | "compacted" | null | undefined;
+    root_thread_id?: string | null | undefined;
+    summary_message_id?: string | null | undefined;
+    fork_reason?: "manual" | "retry" | "compaction" | undefined;
     hlc?: string | undefined;
     op_id?: string | undefined;
     project_id?: string | null | undefined;
@@ -3268,6 +3286,14 @@ import type { Thread } from '~/db';
 import { type HistoryActionRegistryItem } from '../history/createHistoryActionRegistry';
 /** Definition for an extendable chat message action button. */
 export interface ThreadHistoryAction extends HistoryActionRegistryItem<Thread> {
+    /** Reactive ephemeral reason; must be pure and perform no storage reads. */
+    disabledReason?: (ctx: {
+        threadId: string;
+    }) => string | undefined;
+    /** Lazy read-only durable inspection, evaluated only while the menu is open. */
+    inspectDisabledReason?: (ctx: {
+        document: Thread;
+    }) => Promise<string | undefined>;
 }
 /** Register (or replace) a message action. */
 export declare function registerThreadHistoryAction(action: ThreadHistoryAction): void;
@@ -3311,7 +3337,7 @@ import type { HookPayloadMap, FilesAttachInputPayload } from './hook-types';
  * Constraints:
  * - Keep this list stable; add only after a hook name is widely adopted
  */
-export type KnownHookKey = 'ui.chat.message:filter:outgoing' | 'ui.chat.message:filter:incoming' | 'ai.chat.model:filter:select' | 'ai.chat.messages:filter:input' | 'ai.chat.send:action:before' | 'ai.chat.send:action:after' | 'ai.chat.stream:action:delta' | 'ai.chat.stream:action:reasoning' | 'ai.chat.stream:action:complete' | 'ai.chat.stream:action:error' | 'ai.chat.retry:action:before' | 'ai.chat.retry:action:after' | 'ai.document.edit:filter:request' | 'ai.document.edit:action:before' | 'ai.document.edit:action:after' | 'ai.document.edit:action:error' | 'ui.pane.active:action' | 'ui.pane.blur:action' | 'ui.pane.switch:action' | 'ui.pane.thread:filter:select' | 'ui.pane.thread:action:changed' | 'ui.pane.doc:filter:select' | 'ui.pane.doc:action:changed' | 'ui.pane.doc:action:saved' | 'ui.pane.msg:action:sent' | 'ui.pane.msg:action:received' | 'files.attach:filter:input' | 'sync.bootstrap:action:start' | 'sync.bootstrap:action:progress' | 'sync.bootstrap:action:complete' | 'sync.pull:action:received' | 'sync.pull:action:applied' | 'sync.pull:action:error' | 'sync.pull:action:after' | 'sync.subscription:action:statusChange' | 'sync.conflict:action:detected' | 'sync.op:action:captured' | 'sync.push:action:before' | 'sync.push:action:after' | 'sync.error:action' | 'sync.retry:action' | 'sync.queue:action:full' | 'sync.rescan:action:starting' | 'sync.rescan:action:progress' | 'sync.rescan:action:completed' | 'sync.stats:action' | 'notify:action:push' | 'notify:action:read' | 'notify:action:clicked' | 'notify:action:cleared' | 'notify:filter:before_store';
+export type KnownHookKey = 'ui.chat.message:filter:outgoing' | 'ui.chat.message:filter:incoming' | 'ai.chat.model:filter:select' | 'ai.chat.messages:filter:input' | 'ai.chat.send:action:before' | 'ai.chat.send:filter:prepare' | 'ai.chat.send:filter:commit' | 'ai.chat.send:action:after' | 'ai.chat.stream:action:delta' | 'ai.chat.stream:action:reasoning' | 'ai.chat.stream:action:complete' | 'ai.chat.stream:action:error' | 'ai.chat.retry:action:before' | 'ai.chat.retry:action:after' | 'ai.document.edit:filter:request' | 'ai.document.edit:action:before' | 'ai.document.edit:action:after' | 'ai.document.edit:action:error' | 'ui.pane.active:action' | 'ui.pane.blur:action' | 'ui.pane.switch:action' | 'ui.pane.thread:filter:select' | 'ui.pane.thread:action:changed' | 'ui.pane.doc:filter:select' | 'ui.pane.doc:action:changed' | 'ui.pane.doc:action:saved' | 'ui.pane.msg:action:sent' | 'ui.pane.msg:action:received' | 'files.attach:filter:input' | 'sync.bootstrap:action:start' | 'sync.bootstrap:action:progress' | 'sync.bootstrap:action:complete' | 'sync.pull:action:received' | 'sync.pull:action:applied' | 'sync.pull:action:error' | 'sync.pull:action:after' | 'sync.subscription:action:statusChange' | 'sync.conflict:action:detected' | 'sync.op:action:captured' | 'sync.push:action:before' | 'sync.push:action:after' | 'sync.error:action' | 'sync.retry:action' | 'sync.queue:action:full' | 'sync.rescan:action:starting' | 'sync.rescan:action:progress' | 'sync.rescan:action:completed' | 'sync.stats:action' | 'notify:action:push' | 'notify:action:read' | 'notify:action:clicked' | 'notify:action:cleared' | 'notify:filter:before_store';
 /**
  * Purpose:
  * Enumerates Dexie tables that may emit DB-related hooks.
@@ -3401,7 +3427,7 @@ export {};
 import type { PaneState as MultiPaneState } from '../../composables/core/useMultiPane';
 import type { ChatMessage } from '~/utils/chat/types';
 import type { ORMessage } from '~/core/auth/openrouter-build';
-import type { AccessDecision, AttachmentEntity, DbCreatePayload, DbDeletePayload, DbUpdatePayload, DocumentEntity, FileEntity, KvEntry, MessageCreateEntity, MessageEntity, NotificationAction, NotificationCreatePayload, NotificationEntity, PostCreateEntity, PostEntity, ProjectEntity, PromptEntity, SessionContext, StorageFileDownloadAfterPayload, StorageFileDownloadBeforePayload, StorageFileGcPayload, StorageFileUploadAfterPayload, StorageFileUploadBeforePayload, StorageFileUploadPolicyPayload, StorageFileUrlOptionsPayload, SyncPendingOpPayload, SyncScopePayload, ThreadCreateEntity, ThreadEntity } from '~~/shared/hooks/hook-domain-types';
+import type { AccessDecision, ChatSendPreparation, ChatSendCommit, AttachmentEntity, DbCreatePayload, DbDeletePayload, DbUpdatePayload, DocumentEntity, FileEntity, KvEntry, MessageCreateEntity, MessageEntity, NotificationAction, NotificationCreatePayload, NotificationEntity, PostCreateEntity, PostEntity, ProjectEntity, PromptEntity, SessionContext, StorageFileDownloadAfterPayload, StorageFileDownloadBeforePayload, StorageFileGcPayload, StorageFileUploadAfterPayload, StorageFileUploadBeforePayload, StorageFileUploadPolicyPayload, StorageFileUrlOptionsPayload, SyncPendingOpPayload, SyncScopePayload, ThreadCreateEntity, ThreadEntity } from '~~/shared/hooks/hook-domain-types';
 import type { FileKind } from '~~/shared/files/file-kind';
 export type { AccessDecision, AttachmentEntity, DbCreatePayload, DbDeletePayload, DbUpdatePayload, DocumentEntity, FileEntity, KvEntry, MessageCreateEntity, MessageEntity, NotificationAction, NotificationCreatePayload, NotificationEntity, Permission, PostCreateEntity, PostEntity, ProjectEntity, PromptEntity, SessionContext, StorageFileDownloadAfterPayload, StorageFileDownloadBeforePayload, StorageFileGcPayload, StorageFileUploadAfterPayload, StorageFileUploadBeforePayload, StorageFileUploadPolicyPayload, StorageFileUrlOptionsPayload, SyncPendingOpPayload, SyncScopePayload, ThreadCreateEntity, ThreadEntity, WorkspaceRole, } from '~~/shared/hooks/hook-domain-types';
 export interface EditorInstance {
@@ -3604,7 +3630,7 @@ export interface FilesAttachInputPayload {
     size: number;
     kind: FileKind;
 }
-export type BranchMode = 'reference' | 'copy';
+export type BranchMode = 'reference' | 'copy' | 'compacted';
 export interface BranchForkOptions {
     sourceThreadId: string;
     anchorMessageId: string;
@@ -3725,6 +3751,8 @@ export type CoreHookPayloadMap = {
     'editor:request-extensions': [void];
     'ui.chat.editor:filter:extensions': [unknown[]];
     'ui.chat.editor:action:before_send': [Record<string, unknown>];
+    'ai.chat.send:filter:prepare': [ChatSendPreparation];
+    'ai.chat.send:filter:commit': [ChatSendCommit];
     'ai.chat.messages:filter:before_send': [
         {
             messages: OpenRouterMessage[];
@@ -4060,6 +4088,7 @@ export interface TypedHookEngine {
     hasAction<K extends ActionHookName>(name?: K, fn?: InferHookCallback<K>): boolean | number;
     hasFilter<K extends FilterHookName>(name?: K, fn?: InferHookCallback<K>): boolean | number;
     removeAllCallbacks(priority?: number): void;
+    captureFilterChain(names: readonly string[]): () => boolean;
     currentPriority(): number | false;
     readonly _engine: HookEngine;
     readonly _diagnostics: HookEngine['_diagnostics'];
@@ -4447,6 +4476,8 @@ export interface HookEngine {
     doAction: (name: string, ...args: unknown[]) => Promise<void>;
     doActionSync: (name: string, ...args: unknown[]) => void;
     hasFilter: (name?: string, fn?: HookFn) => boolean | number;
+    /** Read-only ownership receipt; dispatching a filter is never part of validation. */
+    captureFilterChain: (names: readonly string[]) => () => boolean;
     hasAction: (name?: string, fn?: HookFn) => boolean | number;
     removeAllCallbacks: (priority?: number) => void;
     currentPriority: () => number | false;

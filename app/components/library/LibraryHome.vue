@@ -28,6 +28,8 @@ interface EntitlementsView {
     readonly plus?: { readonly status: 'active' | 'none' | 'ended'; readonly until: string | null };
     readonly accountId?: string;
     readonly acquired?: readonly PurchasedRelease[];
+    readonly acquiredCursor?: string | null;
+    readonly pluginCoverageCursor?: string | null;
     readonly pluginCoverage?: readonly {
         readonly pluginId: string;
         readonly until: string;
@@ -43,6 +45,8 @@ const linkCopied = ref(false);
 const purchasesLoading = ref(false);
 const purchases = ref<EntitlementsView | null>(null);
 const purchasesFailure = ref<string | null>(null);
+const pageLoading = ref(false);
+const pageFailure = ref<string | null>(null);
 const requestedReleaseIds = ref<ReadonlySet<string>>(new Set());
 const requestBusy = ref<string | null>(null);
 let requestInstallGeneration = 0;
@@ -78,6 +82,8 @@ async function loadPurchases(): Promise<void> {
     const request = ++purchasesGeneration;
     purchases.value = null;
     purchasesFailure.value = null;
+    pageLoading.value = false;
+    pageFailure.value = null;
     requestInstallGeneration++;
     requestBusy.value = null;
     requestedReleaseIds.value = new Set();
@@ -99,6 +105,56 @@ async function loadPurchases(): Promise<void> {
         purchasesFailure.value = 'Your purchases could not be loaded right now.';
     } finally {
         if (request === purchasesGeneration) purchasesLoading.value = false;
+    }
+}
+
+/** Continue each bounded list without restarting a list that is already complete. */
+async function loadMorePurchases(): Promise<void> {
+    const current = purchases.value;
+    const identity = purchaseIdentity.value;
+    const generation = purchasesGeneration;
+    if (!current?.linked || !identity || pageLoading.value) return;
+    const query = {
+        ...(current.acquiredCursor ? { acquiredCursor: current.acquiredCursor } : {}),
+        ...(current.pluginCoverageCursor
+            ? { pluginCoverageCursor: current.pluginCoverageCursor }
+            : {}),
+    };
+    if (!Object.keys(query).length) return;
+    pageLoading.value = true;
+    pageFailure.value = null;
+    try {
+        const result = await $fetch<EntitlementsView>('/api/plugins/library/entitlements', {
+            query,
+        });
+        if (generation !== purchasesGeneration || identity !== purchaseIdentity.value) return;
+        if (!result.linked || result.accountId !== current.accountId) {
+            pageFailure.value = 'The Library link changed. Refresh the account link and try again.';
+            return;
+        }
+        const acquired = new Map(
+            (current.acquired ?? []).map((release) => [release.releaseId, release]),
+        );
+        const coverage = new Map(
+            (current.pluginCoverage ?? []).map((entry) => [entry.pluginId, entry]),
+        );
+        if (current.acquiredCursor)
+            for (const release of result.acquired ?? []) acquired.set(release.releaseId, release);
+        if (current.pluginCoverageCursor)
+            for (const entry of result.pluginCoverage ?? []) coverage.set(entry.pluginId, entry);
+        purchases.value = {
+            ...current,
+            plus: result.plus,
+            acquired: [...acquired.values()],
+            pluginCoverage: [...coverage.values()],
+            acquiredCursor: current.acquiredCursor ? result.acquiredCursor : null,
+            pluginCoverageCursor: current.pluginCoverageCursor ? result.pluginCoverageCursor : null,
+        };
+    } catch {
+        if (generation === purchasesGeneration && identity === purchaseIdentity.value)
+            pageFailure.value = 'More purchases could not be loaded. Try again.';
+    } finally {
+        if (generation === purchasesGeneration) pageLoading.value = false;
     }
 }
 
@@ -482,6 +538,8 @@ const terminalReason = computed(() => {
                     <p v-else-if="!purchases.pluginCoverage?.length" class="mt-4 text-sm text-slate-600">
                         No marketplace purchases appear for this account yet.
                     </p>
+                    <p v-if="pageFailure" class="mt-3 text-sm text-amber-700" aria-live="polite">{{ pageFailure }}</p>
+                    <UButton v-if="purchases.acquiredCursor || purchases.pluginCoverageCursor" class="mt-4" size="sm" color="neutral" variant="outline" :loading="pageLoading" :disabled="pageLoading" @click="loadMorePurchases()">Load more purchases</UButton>
                     <p v-if="installer.checked.value && !installer.canInstall.value && (purchases.acquired?.length || purchases.pluginCoverage?.length)" class="mt-3 text-xs text-slate-500">
                         Installing plugins needs an administrator of this instance. Request an acquired release above; an administrator can review it in this server’s Library.
                     </p>

@@ -44,14 +44,14 @@ function model(
     };
 }
 
-function mountModelSelection() {
+function mountModelSelection(onChange = vi.fn()) {
     let selection!: ReturnType<typeof useChatModelSelection>;
     const wrapper = mount(
         defineComponent({
             setup() {
                 selection = useChatModelSelection({
                     threadId: () => undefined,
-                    onChange: vi.fn(),
+                    onChange,
                 });
                 return () => h('div');
             },
@@ -66,6 +66,21 @@ describe('useChatModelSelection', () => {
         modelStore.favoriteModels = ref([]);
         modelStore.fetchModels.mockReset().mockResolvedValue([]);
         modelStore.getFavoriteModels.mockReset().mockResolvedValue([]);
+    });
+
+    it('propagates the effective route and variant-only changes without synthetic thinking suffixes', async () => {
+        const onChange = vi.fn();
+        const { selection, wrapper } = mountModelSelection(onChange);
+        await flushPromises();
+        selection.selectedModel.value = 'provider/model:thinking';
+        selection.modelVariant.value = 'nitro';
+        await nextTick();
+        expect(onChange).toHaveBeenLastCalledWith('provider/model:nitro');
+        selection.modelVariant.value = 'floor';
+        await nextTick();
+        expect(onChange).toHaveBeenLastCalledWith('provider/model:floor');
+        expect(selection.selectedModel.value).toBe('provider/model:thinking');
+        wrapper.unmount();
     });
 
     it('hydrates the model catalog so capability metadata is available', async () => {

@@ -9,8 +9,8 @@ These references help you choose the right type and understand its boundary. The
 | Internal chat messages, send results, and tools | `~/utils/chat/types`; [Chat types](/documentation/types/chat-types). |
 | Stored entity rows and create inputs | `~/db/schema`; [Database types](/documentation/types/database). |
 | Parsed documents and document patches | `~/db/documents`; [Database types](/documentation/types/database). |
-| Typed hook payloads and augmentation | `~/core/hooks/hook-types`; [Hook types](/documentation/types/hooks). |
-| Portable plugin contracts | `@or3/plugin-sdk`; [Plugin types](/documentation/types/plugins). |
+| Typed hook payloads and augmentation | `~/core/hooks/hook-types`; [Hook API and types](/documentation/hooks/reference#types-and-custom-names). |
+| Portable plugin contracts | `@or3/plugin-sdk`; [SDK reference](/documentation/plugins/plugin-sdk). |
 | Source controllers and registries | [Source contributor map](/documentation/start/source-map); import return types from the defining module. |
 | Provider message parts | `~/core/auth/openrouter-build`; [Build provider messages](/documentation/auth/openrouter-build). |
 | OpenRouter model metadata | `~~/shared/openrouter/types`; [Model catalog](/documentation/auth/models-service). |
@@ -26,3 +26,34 @@ Types do not grant authority or validate untrusted input. Use the existing runti
 ESLint uses the Nuxt project types with `noUncheckedIndexedAccess` enabled. Sparse record and array lookups can return `undefined`, so keep their bounds checks. Runtime JSON should enter as `unknown` and be validated before it is treated as a complete contract.
 
 The plugin compatibility ledger and declaration snapshots cover the modules listed in `planning/complete/plugin-runtime-v2/compatibility-ledger.modules.json`. Their import checks exclude environment-dependent framework utilities such as Nuxt DevTools.
+
+## Hook and extension imports
+
+| Contract | Host source import |
+| --- | --- |
+| Hook payload maps and entity/payload types | `~/core/hooks/hook-types` |
+| Typed registration helpers | `~/core/hooks/typed-hooks` |
+| Runtime hook engine | `~/core/hooks/useHooks` |
+
+Known hook types do not prove that an event is emitted. Check the
+[hook catalog](/documentation/hooks/hook-catalog) and current caller before
+subscribing. Declaration merging adds types only; see
+[Hook API and types](/documentation/hooks/reference).
+
+| Runtime or feature | Source of truth |
+| --- | --- |
+| Portable plugin context, results, UI, storage, and contributions | `@or3/plugin-sdk`; [SDK reference](/documentation/plugins/plugin-sdk). |
+| Package manifest, grants, and runtime declarations | [Manifest reference](/documentation/plugins/manifest). |
+| Trusted source host integration | `~/composables/plugins/trusted-host-context` and its workspace registry adapter. |
+| Pane app definitions | `~/composables/core/usePaneApps` (PaneAppDef). |
+| Sidebar page definitions | `~/composables/sidebar/useSidebarPages` (SidebarPageDef). |
+| Host pane/post actions | `~/plugins/pane-plugin-api.client` (PanePluginApi and Result). |
+| Workspace contribution access policy | `~~/shared/plugins/access-policy`; [plugin access policy](/documentation/cloud/plugin-access-gating). |
+
+The ambient `types/pane-plugin-api.d.ts` declaration describes the existing `window.__or3PanePluginApi` host handle; it is not the portable SDK entry point. `types/theme-plugin.d.ts` augments Nuxt/Vue's injected theme API. Import source types instead of maintaining copied declarations in a package.
+
+SDK results and host pane results use different contracts. Narrow the result you actually receive before reading success data, and handle failure codes. Types and UI access policies do not replace server authorization.
+
+For a portable package, use [Build your first plugin](/documentation/plugins/first-plugin).
+For trusted source pane/sidebar integration, use
+[the source tutorial](/documentation/start/mini-app-tutorial).

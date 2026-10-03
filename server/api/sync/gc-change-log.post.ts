@@ -98,11 +98,10 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 501, statusMessage: 'GC change log not supported by adapter' });
     }
 
+    recordSyncRequest(session.user.id, 'sync:gc');
+
     // Dispatch to adapter
     const result = await adapter.gcChangeLog(event, parsed.data);
-
-    // Record successful request for rate limiting
-    recordSyncRequest(session.user.id, 'sync:gc');
 
     return result;
 });

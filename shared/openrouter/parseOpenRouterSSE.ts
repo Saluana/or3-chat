@@ -1,3 +1,4 @@
+import type { RequestUsage } from '../chat/compaction';
 /**
  * Isomorphic OpenRouter SSE parser shared by foreground and background paths.
  * Framing follows the EventSource processing model; payload interpretation is
@@ -15,7 +16,26 @@ import {
 } from './errors';
 import { createRuntimeUuid } from '../runtime-id';
 
+export interface ProviderRequestUsage {
+    prompt_tokens: number;
+    completion_tokens: number;
+    model?: string;
+    response_id?: string;
+}
+
+/** Missing or malformed counters remain absent rather than becoming a zero measurement. */
+export function normalizeProviderRequestUsage(value: unknown): ProviderRequestUsage | undefined {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    const row = value as Record<string, unknown>;
+    const validCounter = (counter: unknown): counter is number => typeof counter === 'number' && Number.isSafeInteger(counter) && counter >= 0;
+    if (!validCounter(row.prompt_tokens) || !validCounter(row.completion_tokens)) return undefined;
+    return { prompt_tokens: row.prompt_tokens, completion_tokens: row.completion_tokens,
+        ...(typeof row.model === 'string' && row.model.trim() ? { model: row.model } : {}),
+        ...(typeof row.response_id === 'string' && row.response_id.trim() ? { response_id: row.response_id } : {}) };
+}
+
 export type ORStreamEvent =
+    | { type: 'usage'; usage: ProviderRequestUsage; requestUsage?: RequestUsage }
     | { type: 'text'; text: string }
     | { type: 'image'; url: string; final?: boolean; index?: number }
     | { type: 'reasoning'; text: string }
@@ -27,7 +47,7 @@ export type ORStreamEvent =
               function: { name: string; arguments: string };
           };
       }
-    | { type: 'done' };
+    | { type: 'done'; truncated?: true; refused?: true };
 
 /**
  * Standard OpenAI-compatible providers send deltas. A small number of adapters
@@ -57,6 +77,7 @@ interface ToolCallDelta {
 }
 interface ReasoningDetail { type?: string; text?: string; summary?: string }
 interface Delta {
+    refusal?: string;
     reasoning?: string;
     reasoning_details?: ReasoningDetail[];
     content?: string | ContentPart[];
@@ -64,7 +85,7 @@ interface Delta {
     tool_calls?: ToolCallDelta[];
     images?: ImagePart[];
 }
-interface Message { images?: ImagePart[]; content?: string | ContentPart[] }
+interface Message { images?: ImagePart[]; content?: string | ContentPart[]; refusal?: string }
 interface ProviderErrorEnvelope {
     message?: string;
     code?: string | number;
@@ -78,6 +99,9 @@ interface Choice {
     error?: ProviderErrorEnvelope | string;
 }
 interface ParsedChunk {
+    id?: unknown;
+    model?: unknown;
+    usage?: unknown;
     choices?: Choice[];
     error?: ProviderErrorEnvelope | string;
 }
@@ -144,7 +168,10 @@ export async function* parseOpenRouterSSE(
      * without one means the transport ended early and the output is partial.
      * Held in an object so closure mutation survives TypeScript narrowing.
      */
-    const termination = { verified: false };
+    const termination = { verified: false, truncated: false, refused: false };
+    let responseModel: string | undefined;
+    let responseId: string | undefined;
+    let lastUsageIdentity: string | undefined;
 
     const extractImageUrl = (part: ContentPart): string | null => {
         if (typeof part !== 'object') return null;
@@ -184,6 +211,14 @@ export async function* parseOpenRouterSSE(
         if (parsed.error) throwProviderError(parsed.error);
 
         const events: ORStreamEvent[] = [];
+        if (typeof parsed.model === 'string' && parsed.model.trim()) responseModel = parsed.model;
+        if (typeof parsed.id === 'string' && parsed.id.trim()) responseId = parsed.id;
+        const measured = normalizeProviderRequestUsage(parsed.usage);
+        if (measured) {
+            const usage = { ...measured, ...(responseModel ? { model: responseModel } : {}), ...(responseId ? { response_id: responseId } : {}) };
+            const identity = JSON.stringify(usage);
+            if (identity !== lastUsageIdentity) { events.push({ type: 'usage', usage }); lastUsageIdentity = identity; }
+        }
         const choices = parsed.choices ?? [];
         for (let choiceIndex = 0; choiceIndex < choices.length; choiceIndex += 1) {
             const choice = choices[choiceIndex];
@@ -198,9 +233,11 @@ export async function* parseOpenRouterSSE(
             }
             if (finishReason) {
                 termination.verified = true;
+                if (finishReason === 'length') termination.truncated = true;
             }
 
             const delta = choice.delta ?? {};
+            if (typeof delta.refusal === 'string' && delta.refusal.trim() || typeof choice.message?.refusal === 'string' && choice.message.refusal.trim()) termination.refused = true;
             let reasoningYielded = false;
             if (Array.isArray(delta.reasoning_details)) {
                 for (const detail of delta.reasoning_details) {
@@ -398,7 +435,7 @@ export async function* parseOpenRouterSSE(
                 if (payload === null) continue;
                 const result = parsePayload(payload);
                 if (result === 'done') {
-                    yield { type: 'done' };
+                    yield { type: 'done', ...(termination.truncated ? { truncated: true as const } : {}), ...(termination.refused ? { refused: true as const } : {}) };
                     return;
                 }
                 for (const event of result) yield event;
@@ -409,7 +446,7 @@ export async function* parseOpenRouterSSE(
                     const result = parsePayload(dataLines.join('\n'));
                     dataLines = [];
                     if (result === 'done') {
-                        yield { type: 'done' };
+                        yield { type: 'done', ...(termination.truncated ? { truncated: true as const } : {}), ...(termination.refused ? { refused: true as const } : {}) };
                         return;
                     }
                     for (const event of result) yield event;
@@ -422,7 +459,7 @@ export async function* parseOpenRouterSSE(
                         'OpenRouter stream ended before a terminal finish reason'
                     );
                 }
-                yield { type: 'done' };
+                yield { type: 'done', ...(termination.truncated ? { truncated: true as const } : {}), ...(termination.refused ? { refused: true as const } : {}) };
                 return;
             }
         }

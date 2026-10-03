@@ -11,7 +11,7 @@ export const chatOverrides = {
     },
     'button#chat.scroll-to-bottom': {
         trailing: true,
-        class: 'text-xs bg-[var(--md-surface)] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] shadow-md rounded-full border-0 p-2 flex items-center justify-center',
+        class: 'text-xs bg-[var(--md-surface)] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] shadow-md rounded-full  p-2 flex items-center justify-center',
         label: 'Scroll to bottom',
     },
     // Message action buttons: subtle gray icons

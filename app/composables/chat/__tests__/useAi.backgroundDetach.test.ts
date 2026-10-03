@@ -16,6 +16,9 @@ const fetchModelsMock = vi.fn(async (options?: { force?: boolean }) => {
     return catalogModelsRef.value;
 });
 const catalogModelsRef = ref<any[]>([{ id: 'test-model' }]);
+const resolveContextModelMock = vi.fn(async (selectedModelId: string) => ({ ok: true as const,
+    modelId: selectedModelId, selectedModelId, source: 'openrouter-live' as const,
+    metadata: { context_length: 1_048_576 } }));
 const appendMessageMock = vi.fn();
 const upsertMessageMock = vi.fn();
 const hookOnMock = vi.fn();
@@ -74,6 +77,7 @@ vi.mock('#imports', () => ({
         off: vi.fn(),
         doAction: hookDoActionMock,
         applyFilters: hookApplyFiltersMock,
+        captureFilterChain: () => () => true,
         _diagnostics: { errors: {} as Record<string, number> },
     }),
 }));
@@ -99,9 +103,16 @@ vi.mock('~/db', () => ({
 vi.mock('~/db/client', () => ({
     getDb: () => activeDb,
     getActiveWorkspaceId: () => null,
+    getWorkspaceGeneration: () => 0,
 }));
 
+const recoveryStore = new Map<string, any>();
 const dbMock = {
+    chat_request_recoveries: {
+        get: async (id: string) => recoveryStore.get(id),
+        put: async (row: any) => { recoveryStore.set(row.thread_id, row); },
+        delete: async (id: string) => { recoveryStore.delete(id); },
+    },
     threads: {
         get: async (id: string) => ({
             id,
@@ -112,16 +123,15 @@ const dbMock = {
         }),
     },
     messages: {
+        where: () => ({ equals: (threadId: string) => ({ toArray: async () =>
+            [...messageStore.values()].filter((row) => row.thread_id === threadId) }) }),
         get: async (id: string) => messageStore.get(id),
         delete: vi.fn(async (id: string) => {
             messageStore.delete(id);
         }),
     },
-    transaction: async (
-        _mode: string,
-        _tables: string[],
-        fn: () => Promise<unknown>
-    ) => await fn(),
+    transaction: async (_mode: string, ...args: unknown[]) =>
+        await (args.at(-1) as () => Promise<unknown>)(),
 };
 let activeDb = dbMock;
 
@@ -200,7 +210,8 @@ vi.mock('~/utils/chat/messages', async (importOriginal) => ({
             : ['text'],
 }));
 
-vi.mock('~/utils/chat/openrouterStream', () => ({
+vi.mock('~/utils/chat/openrouterStream', async (original) => ({
+    ...(await original<typeof import('~/utils/chat/openrouterStream')>()),
     startBackgroundStream: startBackgroundStreamMock,
     abortBackgroundJob: vi.fn(),
     abortBackgroundAdmission: abortAdmissionMock,
@@ -260,6 +271,7 @@ vi.mock('~/composables/chat/useAiSettings', () => ({
             defaultModelMode: 'lastSelected',
             fixedModelId: null,
         }),
+        captureContextPreference: async () => ({ db: activeDb, workspaceGeneration: 0, maxContextTokens: null }),
     }),
 }));
 
@@ -268,6 +280,7 @@ vi.mock('~/composables/chat/useModelStore', () => ({
         catalog: catalogModelsRef,
         favoriteModels: ref([]),
         fetchModels: fetchModelsMock,
+        resolveContextModel: resolveContextModelMock,
     }),
 }));
 
@@ -383,6 +396,7 @@ describe('useChat background detach race', () => {
         startBackgroundStreamMock.mockReset();
         backgroundJobTrackers.clear();
         messageStore.clear();
+        recoveryStore.clear();
         activeDb = dbMock;
         consumeWorkflowSend = false;
         catalogModelsRef.value = [{ id: 'test-model' }];
@@ -506,6 +520,43 @@ describe('useChat background detach race', () => {
         messagesByThreadMock.mockResolvedValue([]);
     });
 
+    it.each(['missing', 'wrong-role', 'wrong-source', 'pending', 'deleted', 'future-version', 'wrong-anchor'] as const)('rejects a partial or mismatched compacted summary (%s) before native turn writes', async (failure) => {
+        const { Or3DB } = await vi.importActual<typeof import('~/db/client')>('~/db/client');
+        const origin = new Or3DB(`native-summary-${crypto.randomUUID()}`); await origin.open();
+        await origin.threads.put({ id: 'comp-child', branch_mode: 'compacted', parent_thread_id: 'source', anchor_message_id: 'source-last', summary_message_id: 'summary',
+            status: 'ready', deleted: false, pinned: false, forked: true, clock: 1, created_at: 1, updated_at: 1 });
+        if (failure !== 'missing') await origin.messages.put({ id: 'summary', thread_id: 'comp-child', role: failure === 'wrong-role' ? 'assistant' : 'system',
+            index: 0, data: { kind: 'compaction', content: 'Historical reference', compaction: { version: failure === 'future-version' ? 2 : 1, compaction_id: 'operation',
+                source_thread_id: failure === 'wrong-source' ? 'foreign' : 'source', anchor_message_id: failure === 'wrong-anchor' ? 'other' : 'source-last', anchor_index: 0,
+                generated_at: 1, model: 'test-model', message_count: 4, prior_message_count: 0, summary_markdown: 'Historical reference', landmarks: [], history_scope: { version: 1, segments: [] } } },
+            pending: failure === 'pending', deleted: failure === 'deleted', clock: 1, created_at: 1, updated_at: 1 });
+        activeDb = origin as unknown as typeof dbMock;
+        runtimeConfigRef.value.public.backgroundStreaming.enabled = false;
+        const { useChat } = await import('~/composables/chat/useAi');
+        const scope = effectScope();
+        try {
+            const chat = scope.run(() => useChat([], 'comp-child'))!;
+            const originalCount = await origin.messages.count();
+            const result = await chat.sendMessage('Draft and attachments must remain', { model: 'test-model', file_hashes: ['draft-file'] });
+            expect(appendMessageMock.mock.calls.length, JSON.stringify(result)).toBe(0);
+            expect(result).toMatchObject({ status: 'rejected', reason: 'unavailable' });
+            expect(appendMessageMock).not.toHaveBeenCalled(); expect(runForegroundStreamLoopMock).not.toHaveBeenCalled(); expect(startBackgroundStreamMock).not.toHaveBeenCalled();
+            expect(await origin.messages.count()).toBe(originalCount); expect(await origin.threads.count()).toBe(1);
+            expect('userMessageId' in result).toBe(false);
+            // Eventual sync of a valid pair enables admission in the same warm
+            // view, without a remount or an original source row.
+            await origin.messages.put({ id: 'summary', thread_id: 'comp-child', role: 'system', index: 0,
+                data: { kind: 'compaction', content: 'Historical reference', compaction: { version: 1, compaction_id: 'operation',
+                    source_thread_id: 'source', anchor_message_id: 'source-last', anchor_index: 0, generated_at: 1, model: 'test-model',
+                    message_count: 4, prior_message_count: 0, summary_markdown: 'Historical reference', landmarks: [], history_scope: { version: 1, segments: [] } } },
+                pending: false, deleted: false, clock: 2, created_at: 1, updated_at: 2 });
+            const synced = await chat.sendMessage('Preserved draft', { model: 'test-model', file_hashes: ['draft-file'] });
+            expect('reason' in synced ? synced.reason : undefined).not.toBe('unavailable');
+            expect(appendMessageMock).toHaveBeenCalledTimes(2);
+            expect(appendMessageMock.mock.calls[0]?.[0]).toMatchObject({ data: { content: 'Preserved draft' }, file_hashes: JSON.stringify(['draft-file']) });
+
+        } finally { scope.stop(); activeDb = dbMock; origin.close(); await origin.delete(); }
+    });
     it('abandons a public retry after switching away and back while its preparation hook waits', async () => {
         runtimeConfigRef.value.public.backgroundStreaming.enabled = false;
         const rows = [
@@ -660,7 +711,7 @@ describe('useChat background detach race', () => {
         ).toBe(true);
     });
 
-    it('refreshes stale catalog metadata before preparing a chat request', async () => {
+    it('uses the reviewed context model owner and builds full input without the old reserved trimming budget', async () => {
         consumeWorkflowSend = true;
         vi.resetModules();
         const { useChat } = await import('~/composables/chat/useAi');
@@ -674,9 +725,9 @@ describe('useChat background detach race', () => {
             context_hashes: [],
         } as any);
 
-        expect(fetchModelsMock).toHaveBeenCalledWith({ force: true });
+        expect(resolveContextModelMock).toHaveBeenCalledWith('xiaomi/mimo-v2.6-pro', { signal: expect.any(AbortSignal) });
         expect(buildOpenRouterMessagesForSendMock.mock.lastCall?.[0].maxInputTokens)
-            .toBe(1_040_384);
+            .toBeUndefined();
     });
 
     it('does not register a late UI subscriber after clear() detaches the chat', async () => {

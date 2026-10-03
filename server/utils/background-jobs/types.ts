@@ -21,6 +21,7 @@ import type { CanonicalToolResult } from '~~/shared/chat/canonical-tool-transcri
 import type { ChatGenerationAdmissionEnvelope } from '~~/shared/chat/background-history';
 import type { ToolDefinition } from '~/utils/chat/types';
 import type { NormalizedStreamState } from '~~/shared/chat/normalized-stream-reducer';
+import type { RequestUsage } from '~~/shared/chat/compaction';
 
 export type BackgroundClientToolCall = {
     callId: string;
@@ -75,6 +76,7 @@ export type TerminalGenerationSnapshot = {
     content: string;
     reasoning: string;
     toolCalls?: BackgroundJob['tool_calls'];
+    usage?: RequestUsage;
     error?: string;
     completedAt: number;
 };
@@ -104,6 +106,8 @@ export interface BackgroundJob {
     content: string;
     /** Accumulated model reasoning, kept distinct from request reasoning config. */
     reasoning: string;
+    /** Last measured provider request; prompt counts are never accumulated. */
+    usage?: RequestUsage;
     /** One user-requested generation; stable across worker attempts. */
     generationId?: string;
     /** Where the canonical history write stands for this generation. */
@@ -256,6 +260,8 @@ export interface CreateJobParams {
  * - Updates are incremental and should be append-only for `contentChunk`.
  */
 export interface JobUpdate {
+    /** Validated last-request measurement, owned by the current worker lease. */
+    usage?: RequestUsage;
     /** Content chunk to append */
     contentChunk?: string;
     /** Reasoning chunk to append (distinct from request reasoning config). */

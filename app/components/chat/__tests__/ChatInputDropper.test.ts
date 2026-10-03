@@ -4,6 +4,12 @@ import { mount } from '@vue/test-utils';
 import ChatInputDropper from '../ChatInputDropper.vue';
 import { ref } from 'vue';
 import type { SendResult } from '~/utils/chat/types';
+import { useWorkspaceTabDrafts } from '~/composables/core/useWorkspaceTabDrafts';
+
+const mockEnsureAiSettingsLoaded = vi.fn().mockResolvedValue(undefined);
+vi.mock('~/composables/chat/useAiSettings', () => ({
+    useAiSettings: () => ({ settings: ref({ defaultModelVariant: 'off' }), ensureLoaded: mockEnsureAiSettingsLoaded }),
+}));
 
 // Mock VueUse core
 const mockOpen = vi.fn();
@@ -26,7 +32,7 @@ vi.mock('@vueuse/core', async () => {
             reset: mockReset,
             files: mockFiles,
         }),
-        useDropZone: (target: any, options: any) => {
+        useDropZone: (_target: unknown, options?: typeof mockDropZoneCallbacks) => {
             if (options) {
                 mockDropZoneCallbacks.onDrop = options.onDrop;
                 mockDropZoneCallbacks.onEnter = options.onEnter;
@@ -51,7 +57,7 @@ vi.mock('#imports', () => ({
     }),
     useUserApiKey: () => ({ apiKey: ref('test-key') }),
     useOpenRouterAuth: () => ({ startLogin: vi.fn() }),
-    useComposerActions: () => [],
+    useComposerActions: () => ref([]),
     useModelStore: () => ({ 
         catalog: ref([]),
         favoriteModels: ref([]),
@@ -127,6 +133,76 @@ describe('ChatInputDropper', () => {
         vi.clearAllMocks();
         mockFiles.value = null;
         mockIsOverDropZone.value = false;
+        mockEnsureAiSettingsLoaded.mockResolvedValue(undefined);
+        useWorkspaceTabDrafts().clear();
+    });
+
+    it('captures a fresh source draft when tab navigation overlaps asynchronous composer settings restoration', async () => {
+        const settings = deferred<void>();
+        mockEnsureAiSettingsLoaded.mockReturnValue(settings.promise);
+        const wrapper = mount(ChatInputDropper, {
+            props: { loading: false, threadId: 'source' },
+            attrs: { onSend: (payload: { registerResult: (result: Promise<SendResult>) => void }) => {
+                payload.registerResult(Promise.resolve({ status: 'rejected', reason: 'unavailable' }));
+            } },
+            global: { mocks: { $theme: createThemeMock() } },
+        });
+        try {
+            await wrapper.setProps({ tabId: 'source-tab' });
+            expect(mockEnsureAiSettingsLoaded).toHaveBeenCalled();
+            (wrapper.vm as unknown as { setText: (text: string) => void }).setText('Fresh source draft');
+            await wrapper.setProps({ tabId: 'child-tab', threadId: 'child' });
+            expect(useWorkspaceTabDrafts().read('source-tab')?.text).toBe('Fresh source draft');
+            settings.resolve();
+            await wrapper.setProps({ tabId: 'source-tab', threadId: 'source' });
+            await wrapper.vm.$nextTick();
+            await (wrapper.vm as unknown as { triggerSend: () => Promise<SendResult> }).triggerSend();
+            expect(wrapper.emitted('send')?.[0]?.[0]).toMatchObject({ text: 'Fresh source draft' });
+        } finally {
+            settings.resolve();
+            wrapper.unmount();
+        }
+    });
+
+    it('keeps the destination tab variant when an earlier settings restoration finishes', async () => {
+        const settings = deferred<void>();
+        mockEnsureAiSettingsLoaded.mockReturnValue(settings.promise);
+        useWorkspaceTabDrafts().write('child-tab', {
+            version: 1,
+            text: 'Child draft',
+            attachments: [],
+            largeTextBlocks: [],
+            composer: {
+                model: 'scripted',
+                modelVariant: 'nitro',
+                thinkingEnabled: false,
+                imageSettings: { quality: 'medium', numResults: 1, size: '1024x1024' },
+            },
+            updatedAt: Date.now(),
+        });
+        const wrapper = mount(ChatInputDropper, {
+            props: { loading: false, threadId: 'source' },
+            attrs: { onSend: (payload: { registerResult: (result: Promise<SendResult>) => void }) => {
+                payload.registerResult(Promise.resolve({ status: 'rejected', reason: 'unavailable' }));
+            } },
+            global: { mocks: { $theme: createThemeMock() } },
+        });
+        try {
+            await wrapper.setProps({ tabId: 'source-tab' });
+            expect(mockEnsureAiSettingsLoaded).toHaveBeenCalled();
+            await wrapper.setProps({ tabId: 'child-tab', threadId: 'child' });
+            settings.resolve();
+            await settings.promise;
+            await wrapper.vm.$nextTick();
+            await (wrapper.vm as unknown as { triggerSend: () => Promise<SendResult> }).triggerSend();
+            expect(wrapper.emitted('send')?.[0]?.[0]).toMatchObject({
+                text: 'Child draft',
+                modelVariant: 'nitro',
+            });
+        } finally {
+            settings.resolve();
+            wrapper.unmount();
+        }
     });
 
     it('triggers file dialog on button click', async () => {
@@ -164,7 +240,7 @@ describe('ChatInputDropper', () => {
         // Based on template, it has iconAttach. 
         // We can call the method directly to test the composable integration logic first.
         
-        await (wrapper.vm as any).triggerFileInput();
+        await (wrapper.vm as unknown as { triggerFileInput: () => void }).triggerFileInput();
         expect(mockOpen).toHaveBeenCalled();
     });
 

@@ -33,6 +33,8 @@ import type { ChatMessage } from '~/utils/chat/types';
 import type { ORMessage } from '~/core/auth/openrouter-build';
 import type {
     AccessDecision,
+    ChatSendPreparation,
+    ChatSendCommit,
     AttachmentEntity,
     DbCreatePayload,
     DbDeletePayload,
@@ -331,7 +333,7 @@ export interface FilesAttachInputPayload {
 // BRANCHING — payloads & helpers
 // ============================================================================
 
-export type BranchMode = 'reference' | 'copy';
+export type BranchMode = 'reference' | 'copy' | 'compacted';
 
 export interface BranchForkOptions {
     sourceThreadId: string;
@@ -542,6 +544,8 @@ export type CoreHookPayloadMap = {
     // UI/Chat Extensions
     'ui.chat.editor:filter:extensions': [unknown[]];
     'ui.chat.editor:action:before_send': [Record<string, unknown>]; // editor JSON
+    'ai.chat.send:filter:prepare': [ChatSendPreparation];
+    'ai.chat.send:filter:commit': [ChatSendCommit];
     'ai.chat.messages:filter:before_send': [
         { messages: OpenRouterMessage[] } | { messages: OpenRouterMessage[] }[]
     ];

@@ -41,7 +41,7 @@
                     "category": "Development",
                     "categoryOrder": 1,
                     "order": 0,
-                    "summary": "Install with Bun, choose a development mode, and troubleshoot without losing data."
+                    "summary": "Install with Bun, choose a development mode, set build memory limits, and launch source output with the supported runtime."
                 },
                 {
                     "name": "plugin-quickstart.md",
@@ -110,7 +110,7 @@
                     "category": "Reference",
                     "categoryOrder": 2,
                     "order": 3,
-                    "summary": "This reference covers the host application engine. useHooks() returns a TypedHookEngine; you normally do not create another engine. Installable packages use the SDK, whose permissions and runtime limits are separate."
+                    "summary": "Host hook types, filter ownership, pure native preparation and acknowledged delegated commit; SDK permissions and runtime limits remain separate."
                 },
                 {
                     "name": "hook-catalog.md",
@@ -383,6 +383,15 @@
                     "summary": "Register trusted client and server tools with owned lifecycle, runtime admission, and request authorization."
                 },
                 {
+                    "name": "manual-context-compaction.md",
+                    "path": "/utils/manual-context-compaction",
+                    "title": "Manual context compaction",
+                    "category": "Using tools",
+                    "categoryOrder": 0,
+                    "order": 1,
+                    "summary": "Manage context and compaction, compact manually or automatically at 80%, and keep links to the original conversation."
+                },
+                {
                     "name": "openrouterStream.md",
                     "path": "/utils/openrouterStream",
                     "title": "Chat streaming",
@@ -407,7 +416,7 @@
                     "category": "Source integration",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "Use centralized errors, secret scrubbing, reporting hooks, and deliberate retries."
+                    "summary": "Use centralized errors, secret scrubbing, reporting hooks, context admission recovery, and deliberate retries."
                 },
                 {
                     "name": "workspace-backup-stream.md",
@@ -431,7 +440,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Choose host, SDK, stored-row, parsed-record, and provider contracts."
+                    "summary": "Choose source and SDK types for chat, storage, hooks, and extensions without copying declarations."
                 },
                 {
                     "name": "chat-types.md",
@@ -450,24 +459,6 @@
                     "categoryOrder": 1,
                     "order": 1,
                     "summary": "Create inputs, stored rows, parsed documents, and local derived fields."
-                },
-                {
-                    "name": "hooks.md",
-                    "path": "/types/hooks",
-                    "title": "Hook types",
-                    "category": "Reference",
-                    "categoryOrder": 1,
-                    "order": 2,
-                    "summary": "Source imports and the canonical typed hook/augmentation reference."
-                },
-                {
-                    "name": "plugins.md",
-                    "path": "/types/plugins",
-                    "title": "Plugin types",
-                    "category": "Reference",
-                    "categoryOrder": 1,
-                    "order": 3,
-                    "summary": "Portable SDK contracts versus trusted host registry types."
                 }
             ]
         },
@@ -611,7 +602,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Cloud login verifies who you are; workspace membership and permissions decide what you can do. OpenRouter authorization and the deployment admin panel use separate credentials. This page explains the distinctions for both Basic Auth/SQLite "
+                    "summary": "Cloud identity, workspace permissions, session refresh and rate admission, and separate OpenRouter and deployment-admin credentials."
                 },
                 {
                     "name": "background-execution.md",
@@ -629,7 +620,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "The OR3 Notification Center provides real-time, in-app notifications for AI completions, system warnings, and custom plugin events. It works offline-first and syncs across devices when OR3 Cloud is enabled."
+                    "summary": "Use the local-first Notification Center, extend it from source, and understand user scoping and completion alerts."
                 },
                 {
                     "name": "webhooks.md",
@@ -755,7 +746,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "The OR3 Sync Layer provides offline-first, bidirectional synchronization between a workspace-scoped local Dexie database and the selected sync backend (SQLite or Convex in first-party deployments). It enables users to work offline and have "
+                    "summary": "Offline-first workspace synchronization, consistent snapshots, conflict resolution, and request admission against operator-configured rate limits."
                 },
                 {
                     "name": "storage-layer.md",
@@ -764,7 +755,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 20,
-                    "summary": "Authenticated storage writes (presign upload, commit, delete, and GC) require JSON plus x-or3-cloud-intent: mutation from browser callers. The server checks the exact origin against its effective request origin or OR3_ALLOWED_ORIGINS before"
+                    "summary": "Authenticated object storage, mutation guards, hash validation, signed links, and presign/commit admission against operator-configured rate limits."
                 },
                 {
                     "name": "plugin-access-gating.md",
@@ -782,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 22,
-                    "summary": "> This is an advanced source-development path. Managed Cloud intentionally > withholds remote Connect until its operator and staging proof are complete; > use Set up Cloud for supported beginner routes."
+                    "summary": "Advanced source CLI and browser setup: provider selection, private first-run credentials, validation, and deployment. Use Set up Cloud for supported beginner routes."
                 },
                 {
                     "name": "or3-connect.md",
@@ -824,7 +815,16 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Preserve durable sends, streaming ownership, tool authority, tab sessions, and composer drafts."
+                    "summary": "Preserve durable sends, full-context native admission, captured tool-loop policy, tab sessions and composer drafts."
+                },
+                {
+                    "name": "ai-preferences.md",
+                    "path": "/architecture/ai-preferences",
+                    "title": "AI preferences and context maximum",
+                    "category": "Architecture",
+                    "categoryOrder": 0,
+                    "order": 2,
+                    "summary": "Use model limit, custom context maximum, validation and workspace persistence; current admission boundaries."
                 }
             ]
         },
@@ -857,7 +857,7 @@
                     "category": "Using plugins",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Connect a marketplace account, use acquired releases, request administrator installation, and manage the account link."
+                    "summary": "Connect a marketplace account, page through older purchases and coverage, request administrator installation, and manage the account link."
                 },
                 {
                     "name": "first-plugin.md",

@@ -3,6 +3,52 @@ import { createServer, type Server } from 'node:http';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { runDashboardUpdateSmoke } from '../release/smoke-dashboard-update.mjs';
+import { publishedDashboardPair } from '../release/select-dashboard-fixture.mjs';
+
+describe('published dashboard fixture selection', () => {
+    const release = (version: string, minimum = '0.1.40') => ({
+        version,
+        dist: { tarball: `https://registry.npmjs.org/@or3/cloud/-/cloud-${version}.tgz`, integrity: 'sha512-fixture' },
+        or3Cloud: {
+            dashboardUpdateProtocol: 1,
+            dashboardUpdateMinimumSourceVersion: minimum,
+            imageDigest: `sha256:${'a'.repeat(64)}`,
+            operatorImageDigest: `sha256:${'b'.repeat(64)}`,
+        },
+    });
+
+    it('uses the newest compatible published source across a missing patch', () => {
+        const registry = { 'dist-tags': { latest: '0.1.72' }, versions: {
+            '0.1.38': release('0.1.38'),
+            '0.1.69': release('0.1.69'),
+            '0.1.70': release('0.1.70'),
+            '0.1.72': release('0.1.72'),
+        } };
+        expect(publishedDashboardPair(registry).source.version).toBe('0.1.70');
+        expect(publishedDashboardPair(registry).target.version).toBe('0.1.72');
+    });
+
+    it('blocks qualification instead of using a pre-dashboard source or nonexistent target', () => {
+        const registry = { 'dist-tags': { latest: '0.1.72' }, versions: {
+            '0.1.38': release('0.1.38'), '0.1.72': release('0.1.72'),
+        } };
+        expect(() => publishedDashboardPair(registry)).toThrow('No published dashboard-compatible source');
+        registry['dist-tags'].latest = '0.1.71';
+        expect(() => publishedDashboardPair(registry)).toThrow('Published dashboard target');
+    });
+
+    it('honors the target bridge and excludes missing image metadata', () => {
+        const incomplete = release('0.1.71');
+        delete (incomplete.or3Cloud as Partial<typeof incomplete.or3Cloud>).operatorImageDigest;
+        const registry = { 'dist-tags': { latest: '0.1.72' }, versions: {
+            '0.1.49': release('0.1.49'), '0.1.70': release('0.1.70'),
+            '0.1.71': incomplete, '0.1.72': release('0.1.72', '0.1.60'),
+        } };
+        expect(publishedDashboardPair(registry).source.version).toBe('0.1.70');
+        registry.versions['0.1.72'].or3Cloud.dashboardUpdateMinimumSourceVersion = '0.1.71';
+        expect(() => publishedDashboardPair(registry)).toThrow('No published dashboard-compatible source');
+    });
+});
 
 let server: Server | undefined;
 let directory: string | undefined;

@@ -69,12 +69,18 @@ export interface ChatMessageAction {
     handler: (ctx: {
         message: UiChatMessage;
         threadId?: string;
+        compaction?: { start: (anchorMessageId?: string) => Promise<void>; blockedReason?: string };
     }) => void | Promise<void>;
+    /** Read-only availability, evaluated in the owning pane. */
+    visible?: (ctx: MessageActionContext) => boolean;
+    disabled?: (ctx: MessageActionContext) => boolean;
+    disabledReason?: (ctx: MessageActionContext) => string | undefined;
     /** Optional plugin id used for workspace policy lookup. */
     pluginId?: string;
     /** Optional access policy for this action. */
     access?: PluginGatePolicy;
 }
+export type MessageActionContext = Parameters<ChatMessageAction['handler']>[0];
 
 const registry = createRegistry<ChatMessageAction>(
     '__or3MessageActionsRegistry'

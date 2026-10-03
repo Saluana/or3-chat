@@ -59,6 +59,7 @@ const dbState = vi.hoisted(() => {
         posts: createTable('id'),
         kv: createTable('id'),
         file_meta: createTable('hash'),
+        chat_request_recoveries: createTable('thread_id'),
     };
 
     const reset = () => {

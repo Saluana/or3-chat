@@ -45,9 +45,13 @@
                             :message="item"
                             :thread-id="props.threadId"
                             :retry-disabled="retryPending || loading"
+                            :compaction-action="compactionActionFor(item)"
+                            :history-retrieval-available="historyRetrievalAvailable"
                             @retry="onRetry"
                             @continue="onContinue"
                             @branch="onBranch"
+                            @view-compaction-source="onViewCompactionSource(item, $event)"
+                            @view-related-thread="onViewRelatedThread(item, $event)"
                             @edited="onEdited"
                             @begin-edit="onBeginEdit(item.id)"
                             @cancel-edit="onEndEdit(item.id)"
@@ -108,7 +112,7 @@
                     <UButton
                         v-bind="scrollToBottomButtonProps"
                         @click="scrollToBottom"
-                        class="pointer-events-auto"
+                        class="pointer-events-auto chat-scroll-to-bottom"
                     />
                 </div>
                 <div
@@ -123,12 +127,17 @@
                 </div>
                 <component
                     :is="resolveCoreChatComponent($theme.activeComponents.value['chat-input'], 'chat-input')"
-                    :loading="inputLoading"
+                    :loading="inputLoading || compaction.active.value"
                     :streaming="streamingActive"
                     :container-width="containerWidth"
                     :thread-id="currentThreadId"
                     :pane-id="paneId"
                     :tab-id="tabId"
+                    :context-revision="allMessages"
+                    :compact-thread="compactThread"
+                    :compaction-blocked-reason="threadCompactionBlockedReason"
+                    :compaction-state="compaction.state.value"
+                    @cancel-compaction="compaction.cancel()"
                     @send="onSend"
                     @model-change="onModelChange"
                     @stop-stream="onStopStream"
@@ -185,6 +194,14 @@ import { useIcon } from '~/composables/useIcon';
 import { useToast, useHooks, useChat, useRuntimeConfig, useRoute, useState } from '#imports';
 import { getMaxMessageFileHashes } from '~/db/files-util';
 import { kv } from '~/db';
+import { getDb, getActiveWorkspaceId, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
+import { liveQuery, type Subscription } from 'dexie';
+import { useThreadCompaction } from '~/composables/chat/useThreadCompaction';
+import { useAiSettings } from '~/composables/chat/useAiSettings';
+import { useModelStore } from '~/composables/chat/useModelStore';
+import { useToolRegistry } from '~/utils/chat/tool-registry';
+import { appendModelVariant, stripModelVariantSuffix } from '~~/shared/openrouter/model-variants';
+import { resolveSystemPromptText } from '~/utils/chat/useAi-internal/messageBuild';
 import {
     hydrateUserApiKeyFromKv,
     useUserApiKey,
@@ -281,6 +298,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: 'thread-selected', id: string): void;
+    (e: 'compaction-committed', target: { threadId: string; messageId: string; originThreadId: string; generation: number }): void;
+    (e: 'view-compaction-source', target: { threadId: string; messageId: string; originThreadId: string; scrollMessageId?: string; generation: number }): void;
+    (e: 'view-related-thread', target: { threadId: string; originThreadId: string; anchorMessageId: string; generation: number }): void;
     (e: 'reached-top'): void;
     (e: 'reached-bottom'): void;
     (e: 'tab-status', status: WorkspaceTabStatus): void;
@@ -622,6 +642,72 @@ const stableMessageIdentities = computed(() => {
     return identities;
 });
 const allMessages = shallowRef<UiChatMessage[]>([]);
+const compactionPreferences = useAiSettings();
+const compactionModels = useModelStore();
+const historyRegistry = useToolRegistry();
+const historyRetrievalAvailable = computed(() => {
+    const id = stripModelVariantSuffix(model.value.replace(/:thinking$/, ''));
+    const metadata = compactionModels.catalog.value.find((row) => row.id === id || row.canonical_slug === id)
+        ?? compactionModels.favoriteModels.value.find((row) => row.id === id || row.canonical_slug === id);
+    return metadata?.supported_parameters?.includes('tools') === true && historyRegistry.getEnabledDefinitions({
+        workspaceId: getActiveWorkspaceId() ?? 'local', threadId: currentThreadId.value ?? null,
+    }).some((tool) => tool.function.name === 'get_message');
+});
+const compaction = useThreadCompaction({ threadId: currentThreadId, model,
+    isBusy: () => inputLoading.value || workflowRunning.value,
+    apiKey: () => apiKey.value, isCurrent: () => props.threadId === currentThreadId.value,
+    getPreferences: async () => { await compactionPreferences.ensureLoaded(); return { ...compactionPreferences.settings.value }; },
+    resolveModelMetadata: async (selected) => {
+        const result = await compactionModels.resolveContextModel(selected);
+        return result.ok ? result.metadata : undefined;
+    },
+    getTaskSystemPrompt: (threadId) => resolveSystemPromptText({ threadId, activePromptContent: null }),
+    onCommitted: (result) => {
+        const originThreadId = result.thread.parent_thread_id;
+        if (!originThreadId) throw new Error('The saved compacted conversation has no source.');
+        emit('compaction-committed', { threadId: result.thread.id, messageId: result.summary.id,
+            originThreadId, generation: getWorkspaceGeneration() });
+    },
+});
+async function compactThread(anchorMessageId?: string) {
+    const result = await compaction.start(anchorMessageId);
+    if (!result.ok) toast.add({ title: 'Unable to compact', description: result.message, color: 'warning' });
+}
+const localCompactionIds = shallowRef<Set<string>>();
+let compactionOwnerSubscription: Subscription | undefined;
+let compactionOwnerRevision = 0;
+function bindCompactionOwners() {
+    compactionOwnerSubscription?.unsubscribe(); localCompactionIds.value = undefined;
+    const token = ++compactionOwnerRevision; const db = getDb(); const generation = getWorkspaceGeneration(); const source = currentThreadId.value;
+    if (!source) return;
+    compactionOwnerSubscription = liveQuery(() => db.messages.where('thread_id').equals(source).primaryKeys()).subscribe({
+        next: (ids) => { if (token === compactionOwnerRevision && db === getDb() && generation === getWorkspaceGeneration()) localCompactionIds.value = new Set(ids); },
+        error: () => { if (token === compactionOwnerRevision) localCompactionIds.value = undefined; },
+    });
+}
+watch(currentThreadId, bindCompactionOwners, { immediate: true });
+const stopCompactionOwners = subscribeActiveWorkspaceDb(bindCompactionOwners);
+onBeforeUnmount(() => { compactionOwnerRevision++; compactionOwnerSubscription?.unsubscribe(); stopCompactionOwners(); });
+const anchorCompactionReasons = computed(() => {
+    const reasons = new Map<string, string | undefined>(); let turns = 0; let pendingUser = false;
+    const busy = allMessages.value.some((row) => row.pending || row.toolCalls?.some((call) => !['complete', 'error'].includes(call.status)));
+    for (const row of allMessages.value) {
+        if (row.role === 'user') pendingUser = true;
+        if (row.role === 'assistant' && row.text.trim() && pendingUser) { turns++; pendingUser = false; }
+        reasons.set(row.id, compaction.blockedReason.value || (busy ? 'Wait for pending generation and tools to settle.'
+            : !localCompactionIds.value ? 'Checking the persisted source.' : !localCompactionIds.value.has(row.id)
+                ? 'Open the original conversation to compact this inherited message.'
+                : turns < 2 ? 'Compaction requires at least two settled user/assistant turns.' : undefined));
+    }
+    return reasons;
+});
+function compactionActionFor(message: UiChatMessage) {
+    return { start: compactThread, blockedReason: anchorCompactionReasons.value.get(message.id) ?? compaction.blockedReason.value };
+}
+const threadCompactionBlockedReason = computed(() => {
+    const anchor = [...allMessages.value].reverse().find((row) => localCompactionIds.value?.has(row.id));
+    return compaction.blockedReason.value ?? (anchor ? anchorCompactionReasons.value.get(anchor.id) : 'Choose a persisted conversation with settled turns.');
+});
 const rowContentRevision = ref(0);
 let renderedStableSnapshot: UiChatMessage[] | null = null;
 
@@ -703,11 +789,47 @@ type ScrollViewState = {
 
 type ScrollApi = {
     scrollToBottom?: (opts?: { smooth?: boolean }) => void;
+    scrollToItemKey?: (key: string, opts?: { align?: 'start' | 'center' | 'end'; smooth?: boolean }) => void;
     captureScrollState?: () => ScrollViewState;
     restoreScrollState?: (state?: ScrollViewState) => Promise<void>;
     refreshMeasurements?: () => void;
 };
 const scroller = ref<ScrollApi | null>(null);
+const compactionNavigation = shallowRef<{ threadId: string; messageId: string; generation: number; origin: string | undefined }>();
+function onViewRelatedThread(message: UiChatMessage, target: { threadId: string; originThreadId: string; anchorMessageId: string; generation: number }) {
+    if (currentThreadId.value !== target.originThreadId || props.threadId !== target.originThreadId
+        || getWorkspaceGeneration() !== target.generation
+        || message.id !== target.anchorMessageId && !message.toolResultMessageIds?.includes(target.anchorMessageId)
+        || !allMessages.value.some((row) => row.id === message.id)) return;
+    emit('view-related-thread', target);
+}
+function onViewCompactionSource(message: UiChatMessage, target: { threadId: string; messageId: string; originThreadId: string; scrollMessageId?: string }) {
+    const data = message.compaction;
+    if (currentThreadId.value !== target.originThreadId || props.threadId !== target.originThreadId) return;
+    if (!data || !allMessages.value.some((row) => row.id === message.id)) return;
+    const allowed = data.source_thread_id === target.threadId && data.anchor_message_id === target.messageId
+        || data.landmarks.some((landmark) => landmark.thread_id === target.threadId && landmark.message_id === target.messageId);
+    if (!allowed) return;
+    emit('view-compaction-source', { ...target, generation: getWorkspaceGeneration() });
+}
+// PageShell calls the destination pane after its normal resource activation.
+// The source identity remains in the event; this command uses the visible row.
+function scrollToMessage(target: { threadId: string; messageId: string; generation: number }) {
+    if (getWorkspaceGeneration() !== target.generation || props.threadId !== target.threadId) return;
+    compactionNavigation.value = { ...target, origin: currentThreadId.value };
+}
+watch([currentThreadId, allMessages, loading, compactionNavigation], async () => {
+    const target = compactionNavigation.value;
+    if (!target) return;
+    if (getWorkspaceGeneration() !== target.generation || currentThreadId.value !== target.threadId && currentThreadId.value !== target.origin) {
+        compactionNavigation.value = undefined; return;
+    }
+    if (loading.value || currentThreadId.value !== target.threadId || !allMessages.value.some((row) => row.id === target.messageId)) return;
+    await nextTick();
+    if (compactionNavigation.value !== target || getWorkspaceGeneration() !== target.generation || currentThreadId.value !== target.threadId) return;
+    scroller.value?.scrollToItemKey?.(target.messageId, { align: 'center', smooth: false });
+    compactionNavigation.value = undefined;
+});
 
 // Track editing state across child messages for scroll suppression (Task 5.2.2)
 const editingIds = ref<Set<string>>(new Set());
@@ -869,6 +991,7 @@ type UploadedImage = {
 };
 
 type ChatInputSendPayload = {
+    editorDoc?: Record<string, unknown>;
     text: string;
     images: UploadedImage[];
     attachments: UploadedImage[];
@@ -883,6 +1006,8 @@ type ChatInputSendPayload = {
     thinkingEnabled: boolean;
     reasoningEffort?: string | null;
     registerResult: RegisterSendResult;
+    inspectLossyRequest?: boolean;
+    lossyConfirmation?: import('~/utils/chat/lossy-request').LossyRequestPreview;
 };
 
 function waitForDurableSendAcceptance(
@@ -909,22 +1034,16 @@ function waitForDurableSendAcceptance(
         };
         const inspect = (state: ChatRequestState) => {
             if (state.status === 'idle' || state.requestId !== requestId) return;
-            if (state.status === 'persisted') {
-                finish({
-                    status: 'accepted',
-                    requestId,
-                    userMessageId: state.userMessageId,
-                });
-            } else if (state.status === 'streaming') {
+            if (state.status === 'streaming' && state.providerAccepted) {
                 finish({
                     status: 'accepted',
                     requestId,
                     userMessageId: state.userMessageId,
                     assistantMessageId: state.assistantMessageId,
                 });
-            } else if (state.status === 'terminal') {
-                finish(state.result);
             }
+            // Finalization publishes an intermediate terminal projection.
+            // The send promise owns the final reason and any lossy preview.
         };
 
         stopWatcher = watch(stateRef, inspect, { immediate: true });
@@ -939,8 +1058,8 @@ function waitForDurableSendAcceptance(
 }
 
 function onSend(payload: ChatInputSendPayload) {
-    if (loading.value || retryPending.value) return;
-    model.value = payload.model || model.value;
+    if (loading.value || retryPending.value || compaction.active.value) return;
+    model.value = appendModelVariant((payload.model || model.value).replace(/:thinking$/, ''), payload.modelVariant ?? 'off');
     const attachments = payload.attachments?.length
         ? payload.attachments
         : payload.images;
@@ -997,6 +1116,7 @@ function onSend(payload: ChatInputSendPayload) {
     const activeChat = chat.value;
     if (!activeChat) return;
     const result = activeChat.send({
+        editorDoc: payload.editorDoc,
         content: payload.text,
         model: payload.model || model.value,
         files,
@@ -1006,6 +1126,8 @@ function onSend(payload: ChatInputSendPayload) {
         thinking: !!payload.thinkingEnabled,
         reasoningEffort: payload.reasoningEffort ?? null,
         context_hashes,
+        inspectLossyRequest: payload.inspectLossyRequest,
+        lossyConfirmation: payload.lossyConfirmation,
     });
     payload.registerResult(
         result,
@@ -1021,7 +1143,7 @@ function onSend(payload: ChatInputSendPayload) {
 
 async function onRetry(messageId: string) {
     const activeChat = chat.value;
-    if (!activeChat || activeChat.loading.value || retryPending.value) return;
+    if (!activeChat || activeChat.loading.value || retryPending.value || compaction.active.value) return;
     retryPending.value = true;
     try {
         // A retry is appended after the remaining conversation. Move the
@@ -1190,7 +1312,7 @@ onBeforeUnmount(() => {
     } catch {}
 });
 
-defineExpose({ captureViewState, restoreViewState });
+defineExpose({ captureViewState, restoreViewState, scrollToMessage, compactThread });
 </script>
 
 <style>

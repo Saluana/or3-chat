@@ -18,6 +18,8 @@ Portable plugin authors should use [the SDK](/documentation/plugins/plugin-sdk) 
 | Notifications | `app/composables/notifications/useNotifications.ts` and its current service callers | [Notifications](/documentation/cloud/notifications) |
 | Theme resolution and component overrides | `app/composables/useThemeResolver.ts`, `app/composables/useThemeSelection.ts`, `app/theme/` | [Theme reference](/documentation/themes/api-reference) |
 | Search and command-palette sources | `app/core/search/` and the sidebar search callers | [Command palette](/documentation/start/command-palette) |
+| UI token estimates | `app/composables/core/useTokenizer.ts`, `app/workers/tokenizer.worker.ts` | [Context and tools](/documentation/architecture/chat-lifecycle#context-and-tools) |
+| Gallery preview URL ownership | `app/composables/core/usePreviewCache.ts`, `app/config/preview-cache.ts`, `app/pages/images/` | [Image library queries](/documentation/database/files-select) |
 
 Some names are exported through barrels or Nuxt auto-imports. Confirm the defining module and current call site rather than assuming that the filename matches the export.
 
@@ -61,6 +63,14 @@ export default defineNuxtPlugin(() => {
 ```
 
 Verify that the action appears once, opens documentation, and does not duplicate after HMR. Retain the returned owner-scoped handle: removing by ID later can remove a newer replacement registration. A component-owned registration also needs unmount cleanup. Access/visibility rules control UI availability; server authorization still belongs to the server's capability checks.
+
+Not every legacy helper returns a handle. Editor toolbar/extension, project-tree,
+and document/thread-history registration helpers currently return void and need
+their matching unregister function with an exclusive ID. Message actions,
+dashboard tiles, inspector panels, and document AI actions expose owned handles.
+Inspect the defining module before choosing cleanup; do not copy one universal
+registration interface or create another global registry. The underlying
+`app/composables/_registry.ts` owns shared sorting and registration semantics.
 
 ## Lifecycle and runtime boundaries
 

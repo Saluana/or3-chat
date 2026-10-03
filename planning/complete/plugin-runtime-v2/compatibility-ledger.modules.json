@@ -30,7 +30,7 @@
     { "source": "app/composables/sidebar/useSidebarSections.ts", "runtime": "client", "publicPaths": ["~/composables/sidebar/useSidebarSections"], "docs": ["public/_documentation/start/source-map.md"], "behaviorProfileIds": ["registry.sidebar-footer-actions", "registry.sidebar-sections"] },
     { "source": "app/composables/threads/useThreadHistoryActions.ts", "runtime": "client", "publicPaths": ["~/composables/threads/useThreadHistoryActions"], "docs": ["public/_documentation/start/source-map.md"], "behaviorProfileIds": ["registry.history-actions"] },
     { "source": "app/core/hooks/hook-keys.ts", "runtime": "client", "publicPaths": ["~/core/hooks/hook-keys"], "docs": ["public/_documentation/hooks/hook-catalog.md"] },
-    { "source": "app/core/hooks/hook-types.ts", "runtime": "client", "publicPaths": ["~/core/hooks/hook-types"], "docs": ["public/_documentation/types/hooks.md"] },
+    { "source": "app/core/hooks/hook-types.ts", "runtime": "client", "publicPaths": ["~/core/hooks/hook-types"], "docs": ["public/_documentation/hooks/reference.md"] },
     { "source": "app/core/hooks/hooks.ts", "runtime": "client", "publicPaths": ["~/core/hooks/hooks", "~/core/hooks"], "docs": ["public/_documentation/hooks/reference.md", "docs/hooks.md"] },
     { "source": "app/core/hooks/typed-hooks.ts", "runtime": "client", "publicPaths": ["~/core/hooks/typed-hooks"], "docs": ["public/_documentation/hooks/reference.md", "docs/hooks-augmentation.md"] },
     { "source": "app/core/hooks/useHooks.ts", "runtime": "client", "publicPaths": ["~/core/hooks/useHooks"], "docs": ["docs/hooks.md"] },

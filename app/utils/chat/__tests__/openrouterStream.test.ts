@@ -1,3 +1,4 @@
+import type { ORStreamEvent } from '~~/shared/openrouter/parseOpenRouterSSE';
 import { OpenRouterProviderError } from '~~/shared/openrouter/errors';
 import { presentError } from '~~/shared/errors';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -11,6 +12,8 @@ import {
     BackgroundJobPollError,
     abortBackgroundAdmission,
     abortBackgroundJob,
+    subscribeBackgroundJobStream,
+    type BackgroundJobStatus,
 } from '../openrouterStream';
 import { OpenRouterTimeoutError } from '~~/shared/openrouter/deadlines';
 
@@ -21,11 +24,12 @@ const runtimeConfigMock = {
     },
 };
 
-const parseMock = vi.fn(async function* (..._args: unknown[]) {
+const parseMock = vi.fn(async function* (..._args: unknown[]): AsyncGenerator<ORStreamEvent> {
     yield { type: 'text', text: 'hello' };
 });
 
-vi.mock('~~/shared/openrouter/parseOpenRouterSSE', () => ({
+vi.mock('~~/shared/openrouter/parseOpenRouterSSE', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('~~/shared/openrouter/parseOpenRouterSSE')>()),
     parseOpenRouterSSE: (...args: unknown[]) => parseMock(...args),
 }));
 
@@ -47,6 +51,12 @@ function createJsonResponse(body: unknown, status = 200) {
     });
 }
 
+const backgroundMeasurement = {
+    prompt_tokens: 180000, completion_tokens: 42, model: 'model-1', request_id: 'request-2', iteration: 2,
+    measured_at: 123, prefix_message_count: 5, prefix_hash: 'prefix',
+    configuration_hash: 'configuration', input_estimate_tokens: 170000,
+};
+
 describe('openrouterStream', () => {
     beforeEach(() => {
         parseMock.mockClear();
@@ -58,6 +68,132 @@ describe('openrouterStream', () => {
 
     afterEach(() => {
         vi.useRealTimers();
+    });
+
+    it.each(['context_length_exceeded', 'context_window_exceeded'] as const)('preserves %s as a permanent actionable context error without retrying', async (providerCode) => {
+        parseMock.mockImplementationOnce(async function* () {
+            throw new OpenRouterProviderError('Untrusted upstream text token=secret', { status: 400, providerCode });
+        });
+        const fetchMock = vi.fn().mockResolvedValue(createStreamResponse());
+        vi.stubGlobal('fetch', fetchMock);
+        await expect((async () => {
+            for await (const _event of openRouterStreamWithRetry({ apiKey: 'key', model: 'model-1',
+                orMessages: [{ role: 'user', content: 'Keep full input' }], modalities: ['text'] })) { /* consume */ }
+        })()).rejects.toMatchObject({ code: 'ERR_CONTEXT_FULL', retryable: false,
+            message: 'Context full — compact, edit the request, or choose a larger supported model.' });
+        expect(fetchMock).toHaveBeenCalledOnce();
+    });
+
+    it('preserves structured server context denial and sends only captured user choices to the host', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({ code: 'context_full', retryable: false }, 400));
+        vi.stubGlobal('fetch', fetchMock);
+        await expect((async () => {
+            for await (const _event of openRouterStream({ apiKey: 'key', model: 'model-1',
+                orMessages: [{ role: 'user', content: 'Keep input' }], modalities: ['text'],
+                contextPolicy: { model: { context_length: 1_000_000 }, userMaxContextTokens: 500,
+                    requestedCompletionTokens: 100, source: 'openrouter-live' } })) { /* consume */ }
+        })()).rejects.toMatchObject({ code: 'ERR_CONTEXT_FULL', retryable: false });
+        const body = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
+        expect(body._context).toEqual({ version: 1, user_max_context_tokens: 500, requested_completion_tokens: 100 });
+    });
+
+    it('preserves structured background context denial before job acceptance without transport retry', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({ code: 'context_full', error: 'Scripted capacity rejection', retryable: false }, 400));
+        vi.stubGlobal('fetch', fetchMock);
+        await expect(startBackgroundStream({ apiKey: 'key', model: 'model-1', threadId: 'thread', messageId: 'assistant',
+            history: { version: 1, kind: 'new-turn', admissionId: 'admission', generationId: 'generation', workspaceId: 'workspace',
+                threadId: 'thread', messageId: 'assistant', thread: { id: 'thread', clock: 1 },
+                userMessage: { id: 'user', thread_id: 'thread', role: 'user', clock: 1, data: { content: 'Keep complete request' } },
+                assistantMessage: { id: 'assistant', thread_id: 'thread', role: 'assistant', clock: 1, pending: true,
+                    data: { content: '', generation_id: 'generation' } } },
+            orMessages: [{ role: 'user', content: 'Keep complete request' }], modalities: ['text'] }))
+            .rejects.toMatchObject({ code: 'ERR_CONTEXT_FULL', retryable: false, backgroundAdmissionRetryable: false });
+        expect(fetchMock).toHaveBeenCalledOnce();
+    });
+
+    it.each(['server', 'direct'] as const)('classifies provider context HTTP errors on the %s route without retrying or exposing upstream text', async (route) => {
+        if (route === 'direct') localStorage.setItem('or3:server-route-available', JSON.stringify({ available: false, timestamp: Date.now() }));
+        const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({ error: {
+            code: 'context_length_exceeded', message: 'secret=upstream-private' } }, 400));
+        vi.stubGlobal('fetch', fetchMock);
+        await expect((async () => {
+            for await (const _event of openRouterStreamWithRetry({ apiKey: 'key', model: 'model-1',
+                orMessages: [{ role: 'user', content: 'Keep input' }], modalities: ['text'] })) { /* consume */ }
+        })()).rejects.toMatchObject({ code: 'ERR_CONTEXT_FULL', retryable: false,
+            message: 'Context full — compact, edit the request, or choose a larger supported model.' });
+        expect(fetchMock).toHaveBeenCalledOnce();
+    });
+
+    it.each(['poll', 'sse'] as const)('validates background request usage at the %s boundary without failing valid text', async (transport) => {
+        const payloads = [
+            { ...backgroundMeasurement, untrusted: 'drop' },
+            { ...backgroundMeasurement, prompt_tokens: -1 },
+            { prompt_tokens: 2, completion_tokens: 3 },
+            undefined,
+            { ...backgroundMeasurement, prompt_tokens: 0, completion_tokens: 0 },
+        ];
+        const statuses = payloads.map((usage) => ({ id: 'job-1', status: 'complete', threadId: 'thread',
+            messageId: 'assistant', model: 'model-1', chunksReceived: 1, startedAt: 1,
+            content: 'answer', usage }));
+        const accepted: BackgroundJobStatus[] = [];
+        if (transport === 'poll') {
+            const fetchMock = vi.fn();
+            for (const status of statuses) fetchMock.mockResolvedValueOnce(createJsonResponse(status));
+            vi.stubGlobal('fetch', fetchMock);
+            for (const _status of statuses) accepted.push(await pollJobStatus('job-1'));
+        } else {
+            let source!: { onmessage?: (event: { data: string }) => void; close: () => void };
+            class EventSourceMock {
+                onmessage?: (event: { data: string }) => void;
+                close = vi.fn();
+                constructor() { source = this; }
+            }
+            vi.stubGlobal('EventSource', EventSourceMock);
+            const onError = vi.fn();
+            try {
+                const stop = subscribeBackgroundJobStream({ jobId: 'job-1', onStatus: (status) => accepted.push(status), onError });
+                for (const status of statuses) source.onmessage?.({ data: JSON.stringify({ event: 'status', status }) });
+                expect(onError).not.toHaveBeenCalled();
+                stop();
+                expect(source.close).toHaveBeenCalledOnce();
+            } finally { vi.unstubAllGlobals(); }
+        }
+        expect(accepted.map((status) => status.content)).toEqual(payloads.map(() => 'answer'));
+        expect(accepted.map((status) => (status as BackgroundJobStatus & { usage?: unknown }).usage)).toEqual([
+            backgroundMeasurement, undefined, undefined, undefined,
+            { ...backgroundMeasurement, prompt_tokens: 0, completion_tokens: 0 },
+        ]);
+    });
+
+    it.each(['server-key', 'personal-static'] as const)('sends an admitted auxiliary reply maximum through the existing %s auth route', async (route) => {
+        runtimeConfigMock.public.ssrAuthEnabled = route === 'server-key';
+        const fetchMock = vi.fn();
+        if (route === 'personal-static') fetchMock.mockResolvedValueOnce(new Response('', { status: 404 }));
+        fetchMock.mockResolvedValue(createStreamResponse()); vi.stubGlobal('fetch', fetchMock);
+        for await (const _event of openRouterStream({ apiKey: route === 'server-key' ? null : 'scripted', model: 'captured-model',
+            orMessages: [{ role: 'user', content: 'Summary reference' }], modalities: ['text'], maxCompletionTokens: 512 })) { /* drain */ }
+        const request = fetchMock.mock.calls.at(-1)!;
+        expect(request[0]).toBe(route === 'server-key' ? '/api/openrouter/stream' : 'https://openrouter.ai/api/v1/chat/completions');
+        expect(JSON.parse(request[1].body)).toMatchObject({ max_tokens: 512, model: 'captured-model', modalities: ['text'] });
+        expect(JSON.parse(request[1].body)).not.toHaveProperty('tools'); expect(JSON.parse(request[1].body)).not.toHaveProperty('_background');
+        expect(fetchMock).toHaveBeenCalledTimes(route === 'server-key' ? 1 : 2);
+    });
+
+    it('binds final usage to the actual provider payload without leaking internal provenance into the request', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(createStreamResponse()); vi.stubGlobal('fetch', fetchMock);
+        parseMock.mockImplementationOnce(async function* () {
+            yield { type: 'text', text: 'Answer' };
+            yield { type: 'usage', usage: { prompt_tokens: 180000, completion_tokens: 42, model: 'resolved-model', response_id: 'provider-response' } };
+            yield { type: 'done' };
+        });
+        const events: ORStreamEvent[] = [];
+        for await (const event of openRouterStream({ apiKey: 'not-in-provenance', model: 'model-1', orMessages: [{ role: 'user', content: 'Task' }], modalities: ['text'] })) events.push(event);
+        const usage = events.find((event) => event.type === 'usage');
+        expect(usage).toMatchObject({ requestUsage: { prompt_tokens: 180000, completion_tokens: 42, model: 'resolved-model', request_id: 'provider-response',
+            prefix_message_count: 1, prefix_hash: expect.any(String), configuration_hash: expect.any(String), input_estimate_tokens: expect.any(Number) } });
+        expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).not.toHaveProperty('requestUsage');
+        expect(JSON.stringify(usage)).not.toContain('not-in-provenance');
+        expect(events.filter((event) => event.type !== 'usage')).toEqual([{ type: 'text', text: 'Answer' }, { type: 'done' }]);
     });
 
     it.each(['personal', 'server'] as const)('preserves canonical auth guidance from a %s HTTP error envelope', async (owner) => {

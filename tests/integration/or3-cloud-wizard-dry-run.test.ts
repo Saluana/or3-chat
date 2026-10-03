@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -16,6 +16,25 @@ describe('or3 cloud wizard dry-run flows', () => {
 
     afterEach(() => {
         process.env.OR3_CLOUD_WIZARD_HOME = previousWizardHome;
+    });
+
+    it.each(['existing', 'new'])('delivers generated first-run credentials in a private file for an %s directory', async (directory) => {
+        const root = await mkdtemp(resolve(tmpdir(), 'or3-instance-login-'));
+        const instanceDir = directory === 'new' ? resolve(root, 'new', 'chat') : root;
+        const api = new Or3CloudWizardApi();
+        const session = await api.createSession({ presetName: 'recommended', instanceDir });
+        await api.submitAnswers(session.id, { basicAuthBootstrapEmail: 'admin@example.com' });
+        const applied = await api.apply(session.id, { dryRun: false });
+        const hydrated = await api.getSession(session.id, { includeSecrets: true });
+        const credentialsPath = resolve(instanceDir, '.or3-initial-credentials');
+        const credentials = await readFile(credentialsPath, 'utf8');
+        expect(applied.writtenFiles).toContain(credentialsPath);
+        expect(credentials).toContain(`OR3_BASIC_AUTH_BOOTSTRAP_EMAIL=admin@example.com`);
+        expect(credentials).toContain(`OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD=${hydrated.answers.basicAuthBootstrapPassword}`);
+        expect(credentials).toContain(`OR3_ADMIN_PASSWORD=${hydrated.answers.adminPassword}`);
+        expect((await stat(credentialsPath)).mode & 0o777).toBe(0o600);
+        const persisted = await readFile(resolve(wizardHome, '.or3-cloud/sessions', `${session.id}.json`), 'utf8');
+        expect(persisted).not.toContain(hydrated.answers.basicAuthBootstrapPassword);
     });
 
     it('validates and applies dry-run for recommended preset', async () => {

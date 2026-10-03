@@ -2,6 +2,12 @@
 
 Public docs are task guides and supported feature references. Function signatures and return types for internal controllers stay in source TypeScript/JSDoc; the [source contributor map](start/source-map.md) identifies the important owners.
 
+These files ship with the app and are discovered through `docmap.json`.
+Repository-specific procedures, source integration notes, and dated maintenance
+evidence belong in [`docs/`](../../docs/README.md); feature plans belong in
+`planning/`. Choose one maintained home for each topic and link across those
+boundaries instead of copying a second guide.
+
 ## Add or update a page
 
 1. Read `docmap.json` and the existing feature guide before adding another page.

@@ -52,6 +52,9 @@ import {
     monitorForegroundStreamForClient,
 } from '../../utils/webhooks/foreground-stream-monitor';
 import { validateServerToolRequest } from '../../utils/chat/tool-registry';
+import { resolveServerContextPolicy, admitServerProviderBody, contextAdmissionResponse, withoutOr3RequestMetadata } from '../../utils/chat/context-admission';
+import { ChatContextAdmissionError, captureContextEnvelope } from '~~/shared/chat/context-budget';
+import { normalizeProviderResponseError } from '~~/shared/openrouter/errors';
 import { sensitiveValueMetadata } from '~~/shared/logging/sensitive-metadata';
 import {
     fetchWithResponseDeadline,
@@ -332,6 +335,10 @@ export default defineEventHandler(async (event) => {
         ) ?? (normalizeHost(host) === 'localhost' ? 'http' : 'https');
 
         try {
+            const contextPolicy = await resolveServerContextPolicy(body, apiKey, config.openrouterBaseUrl);
+            const prepared = await admitServerProviderBody(withoutOr3RequestMetadata(body), contextPolicy);
+            body = { ...body, ...prepared };
+            if (contextPolicy) body._context = captureContextEnvelope(contextPolicy);
             logBgStream('api-stream-background-start-attempt', {
                 userId,
                 workspaceId,
@@ -340,6 +347,7 @@ export default defineEventHandler(async (event) => {
             });
             const result = await startBackgroundStream({
                 body,
+                contextPolicy,
                 apiKey,
                 credentialSource: selectedClientKey ? 'personal' : 'server',
                 userId,
@@ -359,6 +367,10 @@ export default defineEventHandler(async (event) => {
 
             return result;
         } catch (err) {
+            if (err instanceof ChatContextAdmissionError) {
+                setResponseStatus(event, 400);
+                return contextAdmissionResponse(err);
+            }
             warnBgStream('api-stream-background-start-failed', {
                 userId,
                 workspaceId,
@@ -436,6 +448,8 @@ export default defineEventHandler(async (event) => {
         _toolRuntime: _toolRuntime,
         _streamedFieldMode: _streamedFieldMode,
         _history: _history,
+        _clientDeviceId: _clientDeviceId,
+        _context: _context,
         ...providerBody
     } = body;
 
@@ -447,6 +461,17 @@ export default defineEventHandler(async (event) => {
         logBgStream('api-stream-foreground-client-closed', {});
         ac.abort();
     });
+
+    try {
+        const policy = await resolveServerContextPolicy(body, apiKey, config.openrouterBaseUrl, ac.signal);
+        await admitServerProviderBody(providerBody, policy, ac.signal);
+    } catch (error) {
+        if (error instanceof ChatContextAdmissionError) {
+            setResponseStatus(event, 400);
+            return contextAdmissionResponse(error);
+        }
+        throw error;
+    }
 
     // Req 2: Proxy POST to OpenRouter with Accept: text/event-stream
     let upstream: Response;
@@ -514,9 +539,8 @@ export default defineEventHandler(async (event) => {
         setResponseStatus(event, upstream.status);
         const retryAfterMs = parseRetryAfter(upstream.headers.get('retry-after'));
         if (retryAfterMs !== undefined) setHeader(event, 'Retry-After', Math.ceil(retryAfterMs / 1000));
-        return publicErrorEnvelope({ status: upstream.status, source: 'provider',
-            credentialSource: selectedClientKey ? 'personal' : 'server',
-            providerCode: upstream.status, retryAfterMs });
+        return publicErrorEnvelope({ ...normalizeProviderResponseError(respText, upstream.status, {
+            credentialSource: selectedClientKey ? 'personal' : 'server' }), retryAfterMs });
     }
 
     setHeader(event, 'X-OR3-Credential-Source', selectedClientKey ? 'personal' : 'server');

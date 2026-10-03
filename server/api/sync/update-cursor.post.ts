@@ -77,11 +77,10 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
     }
 
+    recordSyncRequest(session.user.id, 'sync:cursor');
+
     // Dispatch to adapter
     await adapter.updateCursor(event, parsed.data);
-
-    // Record successful request for rate limiting
-    recordSyncRequest(session.user.id, 'sync:cursor');
 
     return { ok: true };
 });

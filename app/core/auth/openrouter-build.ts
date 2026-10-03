@@ -419,37 +419,12 @@ type InlineImageCandidate = {
 
 const INLINE_IMAGE_PREFIX = '__or3_inline_image__';
 
-// Build OpenRouter messages with hydrated images.
-/**
- * Purpose:
- * Build OpenRouter/OpenAI-compatible message array from local chat records.
- *
- * Behavior:
- * - Converts string content to a text part
- * - Hydrates `file_hashes` and supported image refs into `data:image/*` URLs
- * - Enforces image inclusion policy, dedupe, and max image count
- *
- * Constraints:
- * - Hydration uses an in-memory global LRU cache to avoid repeated blob conversions
- * - Remote and blob URLs are fetched and converted with size and timeout guards
- */
-export async function buildOpenRouterMessages(
-    messages: ChatMessageLike[],
-    opts: BuildOptions = {}
-): Promise<ORMessage[]> {
-    const {
-        maxImageInputs = DEFAULT_MAX_IMAGE_INPUTS,
-        dedupeImages = true,
-        imageInclusionPolicy = 'all',
-        recentWindow = 12,
-        filterIncludeImages,
-        debug = false,
-    } = opts;
-
-    if (debug) {
-        // Debug logging suppressed (begin)
-    }
-
+/** Select media references without loading bytes; advisory preview shares the send policy. */
+export async function selectOpenRouterImageCandidates(
+    messages: ChatMessageLike[], opts: BuildOptions = {}
+) {
+    const { maxImageInputs = DEFAULT_MAX_IMAGE_INPUTS, dedupeImages = true,
+        imageInclusionPolicy = 'all', recentWindow = 12, filterIncludeImages } = opts;
     // Determine candidate messages for image inclusion under policy.
     let candidateMessages: number[] = [];
     if (imageInclusionPolicy === 'all') {
@@ -530,10 +505,6 @@ export async function buildOpenRouterMessages(
         }
     }
 
-    if (debug) {
-        // Debug logging suppressed (candidates)
-    }
-
     // Optional external filter
     let filtered = hashCandidates;
     if (filterIncludeImages) {
@@ -555,9 +526,28 @@ export async function buildOpenRouterMessages(
         selected.push(c);
     }
 
-    if (debug) {
-        // Debug logging suppressed (selected)
-    }
+    return { selected, inlineImageCandidates };
+}
+
+// Build OpenRouter messages with hydrated images.
+/**
+ * Purpose:
+ * Build OpenRouter/OpenAI-compatible message array from local chat records.
+ *
+ * Behavior:
+ * - Converts string content to a text part
+ * - Hydrates `file_hashes` and supported image refs into `data:image/*` URLs
+ * - Enforces image inclusion policy, dedupe, and max image count
+ *
+ * Constraints:
+ * - Hydration uses an in-memory global LRU cache to avoid repeated blob conversions
+ * - Remote and blob URLs are fetched and converted with size and timeout guards
+ */
+export async function buildOpenRouterMessages(
+    messages: ChatMessageLike[],
+    opts: BuildOptions = {}
+): Promise<ORMessage[]> {
+    const { selected, inlineImageCandidates } = await selectOpenRouterImageCandidates(messages, opts);
 
     // Group selected hashes by message index for convenient inclusion
     const byMessageIndex = new Map<number, BuildImageCandidate[]>();
@@ -760,7 +750,7 @@ export async function buildOpenRouterMessages(
         });
     }
 
-    if (debug) {
+    if (opts.debug) {
         // Debug logging suppressed (done)
     }
 

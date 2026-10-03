@@ -156,7 +156,7 @@ describe('derived index maintenance', () => {
         const db = new Or3DB(name);
         databases.push(db);
         await db.open();
-        expect(db.verno).toBe(20);
+        expect(db.verno).toBe(24);
         expect(await db.snapshot_staging.count()).toBe(0);
 
         const storedActive = await db.posts.get('doc-active');
@@ -634,7 +634,7 @@ describe('derived index maintenance', () => {
         const db = new Or3DB(name);
         databases.push(db);
         await db.open();
-        expect(db.verno).toBe(20);
+        expect(db.verno).toBe(24);
         if (sourceVersion >= 18) expect(await db.snapshot_staging.get('__active__')).toEqual(sentinel);
 
         // IDs, revisions, attempts, statuses, and payloads are preserved.

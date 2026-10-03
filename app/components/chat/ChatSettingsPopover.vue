@@ -136,6 +136,11 @@
                 {{ promptError }}
             </p>
 
+            <ChatMemorySettings v-if="contextState" :state="contextState" :thread-id="threadId"
+                :compaction-state="compactionState" :blocked-reason="compactionBlockedReason"
+                @compact="emit('compact')" @cancel="emit('cancel-compaction')"
+                @close="emit('close')" />
+
             <p class="chat-settings-heading" aria-hidden="true">Options</p>
 
             <div class="chat-settings-options">
@@ -398,6 +403,7 @@
 </template>
 
 <script setup lang="ts">
+import ChatMemorySettings from './ChatMemorySettings.vue';
 import { computed, nextTick, ref, watch } from 'vue';
 import { useIcon } from '~/composables/useIcon';
 import { useToolRegistry } from '~/utils/chat/tools-public';
@@ -441,10 +447,14 @@ const props = defineProps<{
     threadId?: string;
     paneId?: string;
     promptSelectionRevision?: number;
+    contextState?: ReturnType<typeof import('~/composables/chat/useContextPreview').useContextPreview>['state']['value'];
+    compactionState?: import('~/composables/chat/useThreadCompaction').ThreadCompactionState;
+    compactionBlockedReason?: string;
 }>();
 
 const emit = defineEmits<{
     (e: 'close'): void;
+    (e: 'compact' | 'cancel-compaction'): void;
     (e: 'open-system-prompts'): void;
     (e: 'open-model-catalog'): void;
     (e: 'pending-prompt-selected', id: string): void;
@@ -972,6 +982,10 @@ const modelCatalogButtonProps = computed(() => {
     min-height: 0;
     overflow-y: auto;
     padding: 0.75rem;
+}
+
+.chat-settings-body > * {
+    flex-shrink: 0;
 }
 
 .chat-settings-view-enter {

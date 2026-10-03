@@ -57,10 +57,28 @@ based upgrades. It remains available through the application repository's
    - updating target env file (`.env` by default) with non-destructive merge
    - creating timestamped backup files before write (unless disabled)
    - generating `or3.providers.generated.json` from selected providers only
+   - saving first-run login credentials to a private `.or3-initial-credentials` file (mode `0600`)
 10. Optionally sets Convex backend env vars for Clerk + Convex stacks.
 11. Optionally runs deploy commands (`bun install`, `bun run dev:ssr` or `bun run build`).
 
 For managed installation use `npx @or3/cloud init --local` or the public-domain route in [Set up Cloud](/documentation/cloud/setup). Contributors start this checkout with `bun run dev` or `bun run dev:ssr`.
+
+## Save your first-run login
+
+The recommended self-hosted preset generates a password for the admin email
+you enter. After either wizard saves settings, the target project contains
+`.or3-initial-credentials` with the final login and admin dashboard credentials.
+The file is readable only by its owner and excluded from Git and Docker build
+contexts. Move the credentials to a password manager, then delete the file.
+Dry runs create no credentials file.
+
+The browser review shows the login after **Save Settings** and **Apply + Deploy**.
+After local deployment, it keeps this screen open so you can save the password,
+then use **Open OR3 in a new tab** to sign in. Keep the setup terminal open until
+you have saved the login; press Ctrl+C there to close the wizard server.
+The browser wizard runs in a temporary workspace, so writing target settings
+and installing providers do not interrupt its deployment request. Its temporary
+workspace is removed when the wizard server exits.
 
 ## Commands
 
@@ -140,6 +158,13 @@ Runs deploy for the last session (or specific `--session <id>`):
 - prod-build: `bun install`, `bun run build` (then run `bun run preview`)
 
 ## Environment Variables Written
+
+Disabling conversation sync stops transfers between devices. When accounts are
+enabled, the selected sync provider still supplies the workspace store used by
+sign-in and account provisioning. Its provider selection, runtime and connection
+fields remain available, validated, installed and saved even with sync disabled.
+For example, a custom SQLite workspace database path is preserved. Browser-only
+mode with accounts and sync disabled does not activate this store.
 
 The wizard writes canonical runtime env keys that OR3 already consumes:
 

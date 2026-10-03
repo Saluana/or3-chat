@@ -47,6 +47,11 @@ export interface ThemeDefinition {
 The middle width and radius fields remain the compatibility defaults. Omitted
 outer tiers inherit from `borderWidth` or `borderRadius`, respectively.
 
+The compiler emits `--md-border-width-subtle`, `--md-border-width`,
+`--md-border-width-strong`, `--md-border-radius-small`, `--md-border-radius`, and
+`--md-border-radius-large`. Source controls should consume these tokens with
+their existing fallbacks instead of copying the current theme's numeric values.
+
 - When `customComponents` is non-empty, `componentContractVersion` must match
   the current contract version (`1`). A missing version warns; an incompatible
   version fails validation. See [Replace app components](/documentation/themes/component-overrides).
@@ -181,6 +186,24 @@ The generated variables are:
 
 The globally user-controlled `--app-focus-ring-width` is separate from the
 theme DSL and is constrained to 1–4px.
+
+### ThemeBackgroundLayer
+
+Each background slot accepts these fields:
+
+| Field | Behavior |
+| --- | --- |
+| `image` | URL, `internal-file://<hash>` token, or null |
+| `color` | Optional CSS background color |
+| `opacity` | Clamped to 0–1 at runtime |
+| `repeat` | `repeat`, `no-repeat`, `repeat-x`, or `repeat-y` |
+| `size` | CSS background size such as `150px` or `auto 100%` |
+| `fit` | `cover` or `contain`; takes precedence over `size` |
+
+The source contract is `app/theme/_shared/types.ts`. See
+[Background layers](/documentation/themes/styling#background-layers) for authoring
+and [personal background images](/documentation/themes/customize#background-images)
+for user uploads.
 
 ### ThemeBackgrounds
 
@@ -369,6 +392,60 @@ Resolves a semantic icon token to a concrete icon name for the active theme:
 import { useIcon } from '~/composables/useIcon';
 const icon = useIcon('chat.send'); // computed<string>
 ```
+
+Create the computed during component setup. Read `icon.value` in script and
+bind `icon` in a Vue template, where top-level refs are unwrapped. Tokens are
+typed by `IconToken` in `app/config/icon-tokens.ts`; add a host token there before
+using it in source controls. Theme maps use `IconMap` from
+`app/theme/_shared/icon-registry.ts` and fall back to `DEFAULT_ICONS` for omitted
+tokens. Let the theme loader register maps; theme authors do not need a second
+registration plugin. See [icon authoring](/documentation/themes/styling#icons).
+
+### useUserThemeOverrides
+
+`app/core/theme/useUserThemeOverrides.ts` manages browser-local personal
+appearance. Create it during client component setup or client Nuxt plugin
+initialization: its first browser call resolves the Nuxt theme plugin. It is a
+shared browser store, not request-scoped SSR state or a portable SDK API.
+
+| Member | Behavior |
+| --- | --- |
+| `overrides` | Computed overrides for the active light/dark mode |
+| `light`, `dark`, `activeMode` | Shared refs; use the methods below to change preferences |
+| `set(patch)` | Validates and deep-merges a partial `UserThemeOverrides` into the active mode |
+| `reset(mode?)`, `resetAll()` | Discards the chosen mode's customizations or both modes |
+| `switchMode(mode)` | Changes the active mode and asks the theme plugin to apply it |
+| `reapply()` | Schedules merged appearance application and persistence |
+
+`UserThemeOverrides` is defined in `app/core/theme/user-overrides-types.ts`.
+Colors, backgrounds, shape, density, and elevation have `enabled` switches;
+setting their values alone does not enable those groups. Typography values apply
+directly. For example, inside a client component's setup:
+
+```ts
+import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
+
+const personalTheme = useUserThemeOverrides();
+function increaseFont() {
+  const current = personalTheme.overrides.value.typography?.baseFontPx ?? 20;
+  personalTheme.set({
+    typography: { baseFontPx: Math.min(current + 1, 24) },
+  });
+}
+```
+
+Appearance application is batched and localStorage persistence is delayed by
+50ms. A successful `set()` call does not confirm durable storage; quota failures
+can still prevent saving. Light/dark override keys are listed in
+[persistence](/documentation/themes/architecture#persistence). Global focus
+width and motion preferences have a separate accessibility owner. The store's
+HMR teardown stops its watcher/observer and revokes owned background URLs.
+
+`ui.reducePatternsInHighContrast` caps explicitly configured workspace
+base/overlay and sidebar opacities at 0.04 while a high-contrast mode is active.
+Saved background preferences use `internal-file://<hash>` tokens; the runtime
+owns their temporary object URLs. See
+[background images](/documentation/themes/customize#background-images).
 
 ### useThemeSelection
 

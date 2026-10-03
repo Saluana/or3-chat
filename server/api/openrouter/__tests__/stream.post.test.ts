@@ -12,6 +12,23 @@ const requireCanMock = vi.fn();
 const startBackgroundStreamMock = vi.fn();
 const monitorForegroundStreamForClientMock = vi.fn((params) => params.stream);
 const backgroundStreamingAvailableMock = vi.fn();
+const catalogBoundary = vi.hoisted(() => ({ capacity: 1_000_000, calls: 0 }));
+
+vi.mock('~~/shared/openrouter', async (original) => ({
+    ...await original<typeof import('~~/shared/openrouter')>(),
+    createOpenRouterClient: () => ({ models: { list: async () => ({
+        async *[Symbol.asyncIterator]() {
+            catalogBoundary.calls++;
+            // The selected record is on a later SDK page.
+            for (const id of ['unrelated/model', 'test/model']) yield { result: { data: [{
+                id, name: id, canonicalSlug: id, contextLength: catalogBoundary.capacity,
+                architecture: { inputModalities: ['text'], outputModalities: ['text'] },
+                topProvider: { contextLength: catalogBoundary.capacity, maxCompletionTokens: 4096, isModerated: false },
+                pricing: { prompt: '0', completion: '0' }, supportedParameters: ['tools'],
+            }] } };
+        },
+    }) } }),
+}));
 
 vi.mock('#imports', () => ({ useRuntimeConfig: () => runtimeConfig }));
 
@@ -110,6 +127,7 @@ beforeAll(async () => {
 
 describe('POST /api/openrouter/stream credential authorization', () => {
     beforeEach(() => {
+        catalogBoundary.capacity = 1_000_000; catalogBoundary.calls = 0;
         vi.unstubAllGlobals();
         vi.stubGlobal('defineEventHandler', (value: unknown) => value);
         vi.stubGlobal('readBody', readBodyMock);
@@ -164,6 +182,62 @@ describe('POST /api/openrouter/stream credential authorization', () => {
                 })
             )
         );
+    });
+
+    it('rejects an oversized native envelope using independent catalog capacity instead of forged client facts', async () => {
+        catalogBoundary.capacity = 100;
+        readBodyMock.mockResolvedValue({ model: 'test/model', stream: true,
+            messages: [{ role: 'user', content: 'Keep every source turn. '.repeat(100) }],
+            _context: { version: 1, user_max_context_tokens: null, requested_completion_tokens: null,
+                model_context_tokens: 9_000_000 } });
+        expect(await handler(makeEvent())).toMatchObject({ code: 'context_full', retryable: false });
+        expect(catalogBoundary.calls).toBe(1); expect(fetch).not.toHaveBeenCalled();
+        expect(startBackgroundStreamMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps unknown server capacity explicit and recoverable without an application fallback', async () => {
+        catalogBoundary.capacity = 0;
+        readBodyMock.mockResolvedValue({ model: 'test/model', stream: true, messages: [{ role: 'user', content: 'Draft' }],
+            _context: { version: 1, user_max_context_tokens: null, requested_completion_tokens: null } });
+        expect(await handler(makeEvent())).toMatchObject({ code: 'model_metadata_unavailable', retryable: false });
+        expect(fetch).not.toHaveBeenCalled(); expect(startBackgroundStreamMock).not.toHaveBeenCalled();
+    });
+
+    it('strips the native context envelope while preserving full provider messages and default reply capacity', async () => {
+        const text = 'Source text '.repeat(50_000);
+        readBodyMock.mockResolvedValue({ model: 'test/model', stream: true, messages: [{ role: 'user', content: text }],
+            _context: { version: 1, user_max_context_tokens: null, requested_completion_tokens: null } });
+        await handler(makeEvent());
+        expect(fetch).toHaveBeenCalledOnce();
+        const body = JSON.parse(vi.mocked(fetch).mock.calls[0]![1]!.body as string);
+        expect(body.model).toBe('test/model'); expect(body.max_tokens).toBe(4096);
+        expect(body.messages).toHaveLength(1); expect(body.messages[0].content === text).toBe(true);
+        expect(body).not.toHaveProperty('_context'); expect(catalogBoundary.calls).toBe(1);
+    });
+
+    it('rejects background context overflow before durable job admission', async () => {
+        readBodyMock.mockResolvedValue({ model: 'test/model', messages: [{ role: 'user', content: 'full source '.repeat(100) }],
+            _background: true, _threadId: 'thread-1', _messageId: 'message-1',
+            _context: { version: 1, user_max_context_tokens: 100, requested_completion_tokens: null } });
+        expect(await handler(makeEvent())).toMatchObject({ code: 'context_full', retryable: false });
+        expect(fetch).not.toHaveBeenCalled(); expect(startBackgroundStreamMock).not.toHaveBeenCalled();
+    });
+
+    it.each([0, -1, 1.5, 'invalid'])('rejects malformed provider reply maximum %s even when the native envelope requests the default', async (max_tokens) => {
+        readBodyMock.mockResolvedValue({ model: 'test/model', max_tokens, messages: [{ role: 'user', content: 'Draft' }],
+            _context: { version: 1, user_max_context_tokens: null, requested_completion_tokens: null } });
+        expect(await handler(makeEvent())).toMatchObject({ code: 'invalid_output_limit', retryable: false });
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('passes only canonical captured choices into durable background admission', async () => {
+        readBodyMock.mockResolvedValue({ model: 'test/model', messages: [{ role: 'user', content: 'Draft' }],
+            _background: true, _threadId: 'thread-1', _messageId: 'message-1',
+            _context: { version: 1, user_max_context_tokens: 500, requested_completion_tokens: 100,
+                model_context_tokens: 9_000_000, forged_configuration: 'discard' } });
+        expect(await handler(makeEvent())).toMatchObject({ jobId: 'job-1' });
+        expect(startBackgroundStreamMock.mock.calls[0]?.[0].body._context)
+            .toEqual({ version: 1, user_max_context_tokens: 500, requested_completion_tokens: 100 });
     });
 
     it('rejects anonymous use of the managed key before contacting OpenRouter', async () => {

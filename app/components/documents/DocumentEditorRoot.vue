@@ -1,5 +1,5 @@
 <template>
-    <div ref="rootElement" v-theme="'document.editor'" class="document-editor-root" data-context="document">
+    <div ref="rootElement" v-theme="'document.editor'" class="document-editor-root" data-context="document" :inert="externalWrite">
         <div
             v-theme="'document.toolbar'"
             class="editor-toolbar document-editor-toolbar"
@@ -287,19 +287,13 @@ import { onClickOutside } from '@vueuse/core';
 import { Editor, EditorContent, type JSONContent } from '@tiptap/vue-3';
 import { Selection } from '@tiptap/pm/state';
 import { BubbleMenu } from '@tiptap/vue-3/menus';
-import StarterKit from '@tiptap/starter-kit';
-import { Placeholder } from '@tiptap/extensions/placeholder';
-import { TableKit } from '@tiptap/extension-table';
-import { TaskItem, TaskList } from '@tiptap/extension-list';
 import ToolbarButton from './ToolbarButton.vue';
 import DocumentInspector from './DocumentInspector.vue';
 import DocumentTableToolbar from './DocumentTableToolbar.vue';
 import { useIcon } from '~/composables/useIcon';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import AutocompleteState from '~/plugins/EditorAutocomplete/state';
-import { Or3DocumentImage } from '~/extensions/or3-document-image';
-import { DocumentAiHunks } from '~/plugins/DocumentAiHunks/TiptapExtension';
-import { flush, loadDocument, setDocumentContent, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
+import { acceptCommittedDocument, flush, loadDocument, setDocumentContent, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { getDb, subscribeActiveWorkspaceDb } from '~/db/client';
 import {
     registerDocumentEditorSession,
@@ -324,9 +318,8 @@ import {
     useEditorToolbarButtons,
     type EditorToolbarButton,
 } from '~/composables/editor/useEditorToolbar';
-import { loadEditorExtensions } from '~/composables/editor/useEditorExtensionLoader';
-import { listEditorExtensions, listEditorMarks, listEditorNodes } from '~/composables/editor/useEditorNodes';
 import { useHooks } from '~/core/hooks/useHooks';
+import { loadDocumentEditorExtensions } from '~/utils/documents/document-editor-schema';
 import { createOrRefFile } from '~/db/files';
 import { createDocumentRevision, type CompleteDocumentRevision } from '~/db/document-revisions';
 import type { TipTapDocument } from '~/types/database';
@@ -384,6 +377,7 @@ const rootElement = ref<HTMLElement>();
 const editorScroll = ref<HTMLElement>();
 const state = computed(() => useDocumentState(props.documentId, editorDb.value));
 const titleDraft = ref('');
+const externalWrite = ref(false);
 const capturedContent = ref<TipTapDocument>({
     type: 'doc',
     content: [{ type: 'paragraph' }],
@@ -443,8 +437,14 @@ function captureContent(id = props.documentId, db = editorDb.value): void {
     if (captureTimer) clearTimeout(captureTimer);
     captureTimer = undefined;
     const json = current.getJSON();
+    // A buffer that never changed is not a new edit merely because another pane committed.
+    const unchangedBuffer = JSON.stringify(json) === JSON.stringify(capturedContent.value);
     capturedContent.value = json;
     setSerializedSize(new TextEncoder().encode(JSON.stringify(json)).byteLength);
+    if (unchangedBuffer) return;
+    const currentState = useDocumentState(id, db);
+    if (JSON.stringify(json) === JSON.stringify(currentState.pendingContent !== undefined
+        ? currentState.pendingContent : currentState.record?.content)) return;
     setDocumentContent(id, json, db);
 }
 
@@ -592,25 +592,11 @@ async function insertFiles(files: File[]) {
 }
 
 async function makeEditor(isCurrent: () => boolean) {
-    const loaded = await loadEditorExtensions(listEditorNodes(), listEditorMarks(), listEditorExtensions());
+    const extensions = await loadDocumentEditorExtensions();
     if (!isCurrent()) return;
     editor.value?.destroy();
     editor.value = new Editor({
-        extensions: [
-            StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
-            TaskList,
-            TaskItem.configure({ nested: true }),
-            TableKit.configure({ table: { resizable: true } }),
-            Or3DocumentImage,
-            DocumentAiHunks,
-            Placeholder.configure({
-                placeholder: ({ node }) => (node.type.name === 'heading' ? 'Heading' : "Write, or press '/' for commands…"),
-                showOnlyCurrent: true,
-            }),
-            ...loaded.extensions,
-            ...loaded.nodes,
-            ...loaded.marks,
-        ],
+        extensions,
         content: capturedContent.value,
         autofocus: false,
         editorProps: {
@@ -777,6 +763,7 @@ function registerActiveSession(id: string): void {
     const db = editorDb.value;
     unregisterSession = registerDocumentEditorSession({
         documentId: id,
+        originDb: db,
         paneId: props.paneId,
         tabId: props.tabId,
         captureContent: () => captureContent(id, db),
@@ -785,6 +772,33 @@ function registerActiveSession(id: string): void {
         restoreViewState: (saved, options) =>
             restoreDocumentViewState(id, saved, options),
         getChatContext: (requestId) => ai.getChatContext(requestId),
+        getDocumentSnapshot: () => ({ title: titleDraft.value, content: normalizedContent(editor.value?.getJSON() ?? capturedContent.value) }),
+        beginExternalWrite: (expected) => {
+            if (didUnmount || editorDb.value !== db || props.documentId !== id || externalWrite.value
+                || JSON.stringify({ title: titleDraft.value, content: normalizedContent(editor.value?.getJSON() ?? capturedContent.value) }) !== JSON.stringify(expected)) {
+                throw new Error('This document changed. Update the proposal from a new read.');
+            }
+            externalWrite.value = true;
+            editor.value?.setEditable(false, false);
+            if (captureTimer) clearTimeout(captureTimer);
+            captureTimer = undefined;
+            return () => {
+                externalWrite.value = false;
+                if (!didUnmount && editorDb.value === db && props.documentId === id) editor.value?.setEditable(true, false);
+            };
+        },
+        acceptExternalWrite: (row) => {
+            if (didUnmount || editorDb.value !== db || props.documentId !== id) return;
+            const content = normalizedContent(JSON.parse(row.content) as TipTapDocument);
+            acceptCommittedDocument({ id: row.id, title: row.title, content, created_at: row.created_at,
+                updated_at: row.updated_at, deleted: row.deleted, file_hashes: row.file_hashes }, db);
+            titleDraft.value = row.title;
+            capturedContent.value = content;
+            editor.value?.commands.setContent(content, { emitUpdate: false, errorOnInvalidContent: true });
+            contentVersion.value += 1;
+            setSerializedSize(new TextEncoder().encode(row.content).byteLength);
+            refresh();
+        },
         executeChatTool: (name, argsJson, requestId) =>
             ai.executeChatTool(name, argsJson, requestId),
     });
@@ -803,6 +817,12 @@ async function loadActiveDocument(id: string) {
     contentVersion.value = 0;
     await makeEditor(isCurrent);
     if (!isCurrent()) return;
+    // Lazy extension loading can cross a committed Apply. Use the current origin buffer
+    // before registering, then the session lease covers writes still in progress.
+    titleDraft.value = state.value.pendingTitle ?? state.value.record?.title ?? '';
+    capturedContent.value = normalizedContent(state.value.pendingContent !== undefined
+        ? state.value.pendingContent : state.value.record?.content);
+    editor.value?.commands.setContent(capturedContent.value, { emitUpdate: false, errorOnInvalidContent: true });
     loadedDocumentId = id;
     registerActiveSession(id);
     emit('ready', id);

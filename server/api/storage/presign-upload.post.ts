@@ -151,6 +151,8 @@ export default defineEventHandler(async (event) => {
         requireFileKindCapability(body.data.file_kind_capability);
     }
 
+    recordSyncRequest(userId, 'storage:upload');
+
     // Optional per-workspace storage quota enforcement
     const workspaceQuotaBytes = toPositiveFiniteNumber(
         storageConfig?.workspaceQuotaBytes
@@ -193,7 +195,6 @@ export default defineEventHandler(async (event) => {
         workspaceQuotaBytes,
     });
 
-    recordSyncRequest(userId, 'storage:upload');
     recordUploadStart();
 
     return {

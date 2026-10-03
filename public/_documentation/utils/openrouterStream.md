@@ -37,6 +37,19 @@ the full tool name/arguments in each event.
 only until the first event reaches its consumer. After output starts, errors
 propagate so a retry cannot silently duplicate already displayed content.
 
+Native chat supplies a captured `contextPolicy` to the complete-body admission
+helper. It preserves every selected message and accounts for tools and request
+configuration. The OR3 server receives only versioned user choices in `_context`,
+resolves the selected model through the SDK catalog, and validates before
+provider dispatch or durable job admission. Direct OpenRouter requests omit
+the envelope. Callers without a captured policy retain their legacy contract;
+the unbound native continuation helper rejects missing policy explicitly.
+
+An explicit provider `context_length_exceeded` or `context_window_exceeded`
+machine code becomes permanent `ERR_CONTEXT_FULL`. Native outcomes report
+`context_full`; recovery copy suggests compaction, editing, or a larger supported
+model. No context failure triggers trimmed input or an automatic retry.
+
 ## Background jobs
 
 `startBackgroundStream()` posts `_background: true`, the originating thread

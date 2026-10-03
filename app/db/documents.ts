@@ -309,8 +309,21 @@ export async function createDocumentInDb(
     db: Or3DB,
     input: CreateDocumentInput = {}
 ): Promise<DocumentRecord> {
+    const prepared = await prepareDocumentCreate(input);
+    await dbTry(
+        () => putDocumentPostRow(db, prepared.row),
+        { op: 'write', entity: 'posts', action: 'createDocument' },
+        { rethrow: true }
+    );
+    await prepared.afterCommit();
+    return rowToRecord(prepared.row);
+}
+
+/** Prepare hooks outside a transaction; captured callers can commit an atomic association. */
+export async function prepareDocumentCreate(input: CreateDocumentInput, id = newId()): Promise<{
+    row: Post; afterCommit: () => Promise<void>;
+}> {
     const hooks = useHooks();
-    const id = newId();
     const baseRow: DocumentRow = {
         id,
         title: await resolveTitle(hooks, input.title, {
@@ -331,7 +344,7 @@ export async function createDocumentInDb(
         toDocumentEntity(baseRow)
     );
     const filteredRow = documentEntityToRow(filteredEntity, baseRow);
-    let actionPayload: DbCreatePayload<DocumentEntity> = {
+    const actionPayload: DbCreatePayload<DocumentEntity> = {
         entity: toDocumentEntity(filteredRow),
         tableName: DOCUMENT_TABLE,
     };
@@ -350,17 +363,11 @@ export async function createDocumentInDb(
         clock: persistedRow.clock ?? 0,
         file_hashes: persistedRow.file_hashes,
     };
-    await dbTry(
-        () => putDocumentPostRow(db, postRow),
-        { op: 'write', entity: 'posts', action: 'createDocument' },
-        { rethrow: true }
-    );
-    actionPayload = {
-        ...actionPayload,
-        entity: toDocumentEntity(persistedRow),
-    };
-    await hooks.doAction('db.documents.create:action:after', actionPayload);
-    return rowToRecord(persistedRow);
+    return { row: postRow, afterCommit: async () => {
+        await hooks.doAction('db.documents.create:action:after', {
+            ...actionPayload, entity: toDocumentEntity(persistedRow),
+        });
+    } };
 }
 
 /**
@@ -531,15 +538,40 @@ export async function updateDocument(
 export async function updateDocumentInDb(
     db: Or3DB,
     id: string,
-    patch: UpdateDocumentPatch
+    patch: UpdateDocumentPatch,
+    expected?: Pick<DocumentRecord, 'title' | 'content'>
 ): Promise<DocumentRecord | undefined> {
-    const hooks = useHooks();
     const existing = await dbTry(() => db.posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'getDocument',
     });
     if (!isDocumentPost(existing)) return undefined;
+    if (expected && (existing.title !== expected.title
+        || JSON.stringify(rowToRecord(existing).content) !== JSON.stringify(expected.content))) {
+        throw new Error('This document changed in another tab. Your draft is retained; reconcile it before saving.');
+    }
+    const prepared = await prepareDocumentUpdate(existing, patch);
+    await dbTry(
+        () => expected ? db.transaction('rw', getWriteTxTableNames(db, 'posts'), async () => {
+            if (JSON.stringify(await db.posts.get(id)) !== JSON.stringify(existing)) {
+                throw new Error('This document changed while saving. Your draft is retained; reconcile it before saving.');
+            }
+            await db.posts.put(prepared.row);
+        }) : putDocumentPostRow(db, prepared.row),
+        { op: 'write', entity: 'posts', action: 'updateDocument' },
+        { rethrow: true }
+    );
+    await prepared.afterCommit();
+    return rowToRecord(prepared.row);
+}
+
+/** Run the existing document update hooks before a caller's captured atomic write. */
+export async function prepareDocumentUpdate(existing: Post, patch: UpdateDocumentPatch): Promise<{
+    row: Post; afterCommit: () => Promise<void>;
+}> {
+    const hooks = useHooks();
+    if (existing.postType !== 'doc' || existing.deleted) throw new Error('That document is unavailable.');
     const existingRow: DocumentRow = {
         id: existing.id,
         title: existing.title,
@@ -596,6 +628,7 @@ export async function updateDocumentInDb(
     const persistedRow = documentEntityToRow(actionPayload.updated, mergedRow);
     // Convert DocumentRow to Post type for getDb().posts.put
     const postRow: Post = {
+        ...existing,
         id: persistedRow.id,
         title: persistedRow.title,
         content: persistedRow.content,
@@ -603,22 +636,16 @@ export async function updateDocumentInDb(
         created_at: persistedRow.created_at,
         updated_at: persistedRow.updated_at,
         deleted: persistedRow.deleted,
-        meta: '',
         clock: persistedRow.clock ?? 0,
         file_hashes: persistedRow.file_hashes,
     };
-    await dbTry(
-        () => putDocumentPostRow(db, postRow),
-        { op: 'write', entity: 'posts', action: 'updateDocument' },
-        { rethrow: true }
-    );
-
     actionPayload = {
         ...actionPayload,
         updated: toDocumentEntity(persistedRow),
     };
-    await hooks.doAction('db.documents.update:action:after', actionPayload);
-    return rowToRecord(persistedRow);
+    return { row: postRow, afterCommit: async () => {
+        await hooks.doAction('db.documents.update:action:after', actionPayload);
+    } };
 }
 
 /**

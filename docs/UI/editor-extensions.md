@@ -1,370 +1,111 @@
-# Editor Extensions (TipTap)
+# Source document editor extensions
 
-This guide explains how to extend the document editor with custom toolbar buttons, inspector panels, AI actions, nodes, marks, and generic extensions. It follows the same plugin pattern as message actions and other UI registries.
+This guide covers trusted source extensions in an editable OR3 checkout.
+The chat composer has a separate
+[hook-based extension flow](../../public/_documentation/hooks/chat-editor-extensions.md).
+Installable packages use the [SDK](../../public/_documentation/plugins/plugin-sdk.md)
+and its admitted surfaces.
 
-## Where to import
+## Choose a registry
 
-Helpers are auto-imported by Nuxt, so you can call them from plugins or components without manual imports:
+| Contribution | Source owner | Registration lifetime |
+| --- | --- | --- |
+| Toolbar control | [useEditorToolbar](../../app/composables/editor/useEditorToolbar.ts) | Legacy register returns void; unregister by exclusive ID |
+| TipTap node, mark, or generic extension | [useEditorNodes](../../app/composables/editor/useEditorNodes.ts) | Legacy register returns void; use matching unregister helper |
+| Lazy extension resolution | [useEditorExtensionLoader](../../app/composables/editor/useEditorExtensionLoader.ts) | Editor initialization owns resolution |
+| Inspector panel | [useEditorInspectorPanels](../../app/composables/editor/useEditorInspectorPanels.ts) | Register returns an owned handle |
+| Document AI prompt action | [useDocumentAiActions](../../app/composables/editor/useDocumentAiActions.ts) | Register returns an owned handle |
 
-**Toolbar:**
+Import contracts from their defining modules instead of copying interfaces.
+Definitions support `pluginId` and `access` where the host must gate availability.
+Registries do not grant server authorization.
 
--   `registerEditorToolbarButton()`
--   `unregisterEditorToolbarButton()`
--   `useEditorToolbarButtons(editorRef)`
--   `listRegisteredEditorToolbarButtonIds()`
+## Add a toolbar control
 
-**Inspector and document AI:**
-
--   `registerEditorInspectorPanel()` / `unregisterEditorInspectorPanel()`
--   `useEditorInspectorPanels()`
--   `registerDocumentAiAction()` / `unregisterDocumentAiAction()`
--   `useDocumentAiActions()`
-
-**Generic Extensions:**
-
--   `registerEditorExtension()` / `unregisterEditorExtension()`
--   `listEditorExtensions()`
--   `listRegisteredEditorExtensionIds()`
-
-**Nodes & Marks:**
-
--   `registerEditorNode()` / `unregisterEditorNode()`
--   `registerEditorMark()` / `unregisterEditorMark()`
--   `listEditorNodes()` / `listEditorMarks()`
--   `listRegisteredEditorNodeIds()` / `listRegisteredEditorMarkIds()`
-
-The implementations live at:
-
--   `app/composables/editor/useEditorToolbar.ts`
--   `app/composables/editor/useEditorInspectorPanels.ts`
--   `app/composables/editor/useDocumentAiActions.ts`
--   `app/composables/editor/useEditorNodes.ts`
-
-## Toolbar Buttons
-
-### API contract
+Create `app/plugins/editor-strikethrough.client.ts`:
 
 ```ts
-export interface EditorToolbarButton {
-    id: string; // unique id
-    icon: string; // icon name for UButton
-    tooltip?: string; // tooltip text
-    order?: number; // lower = earlier (default 200)
-    group?: string; // defaults to the plugin overflow group
-    priority?: number; // higher values survive compact layouts longer
-    responsive?: 'always' | 'compact' | 'overflow';
-    isActive?: (editor: Editor) => boolean; // highlight when active
-    onClick: (editor: Editor) => void | Promise<void>; // click handler
-    visible?: (editor: Editor) => boolean; // optional visibility check
-}
-```
-
-### Registering a toolbar button
-
-Create a Nuxt plugin in `app/plugins/` that registers your button at startup:
-
-```ts
-// app/plugins/editor-strikethrough.client.ts
-import type { Editor } from '@tiptap/vue-3';
-
-export default defineNuxtPlugin(() => {
-    registerEditorToolbarButton({
-        id: 'my-plugin:strikethrough',
-        icon: 'pixelarticons:text-strikethrough',
-        tooltip: 'Strikethrough',
-        order: 300,
-        isActive: (editor: Editor) => editor.isActive('strike'),
-        onClick: (editor: Editor) => {
-            editor.chain().focus().toggleStrike().run();
-        },
-    });
-});
-```
-
-### Unregistering
-
-```ts
-unregisterEditorToolbarButton('my-plugin:strikethrough');
-```
-
-### Ordering
-
-Built-in toolbar buttons use order < 200. External plugins should use `order >= 200` to appear after them unless you intentionally want to appear earlier.
-
-Toolbar registrations remain source-compatible. Buttons without responsive metadata are placed in the plugin overflow group. Use `responsive: 'always'` sparingly for actions that must remain visible in narrow panes; all other actions should remain reachable through overflow.
-
-## Inspector panels and AI actions
-
-Inspector panels are lazily displayed beside the editor on wide panes, in a drawer on medium panes, and in a bottom sheet below 720px. Components receive `editor` and `documentId` props. Access policy and contribution-surface selection are applied before a panel is exposed.
-
-```ts
-export default defineNuxtPlugin(() => {
-    const panel = registerEditorInspectorPanel({
-        id: 'my-plugin:metadata',
-        label: 'Metadata',
-        icon: 'lucide:tags',
-        component: defineAsyncComponent(() => import('./MetadataPanel.vue')),
-        pluginId: 'my-plugin',
-        order: 300,
-    });
-
-    const action = registerDocumentAiAction({
-        id: 'my-plugin:house-style',
-        label: 'Apply house style',
-        prompt: 'Rewrite this in our house style while preserving all facts.',
-        defaultScope: 'section',
-        pluginId: 'my-plugin',
-        order: 300,
-    });
-
-    return {
-        provide: {
-            disposeEditorContributions: () => {
-                panel.dispose();
-                action.dispose();
-            },
-        },
-    };
-});
-```
-
-Document AI actions supply prompts and a default scope only; the built-in controller still owns credential checks, schema validation, review, stale-result protection, and acceptance. The related plugin hooks are `ai.document.edit:filter:request`, `ai.document.edit:before`, `ai.document.edit:after`, and `ai.document.edit:error`.
-
-## Generic Extensions
-
-Generic TipTap extensions (like plugins, prosemirror plugins, or other functionality that doesn't fit into Node/Mark) can now be registered dynamically without modifying `DocumentEditor.vue`.
-
-### API contract
-
-```ts
-export interface EditorExtension {
-    id: string; // unique id
-    extension: Extension; // TipTap Extension instance
-    order?: number; // lower = earlier (default 200)
-}
-```
-
-### When to use Generic Extensions
-
-Use `registerEditorExtension()` for:
-
--   TipTap plugins that provide editor functionality (autocomplete, mentions, etc.)
--   ProseMirror plugins wrapped in TipTap Extensions
--   Custom editor behaviors that don't create new nodes or marks
--   Extensions that modify editor behavior globally
-
-Use `registerEditorNode()` or `registerEditorMark()` for:
-
--   New content types (blocks, inline elements)
--   New formatting options (bold, italic, custom marks)
-
-### Registering a generic extension
-
-```ts
-// app/plugins/editor-autocomplete.client.ts
-import { Extension } from '@tiptap/core';
-import { Plugin, PluginKey } from 'prosemirror-state';
-
-// Create your TipTap extension
-const AutocompleteExtension = Extension.create({
-    name: 'autocomplete',
-
-    addProseMirrorPlugins() {
-        return [
-            new Plugin({
-                key: new PluginKey('autocomplete'),
-                // ... your plugin logic
-            }),
-        ];
-    },
-});
-
-export default defineNuxtPlugin(() => {
-    // Register the extension - it will be automatically included in all editors
-    registerEditorExtension({
-        id: 'editor-autocomplete:extension',
-        extension: AutocompleteExtension,
-        order: 100, // Load before most plugins but after core
-    });
-
-    // Optional: Also register a toolbar button to control it
-    registerEditorToolbarButton({
-        id: 'editor-autocomplete:toggle',
-        icon: 'pixelarticons:zap',
-        tooltip: 'Toggle Autocomplete',
-        order: 300,
-        isActive: (editor) => {
-            // Check if your extension is active
-            return true;
-        },
-        onClick: (editor) => {
-            // Toggle your extension's behavior
-        },
-    });
-});
-```
-
-### Real-world example: Autocomplete Plugin
-
-Here's a complete example of a fully self-contained editor plugin:
-
-```ts
-// app/plugins/editor-autocomplete.client.ts
+import { defineNuxtPlugin } from '#app';
 import {
     registerEditorToolbarButton,
-    registerEditorExtension,
-} from '~/composables';
-import type { Editor } from '@tiptap/vue-3';
-import { AutocompleteExtension } from './EditorAutocomplete/TiptapExtension';
-import AutocompleteState from './EditorAutocomplete/state';
-import { computed } from 'vue';
+    unregisterEditorToolbarButton,
+} from '~/composables/editor/useEditorToolbar';
 
 export default defineNuxtPlugin(() => {
-    if (process.client) {
-        // Register the TipTap extension
-        registerEditorExtension({
-            id: 'editor-autocomplete:extension',
-            extension: AutocompleteExtension,
-            order: 100,
-        });
-
-        // Register toolbar toggle button
-        registerEditorToolbarButton({
-            id: 'editor-autocomplete:toggle',
-            icon: 'pixelarticons:zap',
-            tooltip: computed(() =>
-                AutocompleteState.value.isEnabled
-                    ? 'Disable Autocomplete'
-                    : 'Enable Autocomplete'
-            ) as any,
-            order: 300,
-            isActive: (editor: Editor) => AutocompleteState.value.isEnabled,
-            onClick: (editor: Editor) => {
-                AutocompleteState.value.isEnabled =
-                    !AutocompleteState.value.isEnabled;
-            },
-        });
+    const id = 'example:strikethrough';
+    registerEditorToolbarButton({
+        id,
+        icon: 'tabler:strikethrough',
+        tooltip: 'Strikethrough',
+        order: 300,
+        responsive: 'overflow',
+        isActive: editor => editor.isActive('strike'),
+        onClick: editor => { editor.chain().focus().toggleStrike().run(); },
+    });
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => { unregisterEditorToolbarButton(id); });
     }
 });
 ```
 
-**Key benefits:**
+Toolbar buttons without responsive metadata default to the plugin overflow
+group. Use `group`, `priority`, and `responsive` for placement; preserve
+access through overflow in narrow panes. Registered order defaults to 200,
+but built-in controls have their own layout.
 
--   ✅ No modifications to `DocumentEditor.vue` required
--   ✅ Plugin is fully self-contained
--   ✅ Works with HMR (Hot Module Replacement)
--   ✅ Can be enabled/disabled independently
+## Extend TipTap
 
-## Nodes & Marks
+Use `registerEditorNode()` or `registerEditorMark()` for schema additions,
+and `registerEditorExtension()` for behavior. A generic extension descriptor
+can supply an `extension` or a lazy `factory`; inspect the loader contract
+before authoring a factory. Do not add the same TipTap extension name twice.
 
-### API contract
+Extensions are resolved when an editor is created. Registering or removing a
+descriptor does not reconfigure an already-created editor. Recreate it or reload
+to verify changes. A schema extension must also preserve saved document and
+revision compatibility; do not assume its custom nodes are automatically
+accepted by the document AI validator.
+
+These legacy helpers unregister by ID. Use exclusive namespaced IDs and dispose
+before replacement; component registrations need unmount cleanup too. The
+registries survive HMR, which makes cleanup necessary. Avoid a barrel import
+from the nonexistent `~/composables` module.
+
+## Add a document AI action
+
+Create `app/plugins/editor-house-style.client.ts`:
 
 ```ts
-export interface EditorNode {
-    id: string; // unique id
-    extension: Node; // TipTap Node extension instance
-    order?: number; // lower = earlier (default 200)
-}
-
-export interface EditorMark {
-    id: string; // unique id
-    extension: Mark; // TipTap Mark extension instance
-    order?: number; // lower = earlier (default 200)
-}
-```
-
-### Registering extensions
-
-```ts
-// app/plugins/editor-custom-node.client.ts
-import { Node } from '@tiptap/core';
-
-const CustomNode = Node.create({
-    name: 'customNode',
-    // ... TipTap node configuration
-});
+import { defineNuxtPlugin } from '#app';
+import { registerDocumentAiAction } from '~/composables/editor/useDocumentAiActions';
 
 export default defineNuxtPlugin(() => {
-    registerEditorNode({
-        id: 'my-plugin:custom-node',
-        extension: CustomNode,
+    const handle = registerDocumentAiAction({
+        id: 'example:house-style',
+        label: 'Apply house style',
+        prompt: 'Use short, clear sentences while preserving all facts.',
+        defaultScope: 'section',
         order: 300,
     });
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => { handle.dispose(); });
+    }
 });
 ```
 
-For marks:
+AI contributions supply a prompt and default scope. The host still owns
+credential checks, frozen snapshots, proposal validation, review, stale-result
+protection, and acceptance. See
+[document AI proposals](../../public/_documentation/database/documents.md#document-ai-proposals).
+Inspector panels use a Vue component receiving `editor` and `documentId`;
+a `defineAsyncComponent()` wrapper can keep optional UI lazy. Retain and dispose
+the panel's returned handle.
 
-```ts
-import { Mark } from '@tiptap/core';
+## Verify the behavior
 
-const CustomMark = Mark.create({
-    name: 'customMark',
-    // ... TipTap mark configuration
-});
-
-registerEditorMark({
-    id: 'my-plugin:custom-mark',
-    extension: CustomMark,
-    order: 300,
-});
-```
-
-## How the editor uses these
-
-The `DocumentEditor.vue` component:
-
-1. Calls `useEditorToolbarButtons(editorRef)` to get plugin buttons
-2. Calls `listEditorNodes()` and `listEditorMarks()` to get extensions
-3. Includes them in the TipTap editor initialization
-
-## Best practices
-
--   Keep handlers responsive; avoid blocking operations
--   Namespace ids to avoid collisions (e.g. `my-plugin:action`)
--   Use TipTap's chain API for editor commands
--   Test with the editor in different states (empty, with content, etc.)
-
-## Testing
-
-Programmatic checks:
-
-```ts
-// After registering
-expect(listRegisteredEditorToolbarButtonIds()).toContain(
-    'my-plugin:strikethrough'
-);
-
-// After unregistering
-expect(listRegisteredEditorToolbarButtonIds()).not.toContain(
-    'my-plugin:strikethrough'
-);
-```
-
-Manual verification:
-
-1. Start the app and open a document
-2. Check that your toolbar button appears
-3. Click it and verify the expected behavior
-4. For nodes/marks, verify they work in the editor content
-
-## Example plugin
-
-See `app/plugins/examples/editor-toolbar-test.client.ts` for a working example that registers a strikethrough button.
-
-## Edge cases & notes
-
--   Duplicate ids replace previous registrations
--   Registry persists across HMR; re-registering after HMR will replace the prior entry
--   Extensions are loaded when the editor is created
--   Toolbar buttons are reactive and update when the editor state changes
-
----
-
-**Requirements coverage:**
-
--   ✅ Describe API and where to import
--   ✅ Show register/unregister examples
--   ✅ Show use in components and handler behavior
--   ✅ Explain ordering and HMR behavior
--   ✅ Provide working example plugin
+Check the control on an empty and populated document, in narrow and wide panes,
+after HMR, and with a second editor open. Recreate editors when changing schema
+extensions. For AI actions, verify scope selection, rejection, stale-result
+refusal, and explicit acceptance. Existing source examples live in
+[editor-toolbar-test](../../app/plugins/examples/editor-toolbar-test.client.ts)
+and the [editor architecture](premium-document-editor.md) describes persistence.

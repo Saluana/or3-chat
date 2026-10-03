@@ -59,6 +59,7 @@ export default defineEventHandler(async (event) => {
     const rateLimitResult = checkSyncRateLimit(clientIP, 'auth:session');
     
     enforceRateLimit(event, rateLimitResult);
+    recordSyncRequest(clientIP, 'auth:session');
 
     // Add rate limit headers for client visibility
     const stats = getSyncRateLimitStats(clientIP, 'auth:session');
@@ -77,9 +78,6 @@ export default defineEventHandler(async (event) => {
               entitlements,
           }
         : null;
-
-    // Record successful request for rate limiting
-    recordSyncRequest(clientIP, 'auth:session');
 
     return {
         session: clientSession,

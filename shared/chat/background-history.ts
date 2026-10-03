@@ -1,3 +1,5 @@
+import type { RequestUsage } from './compaction';
+
 export const BACKGROUND_HISTORY_CONTRACT_VERSION = 1 as const;
 
 export type CanonicalHistoryActor = {
@@ -33,6 +35,8 @@ export type CanonicalGenerationSnapshot = {
     content: string;
     reasoning: string;
     toolCalls?: unknown[];
+    /** Last measured request, including its immutable provider-prefix identity. */
+    usage?: RequestUsage;
     error?: string;
     completedAt: number;
 };

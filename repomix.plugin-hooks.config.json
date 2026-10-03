@@ -99,7 +99,7 @@
     "public/_documentation/hooks/**",
     "public/_documentation/start/plugin-quickstart.md",
     "public/_documentation/cloud/plugin-access-gating.md",
-    "public/_documentation/types/hooks.md",
+    "public/_documentation/hooks/reference.md",
     "planning/complete/plugin-runtime-extraction/**",
     "planning/complete/or3-cloud-plugin-access-gating/**",
     ".agent/skills/hooks-system/SKILL.md",

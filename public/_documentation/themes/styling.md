@@ -85,6 +85,37 @@ Patch only the slots you need. Preserve labels, focus styles, loading states,
 and disabled behavior. Theme recipes describe presentation, not application
 logic. Local component props and the shared dialog shell can take precedence.
 
+## Background layers
+
+Authored `backgrounds` supply defaults for workspace base/overlay, sidebar,
+header gradient, and bottom navigation. Personal overrides can replace them
+without changing the package. Disabling personal background overrides restores
+authored values.
+
+Merge a layer into the theme definition, for example:
+
+```json
+{
+  "backgrounds": {
+    "content": {
+      "base": { "image": "/bg-repeat.webp", "opacity": 0.08, "repeat": "repeat", "size": "150px" }
+    }
+  }
+}
+```
+
+Include referenced local assets in the package. Keep texture opacity low enough
+for readable text, and check both color modes and responsive layouts. Use
+`fit: 'cover'` or `'contain'` for responsive image sizing; use explicit
+`size` for repeating patterns. Layer fields are in the
+[theme reference](/documentation/themes/api-reference#themebackgroundlayer).
+
+The runtime resolves saved file tokens to object URLs and owns their cleanup.
+It applies `--app-content-bg-1`/`--app-content-bg-2` and
+`--app-sidebar-bg-1` with opacity/repeat/size companions, plus
+`--app-header-gradient` and `--app-bottomnav-gradient`. Use the existing
+background helper rather than introducing parallel token or URL ownership.
+
 ## Icons
 
 Declare semantic tokens in your definition:

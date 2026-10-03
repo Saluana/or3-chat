@@ -142,6 +142,7 @@ export async function runClaimedBackgroundJob(
         if ((job.attempts ?? 0) > 1) {
             emitJobStatus(job.id, 'streaming', {
                 content: job.content,
+                usage: job.usage,
                 contentLength: job.content.length,
                 chunksReceived: job.chunksReceived,
                 tool_calls: cleanup?.tool_calls ?? job.tool_calls,
@@ -167,6 +168,7 @@ export async function runClaimedBackgroundJob(
                 referer: execution.referer,
                 execution,
                 leaseOwner: workerId,
+                attempt: job.attempts,
             },
             dependencies.provider,
             abortController.signal
@@ -200,6 +202,7 @@ export async function runClaimedBackgroundJob(
                     {
                         status: 'error',
                         content: latest.content,
+                        usage: latest.usage,
                         reasoning: latest.reasoning,
                         toolCalls: latest.tool_calls,
                         error: message,
@@ -210,6 +213,7 @@ export async function runClaimedBackgroundJob(
                 if (saved) {
                     emitJobStatus(job.id, 'error', {
                         content: latest.content,
+                        usage: latest.usage,
                         contentLength: latest.content.length,
                         reasoning: latest.reasoning,
                         error: message,

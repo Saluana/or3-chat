@@ -1,241 +1,81 @@
-/**
- * @module app/composables/sidebar/usePaginatedSidebarItems
- *
- * Purpose:
- * Provides a paginated, live-updating list of sidebar items from IndexedDB.
- *
- * Responsibilities:
- * - Queries threads and documents with filtering and pagination
- * - Keeps results updated via Dexie live queries
- *
- * Non-responsibilities:
- * - Does not implement rendering or infinite scroll UI
- * - Does not perform server-side pagination
- */
 import { ref, shallowRef, type Ref, onMounted, onUnmounted, watch } from 'vue';
 import { liveQuery, type Subscription } from 'dexie';
-import type { Thread, Post } from '~/db';
-import { getDb } from '~/db/client';
+import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
+import { getKvByName, setKvByName } from '~/db/kv';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
+import { readFamilyPage, readFamilyMembers, latestFamilyCompaction, resolveSidebarFamilyId, threadToSidebar, documentToSidebar, familyExpansionPreferenceName, FAMILY_PAGE_SIZE, type FamilyFilter } from '~/utils/sidebar/thread-families';
 
-/**
- * `PAGE_SIZE`
- *
- * Purpose:
- * Defines the default page size for sidebar item pagination.
- *
- * Constraints:
- * - Used as the base increment for `loadMore`
- */
-const PAGE_SIZE = 50;
+export const threadToUnified = threadToSidebar;
+export const docToUnified = documentToSidebar;
+const preferenceName = familyExpansionPreferenceName;
 
-/**
- * `threadToUnified`
- *
- * Purpose:
- * Converts a thread record into the unified sidebar item shape.
- *
- * Behavior:
- * Applies title fallbacks and uses the latest available timestamp.
- *
- * Constraints:
- * - Assumes thread timestamps are numeric and comparable
- *
- * Non-Goals:
- * - Does not perform localization or formatting
- */
-export function threadToUnified(thread: Thread): UnifiedSidebarItem {
-    return {
-        id: thread.id,
-        type: 'thread',
-        title: thread.title || 'Untitled Chat',
-        updatedAt: thread.last_message_at ?? thread.updated_at,
-        forked: thread.forked,
-    };
-}
-
-/**
- * `docToUnified`
- *
- * Purpose:
- * Converts a document post into the unified sidebar item shape.
- *
- * Behavior:
- * Applies title fallbacks and preserves post type metadata.
- *
- * Constraints:
- * - Expects document posts with `postType` and `updated_at`
- *
- * Non-Goals:
- * - Does not filter out deleted posts
- */
-export function docToUnified(doc: Post): UnifiedSidebarItem {
-    return {
-        id: doc.id,
-        type: 'document',
-        title: doc.title || 'Untitled Document',
-        updatedAt: doc.updated_at,
-        postType: doc.postType,
-    };
-}
-
-/**
- * `usePaginatedSidebarItems`
- *
- * Purpose:
- * Supplies a paginated, reactive list of sidebar items with live updates.
- *
- * Behavior:
- * Uses Dexie live queries to keep results fresh and supports incremental
- * pagination with `loadMore`.
- *
- * Constraints:
- * - Must run on the client where IndexedDB is available
- * - Pagination is local-only and based on in-memory target counts
- *
- * Non-Goals:
- * - Does not implement server-side pagination or caching
- */
-export function usePaginatedSidebarItems(
-    options: {
-        type?: 'all' | 'thread' | 'document';
-        query?: Ref<string>;
-    } = {}
-) {
-    const items = shallowRef<UnifiedSidebarItem[]>([]);
-    const hasMore = ref(true);
-    const loading = ref(false);
-    const targetCount = ref(PAGE_SIZE);
-    let subscription: Subscription | null = null;
-    let subscriptionToken = 0;
-
-    const filterType = options.type || 'all';
-    const searchQuery = options.query;
-
-    /**
-     * Fetch the latest items up to a target count.
-     *
-     * @param limit - Maximum number of items to return.
-     * @returns Items plus a flag indicating if more items exist.
-     */
-    async function fetchItems(
-        limit: number
-    ): Promise<{ items: UnifiedSidebarItem[]; hasMore: boolean }> {
-        const db = getDb();
-        const query = searchQuery?.value.toLowerCase() || '';
-        const batchLimit = limit + 1;
-        
-        let threadsBatch: Thread[] = [];
-        let docsBatch: Post[] = [];
-
-        // Fetch threads if requested
-        if (filterType === 'all' || filterType === 'thread') {
-            threadsBatch = await db.threads
-                .orderBy('updated_at')
-                .reverse()
-                .filter(
-                    (t) =>
-                        !t.deleted &&
-                        (query === '' ||
-                            !!t.title?.toLowerCase().includes(query))
-                )
-                .limit(batchLimit)
-                .toArray();
+/** One flat family model shared by both sidebar consumers. */
+export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'document'; query?: Ref<string>;
+    projectId?: Ref<string | undefined>; pinned?: Ref<boolean | undefined>; activeIds?: Ref<string[]> } = {}) {
+    const items = shallowRef<UnifiedSidebarItem[]>([]); const hasMore = ref(true); const loading = ref(false);
+    const activeFamilyIds = shallowRef(new Set<string>());
+    const targetCount = ref(FAMILY_PAGE_SIZE); const memberLimits = new Map<string, number>();
+    let subscription: Subscription | undefined; let subscriptionToken = 0; let mounted = false;
+    const filter = (): FamilyFilter => ({ query: options.query?.value.trim(), projectId: options.projectId?.value, pinned: options.pinned?.value });
+    async function fetchItems() {
+        const db = getDb(); const generation = getWorkspaceGeneration(); const currentFilter = filter();
+        const activeRoots = new Set<string>();
+        for (const id of options.activeIds?.value ?? []) {
+            const thread = await db.threads.get(id);
+            if (thread) activeRoots.add(await resolveSidebarFamilyId(db, thread));
         }
-
-        // Fetch docs if requested
-        if (filterType === 'all' || filterType === 'document') {
-            docsBatch = await db.posts
-                .orderBy('updated_at')
-                .reverse()
-                .filter(
-                    (p) =>
-                        p.postType === 'doc' &&
-                        !p.deleted &&
-                        (query === '' ||
-                            !!p.title.toLowerCase().includes(query))
-                )
-                .limit(batchLimit)
-                .toArray();
+        const page = await readFamilyPage(db, { limit: targetCount.value, type: options.type ?? 'all', filter: currentFilter });
+        const rows: UnifiedSidebarItem[] = [];
+        for (const item of page.items) {
+            if (!item.family) { rows.push(item); continue; }
+            const rootId = item.family.rootId;
+            const saved = await getKvByName(preferenceName(rootId), db);
+            const expanded = Boolean(currentFilter.query) || saved?.value === 'true';
+            item.family.expanded = expanded; item.family.searchExpanded = Boolean(currentFilter.query); rows.push(item);
+            if (!expanded) continue;
+            const memberPage = await readFamilyMembers(db, rootId, memberLimits.get(rootId) ?? FAMILY_PAGE_SIZE, currentFilter);
+            const latestCompactionId = await latestFamilyCompaction(db, rootId, currentFilter);
+            const members = memberPage.members.sort((a, b) => b.created_at - a.created_at || b.id.localeCompare(a.id));
+            for (const [index, member] of members.entries()) rows.push({ ...threadToSidebar(member),
+                family: { kind: 'thread-member', key: 'member:' + rootId + ':' + member.id, rootId, expanded: true,
+                    groupUpdatedAt: item.updatedAt,
+                    label: member.id === rootId ? 'Original conversation' : member.branch_mode === 'compacted'
+                        ? member.id === latestCompactionId ? 'Latest compacted version' : 'Earlier compacted version'
+                        : member.fork_reason === 'retry' ? 'Retry' : 'Branch',
+                    latestCompactionId, firstMember: index === 0, lastMember: index === members.length - 1 && !memberPage.hasMore,
+                    damaged: item.family.damaged, originalId: item.family.originalId } });
+            if (memberPage.hasMore) rows.push({ ...item, family: { ...item.family, kind: 'load-more-members', key: 'more-members:' + rootId } });
         }
-
-        // Merge and sort
-        const unified: UnifiedSidebarItem[] = [
-            ...threadsBatch.map(threadToUnified),
-            ...docsBatch.map(docToUnified)
-        ];
-
-        unified.sort((a, b) => b.updatedAt - a.updatedAt);
-
-        const hasMore = unified.length > limit;
-
-        // Take top N
-        return { items: unified.slice(0, limit), hasMore };
+        if (getDb() !== db || getWorkspaceGeneration() !== generation) throw new Error('Sidebar workspace changed.');
+        return { rows, hasMore: page.hasMore, activeRoots };
     }
-
     function startSubscription() {
-        const token = ++subscriptionToken;
-        const shouldShowLoading = items.value.length === 0;
-        if (shouldShowLoading) loading.value = true;
-        subscription?.unsubscribe();
-        subscription = liveQuery(() => fetchItems(targetCount.value)).subscribe({
-            next: (result) => {
-                if (token !== subscriptionToken) return;
-                items.value = result.items;
-                hasMore.value = result.hasMore;
-                loading.value = false;
-            },
-            error: (error) => {
-                if (token !== subscriptionToken) return;
-                console.error(
-                    '[usePaginatedSidebarItems] liveQuery error:',
-                    error
-                );
-                loading.value = false;
-            },
-        });
+        if (!mounted) return;
+        const token = ++subscriptionToken; const db = getDb(); const generation = getWorkspaceGeneration();
+        loading.value = items.value.length === 0; subscription?.unsubscribe();
+        subscription = liveQuery(fetchItems).subscribe({ next: (result) => {
+            if (token !== subscriptionToken || getDb() !== db || generation !== getWorkspaceGeneration()) return;
+            items.value = result.rows; activeFamilyIds.value = result.activeRoots; hasMore.value = result.hasMore; loading.value = false;
+        }, error: () => { if (token === subscriptionToken) loading.value = false; } });
     }
-
-    /**
-     * Load next page of items.
-     */
-    function loadMore() {
-        if (loading.value || !hasMore.value) return;
-        targetCount.value += PAGE_SIZE;
-        startSubscription();
+    function loadMore() { if (loading.value || !hasMore.value) return; targetCount.value += FAMILY_PAGE_SIZE; startSubscription(); }
+    function reset() { targetCount.value = FAMILY_PAGE_SIZE; memberLimits.clear(); hasMore.value = true; startSubscription(); }
+    async function toggleFamily(rootId: string) {
+        const db = getDb(); const generation = getWorkspaceGeneration();
+        const saved = await getKvByName(preferenceName(rootId), db);
+        if (getDb() !== db || generation !== getWorkspaceGeneration()) return;
+        await setKvByName(preferenceName(rootId), saved?.value === 'true' ? 'false' : 'true', db,
+            { isValid: () => getDb() === db && generation === getWorkspaceGeneration() });
     }
-
-    /**
-     * Reset pagination state and reload from start.
-     */
-    function reset() {
-        hasMore.value = true;
-        targetCount.value = PAGE_SIZE;
-        startSubscription();
+    function loadMoreMembers(rootId: string) { memberLimits.set(rootId, (memberLimits.get(rootId) ?? FAMILY_PAGE_SIZE) + FAMILY_PAGE_SIZE); startSubscription(); }
+    async function latestCompaction(rootId: string) {
+        const db = getDb(); const generation = getWorkspaceGeneration(); const id = await latestFamilyCompaction(db, rootId, filter());
+        return getDb() === db && generation === getWorkspaceGeneration() ? id : undefined;
     }
-
-    onMounted(() => {
-        startSubscription();
-    });
-
-    if (searchQuery) {
-        watch(
-            () => searchQuery.value,
-            () => {
-                reset();
-            }
-        );
-    }
-
-    onUnmounted(() => {
-        subscription?.unsubscribe();
-    });
-
-    return {
-        items,
-        hasMore,
-        loading,
-        loadMore,
-        reset
-    };
+    const stopWorkspace = subscribeActiveWorkspaceDb(() => { items.value = []; activeFamilyIds.value = new Set(); reset(); });
+    watch(() => [options.query?.value, options.projectId?.value, options.pinned?.value], reset);
+    watch(() => options.activeIds?.value, startSubscription, { deep: true });
+    onMounted(() => { mounted = true; startSubscription(); });
+    onUnmounted(() => { mounted = false; subscriptionToken++; subscription?.unsubscribe(); stopWorkspace(); });
+    return { items, activeFamilyIds, hasMore, loading, loadMore, reset, toggleFamily, loadMoreMembers, latestCompaction };
 }

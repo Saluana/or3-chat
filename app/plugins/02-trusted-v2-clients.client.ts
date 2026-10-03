@@ -166,6 +166,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 version: descriptor.version,
                 workspaceId: descriptor.workspaceId,
                 generation,
+                features: ['or3-trusted-host-v1', 'chat.send.prepare-commit-v1'],
                 grants: descriptor.effectiveGrants as PluginGrant[],
                 mediation: {
                     authorizeDestination: (url, destination) => authorizeDestination(url, destination),

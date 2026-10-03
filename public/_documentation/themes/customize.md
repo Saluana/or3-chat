@@ -37,6 +37,20 @@ operating system's reduced-motion preference suppress decorative motion while
 preserving visible status information. These are global accessibility choices,
 not per-theme light/dark presets.
 
+## Background images
+
+In Backgrounds, select one area and use its inspector to choose an image,
+layout, opacity, pattern size, and base color. Uploads accept PNG, JPEG, WebP,
+or GIF up to 8 MiB. HEIC/HEIF photos must be exported as JPEG or PNG first.
+Validation uses file signatures, so a valid image with an empty browser MIME
+type still works. Rejected uploads show a Background image not applied toast.
+
+Uploaded bytes are stored in the active browser database and referenced by an
+`internal-file://<hash>` token. A runtime object URL is temporary and must not
+be saved as the preference. Personal background choices remain above newly
+selected theme defaults; disable the Backgrounds group to view the authored
+appearance without discarding your saved choices.
+
 ## What gets saved
 
 | Choice | Current persistence |

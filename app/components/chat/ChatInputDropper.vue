@@ -15,6 +15,27 @@
         @click="handleContainerClick"
     >
         <div class="chat-input-inner-container flex flex-col gap-3.5 m-3.5">
+            <div v-if="sendBlock" role="status" aria-live="polite" class="space-y-2 text-xs">
+                <p v-if="sendBlock.reason === 'context_full'">Context full — compact to continue</p>
+                <p>{{ sendBlock.error || 'Edit the request or choose a larger model.' }}</p>
+                <div class="flex flex-wrap gap-2">
+                    <UButton size="xs" variant="soft" color="neutral" @click.stop="settingsPopoverOpen = true">Chat memory</UButton>
+                    <UButton size="xs" variant="ghost" color="neutral" @click.stop="showModelCatalog = true">Choose model</UButton>
+                    <UButton v-if="sendBlock.reason === 'context_full' && !('userMessageId' in sendBlock && sendBlock.userMessageId)" size="xs" variant="ghost" color="neutral" :disabled="props.loading" @click.stop="handleSend({ inspectLossyRequest: true })">Inspect lossy send</UButton>
+                </div>
+                <details v-if="lossyPreview" open>
+                    <summary class="cursor-pointer py-2">Omit {{ lossyPreview.omitted_turn_count }} old turns ({{ lossyPreview.omitted_message_count }} messages) for this request</summary>
+                    <p>Estimated input after omissions {{ lossyPreview.input_tokens.toLocaleString() }} / {{ lossyPreview.effective_context_tokens.toLocaleString() }} · reply available {{ lossyPreview.reply_tokens.toLocaleString() }}</p>
+                    <p>The original history stays saved. This request excludes only the entries below.</p>
+                    <ul class="max-h-40 overflow-y-auto space-y-1 py-2" aria-label="Messages omitted from this request">
+                        <li v-for="row in lossyPreview.omitted_messages" :key="row.position">{{ row.position + 1 }} · {{ row.role }} · {{ row.excerpt }}</li>
+                    </ul>
+                    <div class="flex gap-2">
+                        <UButton size="xs" variant="soft" color="warning" :disabled="props.loading" @click.stop="handleSend({ lossyConfirmation: lossyPreview })">Send with these omissions</UButton>
+                        <UButton size="xs" variant="ghost" color="neutral" @click.stop="lossyPreview = undefined">Cancel</UButton>
+                    </div>
+                </details>
+            </div>
             <!-- Main Input Area -->
             <div class="relative">
                 <div
@@ -83,7 +104,7 @@
                                     label="Open"
                                     type="button"
                                     aria-label="Settings"
-                                    :disabled="loading"
+                                    :disabled="loading && !compactionInProgress"
                                 >
                                     <UIcon
                                         :name="iconModelSettings"
@@ -103,6 +124,11 @@
                                             modelDefaultReasoningEffort
                                         "
                                         :thread-id="props.threadId"
+                                        :context-state="contextPreview.state.value"
+                                        :compaction-state="props.compactionState"
+                                        :compaction-blocked-reason="props.compactionBlockedReason"
+                                        @compact="compactFromSettings"
+                                        @cancel-compaction="emit('cancel-compaction')"
                                         :pane-id="promptOwnerId"
                                         :prompt-selection-revision="promptSelectionRevision"
                                         v-model:model="selectedModel"
@@ -141,10 +167,10 @@
 
                 <div
                     class="chat-input-composer-actions order-first flex w-full min-w-0 flex-wrap items-center gap-1"
-                    v-if="composerActions.length"
+                    v-if="toolbarComposerActions.length"
                 >
                     <UTooltip
-                        v-for="entry in composerActions"
+                        v-for="entry in toolbarComposerActions"
                         :key="`composer-action-${entry.action.id}`"
                         :delay-duration="0"
                         :text="entry.action.tooltip || entry.action.label"
@@ -348,10 +374,18 @@
 </template>
 
 <script setup lang="ts">
+import { inspectCompactionSource, CompactionError } from '~/db/compaction';
+import { useContextPreview } from '~/composables/chat/useContextPreview';
+import { useModelStore } from '~/composables/chat/useModelStore';
+import { useToolRegistry } from '~/utils/chat/tool-registry';
+import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
+import { appendModelVariant } from '~~/shared/openrouter/model-variants';
+import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import {
     computed,
     ref,
     nextTick,
+    shallowRef,
     onMounted,
     onBeforeUnmount,
     watch,
@@ -459,6 +493,10 @@ const props = defineProps<{
     streaming?: boolean; // assistant response streaming
     paneId?: string; // provided by ChatContainer so the bridge can key this input
     tabId?: string; // owns ephemeral composer state across pane switches
+    contextRevision?: unknown;
+    compactThread?: () => Promise<void>;
+    compactionBlockedReason?: string;
+    compactionState?: import('~/composables/chat/useThreadCompaction').ThreadCompactionState;
 }>();
 
 const iconLoading = useIcon('ui.loading');
@@ -618,6 +656,7 @@ watch(trustedEditorRevision, () => {
 onBeforeUnmount(() => {
     componentDisposed = true;
     editorBuild++;
+    draftRestoreRevision++;
     clearDraftCaptureTimer();
     if (props.tabId) captureDraft(props.tabId);
     else releaseAll();
@@ -710,7 +749,10 @@ const emit = defineEmits<{
             modelVariant: OpenRouterModelVariant;
             thinkingEnabled: boolean;
             reasoningEffort: string | null;
+            editorDoc?: Record<string, unknown>;
             registerResult: RegisterSendResult;
+            inspectLossyRequest?: boolean;
+            lossyConfirmation?: import('~/utils/chat/lossy-request').LossyRequestPreview;
         }
     ): void;
     (e: 'prompt-change', value: string): void;
@@ -722,6 +764,7 @@ const emit = defineEmits<{
     (e: 'pending-prompt-selected', promptId: string | null): void;
     (e: 'stop-stream'): void; // New event for stopping the stream
     (e: 'resize', payload: { height: number }): void;
+    (e: 'cancel-compaction'): void;
 }>();
 
 const {
@@ -749,9 +792,13 @@ const composerActionContext = (): ComposerActionContext => ({
     isStreaming: !!props.streaming,
     isMobile: isMobile.value,
     isLoading: !!props.loading,
+    compactThread: props.compactThread,
+    compactionBlockedReason: props.compactionBlockedReason,
 });
 
 const composerActions = useComposerActions(composerActionContext);
+// Chat memory owns compaction; other extension actions keep their toolbar slots.
+const toolbarComposerActions = computed(() => composerActions.value.filter((entry) => entry.action.id !== 'or3:compact-thread'));
 
 async function handleComposerAction(entry: ComposerActionEntry) {
     if (entry.disabled) return;
@@ -804,10 +851,52 @@ const imageSettings = ref<ImageSettings>({
     numResults: 2,
     size: '1024x1024',
 });
+const previewModels = useModelStore();
+const previewModel = computed(() => appendModelVariant(selectedModel.value.replace(/:thinking$/, ''), modelVariant.value));
+const previewReasoning = computed(() => {
+    const id = selectedModel.value.replace(/:thinking$/, '');
+    const metadata = previewModels.catalog.value.find((row) => row.id === id || row.canonical_slug === id)
+        ?? previewModels.favoriteModels.value.find((row) => row.id === id || row.canonical_slug === id);
+    return thinkingEnabled.value && modelSupportsThinking.value ? resolveReasoningConfig({ model: metadata, enabled: true, effort: reasoningEffort.value }) : undefined;
+});
+const contextPreview = useContextPreview({ threadId: () => props.threadId, model: previewModel,
+    text: promptText, extraText: () => largeTextBlocks.value.map((block) => block.text).join('\n\n'),
+    hasMedia: () => attachments.value.length > 0, promptSelection: stagedPromptId,
+    revision: () => [props.contextRevision, promptSelectionRevision.value], reasoning: previewReasoning });
+const compactionInProgress = computed(() => props.compactionState && ['capturing', 'generating', 'correcting', 'committing'].includes(props.compactionState.status));
 const tabDrafts = useWorkspaceTabDrafts();
 const { settings: aiSettings, ensureLoaded: ensureAiSettingsLoaded } =
     useAiSettings();
+let autoCompactionAttempt: string | undefined;
+watch(() => [contextPreview.state.value, aiSettings.value.autoCompactContext, props.contextRevision,
+    props.threadId, props.loading, props.streaming, compactionInProgress.value], async () => {
+    if (!import.meta.client || componentDisposed || !aiSettings.value.autoCompactContext || !props.threadId || !props.compactThread
+        || props.loading || props.streaming || compactionInProgress.value || props.compactionBlockedReason) return;
+    const preview = contextPreview.state.value;
+    if (preview.pending || !preview.admission || !('budget' in preview.admission)
+        || preview.admission.estimate.input_tokens / preview.admission.budget.effective_context_tokens < 0.8) return;
+    const threadId = props.threadId; const generation = getWorkspaceGeneration();
+    const history = Array.isArray(props.contextRevision) ? props.contextRevision : [];
+    const anchor = history.at(-1)?.id;
+    if (!anchor) return;
+    const attempt = `${generation}:${threadId}:${anchor}`;
+    if (autoCompactionAttempt === attempt) return;
+    autoCompactionAttempt = attempt;
+    try { await inspectCompactionSource(threadId); }
+    catch (error) {
+        if (!(error instanceof CompactionError)) console.warn('[chat-memory] Could not check automatic compaction eligibility.');
+        return;
+    }
+    if (componentDisposed || props.threadId !== threadId || getWorkspaceGeneration() !== generation || props.loading || props.streaming
+        || !aiSettings.value.autoCompactContext || compactionInProgress.value) return;
+    await compactFromSettings();
+});
+async function compactFromSettings() {
+    clearDraftCaptureTimer(); captureDraft();
+    await props.compactThread?.();
+}
 const restoringDraft = ref(false);
+let draftRestoreRevision = 0;
 let draftCaptureTimer: ReturnType<typeof setTimeout> | undefined;
 
 function clearDraftCaptureTimer(): void {
@@ -825,7 +914,7 @@ function scheduleDraftCapture(tabId = props.tabId): void {
 }
 
 function captureDraft(tabId = props.tabId): void {
-    if (!tabId || restoringDraft.value) return;
+    if (!tabId) return;
     tabDrafts.write(tabId, {
         version: 1,
         text: promptText.value,
@@ -844,7 +933,11 @@ function captureDraft(tabId = props.tabId): void {
 }
 
 async function restoreDraft(tabId = props.tabId): Promise<void> {
-    if (!tabId) return;
+    const revision = ++draftRestoreRevision;
+    if (!tabId) {
+        restoringDraft.value = false;
+        return;
+    }
     const draft = tabDrafts.read(tabId);
     restoringDraft.value = true;
     try {
@@ -871,14 +964,21 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
             try {
                 await ensureAiSettingsLoaded?.();
             } catch {}
+            if (
+                componentDisposed ||
+                revision !== draftRestoreRevision ||
+                props.tabId !== tabId
+            ) return;
             modelVariant.value = sanitizeModelVariant(
                 aiSettings.value?.defaultModelVariant
             );
         }
     } finally {
         await nextTick();
-        restoringDraft.value = false;
-        autoResize();
+        if (!componentDisposed && revision === draftRestoreRevision) {
+            restoringDraft.value = false;
+            autoResize();
+        }
     }
 }
 
@@ -981,7 +1081,29 @@ const handleContainerClick = (event: MouseEvent) => {
     }
 };
 
-const handleSend = async (): Promise<SendResult> => {
+const sendBlock = shallowRef<Extract<SendResult, { status: 'rejected' | 'failed' }>>();
+const lossyPreview = shallowRef<import('~/utils/chat/lossy-request').LossyRequestPreview>();
+const stopContextWorkspace = subscribeActiveWorkspaceDb(() => { sendBlock.value = undefined; lossyPreview.value = undefined; });
+onBeforeUnmount(stopContextWorkspace);
+// Compare each source independently; a watch getter returning a new array
+// would also invalidate when a dependency republishes an unchanged value.
+const invalidateContextDecision = () => { sendBlock.value = undefined; lossyPreview.value = undefined; };
+const contextTools = useToolRegistry();
+watch([() => props.threadId, () => props.contextRevision, selectedModel, modelVariant,
+    thinkingEnabled, reasoningEffort, promptText, stagedPromptId, promptSelectionRevision, aiSettings,
+    () => contextTools.listTools.value.map((tool) => [tool.definition, tool.enabled.value])], invalidateContextDecision);
+// Attachment processing mutates the existing array and its pending/hash fields.
+// A shallow ref watch misses those changes and leaves an obsolete decision visible.
+watch([attachments, largeTextBlocks, imageSettings], invalidateContextDecision, { deep: true });
+async function handleSend(decision: { inspectLossyRequest?: boolean; lossyConfirmation?: import('~/utils/chat/lossy-request').LossyRequestPreview } = {}): Promise<SendResult> {
+    const result = await performSend(decision);
+    if ((result.status === 'rejected' || result.status === 'failed') && ['context_full', 'model_metadata_unavailable', 'invalid_context_limit', 'invalid_output_limit'].includes(result.reason)) {
+        sendBlock.value = result;
+        if (result.status === 'rejected') lossyPreview.value = result.lossyPreview;
+    }
+    return result;
+}
+const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfirmation?: import('~/utils/chat/lossy-request').LossyRequestPreview }): Promise<SendResult> => {
     if (props.loading) return { status: 'rejected', reason: 'busy' };
     if (
         !guardPendingAttachmentSend(attachments.value, toast, {
@@ -1035,19 +1157,27 @@ const handleSend = async (): Promise<SendResult> => {
     ) {
         // Provide the current editor JSON to hooks so downstream filters (mentions)
         // can extract structured mentions before the text is flattened.
+        const editorDoc = editor.value?.getJSON?.();
+        const submittedEditorDoc = editorDoc ? structuredClone(editorDoc) : undefined;
+        const submittedText = promptText.value;
+        const submittedAttachments = attachments.value.slice();
+        const submittedLargeTexts = largeTextBlocks.value.slice();
+        const submittedTabId = props.tabId; const submittedThreadId = props.threadId;
+        const submittedWorkspaceGeneration = getWorkspaceGeneration();
         try {
-            const json = editor.value?.getJSON?.();
+            const json = submittedEditorDoc ? structuredClone(submittedEditorDoc) : undefined;
             // Fire as an action to avoid transforming data; listeners can stash it
-            if (json) {
+            if (json && !decision.inspectLossyRequest) {
                 await hooks.doAction('ui.chat.editor:action:before_send', json);
             }
         } catch (e) {
             // Silently handle editor JSON dispatch failure
         }
 
-        let sendResult: Promise<SendResult> | null = null;
-        let durableAcceptance: Promise<SendResult> | null = null;
+        const submission: { result: Promise<SendResult> | null; acceptance: Promise<SendResult> | null } = { result: null, acceptance: null };
         emit('send', {
+            ...decision,
+            editorDoc: submittedEditorDoc,
             text: promptText.value,
             images: attachments.value, // backward compatibility
             attachments: attachments.value, // new unified field
@@ -1062,11 +1192,12 @@ const handleSend = async (): Promise<SendResult> => {
                     ? reasoningEffort.value ?? null
                     : null,
             registerResult: (result, acceptance = result) => {
-                sendResult = result;
-                durableAcceptance = acceptance;
+                submission.result = result;
+                submission.acceptance = acceptance;
             },
         });
         // A parent that cannot accept the request leaves the draft untouched.
+        const sendResult = submission.result;
         if (!sendResult) {
             return {
                 status: 'failed',
@@ -1077,7 +1208,7 @@ const handleSend = async (): Promise<SendResult> => {
         }
         let acceptance: SendResult;
         try {
-            acceptance = await (durableAcceptance ?? sendResult);
+            acceptance = await (submission.acceptance ?? sendResult);
         } catch (error) {
             return {
                 status: 'failed',
@@ -1086,7 +1217,16 @@ const handleSend = async (): Promise<SendResult> => {
                 error: error instanceof Error ? error.message : String(error),
             };
         }
-        if (!hasDurableSendAcceptance(acceptance)) return acceptance;
+        if (!hasDurableSendAcceptance(acceptance) || acceptance.status === 'failed' || acceptance.status === 'aborted') return acceptance;
+        // Admission can await model/server preparation while the user edits or
+        // navigates. Clear only the exact submitted draft in its owning view.
+        if (getWorkspaceGeneration() !== submittedWorkspaceGeneration || props.tabId !== submittedTabId
+            || submittedThreadId && props.threadId !== submittedThreadId || promptText.value !== submittedText
+            || JSON.stringify(editor.value?.getJSON?.()) !== JSON.stringify(submittedEditorDoc)
+            || attachments.value.length !== submittedAttachments.length || attachments.value.some((row, index) => row !== submittedAttachments[index])
+            || largeTextBlocks.value.length !== submittedLargeTexts.length || largeTextBlocks.value.some((row, index) => row !== submittedLargeTexts[index])) {
+            return await sendResult;
+        }
         clearDraftCaptureTimer();
         tabDrafts.discard(props.tabId);
         // Reset local state and editor content so placeholder shows again

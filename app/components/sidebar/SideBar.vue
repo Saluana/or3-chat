@@ -85,6 +85,7 @@
         :icon-folder="iconFolder"
         :delete-thread-modal-props="deleteThreadModalProps"
         :show-delete-modal="showDeleteModal"
+        :thread-has-descendants="threadHasDescendants"
         :delete-document-modal-props="deleteDocumentModalProps"
         :show-delete-document-modal="showDeleteDocumentModal"
         :delete-project-modal-props="deleteProjectModalProps"
@@ -97,6 +98,7 @@
         @save-rename-project="saveRenameProject"
         @update:show-delete-modal="showDeleteModal = $event"
         @delete-thread="deleteThread"
+        @soft-delete-thread="softDeleteThread"
         @update:show-delete-document-modal="showDeleteDocumentModal = $event"
         @delete-document="deleteDocument"
         @update:show-delete-project-modal="showDeleteProjectModal = $event"
@@ -177,6 +179,7 @@ import {
 import { useHooks } from '~/core/hooks/useHooks';
 import { liveQuery } from 'dexie';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
+import { ThreadHasDescendantsError } from '~/db/threads';
 import {
     db,
     upsert,
@@ -552,6 +555,8 @@ const renameProjectModalProps = createSidebarModalProps(
 
 const showDeleteModal = ref(false);
 const deleteId = ref<string | null>(null);
+const threadHasDescendants = ref(false);
+let deleteWorkspaceGeneration = getWorkspaceGeneration();
 const deleteThreadModalProps = createSidebarModalProps(
     'sidebar.delete-thread',
     {
@@ -671,6 +676,8 @@ async function saveRename() {
 }
 
 function confirmDelete(thread: ThreadItem) {
+    threadHasDescendants.value = false;
+    deleteWorkspaceGeneration = getWorkspaceGeneration();
     deleteId.value = thread.id;
     showDeleteModal.value = true;
 }
@@ -691,10 +698,26 @@ function confirmDeleteProject(projectOrId: string | Project) {
 }
 
 async function deleteThread() {
-    if (!deleteId.value) return;
-    await dbDel.hard.thread(deleteId.value);
+    if (!deleteId.value || deleteWorkspaceGeneration !== getWorkspaceGeneration()) return;
+    const id = deleteId.value;
+    try { await dbDel.hard.thread(id); }
+    catch (error) {
+        if (error instanceof ThreadHasDescendantsError && deleteId.value === id && deleteWorkspaceGeneration === getWorkspaceGeneration()) {
+            threadHasDescendants.value = true; return;
+        }
+        throw error;
+    }
+    if (deleteId.value !== id || deleteWorkspaceGeneration !== getWorkspaceGeneration()) return;
     showDeleteModal.value = false;
     deleteId.value = null;
+}
+
+async function softDeleteThread() {
+    if (!deleteId.value || !threadHasDescendants.value || deleteWorkspaceGeneration !== getWorkspaceGeneration()) return;
+    const id = deleteId.value;
+    await dbDel.soft.thread(id);
+    if (deleteId.value !== id || deleteWorkspaceGeneration !== getWorkspaceGeneration()) return;
+    showDeleteModal.value = false; deleteId.value = null; threadHasDescendants.value = false;
 }
 
 async function deleteProject() {

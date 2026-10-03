@@ -366,6 +366,7 @@ describe('trusted host context', () => {
         const disposed: string[] = [];
         const trusted = createTrustedHostContext({
             pluginId: 'fixture.workflow', version: '1.0.0', grants: ['hooks.register'],
+            features: ['or3-trusted-host-v1', 'chat.send.prepare-commit-v1'],
             subscribeHook(name, kind, callback) {
                 const key = `${kind}:${name}`;
                 listeners.set(key, callback);
@@ -373,6 +374,9 @@ describe('trusted host context', () => {
             },
         });
         const seen: unknown[] = [];
+        expect(trusted.context.features.has('chat.send.prepare-commit-v1')).toBe(true);
+        trusted.context.hooks.onFilter('ai.chat.send:filter:prepare', (payload: import('~~/shared/hooks/hook-domain-types').ChatSendPreparation) => payload);
+        trusted.context.hooks.onFilter('ai.chat.send:filter:commit', (payload: import('~~/shared/hooks/hook-domain-types').ChatSendCommit) => ({ ...payload, status: 'handled' as const }));
         trusted.context.hooks.onAction('ai.chat.send:action:before', (payload) => {
             seen.push(payload);
         });
@@ -388,7 +392,7 @@ describe('trusted host context', () => {
             .toThrow(/not available/);
         await trusted.dispose();
         expect(listeners.size).toBe(0);
-        expect(disposed).toHaveLength(2);
+        expect(disposed).toHaveLength(4);
     });
 
     it('releases later hook subscriptions when one unsubscribe throws', async () => {

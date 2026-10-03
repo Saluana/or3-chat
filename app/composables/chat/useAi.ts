@@ -1,4 +1,10 @@
 import { presentError, errorDiagnostics } from '~~/shared/errors';
+import { resolveThreadProjection } from '~/utils/chat/compaction/history';
+import { recoveryInputFingerprint, recoverySourceFingerprint, type NativeRecoveryCheckpoint } from '~/utils/chat/native-recovery';
+import { toolDefinitionEquals } from '~~/shared/chat/tool-policy';
+import { projectTranscriptForOpenRouter, storedMessagesToCanonicalTranscript, associateUiToolResultMessages } from '~/utils/chat/transcript';
+import { ChatContextAdmissionError, contextAdmissionFailureReason, type ContextRequestPolicy } from '~~/shared/chat/context-budget';
+import type { ChatSendPreparation, ChatSendCommit } from '~~/shared/hooks/hook-domain-types';
 /**
  * @module app/composables/chat/useAi.ts
  *
@@ -23,6 +29,7 @@ import { presentError, errorDiagnostics } from '~~/shared/errors';
  * - Abort always finalizes stream accumulator state
  */
 
+import { prepareLossyRequest, confirmLossyRequest } from '~/utils/chat/lossy-request';
 import {
     ref,
     shallowRef,
@@ -35,7 +42,7 @@ import {
 import { useToast, useAppConfig, useRuntimeConfig } from '#imports';
 import { nowSec, newId, getWriteTxTableNames } from '~/db/util';
 import { type Message } from '~/db';
-import { getDb, getActiveWorkspaceId, type Or3DB } from '~/db/client';
+import { getDb, getActiveWorkspaceId, getWorkspaceGeneration, type Or3DB } from '~/db/client';
 import { serializeFileHashes } from '~/db/files-util';
 import { normalizeFileUrl } from '~/utils/chat/useAi-internal/files';
 import {
@@ -77,11 +84,11 @@ import {
     deriveMessageContent,
     shouldKeepAssistantMessage,
     getChatModalities,
-    resolveChatInputTokenBudget,
 } from '~/utils/chat/messages';
 // getTextFromContent removed for UI messages; raw messages maintain original parts if needed
 import {
     startBackgroundStream,
+    prepareOpenRouterRequest,
     abortBackgroundJob,
     abortBackgroundAdmission,
     pollJobStatus,
@@ -91,12 +98,11 @@ import {
     type OpenRouterReasoningConfig,
 } from '../../utils/chat/openrouterStream';
 import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
-import type { OpenRouterModel } from '~~/shared/openrouter/types';
 import {
     appendModelVariant,
-    stripModelVariantSuffix,
 } from '~~/shared/openrouter/model-variants';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
+import { placeHistoryTools } from '~/utils/chat/history-placement';
 import { inferMimeFromUrl } from '~/utils/chat/files';
 import { createStreamAccumulator } from '~/composables/chat/useStreamAccumulator';
 import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
@@ -135,7 +141,6 @@ import {
     resolveSystemPromptText,
     buildSystemPromptMessage,
     buildOpenRouterMessagesForSend,
-    enforceOpenRouterMessageTokenBudget,
     retryMessageImpl,
     continueMessageImpl,
     makeAssistantPersister,
@@ -218,7 +223,7 @@ export function useChat(
     options: { historyAlreadyLoaded?: boolean } = {}
 ) {
     // Messages and basic state
-    const messages = ref<UiChatMessage[]>(msgs.map((m) => ensureUiMessage(m)));
+    const messages = ref<UiChatMessage[]>(associateUiToolResultMessages(msgs.map((m) => ensureUiMessage(m)), msgs));
     const rawMessages = ref<ChatMessage[]>([...msgs]);
     const visibleRequest = shallowRef<ChatRequestScope | null>(null);
     const backgroundRequestScopes = shallowReactive(
@@ -250,44 +255,6 @@ export function useChat(
     // from an async send handler triggers Vue's "inject() can only be used
     // inside setup()" warning.
     const toast = useToast();
-    const unresolvedModelIds = new Set<string>();
-    async function resolveModelMetadata(
-        selectedModelId: string
-    ): Promise<OpenRouterModel | undefined> {
-        const modelId = stripModelVariantSuffix(
-            stripThinkingSuffix(selectedModelId)
-        );
-        const { catalog, favoriteModels, fetchModels } = useModelStore();
-        const matches = (candidate: OpenRouterModel) =>
-            candidate.id === modelId || candidate.canonical_slug === modelId;
-        const lookup = () =>
-            catalog.value.find(matches) ?? favoriteModels.value.find(matches);
-        const hasContext = (candidate: OpenRouterModel | undefined) =>
-            [
-                candidate?.top_provider?.context_length,
-                candidate?.context_length,
-            ].some(
-                (value) =>
-                    typeof value === 'number' &&
-                    Number.isFinite(value) &&
-                    value > 0
-            );
-
-        let metadata = lookup();
-        if (hasContext(metadata) || unresolvedModelIds.has(modelId)) return metadata;
-        try {
-            await fetchModels();
-            metadata = lookup();
-            if (!hasContext(metadata)) {
-                await fetchModels({ force: true });
-                metadata = lookup();
-            }
-            if (!hasContext(metadata)) unresolvedModelIds.add(modelId);
-        } catch {
-            // Keep the conservative fallback if catalog metadata is unavailable.
-        }
-        return metadata;
-    }
     const appConfig = useAppConfig() as {
         errors?: { showAbortInfo?: boolean };
     };
@@ -938,9 +905,9 @@ export function useChat(
                 // A newer navigation owns the reactive state now. The queued
                 // sync below will load that target after this stale query ends.
                 if (threadIdRef.value !== targetThreadId) return;
-                messages.value = rawMessages.value
+                messages.value = associateUiToolResultMessages(rawMessages.value
                     .filter((m: ChatMessage) => m.role !== 'tool')
-                    .map((m) => ensureUiMessage(m));
+                    .map((m) => ensureUiMessage(m)), rawMessages.value);
                 await reattachBackgroundJobs();
                 await reconcileForegroundGenerations();
                 logBgStream('history-sync-complete', {
@@ -1789,19 +1756,25 @@ export function useChat(
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : String(error);
-            result = {
-                status: 'failed',
+            const stopped = requestScope.cancelled || (error instanceof Error && error.name === 'AbortError');
+            result = stopped ? { status: 'aborted', requestId, reason: 'aborted',
+                ...(requestScope.userMessageId ? { userMessageId: requestScope.userMessageId } : {}),
+                ...(requestScope.assistantMessageId ? { assistantMessageId: requestScope.assistantMessageId } : {}),
+            } : {
+                status: error instanceof ChatContextAdmissionError && !requestScope.userMessageId ? 'rejected' : 'failed',
                 requestId,
                 reason:
-                    error instanceof ToolIterationLimitError
+                    contextAdmissionFailureReason(error) ?? (error instanceof ToolIterationLimitError
                         ? 'tool_iteration_limit'
-                        : 'stream_error',
+                        : 'stream_error'),
                 error: message,
+                ...(requestScope.userMessageId ? { userMessageId: requestScope.userMessageId } : {}),
+                ...(requestScope.assistantMessageId ? { assistantMessageId: requestScope.assistantMessageId } : {}),
             };
-            if (import.meta.dev) {
+            if (!stopped && import.meta.dev) {
                 console.warn('[useChat] sendMessage threw', errorDiagnostics(error));
             }
-            reportError(
+            if (!stopped && !contextAdmissionFailureReason(error)) reportError(
                 err('ERR_INTERNAL', message || 'Failed to send message', {
                     severity: 'error',
                     tags: { domain: 'chat', stage: 'send' },
@@ -1809,6 +1782,7 @@ export function useChat(
                 { toast: true }
             );
         } finally {
+            if (result.status !== 'detached') requestScope.abortController?.abort();
             if (!requestScope.finalization && result.status !== 'detached') {
                 const finalization = await finalizeRequest(requestScope, {
                     outcome:
@@ -1828,8 +1802,23 @@ export function useChat(
                               ? result.error
                               : undefined,
                     persistence: requestScope.jobId ? 'tracker' : 'request',
+                    failureReason: 'reason' in result ? result.reason : undefined,
                 });
                 reportFinalization(finalization);
+            }
+            const recovery = nativeRecoveryCandidates.get(requestScope);
+            if (recovery) {
+                try {
+                    if (!(result.status === 'failed' && result.reason === 'context_full' && !recovery.providerAccepted)) {
+                        await requestScope.originDb.transaction('rw', requestScope.originDb.chat_request_recoveries, async () => {
+                            const saved = await requestScope.originDb.chat_request_recoveries.get(recovery.checkpoint.thread_id);
+                            if (saved?.request_id === requestId)
+                                await requestScope.originDb.chat_request_recoveries.delete(saved.thread_id);
+                        });
+                    }
+                } catch {
+                    if (result.status === 'failed') result.error += ' Local recovery cleanup failed. Keep this draft and retry after local storage is available.';
+                }
             }
             if (activeRequestId === requestId) activeRequestId = null;
             if (activeRequestScope === requestScope) {
@@ -1870,6 +1859,32 @@ export function useChat(
             sendMessagesParams = contentOrParams;
         }
 
+        // Detach user selections before any plugin/catalog/media await.
+        sendMessagesParams = { ...sendMessagesParams,
+            files: sendMessagesParams.files?.map((file) => ({ ...file })),
+            file_hashes: sendMessagesParams.file_hashes?.slice(),
+            context_hashes: sendMessagesParams.context_hashes?.slice(),
+            extraTextParts: sendMessagesParams.extraTextParts?.slice(),
+            historyOverride: sendMessagesParams.historyOverride ? structuredClone(sendMessagesParams.historyOverride) : undefined,
+            editorDoc: sendMessagesParams.editorDoc ? structuredClone(sendMessagesParams.editorDoc) : undefined,
+        };
+        const workspaceGeneration = getWorkspaceGeneration();
+        const preparationHookNames = ['ui.chat.message:filter:outgoing', 'ai.chat.model:filter:select',
+            'ai.chat.messages:filter:input', 'ai.chat.send:filter:prepare', 'ai.chat.send:filter:commit',
+            'ai.chat.messages:filter:before_send'];
+        const ownsFilterChain = hooks.captureFilterChain(preparationHookNames);
+        const preparationErrors = preparationHookNames.map((name) => hooks._diagnostics.errors[name] ?? 0);
+        requestScope.abortController ??= new AbortController();
+        abortController.value = requestScope.abortController;
+        const preparationSignal = requestScope.abortController.signal;
+        const ownsPreparation = () => !isRequestCancelled(requestScope) && !preparationSignal.aborted
+            && requestScope.ownsView() && getDb() === requestScope.originDb
+            && getWorkspaceGeneration() === workspaceGeneration;
+        const capturedPreference = await useAiSettings().captureContextPreference();
+        if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
+        const newPromptSelection = pendingPromptIdRef.value || DEFAULT_PROMPT_SELECTION;
+        const masterPrompt = useAiSettings().settings.value.masterSystemPrompt;
+
         const hasKey = Boolean(effectiveApiKey.value) || hasInstanceKey.value;
         if (!hasKey) {
             if (allowUserOverride.value && guestAccessEnabled.value) {
@@ -1907,6 +1922,19 @@ export function useChat(
                 requestId,
                 reason: 'missing_credentials',
             };
+        }
+
+        // Reuse the already filtered native payload, never request/delegation hooks.
+        if (requestScope.threadId && !sendMessagesParams.historyOverride) {
+            const recovery = await requestScope.originDb.chat_request_recoveries.get(requestScope.threadId);
+            if (recovery && recovery.input_fingerprint === await recoveryInputFingerprint(content, sendMessagesParams)) {
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- A durable checkpoint can be written by a newer client.
+                if (recovery.version !== 1)
+                    return { status: 'rejected', requestId, reason: 'unavailable', error: 'This saved attempt uses an unsupported recovery version. Update the app or edit the draft to prepare a new request.' };
+                if (sendMessagesParams.inspectLossyRequest || sendMessagesParams.lossyConfirmation)
+                    return { status: 'rejected', requestId, reason: 'unavailable', error: 'This saved attempt has a final payload. Retry it with another model or reply allowance, or edit the draft for a new request.' };
+                return await recoverNativeTurn(requestScope, recovery, sendMessagesParams);
+            }
         }
 
         // Extract extra text parts early so we can account for them in validation.
@@ -1956,8 +1984,6 @@ export function useChat(
             return { status: 'rejected', requestId, reason: 'client_limit' };
 
         if (!requestScope.threadId) {
-            const effectivePromptId =
-                pendingPromptIdRef.value || DEFAULT_PROMPT_SELECTION;
             try {
                 const { settings } = useAiSettings();
                 const settingsValue = settings.value as
@@ -2010,61 +2036,14 @@ export function useChat(
             } catch {
                 /* intentionally empty */
             }
-            const newThread = await createThreadInDb(
-                requestScope.originDb,
-                {
-                    title:
-                        content.split(' ').slice(0, 6).join(' ') ||
-                        'New Thread',
-                    last_message_at: nowSec(),
-                    parent_thread_id: null,
-                    system_prompt_id: effectivePromptId || null,
-                },
-                {
-                    hooks,
-                    limits: runtimeConfig.public.limits,
-                }
-            );
-            if (isRequestCancelled(requestScope)) {
-                return { status: 'aborted', requestId, reason: 'aborted' };
-            }
-            requestScope.threadId = newThread.id;
-            threadIdRef.value = newThread.id;
-            // Bind thread to active pane immediately (before first user message hook) if multi-pane present.
-            try {
-                const mpApi = (globalThis as GlobalWithPaneApi)
-                    .__or3MultiPaneApi;
-                if (mpApi?.panes.value && mpApi.activePaneIndex.value >= 0) {
-                    const pane = mpApi.panes.value[mpApi.activePaneIndex.value];
-                    if (pane && pane.mode === 'chat' && !pane.threadId) {
-                        if (typeof mpApi.setPaneThread === 'function') {
-                            try {
-                                await mpApi.setPaneThread(
-                                    mpApi.activePaneIndex.value,
-                                    newThread.id
-                                );
-                            } catch {
-                                pane.threadId = newThread.id;
-                            }
-                        } else {
-                            pane.threadId = newThread.id;
-                        }
-                    }
-                }
-            } catch {
-                /* intentionally empty */
-            }
         } // END create-new-thread block
 
-        const requestThreadId = requestScope.threadId;
-        if (!requestThreadId) {
-            return {
-                status: 'failed',
-                requestId,
-                reason: 'stream_error',
-                error: 'No chat thread is available for this request.',
-            };
-        }
+        const preparationThreadId = requestScope.threadId;
+        // Reserve the actual new-thread ID, reused by the existing creator
+        // after admission. No assistant IDs or saved-row hooks run here.
+        // Blank panes use either undefined or the empty string. Neither is a
+        // durable thread identity for preparation or the atomic first write.
+        const admissionThreadId = preparationThreadId || newId();
 
         if (
             tailAssistant.value &&
@@ -2154,7 +2133,7 @@ export function useChat(
         const hydratedFiles = await Promise.all(
             Array.isArray(files) ? files.map(normalizeFileUrl) : []
         );
-        if (isRequestCancelled(requestScope) || threadIdRef.value !== requestThreadId) {
+        if (isRequestCancelled(requestScope) || threadIdRef.value !== preparationThreadId) {
             return { status: 'aborted', requestId, reason: 'aborted' };
         }
 
@@ -2171,6 +2150,161 @@ export function useChat(
                 (t): t is string => typeof t === 'string' && t.trim() !== ''
             )
             .join('\n\n');
+        let canonicalHistory = sendMessagesParams.historyOverride ?? rawMessages.value.slice();
+        let measuredUsage: unknown;
+        let sourceFingerprint: string | undefined;
+        if (preparationThreadId) {
+            try {
+                const projection = await resolveThreadProjection(preparationThreadId, requestScope.originDb);
+                sourceFingerprint = JSON.stringify(projection);
+                for (const row of [...projection.messages].reverse()) {
+                    if (row.role !== 'assistant') continue;
+                    if (row.data && typeof row.data === 'object' && !Array.isArray(row.data)) {
+                        const usage = (row.data as Record<string, unknown>).usage;
+                        if (usage) { measuredUsage = usage; break; }
+                    }
+                }
+                if (sendMessagesParams.retryExcludedMessageIds) {
+                    const excluded = new Set(sendMessagesParams.retryExcludedMessageIds);
+                    if ([...excluded].some((id) => !projection.messages.some((row) => row.id === id && row.thread_id === preparationThreadId))) {
+                        return { status: 'rejected', requestId, reason: 'unavailable' };
+                    }
+                    canonicalHistory = projectTranscriptForOpenRouter(storedMessagesToCanonicalTranscript(
+                        projection.messages.filter((row) => !excluded.has(row.id))));
+                } else if (!sendMessagesParams.historyOverride) canonicalHistory = projectTranscriptForOpenRouter(
+                    storedMessagesToCanonicalTranscript(projection.messages));
+            } catch (error) {
+                if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
+                toast.add({ title: 'Conversation unavailable', description: presentError(error).message, color: 'warning' });
+                return { status: 'rejected', requestId, reason: 'unavailable' };
+            }
+        }
+        const startedAt = Date.now();
+        const modelId = await hooks.applyFilters('ai.chat.model:filter:select', model);
+        const readiness = await useModelStore().resolveContextModel(modelId, { signal: preparationSignal });
+        if (!readiness.ok) throw new ChatContextAdmissionError(readiness);
+        const contextPolicy: ContextRequestPolicy = Object.freeze({ model: readiness.metadata,
+            userMaxContextTokens: capturedPreference.maxContextTokens, source: readiness.source,
+            requestedCompletionTokens: sendMessagesParams.maxCompletionTokens, measuredUsage });
+        const systemMessage = await buildSystemPromptMessage({ threadId: preparationThreadId,
+            promptSelection: newPromptSelection, activePromptContent: activePromptContent.value,
+            masterPrompt });
+        const candidateUser: ChatMessage = { role: 'user', content: parts,
+            file_hashes: file_hashes.length ? serializeFileHashes(file_hashes) : undefined };
+        const messagesWithSystemRaw = [...canonicalHistory, candidateUser];
+        if (systemMessage) messagesWithSystemRaw.unshift(systemMessage);
+        const effectiveMessages = await hooks.applyFilters('ai.chat.messages:filter:input', messagesWithSystemRaw);
+        const sanitizedEffectiveMessages = (Array.isArray(effectiveMessages) ? effectiveMessages : []).filter(shouldKeepAssistantMessage);
+        let orMessages = await buildOpenRouterMessagesForSend({ effectiveMessages: sanitizedEffectiveMessages,
+            assistantHashes, prevAssistantId: prevAssistant?.id, contextHashes: context_hashes,
+            fileHashes: Array.isArray(file_hashes) ? file_hashes : [], maxImageInputs: 5, imageInclusionPolicy: 'all' });
+        const preparation: ChatSendPreparation = { requestId, workspaceId: requestScope.workspaceId,
+            workspaceGeneration, model: modelId, messages: JSON.parse(JSON.stringify(orMessages)) as ChatSendPreparation['messages'],
+            editorDoc: sendMessagesParams.editorDoc, signal: preparationSignal };
+        const prepared = await hooks.applyFilters('ai.chat.send:filter:prepare', preparation);
+        if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
+        if (!ownsFilterChain() || preparationHookNames.some((name, index) => (hooks._diagnostics.errors[name] ?? 0) > preparationErrors[index]!))
+            return { status: 'rejected', requestId, reason: 'unavailable', error: 'Request filters changed or failed during preparation. Retry the request.' };
+        if (prepared.error) return { status: 'rejected', requestId, reason: 'unavailable', error: prepared.error.message };
+        if (prepared.requestId !== requestId || prepared.workspaceId !== requestScope.workspaceId
+            || prepared.workspaceGeneration !== workspaceGeneration || prepared.model !== modelId
+            || prepared.signal !== preparationSignal || !Array.isArray(prepared.messages))
+            return { status: 'rejected', requestId, reason: 'unavailable', error: 'Request preparation changed ownership. Retry the request.' };
+        orMessages = JSON.parse(JSON.stringify(prepared.messages)) as OpenRouterMessage[];
+        if (!prepared.delegation && !orMessages.length)
+            return { status: 'rejected', requestId, reason: 'empty_context', error: 'No model input remained after preparation.' };
+        const modalities = getChatModalities(modelId);
+        const toolRegistry = useToolRegistry();
+        const budgetModelMeta = catalog.value.find((entry) => entry.id === readiness.modelId)
+            ?? favoriteModels.value.find((entry) => entry.id === readiness.modelId);
+        const modelSupportsTools = !budgetModelMeta?.supported_parameters || budgetModelMeta.supported_parameters.includes('tools');
+        const advertisedToolDefs = JSON.parse(JSON.stringify(modelSupportsTools ? toolRegistry.getEnabledDefinitions({
+            workspaceId: requestScope.workspaceId, threadId: admissionThreadId }) : [])) as import('~/utils/chat/types').ToolDefinition[];
+        const enabledToolDefs = await placeHistoryTools(advertisedToolDefs, { background: backgroundStreamingAllowed.value,
+            threadId: preparationThreadId, signal: preparationSignal });
+        const foregroundToolDefs = enabledToolDefs.filter((tool) => tool.runtime !== 'server');
+        const hasBrowserTools = enabledToolDefs.some((tool) => tool.runtime === 'client');
+        const browserToolBridgeAvailable = !hasBrowserTools || !backgroundStreamingAllowed.value
+            || await isBackgroundClientToolBridgeAvailable();
+        const allowBackgroundStreaming = backgroundStreamingAllowed.value && browserToolBridgeAvailable
+            && modalities.length === 1 && modalities[0] === 'text';
+        const providerPreparation = { model: modelId, orMessages, modalities, reasoning,
+            tools: (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs).length
+                ? (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs) : undefined,
+            contextPolicy, signal: preparationSignal };
+        const lossyScope = { db: requestScope.originDb, generation: workspaceGeneration,
+            threadId: preparationThreadId, sourceFingerprint };
+        let lossyPreview: Awaited<ReturnType<typeof prepareLossyRequest>> | undefined;
+        let contextOmission: Awaited<ReturnType<typeof confirmLossyRequest>>['omission'] | undefined;
+        let reviewedLossyMessages: string | undefined;
+        if (sendMessagesParams.inspectLossyRequest || sendMessagesParams.lossyConfirmation) {
+            if (prepared.delegation) return { status: 'rejected', requestId, reason: 'unavailable',
+                error: 'Delegated requests cannot omit native history. Edit the request or compact the conversation.' };
+            if (sendMessagesParams.inspectLossyRequest) lossyPreview = await prepareLossyRequest(providerPreparation, lossyScope);
+            else {
+                const confirmed = await confirmLossyRequest(sendMessagesParams.lossyConfirmation!, providerPreparation, lossyScope);
+                orMessages = confirmed.messages as OpenRouterMessage[]; contextOmission = confirmed.omission;
+                reviewedLossyMessages = JSON.stringify(orMessages);
+            }
+        } else if (!prepared.delegation) await prepareOpenRouterRequest(providerPreparation);
+        if (sourceFingerprint && JSON.stringify(await resolveThreadProjection(preparationThreadId!, requestScope.originDb)) !== sourceFingerprint)
+            return { status: 'rejected', requestId, reason: 'unavailable', error: 'Conversation changed during preparation. Retry the request.' };
+        if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
+        if (!ownsFilterChain() || useAiSettings().settings.value.masterSystemPrompt !== masterPrompt
+            || (!preparationThreadId && (pendingPromptIdRef.value || DEFAULT_PROMPT_SELECTION) !== newPromptSelection)
+            || JSON.stringify(modelSupportsTools ? toolRegistry.getEnabledDefinitions({ workspaceId: requestScope.workspaceId,
+                threadId: admissionThreadId }) : []) !== JSON.stringify(advertisedToolDefs))
+            return { status: 'rejected', requestId, reason: 'unavailable', error: 'Request configuration changed during preparation. Retry the request.' };
+        if (lossyPreview) return { status: 'rejected', requestId, reason: 'context_full', lossyPreview,
+            error: 'Review the listed omissions before sending this one request.' };
+        if (!requestScope.threadId) {
+            const newThread = await createThreadInDb(
+                requestScope.originDb,
+                {
+                    id: admissionThreadId,
+                    title:
+                        content.split(' ').slice(0, 6).join(' ') ||
+                        'New Thread',
+                    last_message_at: nowSec(),
+                    parent_thread_id: null,
+                    system_prompt_id: newPromptSelection || null,
+                },
+                {
+                    hooks,
+                    limits: runtimeConfig.public.limits,
+                }
+            );
+            if (isRequestCancelled(requestScope)) {
+                return { status: 'aborted', requestId, reason: 'aborted' };
+            }
+            requestScope.threadId = newThread.id;
+            threadIdRef.value = newThread.id;
+            // Bind thread to active pane immediately (before first user message hook) if multi-pane present.
+            try {
+                const mpApi = (globalThis as GlobalWithPaneApi)
+                    .__or3MultiPaneApi;
+                if (mpApi?.panes.value && mpApi.activePaneIndex.value >= 0) {
+                    const pane = mpApi.panes.value[mpApi.activePaneIndex.value];
+                    if (pane && pane.mode === 'chat' && !pane.threadId) {
+                        if (typeof mpApi.setPaneThread === 'function') {
+                            try {
+                                await mpApi.setPaneThread(
+                                    mpApi.activePaneIndex.value,
+                                    newThread.id
+                                );
+                            } catch {
+                                pane.threadId = newThread.id;
+                            }
+                        } else {
+                            pane.threadId = newThread.id;
+                        }
+                    }
+                }
+            } catch {
+                /* intentionally empty */
+            }
+        }
+        const requestThreadId = requestScope.threadId!;
         const nextUserMessageId = newId();
         const userDbMsg = await appendMessageToDb(requestScope.originDb, {
             id: nextUserMessageId,
@@ -2180,6 +2314,7 @@ export function useChat(
                 ...userTranscriptData(nextUserMessageId),
                 content: persistedUserText,
                 attachments: files ?? [],
+                ...(contextOmission ? { context_omission: contextOmission } : {}),
             },
             file_hashes: file_hashes.length
                 ? serializeFileHashes(file_hashes)
@@ -2243,99 +2378,7 @@ export function useChat(
         let terminalResult: SendResult | undefined;
         let stopForegroundHeartbeat: (() => void) | undefined;
         try {
-            const startedAt = Date.now();
-            const modelIdPromise = hooks.applyFilters(
-                'ai.chat.model:filter:select',
-                model
-            );
-            const historySyncPromise = ensureHistorySynced();
-
-            let masterPrompt = '';
-            try {
-                const { settings } = useAiSettings();
-                const settingsValue = settings.value as
-                    | ChatSettings
-                    | undefined;
-                masterPrompt = settingsValue?.masterSystemPrompt ?? '';
-            } catch {
-                masterPrompt = '';
-            }
-            const systemMessagePromise = buildSystemPromptMessage({
-                threadId: requestThreadId,
-                activePromptContent: activePromptContent.value,
-                masterPrompt,
-            });
-            const [modelId] = await Promise.all([
-                modelIdPromise,
-                historySyncPromise,
-            ]);
             currentModelId = modelId;
-            const systemMessage = await systemMessagePromise;
-            if (
-                isRequestCancelled(requestScope) ||
-                threadIdRef.value !== requestThreadId
-            ) {
-                return {
-                    status: 'aborted',
-                    requestId,
-                    reason: 'aborted',
-                    userMessageId: userDbMsg.id,
-                };
-            }
-
-            const messagesWithSystemRaw = sendMessagesParams.historyOverride
-                ? [...sendMessagesParams.historyOverride, rawUser]
-                : [...rawMessages.value];
-            if (systemMessage) {
-                messagesWithSystemRaw.unshift(systemMessage);
-            }
-
-            const effectiveMessages = await hooks.applyFilters(
-                'ai.chat.messages:filter:input',
-                messagesWithSystemRaw
-            );
-
-            // Remove prior empty assistant placeholder messages
-            const sanitizedEffectiveMessages = (
-                Array.isArray(effectiveMessages) ? effectiveMessages : []
-            ).filter(shouldKeepAssistantMessage);
-
-            const budgetModelMeta = await resolveModelMetadata(modelId);
-            const maxInputTokens = resolveChatInputTokenBudget(budgetModelMeta);
-
-            let orMessages = await buildOpenRouterMessagesForSend({
-                effectiveMessages: sanitizedEffectiveMessages,
-                assistantHashes,
-                prevAssistantId: prevAssistant?.id,
-                contextHashes: context_hashes,
-                fileHashes: Array.isArray(file_hashes) ? file_hashes : [],
-                maxImageInputs: 5,
-                imageInclusionPolicy: 'all',
-                maxInputTokens,
-            });
-            if (
-                isRequestCancelled(requestScope) ||
-                threadIdRef.value !== requestThreadId
-            ) {
-                return {
-                    status: 'aborted',
-                    requestId,
-                    reason: 'aborted',
-                    userMessageId: userDbMsg.id,
-                };
-            }
-            if (orMessages.length === 0) {
-                return {
-                    status: 'failed',
-                    requestId,
-                    reason: 'empty_context',
-                    error: 'No model input remained after message preparation.',
-                    userMessageId: userDbMsg.id,
-                };
-            }
-
-            // modalities controls OUTPUT format, not input capability
-            const modalities = getChatModalities(modelId);
 
             const newStreamId = newId();
             requestScope.streamId = newStreamId;
@@ -2402,23 +2445,8 @@ export function useChat(
                     : undefined,
             });
 
-            const toolRegistry = useToolRegistry();
-            const modelSupportsTools = !budgetModelMeta?.supported_parameters
-                || budgetModelMeta.supported_parameters.includes('tools');
-            const enabledToolDefs = modelSupportsTools ? toolRegistry.getEnabledDefinitions({
-                workspaceId: requestScope.workspaceId,
-                threadId: requestThreadId,
-            }) : [];
-            const foregroundToolDefs = enabledToolDefs.filter(
-                (tool) => tool.runtime !== 'server'
-            );
-
-            // Track tool calls across all loop iterations (persists state)
-            const activeToolCalls = new Map<string, ToolCallInfo>();
 
             aborted.value = false;
-            requestScope.abortController = null;
-            abortController.value = null;
             backgroundJobId.value = null;
             backgroundJobMode.value = 'none';
             backgroundJobInfo.value = null;
@@ -2443,13 +2471,33 @@ export function useChat(
                     orMessages = candidate;
                 }
             }
-            orMessages = await enforceOpenRouterMessageTokenBudget(
-                orMessages,
-                maxInputTokens
-            );
+            if (prepared.delegation) {
+                const expectedDelegation = { ...prepared.delegation };
+                const commit: ChatSendCommit = { requestId, workspaceId: requestScope.workspaceId,
+                    workspaceGeneration, signal: preparationSignal, delegation: { ...expectedDelegation },
+                    assistant: { id: assistantDbMsg.id, threadId: requestThreadId, streamId: newStreamId }, status: 'pending' };
+                const acknowledgement = await hooks.applyFilters('ai.chat.send:filter:commit', commit);
+                if (!ownsPreparation()) throw new DOMException('Chat request cancelled', 'AbortError');
+                if (acknowledgement.status !== 'handled'
+                    || acknowledgement.requestId !== requestId
+                    || acknowledgement.workspaceId !== requestScope.workspaceId
+                    || acknowledgement.workspaceGeneration !== workspaceGeneration
+                    || acknowledgement.signal !== preparationSignal
+                    // A runtime filter can return an incomplete acknowledgement.
+                    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+                    || acknowledgement.assistant?.id !== assistantDbMsg.id
+                    || acknowledgement.assistant.threadId !== requestThreadId
+                    || acknowledgement.assistant.streamId !== newStreamId
+                    || acknowledgement.delegation?.pluginId !== expectedDelegation.pluginId
+                    || acknowledgement.delegation.generation !== expectedDelegation.generation
+                    || acknowledgement.delegation.intent !== expectedDelegation.intent) {
+                    consumeChatSendHandled();
+                    throw new Error(acknowledgement.error?.message ?? 'The delegated request was not acknowledged. Retry it explicitly.');
+                }
+            }
 
             // Check if a workflow is handling this request - skip AI call
-            if (consumeChatSendHandled()) {
+            if (consumeChatSendHandled() || prepared.delegation) {
                 // Seed UI with assistant placeholder so workflow state can render immediately
                 const workflowAssistant: ChatMessage = {
                     role: 'assistant',
@@ -2520,18 +2568,274 @@ export function useChat(
                 };
             }
 
-            const hasBrowserTools = enabledToolDefs.some(
-                (tool) => tool.runtime === 'client'
-            );
-            const browserToolBridgeAvailable =
-                !hasBrowserTools ||
-                !backgroundStreamingAllowed.value ||
-                await isBackgroundClientToolBridgeAvailable();
-            const allowBackgroundStreaming =
-                backgroundStreamingAllowed.value &&
-                browserToolBridgeAvailable &&
-                modalities.length === 1 &&
-                modalities[0] === 'text';
+            return await runPreparedNative({ requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy, enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt, reviewedLossyMessages, recoveryInput: { ...sendMessagesParams, content }, advertisedToolDefs });
+        } catch (err) {
+            stopForegroundHeartbeat?.();
+            if (err instanceof Error && err.name === 'AbortError') {
+                if (isDetached()) {
+                    return {
+                        status: 'detached',
+                        requestId,
+                        reason: 'detached',
+                        userMessageId: userDbMsg.id,
+                    };
+                }
+            }
+            if (
+                visibleRequest.value === requestScope &&
+                tailAssistant.value?.id === requestScope.assistantMessageId
+            )
+                requestScope.message = tailAssistant.value;
+            const stopped =
+                isRequestCancelled(requestScope) ||
+                requestScope.abortController?.signal.aborted === true;
+            if (
+                stopped &&
+                requestScope.stopConfirmation &&
+                !(await requestScope.stopConfirmation)
+            ) {
+                requestScope.attached.value = false;
+                return {
+                    status: 'detached',
+                    requestId,
+                    reason: 'detached',
+                    userMessageId: userDbMsg.id,
+                    assistantMessageId: requestScope.assistantMessageId,
+                };
+            }
+            const rawError = isStaleDevModuleError(err)
+                ? new Error(
+                      'The development server reloaded while this message was starting. Reload OR3, then resend the message.'
+                  )
+                : err instanceof Error
+                  ? err
+                  : new Error(String(err));
+            const visibleError = asAppError(rawError, { code: 'ERR_STREAM_FAILURE',
+                ...(isStaleDevModuleError(err) ? { fallbackMessage: 'The development server reloaded. Reload OR3, then resend your message.' } : {}),
+            });
+            if (stopped) {
+                terminalResult = {
+                    status: 'aborted',
+                    requestId,
+                    reason: 'aborted',
+                    userMessageId: userDbMsg.id,
+                    assistantMessageId: requestScope.assistantMessageId,
+                };
+                reportFinalization(
+                    await finalizeRequest(requestScope, {
+                        outcome: 'aborted',
+                        messageError: 'stopped',
+                        deleteEmpty: true,
+                        persistence: requestScope.backgroundAdmissionId
+                            ? 'tracker'
+                            : 'request',
+                        beforePersist: async () => {
+                            await hooks.doAction('ai.chat.send:action:after', {
+                                threadId: requestThreadId,
+                                aborted: true,
+                            });
+                        },
+                    })
+                );
+            } else {
+                terminalResult = {
+                    status: 'failed',
+                    requestId,
+                    reason:
+                        contextAdmissionFailureReason(rawError) ?? contextAdmissionFailureReason(visibleError) ?? (err instanceof ToolIterationLimitError ? 'tool_iteration_limit' : 'stream_error'),
+                    error: visibleError.message,
+                    userMessageId: userDbMsg.id,
+                    assistantMessageId: requestScope.assistantMessageId,
+                };
+                reportError(visibleError, {
+                    code: 'ERR_STREAM_FAILURE',
+                    tags: {
+                        domain: 'chat',
+                        threadId: requestThreadId,
+                        streamId: requestScope.streamId || '',
+                        modelId: currentModelId || '',
+                        stage: 'stream',
+                    },
+                    toast: true,
+                });
+                reportFinalization(
+                    await finalizeRequest(requestScope, {
+                        outcome: 'failed',
+                        error: visibleError,
+                        messageError: 'stream_interrupted',
+                        generationState: 'interrupted',
+                        deleteEmpty: true,
+                        beforePersist: async () => {
+                            if (requestScope.ownsView())
+                                requestScope.accumulator.finalize({
+                                    error: visibleError,
+                                });
+                            await hooks.doAction(
+                                'ai.chat.stream:action:error',
+                                {
+                                    threadId: requestThreadId,
+                                    streamId: requestScope.streamId,
+                                    error: visibleError,
+                                    aborted: false,
+                                }
+                            );
+                        },
+                    })
+                );
+            }
+        } finally {
+            stopForegroundHeartbeat?.();
+            // CRITICAL: Ensure abort controller is cleaned up to prevent memory leak
+            if (activeRequestScope === requestScope) {
+                if (abortController.value) {
+                    abortController.value = null;
+                }
+            }
+            setTimeout(() => {
+                if (
+                    activeRequestScope === null &&
+                    !loading.value &&
+                    requestScope.accumulator.state.finalized
+                ) {
+                    resetStream();
+                }
+            }, 0);
+        }
+        return terminalResult;
+    }
+
+    async function recoverNativeTurn(requestScope: ChatRequestScope, checkpoint: NativeRecoveryCheckpoint, params: SendMessageParams): Promise<SendResult> {
+        const requestId = requestScope.requestId; const db = requestScope.originDb; const generation = getWorkspaceGeneration();
+        const signal = requestScope.abortController!.signal;
+        const owns = () => !isRequestCancelled(requestScope) && !signal.aborted && requestScope.ownsView()
+            && getDb() === db && getWorkspaceGeneration() === generation;
+        const unavailable = (error: string): SendResult => ({ status: 'failed', requestId, reason: 'unavailable', error,
+            userMessageId: checkpoint.user_message_id, assistantMessageId: checkpoint.assistant_message_id });
+        const [userDbMsg, savedAssistant] = await Promise.all([db.messages.get(checkpoint.user_message_id), db.messages.get(checkpoint.assistant_message_id)]);
+        if (!owns()) return { status: 'aborted', requestId, reason: 'aborted' };
+        if (!userDbMsg || userDbMsg.deleted || userDbMsg.role !== 'user' || userDbMsg.thread_id !== checkpoint.thread_id
+            || !savedAssistant || savedAssistant.deleted || savedAssistant.pending || savedAssistant.role !== 'assistant'
+            || savedAssistant.thread_id !== checkpoint.thread_id || typeof (savedAssistant.data as Record<string, unknown> | null)?.background_job_id === 'string'
+            || typeof (savedAssistant.data as Record<string, unknown> | null)?.superseded_by === 'string')
+            return unavailable('This saved attempt is no longer available for initial recovery.');
+        const assistantData = savedAssistant.data as Record<string, unknown> | null;
+        if (savedAssistant.error !== 'context_full' || assistantData?.request_id !== checkpoint.request_id)
+            return unavailable('This attempt was not an initial context rejection. Use its normal retry or continuation.');
+        if (assistantData.turn_id !== userDbMsg.id || assistantData.parent_turn_id !== userDbMsg.id)
+            return unavailable('The saved assistant no longer belongs to this user turn.');
+        if (assistantData.content || assistantData.reasoning_text || savedAssistant.file_hashes)
+            return unavailable('This generation already has output. Use its normal continuation or compact the conversation.');
+        const masterPrompt = useAiSettings().settings.value.masterSystemPrompt; const taskPrompt = activePromptContent.value;
+        if (checkpoint.source_fingerprint !== await recoverySourceFingerprint(db, checkpoint.thread_id, savedAssistant.id, masterPrompt, taskPrompt))
+            return unavailable('The saved conversation changed. Edit the draft to prepare a new request.');
+        const store = useModelStore(); const preference = await useAiSettings().captureContextPreference();
+        const modelId = appendModelVariant(stripThinkingSuffix(params.model || DEFAULT_AI_MODEL), params.modelVariant ?? (params.online ? 'online' : 'off'));
+        const readiness = await store.resolveContextModel(modelId, { signal });
+        if (!readiness.ok) return { status: 'failed', requestId, reason: readiness.code,
+            error: 'Refresh this model’s capacity before recovering the saved turn.', userMessageId: userDbMsg.id, assistantMessageId: savedAssistant.id };
+        const metadata = store.catalog.value.find((row) => row.id === readiness.modelId) ?? store.favoriteModels.value.find((row) => row.id === readiness.modelId);
+        const reasoning = params.thinking || params.model?.endsWith(THINKING_SUFFIX)
+            ? resolveReasoningConfig({ model: metadata, enabled: true, effort: params.reasoningEffort }) : undefined;
+        const advertisedToolDefs = metadata?.supported_parameters && !metadata.supported_parameters.includes('tools') ? []
+            : useToolRegistry().getEnabledDefinitions({ workspaceId: requestScope.workspaceId, threadId: checkpoint.thread_id });
+        if (advertisedToolDefs.length !== checkpoint.tools.length || advertisedToolDefs.some((tool, index) => !toolDefinitionEquals(tool, checkpoint.tools[index]!)))
+            return unavailable('The saved attempt’s tools changed or this model cannot use them. Restore its tools or edit the draft for a new request.');
+        const enabledToolDefs = await placeHistoryTools(structuredClone(advertisedToolDefs), { background: backgroundStreamingAllowed.value, threadId: checkpoint.thread_id, signal });
+        const foregroundToolDefs = enabledToolDefs.filter((tool) => tool.runtime !== 'server');
+        const hasBrowserTools = enabledToolDefs.some((tool) => tool.runtime === 'client');
+        const bridgeReady = !hasBrowserTools || !backgroundStreamingAllowed.value || await isBackgroundClientToolBridgeAvailable();
+        const modalities = getChatModalities(modelId); const allowBackgroundStreaming = backgroundStreamingAllowed.value && bridgeReady && modalities.length === 1 && modalities[0] === 'text';
+        const contextPolicy: ContextRequestPolicy = { model: readiness.metadata, source: readiness.source,
+            userMaxContextTokens: preference.maxContextTokens, requestedCompletionTokens: params.maxCompletionTokens };
+        const orMessages = structuredClone(checkpoint.messages);
+        try {
+            await prepareOpenRouterRequest({ model: modelId, orMessages, modalities, reasoning, contextPolicy, signal,
+                tools: (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs).length ? (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs) : undefined });
+        } catch (error) {
+            if (!(error instanceof ChatContextAdmissionError)) throw error;
+            return { status: 'failed', requestId, reason: contextAdmissionFailureReason(error) ?? 'context_full',
+                error: error.message, userMessageId: userDbMsg.id, assistantMessageId: savedAssistant.id };
+        }
+        if (!owns()) return { status: 'aborted', requestId, reason: 'aborted' };
+        if (JSON.stringify(advertisedToolDefs) !== JSON.stringify(metadata?.supported_parameters && !metadata.supported_parameters.includes('tools') ? []
+            : useToolRegistry().getEnabledDefinitions({ workspaceId: requestScope.workspaceId, threadId: checkpoint.thread_id })))
+            return unavailable('Tool selection changed during recovery. Retry the saved attempt again.');
+        const newStreamId = newId();
+        const Dexie = (await import('dexie')).default;
+        const reset = await db.transaction('rw', [...new Set([...getWriteTxTableNames(db, 'messages', { includeTombstones: true }), 'threads', 'chat_request_recoveries'])], async () => {
+            if (!owns() || useAiSettings().settings.value.masterSystemPrompt !== masterPrompt || activePromptContent.value !== taskPrompt
+                || checkpoint.source_fingerprint !== await Dexie.waitFor(recoverySourceFingerprint(db, checkpoint.thread_id, savedAssistant.id, masterPrompt, taskPrompt))) return false;
+            const current = await db.messages.get(savedAssistant.id);
+            if (!current || current.clock !== savedAssistant.clock || current.pending || current.deleted) return false;
+            await updateMessageRecord(db, savedAssistant.id, { pending: true, error: null, stream_id: newStreamId,
+                data: { ...assistantTranscriptData({ turnId: userDbMsg.id, requestId, generationId: newStreamId, mode: 'foreground' }),
+                    generation_state: 'streaming', content: '', reasoning_text: null, tool_calls: null, background_job_id: undefined,
+                    background_admission_id: undefined, background_job_status: undefined, ...createForegroundGenerationLease(requestId) } });
+            return true;
+        });
+        if (!reset) return unavailable('The saved attempt changed before recovery could start.');
+        requestScope.userMessageId = userDbMsg.id; requestScope.assistantMessageId = savedAssistant.id;
+        const assistantDbMsg = await db.messages.get(savedAssistant.id) as StoredMessage;
+        if (!owns()) throw new DOMException('Recovery canceled after admission.', 'AbortError');
+        requestScope.userMessageId = userDbMsg.id; requestScope.assistantMessageId = assistantDbMsg.id; requestScope.assistantRecord = assistantDbMsg;
+        requestScope.streamId = newStreamId; streamId.value = newStreamId;
+        rawMessages.value = rawMessages.value.filter((row) => row.id !== assistantDbMsg.id);
+        messages.value = messages.value.filter((row) => row.id !== assistantDbMsg.id);
+        if (tailAssistant.value?.id === assistantDbMsg.id) tailAssistant.value = null;
+        publishRequest(requestScope, { status: 'streaming', requestId, userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id });
+        return await runPreparedNative({ requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy,
+            enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt: Date.now(),
+            recoveryInput: { ...checkpoint.input, ...params, content: checkpoint.input.content }, advertisedToolDefs });
+    }
+
+    const nativeRecoveryCandidates = new WeakMap<ChatRequestScope, { checkpoint: NativeRecoveryCheckpoint; providerAccepted: boolean }>();
+    type NativeExecutionInput = {
+        requestScope: ChatRequestScope; userDbMsg: Message; assistantDbMsg: StoredMessage; newStreamId: string;
+        modelId: string; orMessages: OpenRouterMessage[]; modalities: ReturnType<typeof getChatModalities>;
+        reasoning: ReturnType<typeof resolveReasoningConfig>; contextPolicy: ContextRequestPolicy;
+        enabledToolDefs: import('~/utils/chat/types').ToolDefinition[]; foregroundToolDefs: import('~/utils/chat/types').ToolDefinition[];
+        allowBackgroundStreaming: boolean; startedAt: number; reviewedLossyMessages?: string;
+        recoveryInput: SendMessageParams & { content: string }; advertisedToolDefs: import('~/utils/chat/types').ToolDefinition[];
+    };
+    /** One native foreground/background owner, shared by new turns and explicit unsent recovery. */
+    async function runPreparedNative(input: NativeExecutionInput): Promise<SendResult> {
+        const { requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy, enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt, reviewedLossyMessages, recoveryInput, advertisedToolDefs } = input;
+        const requestId = requestScope.requestId; const requestThreadId = requestScope.threadId!;
+        const preparationSignal = requestScope.abortController!.signal;
+        const toolRegistry = useToolRegistry(); const activeToolCalls = new Map<string, ToolCallInfo>();
+        const assistantFileHashes: string[] = []; const persistAssistant = makeAssistantPersister(requestScope.originDb, assistantDbMsg, assistantFileHashes, requestId);
+        requestScope.persistAssistant = persistAssistant;
+        const currentModelId = modelId; let terminalResult: SendResult | undefined; let stopForegroundHeartbeat: (() => void) | undefined;
+        try {
+            // Old side-effecting final filters retain their once-only post-write
+            // order. Their final native body is still admitted before inference;
+            // universal zero-write admission requires migration to pure prepare.
+            if (reviewedLossyMessages && JSON.stringify(orMessages) !== reviewedLossyMessages) {
+                throw Object.assign(new Error('A final request filter changed the reviewed lossy candidate. Inspect the omissions again.'),
+                    { code: 'context_full' });
+            }
+            const { onUserPersisted: _persisted, historyOverride: _history, lossyConfirmation: _confirmation, inspectLossyRequest: _inspect, ...savedInput } = recoveryInput;
+            const checkpoint: NativeRecoveryCheckpoint = {
+                version: 1, request_id: requestId, thread_id: requestThreadId, user_message_id: userDbMsg.id, assistant_message_id: assistantDbMsg.id,
+                input: structuredClone(savedInput), input_fingerprint: await recoveryInputFingerprint(savedInput.content, savedInput),
+                source_fingerprint: await recoverySourceFingerprint(requestScope.originDb, requestThreadId, assistantDbMsg.id, useAiSettings().settings.value.masterSystemPrompt, activePromptContent.value),
+                messages: structuredClone(orMessages), tools: structuredClone(advertisedToolDefs),
+            };
+            // Durable before inference: a crash after rejection cannot append a
+            // duplicate user turn. The row/lease gate excludes accepted output.
+            await requestScope.originDb.transaction('rw', requestScope.originDb.threads, requestScope.originDb.messages, requestScope.originDb.chat_request_recoveries, async () => {
+                const thread = await requestScope.originDb.threads.get(requestThreadId);
+                const assistant = await requestScope.originDb.messages.get(assistantDbMsg.id);
+                if (!thread || thread.deleted || !assistant || assistant.deleted || !assistant.pending
+                    || (assistant.data as Record<string, unknown> | null)?.generation_lease_id !== requestId
+                    || isRequestCancelled(requestScope)) throw new Error('The saved attempt changed before native recovery could be recorded.');
+                await requestScope.originDb.chat_request_recoveries.put(checkpoint);
+            });
+            nativeRecoveryCandidates.set(requestScope, { providerAccepted: false, checkpoint });
+            await prepareOpenRouterRequest({ model: modelId, orMessages, modalities, reasoning,
+                tools: (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs).length
+                    ? (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs) : undefined,
+                contextPolicy, signal: preparationSignal });
             if (isRequestCancelled(requestScope) || !ownsCurrentView(requestScope)) {
                 reportFinalization(await finalizeRequest(requestScope, {
                     outcome: 'aborted', messageError: 'stopped', deleteEmpty: true,
@@ -2570,7 +2874,7 @@ export function useChat(
 
                 // Background admission can block before a job ID exists. Keep it
                 // cancellable through the same request-scoped controller as foreground.
-                requestScope.abortController = new AbortController();
+                requestScope.abortController ??= new AbortController();
                 abortController.value = requestScope.abortController;
 
                 // Stable per-send admission identity. Persisted on the request
@@ -2631,6 +2935,7 @@ export function useChat(
                             typeof startBackgroundStream
                         >[0]['orMessages'],
                         modalities,
+                        contextPolicy,
                         threadId: requestThreadId,
                         messageId: assistantDbMsg.id,
                         admissionId: backgroundAdmissionId,
@@ -2655,6 +2960,10 @@ export function useChat(
                         signal: requestScope.abortController.signal,
                     });
                     requestScope.jobId = result.jobId;
+                    if (ownsCurrentView(requestScope) && !isRequestCancelled(requestScope)) publishRequest(requestScope, {
+                        status: 'streaming', requestId, userMessageId: userDbMsg.id,
+                        assistantMessageId: assistantDbMsg.id, providerAccepted: true });
+                    nativeRecoveryCandidates.get(requestScope)!.providerAccepted = true;
                     if (isRequestCancelled(requestScope) && requestScope.stopConfirmation) {
                         throw new DOMException('Admission cancelled', 'AbortError');
                     }
@@ -2828,17 +3137,19 @@ export function useChat(
                     requestScope.message = ownsView
                         ? resolveUiMessage(assistantDbMsg.id)
                         : requestScope.message;
+                    const failureReason = contextAdmissionFailureReason(error) ?? 'stream_error';
                     reportFinalization(
                         await finalizeRequest(requestScope, {
                             outcome: 'failed',
-                            error: new Error(errMessage),
-                            messageError: errMessage,
+                            error: error instanceof Error ? error : new Error(errMessage),
+                            messageError: failureReason === 'context_full' && !requestScope.jobId ? 'context_full' : errMessage,
+                            failureReason,
                         })
                     );
                     return {
                         status: 'failed',
                         requestId,
-                        reason: 'stream_error',
+                        reason: failureReason,
                         error: errMessage,
                         userMessageId: userDbMsg.id,
                         assistantMessageId: assistantDbMsg.id,
@@ -2853,7 +3164,7 @@ export function useChat(
                 };
             }
 
-            requestScope.abortController = new AbortController();
+            requestScope.abortController ??= new AbortController();
             abortController.value = requestScope.abortController;
 
             stopForegroundHeartbeat = startForegroundGenerationHeartbeat(
@@ -2866,10 +3177,17 @@ export function useChat(
                 orMessages,
                 modalities,
                 reasoning,
+                contextPolicy,
                 tools:
                     foregroundToolDefs.length > 0
                         ? foregroundToolDefs
                         : undefined,
+                onProviderAccepted: () => {
+                    nativeRecoveryCandidates.get(requestScope)!.providerAccepted = true;
+                    if (ownsCurrentView(requestScope) && !isRequestCancelled(requestScope)) publishRequest(requestScope, {
+                        status: 'streaming', requestId, userMessageId: userDbMsg.id,
+                        assistantMessageId: assistantDbMsg.id, providerAccepted: true });
+                },
                 abortSignal: requestScope.abortController.signal,
                 assistantId: assistantDbMsg.id,
                 parentTurnId: userDbMsg.id,
@@ -3074,9 +3392,7 @@ export function useChat(
                     status: 'failed',
                     requestId,
                     reason:
-                        err instanceof ToolIterationLimitError
-                            ? 'tool_iteration_limit'
-                            : 'stream_error',
+                        contextAdmissionFailureReason(rawError) ?? contextAdmissionFailureReason(visibleError) ?? (err instanceof ToolIterationLimitError ? 'tool_iteration_limit' : 'stream_error'),
                     error: visibleError.message,
                     userMessageId: userDbMsg.id,
                     assistantMessageId: requestScope.assistantMessageId,
@@ -3096,9 +3412,9 @@ export function useChat(
                     await finalizeRequest(requestScope, {
                         outcome: 'failed',
                         error: visibleError,
-                        messageError: 'stream_interrupted',
+                        messageError: terminalResult.reason === 'context_full' ? 'context_full' : 'stream_interrupted',
                         generationState: 'interrupted',
-                        deleteEmpty: true,
+                        deleteEmpty: terminalResult.reason !== 'context_full',
                         beforePersist: async () => {
                             if (requestScope.ownsView())
                                 requestScope.accumulator.finalize({
@@ -3138,6 +3454,7 @@ export function useChat(
         return terminalResult;
     }
 
+
     // END sendMessage
 
     /**
@@ -3153,6 +3470,19 @@ export function useChat(
      */
     async function retryMessage(messageId: string, modelOverride?: string) {
         const retryRevision = navigationRevision;
+        if (threadIdRef.value) {
+            const db = getDb(); const generation = getWorkspaceGeneration(); const threadId = threadIdRef.value;
+            const checkpoint = await db.chat_request_recoveries.get(threadId);
+            if (disposed || retryRevision !== navigationRevision || getDb() !== db || generation !== getWorkspaceGeneration() || threadIdRef.value !== threadId)
+                return { status: 'rejected' as const, reason: 'unavailable' as const };
+            if (checkpoint && [checkpoint.user_message_id, checkpoint.assistant_message_id].includes(messageId)) {
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- A durable checkpoint can be written by a newer client.
+                if (checkpoint.version !== 1)
+                    return { status: 'rejected' as const, reason: 'unavailable' as const,
+                        error: 'This saved attempt uses an unsupported recovery version. Update the app or edit the draft to prepare a new request.' };
+                return sendMessage({ ...checkpoint.input, model: modelOverride || checkpoint.input.model });
+            }
+        }
         return await retryMessageImpl(
             {
                 ownsView: () => !disposed && navigationRevision === retryRevision,
@@ -3211,10 +3541,13 @@ export function useChat(
                     defaultModelId: DEFAULT_AI_MODEL,
                     getSystemPromptContent,
                     useAiSettings,
-                    resolveInputTokenBudget: async (selectedModelId: string) =>
-                        resolveChatInputTokenBudget(
-                            await resolveModelMetadata(selectedModelId)
-                        ),
+                    resolveContextPolicy: async (selectedModelId, signal) => {
+                        const preference = await useAiSettings().captureContextPreference();
+                        const model = await useModelStore().resolveContextModel(selectedModelId, { signal });
+                        if (!model.ok) throw new ChatContextAdmissionError(model);
+                        return Object.freeze({ model: model.metadata, source: model.source,
+                            userMaxContextTokens: preference.maxContextTokens });
+                    },
                     backgroundStreamingAllowed:
                         backgroundStreamingAllowed.value,
                     workspaceId: request.workspaceId,
@@ -3562,7 +3895,7 @@ export function useChat(
             .filter((message) => message.role !== 'tool')
             .map((message) => ensureUiMessage(message));
         rawMessages.value = nextRaw;
-        messages.value = nextUi;
+        messages.value = associateUiToolResultMessages(nextUi, nextRaw);
     }
 
     void reattachBackgroundJobs();

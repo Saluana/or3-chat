@@ -49,6 +49,9 @@ export interface ComposerActionContext {
     paneId?: string | null;
     /** Whether AI content is currently streaming */
     isStreaming?: boolean;
+    /** Host compaction controller belonging to this composer and pane. */
+    compactThread?: () => Promise<void>;
+    compactionBlockedReason?: string;
     /** Additional context properties for extensibility */
     [key: string]: unknown;
 }

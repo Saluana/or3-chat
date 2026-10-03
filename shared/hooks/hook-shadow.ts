@@ -240,6 +240,7 @@ export function createHookShadowFacade(
             primary.doActionSync(name, ...args);
         },
         hasFilter: (name, fn) => primary.hasFilter(name, fn),
+        captureFilterChain: (names) => primary.captureFilterChain(names),
         hasAction: (name, fn) => primary.hasAction(name, fn),
         removeAllCallbacks(priority) {
             primary.removeAllCallbacks(priority);

@@ -143,7 +143,6 @@ function providerFieldsStep(
 
     const visibleForSelectedProvider = (current: WizardAnswers): boolean => {
         if (!current.ssrAuthEnabled) return false;
-        if (kind === 'sync' && !current.syncEnabled) return false;
         if (kind === 'storage' && !current.storageEnabled) return false;
 
         const selectedProviderId =
@@ -188,11 +187,10 @@ function providerFieldsStep(
     return {
         id,
         title,
-        description: `Configure your ${descriptor.label.replace(/ \(.*\)$/, '')} settings. Press Enter to accept defaults.`,
+        description: `Configure your ${descriptor.label.replace(/ \(.*\)$/, '')} settings. Defaults are filled automatically.`,
         fields,
         canSkip: (current) => {
             if (!current.ssrAuthEnabled) return true;
-            if (kind === 'sync') return !current.syncEnabled;
             if (kind === 'storage') return !current.storageEnabled;
             return false;
         },
@@ -518,16 +516,16 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     key: 'syncEnabled',
                     type: 'boolean',
                     label: 'Enable data sync (conversations sync across devices)',
+                    help: 'Turning this off stops conversation sync. Accounts still need the workspace store selected below.',
                     defaultValue: true,
                     visibleWhen: (current) => current.ssrAuthEnabled,
                 },
                 {
                     key: 'syncProvider',
                     type: 'select',
-                    label: 'Where should synced data be stored?',
+                    label: 'Where should workspace and synced data be stored?',
                     options: providerOptions('sync'),
-                    visibleWhen: (current) =>
-                        current.ssrAuthEnabled && current.syncEnabled,
+                    visibleWhen: (current) => current.ssrAuthEnabled,
                 },
                 {
                     key: 'storageEnabled',

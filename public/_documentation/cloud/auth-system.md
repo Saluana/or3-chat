@@ -10,6 +10,8 @@ A user can belong to multiple workspaces. Each request resolves one active works
 
 The store honors `users.active_workspace_id`. Workspace switches are coordinated across tabs using a monotonic revision, so a late response cannot commit an older selection. If data looks empty after login or switching, check the resolved workspace before resetting local storage.
 
+Background jobs remain tied to their original workspace when you switch. Reading their status or stream requires current membership there; stopping them requires an editor or owner role there. Open streams recheck membership through their existing reconciliation loop and close when access is revoked. Jobs without a recorded workspace cannot be accessed safely and are denied.
+
 ## Two user identifiers
 
 | Identifier | Used for |
@@ -37,7 +39,13 @@ The core server resolver in `server/auth/session.ts` verifies a registered provi
 
 Permission invalidation also fences in-flight resolution: an older lookup cannot restore a revoked role in the shared cache. Resolution retries against the current revision and returns `503` if permissions keep changing during the bounded retries.
 
-`GET /api/auth/session` returns an envelope with `session` and `appAccessAllowed`. Client code reads it through `useSessionContext()`:
+`GET /api/auth/session` reserves its existing per-IP `auth:session` rate allowance before
+resolving identity or entitlements, so concurrent lookups share the configured
+bucket. A rate-limited response includes `Retry-After`; all session responses
+remain `no-store`.
+
+It returns an envelope with `session` and `appAccessAllowed`. Client code reads
+it through `useSessionContext()`:
 
 ```ts
 const context = useSessionContext();

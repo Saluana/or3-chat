@@ -26,7 +26,7 @@
  * @see writeEnvFileDetailed for the underlying env file writer
  * @see renderProviderModulesFile for the generated file format
  */
-import { writeFile, rename, rm } from 'node:fs/promises';
+import { writeFile, rename, rm, mkdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { providerMetadataSchema, PROVIDER_METADATA_FILENAME } from '../provider-metadata';
 import { resolve } from 'node:path';
@@ -36,6 +36,7 @@ import {
     deriveWizardOwnedEnvUpdates,
 } from './derive';
 import { validateAnswers } from './validation';
+import { initialLoginCredentials, writeInitialCredentialsFile } from './initial-credentials';
 import type { WizardAnswers, WizardApplyResult } from './types';
 
 /**
@@ -136,6 +137,7 @@ export async function applyAnswers(
     const providerModuleFilePath = getProviderModuleFilePath(answers.instanceDir);
     const backupFiles: string[] = [];
     const writtenFiles: string[] = [];
+    let credentialsPath: string | undefined;
 
     const themeInstaller = options.themeInstaller ?? new NoopThemeInstaller();
     const themePlan = themeInstaller.plan(answers);
@@ -144,6 +146,7 @@ export async function applyAnswers(
     }
 
     if (!dryRun) {
+        await mkdir(answers.instanceDir, { recursive: true });
         const envWrite = await writeEnvFileDetailed(envUpdates, {
             instanceDir: answers.instanceDir,
             envFile: answers.envFile,
@@ -174,10 +177,13 @@ export async function applyAnswers(
             await rm(temporary, { force: true });
         }
         writtenFiles.push(providerModuleFilePath);
+        credentialsPath = await writeInitialCredentialsFile(answers.instanceDir, initialLoginCredentials(answers)) ?? undefined;
+        if (credentialsPath) writtenFiles.push(credentialsPath);
     }
 
     return {
         writtenFiles,
+        credentialsPath,
         backupFiles,
         envUpdates,
         providerModules: validation.derived.providerModules,

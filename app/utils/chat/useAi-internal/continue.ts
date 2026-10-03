@@ -1,3 +1,7 @@
+import { readMeasuredRequestUsage } from '~~/shared/chat/request-usage';
+import type { RequestUsage } from '~~/shared/chat/compaction';
+import { resolveThreadProjection } from '~/utils/chat/compaction/history';
+import { ChatContextAdmissionError, contextAdmissionFailureReason, type ContextRequestPolicy } from '~~/shared/chat/context-budget';
 /**
  * @module app/utils/chat/useAi-internal/continue.ts
  *
@@ -44,6 +48,7 @@ import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import {
     openRouterStreamWithRetry,
     startBackgroundStream,
+    prepareOpenRouterRequest,
 } from '~/utils/chat/openrouterStream';
 import { dataUrlToBlob, fetchImageBlob } from '~/utils/chat/files';
 import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
@@ -53,11 +58,9 @@ import { makeAssistantPersister, updateMessageRecord, startForegroundGenerationH
 import { createForegroundGenerationLease } from '~/utils/chat/generation-lease';
 import {
     buildOpenRouterMessagesForSend,
-    enforceOpenRouterMessageTokenBudget,
 } from './messageBuild';
 import { createStreamWriteCoalescer } from './streamWriteCoalescer';
 import { utf8Bytes } from '~~/shared/chat/tool-limits';
-import { DEFAULT_MAX_INPUT_TOKENS } from '~/utils/chat/constants';
 import {
     CONTINUATION_PREFIX,
     CONTINUE_TAIL_CHARS,
@@ -112,7 +115,7 @@ export type ContinueMessageContext = {
     defaultModelId: string;
     getSystemPromptContent: () => Promise<string | null>;
     useAiSettings: () => { settings: Ref<ChatSettings | undefined> };
-    resolveInputTokenBudget?: (modelId: string) => number | Promise<number>;
+    resolveContextPolicy?: (modelId: string, signal: AbortSignal) => Promise<ContextRequestPolicy>;
     resetStream: () => void;
     backgroundStreamingAllowed?: boolean;
     workspaceId?: string;
@@ -232,6 +235,9 @@ export async function continueMessageImpl(
     let innerStreamLifecycleStarted = false;
     let backgroundAdmissionStarted = false;
     let stopHeartbeat: (() => void) | undefined;
+    continuationAbortController = new AbortController();
+    request.abortController = continuationAbortController;
+    ctx.abortController.value = continuationAbortController;
 
     try {
         const target = (await originDb.messages.get(messageId)) as StoredMessage | undefined;
@@ -257,12 +263,18 @@ export async function continueMessageImpl(
         if (!existingText) return;
 
         const DexieMod = (await import('dexie')).default;
-        const all = await originDb.messages
-            .where('[thread_id+index]')
-            .between([ctx.threadIdRef.value, DexieMod.minKey], [ctx.threadIdRef.value, target.index])
-            .filter((m: Message) => !m.deleted)
-            .toArray();
-        all.sort(compareMessageOrder);
+        const admissionThread = await originDb.threads.get(originThreadId);
+        if (!ownsThread()) return;
+        const all = admissionThread?.branch_mode === 'compacted' || admissionThread?.branch_mode === 'reference'
+            ? (await resolveThreadProjection(originThreadId, originDb, target.id)).messages
+            : await originDb.messages
+                .where('[thread_id+index]')
+                .between([originThreadId, DexieMod.minKey], [originThreadId, target.index])
+                .filter((m: Message) => !m.deleted)
+                .toArray();
+        // Canonical branch projection already orders each lineage segment. Sorting
+        // the flattened result by local index would interleave child and ancestors.
+        if (admissionThread?.branch_mode !== 'compacted' && admissionThread?.branch_mode !== 'reference') all.sort(compareMessageOrder);
         if (!ownsThread()) return;
 
         const toContent = (m: StoredMessage): string => {
@@ -407,11 +419,10 @@ export async function continueMessageImpl(
             modelOverride ||
             ctx.defaultModelId;
         if (!ownsThread()) return;
-        orMessages = await enforceOpenRouterMessageTokenBudget(
-            orMessages,
-            (await ctx.resolveInputTokenBudget?.(modelId)) ??
-                DEFAULT_MAX_INPUT_TOKENS
-        );
+        const resolvedPolicy = await ctx.resolveContextPolicy?.(modelId, continuationAbortController.signal);
+        if (!resolvedPolicy) throw new ChatContextAdmissionError({ ok: false, code: 'model_metadata_unavailable' });
+        const contextPolicy = { ...resolvedPolicy, measuredUsage: target.data && typeof target.data === 'object'
+            ? (target.data as Record<string, unknown>).usage : undefined };
         // Last setup gate: never publish stream state into a new chat.
         if (!ownsThread()) return;
         if (orMessages.length === 0)
@@ -425,13 +436,15 @@ export async function continueMessageImpl(
             modalities.length === 1 &&
             modalities[0] === 'text' &&
             Boolean(ctx.workspaceId && ctx.userId && ctx.attachBackgroundJob);
+        await prepareOpenRouterRequest({ model: modelId, orMessages,
+            modalities, contextPolicy, signal: continuationAbortController.signal });
+        if (!ownsThread()) return;
 
         ctx.streamAcc.reset();
         const newStreamId = newId();
         ctx.streamId.value = newStreamId;
         request.phase.value = 'streaming';
         ctx.aborted.value = false;
-        continuationAbortController = new AbortController();
         request.abortController = continuationAbortController;
         ctx.abortController.value = continuationAbortController;
 
@@ -540,6 +553,7 @@ export async function continueMessageImpl(
                 model: modelId,
                 orMessages: orMessages as Parameters<typeof startBackgroundStream>[0]['orMessages'],
                 modalities,
+                contextPolicy,
                 threadId: originThreadId,
                 messageId: target.id,
                 admissionId: backgroundAdmissionId,
@@ -634,6 +648,7 @@ export async function continueMessageImpl(
             model: modelId,
             orMessages: orMessages as Parameters<typeof openRouterStreamWithRetry>[0]['orMessages'],
             modalities,
+            contextPolicy,
             threadId: ctx.threadIdRef.value,
             messageId: target.id,
             signal: ctx.abortController.value.signal,
@@ -648,10 +663,12 @@ export async function continueMessageImpl(
             onIdleFlush: () => flushProgress(),
         });
 
+        let requestUsage: RequestUsage | undefined;
         const flushProgress = async () => {
             await writeCoalescer.flush(async () => {
                 await persistAssistant({
                     content: current.text,
+                    usage: requestUsage,
                     reasoning: current.reasoning_text ?? null,
                     toolCalls: current.toolCalls ?? undefined,
                 });
@@ -670,7 +687,10 @@ export async function continueMessageImpl(
         try {
             for await (const ev of stream) {
                 if (!ownsThread()) throw new ContinuationOwnershipLost();
-                if (ev.type === 'reasoning') {
+                if (ev.type === 'usage') {
+                    const measured = readMeasuredRequestUsage(ev.usage, ev.requestUsage);
+                    if (measured) { requestUsage = { ...measured, iteration: 1 }; writeCoalescer.markDirty(); }
+                } else if (ev.type === 'reasoning') {
                     if (current.reasoning_text === null) current.reasoning_text = ev.text;
                     else current.reasoning_text += ev.text;
                     ctx.streamAcc.append(ev.text, { kind: 'reasoning' });
@@ -738,6 +758,11 @@ export async function continueMessageImpl(
                     }
                 );
         } catch (streamError) {
+            if (requestUsage) {
+                try { await flushProgress(); } catch (error) {
+                    reportError(error, { code: 'ERR_DB_WRITE_FAILED', tags: { domain: 'chat', stage: 'continue_usage' } });
+                }
+            }
             stopHeartbeat();
             await writeCoalescer.dispose();
             const ownershipLost = streamError instanceof ContinuationOwnershipLost;
@@ -747,6 +772,7 @@ export async function continueMessageImpl(
             const finalization = await finalizeRequest(request, {
                 outcome: stopped ? 'aborted' : 'failed',
                 error: stopped ? undefined : e,
+                failureReason: contextAdmissionFailureReason(e),
                 messageError: stopped ? 'stopped' : 'stream_interrupted',
                 generationState: stopped ? 'aborted' : 'interrupted',
             });
@@ -786,7 +812,7 @@ export async function continueMessageImpl(
             e instanceof Error ? e : new Error(String(e));
         const stopped =
             request.cancelled ||
-            continuationAbortController?.signal.aborted === true;
+            continuationAbortController.signal.aborted;
         if (
             stopped &&
             request.stopConfirmation &&
@@ -798,6 +824,7 @@ export async function continueMessageImpl(
         const finalization = await finalizeRequest(request, {
             outcome: stopped ? 'aborted' : 'failed',
             error: stopped ? undefined : setupError,
+            failureReason: contextAdmissionFailureReason(e),
             messageError: stopped ? 'stopped' : 'stream_interrupted',
             generationState: stopped ? 'aborted' : 'interrupted',
             persistence:
