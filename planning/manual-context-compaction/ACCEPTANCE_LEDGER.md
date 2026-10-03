@@ -456,7 +456,7 @@ IF canonical history is incomplete, access is revoked, or the browser executor i
 
 WHEN a selected model lacks tool support THEN compaction SHALL remain available and the card SHALL provide manual landmark navigation with an explicit retrieval-unavailable indication.
 
-- State: Partial: manual card links and retrieval-unavailable UI are implemented/visually inspected; an actual no-tool catalog model action journey remains unqualified.
+- State: Locally verified: context-no-tools-final selects an actual catalog model without tools, shows unavailable-tools guidance and follows the original link without inference; final parent review remains pending.
 - Owner: Server tool-registry authorization owner; canonical-history-context; SQLite actual built storage; Convex actual scaffold handler owner.
 - Evidence scope: Trusted real jobs and fresh can()/membership checks qualify locally. Deployed provider transactions, browser bridge/reconnect and released pins remain separate.
 
