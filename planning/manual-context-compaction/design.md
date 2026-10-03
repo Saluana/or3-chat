@@ -420,8 +420,8 @@ Use a typed result at compaction/retrieval boundaries, consistent with existing 
 | Explicit reply maximum exceeds actual model output capacity | `invalid_output_limit` | Explain the setting; never silently change the user's requested maximum. |
 | Empty/short source, deleted source, active job | `ineligible` | Explain reason; no inference or writes. |
 | Bad/mid-tool anchor | `invalid_anchor` | Select an eligible persisted boundary explicitly. |
-| Missing/cyclic/deep ancestry | `scope_incomplete` / `lineage_limit` | Show location/status without partial-success claim. |
-| Reference manifest too large | `scope_too_large` | Earlier scope or future larger-scope capability; no implicit truncation. |
+| Missing/cyclic ancestry | `scope_incomplete` / `cyclic_lineage` | Show location/status without partial-success claim; valid deep lineage has no arbitrary depth cutoff. |
+| Complete serialized summary row exceeds the existing storage limit | `summary_too_large` | Preserve source and reject commit without truncating summary or membership; no separate reference-count, ancestry-depth or recipe-byte application cap. |
 | Oversized serialized history | `summary_input_too_large` | One documented tool-output reduction pass, then fail before inference. |
 | Output cannot save useful space | `not_beneficial` | Preserve source; allow ordinary chat or another explicit scope. |
 | Invalid/oversized JSON summary | `invalid_summary` | One corrective request, then fail without writes. |
