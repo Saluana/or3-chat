@@ -76,6 +76,51 @@ function chat(threadId?: string) { scope = effectScope(); return scope.run(() =>
 // hooks and actual foreground transport remain production code; external
 // catalog/network inference and credential UI alone are scripted.
 describe('native context admission at the actual durable boundary', () => {
+    async function rejectedAttempt() {
+        const owner = chat(); const filters = vi.fn((request) => request);
+        useHooks().addFilter('ai.chat.messages:filter:before_send', filters);
+        vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+            external.bodies.push(JSON.parse(init?.body as string));
+            return Response.json({ error: { code: 'context_length_exceeded', message: 'Scripted initial refusal' } }, { status: 400 });
+        }));
+        const result = await owner.sendMessage('Saved initial request', { model: 'fixture/model' });
+        if (result.status !== 'failed') throw new Error('Initial refusal fixture failed');
+        const checkpoint = await getDb().chat_request_recoveries.get(owner.threadId.value!);
+        if (!checkpoint) throw new Error('Initial refusal did not retain its checkpoint');
+        return { owner, checkpoint, filters };
+    }
+    it('does not repeat final filters or write rows when the saved recovery version is unsupported', async () => {
+        const { owner, checkpoint, filters } = await rejectedAttempt();
+        // A durable row may be written by a newer client. This deliberately
+        // violates the current compile-time version while using real storage.
+        await getDb().chat_request_recoveries.put({ ...checkpoint, version: 2 as 1 });
+        const before = await getDb().messages.toArray(); const requests = external.bodies.length;
+        expect(await owner.retryMessage(checkpoint.assistant_message_id, 'fixture/model'))
+            .toMatchObject({ status: 'rejected', reason: 'unavailable' });
+        expect(await getDb().messages.toArray()).toEqual(before);
+        expect(external.bodies).toHaveLength(requests); expect(filters).toHaveBeenCalledOnce();
+    });
+    it('refuses a saved recovery after the source or tool selection changes', async () => {
+        const { owner, checkpoint, filters } = await rejectedAttempt();
+        const db = getDb(); const before = await db.messages.toArray();
+        await db.messages.update(checkpoint.user_message_id, { clock: 2 });
+        expect(await owner.retryMessage(checkpoint.assistant_message_id, 'fixture/model')).toMatchObject({ status: 'failed', reason: 'unavailable' });
+        await db.messages.put(before.find((row) => row.id === checkpoint.user_message_id)!);
+        useToolRegistry().registerTool({ type: 'function', function: { name: 'fixture_context_output', description: 'Changed tool selection',
+            parameters: { type: 'object', properties: {}, required: [] } } }, () => 'Never execute', { enabled: true });
+        expect(await owner.retryMessage(checkpoint.assistant_message_id, 'fixture/model')).toMatchObject({ status: 'failed', reason: 'unavailable' });
+        expect(await db.messages.toArray()).toEqual(before); expect(external.bodies).toHaveLength(1); expect(filters).toHaveBeenCalledOnce();
+    });
+    it('settles a checkpoint storage failure before any provider request', async () => {
+        const db = getDb(); const put = vi.spyOn(db.chat_request_recoveries, 'put')
+            .mockRejectedValueOnce(new DOMException('Scripted storage exhaustion', 'QuotaExceededError'));
+        try {
+            expect(await chat().sendMessage('Keep this draft', { model: 'fixture/model' })).toMatchObject({ status: 'failed' });
+            expect(external.bodies).toEqual([]); expect(await db.chat_request_recoveries.count()).toBe(0);
+            const rows = await db.messages.toArray(); expect(rows.filter((row) => row.role === 'user')).toHaveLength(1);
+            expect(rows.filter((row) => row.role === 'assistant' && row.pending)).toEqual([]);
+        } finally { put.mockRestore(); }
+    });
     it('reports provider context overflow as context_full while retaining the full durable turn and never replaying it', async () => {
         const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
             external.bodies.push(JSON.parse(init?.body as string));
@@ -243,6 +288,7 @@ describe('native context admission at the actual durable boundary', () => {
         const result = await chat().sendMessage('Read the source', { model: 'fixture/model' });
         expect(result).toMatchObject({ status: 'failed', reason: 'context_full' });
         expect(handler).toHaveBeenCalledTimes(1); expect(external.bodies).toHaveLength(1);
+        expect(await getDb().chat_request_recoveries.count()).toBe(0);
         const tools = (await getDb().messages.toArray()).filter((row) => row.role === 'tool');
         expect(tools).toHaveLength(1);
         expect(JSON.stringify(tools[0]?.data)).toContain(output);

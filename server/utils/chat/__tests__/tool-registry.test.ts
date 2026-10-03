@@ -1,10 +1,20 @@
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import {
     registerServerTool,
     unregisterServerTool,
     executeServerTool,
     getServerTool,
 } from '../tool-registry';
+import { registerServerHistoryTools } from '../history-tools';
+import { registerSyncGatewayAdapter } from '../../../sync/gateway/registry';
+import type { SyncGatewayAdapter } from '../../../sync/gateway/types';
+import { registerAuthWorkspaceStore } from '../../../auth/store/registry';
+import type { AuthWorkspaceStore } from '../../../auth/store/types';
+import { clearAllJobs, memoryJobProvider } from '../../background-jobs/providers/memory';
+import { resetJobProvider } from '../../background-jobs/store';
+import type { CanonicalHistoryActor, CanonicalHistoryRecord } from '~~/shared/chat/background-history';
+import type { CanonicalChatQuery } from '~~/shared/chat/history-reader';
+import { historyToolDefinitions } from '~~/shared/chat/history-tools';
 import type { ToolDefinition, ToolExecutionContext } from '~/utils/chat/types';
 
 describe('server tool registry', () => {
@@ -179,5 +189,86 @@ describe('server tool registry', () => {
             error: expect.stringContaining('Tool result exceeds'),
         });
         unregisterServerTool(def.function.name);
+    });
+});
+
+
+/** Host authorization owner. External storage alone is scripted; job identity,
+ * registry, can(), scope construction and retrieval are production code. */
+describe('registered canonical history authorization', () => {
+    let dispose: () => void;
+    let context: ToolExecutionContext;
+    let allowed: boolean;
+    let revokeOnOriginal: boolean;
+    let reads: Array<{ actor: CanonicalHistoryActor; query: CanonicalChatQuery }>;
+    let records: Map<string, CanonicalHistoryRecord>;
+    let adapter: SyncGatewayAdapter;
+    beforeEach(async () => {
+        vi.stubGlobal('useRuntimeConfig', () => ({ backgroundJobs: { storageProvider: 'memory', maxConcurrentPerUser: 20 } }));
+        resetJobProvider(); clearAllJobs(); allowed = true; revokeOnOriginal = false; reads = [];
+        records = new Map([
+            ['original', { id: 'original', clock: 1, thread_id: 'root', role: 'assistant', index: 0, data: { content: 'EXACT_AUTHORIZED_EVIDENCE' } }],
+            ['private', { id: 'private', clock: 1, thread_id: 'sibling', role: 'assistant', index: 0, data: { content: 'NEVER_DISCLOSE_SIBLING' } }],
+            ['root', { id: 'root', clock: 1 }],
+            ['current', { id: 'current', clock: 1, parent_thread_id: 'root', anchor_message_id: 'original', summary_message_id: 'summary', branch_mode: 'compacted' }],
+            ['summary', { id: 'summary', clock: 1, thread_id: 'current', role: 'system', index: 0, data: { kind: 'compaction', content: 'Saved summary', compaction: {
+                version: 1, compaction_id: 'op', source_thread_id: 'root', anchor_message_id: 'original', anchor_index: 0, generated_at: 1, model: 'model',
+                message_count: 1, prior_message_count: 0, summary_markdown: 'Saved summary', landmarks: [],
+                history_scope: { version: 1, segments: [{ thread_id: 'root', messages: [{ message_id: 'original', clock: 1 }] }] }
+            } } }],
+        ]);
+        adapter = { capabilities: { canonicalChatHistory: 'v1' }, readChatHistory: async (actor, query) => {
+            reads.push({ actor, query });
+            if (query.kind === 'messages') {
+                const messages = query.message_ids.map(id => records.get(id)).filter((row): row is CanonicalHistoryRecord => Boolean(row));
+                if (revokeOnOriginal && query.message_ids.includes('original')) allowed = false;
+                return { status: 'ok', messages };
+            }
+            return query.kind === 'thread' ? { status: 'ok', thread: records.get(query.thread_id), revision: '1' } : { status: 'ok', messages: [] };
+        } } as SyncGatewayAdapter;
+        registerSyncGatewayAdapter({ id: 'history-owner', create: () => adapter });
+        registerAuthWorkspaceStore({ id: 'history-owner', create: () => ({ listUserWorkspaces: async (subject: string) =>
+            allowed && subject === 'owner' ? [{ id: 'workspace', name: 'Workspace', role: 'viewer' }] : [] }) as AuthWorkspaceStore });
+        const requestId = await memoryJobProvider.createJob({ userId: 'owner', threadId: 'current', messageId: 'assistant', model: 'model',
+            syncProviderId: 'history-owner', execution: { version: 1, workspaceId: 'workspace', body: { model: 'model', messages: [] },
+                referer: 'http://localhost', apiKeyCiphertext: 'unused' } });
+        context = { subject: 'owner', workspaceId: 'workspace', threadId: 'current', messageId: 'assistant', requestId, callId: 'lookup', abortSignal: new AbortController().signal };
+        dispose = registerServerHistoryTools();
+    });
+    afterEach(() => { dispose?.(); clearAllJobs(); resetJobProvider(); vi.unstubAllGlobals(); });
+    async function lookup(messageId = 'original', extra: Partial<ToolExecutionContext> = {}) {
+        const result = await executeServerTool('get_message', JSON.stringify({ message_id: messageId, include_after_compaction: true }), { ...context, ...extra });
+        expect(result.error).toBeUndefined(); return JSON.parse(result.result!);
+    }
+    it('returns same-workspace evidence and denies sibling/unknown IDs through the registered tool', async () => {
+        expect(await lookup()).toMatchObject({ status: 'ok', message: { text: 'EXACT_AUTHORIZED_EVIDENCE', thread_id: 'root', reference_only: true }, neighbors: [] });
+        expect(reads.every(read => read.actor.userId === 'owner' && read.actor.workspaceId === 'workspace')).toBe(true);
+        expect(await lookup('private')).toMatchObject({ status: 'out_of_scope' });
+        expect(await lookup('unknown')).toMatchObject({ status: 'out_of_scope' });
+        expect(JSON.stringify(await lookup('private'))).not.toContain('NEVER_DISCLOSE_SIBLING');
+    });
+    it.each(['subject', 'workspaceId', 'threadId', 'messageId', 'requestId'] as const)('rejects forged %s before a canonical content read', async field => {
+        expect(await lookup('original', { [field]: 'forged' })).toMatchObject({ status: 'scope_incomplete' }); expect(reads).toEqual([]);
+    });
+    it('rechecks membership before and after materialized original reads', async () => {
+        allowed = false; expect(await lookup()).toMatchObject({ status: 'scope_incomplete' }); expect(reads).toEqual([]);
+        allowed = true; revokeOnOriginal = true; const result = await lookup();
+        expect(result).toMatchObject({ status: 'scope_incomplete' }); expect(JSON.stringify(result)).not.toContain('EXACT_AUTHORIZED_EVIDENCE');
+        expect(reads.some(read => read.query.kind === 'messages' && read.query.message_ids.includes('original'))).toBe(true);
+    });
+    it('reports missing canonical capability and missing summary as incomplete', async () => {
+        adapter.capabilities = {}; expect(await lookup()).toMatchObject({ status: 'scope_incomplete' }); expect(reads).toEqual([]);
+        adapter.capabilities = { canonicalChatHistory: 'v1' }; records.delete('summary');
+        expect(await lookup()).toMatchObject({ status: 'scope_incomplete' });
+    });
+    it('preserves an existing historical tool and cleans a partially registered sibling on collision', () => {
+        dispose();
+        const existing = registerServerTool(historyToolDefinitions[1]!, () => 'existing owner', { runtime: 'hybrid' });
+        const original = getServerTool('search_parent');
+        try {
+            expect(() => registerServerHistoryTools()).toThrow();
+            expect(getServerTool('search_parent')).toBe(original);
+            expect(getServerTool('get_message')).toBeUndefined();
+        } finally { existing(); }
     });
 });

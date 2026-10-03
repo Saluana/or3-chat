@@ -65,13 +65,11 @@ afterEach(async () => {
     setHookEngine(null);
 });
 
-// Maximum handlers are retained but hidden until native admission consumes
-// the preference. Programmatic DOM events below prove dormant preparation,
-// not an exposed product flow or browser/theme qualification.
-describe('dormant Dashboard context maximum through real KV', () => {
-    it('keeps the unenforced maximum hidden and retains existing controls', async () => {
+// Native admission consumes this workspace setting; retain its real KV owner.
+describe('Dashboard context maximum through real KV', () => {
+    it('exposes the optional maximum and retains existing controls', async () => {
         await openPage();
-        expect(wrapper!.get('#dashboard-ai-context-section').isVisible()).toBe(false);
+        expect(wrapper!.get('#dashboard-ai-context-section').isVisible()).toBe(true);
         expect(input().element.value).toBe('');
         expect(input().attributes('placeholder')).toBe('Use model limit');
         expect(wrapper!.get('label[for="dashboard-ai-max-context-input"]').text()).toBe('Maximum context tokens');
@@ -124,7 +122,7 @@ describe('dormant Dashboard context maximum through real KV', () => {
         });
         expect(failure).toHaveBeenCalled();
         expect(await savedMaximum()).toBe(175_000);
-        expect(wrapper!.get('#dashboard-ai-context-section').isVisible()).toBe(false);
+        expect(wrapper!.get('#dashboard-ai-context-section').isVisible()).toBe(true);
         expect(wrapper!.get('#dashboard-ai-reset-btn').attributes('disabled')).toBeUndefined();
         failure.mockRestore();
         await wrapper!.get('#dashboard-ai-reset-btn').trigger('click');

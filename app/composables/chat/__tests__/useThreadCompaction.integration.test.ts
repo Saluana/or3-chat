@@ -3,6 +3,7 @@ import { ref, effectScope, type EffectScope } from 'vue';
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { getDb, setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { useThreadCompaction } from '../useThreadCompaction';
+import { inspectCompactionSource } from '~/db/compaction';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine, useHooks } from '~/core/hooks/useHooks';
@@ -11,7 +12,10 @@ import { getWriteTxTableNames } from '~/db/util';
 import type { ORStreamEvent } from '~~/shared/openrouter/parseOpenRouterSSE';
 import type { openRouterStream } from '~/utils/chat/openrouterStream';
 const transport = vi.hoisted(() => vi.fn<typeof openRouterStream>());
-vi.mock('~/utils/chat/openrouterStream', () => ({ openRouterStream: transport }));
+vi.mock('~/utils/chat/openrouterStream', async (original) => ({
+    ...await original<typeof import('~/utils/chat/openrouterStream')>(),
+    openRouterStream: transport,
+}));
 const markdown = '## Objective\nFinish implementation.\n## Important Details\nKeep exact paths.\n## Work State\nTwo turns settled.\n## Next Move\nContinue safely.\n## Relevant Files\nNone.';
 const envelope = JSON.stringify({ summary_markdown: markdown, landmarks: [{ message_id: 'm0', kind: 'decision', summary: 'Source evidence' }] });
 let workspace: string;
@@ -143,15 +147,21 @@ it('includes inherited history when the reference child has a local anchor', asy
 });
 it('inspects the exact persisted boundary without inference or durable mutations', async () => {
     const service = controller(); const before = await getDb().messages.toArray();
+    await expect(inspectCompactionSource('source')).resolves.toBeUndefined();
     expect(await service.inspect()).toMatchObject({ eligible: true, source_thread_id: 'source', anchor_message_id: 'm3', model: 'large-model' });
     expect(await service.inspect('m1')).toMatchObject({ eligible: false, code: 'not_eligible' });
     expect(transport).not.toHaveBeenCalled(); expect(await getDb().messages.toArray()).toEqual(before); expect(await getDb().pending_ops.count()).toBe(0);
     expect(service.state.value.status).toBe('idle');
+    await getDb().transaction('rw', getWriteTxTableNames(getDb(), 'messages', { includeTombstones: true }), async () => {
+        await getDb().messages.delete('m3'); await getDb().messages.delete('m2');
+    });
+    await expect(inspectCompactionSource('source')).rejects.toMatchObject({ code: 'not_eligible' });
 });
 it('returns persisted pending-generation eligibility even when the pane busy flag is false', async () => {
     await getDb().transaction('rw', getWriteTxTableNames(getDb(), 'messages'), async () => { await getDb().messages.update('m3', { pending: true }); });
     const before = await getDb().pending_ops.count(); const service = controller();
     expect(await service.inspect()).toMatchObject({ eligible: false, code: 'source_busy' });
+    await expect(inspectCompactionSource('source')).rejects.toMatchObject({ code: 'source_busy' });
     expect(transport).not.toHaveBeenCalled(); expect(await getDb().pending_ops.count()).toBe(before);
 });
 it('never silently moves an inherited anchor to a local message', async () => {

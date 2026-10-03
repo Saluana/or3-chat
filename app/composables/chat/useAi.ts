@@ -2,7 +2,7 @@ import { presentError, errorDiagnostics } from '~~/shared/errors';
 import { resolveThreadProjection } from '~/utils/chat/compaction/history';
 import { recoveryInputFingerprint, recoverySourceFingerprint, type NativeRecoveryCheckpoint } from '~/utils/chat/native-recovery';
 import { toolDefinitionEquals } from '~~/shared/chat/tool-policy';
-import { projectTranscriptForOpenRouter, storedMessagesToCanonicalTranscript } from '~/utils/chat/transcript';
+import { projectTranscriptForOpenRouter, storedMessagesToCanonicalTranscript, associateUiToolResultMessages } from '~/utils/chat/transcript';
 import { ChatContextAdmissionError, contextAdmissionFailureReason, type ContextRequestPolicy } from '~~/shared/chat/context-budget';
 import type { ChatSendPreparation, ChatSendCommit } from '~~/shared/hooks/hook-domain-types';
 /**
@@ -223,7 +223,7 @@ export function useChat(
     options: { historyAlreadyLoaded?: boolean } = {}
 ) {
     // Messages and basic state
-    const messages = ref<UiChatMessage[]>(msgs.map((m) => ensureUiMessage(m)));
+    const messages = ref<UiChatMessage[]>(associateUiToolResultMessages(msgs.map((m) => ensureUiMessage(m)), msgs));
     const rawMessages = ref<ChatMessage[]>([...msgs]);
     const visibleRequest = shallowRef<ChatRequestScope | null>(null);
     const backgroundRequestScopes = shallowReactive(
@@ -905,9 +905,9 @@ export function useChat(
                 // A newer navigation owns the reactive state now. The queued
                 // sync below will load that target after this stale query ends.
                 if (threadIdRef.value !== targetThreadId) return;
-                messages.value = rawMessages.value
+                messages.value = associateUiToolResultMessages(rawMessages.value
                     .filter((m: ChatMessage) => m.role !== 'tool')
-                    .map((m) => ensureUiMessage(m));
+                    .map((m) => ensureUiMessage(m)), rawMessages.value);
                 await reattachBackgroundJobs();
                 await reconcileForegroundGenerations();
                 logBgStream('history-sync-complete', {
@@ -1774,7 +1774,7 @@ export function useChat(
             if (!stopped && import.meta.dev) {
                 console.warn('[useChat] sendMessage threw', errorDiagnostics(error));
             }
-            if (!stopped) reportError(
+            if (!stopped && !contextAdmissionFailureReason(error)) reportError(
                 err('ERR_INTERNAL', message || 'Failed to send message', {
                     severity: 'error',
                     tags: { domain: 'chat', stage: 'send' },
@@ -1802,6 +1802,7 @@ export function useChat(
                               ? result.error
                               : undefined,
                     persistence: requestScope.jobId ? 'tracker' : 'request',
+                    failureReason: 'reason' in result ? result.reason : undefined,
                 });
                 reportFinalization(finalization);
             }
@@ -1926,8 +1927,10 @@ export function useChat(
         // Reuse the already filtered native payload, never request/delegation hooks.
         if (requestScope.threadId && !sendMessagesParams.historyOverride) {
             const recovery = await requestScope.originDb.chat_request_recoveries.get(requestScope.threadId);
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Durable rows may come from an older or malformed storage version.
-            if (recovery && recovery.version === 1 && recovery.input_fingerprint === await recoveryInputFingerprint(content, sendMessagesParams)) {
+            if (recovery && recovery.input_fingerprint === await recoveryInputFingerprint(content, sendMessagesParams)) {
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- A durable checkpoint can be written by a newer client.
+                if (recovery.version !== 1)
+                    return { status: 'rejected', requestId, reason: 'unavailable', error: 'This saved attempt uses an unsupported recovery version. Update the app or edit the draft to prepare a new request.' };
                 if (sendMessagesParams.inspectLossyRequest || sendMessagesParams.lossyConfirmation)
                     return { status: 'rejected', requestId, reason: 'unavailable', error: 'This saved attempt has a final payload. Retry it with another model or reply allowance, or edit the draft for a new request.' };
                 return await recoverNativeTurn(requestScope, recovery, sendMessagesParams);
@@ -3463,8 +3466,13 @@ export function useChat(
             const checkpoint = await db.chat_request_recoveries.get(threadId);
             if (disposed || retryRevision !== navigationRevision || getDb() !== db || generation !== getWorkspaceGeneration() || threadIdRef.value !== threadId)
                 return { status: 'rejected' as const, reason: 'unavailable' as const };
-            if (checkpoint && [checkpoint.user_message_id, checkpoint.assistant_message_id].includes(messageId))
+            if (checkpoint && [checkpoint.user_message_id, checkpoint.assistant_message_id].includes(messageId)) {
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- A durable checkpoint can be written by a newer client.
+                if (checkpoint.version !== 1)
+                    return { status: 'rejected' as const, reason: 'unavailable' as const,
+                        error: 'This saved attempt uses an unsupported recovery version. Update the app or edit the draft to prepare a new request.' };
                 return sendMessage({ ...checkpoint.input, model: modelOverride || checkpoint.input.model });
+            }
         }
         return await retryMessageImpl(
             {
@@ -3878,7 +3886,7 @@ export function useChat(
             .filter((message) => message.role !== 'tool')
             .map((message) => ensureUiMessage(message));
         rawMessages.value = nextRaw;
-        messages.value = nextUi;
+        messages.value = associateUiToolResultMessages(nextUi, nextRaw);
     }
 
     void reattachBackgroundJobs();

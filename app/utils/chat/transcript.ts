@@ -103,6 +103,11 @@ type StoredTranscriptMessage = Message & {
 const asObject = (value: unknown): Record<string, unknown> =>
     value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 
+function readParentAssistantId(data: Record<string, unknown>, isTool: boolean): string | undefined {
+    return typeof data.parent_assistant_id === 'string' ? data.parent_assistant_id
+        : isTool && typeof data.parent_turn_id === 'string' ? data.parent_turn_id : undefined;
+}
+
 const safeFileHashes = (value: string | null | undefined): string[] => {
     if (!value) return [];
     try {
@@ -164,12 +169,7 @@ export function messageToCanonicalTranscript(
               : message.role === 'system'
                 ? 'system'
                 : 'user';
-    const parentAssistantId =
-        typeof data.parent_assistant_id === 'string'
-            ? data.parent_assistant_id
-            : typeof data.parent_turn_id === 'string' && kind === 'tool_result'
-              ? data.parent_turn_id
-              : '';
+    const parentAssistantId = readParentAssistantId(data, kind === 'tool_result');
     const normalized = normalizeStreamingMessage({
         content: message.content,
         reasoning_text: message.reasoning_text,
@@ -325,9 +325,38 @@ export function projectTranscriptForOpenRouter(
 export function projectTranscriptForUi(
     input: CanonicalTranscriptRecord[]
 ): UiChatMessage[] {
-    return projectTranscriptForOpenRouter(input)
-        .filter((message) => message.role !== 'tool')
-        .map(ensureUiMessage);
+    return associateUiToolResultMessages(projectTranscriptForOpenRouter(input)
+        .filter((message) => message.role !== 'tool').map(ensureUiMessage), input);
+}
+
+/** UI-only navigation hints; callers retain their established presentation projection. */
+export function associateUiToolResultMessages(messages: UiChatMessage[], input: readonly (CanonicalTranscriptRecord | ChatMessage)[]): UiChatMessage[] {
+    // Durable navigation identities only: never fabricate storage records for
+    // a provider projection or normalize its historical text a second time.
+    const identities = input.flatMap<{
+        id: string; role: ChatMessage['role']; threadId?: string;
+        parentAssistantId?: string; callId?: string; toolCalls: readonly { callId: string }[];
+    }>(row => {
+        if ('kind' in row) return [row];
+        if (!row.id) return [];
+        const data = asObject(row.data);
+        return [{ id: row.id, role: row.role, threadId: undefined,
+            parentAssistantId: readParentAssistantId(data, row.role === 'tool'),
+            callId: row.tool_call_id ?? (typeof data.tool_call_id === 'string' ? data.tool_call_id : undefined),
+            toolCalls: normalizeStreamingMessage({ data: { tool_calls: data.tool_calls } }).toolCalls.map(call => ({ callId: call.id })) }];
+    });
+    const owners = new Map(identities.filter(row => row.role === 'assistant').map(row => [row.id, row]));
+    const resultIds = new Map<string, string[]>();
+    for (const row of identities) {
+        const parent = row.parentAssistantId && owners.get(row.parentAssistantId);
+        if (row.role !== 'tool' || !parent || row.threadId !== parent.threadId || !row.callId
+            || !parent.toolCalls.some(call => call.callId === row.callId)) continue;
+        const ids = resultIds.get(parent.id) ?? []; ids.push(row.id); resultIds.set(parent.id, ids);
+    }
+    return messages.map(ui => {
+        const ids = resultIds.get(ui.id);
+        return ids?.length ? { ...ui, toolResultMessageIds: [...new Set(ids)] } : ui;
+    });
 }
 
 export function storedMessagesToCanonicalTranscript(

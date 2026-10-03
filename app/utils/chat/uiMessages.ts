@@ -87,6 +87,8 @@ export interface UiChatMessage {
     stream_id?: string;
     pending?: boolean;
     toolCalls?: ToolCallInfo[];
+    /** Canonically associated stored tool-result IDs, for reverse navigation only. */
+    toolResultMessageIds?: string[];
     /**
      * Ordered assistant content. When present, text and tool calls are rendered
      * in the same sequence in which the provider emitted them.

@@ -72,7 +72,12 @@ import { getPluginGateDecision } from '~/utils/plugins/access-gate';
 
 /** Definition for an extendable chat message action button. */
 export interface ThreadHistoryAction
-    extends HistoryActionRegistryItem<Thread> {}
+    extends HistoryActionRegistryItem<Thread> {
+    /** Reactive ephemeral reason; must be pure and perform no storage reads. */
+    disabledReason?: (ctx: { threadId: string }) => string | undefined;
+    /** Lazy read-only durable inspection, evaluated only while the menu is open. */
+    inspectDisabledReason?: (ctx: { document: Thread }) => Promise<string | undefined>;
+}
 
 const registry = createHistoryActionRegistry<Thread, ThreadHistoryAction>(
     '__or3ThreadHistoryActionsRegistry'

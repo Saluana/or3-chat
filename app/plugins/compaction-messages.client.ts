@@ -5,6 +5,8 @@ import { registerMessageAction, unregisterMessageAction } from '~/composables/ch
 import { registerComposerAction } from '~/composables/sidebar/useComposerActions';
 import { registerThreadHistoryAction, unregisterThreadHistoryAction } from '~/composables/threads/useThreadHistoryActions';
 import { getWorkspaceGeneration } from '~/db/client';
+import { CompactionError, inspectCompactionSource } from '~/db/compaction';
+import { isThreadCompactionActive } from '~/composables/chat/useThreadCompaction';
 
 export default defineNuxtPlugin(() => {
     const handle = registerMessageRenderer({
@@ -26,7 +28,15 @@ export default defineNuxtPlugin(() => {
         disabled: (ctx) => Boolean(ctx.isLoading || ctx.isStreaming || ctx.compactionBlockedReason),
         handler: async (ctx) => { await ctx.compactThread?.(); } });
     registerThreadHistoryAction({ id: 'or3:compact-thread-history', icon: 'i-lucide-fold-vertical', label: 'Compact conversation', order: 190,
-        handler: ({ document }) => { window.dispatchEvent(new CustomEvent('or3:compact-thread', {
+        disabledReason: ({ threadId }) => isThreadCompactionActive(threadId) ? 'A compaction is already active for this conversation.' : undefined,
+        inspectDisabledReason: async ({ document }) => {
+            try { await inspectCompactionSource(document.id); return undefined; }
+            catch (error) { return error instanceof CompactionError ? error.message : 'Conversation history is unavailable. Open it and retry explicitly.'; }
+        },
+        handler: async ({ document }) => {
+            if (isThreadCompactionActive(document.id)) return;
+            await inspectCompactionSource(document.id);
+            window.dispatchEvent(new CustomEvent('or3:compact-thread', {
             detail: { threadId: document.id, generation: getWorkspaceGeneration() },
         })); } });
     if (import.meta.hot) import.meta.hot.dispose(() => { handle.dispose(); composer.dispose(); unregisterMessageAction('or3:compact-here'); unregisterThreadHistoryAction('or3:compact-thread-history'); });

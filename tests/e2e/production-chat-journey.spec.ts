@@ -9,14 +9,14 @@ const chatPage = '/__or3-chat-journey-test';
 test('PageShell compaction families retain keyboard expansion and child-only search across sidebar consumers', async ({ page }, info) => {
     test.setTimeout(120_000);
     await page.route('**openrouter.ai/**', (route) => route.abort());
-    await page.goto(`${chatPage}?compaction=1&presentation=1`);
+    await page.goto(`${chatPage}?compaction=1&presentation=1&native=1`);
     await expect(page.locator('[data-compaction-card]')).toBeVisible({ timeout: 60_000 });
     const root = await page.evaluate(() => localStorage.getItem('or3:e2e:compaction-source'));
     const header = page.locator(`[data-thread-family="${root}"][data-family-kind="group-header"]`);
     const members = page.locator(`[data-thread-family="${root}"][data-family-kind="thread-member"]`);
     const toggle = header.getByRole('button', { name: /^(Expand|Collapse) / });
     await expect(toggle).toHaveAttribute('aria-expanded', 'false'); await toggle.focus(); await page.keyboard.press('Enter');
-    await expect(toggle).toHaveAttribute('aria-expanded', 'true'); await expect(members).toHaveCount(4);
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true'); await expect(members).toHaveCount(4); await expect(toggle).toBeFocused();
     await page.reload(); await expect(toggle).toHaveAttribute('aria-expanded', 'true'); await expect(members).toHaveCount(4);
     await page.getByRole('button', { name: 'Chats', exact: true }).click();
     await expect(toggle).toHaveAttribute('aria-expanded', 'true'); await expect(members).toHaveCount(4);
@@ -34,6 +34,97 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
         assertions: ['Enter and Space', 'four flat members', 'workspace KV reload', 'child-only match', 'search leaves saved expansion unchanged'] }) });
     const screenshot = info.outputPath('family-keyboard-reload.png'); await page.screenshot({ path: screenshot, animations: 'disabled' });
     await info.attach('family-keyboard-reload', { path: screenshot, contentType: 'image/png' });
+    const input = page.getByRole('textbox', { name: 'Message input' }); await input.fill('Preserve this unsent native compaction draft.');
+    const summaryRow = page.locator('[data-msg-id]').filter({ has: page.locator('[data-compaction-card]') });
+    const originalSummaryId = await summaryRow.getAttribute('data-msg-id');
+    await page.getByTestId('fixture-hold-summary').check();
+    await page.getByRole('button', { name: 'Compact conversation', exact: true }).click();
+    await expect(page.getByText(/^generating summary · scripted-compaction-model$/)).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page.getByText(/generating summary ·/)).toHaveCount(0);
+    expect(await summaryRow.getAttribute('data-msg-id')).toBe(originalSummaryId);
+    await expect(input).toHaveText('Preserve this unsent native compaction draft.');
+    await page.getByTestId('fixture-hold-summary').uncheck();
+    await page.getByRole('button', { name: 'Compact conversation', exact: true }).click();
+    await expect.poll(async () => summaryRow.getAttribute('data-msg-id')).not.toBe(originalSummaryId);
+    const childSummaryId = await summaryRow.getAttribute('data-msg-id');
+    await page.locator('.unified-sb-item-active').getByRole('button', { name: 'Open actions', exact: true }).last().click();
+    const historyCompact = page.getByRole('button', { name: 'Compact conversation', exact: true }).filter({ hasText: 'Compact conversation' });
+    await expect(historyCompact).toBeDisabled();
+    await expect(historyCompact).toHaveAttribute('title', /at least two settled/);
+    await page.keyboard.press('Escape');
+    await page.locator('[data-compaction-card]').getByRole('button', { name: /^View original/ }).click();
+    await expect.poll(async () => summaryRow.getAttribute('data-msg-id')).toBe(originalSummaryId);
+    await expect(input).toHaveText('Preserve this unsent native compaction draft.');
+    const sourceAssistant = page.locator('[data-msg-id$="-presentation-answer"]');
+    await sourceAssistant.hover();
+    await sourceAssistant.getByRole('button', { name: 'Compact here', exact: true }).click();
+    await expect.poll(async () => summaryRow.getAttribute('data-msg-id')).not.toBe(originalSummaryId);
+    await page.locator('[data-compaction-card]').getByRole('button', { name: 'View original · message 5', exact: true }).click();
+    await expect.poll(async () => summaryRow.getAttribute('data-msg-id')).toBe(originalSummaryId);
+    await expect(sourceAssistant).toBeVisible();
+    const originalMember = members.filter({ hasText: 'Original' });
+    await originalMember.locator('.unified-sb-item').click();
+    await expect(summaryRow).toHaveCount(0);
+    await originalMember.getByRole('button', { name: 'Open actions', exact: true }).click();
+    await expect(historyCompact).toBeEnabled(); await historyCompact.click();
+    await expect(summaryRow).toHaveCount(1);
+    await expect(page.locator('[data-compaction-card]')).toBeVisible();
+    await page.keyboard.press('Escape');
+    const historySummaryId = await summaryRow.getAttribute('data-msg-id');
+    await page.locator('[data-compaction-card]').getByRole('button', { name: /^View original/ }).click();
+    const reverseCompactions = page.locator(`[data-msg-id="${root}-anchor"]`).getByRole('button', { name: 'Compacted · Launch checklist — compacted', exact: true });
+    await expect(reverseCompactions).toHaveCount(2);
+    await reverseCompactions.first().click();
+    await expect.poll(async () => summaryRow.getAttribute('data-msg-id')).toBe(historySummaryId);
+    await info.attach('native-composer-compaction-assertions', { contentType: 'application/json', body: JSON.stringify({
+        source: process.env.OR3_CONTEXT_SOURCE_SHA, originalSummaryId, childSummaryId, assertions: ['native registry action', 'progress/model/Cancel', 'new child opened', 'short child history action disabled with reason', 'exact Compact-here anchor', 'registered history-menu action', 'draft retained'] }) });
+});
+
+test('compaction lossy confirmation shows its estimate and preserves full saved history', async ({ page }, info) => {
+    test.setTimeout(120_000);
+    await page.route('**openrouter.ai/**', (route) => route.abort());
+    await page.goto(`${chatPage}?compaction=1&lossy=1`);
+    const input = page.getByRole('textbox', { name: 'Message input' });
+    await expect(input).toBeVisible({ timeout: 60_000 });
+    const read = () => page.evaluate(async () => {
+        const root = localStorage.getItem('or3:e2e:compaction-source');
+        for (const { name } of await indexedDB.databases()) {
+            if (!name) continue;
+            const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+            if (!db.objectStoreNames.contains('messages')) { db.close(); continue; }
+            const request = db.transaction('messages', 'readonly').objectStore('messages').getAll();
+            const rows = await new Promise<Array<{ id: string; thread_id: string; role: string; data: Record<string, unknown> }>>((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+            db.close(); const selected = rows.filter((row) => row.thread_id === root);
+            if (selected.length) return { rows: selected, requests: JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]') };
+        }
+        return { rows: [], requests: [] };
+    });
+    const before = await read(); expect(before.rows.length).toBe(5);
+    await input.fill('journey:lossy'); await page.getByRole('button', { name: 'Send message', exact: true }).click();
+    const inspect = page.getByRole('button', { name: 'Inspect lossy send', exact: true }); await expect(inspect).toBeVisible();
+    expect(await read()).toEqual(before); await expect(input).toHaveText('journey:lossy');
+    await inspect.click();
+    const confirm = page.getByRole('button', { name: 'Send with these omissions', exact: true }); await expect(confirm).toBeVisible();
+    await expect(page.getByText(/Estimated input after omissions/)).toBeVisible();
+    await expect(page.getByText('The original history stays saved. This request excludes only the entries below.')).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Messages omitted from this request' })).toBeVisible();
+    expect(await read()).toEqual(before);
+    await input.fill('journey:lossy edited'); await expect(confirm).toHaveCount(0);
+    await page.getByRole('button', { name: 'Send message', exact: true }).click(); await expect(inspect).toBeVisible();
+    await inspect.click(); await expect(confirm).toBeVisible(); await confirm.click();
+    await expect.poll(async () => (await read()).requests.length).toBe(1);
+    await expect(page.getByRole('button', { name: 'Stop response', exact: true })).toHaveCount(0);
+    await expect(input).toBeEmpty(); const after = await read();
+    expect(after.rows.filter((row) => before.rows.some((original) => original.id === row.id))).toEqual(before.rows);
+    expect(after.rows.filter((row) => !before.rows.some((original) => original.id === row.id) && row.role === 'user')).toHaveLength(1);
+    const sentUser = after.rows.find((row) => row.role === 'user' && row.data.context_omission); expect(sentUser).toBeTruthy();
+    await expect.poll(async () => (await read()).rows.find((row) => row.role === 'assistant' && row.data.turn_id === sentUser!.id)?.data.content).toBe('Hello from deterministic stream.');
+    expect(JSON.stringify(after.requests[0])).toContain('journey:lossy edited');
+    await input.fill('journey:next normal'); await page.getByRole('button', { name: 'Send message', exact: true }).click();
+    await expect(inspect).toBeVisible(); expect((await read()).requests).toHaveLength(1); await expect(input).toHaveText('journey:next normal');
+    await info.attach('lossy-confirmation-assertions', { contentType: 'application/json', body: JSON.stringify({ source: process.env.OR3_CONTEXT_SOURCE_SHA,
+        assertions: ['zero-write local block', 'candidate estimate', 'saved originals', 'edit invalidates decision', 'single explicit send', 'durable omission metadata', 'next send restores full history'], request: after.requests[0] }) });
 });
 
 test('compaction history and families use production scope and deletion policies', async ({ page }, info) => {
@@ -49,6 +140,7 @@ test('compaction history and families use production scope and deletion policies
         source: process.env.OR3_CONTEXT_SOURCE_SHA ?? 'unrecorded', ...result }) });
     expect(result.failure).toBeUndefined();
     expect(result.inherited.status).toBe('ok'); expect(result.immediate.status).toBe('ok');
+    expect(result.inherited.message.reference_only).toBe(true); expect(result.immediate.message.reference_only).toBe(true);
     expect(result.inherited.message.thread_id).toBe(result.root); expect(result.immediate.message.thread_id).toBe(result.parent);
     expect(result.siblingRead.status).toBe('out_of_scope'); expect(result.unknown.status).toBe('out_of_scope');
     expect(result.laterDefault.status).toBe('out_of_scope'); expect(result.laterExpanded.message.outside_compaction_scope).toBe(true);
@@ -87,6 +179,7 @@ test('compaction history and families use production scope and deletion policies
     expect(result.descendantError).toBe('thread_has_descendants'); expect(result.hookError).toBe('thread_has_descendants');
     expect(result.hookRollback).toBe(true); expect(result.preferenceRetained).toBe(true); expect(result.retiredPreference).toBe(true);
     expect(JSON.stringify(result.survivingContext)).toContain('## Objective');
+    expect(result.scale.families).toBe(500); expect(result.scale.expandedMembers).toBe(200); expect(result.scale.memberPageSize).toBe(50);
     expect(result.scale.messageReads).toBe(0); expect(result.scale.p95).toBeLessThan(500);
     expect(result.scale.memberP95).toBeLessThan(500);
 });

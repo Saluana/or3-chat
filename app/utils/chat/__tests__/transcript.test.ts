@@ -117,7 +117,12 @@ describe('canonical transcript projections', () => {
         expect(ui[1]).toMatchObject({
             id: 'a1', reasoning_text: 'plan',
             toolCalls: [{ id: 'call-1', status: 'complete', result: 'answer' }],
+            toolResultMessageIds: ['t1'],
         });
+        for (const change of [{ threadId: 'another-thread' }, { parentAssistantId: 'another-assistant' }, { callId: 'another-call' }]) {
+            expect(projectTranscriptForUi([records[0]!, records[1]!, { ...records[2]!, ...change }])[1]?.toolResultMessageIds).toBeUndefined();
+        }
+        expect(provider[1]).not.toHaveProperty('toolResultMessageIds');
     });
 
     it('reloads the same canonical assistant state from mixed and malformed fields', () => {

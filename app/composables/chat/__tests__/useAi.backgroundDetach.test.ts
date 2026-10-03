@@ -106,7 +106,13 @@ vi.mock('~/db/client', () => ({
     getWorkspaceGeneration: () => 0,
 }));
 
+const recoveryStore = new Map<string, any>();
 const dbMock = {
+    chat_request_recoveries: {
+        get: async (id: string) => recoveryStore.get(id),
+        put: async (row: any) => { recoveryStore.set(row.thread_id, row); },
+        delete: async (id: string) => { recoveryStore.delete(id); },
+    },
     threads: {
         get: async (id: string) => ({
             id,
@@ -124,11 +130,8 @@ const dbMock = {
             messageStore.delete(id);
         }),
     },
-    transaction: async (
-        _mode: string,
-        _tables: string[],
-        fn: () => Promise<unknown>
-    ) => await fn(),
+    transaction: async (_mode: string, ...args: unknown[]) =>
+        await (args.at(-1) as () => Promise<unknown>)(),
 };
 let activeDb = dbMock;
 
@@ -393,6 +396,7 @@ describe('useChat background detach race', () => {
         startBackgroundStreamMock.mockReset();
         backgroundJobTrackers.clear();
         messageStore.clear();
+        recoveryStore.clear();
         activeDb = dbMock;
         consumeWorkflowSend = false;
         catalogModelsRef.value = [{ id: 'test-model' }];

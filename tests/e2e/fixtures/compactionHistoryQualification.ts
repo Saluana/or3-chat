@@ -148,11 +148,19 @@ export async function qualifyCompactionHistory(current: string) {
 
     // Measure production grouping on materialized metadata, including roots
     // beyond the newest page and sparse legacy hints. No chat is mounted here.
-    await db.threads.bulkPut(Array.from({ length: 10_000 }, (_, index) => {
-        const group = Math.floor(index / 50); const id = `scale-${index}`; const rootId = `scale-${group * 50}`;
-        return thread(id, { created_at: now + index, updated_at: now + index,
-            ...(index % 50 ? { parent_thread_id: rootId, ...(index % 17 ? { root_thread_id: rootId } : {}) } : {}) });
-    }));
+    let ordinal = 0;
+    const scaleThreads: Thread[] = [];
+    for (let family = 0; family < 500; family++) {
+        const count = family === 0 ? 200 : family <= 319 ? 20 : 19;
+        const rootId = `scale-family-${family}-member-0`;
+        for (let member = 0; member < count; member++) {
+            const id = `scale-family-${family}-member-${member}`;
+            scaleThreads.push(thread(id, { created_at: now + ordinal, updated_at: now + ordinal++,
+                ...(member ? { parent_thread_id: rootId, ...(member % 17 ? { root_thread_id: rootId } : {}) } : {}) }));
+        }
+    }
+    if (scaleThreads.length !== 10_000) throw new Error('The documented scale fixture requires 10,000 threads.');
+    await db.threads.bulkPut(scaleThreads);
     let messageReads = 0; const reading = (row: Message) => { messageReads++; return row; };
     db.messages.hook('reading', reading); const timings: number[] = []; const memberTimings: number[] = [];
     try { for (let sample = 0; sample < 7; sample++) { const start = performance.now();
@@ -160,17 +168,25 @@ export async function qualifyCompactionHistory(current: string) {
         if (page.items.length !== 50 || !page.hasMore) throw new Error('Scale family pagination lost groups.');
         timings.push(performance.now() - start); }
         for (let sample = 0; sample < 3; sample++) { const start = performance.now();
-            const members = await readFamilyMembers(db, 'scale-9950', 20, {});
-            if (members.members.length !== 20 || !members.hasMore) throw new Error('Scale member pagination lost rows.');
+            const members = await readFamilyMembers(db, 'scale-family-0-member-0', 50, {});
+            if (members.members.length !== 50 || !members.hasMore) throw new Error('Scale member pagination lost rows.');
             memberTimings.push(performance.now() - start);
-        } }
+        }
+        const first = await readFamilyPage(db, { limit: 50, type: 'thread', filter: {} });
+        const next = await readFamilyPage(db, { limit: 100, type: 'thread', filter: {} });
+        if (new Set(next.items.map((item) => item.family?.rootId)).size !== 100
+            || first.items.some((item, index) => item.id !== next.items[index]?.id)) throw new Error('Family pagination duplicated or reordered a family.');
+        const expanded = await readFamilyMembers(db, 'scale-family-0-member-0', 200, {});
+        if (expanded.members.length !== 200 || expanded.hasMore || new Set(expanded.members.map((row) => row.id)).size !== 200)
+            throw new Error('The 200-member family lost or duplicated members.');
+        }
     finally { db.messages.hook('reading').unsubscribe(reading); }
     timings.sort((a, b) => a - b);
-    return { fixtureVersion: 3, current, parent: parent.id, root, inherited, immediate, siblingRead, unknown, laterDefault, laterExpanded,
+    return { fixtureVersion: 4, current, parent: parent.id, root, inherited, immediate, siblingRead, unknown, laterDefault, laterExpanded,
         changed, deleted, replacement, first, repeated, emptyPartial, kindResults, second, tampered, differentQuery, currentWriteContinuation, ancestorWriteContinuation,
         expandedPages, canceled: Boolean(canceledExecution.error) && !canceledExecution.result, missingSummary, missingCaptured, missingAnchor,
         switched, crossConnectionContinuation, filtered, filteredMembers, latest, damaged, mixed, projectMixed, pinnedMixed,
         projectDocumentId: projectDocument.id, descendantError, hookError, hookRollback,
-        preferenceRetained, retiredPreference, survivingContext, scale: { threads: 10_000, timings, p95: timings.at(-1),
+        preferenceRetained, retiredPreference, survivingContext, scale: { threads: 10_000, families: 500, expandedMembers: 200, memberPageSize: 50, timings, p95: timings.at(-1),
             memberTimings, memberP95: Math.max(...memberTimings), messageReads } };
 }

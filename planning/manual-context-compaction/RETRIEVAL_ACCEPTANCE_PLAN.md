@@ -22,3 +22,27 @@ Use both sidebar consumers with siblings, mixed documents, 10k threads, wrong/mi
 ## Recovery and visual gates (2.8, 2.11, 4.5–4.7, 8.1)
 
 The named context harness owns initial provider rejection, same-ID reload recovery and once-only filtering. Additional owners must cover checkpoint failure, cancellation, changed source/tool/workspace, attachments and accepted tool-loop overflow. Capture the real PageShell sidebar expanded/collapsed, context details and composer/manual row-menu compaction in light/dark and mobile. Inspect every exported image before marking visual evidence accepted.
+
+## Native lossy confirmation follow-up (2.10, 2.11)
+
+Extend the existing production journey before correcting the confirmation: a disposable original thread exceeds a saved6,000-token maximum; native send makes no provider request or turn write; inspection shows complete omitted turns plus the resulting input/window/reply estimate; editing invalidates the displayed decision; explicit confirmation sends one bounded candidate, preserves original rows and saves omission metadata; the next ordinary send restores full history and blocks again. The external inference fixture alone is scripted. Also exercise the actual composer Compact action on the existing presentation thread and preserve its draft. Existing Dashboard owner must now assert the exposed setting, since native admission consumes it.
+
+## Lazy history-menu eligibility follow-up (R1.AC3,4.6)
+
+Before implementation, extend the existing PageShell family journey: open the actual newly committed summary-only child menu, require Compact conversation disabled with the two-settled-turn reason, then navigate back without consuming the draft. Production capture and menu inspection must share the same canonical source checks. Open-menu subscriptions must be disposed on close/workspace change; no message reads occur for closed sidebar rows. Fresh execution rechecks eligibility even after an enabled menu becomes stale. Existing controller owners cover pending rows and cross-pane locks; extend their read-only inspection owner for model-independent menu inspection and zero writes/inference.
+
+## Server registered-tool authorization owner (6.3)
+
+Extend the existing server tool-registry owner, before any service correction: real memory job storage and registered history handlers, real canonicalHistoryContext and requireCan, with only the external membership/canonical storage adapter scripted. Positive same-workspace original read must return evidence; a sibling/unknown ID must return indistinguishable out-of-scope; forged durable execution fields must cause zero canonical reads; revoked membership before and during an original read must return no content; unavailable capability and missing summary must report scope-incomplete. Registry collision must retain its original handler and clean partial registration. This isolates host trust boundaries; actual SQLite/Convex storage conformance remains independently owned and deployed second-client/reconnect is not implied.
+
+## Native action closure (4.5–4.6)
+
+Extend the existing family UI case before further action fixes: hold external inference only, invoke native composer Compact, observe selected model/progress/Cancel, cancel without a new child and with draft intact; then complete native compaction. From its original source invoke native Compact here at the exact final assistant and verify the saved anchor via View original. Finally invoke the original family member’s registered history-menu Compact and verify child navigation. Fixture controls only delay external inference; they never supply policy, admission, controller results or navigation.
+
+## Reverse tool-anchor child links (4.7/R9.AC4)
+
+Before implementation, require the newly created root tool-anchored compaction and the earlier compacted child to appear beneath the visible owning assistant, and navigate back to the exact latest child summary. The canonical projection owner must expose result IDs only for a matching parent/call/thread; those IDs are UI hints, never scope authority or provider payload. Indexed child pages remain metadata-only and fresh navigation validates the actual stored tool anchor and its canonical assistant ownership. No per-row whole-history reads or invented durable IDs.
+
+## Historical tool-output labeling (R9.AC5)
+
+Extend the existing positive registered-server lookup assertion before changing output: original text and neighbors/results must carry a host-authored reference_only marker, with tool descriptions explicitly excluding instructions/authorization. This is additive bounded metadata; shared output-byte admission must still account for it. No model-provided text becomes authority.

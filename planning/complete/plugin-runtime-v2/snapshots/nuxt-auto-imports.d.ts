@@ -17,7 +17,7 @@ export { registerEditorInspectorPanel, unregisterEditorInspectorPanel, useEditor
 export { registerEditorNode, unregisterEditorNode, registerEditorMark, unregisterEditorMark, registerEditorExtension, unregisterEditorExtension, listEditorNodes, listEditorMarks, listEditorExtensions, listRegisteredEditorNodeIds, listRegisteredEditorMarkIds, listRegisteredEditorExtensionIds, EditorNode, EditorMark, EditorExtension } from '../app/composables/editor/useEditorNodes';
 export { registerEditorToolbarButton, unregisterEditorToolbarButton, useEditorToolbarButtons, listRegisteredEditorToolbarButtonIds, EditorToolbarButton } from '../app/composables/editor/useEditorToolbar';
 export { registerHeaderAction, unregisterHeaderAction, useHeaderActions, listRegisteredHeaderActionIds, HeaderActionContext, HeaderAction, HeaderActionEntry } from '../app/composables/sidebar/useHeaderActions';
-export { registerMessageAction, unregisterMessageAction, useMessageActions, listRegisteredMessageActionIds, ChatMessageAction } from '../app/composables/chat/useMessageActions';
+export { registerMessageAction, unregisterMessageAction, useMessageActions, listRegisteredMessageActionIds, ChatMessageAction, MessageActionContext } from '../app/composables/chat/useMessageActions';
 export { registerProjectTreeAction, unregisterProjectTreeAction, useProjectTreeActions, listRegisteredProjectTreeActionIds, ProjectTreeKind, ShowOnKind, ProjectTreeChild, ProjectTreeRoot, ProjectTreeRow, ProjectTreeHandlerCtx, ProjectTreeAction } from '../app/composables/projects/useProjectTreeActions';
 export { registerSidebarPage, registerSidebarPageWithPosts, RegisterSidebarPageOptions, RegisterSidebarPageWithPostsOptions } from '../app/composables/sidebar/registerSidebarPage';
 export { registerSidebarSection, unregisterSidebarSection, registerSidebarFooterAction, unregisterSidebarFooterAction, useSidebarSections, useSidebarFooterActions, listRegisteredSidebarSectionIds, listRegisteredSidebarFooterActionIds, SidebarSectionPlacement, SidebarSection, SidebarSectionGroups, SidebarFooterActionContext, ChromeActionColor, SidebarFooterAction, SidebarFooterActionEntry } from '../app/composables/sidebar/useSidebarSections';
@@ -286,7 +286,7 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
   const useSwitchToPage: typeof import('../../app/composables/sidebar/useSidebarPageControls').useSwitchToPage
   const useThreadHistoryActions: typeof import('../../app/composables/threads/useThreadHistoryActions').useThreadHistoryActions
   export type { AdminPageDef, AdminWidgetDef, AdminComponent, AdminPlugin, AdminPluginApi } from '../../app/composables/admin/useAdminPlugins'
-  export type { ChatMessageAction } from '../../app/composables/chat/useMessageActions'
+  export type { ChatMessageAction, MessageActionContext } from '../../app/composables/chat/useMessageActions'
   export type { ComposerActionContext, ComposerAction, ComposerActionEntry } from '../../app/composables/sidebar/useComposerActions'
   export type { DashboardPlugin, DashboardPluginPage, DashboardNavigationError, DashboardNavigationErrorCode, DashboardNavigationResult, DashboardNavigationState, UseDashboardNavigationOptions } from '../../app/composables/dashboard/useDashboardPlugins'
   export type { DocumentAiScope, DocumentAiAction } from '../../app/composables/editor/useDocumentAiActions'

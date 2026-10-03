@@ -28,14 +28,16 @@
                 </UTooltip>
             </div>
             <div v-if="sendBlock" role="status" aria-live="polite" class="space-y-2 text-xs">
-                <p>{{ sendBlock.error || 'Context full. Compact, edit the request, or choose a larger model.' }}</p>
+                <p v-if="sendBlock.reason === 'context_full'">Context full — compact to continue</p>
+                <p>{{ sendBlock.error || 'Edit the request or choose a larger model.' }}</p>
                 <div class="flex flex-wrap gap-2">
-                    <UButton v-if="props.compactThread" size="xs" variant="soft" color="neutral" :disabled="Boolean(props.compactionBlockedReason) || props.loading" @click.stop="props.compactThread()">Compact</UButton>
+                    <UButton v-if="props.compactThread" size="xs" variant="soft" color="neutral" :disabled="Boolean(props.compactionBlockedReason) || props.loading" @click.stop="props.compactThread()">Compact now</UButton>
                     <UButton size="xs" variant="ghost" color="neutral" @click.stop="showModelCatalog = true">Choose model</UButton>
                     <UButton v-if="sendBlock.reason === 'context_full' && !('userMessageId' in sendBlock && sendBlock.userMessageId)" size="xs" variant="ghost" color="neutral" :disabled="props.loading" @click.stop="handleSend({ inspectLossyRequest: true })">Inspect lossy send</UButton>
                 </div>
                 <details v-if="lossyPreview" open>
                     <summary class="cursor-pointer py-2">Omit {{ lossyPreview.omitted_turn_count }} old turns ({{ lossyPreview.omitted_message_count }} messages) for this request</summary>
+                    <p>Estimated input after omissions {{ lossyPreview.input_tokens.toLocaleString() }} / {{ lossyPreview.effective_context_tokens.toLocaleString() }} · reply available {{ lossyPreview.reply_tokens.toLocaleString() }}</p>
                     <p>The original history stays saved. This request excludes only the entries below.</p>
                     <ul class="max-h-40 overflow-y-auto space-y-1 py-2" aria-label="Messages omitted from this request">
                         <li v-for="row in lossyPreview.omitted_messages" :key="row.position">{{ row.position + 1 }} · {{ row.role }} · {{ row.excerpt }}</li>
@@ -1068,8 +1070,10 @@ const sendBlock = shallowRef<Extract<SendResult, { status: 'rejected' | 'failed'
 const lossyPreview = shallowRef<import('~/utils/chat/lossy-request').LossyRequestPreview>();
 const stopContextWorkspace = subscribeActiveWorkspaceDb(() => { sendBlock.value = undefined; lossyPreview.value = undefined; });
 onBeforeUnmount(stopContextWorkspace);
-watch(() => [props.threadId, props.contextRevision, selectedModel.value, modelVariant.value,
-    thinkingEnabled.value, reasoningEffort.value, promptText.value, attachments.value, largeTextBlocks.value],
+// Compare each source independently; a watch getter returning a new array
+// would also invalidate when a dependency republishes an unchanged value.
+watch([() => props.threadId, () => props.contextRevision, selectedModel, modelVariant,
+    thinkingEnabled, reasoningEffort, promptText, attachments, largeTextBlocks],
     () => { sendBlock.value = undefined; lossyPreview.value = undefined; });
 async function handleSend(decision: { inspectLossyRequest?: boolean; lossyConfirmation?: import('~/utils/chat/lossy-request').LossyRequestPreview } = {}): Promise<SendResult> {
     const result = await performSend(decision);

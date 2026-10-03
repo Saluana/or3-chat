@@ -135,6 +135,7 @@ describe('workspace profile mobile expanded sidebar', () => {
     let unregisterPages: Array<() => void> = [];
 
     beforeEach(() => {
+        vi.stubGlobal('useToast', () => ({ add: vi.fn() }));
         vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
             callback(0);
             return 1;

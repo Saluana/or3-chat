@@ -298,6 +298,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: 'thread-selected', id: string): void;
+    (e: 'compaction-committed', target: { threadId: string; messageId: string; originThreadId: string; generation: number }): void;
     (e: 'view-compaction-source', target: { threadId: string; messageId: string; originThreadId: string; scrollMessageId?: string; generation: number }): void;
     (e: 'view-related-thread', target: { threadId: string; originThreadId: string; anchorMessageId: string; generation: number }): void;
     (e: 'reached-top'): void;
@@ -661,7 +662,12 @@ const compaction = useThreadCompaction({ threadId: currentThreadId, model,
         return result.ok ? result.metadata : undefined;
     },
     getTaskSystemPrompt: (threadId) => resolveSystemPromptText({ threadId, activePromptContent: null }),
-    onCommitted: (result) => { emit('thread-selected', result.thread.id); },
+    onCommitted: (result) => {
+        const originThreadId = result.thread.parent_thread_id;
+        if (!originThreadId) throw new Error('The saved compacted conversation has no source.');
+        emit('compaction-committed', { threadId: result.thread.id, messageId: result.summary.id,
+            originThreadId, generation: getWorkspaceGeneration() });
+    },
 });
 async function compactThread(anchorMessageId?: string) {
     const result = await compaction.start(anchorMessageId);
@@ -792,7 +798,8 @@ const scroller = ref<ScrollApi | null>(null);
 const compactionNavigation = shallowRef<{ threadId: string; messageId: string; generation: number; origin: string | undefined }>();
 function onViewRelatedThread(message: UiChatMessage, target: { threadId: string; originThreadId: string; anchorMessageId: string; generation: number }) {
     if (currentThreadId.value !== target.originThreadId || props.threadId !== target.originThreadId
-        || getWorkspaceGeneration() !== target.generation || message.id !== target.anchorMessageId
+        || getWorkspaceGeneration() !== target.generation
+        || message.id !== target.anchorMessageId && !message.toolResultMessageIds?.includes(target.anchorMessageId)
         || !allMessages.value.some((row) => row.id === message.id)) return;
     emit('view-related-thread', target);
 }
@@ -1034,9 +1041,9 @@ function waitForDurableSendAcceptance(
                     userMessageId: state.userMessageId,
                     assistantMessageId: state.assistantMessageId,
                 });
-            } else if (state.status === 'terminal') {
-                finish(state.result);
             }
+            // Finalization publishes an intermediate terminal projection.
+            // The send promise owns the final reason and any lossy preview.
         };
 
         stopWatcher = watch(stateRef, inspect, { immediate: true });

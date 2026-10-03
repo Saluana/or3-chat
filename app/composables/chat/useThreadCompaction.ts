@@ -39,6 +39,10 @@ function getSourceLocks(db: Or3DB): Map<string, string> {
     if (!locks) { locks = shallowReactive(new Map<string, string>()); sourceLocks.set(db, locks); }
     return locks;
 }
+/** Pure workspace-scoped lock observation for action registries. */
+export function isThreadCompactionActive(threadId: string): boolean {
+    return getSourceLocks(getDb()).has(`${getWorkspaceGeneration()}:${threadId}`);
+}
 async function prepareCapture(options: Omit<Parameters<typeof captureCompaction>[0], 'anchorMessageId'> & { anchorMessageId?: string }) {
     const projection = options.anchorMessageId ? undefined : await resolveThreadProjection(options.sourceThreadId, options.db);
     if (options.signal?.aborted) throw new CompactionError('cancelled', 'Compaction was cancelled.');

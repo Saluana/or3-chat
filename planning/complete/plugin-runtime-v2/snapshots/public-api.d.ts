@@ -131,12 +131,21 @@ export interface ChatMessageAction {
     handler: (ctx: {
         message: UiChatMessage;
         threadId?: string;
+        compaction?: {
+            start: (anchorMessageId?: string) => Promise<void>;
+            blockedReason?: string;
+        };
     }) => void | Promise<void>;
+    /** Read-only availability, evaluated in the owning pane. */
+    visible?: (ctx: MessageActionContext) => boolean;
+    disabled?: (ctx: MessageActionContext) => boolean;
+    disabledReason?: (ctx: MessageActionContext) => string | undefined;
     /** Optional plugin id used for workspace policy lookup. */
     pluginId?: string;
     /** Optional access policy for this action. */
     access?: PluginGatePolicy;
 }
+export type MessageActionContext = Parameters<ChatMessageAction['handler']>[0];
 /**
  * Registers (or replaces) a message action in the global registry.
  *
@@ -1852,6 +1861,9 @@ export interface ComposerActionContext {
     paneId?: string | null;
     /** Whether AI content is currently streaming */
     isStreaming?: boolean;
+    /** Host compaction controller belonging to this composer and pane. */
+    compactThread?: () => Promise<void>;
+    compactionBlockedReason?: string;
     /** Additional context properties for extensibility */
     [key: string]: unknown;
 }
@@ -3274,6 +3286,14 @@ import type { Thread } from '~/db';
 import { type HistoryActionRegistryItem } from '../history/createHistoryActionRegistry';
 /** Definition for an extendable chat message action button. */
 export interface ThreadHistoryAction extends HistoryActionRegistryItem<Thread> {
+    /** Reactive ephemeral reason; must be pure and perform no storage reads. */
+    disabledReason?: (ctx: {
+        threadId: string;
+    }) => string | undefined;
+    /** Lazy read-only durable inspection, evaluated only while the menu is open. */
+    inspectDisabledReason?: (ctx: {
+        document: Thread;
+    }) => Promise<string | undefined>;
 }
 /** Register (or replace) a message action. */
 export declare function registerThreadHistoryAction(action: ThreadHistoryAction): void;

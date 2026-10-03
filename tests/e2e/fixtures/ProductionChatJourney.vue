@@ -7,7 +7,7 @@
         <span class="sr-only" data-testid="chat-journey-thread-id">
             {{ threadId || 'new-thread' }}
         </span>
-        <section v-if="ready && compactionJourney && !presentationJourney" class="flex flex-wrap items-center gap-2 p-2" aria-label="Scripted compaction fixture controls">
+        <section v-if="ready && compactionJourney && (!presentationJourney || nativeCompactionJourney)" class="flex flex-wrap items-center gap-2 p-2" aria-label="Scripted compaction fixture controls">
             <button type="button" data-testid="fixture-compact" :disabled="compactor.active.value" @click="startFixtureCompaction">Generate scripted summary</button>
             <button type="button" data-testid="fixture-cancel-compaction" :disabled="!compactor.active.value" @click="compactor.cancel()">Cancel scripted summary</button>
             <label><input v-model="holdSummary" type="checkbox" data-testid="fixture-hold-summary"> Hold scripted inference</label>
@@ -42,6 +42,7 @@ import { useHooks } from '~/core/hooks/useHooks';
 import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
 import type { ChatMessage } from '~/utils/chat/types';
 import { createDocument, getDocument } from '~/db/documents';
+import { useAiSettings } from '~/composables/chat/useAiSettings';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { forkThread } from '~/db/branching';
 import { nowSec } from '~/db/util';
@@ -51,6 +52,8 @@ const workspaceJourney = useRoute().query.workspace === '1';
 
 const compactionJourney = useRoute().query.compaction === '1';
 const presentationJourney = compactionJourney && useRoute().query.presentation === '1';
+const nativeCompactionJourney = presentationJourney && useRoute().query.native === '1';
+const lossyJourney = compactionJourney && useRoute().query.lossy === '1';
 const evidenceJourney = compactionJourney && useRoute().query.history === '1';
 const evidenceRunning = ref(false);
 const evidenceReceipt = ref('');
@@ -138,7 +141,7 @@ async function seedCompactionPresentation() {
         { id: `${current}-presentation-user`, thread_id: current, role: 'user', index: 1, created_at: timestamp, updated_at: timestamp, clock: 1, pending: false, deleted: false,
             data: { content: 'What should we check before the launch?' } },
         { id: `${current}-presentation-reply`, thread_id: current, role: 'assistant', index: 2, created_at: timestamp, updated_at: timestamp, clock: 1, pending: false, deleted: false,
-            data: { content: 'Verify the integration, review the evidence, and confirm the rollout plan. The original decisions remain linked in the compacted context above. '.repeat(8) } },
+            data: { content: 'Verify the integration, review the evidence, and confirm the rollout plan. The original decisions remain linked in the compacted context above. '.repeat(nativeCompactionJourney ? 80 : 8) } },
         { id: `${current}-presentation-followup`, thread_id: current, role: 'user', index: 3, created_at: timestamp + 1, updated_at: timestamp + 1, clock: 1, pending: false, deleted: false,
             data: { content: 'Can we keep the original decisions available while continuing?' } },
         { id: `${current}-presentation-answer`, thread_id: current, role: 'assistant', index: 4, created_at: timestamp + 1, updated_at: timestamp + 1, clock: 1, pending: false, deleted: false,
@@ -297,7 +300,11 @@ function installDeterministicFetch(): void {
                             if (signal?.aborted) { resolve(); return; }
                             signal?.addEventListener('abort', () => resolve(), { once: true });
                         });
-                        const localAnchor = presentationJourney || evidenceJourney ? (await getDb().messages.where('thread_id').equals(fixtureSourceThread.value).toArray())
+                        const quotedRecords = nativeCompactionJourney ? messageText(messages[1]).split('\n').flatMap((line) => {
+                            try { const row = JSON.parse(line) as Record<string, unknown>; return row.role === 'assistant' && typeof row.message_id === 'string' ? [row] : []; }
+                            catch { return []; }
+                        }) : [];
+                        const localAnchor = nativeCompactionJourney ? quotedRecords.at(-1)?.message_id : presentationJourney || evidenceJourney ? (await getDb().messages.where('thread_id').equals(fixtureSourceThread.value).toArray())
                             .filter((row) => row.role === 'assistant' && !row.pending && !row.deleted).sort((a, b) => b.index - a.index)[0]?.id : undefined;
                         if (!stopped) enqueue(sseChunk(JSON.stringify({
                             summary_markdown: '## Objective\nContinue the implementation.\n## Important Details\nPreserve app/example.ts exactly.\n## Work State\nImplementation is pending.\n## Next Move\nInspect original evidence.\n## Relevant Files\napp/example.ts',
@@ -454,6 +461,7 @@ onMounted(async () => {
     }
     if (compactionJourney) {
         await seedCompactionSource();
+        if (lossyJourney) await useAiSettings().set({ maxContextTokens: 6000 });
         if (evidenceJourney) {
             const source = fixtureSourceThread.value;
             await getDb().messages.bulkPut(Array.from({ length: 550 }, (_, index) => ({ id: `${source}-history-${index}`,

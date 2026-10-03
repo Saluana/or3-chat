@@ -54,6 +54,7 @@
             class="absolute right-1 top-1/2 -translate-y-1/2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
         >
             <UPopover
+                v-model:open="actionsOpen"
                 :content="{ side: 'right', align: 'start', sideOffset: 6 }"
             >
                 <UButton
@@ -120,6 +121,8 @@
                             <UButton
                                 v-bind="actionButtonProps('extra')"
                                 :icon="action.icon"
+                                :disabled="Boolean(extraActionReason(action))"
+                                :title="extraActionReason(action)"
                                 class="w-full justify-start"
                                 @click="() => runExtraAction(action)"
                             >
@@ -134,9 +137,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, shallowRef, watch, onScopeDispose } from 'vue';
+import { liveQuery, type Subscription } from 'dexie';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
-import { getDb } from '~/db/client';
+import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
@@ -277,16 +281,49 @@ const extraActions = computed<readonly ExtraAction[]>(() =>
     props.item.type === 'thread' ? threadActions.value : documentActions.value
 );
 
+const actionsOpen = ref(false);
+const inspectedReasons = shallowRef<Record<string, string | undefined>>({});
+let availabilitySubscription: Subscription | undefined;
+let availabilityRevision = 0;
+function closeAvailability() { availabilityRevision++; availabilitySubscription?.unsubscribe(); availabilitySubscription = undefined; inspectedReasons.value = {}; }
+const stopAvailability = watch([actionsOpen, () => props.item.id, extraActions], () => {
+    closeAvailability();
+    if (!actionsOpen.value || props.item.type !== 'thread') return;
+    const db = getDb(); const generation = getWorkspaceGeneration(); const id = props.item.id; const revision = availabilityRevision;
+    for (const action of threadActions.value) if (action.inspectDisabledReason) inspectedReasons.value[action.id] = 'Checking conversation eligibility…';
+    availabilitySubscription = liveQuery(async () => {
+        const document = await db.threads.get(id);
+        return Object.fromEntries(await Promise.all(threadActions.value.filter(action => action.inspectDisabledReason).map(async action =>
+            [action.id, document ? await action.inspectDisabledReason!({ document }) : 'Conversation is unavailable.'] as const)));
+    }).subscribe({ next: reasons => {
+        if (revision === availabilityRevision && db === getDb() && generation === getWorkspaceGeneration()) inspectedReasons.value = reasons;
+    }, error: () => {
+        if (revision === availabilityRevision) inspectedReasons.value = Object.fromEntries(threadActions.value.filter(action => action.inspectDisabledReason)
+            .map(action => [action.id, 'Unable to check conversation eligibility. Close and reopen this menu.']));
+    } });
+});
+const stopWorkspaceAvailability = subscribeActiveWorkspaceDb(() => { actionsOpen.value = false; closeAvailability(); });
+onScopeDispose(() => { stopAvailability(); stopWorkspaceAvailability(); closeAvailability(); });
+function extraActionReason(action: ExtraAction): string | undefined {
+    if (props.item.type !== 'thread') return undefined;
+    const threadAction = action as ThreadHistoryAction;
+    return threadAction.disabledReason?.({ threadId: props.item.id }) || inspectedReasons.value[action.id];
+}
+
 async function runExtraAction(action: ExtraAction) {
+    if (extraActionReason(action)) return;
     try {
         const db = getDb();
+        const generation = getWorkspaceGeneration();
         if (props.item.type === 'thread') {
             const thread = await db.threads.get(props.item.id);
-            if (!thread) return;
+            if (!thread || db !== getDb() || generation !== getWorkspaceGeneration()) return;
+            if (await (action as ThreadHistoryAction).inspectDisabledReason?.({ document: thread })) return;
+            if (db !== getDb() || generation !== getWorkspaceGeneration()) return;
             await (action as ThreadHistoryAction).handler({ document: thread });
         } else {
             const doc = await db.posts.get(props.item.id);
-            if (!doc) return;
+            if (!doc || db !== getDb() || generation !== getWorkspaceGeneration()) return;
             await (action as DocumentHistoryAction).handler({ document: doc });
         }
     } catch (e: unknown) {

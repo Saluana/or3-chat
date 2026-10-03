@@ -64,26 +64,7 @@ async function readCapture(options: CaptureOptions, db: Or3DB): Promise<Omit<Cap
     if (!anchor || !sourceSegment.visible.some((row) => row.id === anchor.id)) {
         throw new CompactionError('not_eligible', 'Choose a persisted, visible message owned by this conversation.');
     }
-    if (source.status !== 'ready' || sourceSegment.rows.some((row) => row.pending)) {
-        throw new CompactionError('source_busy', 'Wait for pending generation to settle before compacting.');
-    }
-    const sourceTranscript = storedMessagesToCanonicalTranscript(sourceSegment.visible);
-    if (sourceTranscript.some((row) => row.toolCalls.some((call) => call.status !== 'complete' && call.status !== 'error'))) {
-        throw new CompactionError('source_busy', 'Wait for pending tools in the source conversation to settle.');
-    }
-    const selected = projection.segments.flatMap((segment) => segment === sourceSegment
-        ? segment.visible.filter((row) => compareMessageOrder(row, anchor) <= 0) : segment.visible);
-    const messages = storedMessagesToCanonicalTranscript(selected);
-    if (messages.some((row) => row.pending || row.generation && ['pending', 'streaming', 'detached'].includes(row.generation.state)
-        || row.toolCalls.some((call) => call.status !== 'complete' && call.status !== 'error'))) {
-        throw new CompactionError('source_busy', 'Wait for pending generation and unresolved tools to settle.');
-    }
-    let turns = 0; let userPending = false;
-    for (const row of messages) {
-        if (row.role === 'user') userPending = true;
-        if (row.role === 'assistant' && getTextFromContent(row.content).trim() && userPending) { turns += 1; userPending = false; }
-    }
-    if (turns < 2) throw new CompactionError('not_eligible', 'Compaction requires at least two settled user/assistant turns.');
+    const messages = eligibleSourceMessages(projection, anchor);
     const ancestry: Thread[] = [];
     const inheritedScopes: Message[] = [];
     const path = new Set<string>(); let pathId: string | null | undefined = source.id;
@@ -145,6 +126,46 @@ async function readCapture(options: CaptureOptions, db: Or3DB): Promise<Omit<Cap
     const messageCount = new Set(messages.filter((row) => !row.compaction && !priorIds.has(row.id)).map((row) => row.id)).size;
     return { root, source, anchor, scope, rows, messages, messageCount, priorMessageCount,
         snapshot: stable({ root, ancestry, inheritedScopes, segments: snapshotSegments, inheritedRows: [...rows.values()], model: options.model }) };
+}
+
+/** Shared canonical checks for capture and lazy history-menu inspection. */
+function eligibleSourceMessages(projection: ThreadProjection, anchor: Message): CanonicalTranscriptRecord[] {
+    const sourceSegment = projection.segments.at(-1)!;
+    const source = sourceSegment.thread;
+    if (source.status !== 'ready' || sourceSegment.rows.some((row) => row.pending)) {
+        throw new CompactionError('source_busy', 'Wait for pending generation to settle before compacting.');
+    }
+    const sourceTranscript = storedMessagesToCanonicalTranscript(sourceSegment.visible);
+    if (sourceTranscript.some((row) => row.toolCalls.some((call) => call.status !== 'complete' && call.status !== 'error'))) {
+        throw new CompactionError('source_busy', 'Wait for pending tools in the source conversation to settle.');
+    }
+    const selected = projection.segments.flatMap((segment) => segment === sourceSegment
+        ? segment.visible.filter((row) => compareMessageOrder(row, anchor) <= 0) : segment.visible);
+    const messages = storedMessagesToCanonicalTranscript(selected);
+    if (messages.some((row) => row.pending || row.generation && ['pending', 'streaming', 'detached'].includes(row.generation.state)
+        || row.toolCalls.some((call) => call.status !== 'complete' && call.status !== 'error'))) {
+        throw new CompactionError('source_busy', 'Wait for pending generation and unresolved tools to settle.');
+    }
+    let turns = 0; let userPending = false;
+    for (const row of messages) {
+        if (row.role === 'user') userPending = true;
+        if (row.role === 'assistant' && getTextFromContent(row.content).trim() && userPending) { turns += 1; userPending = false; }
+    }
+    if (turns < 2) throw new CompactionError('not_eligible', 'Compaction requires at least two settled user/assistant turns.');
+    return messages;
+}
+
+/** Read-only menu inspection, without a selected model, operation IDs or writes. */
+export async function inspectCompactionSource(sourceThreadId: string): Promise<void> {
+    const db = getDb(); const generation = getWorkspaceGeneration();
+    await db.transaction('r', ['threads', 'messages'], async () => {
+        const projection = await resolveThreadProjection(sourceThreadId, db);
+        const anchor = projection.segments.at(-1)?.visible.at(-1);
+        if (!anchor) throw new CompactionError('not_eligible', 'This conversation has no local persisted anchor.');
+        eligibleSourceMessages(projection, anchor);
+    });
+    if (getDb() !== db || getWorkspaceGeneration() !== generation)
+        throw new CompactionError('stale_source', 'Workspace changed while checking this conversation.');
 }
 
 /** Checks the host-owned operation identity before any auxiliary request is spent. */

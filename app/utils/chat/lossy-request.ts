@@ -1,9 +1,13 @@
 import { trimOrMessagesByTokenBudget } from './messages';
 import { countTokensApprox } from './tokens';
 import { buildOpenRouterRequestBody, prepareOpenRouterRequest, type OpenRouterStreamParams } from './openrouterStream';
-import { ChatContextAdmissionError } from '~~/shared/chat/context-budget';
+import { estimateMeasuredChatRequest } from '~~/shared/chat/request-usage';
+import { admitChatContext, ChatContextAdmissionError } from '~~/shared/chat/context-budget';
 
 export interface LossyRequestPreview {
+    readonly input_tokens: number;
+    readonly effective_context_tokens: number;
+    readonly reply_tokens: number;
     readonly omitted_message_count: number;
     readonly omitted_turn_count: number;
     readonly omitted_messages: readonly { position: number; role: string; excerpt: string }[];
@@ -66,13 +70,23 @@ export async function prepareLossyRequest(params: OpenRouterStreamParams, scope:
         const selected = new Set(retained.flatMap((envelope) => groups[envelopes.indexOf(envelope)]!.positions));
         const messages = body.messages.filter((_row, position) => selected.has(position));
         try {
-            await prepareOpenRouterRequest({ ...params, orMessages: messages });
+            const admitted = await prepareOpenRouterRequest({ ...params, orMessages: messages });
+            if (!params.contextPolicy) throw new Error('Lossy inspection requires a captured context policy.');
+            const { messages: admittedMessages, ...configuration } = admitted;
+            const estimate = await estimateMeasuredChatRequest({ model: params.model, messages: admittedMessages,
+                tools: admitted.tools, modalities: admitted.modalities, configuration,
+                usage: params.contextPolicy.measuredUsage, countText: countTokensApprox });
+            const admission = admitChatContext({ ...params.contextPolicy, inputTokens: estimate.input_tokens, estimate,
+                requestedCompletionTokens: params.contextPolicy.requestedCompletionTokens ?? params.maxCompletionTokens });
+            if (!admission.ok) throw new ChatContextAdmissionError(admission);
             const omitted = body.messages.flatMap((row, position) => selected.has(position) ? [] : [{ position, role: row.role,
                 excerpt: Array.from(typeof row.content === 'string' ? row.content : JSON.stringify(row.content)).slice(0, 200).join('') }]);
             if (!omitted.length) throw new Error('This request fits without omissions. Send the full request.');
             const [originalDigest, candidateDigest, protectedDigest] = await Promise.all([digest(body), digest(messages),
                 digest(groups.filter((group) => group.protected).flatMap((group) => group.positions.map((position) => body.messages[position])))]);
-            const preview = Object.freeze({ omitted_message_count: omitted.length,
+            const preview = Object.freeze({ input_tokens: estimate.input_tokens,
+                effective_context_tokens: admission.budget.effective_context_tokens,
+                reply_tokens: admission.budget.available_completion_tokens, omitted_message_count: omitted.length,
                 omitted_turn_count: groups.filter((group) => !group.protected && !selected.has(group.positions[0]!)).length,
                 omitted_messages: Object.freeze(omitted.map((row) => Object.freeze(row))), original_digest: originalDigest,
                 candidate_digest: candidateDigest, protected_digest: protectedDigest });

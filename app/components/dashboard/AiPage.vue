@@ -225,7 +225,7 @@
             </div>
         </section>
 
-        <!-- Remains dormant until native context admission consumes the preference. -->
+        <!-- Native generations capture this workspace preference at admission. -->
         <section
             id="dashboard-ai-context-section"
             class="section-card space-y-3"

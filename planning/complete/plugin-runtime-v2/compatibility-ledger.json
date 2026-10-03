@@ -6,15 +6,15 @@
     "moduleManifest": "planning/complete/plugin-runtime-v2/compatibility-ledger.modules.json",
     "moduleManifestSha256": "605b4e840d28caee7a2f56b75efddae519707fdc50fbbc4abc984881372ca810",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
-    "scopedNuxtImportsDeclarationSha256": "312b4e32418c06c1bdc7a02b6d57d568d8de7320aa50d4fc5c1cf5c8b9503876",
+    "scopedNuxtImportsDeclarationSha256": "35e4eff3448bab2dbf812cb07ff064d66e2c85d7f4e7ddea3839359a5bd1433a",
     "behaviorProfiles": "planning/complete/plugin-runtime-v2/compatibility-profiles.json",
     "behaviorProfilesSha256": "6e35c5b9392b785e5bb541580865f80f0d5f0888851c2ff68c5a3ecd75097cc1"
   },
   "coverage": {
     "moduleCount": 39,
-    "exportCount": 594,
+    "exportCount": 596,
     "callableExportCount": 273,
-    "nuxtAutoImportCount": 308
+    "nuxtAutoImportCount": 309
   },
   "behaviorProfiles": [
     {
@@ -842,7 +842,7 @@
     },
     {
       "source": "app/composables/chat/useMessageActions.ts",
-      "apiSha256": "7450dc924d806b66c9f89c84c15b51f6a06a6138a65b5073cd4ba59c0a1b864a",
+      "apiSha256": "cd926bf30ffbac894a58ec65e59533c113356a7aae8faa03500aef3a319d4148",
       "runtime": "client",
       "publicPaths": [
         "~/composables/chat/useMessageActions"
@@ -865,7 +865,7 @@
               "source": "app/composables/chat/useMessageActions.ts",
               "line": 57,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface ChatMessageAction {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** Icon name (passed to UButton icon prop). */\n    icon: string;\n    /** Tooltip text. */\n    tooltip: string;\n    /** Where to show the action. */\n    showOn: 'user' | 'assistant' | 'both';\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n    /** Handler invoked on click. */\n    handler: (ctx: {\n        message: UiChatMessage;\n        threadId?: string;\n    }) => void | Promise<void>;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this action. */\n    access?: PluginGatePolicy;\n}"
+              "text": "export interface ChatMessageAction {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** Icon name (passed to UButton icon prop). */\n    icon: string;\n    /** Tooltip text. */\n    tooltip: string;\n    /** Where to show the action. */\n    showOn: 'user' | 'assistant' | 'both';\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n    /** Handler invoked on click. */\n    handler: (ctx: {\n        message: UiChatMessage;\n        threadId?: string;\n        compaction?: { start: (anchorMessageId?: string) => Promise<void>; blockedReason?: string };\n    }) => void | Promise<void>;\n    /** Read-only availability, evaluated in the owning pane. */\n    visible?: (ctx: MessageActionContext) => boolean;\n    disabled?: (ctx: MessageActionContext) => boolean;\n    disabledReason?: (ctx: MessageActionContext) => string | undefined;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this action. */\n    access?: PluginGatePolicy;\n}"
             }
           ]
         },
@@ -880,7 +880,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/chat/useMessageActions.ts",
-                "line": 171,
+                "line": 177,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredMessageActionIds(): string[];"
               }
@@ -889,9 +889,23 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageActions.ts",
-              "line": 171,
+              "line": 177,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredMessageActionIds(): string[];"
+            }
+          ]
+        },
+        {
+          "name": "MessageActionContext",
+          "kind": "type",
+          "nuxtAutoImport": true,
+          "signatures": [],
+          "declarations": [
+            {
+              "source": "app/composables/chat/useMessageActions.ts",
+              "line": 83,
+              "syntaxKind": "TypeAliasDeclaration",
+              "text": "export type MessageActionContext = Parameters<ChatMessageAction['handler']>[0];"
             }
           ]
         },
@@ -906,7 +920,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useMessageActions.ts",
-                "line": 115,
+                "line": 121,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerMessageAction(action: ChatMessageAction);"
               }
@@ -915,7 +929,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageActions.ts",
-              "line": 115,
+              "line": 121,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerMessageAction(action: ChatMessageAction);"
             }
@@ -932,7 +946,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useMessageActions.ts",
-                "line": 129,
+                "line": 135,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterMessageAction(id: string);"
               }
@@ -941,7 +955,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageActions.ts",
-              "line": 129,
+              "line": 135,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterMessageAction(id: string);"
             }
@@ -958,7 +972,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useMessageActions.ts",
-                "line": 151,
+                "line": 157,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useMessageActions(message: { role: 'user' | 'assistant' });"
               }
@@ -967,7 +981,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageActions.ts",
-              "line": 151,
+              "line": 157,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useMessageActions(message: { role: 'user' | 'assistant' });"
             }
@@ -2796,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "cf7bdcb8f3431aa81c567cd9cbece6942d5de79e786dda3f2e4ccabe4567e74c",
+      "apiSha256": "f73fd5e7b59b59052c339df1d0e89a34c552d3a4e81dfbdfca6a587ea041f3c6",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -3031,7 +3045,7 @@
               "source": "app/composables/chat/useMessageActions.ts",
               "line": 57,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface ChatMessageAction {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** Icon name (passed to UButton icon prop). */\n    icon: string;\n    /** Tooltip text. */\n    tooltip: string;\n    /** Where to show the action. */\n    showOn: 'user' | 'assistant' | 'both';\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n    /** Handler invoked on click. */\n    handler: (ctx: {\n        message: UiChatMessage;\n        threadId?: string;\n    }) => void | Promise<void>;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this action. */\n    access?: PluginGatePolicy;\n}"
+              "text": "export interface ChatMessageAction {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** Icon name (passed to UButton icon prop). */\n    icon: string;\n    /** Tooltip text. */\n    tooltip: string;\n    /** Where to show the action. */\n    showOn: 'user' | 'assistant' | 'both';\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n    /** Handler invoked on click. */\n    handler: (ctx: {\n        message: UiChatMessage;\n        threadId?: string;\n        compaction?: { start: (anchorMessageId?: string) => Promise<void>; blockedReason?: string };\n    }) => void | Promise<void>;\n    /** Read-only availability, evaluated in the owning pane. */\n    visible?: (ctx: MessageActionContext) => boolean;\n    disabled?: (ctx: MessageActionContext) => boolean;\n    disabledReason?: (ctx: MessageActionContext) => string | undefined;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this action. */\n    access?: PluginGatePolicy;\n}"
             }
           ]
         },
@@ -3083,7 +3097,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 73,
+              "line": 76,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ComposerAction {\n    /** Unique identifier for the action */\n    id: string;\n    /** Icon name displayed in the toolbar button */\n    icon: string;\n    /** Optional tooltip shown on hover/focus */\n    tooltip?: string;\n    /** Optional visible label (text inside button) */\n    label?: string;\n    /** Optional ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional color variant for the button */\n    color?: ChromeActionColor;\n    /** Handler called when the action button is clicked */\n    handler: (ctx: ComposerActionContext) => void | Promise<void>;\n    /** Optional function to determine if action should be visible */\n    visible?: (ctx: ComposerActionContext) => boolean;\n    /** Optional function to determine if action should be disabled */\n    disabled?: (ctx: ComposerActionContext) => boolean;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this action. */\n    access?: PluginGatePolicy;\n}"
             }
@@ -3099,7 +3113,7 @@
               "source": "app/composables/sidebar/useComposerActions.ts",
               "line": 43,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface ComposerActionContext {\n    /** The TipTap editor instance, if available */\n    editor?: Editor | null;\n    /** ID of the current thread, if any */\n    threadId?: string | null;\n    /** ID of the current pane, if any */\n    paneId?: string | null;\n    /** Whether AI content is currently streaming */\n    isStreaming?: boolean;\n    /** Additional context properties for extensibility */\n    [key: string]: unknown;\n}"
+              "text": "export interface ComposerActionContext {\n    /** The TipTap editor instance, if available */\n    editor?: Editor | null;\n    /** ID of the current thread, if any */\n    threadId?: string | null;\n    /** ID of the current pane, if any */\n    paneId?: string | null;\n    /** Whether AI content is currently streaming */\n    isStreaming?: boolean;\n    /** Host compaction controller belonging to this composer and pane. */\n    compactThread?: () => Promise<void>;\n    compactionBlockedReason?: string;\n    /** Additional context properties for extensibility */\n    [key: string]: unknown;\n}"
             }
           ]
         },
@@ -3111,7 +3125,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 113,
+              "line": 116,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ComposerActionEntry {\n    /** The composer action definition */\n    action: ComposerAction;\n    /** Whether the action is currently disabled based on context */\n    disabled: boolean;\n}"
             }
@@ -4208,7 +4222,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/sidebar/useComposerActions.ts",
-                "line": 291,
+                "line": 294,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredComposerActionIds(): string[];"
               }
@@ -4217,7 +4231,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 291,
+              "line": 294,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredComposerActionIds(): string[];"
             }
@@ -4416,7 +4430,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/chat/useMessageActions.ts",
-                "line": 171,
+                "line": 177,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredMessageActionIds(): string[];"
               }
@@ -4425,7 +4439,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageActions.ts",
-              "line": 171,
+              "line": 177,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredMessageActionIds(): string[];"
             }
@@ -4520,7 +4534,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 117,
+                "line": 122,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredThreadHistoryActionIds(): string[];"
               }
@@ -4529,7 +4543,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 117,
+              "line": 122,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredThreadHistoryActionIds(): string[];"
             }
@@ -4572,6 +4586,20 @@
               "line": 14,
               "syntaxKind": "VariableDeclaration",
               "text": "MAX_DOCUMENT_AI_MAX_ITERATIONS = 20"
+            }
+          ]
+        },
+        {
+          "name": "MessageActionContext",
+          "kind": "type",
+          "nuxtAutoImport": false,
+          "signatures": [],
+          "declarations": [
+            {
+              "source": "app/composables/chat/useMessageActions.ts",
+              "line": 83,
+              "syntaxKind": "TypeAliasDeclaration",
+              "text": "export type MessageActionContext = Parameters<ChatMessageAction['handler']>[0];"
             }
           ]
         },
@@ -4914,7 +4942,7 @@
               "resolvedReturnType": "RegistrationHandle",
               "declaration": {
                 "source": "app/composables/sidebar/useComposerActions.ts",
-                "line": 189,
+                "line": 192,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerComposerAction(action: ComposerAction): RegistrationHandle;"
               }
@@ -4923,7 +4951,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 189,
+              "line": 192,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerComposerAction(action: ComposerAction): RegistrationHandle;"
             }
@@ -5263,7 +5291,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useMessageActions.ts",
-                "line": 115,
+                "line": 121,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerMessageAction(action: ChatMessageAction);"
               }
@@ -5272,7 +5300,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageActions.ts",
-              "line": 115,
+              "line": 121,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerMessageAction(action: ChatMessageAction);"
             }
@@ -5393,7 +5421,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 95,
+                "line": 100,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerThreadHistoryAction(action: ThreadHistoryAction);"
               }
@@ -5402,7 +5430,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 95,
+              "line": 100,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerThreadHistoryAction(action: ThreadHistoryAction);"
             }
@@ -5910,7 +5938,7 @@
               "source": "app/composables/threads/useThreadHistoryActions.ts",
               "line": 74,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface ThreadHistoryAction\n    extends HistoryActionRegistryItem<Thread> {}"
+              "text": "export interface ThreadHistoryAction\n    extends HistoryActionRegistryItem<Thread> {\n    /** Reactive ephemeral reason; must be pure and perform no storage reads. */\n    disabledReason?: (ctx: { threadId: string }) => string | undefined;\n    /** Lazy read-only durable inspection, evaluated only while the menu is open. */\n    inspectDisabledReason?: (ctx: { document: Thread }) => Promise<string | undefined>;\n}"
             }
           ]
         },
@@ -5965,7 +5993,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/sidebar/useComposerActions.ts",
-                "line": 229,
+                "line": 232,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterComposerAction(id: string);"
               }
@@ -5974,7 +6002,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 229,
+              "line": 232,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterComposerAction(id: string);"
             }
@@ -6251,7 +6279,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useMessageActions.ts",
-                "line": 129,
+                "line": 135,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterMessageAction(id: string);"
               }
@@ -6260,7 +6288,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageActions.ts",
-              "line": 129,
+              "line": 135,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterMessageAction(id: string);"
             }
@@ -6381,7 +6409,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 101,
+                "line": 106,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterThreadHistoryAction(id: string);"
               }
@@ -6390,7 +6418,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 101,
+              "line": 106,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterThreadHistoryAction(id: string);"
             }
@@ -6485,7 +6513,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAi.ts",
-                "line": 215,
+                "line": 219,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
               }
@@ -6494,7 +6522,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAi.ts",
-              "line": 215,
+              "line": 219,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
             }
@@ -6511,7 +6539,7 @@
               "resolvedReturnType": "ComputedRef<ComposerActionEntry[]>",
               "declaration": {
                 "source": "app/composables/sidebar/useComposerActions.ts",
-                "line": 254,
+                "line": 257,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useComposerActions(\n    context: () => ComposerActionContext = () => ({})\n): ComputedRef<ComposerActionEntry[]>;"
               }
@@ -6520,7 +6548,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 254,
+              "line": 257,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useComposerActions(\n    context: () => ComposerActionContext = () => ({})\n): ComputedRef<ComposerActionEntry[]>;"
             }
@@ -6967,7 +6995,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useMessageActions.ts",
-                "line": 151,
+                "line": 157,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useMessageActions(message: { role: 'user' | 'assistant' });"
               }
@@ -6976,7 +7004,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageActions.ts",
-              "line": 151,
+              "line": 157,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useMessageActions(message: { role: 'user' | 'assistant' });"
             }
@@ -7453,7 +7481,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 107,
+                "line": 112,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useThreadHistoryActions();"
               }
@@ -7462,7 +7490,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 107,
+              "line": 112,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useThreadHistoryActions();"
             }
@@ -8285,7 +8313,7 @@
     },
     {
       "source": "app/composables/sidebar/useComposerActions.ts",
-      "apiSha256": "4a10c82b5f5d50e4dd12a2005d593c081d6e1b02d8629090efbe96da895d0ca9",
+      "apiSha256": "de4924a22229848c8e085a73135db78eac25f32b6fbfe57b93230d82da56eca4",
       "runtime": "client",
       "publicPaths": [
         "~/composables/sidebar/useComposerActions"
@@ -8306,7 +8334,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 73,
+              "line": 76,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ComposerAction {\n    /** Unique identifier for the action */\n    id: string;\n    /** Icon name displayed in the toolbar button */\n    icon: string;\n    /** Optional tooltip shown on hover/focus */\n    tooltip?: string;\n    /** Optional visible label (text inside button) */\n    label?: string;\n    /** Optional ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional color variant for the button */\n    color?: ChromeActionColor;\n    /** Handler called when the action button is clicked */\n    handler: (ctx: ComposerActionContext) => void | Promise<void>;\n    /** Optional function to determine if action should be visible */\n    visible?: (ctx: ComposerActionContext) => boolean;\n    /** Optional function to determine if action should be disabled */\n    disabled?: (ctx: ComposerActionContext) => boolean;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this action. */\n    access?: PluginGatePolicy;\n}"
             }
@@ -8322,7 +8350,7 @@
               "source": "app/composables/sidebar/useComposerActions.ts",
               "line": 43,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface ComposerActionContext {\n    /** The TipTap editor instance, if available */\n    editor?: Editor | null;\n    /** ID of the current thread, if any */\n    threadId?: string | null;\n    /** ID of the current pane, if any */\n    paneId?: string | null;\n    /** Whether AI content is currently streaming */\n    isStreaming?: boolean;\n    /** Additional context properties for extensibility */\n    [key: string]: unknown;\n}"
+              "text": "export interface ComposerActionContext {\n    /** The TipTap editor instance, if available */\n    editor?: Editor | null;\n    /** ID of the current thread, if any */\n    threadId?: string | null;\n    /** ID of the current pane, if any */\n    paneId?: string | null;\n    /** Whether AI content is currently streaming */\n    isStreaming?: boolean;\n    /** Host compaction controller belonging to this composer and pane. */\n    compactThread?: () => Promise<void>;\n    compactionBlockedReason?: string;\n    /** Additional context properties for extensibility */\n    [key: string]: unknown;\n}"
             }
           ]
         },
@@ -8334,7 +8362,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 113,
+              "line": 116,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ComposerActionEntry {\n    /** The composer action definition */\n    action: ComposerAction;\n    /** Whether the action is currently disabled based on context */\n    disabled: boolean;\n}"
             }
@@ -8351,7 +8379,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/sidebar/useComposerActions.ts",
-                "line": 291,
+                "line": 294,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredComposerActionIds(): string[];"
               }
@@ -8360,7 +8388,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 291,
+              "line": 294,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredComposerActionIds(): string[];"
             }
@@ -8377,7 +8405,7 @@
               "resolvedReturnType": "RegistrationHandle",
               "declaration": {
                 "source": "app/composables/sidebar/useComposerActions.ts",
-                "line": 189,
+                "line": 192,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerComposerAction(action: ComposerAction): RegistrationHandle;"
               }
@@ -8386,7 +8414,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 189,
+              "line": 192,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerComposerAction(action: ComposerAction): RegistrationHandle;"
             }
@@ -8403,7 +8431,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/sidebar/useComposerActions.ts",
-                "line": 229,
+                "line": 232,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterComposerAction(id: string);"
               }
@@ -8412,7 +8440,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 229,
+              "line": 232,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterComposerAction(id: string);"
             }
@@ -8429,7 +8457,7 @@
               "resolvedReturnType": "ComputedRef<ComposerActionEntry[]>",
               "declaration": {
                 "source": "app/composables/sidebar/useComposerActions.ts",
-                "line": 254,
+                "line": 257,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useComposerActions(\n    context: () => ComposerActionContext = () => ({})\n): ComputedRef<ComposerActionEntry[]>;"
               }
@@ -8438,7 +8466,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 254,
+              "line": 257,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useComposerActions(\n    context: () => ComposerActionContext = () => ({})\n): ComputedRef<ComposerActionEntry[]>;"
             }
@@ -9657,7 +9685,7 @@
     },
     {
       "source": "app/composables/threads/useThreadHistoryActions.ts",
-      "apiSha256": "e88f82912481ed9629551f5311a242a877c9769f2dded349fa30c3acb9269ad2",
+      "apiSha256": "a35314621ad20135199785f092ede7efa914878a8f0e6e35e56296cf588762eb",
       "runtime": "client",
       "publicPaths": [
         "~/composables/threads/useThreadHistoryActions"
@@ -9681,7 +9709,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 117,
+                "line": 122,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredThreadHistoryActionIds(): string[];"
               }
@@ -9690,7 +9718,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 117,
+              "line": 122,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredThreadHistoryActionIds(): string[];"
             }
@@ -9707,7 +9735,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 95,
+                "line": 100,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerThreadHistoryAction(action: ThreadHistoryAction);"
               }
@@ -9716,7 +9744,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 95,
+              "line": 100,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerThreadHistoryAction(action: ThreadHistoryAction);"
             }
@@ -9732,7 +9760,7 @@
               "source": "app/composables/threads/useThreadHistoryActions.ts",
               "line": 74,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface ThreadHistoryAction\n    extends HistoryActionRegistryItem<Thread> {}"
+              "text": "export interface ThreadHistoryAction\n    extends HistoryActionRegistryItem<Thread> {\n    /** Reactive ephemeral reason; must be pure and perform no storage reads. */\n    disabledReason?: (ctx: { threadId: string }) => string | undefined;\n    /** Lazy read-only durable inspection, evaluated only while the menu is open. */\n    inspectDisabledReason?: (ctx: { document: Thread }) => Promise<string | undefined>;\n}"
             }
           ]
         },
@@ -9747,7 +9775,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 101,
+                "line": 106,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterThreadHistoryAction(id: string);"
               }
@@ -9756,7 +9784,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 101,
+              "line": 106,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterThreadHistoryAction(id: string);"
             }
@@ -9773,7 +9801,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 107,
+                "line": 112,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useThreadHistoryActions();"
               }
@@ -9782,7 +9810,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 107,
+              "line": 112,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useThreadHistoryActions();"
             }
@@ -11721,7 +11749,7 @@
     },
     {
       "source": "app/utils/chat/tools-public.ts",
-      "apiSha256": "a8d8e735383acc4cedc92a36310b62c94bd840855fadd9d998a3889fa8d75163",
+      "apiSha256": "9528ebd675cc9ad29c1fdc04a96c8376b23a2df4464ae0d8622d91ad8c8b3001",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tools-public"
@@ -11794,7 +11822,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 117,
+              "line": 120,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolCall {\n    id: string;\n    type: 'function';\n    function: {\n        name: string;\n        arguments: string; // JSON string, parsed by consumer\n    };\n}"
             }
@@ -11808,7 +11836,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 155,
+              "line": 158,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolDefinition {\n    type: 'function';\n    function: {\n        name: string;\n        description: string;\n        parameters: import('~~/shared/chat/tool-schema').JsonSchemaObject;\n    };\n    ui?: {\n        label?: string;\n        icon?: string;\n        descriptionHint?: string;\n        defaultEnabled?: boolean;\n        category?: string;\n    };\n    runtime?: ToolRuntime;\n}"
             }
@@ -11822,7 +11850,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 129,
+              "line": 132,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolExecutionContext {\n    subject: string | null;\n    workspaceId: string | null;\n    threadId: string | null;\n    messageId: string | null;\n    callId: string;\n    requestId: string;\n    abortSignal: AbortSignal;\n}"
             }
@@ -11850,7 +11878,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 126,
+              "line": 129,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolRuntime = 'hybrid' | 'client' | 'server';"
             }

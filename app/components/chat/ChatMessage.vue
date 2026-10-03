@@ -417,7 +417,7 @@
                 </UFieldGroup>
             </div>
         </template>
-        <ThreadChildLinks v-if="props.message.id && !props.message.pending" :thread-id="props.threadId" :message-id="props.message.id"
+        <ThreadChildLinks v-if="props.message.id && !props.message.pending" :thread-id="props.threadId" :message-id="props.message.id" :tool-result-message-ids="props.message.toolResultMessageIds"
             @navigate="emit('view-related-thread', $event)" />
     </div>
 </template>

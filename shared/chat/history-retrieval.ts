@@ -114,7 +114,7 @@ function permitted(state: Awaited<ReturnType<typeof scope>>, row: Row, expanded:
 }
 function describe(state: Awaited<ReturnType<typeof scope>>, row: Row, limit: number) {
     const captured = state.memberships.get(String(row.thread_id))?.get(row.id);
-    return { message_id: row.id, thread_id: row.thread_id, role: row.role, ...excerpt(textOf(row), limit),
+    return { message_id: row.id, thread_id: row.thread_id, role: row.role, reference_only: true as const, ...excerpt(textOf(row), limit),
         changed_since_compaction: captured !== undefined && captured !== row.clock,
         outside_compaction_scope: captured === undefined };
 }

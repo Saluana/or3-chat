@@ -350,6 +350,7 @@
                                 ? (id: string) => onInternalThreadCreated(id, i)
                                 : undefined
                         "
+                        @compaction-committed="onCompactionCommitted($event, i)"
                         @view-compaction-source="onCompactionSourceSelected($event, i)"
                         @view-related-thread="onCompactionSourceSelected({ ...$event, messageId: '' }, i)"
                         @tab-status="
@@ -1691,6 +1692,18 @@ async function onCompactionSourceSelected(target: { threadId: string; messageId:
     if (target.messageId) paneComponentRefs.get(destination.id)?.scrollToMessage?.({ threadId: target.threadId,
         messageId: target.scrollMessageId ?? target.messageId, generation: target.generation });
     closeSidebarIfMobile();
+}
+async function onCompactionCommitted(target: { threadId: string; messageId: string; originThreadId: string; generation: number }, paneIndex: number) {
+    const pane = panes.value[paneIndex];
+    // Completion must not activate a pane the user has since left.
+    if (activePaneIndex.value !== paneIndex || !pane || pane.mode !== 'chat'
+        || pane.threadId !== target.originThreadId || getWorkspaceGeneration() !== target.generation) return;
+    try { await onCompactionSourceSelected(target, paneIndex); }
+    catch { /* The durable child remains available even if navigation fails. */ }
+    if (getWorkspaceGeneration() === target.generation && activePaneIndex.value === paneIndex
+        && panes.value[paneIndex]?.id === pane.id && pane.threadId === target.originThreadId) {
+        toast.add({ title: 'Compacted conversation saved', description: 'The continuation could not be opened. It remains available in conversation history.', color: 'warning' });
+    }
 }
 function onInternalThreadCreated(id: string, paneIndex?: number) {
     if (!id) return;
