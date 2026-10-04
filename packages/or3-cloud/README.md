@@ -69,8 +69,8 @@ never a development image.
 
 Run `verify` after every update and before declaring a deployment healthy. It
 checks the managed image digest, deep provider health, Basic Auth sign-in,
-session hydration, SQLite sync, a disposable filesystem upload/download/delete
-cycle, both SQLite databases, volume ownership, proxy runtime settings, and a
+session hydration, SQLite sync, a disposable filesystem upload/download and
+canonical metadata cleanup cycle, both SQLite databases, volume ownership, proxy runtime settings, and a
 bounded window of serious container logs. On a public VPS, require the real
 HTTPS path (with no redirects) using `npx @or3/cloud verify --public`.
 After changing the owner password in the app, pass the current credential only
@@ -80,8 +80,11 @@ Until the one-time handoff file is deleted, `verify` may read its initial owner
 credential from that protected file; it is never restored to `.env` or Docker
 container metadata.
 Verification rejects cross-origin filesystem grants and unexpected methods or
-headers, validates the storage ID before uploading, deletes its probe, and
-revokes its temporary session even when a later check fails.
+headers, validates the storage ID before uploading, tombstones its probe before
+requesting physical deletion, and revokes its temporary session even when a later
+check fails. When the provider explicitly requires deletion coordination,
+verification reports physical cleanup as deferred; retained probe bytes remain
+subject to the provider retention policy. Other deletion failures still fail verification.
 
 Do not run `docker compose down --volumes` on a normal deployment: it deletes
 the application data. Use `backup` before an update or any destructive action.
