@@ -47,6 +47,20 @@ describe('clearWorkspaceDbsOnLogout', () => {
         expect(deleteDb).toHaveBeenCalledWith('or3-db-ws-1');
     });
 
+    it('does not destroy a workspace when cleanup expires during its policy lookup', async () => {
+        let current = true;
+        let finishPolicy!: (policy: { value: string }) => void;
+        getDatabaseNames.mockResolvedValue(['or3-db-ws-1']);
+        getKvByName.mockImplementation(() => new Promise((resolve) => { finishPolicy = resolve; }));
+        const { clearWorkspaceDbsOnLogout } = await import('~/utils/workspace-db-logout');
+        const cleanup = clearWorkspaceDbsOnLogout(() => current);
+        await vi.waitFor(() => expect(getKvByName).toHaveBeenCalled());
+        current = false;
+        finishPolicy({ value: 'clear' });
+        await cleanup;
+        expect(deleteDb).not.toHaveBeenCalled();
+    });
+
     it('does nothing when no workspace databases exist', async () => {
         getDatabaseNames.mockResolvedValue(['or3-db']);
         const { clearWorkspaceDbsOnLogout } = await import(

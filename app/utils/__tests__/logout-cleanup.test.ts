@@ -83,8 +83,8 @@ describe('logoutCleanup', () => {
 
         expect(stop).toHaveBeenCalledTimes(1);
         expect(clearWorkspaceDbsOnLogout).toHaveBeenCalledTimes(1);
-        expect(kvDelete).toHaveBeenCalledWith('openrouter_api_key');
-        expect(kvDelete).toHaveBeenCalledWith('workspace.manager.cache');
+        expect(kvDelete).toHaveBeenCalledWith('openrouter_api_key', expect.anything(), { isValid: expect.any(Function) });
+        expect(kvDelete).toHaveBeenCalledWith('workspace.manager.cache', expect.anything(), { isValid: expect.any(Function) });
         expect(state.value.openrouterKey).toBeNull();
         expect(localStorage.getItem('openrouter_api_key')).toBeNull();
         expect(localStorage.getItem('openrouter_state')).toBeNull();

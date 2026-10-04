@@ -21,7 +21,8 @@
 
 import type { NuxtApp } from 'nuxt/app';
 import { kv } from '~/db';
-import { state } from '~/state/global';
+import { getDb, getWorkspaceGeneration } from '~/db/client';
+import { clearPersistedUserApiKey, getUserApiKeyGeneration } from '~/core/auth/useUserApiKey';
 import { clearWorkspaceDbsOnLogout } from '~/utils/workspace-db-logout';
 import { stopAllPortableClientsAndAwait } from '~/composables/plugins/portable-client-runtime';
 
@@ -59,6 +60,25 @@ export async function logoutCleanup(
     nuxtApp?: NuxtAppWithSync,
     options: LogoutCleanupOptions = {}
 ) {
+    // Clear memory and invalidate pending reads before the first await. Start
+    // the captured, guarded delete now so late cleanup cannot erase a new key.
+    const clearApiKey = clearPersistedUserApiKey().catch(() => {
+        // Best-effort; memory is already cleared even if storage fails.
+    });
+
+    const syncEngine = nuxtApp?.$syncEngine;
+    const keyGeneration = getUserApiKeyGeneration();
+    const workspaceGeneration = getWorkspaceGeneration();
+    const isCurrent = () =>
+        keyGeneration === getUserApiKeyGeneration() &&
+        workspaceGeneration === getWorkspaceGeneration();
+    let targetDb: ReturnType<typeof getDb> | undefined;
+    try {
+        targetDb = getDb();
+    } catch {
+        // Storage can be unavailable; credential invalidation still happened.
+    }
+
     try {
         // Revoke portable activation handles before clearing the session. The
         // server TTL remains the fallback if the browser is already offline.
@@ -67,21 +87,17 @@ export async function logoutCleanup(
         // Best-effort; logout must still clear local state.
     }
 
+    if (!isCurrent()) return;
     try {
-        await nuxtApp?.$syncEngine?.stop?.();
+        await syncEngine?.stop?.();
     } catch {
         // Best-effort; sync engine may already be stopped.
     }
 
-    await clearWorkspaceDbsOnLogout();
-
-    // Clear user-scoped auth data
-    try {
-        await kv.delete('openrouter_api_key');
-    } catch {
-        // Best-effort.
-    }
-    state.value.openrouterKey = null;
+    await clearApiKey;
+    if (!isCurrent()) return;
+    await clearWorkspaceDbsOnLogout(isCurrent);
+    if (!isCurrent()) return;
 
     // Clear local/session storage auth remnants and transient caches
     if (typeof localStorage !== 'undefined') {
@@ -120,7 +136,9 @@ export async function logoutCleanup(
 
     // Clear cached workspace list
     try {
-        await kv.delete('workspace.manager.cache');
+        if (targetDb) {
+            await kv.delete('workspace.manager.cache', targetDb, { isValid: isCurrent });
+        }
     } catch {
         // Best-effort.
     }

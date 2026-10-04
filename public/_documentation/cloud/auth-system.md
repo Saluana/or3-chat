@@ -61,6 +61,8 @@ Direct sync providers acquire provider-specific JWTs through `AuthTokenBroker`. 
 
 Connect OpenRouter with OAuth PKCE or paste a supported key. Source code must use `persistUserApiKey()` to save browser keys in Dexie `kv`, update reactive state, and emit the connection signal.
 
+Logout clears the browser key from memory before waiting for local cleanup and invalidates pending reads. Reads and saves are scoped to the workspace database generation; delayed cleanup cannot erase a newly saved key. A direct account change also clears the previous account key, while a same-user workspace switch retains an already loaded personal key. Storage cleanup is best-effort if IndexedDB is unavailable.
+
 Local mode can use the browser key directly. SSR mode forwards the key per request to the server stream route, unless the host supplies an instance key under its override policy. Plaintext user keys are not persisted as ordinary server configuration; durable background jobs can keep an encrypted credential envelope so work continues after detachment. Keep its encryption secret server-only. See [background execution](/documentation/cloud/background-execution) and [configuration](/documentation/cloud/config-reference#servicesllmopenrouter).
 
 Managed-key streaming and background admission require `Content-Type: application/json`, `x-or3-cloud-intent: mutation`, and an exact same-origin `Origin` or `Referer`, or an explicitly configured browser origin. Separately authenticated bearer clients may omit origin only when they send no cookies. The browser helpers supply the required intent header. Guest foreground requests using a personal key retain their existing behavior.
