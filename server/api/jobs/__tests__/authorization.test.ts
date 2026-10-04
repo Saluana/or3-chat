@@ -634,6 +634,14 @@ describe('background job workspace authorization at the HTTP boundary', () => {
         const resolveImport = (id: string) => {
             if (id === 'convex/values') return convexValues;
             if (id === './_generated/server') return { internalMutation: internalMutationGeneric, internalQuery: internalQueryGeneric };
+            if (id === './requestUsage') {
+                const source = packed.files['requestUsage.ts'];
+                if (!source) throw new Error('Missing published requestUsage helper');
+                const helper = { exports: {} };
+                const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+                new Function('require', 'module', 'exports', compiled)(resolveImport, helper, helper.exports);
+                return helper.exports;
+            }
             throw new Error(`Unexpected published handler import: ${id}`);
         };
         new Function('require', 'module', 'exports', output)(resolveImport, loaded, loaded.exports);
