@@ -464,7 +464,7 @@ onMounted(async () => {
     // Set scripted routing before seed-time auxiliary compactions, too.
     localStorage.setItem('or3:server-route-available', JSON.stringify({ available: false, timestamp: Date.now() }));
     await persistUserApiKey(TEST_API_KEY);
-    if (!contextJourney && !presentationJourney) await useModelStore().addFavoriteModel({
+    if (!contextJourney && !presentationJourney && !meterJourney && !mediaJourney) await useModelStore().addFavoriteModel({
         id: '~openai/gpt-luna-latest', name: 'Scripted journey model', context_length: 1_000_000,
         top_provider: { max_completion_tokens: 65_536 }, supported_parameters: ['tools'],
         architecture: { input_modalities: ['text'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' },

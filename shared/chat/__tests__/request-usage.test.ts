@@ -6,7 +6,7 @@ const request = () => ({ model: 'large-model', messages: [{ role: 'user', conten
     tools: [{ type: 'function', function: { name: 'lookup', parameters: { type: 'object' } } }], modalities: ['text'], countText });
 describe('measured request prefix provenance', () => {
 
-    it('uses a matched measured prefix plus the current suffix, never below complete-request estimation', async () => {
+    it('uses reported usage for a matched prefix plus the current suffix, even below local estimation', async () => {
         const input = { ...request(), configuration: { reasoning: { effort: 'medium' }, max_tokens: 4096 } };
         const prefix = await captureUsagePrefix(input);
         const messages = [...input.messages, { role: 'assistant', content: 'Prior answer' }, { role: 'user', content: 'New draft' }];
@@ -17,7 +17,7 @@ describe('measured request prefix provenance', () => {
             const next = { ...input, messages, configuration: { ...input.configuration, max_tokens: 8192 }, usage };
             const full = await estimateChatRequest(next);
             expect(await estimateMeasuredChatRequest(next)).toEqual({ ...full, basis: 'measured-prefix',
-                input_tokens: Math.max(full.input_tokens, prompt + suffix.input_tokens - empty.input_tokens) });
+                input_tokens: prompt + suffix.input_tokens - empty.input_tokens });
         }
     });
 
@@ -36,15 +36,32 @@ describe('measured request prefix provenance', () => {
         expect(await estimateMeasuredChatRequest({ ...next, countText })).toEqual(full);
     });
 
-    it('retains media uncertainty in matched hydrated history and invalidates changed image bytes', async () => {
+    it('uses measured media cost in matched history and invalidates changed image bytes', async () => {
         const messages: CountableChatMessage[] = [{ role: 'user', content: [{ type: 'text', text: 'Image caption' },
             { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } }] }];
         const initial = { ...request(), messages };
         const usage = attachRequestUsage(await captureUsagePrefix(initial), { prompt_tokens: 1000, completion_tokens: 5 }, { requestId: 'media', iteration: 1, measuredAt: 1 });
-        expect(await estimateMeasuredChatRequest({ ...initial, usage })).toMatchObject({ basis: 'measured-prefix', media_cost: 'unknown' });
+        expect(await estimateMeasuredChatRequest({ ...initial, usage })).toMatchObject({ basis: 'measured-prefix', media_cost: 'none', input_tokens: 1000 });
         const edited = { ...initial, messages: [{ role: 'user', content: [{ type: 'text', text: 'Image caption' },
             { type: 'image_url', image_url: { url: 'data:image/png;base64,BBBB' } }] }], usage };
         expect(await estimateMeasuredChatRequest(edited)).toEqual(await estimateChatRequest(edited));
+    });
+    it('matches stored image identities to wire bytes and estimates only newly attached images', async () => {
+        const hash = 'sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+        const initial = { ...request(), messages: [{ role: 'user', content: [
+            { type: 'text', text: 'Caption' }, { type: 'image_url', image_url: { url: 'data:image/png;base64,YWJj' } },
+        ] }] };
+        const usage = attachRequestUsage(await captureUsagePrefix(initial), { prompt_tokens: 200, completion_tokens: 5 },
+            { requestId: 'image', iteration: 1, measuredAt: 1 });
+        const preview = { ...initial, usage, messages: [{ role: 'user', content: [
+            { type: 'text', text: 'Caption' }, { type: 'image_url', image_url: { url: hash }, width: 600, height: 240 },
+        ] }, { role: 'user', content: [{ type: 'image_url', image_url: { url: 'new-image' }, width: 1024, height: 1024 }] }] };
+        const suffix = await estimateChatRequest({ messages: preview.messages.slice(1), countText });
+        const empty = await estimateChatRequest({ messages: [], countText });
+        expect(await estimateMeasuredChatRequest(preview)).toMatchObject({ basis: 'measured-prefix', media_cost: 'estimated',
+            input_tokens: 200 + suffix.input_tokens - empty.input_tokens });
+        preview.messages[0]!.content[0] = { type: 'text', text: 'Edited caption' };
+        expect(await estimateMeasuredChatRequest(preview)).toMatchObject({ basis: 'estimated' });
     });
     it('snapshots the actual prefix before asynchronous counting and binds measurement to that request', async () => {
         const input = request(); let release!: () => void;

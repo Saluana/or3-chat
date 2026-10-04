@@ -116,7 +116,7 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
         const related = member.parent_thread_id || member.forked || member.branch_mode === 'compacted'
             || await db.threads.where('parent_thread_id').equals(member.id).first();
         if (related) {
-            item.title = root.original?.title || item.title;
+            item.title = root.original ? root.original.title || 'Untitled Chat' : item.title;
             item.family = { kind: 'group-header', key: `family:${root.id}`,
             rootId: root.id, expanded: false, searchExpanded: false, damaged: root.damaged, originalId: root.original?.id };
         }
@@ -127,8 +127,25 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
     return { items: top.slice(0, options.limit).map((row) => row.item), hasMore: top.length > options.limit };
 }
 
+/** Share legacy metadata discovery across every expanded family in one refresh. */
+export function createFamilyFallback(db: Or3DB) {
+    let snapshot: Promise<Map<string, Thread[]>> | undefined;
+    return () => snapshot ??= (async () => {
+        const rows: Thread[] = []; const resolver = rootResolver(db);
+        for await (const page of threadPages(db)) { rows.push(...page); resolver.seed(page); }
+        const families = new Map<string, Thread[]>();
+        for (const row of rows) {
+            const rootId = (await resolver.resolve(row)).id;
+            if (row.root_thread_id === rootId) continue;
+            const members = families.get(rootId) ?? []; members.push(row); families.set(rootId, members);
+        }
+        return families;
+    })();
+}
+type FamilyFallback = ReturnType<typeof createFamilyFallback>;
+
 /** Indexed new members plus lazy legacy discovery, retained only one member page. */
-export async function readFamilyMembers(db: Or3DB, rootId: string, limit: number, filter: FamilyFilter) {
+export async function readFamilyMembers(db: Or3DB, rootId: string, limit: number, filter: FamilyFilter, fallback: FamilyFallback = createFamilyFallback(db)) {
     const resolver = rootResolver(db); const members = new Map<string, Thread>();
     let before: [string, number, number, string] | undefined;
     while (members.size <= limit) {
@@ -146,20 +163,18 @@ export async function readFamilyMembers(db: Or3DB, rootId: string, limit: number
     if (original && allowed(original, filter)) members.set(original.id, original);
     // Legacy rows have no grouping hint. Scanning bounded metadata batches
     // supports them without a startup rewrite or loading conversation content.
-    for await (const page of threadPages(db)) {
-        resolver.seed(page);
-        for (const row of page) if (row.root_thread_id !== rootId && allowed(row, filter) && (await resolver.resolve(row)).id === rootId) {
-            members.set(row.id, row);
-            if (members.size > limit + 1) {
-                const keep = [...members.values()].sort(compare).slice(0, limit + 1); members.clear(); keep.forEach((row) => members.set(row.id, row));
-            }
+    const legacy = await fallback();
+    for (const row of legacy.get(rootId) ?? []) if (allowed(row, filter)) {
+        members.set(row.id, row);
+        if (members.size > limit + 1) {
+            const keep = [...members.values()].sort(compare).slice(0, limit + 1); members.clear(); keep.forEach((row) => members.set(row.id, row));
         }
     }
     const ordered = [...members.values()].sort(compare);
     return { members: ordered.slice(0, limit), hasMore: ordered.length > limit };
 }
 
-export async function latestFamilyCompaction(db: Or3DB, rootId: string, filter: FamilyFilter): Promise<string | undefined> {
+export async function latestFamilyCompaction(db: Or3DB, rootId: string, filter: FamilyFilter, fallback: FamilyFallback = createFamilyFallback(db)): Promise<string | undefined> {
     const resolver = rootResolver(db); let latest: Thread | undefined;
     const accept = (row: Thread) => {
         if (!latest || row.created_at > latest.created_at || row.created_at === latest.created_at && row.id > latest.id) latest = row;
@@ -174,10 +189,7 @@ export async function latestFamilyCompaction(db: Or3DB, rootId: string, filter: 
         if (latest || page.length < 50) break;
         const last = page.at(-1)!; before = [rootId, 'compacted', last.created_at, last.id];
     }
-    for await (const page of threadPages(db)) {
-        resolver.seed(page);
-        for (const row of page) if (row.root_thread_id !== rootId && row.branch_mode === 'compacted' && allowed(row, { ...filter, query: undefined })
-            && (await resolver.resolve(row)).id === rootId) accept(row);
-    }
+    const legacy = await fallback();
+    for (const row of legacy.get(rootId) ?? []) if (row.branch_mode === 'compacted' && allowed(row, { ...filter, query: undefined })) accept(row);
     return latest?.id;
 }

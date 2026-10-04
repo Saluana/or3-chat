@@ -14,9 +14,10 @@ test('compaction chat memory lives under system prompt in settings, with working
     await expect(page.locator('[data-compaction-card]')).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('#chat-input-main [data-context-actions]')).toHaveCount(0);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    const memory = page.getByRole('region', { name: 'Chat memory', exact: true });
+    const memory = page.getByRole('region', { name: 'Context & compaction', exact: true });
     await expect(memory).toBeVisible();
-    await expect(memory.getByRole('button', { name: 'Create compacted version', exact: true })).toBeVisible();
+    await memory.getByRole('button', { name: /^Context & compaction/ }).click();
+    await expect(memory.getByRole('button', { name: 'Compact now', exact: true })).toBeVisible();
     await expect(memory.getByRole('button', { name: 'Chat memory details' })).toHaveCount(0);
     await expect(memory).not.toContainText('auto-compaction off');
     await expect(memory.getByRole('meter', { name: 'Estimated context used' })).toBeVisible();
@@ -28,8 +29,18 @@ test('compaction chat memory lives under system prompt in settings, with working
     await page.getByRole('textbox', { name: 'Message input' }).fill(draft);
     await expect.poll(async () => page.locator('[data-msg-id]').filter({ has: page.locator('[data-compaction-card]') }).getAttribute('data-msg-id'), { timeout: 30_000 }).not.toBe(before);
     await expect(page.getByRole('textbox', { name: 'Message input' })).toHaveText(draft.trim());
+    const attempts = await page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]').length);
+    // The fixture reopens the same persisted source; re-entering the same draft still exceeds 80%.
+    await page.reload();
+    await expect(page.locator('[data-msg-id]').filter({ has: page.locator('[data-compaction-card]') })).toHaveAttribute('data-msg-id', before!);
+    await page.getByRole('textbox', { name: 'Message input' }).fill(draft);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    if (await memory.getByRole('button', { name: /^Context & compaction/ }).getAttribute('aria-expanded') === 'false') await memory.getByRole('button', { name: /^Context & compaction/ }).click();
     await expect(automatic).toBeChecked();
+    await expect(memory.locator('[data-context-indicator]')).toHaveAttribute('aria-busy', 'false');
+    expect(Number(await memory.getByRole('meter').getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(80);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]').length)).toBe(attempts);
+    await info.attach('automatic-compaction-reload', { contentType: 'application/json', body: JSON.stringify({ attempts, assertions: ['unchanged source reopened', 'same draft re-entered above 80%', 'no repeated inference'] }) });
     await expect.poll(async () => memory.evaluate(element => { const card = element.getBoundingClientRect(); const toggle = element.querySelector('[role="switch"]')!.getBoundingClientRect(); return toggle.bottom <= card.bottom; })).toBe(true);
     const shot = info.outputPath('chat-memory-settings.png'); await page.screenshot({ path: shot, animations: 'disabled' });
     await info.attach('chat-memory-settings', { path: shot, contentType: 'image/png' });
@@ -43,9 +54,9 @@ test('compaction composer meter updates configuration, media and accessible warn
     await page.addInitScript(() => window.addEventListener('error', event => { if (event.message.includes('ResizeObserver loop')) event.stopImmediatePropagation(); }));
     await page.goto(`${chatPage}?compaction=1&meter=1`);
     const input = page.getByRole('textbox', { name: 'Message input' }); await expect(input).toBeVisible({ timeout: 60_000 });
-    const memory = page.getByRole('region', { name: 'Chat memory', exact: true });
+    const memory = page.getByRole('region', { name: 'Context & compaction', exact: true });
     const indicator = memory.locator('[data-context-indicator]'); const meter = indicator.getByRole('meter', { name: 'Estimated context used' });
-    const settle = async () => { if (!await memory.isVisible()) await page.getByRole('button', { name: 'Settings', exact: true }).click(); await expect(indicator).toHaveAttribute('aria-busy', 'false'); await expect(meter).toBeVisible(); };
+    const settle = async () => { if (!await memory.isVisible()) await page.getByRole('button', { name: 'Settings', exact: true }).click(); if (await memory.getByRole('button', { name: /^Context & compaction/ }).getAttribute('aria-expanded') === 'false') await memory.getByRole('button', { name: /^Context & compaction/ }).click(); await expect(indicator).toHaveAttribute('aria-busy', 'false'); await expect(meter).toBeVisible(); };
     const closeSettings = async () => { if (await memory.isVisible()) { await page.getByRole('button', { name: 'Close chat settings', exact: true }).click(); await expect(memory).not.toBeVisible(); } };
     const outside = async (action: () => Promise<unknown>) => { await closeSettings(); await action(); await settle(); };
     const percent = async () => Number(await meter.getAttribute('aria-valuenow'));
@@ -79,11 +90,11 @@ test('compaction composer meter updates configuration, media and accessible warn
     await settle(); expect(await percent()).toBeGreaterThan(beforePrompt);
     const beforeTool = await percent(); await outside(() => page.getByTestId('fixture-meter-tool').click()); expect(await percent()).toBeGreaterThan(beforeTool);
     await outside(() => page.getByTestId('fixture-meter-tool').click()); expect(await percent()).toBe(beforeTool);
-    await closeSettings();
+    const beforeImage = await percent(); await closeSettings();
     const chooser = page.waitForEvent('filechooser'); await page.getByRole('button', { name: 'Add attachments', exact: true }).click(); await (await chooser).setFiles(fixturePng);
     await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
-    await settle(); await expect(meter).toHaveAttribute('aria-valuetext', /attachment cost unknown/);
-    await outside(() => page.getByRole('button', { name: 'Remove image', exact: true }).click()); await expect(meter).not.toHaveAttribute('aria-valuetext', /attachment cost unknown/);
+    await settle(); await expect.poll(percent).toBeGreaterThan(beforeImage); await expect(meter).not.toHaveAttribute('aria-valuetext', /attachment cost unknown/);
+    await outside(() => page.getByRole('button', { name: 'Remove image', exact: true }).click()); await expect.poll(percent).toBe(beforeImage);
     await outside(() => page.getByTestId('fixture-meter-full-window').click());
     await outside(() => input.fill('Budget context. '.repeat(3000)));
     await expect.poll(percent).toBeGreaterThan(10); const originalModel = await percent();
@@ -94,17 +105,20 @@ test('compaction composer meter updates configuration, media and accessible warn
     await info.attach('composer-meter-receipt', { contentType: 'application/json', body: JSON.stringify({ colors, assertions: ['69/70/89/90 computed theme colors', 'reply aria text', 'optional maximum', 'prompt', 'tool schema', 'add/remove image', 'larger model', 'zero inference'] }) });
     const screenshot = info.outputPath('composer-meter.png'); await page.screenshot({ path: screenshot, animations: 'disabled' }); await info.attach('composer-meter', { path: screenshot, contentType: 'image/png' });
 });
-test('compaction media meter labels inherited historical image cost without a current attachment', async ({ page }, info) => {
+test('compaction media meter estimates inherited historical image cost without a current attachment', async ({ page }, info) => {
     test.setTimeout(120_000);
     await page.route('**openrouter.ai/**', (route) => route.abort());
     await page.goto(`${chatPage}?compaction=1&media=1`);
     const input = page.getByRole('textbox', { name: 'Message input' }); await expect(input).toBeVisible({ timeout: 60_000 });
     await input.fill('Text-only new draft');
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await expect(page.getByRole('region', { name: 'Chat memory' }).getByRole('meter')).toHaveAttribute('aria-valuetext', /attachment cost unknown/);
+    await page.getByRole('region', { name: 'Context & compaction' }).getByRole('button', { name: /^Context & compaction/ }).click();
+    const meter = page.getByRole('region', { name: 'Context & compaction' }).getByRole('meter');
+    await expect(meter).toHaveAttribute('aria-valuetext', /reply tokens available/);
+    await expect(meter).not.toHaveAttribute('aria-valuetext', /attachment cost unknown/);
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]'))).toEqual([]);
     await info.attach('historical-media-meter', { contentType: 'application/json', body: JSON.stringify({
-        source: process.env.OR3_CONTEXT_SOURCE_SHA, assertions: ['reference ancestor image', 'text-only current draft', 'unknown cost label', 'no inference'] }) });
+        source: process.env.OR3_CONTEXT_SOURCE_SHA, assertions: ['reference ancestor image estimated', 'text-only current draft', 'no unknown image cost', 'no inference'] }) });
 });
 test('PageShell compaction families retain keyboard expansion and child-only search across sidebar consumers', async ({ page }, info) => {
     test.setTimeout(120_000);
@@ -159,7 +173,7 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await selectVariant('Nitro');
     await page.getByTestId('fixture-hold-summary').check();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.getByRole('button', { name: 'Create compacted version', exact: true }).click();
+    await page.getByRole('button', { name: 'Compact now', exact: true }).click();
     await expect(page.getByText('Compacting…', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeEnabled();
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -169,7 +183,7 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await expect(input).toHaveText('Preserve this unsent native compaction draft.');
     await selectVariant('Floor');
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.getByRole('button', { name: 'Create compacted version', exact: true }).click();
+    await page.getByRole('button', { name: 'Compact now', exact: true }).click();
     await expect(page.getByText('Compacting…', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(page.getByText('Compacting…', { exact: true })).toHaveCount(0);
@@ -178,7 +192,7 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await expect(input).toHaveText('Preserve this unsent native compaction draft.');
     await page.getByTestId('fixture-hold-summary').uncheck();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.getByRole('button', { name: 'Create compacted version', exact: true }).click();
+    await page.getByRole('button', { name: 'Compact now', exact: true }).click();
     await expect.poll(async () => summaryRow.getAttribute('data-msg-id')).not.toBe(originalSummaryId);
     const childSummaryId = await summaryRow.getAttribute('data-msg-id');
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]').at(-1)?.model)).toBe('scripted-compaction-model:floor');
@@ -190,13 +204,6 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await page.locator('[data-compaction-card]').getByRole('button', { name: /^View original/ }).click();
     await expect.poll(async () => summaryRow.getAttribute('data-msg-id')).toBe(originalSummaryId);
     await expect(input).toHaveText('Preserve this unsent native compaction draft.');
-    const sourceAssistant = page.locator('[data-msg-id$="-presentation-answer"]');
-    await sourceAssistant.hover();
-    await sourceAssistant.getByRole('button', { name: 'Compact here', exact: true }).click();
-    await expect.poll(async () => summaryRow.getAttribute('data-msg-id')).not.toBe(originalSummaryId);
-    await page.locator('[data-compaction-card]').getByRole('button', { name: 'View original · message 5', exact: true }).click();
-    await expect.poll(async () => summaryRow.getAttribute('data-msg-id')).toBe(originalSummaryId);
-    await expect(sourceAssistant).toBeVisible();
     const originalMember = members.filter({ hasText: 'Original' });
     await originalMember.locator('.unified-sb-item').click();
     await expect(summaryRow).toHaveCount(0);
@@ -249,7 +256,7 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
         await expect.poll(() => summaryRow.getAttribute('data-msg-id')).toBe(latestSummary); await search.fill('');
     }
     await info.attach('native-composer-compaction-assertions', { contentType: 'application/json', body: JSON.stringify({
-        source: process.env.OR3_CONTEXT_SOURCE_SHA, originalSummaryId, childSummaryId, latestSummary, assertions: ['native registry action', 'progress/model/Cancel', 'new child opened', 'short child history action disabled with reason', 'exact Compact-here anchor', 'registered history-menu action', 'no-tool model manual navigation without inference', 'latest activity differs from newest compaction under filter/reload', 'draft retained'] }) });
+        source: process.env.OR3_CONTEXT_SOURCE_SHA, originalSummaryId, childSummaryId, latestSummary, assertions: ['native registry action', 'progress/model/Cancel', 'new child opened', 'short child history action disabled with reason', 'registered history-menu action', 'no-tool model manual navigation without inference', 'latest activity differs from newest compaction under filter/reload', 'draft retained'] }) });
 });
 
 test('compaction lossy confirmation shows its estimate and preserves full saved history', async ({ page }, info) => {
@@ -391,7 +398,8 @@ test('native context recovery retains saved identities after reload', async ({ p
     const input = page.getByRole('textbox', { name: 'Message input' });
     await expect(input).toBeVisible({ timeout: 45_000 });
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await expect(page.getByRole('region', { name: 'Chat memory' }).getByRole('meter')).toBeVisible();
+    await page.getByRole('region', { name: 'Context & compaction' }).getByRole('button', { name: /^Context & compaction/ }).click();
+    await expect(page.getByRole('region', { name: 'Context & compaction' }).getByRole('meter')).toBeVisible();
     await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
     const readAttempt = () => page.evaluate(async () => {
         const remembered = localStorage.getItem('or3:e2e:production-chat-thread');

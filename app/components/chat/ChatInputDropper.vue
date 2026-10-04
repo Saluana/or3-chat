@@ -374,7 +374,7 @@
 </template>
 
 <script setup lang="ts">
-import { inspectCompactionSource, CompactionError } from '~/db/compaction';
+import { claimAutomaticCompaction, CompactionError } from '~/db/compaction';
 import { useContextPreview } from '~/composables/chat/useContextPreview';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
@@ -861,7 +861,7 @@ const previewReasoning = computed(() => {
 });
 const contextPreview = useContextPreview({ threadId: () => props.threadId, model: previewModel,
     text: promptText, extraText: () => largeTextBlocks.value.map((block) => block.text).join('\n\n'),
-    hasMedia: () => attachments.value.length > 0, promptSelection: stagedPromptId,
+    attachments: () => attachments.value, promptSelection: stagedPromptId,
     revision: () => [props.contextRevision, promptSelectionRevision.value], reasoning: previewReasoning });
 const compactionInProgress = computed(() => props.compactionState && ['capturing', 'generating', 'correcting', 'committing'].includes(props.compactionState.status));
 const tabDrafts = useWorkspaceTabDrafts();
@@ -879,10 +879,13 @@ watch(() => [contextPreview.state.value, aiSettings.value.autoCompactContext, pr
     const history = Array.isArray(props.contextRevision) ? props.contextRevision : [];
     const anchor = history.at(-1)?.id;
     if (!anchor) return;
-    const attempt = `${generation}:${threadId}:${anchor}`;
+    const attempt = JSON.stringify([generation, threadId, history.map(row => [row.id, row.clock, row.updated_at, row.pending])]);
     if (autoCompactionAttempt === attempt) return;
     autoCompactionAttempt = attempt;
-    try { await inspectCompactionSource(threadId); }
+    try {
+        if (!await claimAutomaticCompaction(threadId, () => !componentDisposed && props.threadId === threadId
+            && !props.loading && !props.streaming && aiSettings.value.autoCompactContext && !compactionInProgress.value)) return;
+    }
     catch (error) {
         if (!(error instanceof CompactionError)) console.warn('[chat-memory] Could not check automatic compaction eligibility.');
         return;

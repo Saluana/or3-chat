@@ -3,7 +3,7 @@ import { liveQuery, type Subscription } from 'dexie';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { getKvByName, setKvByName } from '~/db/kv';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
-import { readFamilyPage, readFamilyMembers, latestFamilyCompaction, resolveSidebarFamilyId, threadToSidebar, documentToSidebar, familyExpansionPreferenceName, FAMILY_PAGE_SIZE, type FamilyFilter } from '~/utils/sidebar/thread-families';
+import { readFamilyPage, createFamilyFallback, readFamilyMembers, latestFamilyCompaction, resolveSidebarFamilyId, threadToSidebar, documentToSidebar, familyExpansionPreferenceName, FAMILY_PAGE_SIZE, type FamilyFilter } from '~/utils/sidebar/thread-families';
 
 export const threadToUnified = threadToSidebar;
 export const docToUnified = documentToSidebar;
@@ -25,7 +25,7 @@ export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'd
             if (thread) activeRoots.add(await resolveSidebarFamilyId(db, thread));
         }
         const page = await readFamilyPage(db, { limit: targetCount.value, type: options.type ?? 'all', filter: currentFilter });
-        const rows: UnifiedSidebarItem[] = [];
+        const rows: UnifiedSidebarItem[] = []; const fallback = createFamilyFallback(db);
         for (const item of page.items) {
             if (!item.family) { rows.push(item); continue; }
             const rootId = item.family.rootId;
@@ -33,8 +33,8 @@ export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'd
             const expanded = Boolean(currentFilter.query) || saved?.value === 'true';
             item.family.expanded = expanded; item.family.searchExpanded = Boolean(currentFilter.query); rows.push(item);
             if (!expanded) continue;
-            const memberPage = await readFamilyMembers(db, rootId, memberLimits.get(rootId) ?? FAMILY_PAGE_SIZE, currentFilter);
-            const latestCompactionId = await latestFamilyCompaction(db, rootId, currentFilter);
+            const memberPage = await readFamilyMembers(db, rootId, memberLimits.get(rootId) ?? FAMILY_PAGE_SIZE, currentFilter, fallback);
+            const latestCompactionId = await latestFamilyCompaction(db, rootId, currentFilter, fallback);
             const members = memberPage.members.sort((a, b) => b.created_at - a.created_at || b.id.localeCompare(a.id));
             for (const [index, member] of members.entries()) rows.push({ ...threadToSidebar(member),
                 family: { kind: 'thread-member', key: 'member:' + rootId + ':' + member.id, rootId, expanded: true,

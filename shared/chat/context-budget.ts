@@ -95,8 +95,37 @@ export interface CountableChatMessage {
     tool_calls?: unknown;
 }
 
+// Provider geometry rules for common vision models; unknown models use Pi's
+// simple 1,200-token allowance. Encoded bytes never enter the text tokenizer.
+function imageTokens(model: string, part: Record<string, unknown>): number {
+    let width = Number(part.width); let height = Number(part.height);
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return 1200;
+    const id = model.replace(/^[^/]+\//, '').split(':')[0] ?? '';
+    if (id.startsWith('claude-')) {
+        const highResolution = /-(?:4[.-][7-9]|5)(?:\D|$)/.test(id);
+        const limit = highResolution ? 4784 : 1568;
+        const scale = Math.min(1, (highResolution ? 2576 : 1568) / Math.max(width, height), Math.sqrt(limit * 28 * 28 / (width * height)));
+        return Math.min(limit, Math.ceil(width * scale / 28) * Math.ceil(height * scale / 28));
+    }
+    if (/^gpt-4(?:o|\.1)(?:-|$)/.test(id) && !/^gpt-4\.1-(?:mini|nano)/.test(id)) {
+        const detail = (part.image_url as { detail?: string } | undefined)?.detail;
+        const mini = id.startsWith('gpt-4o-mini'); const base = mini ? 2833 : 85; const tile = mini ? 5667 : 170;
+        if (detail === 'low') return base;
+        const fit = Math.min(1, 2048 / Math.max(width, height)); width *= fit; height *= fit;
+        const scale = Math.min(1, 768 / Math.min(width, height));
+        return base + tile * Math.ceil(width * scale / 512) * Math.ceil(height * scale / 512);
+    }
+    if (/^gpt-4\.1-(?:mini|nano)/.test(id) || id.startsWith('o4-mini')) {
+        const scale = Math.min(1, 2048 / Math.max(width, height), Math.sqrt(6144 * 32 * 32 / (width * height)));
+        const patches = Math.min(6144, Math.ceil(width * scale / 32) * Math.ceil(height * scale / 32));
+        return Math.ceil(patches * (id.startsWith('o4-mini') ? 1.72 : id.startsWith('gpt-4.1-nano') ? 2.46 : 1.62));
+    }
+    return 1200;
+}
+
 /** Count the final visible wire text/metadata once; media bytes are never treated as text tokens. */
 export async function estimateChatRequest(input: {
+    model?: string;
     messages: readonly CountableChatMessage[];
     tools?: readonly unknown[];
     configuration?: Record<string, unknown>;
@@ -114,7 +143,10 @@ export async function estimateChatRequest(input: {
         else if (Array.isArray(content)) {
             for (const part of content) {
                 if (part.type === 'text' && typeof part.text === 'string') total += await input.countText(part.text);
-                else media = 'unknown';
+                else if (part.type === 'image_url') {
+                    total += imageTokens(input.model ?? String(input.configuration?.model ?? ''), part);
+                    if (media !== 'unknown') media = 'estimated';
+                } else media = 'unknown';
             }
         }
     }

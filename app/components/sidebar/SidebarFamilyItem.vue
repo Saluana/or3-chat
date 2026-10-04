@@ -10,7 +10,7 @@
                 :disabled="item.family.searchExpanded" :title="item.family.searchExpanded ? 'Search reveals matching branches without changing saved expansion.' : undefined"
                 @click="emit('toggleFamily', item.family.rootId)" />
             <SidebarUnifiedItem class="flex-1 min-w-0" :item="item" :active="active" :time-display="timeDisplay"
-                @select="emit('select', item)" @rename="emit('rename', item)" @delete="emit('delete', item)" @add-to-project="emit('addToProject', item)">
+                @select="emit('select', item)" @rename="emit('rename', mutationTarget(item))" @delete="emit('delete', mutationTarget(item))" @add-to-project="emit('addToProject', item)">
                 <template v-if="item.family?.kind === 'thread-member'" #icon>
                     <span class="family-timeline-marker" aria-hidden="true">
                         <span class="family-timeline-line" :class="{ 'is-first': item.family.firstMember, 'is-last': item.family.lastMember }" />
@@ -36,6 +36,10 @@
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import SidebarUnifiedItem from './SidebarUnifiedItem.vue';
 defineProps<{ item: UnifiedSidebarItem; active: boolean; timeDisplay: string }>();
+function mutationTarget(item: UnifiedSidebarItem): UnifiedSidebarItem {
+    return item.family?.kind === 'group-header' && item.family.originalId
+        ? { ...item, id: item.family.originalId } : item;
+}
 const emit = defineEmits<{
     (e: 'select' | 'rename' | 'delete' | 'addToProject', item: UnifiedSidebarItem): void;
     (e: 'toggleFamily' | 'loadMoreMembers' | 'latestCompaction' | 'navigate', id: string): void;

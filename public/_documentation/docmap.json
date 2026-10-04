@@ -389,7 +389,7 @@
                     "category": "Using tools",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Manage context and compaction, compact manually or automatically at 80%, and keep links to the original conversation."
+                    "summary": "Use reported context usage and image estimates, compact manually or automatically at 80%, and keep links to the original conversation."
                 },
                 {
                     "name": "openrouterStream.md",

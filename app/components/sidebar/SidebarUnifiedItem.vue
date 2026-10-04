@@ -95,7 +95,7 @@
                             class="w-full justify-start"
                             @click="emit('rename', item)"
                         >
-                            Rename
+                            {{ item.family?.kind === 'group-header' && item.family.originalId ? 'Rename original conversation' : 'Rename' }}
                         </UButton>
                         <UButton
                             v-bind="actionButtonProps('add-to-project')"
@@ -109,7 +109,7 @@
                             class="w-full justify-start text-[var(--md-error)] hover:bg-[var(--md-error)]/10"
                             @click="emit('delete', item)"
                         >
-                            Delete
+                            {{ item.family?.kind === 'group-header' && item.family.originalId ? 'Delete original conversation' : 'Delete' }}
                         </UButton>
 
                         <!-- Plugin actions -->

@@ -58,6 +58,12 @@ describe('mounted sidebar workspace isolation', () => {
         ]);
         const page = await readFamilyPage(db, { limit: 50, type: 'thread', filter: {} });
         expect(page.items[0]?.title).toBe('Launch');
+        expect(page.items[0]?.id).toBe('earlier');
+        wrapper = shallowMount(SidebarFamilyItem, { props: { item: page.items[0]!, active: false, timeDisplay: '' } });
+        const row = wrapper.getComponent({ name: 'SidebarUnifiedItem' });
+        row.vm.$emit('rename', page.items[0]); row.vm.$emit('delete', page.items[0]);
+        expect(wrapper.emitted('rename')?.[0]?.[0]).toMatchObject({ id: 'root', title: 'Launch' });
+        expect(wrapper.emitted('delete')?.[0]?.[0]).toMatchObject({ id: 'root', title: 'Launch' });
     });
 
     it.each(['standalone', 'reference', 'compacted'] as const)('only shows a family dropdown for related chats (%s)', async (kind) => {

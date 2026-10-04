@@ -671,7 +671,7 @@ const compaction = useThreadCompaction({ threadId: currentThreadId, model,
 });
 async function compactThread(anchorMessageId?: string) {
     const result = await compaction.start(anchorMessageId);
-    if (!result.ok) toast.add({ title: 'Unable to compact', description: result.message, color: 'warning' });
+    if (!result.ok && result.code !== 'cancelled') toast.add({ title: 'Unable to compact', description: result.message, color: 'warning' });
 }
 const localCompactionIds = shallowRef<Set<string>>();
 let compactionOwnerSubscription: Subscription | undefined;

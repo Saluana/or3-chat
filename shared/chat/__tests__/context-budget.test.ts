@@ -63,7 +63,24 @@ describe('provider context admission', () => {
         expect(counted.join('\n').match(/query-unique/gu)).toHaveLength(1);
         expect(counted.join('\n').match(/result-unique/gu)).toHaveLength(1);
         expect(counted.join('\n').match(/schema-unique/gu)).toHaveLength(1);
-        expect(estimate).toMatchObject({ basis: 'estimated', media_cost: 'unknown' });
+        expect(estimate).toMatchObject({ basis: 'estimated', media_cost: 'estimated' });
         expect(estimate.input_tokens).toBeGreaterThan('callingresult-uniquedraft-unique'.length);
+    });
+    it.each([
+        ['openai/gpt-4o', 1024, 1024, 765],
+        ['openai/gpt-4.1-mini', 1024, 1024, 1659],
+        ['anthropic/claude-sonnet-4.5', 1000, 1000, 1296],
+        ['anthropic/claude-opus-4.7', 1920, 1080, 2691],
+        ['unknown-model', 1024, 1024, 1200],
+        ['openai/gpt-4o', undefined, undefined, 1200],
+    ] as const)('estimates image geometry for %s without counting encoded bytes', async (model, width, height, expected) => {
+        const estimate = await estimateChatRequest({ model, countText: async () => 0, messages: [{ role: 'user', content: [
+            { type: 'image_url', width, height, image_url: { url: 'data:image/png;base64,' + 'a'.repeat(100000) } },
+        ] }] });
+        expect(estimate).toEqual({ input_tokens: expected, basis: 'estimated', media_cost: 'estimated' });
+    });
+    it('keeps unmeasured PDF cost unknown', async () => {
+        expect(await estimateChatRequest({ countText: async () => 0, messages: [{ role: 'user', content: [{ type: 'file' }] }] }))
+            .toEqual({ input_tokens: 0, basis: 'estimated', media_cost: 'unknown' });
     });
 });

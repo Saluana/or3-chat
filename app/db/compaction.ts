@@ -1,4 +1,5 @@
 import Ajv from 'ajv';
+import { getKvRecordByName, setKvByName } from './kv';
 import { getTextFromContent } from '../utils/chat/messages';
 import { getDb, getWorkspaceGeneration, type Or3DB } from './client';
 import { MessageSchema, ThreadSchema, type Message, type Thread } from './schema';
@@ -157,15 +158,41 @@ function eligibleSourceMessages(projection: ThreadProjection, anchor: Message): 
 
 /** Read-only menu inspection, without a selected model, operation IDs or writes. */
 export async function inspectCompactionSource(sourceThreadId: string): Promise<void> {
+    await inspectCompactionRevision(sourceThreadId, false);
+}
+async function inspectCompactionRevision(sourceThreadId: string, captureRevision = true): Promise<string> {
     const db = getDb(); const generation = getWorkspaceGeneration();
-    await db.transaction('r', ['threads', 'messages'], async () => {
+    const revision = await db.transaction('r', ['threads', 'messages'], async () => {
         const projection = await resolveThreadProjection(sourceThreadId, db);
         const anchor = projection.segments.at(-1)?.visible.at(-1);
         if (!anchor) throw new CompactionError('not_eligible', 'This conversation has no local persisted anchor.');
         eligibleSourceMessages(projection, anchor);
+        return captureRevision ? stable(projection.segments.map(segment => ({ thread: segment.thread, rows: segment.rows }))) : '';
     });
     if (getDb() !== db || getWorkspaceGeneration() !== generation)
         throw new CompactionError('stale_source', 'Workspace changed while checking this conversation.');
+    if (!captureRevision) return '';
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(revision));
+    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/** Durable CAS claim before paid work; one bounded record per workspace conversation. */
+export async function claimAutomaticCompaction(sourceThreadId: string, isCurrent: () => boolean): Promise<boolean> {
+    const db = getDb(); const generation = getWorkspaceGeneration();
+    const valid = () => getDb() === db && getWorkspaceGeneration() === generation && isCurrent();
+    const revision = await inspectCompactionRevision(sourceThreadId);
+    if (!valid()) return false;
+    const name = 'compaction:auto-attempt:' + encodeURIComponent(sourceThreadId);
+    const saved = await getKvRecordByName(name, db);
+    if (saved.row && !saved.row.deleted && saved.row.value === revision) return false;
+    try {
+        await setKvByName(name, revision, db, { ifClock: saved.revision, isValid: valid });
+        return valid();
+    } catch (error) {
+        // A competing tab or a revoked workspace must never start paid work.
+        if (!valid() || (error as { rpcCode?: string }).rpcCode === 'conflict') return false;
+        throw error;
+    }
 }
 
 /** Checks the host-owned operation identity before any auxiliary request is spent. */
