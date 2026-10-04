@@ -32,7 +32,7 @@ import { createGunzip } from 'node:zlib';
 const execFile = promisify(execFileCallback);
 const PACKAGE_ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
 
-export const PACKAGE_VERSION = '0.1.73';
+export const PACKAGE_VERSION = '0.1.74';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 /** Schema this bridge release writes by default; schema 2 is opt-in metadata. */
@@ -5424,7 +5424,7 @@ async function verificationFetch(url: URL, init: RequestInit = {}) {
 async function verificationJson(
   baseUrl: URL,
   path: string,
-  options: { body?: unknown; cookie?: string; method?: 'GET' | 'POST' } = {},
+  options: { body?: unknown; cookie?: string; method?: 'GET' | 'POST'; allowStorageDeletionDeferral?: boolean } = {},
 ) {
   const method = options.method ?? (options.body === undefined ? 'GET' : 'POST');
   const response = await verificationFetch(new URL(path, baseUrl), {
@@ -5438,7 +5438,16 @@ async function verificationJson(
     ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
   });
   if (response.status !== 200) {
-    const detail = (await response.text().catch(() => '')).slice(0, 300);
+    const responseText = await response.text().catch(() => '');
+    const detail = responseText.slice(0, 300);
+    if (options.allowStorageDeletionDeferral && path === '/api/storage/delete' && response.status === 503) {
+      let failure: unknown;
+      try { failure = JSON.parse(responseText); } catch { /* Unexpected responses remain failures. */ }
+      if (failure && typeof failure === 'object' && 'statusMessage' in failure
+          && failure.statusMessage === 'Provider-owned deletion coordination is required') {
+        return { deletionDeferred: true };
+      }
+    }
     throw new Error(`${response.url} returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`);
   }
   const value: unknown = await response.json();
@@ -5538,6 +5547,7 @@ async function verifyPublicApplication(baseUrl: URL, credentials: { email: strin
     const hash = `sha256:${createHash('sha256').update(probeBytes).digest('hex')}`;
     let storageId: string | undefined;
     let metadataAttempted = false;
+    let physicalCleanupDeferred = false;
     try {
       const presign = await verificationJson(baseUrl, '/api/storage/presign-upload', {
         cookie,
@@ -5558,6 +5568,8 @@ async function verifyPublicApplication(baseUrl: URL, credentials: { email: strin
         body: probeBytes,
       });
       if (!upload.ok) throw new Error(`Filesystem verification upload returned HTTP ${upload.status}.`);
+      // Commit can create canonical metadata even if its response or the later sync fails.
+      metadataAttempted = true;
       await verificationJson(baseUrl, '/api/storage/commit', {
         cookie,
         body: {
@@ -5573,7 +5585,6 @@ async function verifyPublicApplication(baseUrl: URL, credentials: { email: strin
       });
       const metadataCreatedAt = Date.now();
       const metadataOpId = randomUUID();
-      metadataAttempted = true;
       const pushed = await verificationJson(baseUrl, '/api/sync/push', {
         cookie,
         body: {
@@ -5621,45 +5632,45 @@ async function verifyPublicApplication(baseUrl: URL, credentials: { email: strin
       }
     } finally {
       if (storageId) {
-        try {
-          await verificationJson(baseUrl, '/api/storage/delete', {
+        // Canonical tombstoning must succeed before requesting any physical deletion.
+        if (metadataAttempted) {
+          const metadataDeleteAt = Date.now();
+          const metadataDeleteOpId = randomUUID();
+          const deleted = await verificationJson(baseUrl, '/api/sync/push', {
             cookie,
-            body: { workspace_id: workspaceId, hash, storage_id: storageId },
+            body: {
+              scope: { workspaceId },
+              ops: [{
+                id: `or3-verification-${metadataDeleteOpId}`,
+                tableName: 'file_meta',
+                operation: 'delete',
+                pk: hash,
+                payload: { hash },
+                stamp: {
+                  deviceId: 'or3-cloud-verification',
+                  opId: metadataDeleteOpId,
+                  hlc: `${String(metadataDeleteAt).padStart(13, '0')}:0000:or3-cloud-verification`,
+                  clock: metadataDeleteAt,
+                },
+                createdAt: metadataDeleteAt,
+                attempts: 0,
+                status: 'pending',
+              }],
+            },
           });
-        } finally {
-          if (metadataAttempted) {
-            const metadataDeleteAt = Date.now();
-            const metadataDeleteOpId = randomUUID();
-            const deleted = await verificationJson(baseUrl, '/api/sync/push', {
-              cookie,
-              body: {
-                scope: { workspaceId },
-                ops: [{
-                  id: `or3-verification-${metadataDeleteOpId}`,
-                  tableName: 'file_meta',
-                  operation: 'delete',
-                  pk: hash,
-                  payload: { hash },
-                  stamp: {
-                    deviceId: 'or3-cloud-verification',
-                    opId: metadataDeleteOpId,
-                    hlc: `${String(metadataDeleteAt).padStart(13, '0')}:0000:or3-cloud-verification`,
-                    clock: metadataDeleteAt,
-                  },
-                  createdAt: metadataDeleteAt,
-                  attempts: 0,
-                  status: 'pending',
-                }],
-              },
-            });
-            if (deleted.results?.[0]?.success !== true) {
-              throw new Error(`Filesystem verification metadata cleanup failed: ${JSON.stringify(deleted)}`);
-            }
+          if (deleted.results?.[0]?.success !== true) {
+            throw new Error(`Filesystem verification metadata cleanup failed: ${JSON.stringify(deleted)}`);
           }
         }
+        const deletion = await verificationJson(baseUrl, '/api/storage/delete', {
+          cookie,
+          body: { workspace_id: workspaceId, hash, storage_id: storageId },
+          allowStorageDeletionDeferral: true,
+        });
+        physicalCleanupDeferred = deletion.deletionDeferred === true;
       }
     }
-    return health;
+    return { ...health, physicalCleanupDeferred };
   } finally {
     await verificationJson(baseUrl, '/api/basic-auth/sign-out', {
       cookie,
@@ -5753,7 +5764,7 @@ async function verifyCommand(directory: string, flags: Flags, positionals: strin
       ? `https://${loaded.state.domain}`
       : `http://127.0.0.1:${loaded.state.port}`,
   );
-  await verifyPublicApplication(baseUrl, await verificationCredentials(loaded.directory, flags, loaded.env));
+  const verification = await verifyPublicApplication(baseUrl, await verificationCredentials(loaded.directory, flags, loaded.env));
   const databaseCheck = await run('docker', [
     ...composeArgs(loaded.directory, loaded.state.mode, ['exec', '-T', 'or3', ...containerNodeCommand(VERIFY_DATABASES_SCRIPT)]),
   ], loaded.directory);
@@ -5774,7 +5785,9 @@ async function verifyCommand(directory: string, flags: Flags, positionals: strin
   console.log(`✓ OR3 ${loaded.state.appVersion} image digest matches managed state`);
   console.log(`✓ ${baseUrl.origin} root and deep health return HTTP 200 without redirects`);
   console.log('✓ Basic Auth sign-in, session hydration, and SQLite sync pull passed');
-  console.log('✓ Filesystem storage write/read/delete probe passed');
+  console.log(verification.physicalCleanupDeferred
+    ? '✓ Filesystem storage write/read and canonical metadata cleanup passed; physical cleanup deferred by provider retention policy'
+    : '✓ Filesystem storage write/read and canonical/physical cleanup passed');
   console.log('✓ auth.sqlite and sync.sqlite quick_check passed with managed ownership');
   console.log('✓ Recent bounded logs contain no fatal, panic, unhandled, or OOM events');
   console.log('OR3 production verification passed.');
