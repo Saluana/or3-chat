@@ -25,12 +25,17 @@ import { err } from '~/utils/errors';
  * @see state/global for the reactive state singleton
  */
 import { computed } from 'vue';
-import { getDb } from '~/db/client';
+import { getDb, getWorkspaceGeneration } from '~/db/client';
 import { kv } from '~/db';
 import { state } from '~/state/global';
 
 let kvHydrationStarted = false;
 let kvHydrationGeneration = 0;
+
+/** Capture credential changes so delayed logout work can reject a newer key. */
+export function getUserApiKeyGeneration(): number {
+    return kvHydrationGeneration;
+}
 
 const OPENROUTER_KEY_PREFIX = 'sk-or-';
 
@@ -65,8 +70,14 @@ export async function persistUserApiKey(key: string): Promise<void> {
     }
     // Invalidate an in-flight initial read so an older persisted value cannot
     // overwrite the key the user just supplied.
-    kvHydrationGeneration += 1;
-    await kv.set('openrouter_api_key', trimmed);
+    const generation = ++kvHydrationGeneration;
+    const workspaceGeneration = getWorkspaceGeneration();
+    const db = getDb();
+    const isCurrent = () =>
+        generation === kvHydrationGeneration &&
+        workspaceGeneration === getWorkspaceGeneration();
+    await kv.set('openrouter_api_key', trimmed, db, { isValid: isCurrent });
+    if (!isCurrent()) return;
     state.value.openrouterKey = trimmed;
     try {
         window.dispatchEvent(new CustomEvent('openrouter:connected'));
@@ -87,6 +98,7 @@ function hasKvTable(db: { tables?: Array<{ name?: string }> }): boolean {
 
 export async function hydrateUserApiKeyFromKv(): Promise<void> {
     const hydrationGeneration = kvHydrationGeneration;
+    const workspaceGeneration = getWorkspaceGeneration();
     let db: ReturnType<typeof getDb>;
     try {
         db = getDb();
@@ -99,7 +111,12 @@ export async function hydrateUserApiKeyFromKv(): Promise<void> {
     try {
         const kv = db.table<KvApiKeyRow, string>('kv');
         const rec = await kv.where('name').equals('openrouter_api_key').first();
-        if (hydrationGeneration !== kvHydrationGeneration) return;
+        if (
+            hydrationGeneration !== kvHydrationGeneration ||
+            workspaceGeneration !== getWorkspaceGeneration()
+        ) {
+            return;
+        }
         if (rec && typeof rec.value === 'string') {
             state.value.openrouterKey = rec.value;
         } else if (rec && rec.value == null) {
@@ -120,9 +137,15 @@ export async function hydrateUserApiKeyFromKv(): Promise<void> {
  * previously-started hydration read from restoring the key after logout.
  */
 export async function clearPersistedUserApiKey(): Promise<void> {
-    kvHydrationGeneration += 1;
+    const generation = ++kvHydrationGeneration;
     state.value.openrouterKey = null;
-    await kv.delete('openrouter_api_key');
+    const workspaceGeneration = getWorkspaceGeneration();
+    const db = getDb();
+    await kv.delete('openrouter_api_key', db, {
+        isValid: () =>
+            generation === kvHydrationGeneration &&
+            workspaceGeneration === getWorkspaceGeneration(),
+    });
 }
 
 /**

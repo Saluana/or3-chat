@@ -602,7 +602,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Cloud identity, workspace permissions, session refresh and rate admission, and separate OpenRouter and deployment-admin credentials."
+                    "summary": "Cloud identity, workspace permissions, session refresh and rate admission, and OpenRouter credential lifecycle across logout and account changes."
                 },
                 {
                     "name": "background-execution.md",

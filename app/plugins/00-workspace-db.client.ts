@@ -6,6 +6,7 @@ import { useWorkspaceManager } from '~/composables/workspace/useWorkspaceManager
 import { cleanupCursorManager } from '~/core/sync/cursor-manager';
 import { cleanupHookBridge } from '~/core/sync/hook-bridge';
 import { cleanupSubscriptionManager } from '~/core/sync/subscription-manager';
+import { clearPersistedUserApiKey } from '~/core/auth/useUserApiKey';
 import { logoutCleanup } from '~/utils/logout-cleanup';
 import { stopWorkspacePluginsAndAwait } from '~/composables/plugins/workspace-plugin-coordinator';
 import { abortBackgroundClientToolDispatchesForWorkspace } from '~/utils/chat/useAi-internal/backgroundJobs';
@@ -30,7 +31,11 @@ export default defineNuxtPlugin(async () => {
     const nuxtApp = useNuxtApp();
 
     await refresh();
-    if (await shouldRunLogoutCleanup(data.value?.session?.authenticated)) {
+    const initialSession = data.value?.session;
+    if (
+        (await shouldRunLogoutCleanup(initialSession?.authenticated)) &&
+        data.value?.session === initialSession
+    ) {
         const cleanupOptions: {
             preserveExternalAgentCredentials: boolean;
             preserveOpenRouterPkce?: boolean;
@@ -41,12 +46,32 @@ export default defineNuxtPlugin(async () => {
         if (window.location.pathname === '/openrouter-callback') {
             cleanupOptions.preserveOpenRouterPkce = true;
         }
-        await stopWorkspacePluginsAndAwait();
-        await logoutCleanup(
+        const cleanup = logoutCleanup(
             nuxtApp as Parameters<typeof logoutCleanup>[0],
             cleanupOptions
         );
+        await stopWorkspacePluginsAndAwait();
+        await cleanup;
     }
+
+    // Register before workspace management so an account change captures the
+    // previous DB and clears memory synchronously, even without a signed-out
+    // intermediate session. Same-user workspace switches retain the key.
+    watch(
+        () => data.value?.session,
+        (newSession, oldSession) => {
+            if (
+                oldSession?.authenticated &&
+                newSession?.authenticated &&
+                oldSession.user?.id !== newSession.user?.id
+            ) {
+                void clearPersistedUserApiKey().catch(() => {
+                    // Best-effort; memory and pending hydration are cleared first.
+                });
+            }
+        },
+        { flush: 'sync' }
+    );
 
     // Initialize the unified workspace manager
     // This will handle setting the active workspace DB automatically
@@ -74,10 +99,12 @@ export default defineNuxtPlugin(async () => {
             if (
                 oldSession?.authenticated &&
                 !newSession?.authenticated &&
-                (await shouldRunLogoutCleanup(newSession?.authenticated))
+                (await shouldRunLogoutCleanup(newSession?.authenticated)) &&
+                data.value?.session === newSession
             ) {
+                const cleanup = logoutCleanup(nuxtApp as Parameters<typeof logoutCleanup>[0]);
                 await stopWorkspacePluginsAndAwait();
-                await logoutCleanup(nuxtApp as Parameters<typeof logoutCleanup>[0]);
+                await cleanup;
             }
         }
     );

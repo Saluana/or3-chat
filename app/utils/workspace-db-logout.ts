@@ -26,7 +26,10 @@ const LOGOUT_POLICY_PREFIX = 'workspace.logout.policy.';
  * Purpose:
  * Deletes workspace DBs that are configured to be cleared on logout.
  */
-export async function clearWorkspaceDbsOnLogout(): Promise<void> {
+export async function clearWorkspaceDbsOnLogout(
+    isCurrent: () => boolean = () => true
+): Promise<void> {
+    if (!isCurrent()) return;
     const baseDb = getDefaultDb();
     let names: string[] = [];
     try {
@@ -48,6 +51,7 @@ export async function clearWorkspaceDbsOnLogout(): Promise<void> {
         }
     }
 
+    if (!isCurrent()) return;
     const workspaceDbs = names.filter((name) =>
         name.startsWith(WORKSPACE_DB_PREFIX)
     );
@@ -60,7 +64,7 @@ export async function clearWorkspaceDbsOnLogout(): Promise<void> {
                 `${LOGOUT_POLICY_PREFIX}${workspaceId}`,
                 baseDb
             );
-            if (policy?.value !== 'clear') return;
+            if (!isCurrent() || policy?.value !== 'clear') return;
             await Dexie.delete(name);
         })
     );

@@ -55,6 +55,6 @@ describe('useOpenRouterAuth', () => {
 
         resolveDelete();
         await logout;
-        expect(kvDelete).toHaveBeenCalledWith('openrouter_api_key');
+        expect(kvDelete).toHaveBeenCalledWith('openrouter_api_key', expect.anything(), { isValid: expect.any(Function) });
     });
 });
