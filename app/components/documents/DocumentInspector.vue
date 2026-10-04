@@ -66,6 +66,7 @@
                 <DocumentHistoryPanel
                     :document-id="documentId"
                     :create-checkpoint="createCheckpoint"
+                    :read-only="readOnly"
                     @restore="(revision) => $emit('restore', revision)"
                 />
                 <template #fallback><div class="panel-loading">Loading revision history…</div></template>
@@ -150,6 +151,7 @@ const props = defineProps<{
     editor: Editor | null;
     documentId: string;
     createCheckpoint: () => Promise<void>;
+    readOnly?: boolean;
     outline: readonly DocumentOutlineItem[];
     activeOutlineId?: string;
     stats: DocumentStats;

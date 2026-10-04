@@ -4,6 +4,8 @@ import { normalizeMessageContent, tiptapToPlainText } from '~/core/search/comman
 import { settleWorkspaceDocumentEditors } from '~/composables/documents/useDocumentEditorSessions';
 import type { WorkspaceOperationScope } from './workspace-access';
 import type { ToolExecutionContext } from './types';
+import { FILE_CATALOG_POST_TYPE, isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
+import { parseFileHashes } from '~/db/files-util';
 
 export type WorkspaceItemKind = 'chat' | 'document' | 'project' | 'file';
 export interface WorkspaceItemRef { kind: WorkspaceItemKind; id: string }
@@ -27,12 +29,28 @@ export async function readWorkspaceItem(scope: WorkspaceOperationScope, item: Wo
     source: WorkspaceSource; content: string; row: Post | Project | Thread; messages?: Message[];
 }> {
     scope.assertCurrent();
+    if (item.kind === 'file') {
+        const post = await scope.db.posts.get(item.id);
+        scope.assertCurrent();
+        if (!post || post.postType !== FILE_CATALOG_POST_TYPE || !isVisibleWorkspaceItem(post)) throw new Error('That saved file is unavailable.');
+        const hashes = parseFileHashes(post.file_hashes);
+        const meta = hashes.length === 1 ? await scope.db.file_meta.get(hashes[0]!) : undefined;
+        scope.assertCurrent();
+        if (!meta || meta.deleted) throw new Error('That saved file is unavailable.');
+        const revision = await workspaceRevision(post);
+        scope.assertCurrent();
+        if (JSON.stringify(await scope.db.posts.get(item.id)) !== JSON.stringify(post)) throw new Error('This source changed. Read it again.');
+        const currentMeta = await scope.db.file_meta.get(meta.hash);
+        if (!currentMeta || currentMeta.deleted) throw new Error('That saved file is unavailable.');
+        scope.assertCurrent();
+        return { source: { ...item, title: post.title, revision }, content: post.content, row: post };
+    }
     if (item.kind === 'document') {
         // Refuse disagreement through the existing session owner; no arbitrary editor selection.
         await settleWorkspaceDocumentEditors(item.id, scope.db);
         scope.assertCurrent();
         const post = await scope.db.posts.get(item.id);
-        if (!post || post.deleted || post.postType !== 'doc') throw new Error('That document is unavailable.');
+        if (!post || !isVisibleWorkspaceItem(post) || post.postType !== 'doc') throw new Error('That document is unavailable.');
         const revision = await workspaceRevision(post);
         scope.assertCurrent();
         if (JSON.stringify(await scope.db.posts.get(item.id)) !== JSON.stringify(post)) throw new Error('This source changed. Read it again.');
@@ -89,6 +107,10 @@ export async function readWorkspaceItem(scope: WorkspaceOperationScope, item: Wo
 /** Continuations are bound to identity and revision; they cannot change scope. */
 export async function workspaceRead(scope: WorkspaceOperationScope, item: WorkspaceItemRef, continuation?: string, context?: ToolExecutionContext) {
     const loaded = await readWorkspaceItem(scope, item);
+    if (item.kind === 'file') {
+        const { readWorkspaceFilePage } = await import('./workspace-file-read');
+        return readWorkspaceFilePage(scope, loaded.row as Post, loaded.source, continuation);
+    }
     if (item.kind === 'document') {
         const { readWorkspaceDocumentPage } = await import('./workspace-document-read');
         return readWorkspaceDocumentPage(scope, { row: loaded.row as Post, source: loaded.source }, continuation, context);

@@ -14,6 +14,8 @@ The sidebar shows an expand arrow only for chats with forks or compactions. Stan
 
 Hard deletion is refused while a retained child depends on the original. **Move to Trash** preserves that relationship. Historical retrieval never returns deleted text, and a missing original does not invalidate a saved summary.
 
+Database upgrades preserve the existing Files outbox index while adding lineage, history paging, and local request recovery indexes. Upgrading a compaction development database also retains these indexes without rewriting conversation rows or creating startup sync operations.
+
 If input and reply cannot fit, sending stops with `context_full`. Keep the draft, compact, edit it, or select another supported model. A locally blocked new request saves no new turn. An initial native rejection after local persistence keeps the saved turn; Retry can recover that same identity through its local checkpoint. Recovery repeats admission and does not repeat already-run request filters. A changed source or tool set requires explicit new preparation. Later tool-loop overflow preserves accepted results and stops before another provider request.
 
 **Inspect lossy send** is a separate explicit recovery for a locally blocked new request. Inspect the exact old turns proposed for omission, the resulting input/window estimate and reply allowance, then confirm that one request. Editing invalidates that decision. Saved history remains intact; the next ordinary send starts from the full saved projection. Ordinary sends, retries, continuation and tool loops do not implicitly shorten normal user context.

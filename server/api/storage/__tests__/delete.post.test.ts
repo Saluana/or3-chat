@@ -36,6 +36,10 @@ vi.mock('../../../storage/gateway/registry', () => ({
     getActiveStorageGatewayAdapter: getActiveStorageGatewayAdapterMock,
 }));
 
+const queryCanonicalStorageMock = vi.fn();
+const getActiveSyncGatewayAdapterMock = vi.fn();
+vi.mock('../../../sync/gateway/registry', () => ({getActiveSyncGatewayAdapter: getActiveSyncGatewayAdapterMock}));
+
 const event = { context: {}, node: { req: { headers: {} } } } as H3Event;
 
 async function handler() {
@@ -60,10 +64,48 @@ describe('POST /api/storage/delete', () => {
         isSsrAuthEnabledMock.mockReset().mockReturnValue(true);
         isStorageEnabledMock.mockReset().mockReturnValue(true);
         deleteObjectMock.mockReset().mockResolvedValue(undefined);
+        queryCanonicalStorageMock.mockReset().mockResolvedValue({items: [], hasMore: false});
+        getActiveSyncGatewayAdapterMock.mockReset().mockReturnValue({id: 'test', queryCanonicalStorage: queryCanonicalStorageMock});
         getActiveStorageGatewayAdapterMock.mockReset().mockReturnValue({
             id: 'test',
+            deletionCoordination: { version: 1, syncProviderId: 'test' },
             deleteObject: deleteObjectMock,
         });
+    });
+
+    it.each([undefined, { version: 1, syncProviderId: 'another-store' }])('fails closed without matching provider-owned deletion coordination: %j', async coordination => {
+        getActiveStorageGatewayAdapterMock.mockReturnValue({ id: 'legacy', deleteObject: deleteObjectMock, deletionCoordination: coordination });
+        const route = await handler();
+        await expect(route(event)).rejects.toMatchObject({ statusCode: 503 });
+        expect(deleteObjectMock).not.toHaveBeenCalled();
+    });
+
+    it.each(['live_metadata', 'reference_edges'] as const)('protects retained %s before calling a legacy storage adapter', async kind => {
+        queryCanonicalStorageMock.mockImplementation(async (_event, request) => ({items: request.kind === kind ? [{hash: request.hash}] : [], hasMore: false}));
+        const route = await handler();
+        await expect(route(event)).rejects.toMatchObject({statusCode: 409});
+        expect(deleteObjectMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses deletion without canonical storage queries', async () => {
+        getActiveSyncGatewayAdapterMock.mockReturnValue({});
+        const route = await handler();
+        await expect(route(event)).rejects.toMatchObject({statusCode: 503});
+        expect(deleteObjectMock).not.toHaveBeenCalled();
+    });
+
+    it('does not dispatch after a canonical read fails', async () => {
+        queryCanonicalStorageMock.mockRejectedValue(new Error('Canonical unavailable'));
+        const route = await handler();
+        await expect(route(event)).rejects.toThrow('Canonical unavailable');
+        expect(deleteObjectMock).not.toHaveBeenCalled();
+    });
+
+    it('does not dispatch when a canonical page is incomplete', async () => {
+        queryCanonicalStorageMock.mockResolvedValue({items: [], hasMore: true});
+        const route = await handler();
+        await expect(route(event)).rejects.toMatchObject({statusCode: 502});
+        expect(deleteObjectMock).not.toHaveBeenCalled();
     });
 
     it('rejects a mutation guard failure before parsing or deleting an object', async () => {

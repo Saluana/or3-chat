@@ -47,6 +47,18 @@ import {
     normalizeFileMimeType,
     type FileKind,
 } from '~~/shared/files/file-kind';
+import { parseDocumentFileHashes } from '~/utils/documents/document-content';
+
+/** Derived counts cannot authorize deletion; live ownership rows are authoritative. */
+async function assertFilesUnreferenced(db: ReturnType<typeof getDb>, hashes: string[]): Promise<void> {
+    const targets = new Set(hashes);
+    // Ownership includes every persisted hash, even beyond today's message limit.
+    const retained = (row: { deleted?: boolean; file_hashes?: string | null }) =>
+        !row.deleted && parseDocumentFileHashes(row.file_hashes).some(hash => targets.has(hash));
+    if (await db.messages.filter(retained).first() || await db.posts.filter(retained).first()) {
+        throw new Error('This file is still referenced by retained workspace content.');
+    }
+}
 
 // Default max file size (20MB) - can be overridden by config
 const DEFAULT_MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
@@ -230,7 +242,16 @@ export async function createOrRefFile(
     const existing = await db.file_meta.get(hash);
     assertCurrentDb();
     if (existing) {
-        const incremented = await changeRefCount(hash, 1, db);
+        // The supplied bytes have already been hashed. Metadata may have arrived
+        // through sync before its original; preserve the original atomically with intake.
+        const incremented = await db.transaction('rw',
+            getWriteTxTableNames(db, 'file_meta', { include: ['file_blobs'] }), async () => {
+                assertCurrentDb();
+                if (!(await db.file_blobs.get(hash))) await db.file_blobs.put({ hash, blob: file });
+                const incremented = await changeRefCount(hash, 1, db);
+                assertCurrentDb();
+                return incremented;
+            });
         if (incremented) {
             assertCurrentDb();
             if (import.meta.dev) {
@@ -409,10 +430,10 @@ export async function getFileMeta(hash: string): Promise<FileMeta | undefined> {
  * Non-Goals:
  * - Does not guarantee a remote download.
  */
-export async function getFileBlob(hash: string): Promise<Blob | undefined> {
-    const row = await getDb().file_blobs.get(hash);
+export async function getFileBlob(hash: string, db = getDb()): Promise<Blob | undefined> {
+    const row = await db.file_blobs.get(hash);
     if (row?.blob) return row.blob;
-    return ensureFileBlob(hash);
+    return ensureFileBlob(hash, db);
 }
 
 /**
@@ -429,9 +450,9 @@ export async function getFileBlob(hash: string): Promise<Blob | undefined> {
  * - Does not force a download when the queue is unavailable.
  */
 export async function ensureFileBlob(
-    hash: string
+    hash: string,
+    db = getDb()
 ): Promise<Blob | undefined> {
-    const db = getDb();
     const row = await db.file_blobs.get(hash);
     if (row?.blob) return row.blob;
     if (!import.meta.client) return undefined;
@@ -477,12 +498,13 @@ export async function softDeleteFile(hash: string): Promise<void> {
     const db = getDb();
     await db.transaction(
         'rw',
-        getWriteTxTableNames(db, 'file_meta', { includeTombstones: true }),
+        getWriteTxTableNames(db, 'file_meta', { include: ['posts', 'messages'], includeTombstones: true }),
         async () => {
         const meta = await db.file_meta.get(hash);
         if (!meta) return;
         const payload = createFileDeletePayload(meta, hash);
         await hooks.doAction('db.files.delete:action:soft:before', payload);
+        await assertFilesUnreferenced(db, [hash]);
         const now = nowSec();
         await db.file_meta.put({
             ...meta,
@@ -518,7 +540,7 @@ export async function softDeleteMany(hashes: string[]): Promise<string[]> {
     const db = getDb();
     return db.transaction(
         'rw',
-        getWriteTxTableNames(db, 'file_meta', { includeTombstones: true }),
+        getWriteTxTableNames(db, 'file_meta', { include: ['posts', 'messages'], includeTombstones: true }),
         async () => {
         const metas = await db.file_meta.bulkGet(unique);
         const updates: FileMeta[] = [];
@@ -544,6 +566,7 @@ export async function softDeleteMany(hashes: string[]): Promise<string[]> {
             removed.push(hash);
         }
 
+        await assertFilesUnreferenced(db, removed);
         if (updates.length > 0) {
             await db.file_meta.bulkPut(updates);
         }
@@ -634,7 +657,7 @@ export async function hardDeleteMany(hashes: string[]): Promise<string[]> {
     await db.transaction(
         'rw',
         getWriteTxTableNames(db, 'file_meta', {
-            include: ['file_blobs'],
+            include: ['file_blobs', 'posts', 'messages'],
             includeTombstones: true,
         }),
         async () => {
@@ -644,6 +667,7 @@ export async function hardDeleteMany(hashes: string[]): Promise<string[]> {
             const meta = metas[i];
             const payload = createFileDeletePayload(meta ?? undefined, hash);
             await hooks.doAction('db.files.delete:action:hard:before', payload);
+            await assertFilesUnreferenced(db, [hash]);
             await db.file_meta.delete(hash);
             await db.file_blobs.delete(hash);
             await hooks.doAction('db.files.delete:action:hard:after', payload);

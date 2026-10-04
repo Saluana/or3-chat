@@ -17,6 +17,7 @@ import { resolveSessionContext } from '../../../auth/session';
 import { requireCan } from '../../../auth/can';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 import { isStorageEnabled } from '../../../utils/storage/is-storage-enabled';
+import { getActiveSyncGatewayAdapter } from '../../../sync/gateway/registry';
 import { getActiveStorageGatewayAdapter } from '../../../storage/gateway/registry';
 import {
     DEFAULT_STORAGE_GC_COOLDOWN_MS,
@@ -128,6 +129,10 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 501, statusMessage: 'GC not supported by adapter' });
     }
 
+    if (adapter.deletionCoordination?.version !== 1
+        || adapter.deletionCoordination.syncProviderId !== getActiveSyncGatewayAdapter()?.id) {
+        return { deleted_count: 0, status: 'disabled', reason: 'deletion_coordination_required' };
+    }
     const retentionSeconds = body.data.retention_seconds ?? defaultRetentionSeconds;
     const result = await adapter.gc(event, {
         workspace_id: body.data.workspace_id,

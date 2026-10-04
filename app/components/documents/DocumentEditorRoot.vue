@@ -1,5 +1,6 @@
 <template>
     <div ref="rootElement" v-theme="'document.editor'" class="document-editor-root" data-context="document" :inert="externalWrite">
+        <p v-if="itemReadOnly" role="status">This document is read-only. Restore it from Files Trash to edit it.</p>
         <div
             v-theme="'document.toolbar'"
             class="editor-toolbar document-editor-toolbar"
@@ -8,6 +9,7 @@
                 'editor-toolbar--mobile': isMobile,
             }"
             role="toolbar"
+            :inert="itemReadOnly"
             aria-label="Document formatting"
         >
             <div class="toolbar-primary-rail">
@@ -165,7 +167,7 @@
         <div class="editor-layout">
             <main ref="editorScroll" class="editor-scroll" @mousedown="focusCanvas">
                 <article v-theme="'document.canvas'" class="document-canvas">
-                    <UTextarea id="document-title" :model-value="titleDraft" name="document-title" class="document-title-field" :rows="1" :maxrows="3" autoresize variant="none" maxlength="300" placeholder="Untitled" aria-label="Document title" @update:model-value="onTitleInput" />
+                    <UTextarea :disabled="itemReadOnly" id="document-title" :model-value="titleDraft" name="document-title" class="document-title-field" :rows="1" :maxrows="3" autoresize variant="none" maxlength="300" placeholder="Untitled" aria-label="Document title" @update:model-value="onTitleInput" />
                     <p class="document-byline">
                         <span>{{ stats.words.toLocaleString() }} words</span>
                         <span>{{ stats.readingMinutes }} min read</span>
@@ -208,7 +210,7 @@
                             @submit="runAi"
                             @estimate="estimateAi"
                             @accept="acceptAi"
-                            @accept-hunk="(id) => void ai.acceptHunk(id)"
+                            @accept-hunk="(id) => !itemReadOnly && !externalWrite && void ai.acceptHunk(id)"
                             @discard-hunk="ai.discardHunk"
                             @focus-hunk="ai.focusHunk"
                             @focus-next-hunk="ai.focusNextHunk(1)"
@@ -235,7 +237,7 @@
                 name="document-inspector"
                 :css="inspectorTransitionsReady"
             >
-                <DocumentInspector v-if="inspectorOpen" :editor="editor" :document-id="documentId" :create-checkpoint="createManualCheckpoint" :outline="outline" :active-outline-id="activeOutlineId" :stats="stats" :saved-at="state.record?.updated_at" :plugin-panels="inspectorPanels" :initial-tab="inspectorTab" @update:active-tab="inspectorTab = $event" @close="inspectorOpen = false" @outline-select="onOutlineSelect" @restore="onInspectorRestore" />
+                <DocumentInspector v-if="inspectorOpen" :editor="editor" :document-id="documentId" :create-checkpoint="createManualCheckpoint" :read-only="itemReadOnly" :outline="outline" :active-outline-id="activeOutlineId" :stats="stats" :saved-at="state.record?.updated_at" :plugin-panels="inspectorPanels" :initial-tab="inspectorTab" @update:active-tab="inspectorTab = $event" @close="inspectorOpen = false" @outline-select="onOutlineSelect" @restore="onInspectorRestore" />
             </Transition>
         </div>
 
@@ -281,6 +283,7 @@
 </template>
 
 <script setup lang="ts">
+import { shouldLockDocumentAiEditor } from '~/composables/documents/documentAiLifecycle';
 import AppModal from '~/components/ui/AppModal.vue';
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRef, watch } from 'vue';
 import { onClickOutside } from '@vueuse/core';
@@ -295,6 +298,8 @@ import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import AutocompleteState from '~/plugins/EditorAutocomplete/state';
 import { acceptCommittedDocument, flush, loadDocument, setDocumentContent, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { getDb, subscribeActiveWorkspaceDb } from '~/db/client';
+import { liveQuery } from 'dexie';
+import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 import {
     registerDocumentEditorSession,
     type DocumentEditorFocusedRegion,
@@ -424,6 +429,16 @@ const inspectorTransitionsReady = ref(false);
 let suppressFindAutofocus = false;
 let loadedDocumentId: string | undefined;
 let loadGeneration = 0;
+const itemReadOnly = ref(false);
+let itemSubscription: { unsubscribe(): void } | undefined;
+watch([documentId, editorDb], ([id, db]) => {
+    itemSubscription?.unsubscribe();
+    itemSubscription = liveQuery(() => db.posts.get(id)).subscribe({ next: row => {
+        if (didUnmount || editorDb.value !== db || props.documentId !== id) return;
+        itemReadOnly.value = !row || !isVisibleWorkspaceItem(row);
+        if (itemReadOnly.value) ai.abort();
+    } });
+}, { immediate: true });
 
 const pluginButtons = useEditorToolbarButtons(editor);
 const inspectorPanels = useEditorInspectorPanels();
@@ -431,6 +446,7 @@ const documentAiActions = useDocumentAiActions();
 const { outline, activeOutlineId, stats, scrollTo, setSerializedSize, refresh } = useDocumentInsights(editor);
 
 function captureContent(id = props.documentId, db = editorDb.value): void {
+    if (itemReadOnly.value) return;
     if (db !== editorDb.value || loadedDocumentId !== id) return;
     const current = editor.value;
     if (!current || current.isDestroyed) return;
@@ -465,10 +481,16 @@ const ai = useDocumentAiAgent({
     title: titleDraft,
     contentVersion,
     persistCurrent: () => ensureLocalDurability(),
+    readOnly: computed(() => itemReadOnly.value || externalWrite.value),
 });
 
+const editorLocked = computed(() => shouldLockDocumentAiEditor({
+    readOnly: itemReadOnly.value || externalWrite.value, status: ai.status.value, accepting: ai.accepting.value,
+}));
+watch([editor, editorLocked], () => editor.value?.setEditable(!editorLocked.value, false), { flush: 'sync' });
 const aiPanelState = computed(() => ({
     status: ai.status.value,
+    readOnly: itemReadOnly.value || externalWrite.value,
     error: ai.error.value,
     tokenEstimate: ai.tokenEstimate.value,
     proposal: ai.proposal.value,
@@ -560,6 +582,7 @@ function updateSelectionContext() {
 }
 
 function onEditorUpdate(payload?: { transaction?: { docChanged?: boolean } }) {
+    if (itemReadOnly.value) return;
     // Ignore soft updates (e.g. TipTap setEditable) that do not change the doc.
     if (payload?.transaction && payload.transaction.docChanged === false) return;
     contentVersion.value += 1;
@@ -784,7 +807,7 @@ function registerActiveSession(id: string): void {
             captureTimer = undefined;
             return () => {
                 externalWrite.value = false;
-                if (!didUnmount && editorDb.value === db && props.documentId === id) editor.value?.setEditable(true, false);
+                if (!didUnmount && editorDb.value === db && props.documentId === id) editor.value?.setEditable(!editorLocked.value, false);
             };
         },
         acceptExternalWrite: (row) => {
@@ -816,6 +839,7 @@ async function loadActiveDocument(id: string) {
         ? state.value.pendingContent : state.value.record?.content);
     contentVersion.value = 0;
     await makeEditor(isCurrent);
+    editor.value?.setEditable(!itemReadOnly.value, false);
     if (!isCurrent()) return;
     // Lazy extension loading can cross a committed Apply. Use the current origin buffer
     // before registering, then the session lease covers writes still in progress.
@@ -956,6 +980,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
     didUnmount = true;
     stopWorkspaceSubscription();
+    itemSubscription?.unsubscribe();
     paneResizeObserver?.disconnect();
     paneResizeObserver = undefined;
     ai.abort();
@@ -970,6 +995,7 @@ onBeforeUnmount(() => {
 });
 
 function onTitleInput(value: string | number | null) {
+    if (itemReadOnly.value) return;
     titleDraft.value = String(value ?? '');
     setDocumentTitle(props.documentId, titleDraft.value, editorDb.value);
 }
@@ -1440,6 +1466,7 @@ function toggleAutocomplete() {
 }
 
 async function runAi(payload: DocumentAiSubmission) {
+    if (itemReadOnly.value || externalWrite.value) return;
     try {
         await ai.submit(payload);
     } catch (caught) {
@@ -1447,9 +1474,11 @@ async function runAi(payload: DocumentAiSubmission) {
     }
 }
 async function estimateAi(payload: DocumentAiEstimateRequest) {
+    if (itemReadOnly.value || externalWrite.value) return;
     await ai.estimate(payload).catch(() => 0);
 }
 async function acceptAi() {
+    if (itemReadOnly.value || externalWrite.value) return;
     try {
         await ai.accept();
     } catch (caught) {

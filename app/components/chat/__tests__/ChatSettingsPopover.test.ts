@@ -148,17 +148,9 @@ describe('ChatSettingsPopover options layout', () => {
         }
 
         const wrapper = mountPopover();
-        const popover = wrapper.find('.chat-settings-popover').element as HTMLElement;
-        const animate = vi.fn(() => ({ cancel: vi.fn() } as unknown as Animation));
-        vi.spyOn(popover, 'getBoundingClientRect').mockImplementation(
-            () => ({
-                height:
-                    wrapper.find('.chat-settings-title').text() === 'Chat settings'
-                        ? 400
-                        : 700,
-            }) as DOMRect
-        );
-        Object.defineProperty(popover, 'animate', { configurable: true, value: animate });
+        expect(wrapper.find('.chat-settings-tool-category').exists()).toBe(false);
+        await wrapper.findAll('button').find(button => button.text().startsWith('Tools'))!.trigger('click');
+        expect(wrapper.find('.chat-settings-title').text()).toBe('Tools');
         const category = wrapper.find('.chat-settings-tool-category');
         expect(category.text()).toContain('Task list tools');
         expect(category.text()).toContain('11');
@@ -166,22 +158,15 @@ describe('ChatSettingsPopover options layout', () => {
         expect(wrapper.findAll('.chat-settings-tool-row')).toHaveLength(0);
 
         await category.trigger('click');
-        expect(animate).toHaveBeenNthCalledWith(
-            1,
-            [{ height: '400px' }, { height: '700px' }],
-            { duration: 190, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
-        );
         expect(wrapper.find('.chat-settings-title').text()).toBe('Task list tools');
         expect(wrapper.findAll('.chat-settings-tool-row')).toHaveLength(11);
         expect(wrapper.text()).toContain('search lists');
         expect(wrapper.find('.chat-settings-body').attributes('style')).toContain('display: none');
 
+        await wrapper.find('[aria-label="Back to tools"]').trigger('click');
+        expect(wrapper.find('.chat-settings-title').text()).toBe('Tools');
+        expect(wrapper.findAll('.chat-settings-tool-row')).toHaveLength(0);
         await wrapper.find('[aria-label="Back to chat settings"]').trigger('click');
-        expect(animate).toHaveBeenNthCalledWith(
-            2,
-            [{ height: '700px' }, { height: '400px' }],
-            { duration: 190, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
-        );
         expect(wrapper.find('.chat-settings-title').text()).toBe('Chat settings');
         expect(wrapper.findAll('.chat-settings-tool-row')).toHaveLength(0);
     });
@@ -215,6 +200,7 @@ describe('ChatSettingsPopover options layout', () => {
         } as RegisteredTool);
 
         const wrapper = mountPopover();
+        await wrapper.findAll('button').find(button => button.text().startsWith('Tools'))!.trigger('click');
         await wrapper.find('.chat-settings-tool-category').trigger('click');
         const allSwitch = wrapper.find('#chat-tools-all');
         expect(allSwitch.attributes('aria-checked')).toBe('false');

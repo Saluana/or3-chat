@@ -170,6 +170,22 @@
         @apply shadow-none;
     }
 
+    .page-link-btn {
+        border: 0 !important;
+        box-shadow: none !important;
+        background: transparent;
+        padding-inline: 12px;
+        gap: 12px;
+    }
+
+    .page-link-btn:hover {
+        background: var(--md-surface-hover);
+    }
+
+    .page-link-btn:active {
+        background: var(--md-surface-active);
+    }
+
     .unified-sb-item {
         @apply mx-1;
     }
@@ -897,11 +913,11 @@ html[data-theme='blank']
 
     html[data-theme="blank"] #top-nav
         .notification-bell-btn .iconify {
-        width: 24px !important;
-        height: 24px !important;
-        min-width: 24px;
-        min-height: 24px;
-        font-size: 24px !important;
+        width: 22px !important;
+        height: 22px !important;
+        min-width: 22px;
+        min-height: 22px;
+        font-size: 22px !important;
     }
 
     /* Keep separate 44px targets; expanded pseudo-elements overlap adjacent

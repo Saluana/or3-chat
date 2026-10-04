@@ -16,6 +16,7 @@ import type {
 import type * as MentionIndexApi from './ChatMentions/useChatMentions';
 import type { createMentionSuggestion } from './ChatMentions/suggestions';
 import type MentionExtension from '@tiptap/extension-mention';
+import { getDb, subscribeActiveWorkspaceDb } from '~/db/client';
 
 type MentionsConfig = {
     enabled?: boolean;
@@ -74,7 +75,7 @@ function safeId(payload: {
     return null;
 }
 
-export default defineNuxtPlugin(() => {
+export default defineNuxtPlugin((nuxtApp) => {
     // Check OR3 config feature flag (master toggle)
     const or3Config = useOr3Config();
     if (!or3Config.features.mentions.enabled) {
@@ -105,6 +106,20 @@ export default defineNuxtPlugin(() => {
     let indexInitialized = false;
     let mentionsModule: MentionsModule | null = null;
     let mentionsModulePromise: Promise<MentionsModule | null> | null = null;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    const refreshDisposers: Array<() => void> = [];
+    const refreshMentions = () => {
+        if (!mentionsModule) return;
+        mentionsModule.resetIndex();
+        clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(() => { void mentionsModule?.initMentionsIndex(); }, 120);
+    };
+    const stopWorkspace = subscribeActiveWorkspaceDb(refreshMentions);
+    const disposeRefresh = () => {
+        clearTimeout(refreshTimer); stopWorkspace();
+        for (const off of refreshDisposers.splice(0)) off();
+    };
+    nuxtApp.vueApp.onUnmount(disposeRefresh);
     let lastEditorContent: Record<string, unknown> | null = null; // captured TipTap JSON before send
     let extensionsRegistered = false; // Prevent duplicate registrations
 
@@ -338,10 +353,29 @@ export default defineNuxtPlugin(() => {
         }
     );
 
+    for (const name of ['sync.bootstrap:action:complete', 'sync.pull:action:applied', 'sync.rescan:action:completed'] as const) {
+        refreshDisposers.push(hooks.on(name, refreshMentions, { kind: 'action' }));
+    }
     // 4) Wire DB hooks for incremental index updates (registered once at plugin init)
     // These are intentionally fire-and-forget async operations
     /* eslint-disable @typescript-eslint/no-floating-promises */
     // Documents
+    refreshDisposers.push(hooks.on('db.posts.upsert:action:after', (payload) => {
+        const origin = getDb();
+        void (async () => {
+            const id = safeId(payload);
+            if (!id) return;
+            const row = await origin.posts.get(id);
+            if (origin !== getDb()) return;
+            const module = mentionsModule || (await loadMentionsModule());
+            if (origin !== getDb() || !module || !row || !['doc', 'or3:file'].includes(row.postType)) return;
+            await module.upsertDocument(row);
+        })();
+    }, { kind: 'action' }));
+    for (const name of ['db.files.create:action:after', 'db.files.restore:action:after',
+        'db.files.delete:action:soft:after', 'db.files.delete:action:hard:after'] as const) {
+        refreshDisposers.push(hooks.on(name, refreshMentions, { kind: 'action' }));
+    }
     hooks.on(
         'db.documents.create:action:after',
         (payload: DbCreatePayload<DocumentEntity>) => {
@@ -446,6 +480,7 @@ export default defineNuxtPlugin(() => {
     // HMR cleanup
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
+            disposeRefresh();
             if (mentionsModule) {
                 mentionsModule.resetIndex();
             }

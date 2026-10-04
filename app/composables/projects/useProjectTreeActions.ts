@@ -7,8 +7,8 @@ import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 
 // Local interfaces describing the tree rows printed in the console.
 // These mirror the shape produced by SidebarProjectTree.vue for root and child items.
-export type ProjectTreeKind = 'chat' | 'doc';
-export type ShowOnKind = 'root' | 'all' | 'chat' | 'doc';
+export type ProjectTreeKind = 'chat' | 'doc' | 'file';
+export type ShowOnKind = 'root' | 'all' | ProjectTreeKind;
 
 export interface ProjectTreeChild {
     value: string; // id of the entry

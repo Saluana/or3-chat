@@ -65,8 +65,8 @@ export interface SidebarPageDef {
     usesDefaultHeader?: boolean;
     /** Optional context provider for the page */
     provideContext?: (ctx: SidebarPageContext) => void;
-    /** Optional activation guard - return false to prevent activation */
-    canActivate?: (ctx: SidebarActivateContext) => boolean | Promise<boolean>;
+    /** False denies activation; handled completes navigation elsewhere without replacing the sidebar. */
+    canActivate?: (ctx: SidebarActivateContext) => boolean | 'handled' | Promise<boolean | 'handled'>;
     /** Optional activation hook called when page becomes active */
     onActivate?: (ctx: SidebarActivateContext) => void | Promise<void>;
     /** Optional deactivation hook called when page becomes inactive */

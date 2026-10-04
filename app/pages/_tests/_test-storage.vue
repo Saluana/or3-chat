@@ -7,6 +7,7 @@
             </p>
             <output data-testid="storage-ready">{{ ready ? 'true' : 'false' }}</output>
         </header>
+        <WorkspaceFilesPane />
 
         <section class="space-y-3 rounded-lg border p-4">
             <div class="flex flex-wrap gap-2">
@@ -93,6 +94,7 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
+import WorkspaceFilesPane from '~/components/files/WorkspaceFilesPane.vue';
 import { FileTransferQueue } from '~/core/storage/transfer-queue';
 import type { ObjectStorageProvider } from '~/core/storage/types';
 import { getDb } from '~/db/client';

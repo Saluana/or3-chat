@@ -34,6 +34,7 @@ Search runs over full content, not just titles:
 | Projects | Project names and descriptions |
 | Prompts | Prompt titles, instruction bodies, tags, and favorite state |
 | Images | File names and captions |
+| Files | Saved-file names and bounded indexed text; prefix/filename coverage is disclosed |
 | Dashboard | Page titles and descriptions |
 | Commands | Command labels, descriptions, and keywords |
 
@@ -50,6 +51,7 @@ doc: roadmap
 project: marketing
 prompt: roleplay
 image: garden
+file: notes
 cmd: theme
 ```
 

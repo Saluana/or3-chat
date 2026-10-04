@@ -6,6 +6,7 @@ import {
 } from '~/components/chat/file-upload-utils';
 import type { FilesAttachInputPayload } from '~/core/hooks/hook-types';
 import { db } from '../client';
+import { testRuntimeConfig } from '~~/tests/setup';
 
 const filterRegistry = new Map<
     string,
@@ -35,12 +36,16 @@ vi.mock('~/core/hooks/useHooks', () => ({
 
 describe('files.attach:filter:input hook', () => {
     let hooks: ReturnType<typeof useHooks>;
+    let originalAuth: boolean;
 
     beforeEach(() => {
+        originalAuth = testRuntimeConfig.value.public.ssrAuthEnabled;
+        testRuntimeConfig.value.public.ssrAuthEnabled = false;
         hooks = useHooks();
     });
 
     afterEach(() => {
+        testRuntimeConfig.value.public.ssrAuthEnabled = originalAuth;
         // Clean up all hooks
         hooks.removeAllCallbacks();
     });

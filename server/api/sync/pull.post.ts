@@ -1,3 +1,5 @@
+import { hasWorkspaceItemSemantics } from "~~/shared/posts/workspace-item-capability";
+import { requireWorkspaceItemCapability } from "../../utils/sync/workspace-item-capability";
 /**
  * @module server/api/sync/pull.post
  *
@@ -119,6 +121,10 @@ export default defineEventHandler(async (event) => {
     )) {
         requireFileKindCapability(parsed.data.fileKindCapability);
     }
+
+    if (result.data.changes.some(change =>
+        hasWorkspaceItemSemantics(change.tableName, change.payload)
+    )) requireWorkspaceItemCapability(parsed.data.workspaceItemCapability);
 
     return result.data;
 });

@@ -1,10 +1,25 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
+    searchDocumentAiMentions,
     formatDocumentAiReferenceContext,
     uniqueDocumentAiReferences,
 } from '../document-ai-context';
 
+const mentions = vi.hoisted(() => ({ search: vi.fn() }));
+vi.mock('~/plugins/ChatMentions/useChatMentions', () => ({
+    setMentionsConfig: vi.fn(), initMentionsIndex: vi.fn(), searchMentions: mentions.search,
+}));
 describe('Document AI reference context', () => {
+    it('only suggests sources the document composer can resolve', async () => {
+        mentions.search.mockResolvedValue([
+            { id: 'self', source: 'document', label: 'Current' },
+            { id: 'file', source: 'file', label: 'Unresolved file' },
+            { id: 'doc', source: 'document', label: 'Other document' },
+            { id: 'chat', source: 'chat', label: 'Conversation' },
+        ]);
+        expect(await searchDocumentAiMentions('', { currentDocumentId: 'self', documentsEnabled: true, conversationsEnabled: true }))
+            .toEqual([{ id: 'doc', source: 'document', label: 'Other document' }, { id: 'chat', source: 'chat', label: 'Conversation' }]);
+    });
     it('deduplicates references by source and id while preserving order', () => {
         expect(uniqueDocumentAiReferences([
             { id: 'doc-1', source: 'document', label: 'Plan' },

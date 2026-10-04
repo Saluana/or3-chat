@@ -237,7 +237,7 @@ export interface RegisteredPaletteCommand extends PaletteCommandDefinition {
 
 export interface PaletteHostContext {
     openChat(
-        threadId: string,
+        threadId: string | null,
         destination: 'active' | 'new-pane'
     ): Promise<PaletteActionResult>;
     openDocument(

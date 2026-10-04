@@ -161,6 +161,8 @@ export interface SyncGatewayAdapter {
         backgroundGenerationHistory?: 'v1';
         /** Bounded current materialized history, independently workspace authorized. */
         canonicalChatHistory?: 'v1';
+        /** Transactional preservation/admission for catalog, Trash and file memberships. */
+        workspaceItems?: 'v1';
     };
     readChatHistory?: CanonicalChatReader['readChatHistory'];
 

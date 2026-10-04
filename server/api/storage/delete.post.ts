@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { requireCan } from '../../auth/can';
 import { resolveSessionContext } from '../../auth/session';
 import { getActiveStorageGatewayAdapter } from '../../storage/gateway/registry';
+import { getActiveSyncGatewayAdapter } from '../../sync/gateway/registry';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isStorageEnabled } from '../../utils/storage/is-storage-enabled';
 
@@ -49,6 +50,34 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 501, statusMessage: 'Delete not supported by adapter' });
     }
 
+    // Preflight rejects known retained files. Atomic protection is provider-owned; use
+    // canonical rows and retained edges, never the derived ref_count cache.
+    const sync = getActiveSyncGatewayAdapter();
+    if (!sync?.queryCanonicalStorage) {
+        throw createError({ statusCode: 503, statusMessage: 'Canonical reference state is required for deletion' });
+    }
+    for (const kind of ['live_metadata', 'reference_edges'] as const) {
+        let cursor: string | undefined;
+        for (let pageNumber = 0; ; pageNumber++) {
+            const page = await sync.queryCanonicalStorage(event, {
+                scope: { workspaceId: body.data.workspace_id }, kind,
+                hash: body.data.hash, cursor, limit: 100,
+            });
+            if (page.items.length) {
+                throw createError({ statusCode: 409, statusMessage: 'Cannot delete a retained file' });
+            }
+            if (!page.hasMore) break;
+            if (!page.nextCursor || page.nextCursor === cursor || pageNumber >= 99) {
+                throw createError({ statusCode: 502, statusMessage: 'Canonical storage provider returned an invalid page' });
+            }
+            cursor = page.nextCursor;
+        }
+    }
+
+    if (adapter.deletionCoordination?.version !== 1
+        || adapter.deletionCoordination.syncProviderId !== sync.id) {
+        throw createError({ statusCode: 503, statusMessage: 'Provider-owned deletion coordination is required' });
+    }
     await adapter.deleteObject(event, {
         workspaceId: body.data.workspace_id,
         hash: body.data.hash,

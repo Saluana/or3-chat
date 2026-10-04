@@ -32,7 +32,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 2,
-                    "summary": "Search your workspace and use keyboard shortcuts, previews, and actions."
+                    "summary": "Search workspace sources and saved-file excerpts with keyboard navigation, previews, and coverage."
                 },
                 {
                     "name": "development-setup.md",
@@ -188,7 +188,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Source API reference for projects."
+                    "summary": "Project CRUD and revision-aware chat/document/file associations that preserve extension entries."
                 },
                 {
                     "name": "posts.md",
@@ -206,7 +206,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Document CRUD, workspace-scoped editors and checkpoint history, autosave, and AI proposals."
+                    "summary": "Native editing and custom schemas, captured workspace history, review/Undo, and recoverable Files Trash."
                 },
                 {
                     "name": "prompts.md",
@@ -242,7 +242,7 @@
                     "category": "Files",
                     "categoryOrder": 2,
                     "order": 0,
-                    "summary": "Blob deduplication, classification, transfer queue, and deletion contracts."
+                    "summary": "Hash-addressed blob storage, deterministic catalog ownership, bounded text, retained references, and sync admission."
                 },
                 {
                     "name": "message-files.md",
@@ -371,7 +371,7 @@
                     "category": "Using tools",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Search conversations and documents, stage reviewable edits, and understand workspace and editor boundaries."
+                    "summary": "Use the five scoped workspace tools, source receipts, native review/Undo, file coverage, and browser execution limits."
                 },
                 {
                     "name": "tool-runtime.md",
@@ -407,7 +407,7 @@
                     "category": "Source integration",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Normalize attachment inputs, hash new files, and preserve stored file identity."
+                    "summary": "Browse saved Files, upload and reuse references, understand text coverage, Trash, and shared-byte retention."
                 },
                 {
                     "name": "errors.md",
@@ -656,7 +656,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "Configure SQLite sync runtimes, source launcher selection, native-driver prerequisites, and persistence invariants."
+                    "summary": "Configure SQLite sync runtimes, native drivers, workspace Files and Trash admission, and persistence invariants."
                 },
                 {
                     "name": "provider-fs.md",
@@ -665,7 +665,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 10,
-                    "summary": "Setup and operating guide for the default-stack object storage backend."
+                    "summary": "Configure filesystem object storage, signed transfers, and fail-closed physical deletion and garbage collection."
                 },
                 {
                     "name": "provider-clerk.md",
@@ -683,7 +683,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 12,
-                    "summary": "Dedicated install and wiring guide for the Convex sync/storage/backend provider package."
+                    "summary": "Install and upgrade Convex sync/storage, workspace Files and Trash admission, and coordinated native storage deletion."
                 },
                 {
                     "name": "provider-s3.md",
@@ -692,7 +692,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 13,
-                    "summary": "S3-compatible storage provider for OR3 Cloud."
+                    "summary": "S3 storage setup, checksum verification, admin diagnostics, compatibility testing, and coordinated deletion requirements."
                 },
                 {
                     "name": "deployment-operations.md",

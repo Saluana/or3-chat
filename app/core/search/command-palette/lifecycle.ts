@@ -111,7 +111,7 @@ export function bindPaletteLifecycle(
                 'db.files.delete:action:soft:after',
                 'db.files.delete:action:hard:after',
             ],
-            sourceIds: () => ['image'],
+            sourceIds: () => ['image', 'file'],
         },
         {
             names: [
@@ -122,6 +122,7 @@ export function bindPaletteLifecycle(
             ],
             sourceIds: () => [
                 'document',
+                'file',
                 ...listPaletteSources()
                     .filter((source) => Boolean(source.pluginId))
                     .map((source) => source.id),

@@ -12,6 +12,7 @@ import { recoverClientSession } from '~/composables/auth/useClientSessionRecover
 export type SessionPayload = {
     session: SessionContext | null;
     appAccessAllowed: boolean;
+    workspaceItemCapability?: 'v1';
 };
 type SessionContextState = {
     data: ComputedRef<SessionPayload | null>;
@@ -142,13 +143,17 @@ export function useSessionContext(): SessionContextState {
  * Read the current cached session payload without triggering a network request.
  * Safe to call from non-component utilities (returns null when unavailable).
  */
-export function getCachedSessionContext(): SessionContext | null {
+export function getCachedSessionPayload(): SessionPayload | null {
     try {
         const state = useState<SessionPayload | null>('auth-session');
-        return state.value?.session ?? null;
+        return state.value ?? null;
     } catch {
         return null;
     }
+}
+
+export function getCachedSessionContext(): SessionContext | null {
+    return getCachedSessionPayload()?.session ?? null;
 }
 
 /** Refresh the existing client session generation during bounded auth recovery. */

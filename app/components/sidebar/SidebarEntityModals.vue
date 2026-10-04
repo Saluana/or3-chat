@@ -52,12 +52,12 @@
     <AppModal
         v-bind="deleteDocumentModalProps"
         :open="showDeleteDocumentModal"
-        title="Delete document"
+        :title="documentTrashEnabled ? 'Trash document' : 'Delete document'"
         @update:open="emit('update:showDeleteDocumentModal', $event)"
     >
         <template #default>
             <p class="text-sm opacity-70">
-                This will permanently remove the document.
+                {{ documentTrashEnabled ? 'This document can be restored from Files Trash. Its history and shared files remain retained.' : 'This will permanently remove the document.' }}
             </p>
         </template>
         <template #footer>
@@ -69,7 +69,7 @@
                 Cancel
             </UButton>
             <UButton color="error" size="modal" @click="emit('deleteDocument')">
-                Delete
+                {{ documentTrashEnabled ? 'Trash' : 'Delete' }}
             </UButton>
         </template>
     </AppModal>
@@ -124,6 +124,7 @@ defineProps<{
 
     deleteDocumentModalProps: Record<string, unknown>;
     showDeleteDocumentModal: boolean;
+    documentTrashEnabled?: boolean;
 
     deleteProjectModalProps: Record<string, unknown>;
     showDeleteProjectModal: boolean;

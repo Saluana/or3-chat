@@ -52,7 +52,7 @@ Soft delete keeps a row; hard delete removes it and can be destructive. Relation
 
 Use [message-file helpers](/documentation/database/message-files) when attaching or removing message files. They reconcile references; decrementing again afterward is incorrect. A zero reference count does not automatically delete a blob. Counts are derived state, not a synchronized authority to garbage-collect data across devices.
 
-`hardDeleteMany` in `~/db/files` removes metadata and blobs for the supplied hashes without checking live references. Callers must check ownership/reference policy first; it is not a safe automatic cleanup of arbitrary files. Soft deletion also has visible effects, so cleanup needs the application's existing policy.
+`hardDeleteMany` and soft file deletion check canonical retained messages/posts inside the transaction, after before-delete hooks. Catalog, logical Trash, and document checkpoints retain references. These helpers refuse physical deletion while any such edge remains; derived counts alone never authorize cleanup. Removing an item from Files releases its ownership without deleting shared bytes or history. Supported cloud storage deletion/GC must use the provider's canonical reference queries and existing retention policy.
 
 ## Schema changes and recovery
 

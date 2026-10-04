@@ -2,7 +2,7 @@ import { computed, nextTick, ref, watch, type Ref } from 'vue';
 import { useDropZone, useFileDialog } from '@vueuse/core';
 import { useToast } from '#imports';
 import { reportError, err } from '~/utils/errors';
-import { validateFile, persistAttachment } from '~/components/chat/file-upload-utils';
+import { getMaxFileBytes, validateFile, persistAttachment } from '~/components/chat/file-upload-utils';
 import type { LargeTextBlock, UploadedImage } from './types';
 
 type EditorLike = {
@@ -43,6 +43,7 @@ interface UseChatInputAttachmentsOptions {
     maxFiles: number;
     onImageAdd: (attachment: UploadedImage) => void;
     onImageRemove: (index: number) => void;
+    onTextFile?: (file: File) => Promise<void>;
 }
 
 export function useChatInputAttachments(options: UseChatInputAttachmentsOptions) {
@@ -55,6 +56,15 @@ export function useChatInputAttachments(options: UseChatInputAttachmentsOptions)
     async function processAttachment(file: File, name?: string) {
         const toast = useToast();
         const mime = file.type || '';
+        if (options.onTextFile && !mime.startsWith('image/') && mime !== 'application/pdf' && /\.(txt|md|csv)$/iu.test(file.name)) {
+            try {
+                if (file.size > getMaxFileBytes()) throw new Error('File exceeds the configured upload limit.');
+                await options.onTextFile(file);
+            } catch (error) {
+                reportError(error, { toast: true, tags: { domain: 'files', stage: 'text-upload' } });
+            }
+            return;
+        }
         const validation = validateFile(file);
         if (!validation.ok) {
             reportError(err(validation.code, validation.message), {
@@ -85,6 +95,7 @@ export function useChatInputAttachments(options: UseChatInputAttachmentsOptions)
         attachments.value.push(attachment);
         options.onImageAdd(attachment);
         await persistAttachment(attachment);
+        return attachment;
     }
 
     async function processFiles(files: FileList | null) {
@@ -197,7 +208,7 @@ export function useChatInputAttachments(options: UseChatInputAttachmentsOptions)
         open: openFileDialog,
         reset: resetFileDialog,
     } = useFileDialog({
-        accept: 'image/*,application/pdf',
+        accept: options.onTextFile ? 'image/*,application/pdf,.txt,.md,.csv' : 'image/*,application/pdf',
         multiple: true,
     });
 

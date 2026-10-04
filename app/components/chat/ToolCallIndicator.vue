@@ -86,10 +86,10 @@
                 :key="`${receipt.workspaceId}:${receipt.source.kind}:${receipt.source.id}`"
                 type="button"
                 :aria-label="`Open source: ${receipt.source.title}`"
-                class="min-h-11 max-w-full rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] px-3 text-left text-xs text-[var(--md-on-surface)] focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
+                class="min-h-[44px] max-w-full rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] px-3 text-left text-xs text-[var(--md-on-surface)] focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
                 @click="openSource(receipt)"
             >{{ receipt.action === 'created' ? 'Open document · ' : '' }}{{ receipt.source.title }}</button>
-            <button v-if="sources.length > 3" type="button" class="min-h-11 px-2 text-xs" @click="showAllSources = !showAllSources">
+            <button v-if="sources.length > 3" type="button" class="min-h-[44px] px-2 text-xs" @click="showAllSources = !showAllSources">
                 {{ showAllSources ? 'Show fewer' : `Show all (${sources.length})` }}
             </button>
         </div>

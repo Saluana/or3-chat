@@ -8,6 +8,7 @@ import {
     type PaletteSearchSource,
 } from '../types';
 import { documentActions } from './actions';
+import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 
 function category() {
     return CORE_PALETTE_CATEGORIES.find((c) => c.id === 'document')!;
@@ -26,7 +27,7 @@ export function createDocumentPaletteSource(): PaletteSearchSource {
                 await db.posts.where('postType').equals('doc').toArray()
             ).filter(
                 (post) =>
-                    !post.deleted &&
+                    isVisibleWorkspaceItem(post) &&
                     post.postType === 'doc' &&
                     isIndexablePostType(post.postType)
             );

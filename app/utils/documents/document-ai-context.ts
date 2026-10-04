@@ -92,7 +92,8 @@ export async function searchDocumentAiMentions(
     try {
         await mentionApi.initMentionsIndex();
         const indexed = (await mentionApi.searchMentions(query)).filter(
-            (item) => item.source !== 'document' || item.id !== options.currentDocumentId,
+            (item) => (item.source === 'document' && options.documentsEnabled && item.id !== options.currentDocumentId)
+                || (item.source === 'chat' && options.conversationsEnabled),
         );
         if (indexed.length) return indexed;
     } catch {

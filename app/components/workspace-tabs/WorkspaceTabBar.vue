@@ -767,9 +767,10 @@ watch(
 .workspace-tab-bar::-webkit-scrollbar { display: none; }
 .workspace-tab-wrap {
     position: relative;
-    flex: 0 1 clamp(96px, 15vw, 220px);
+    flex: 0 0 auto;
+    width: max-content;
     min-width: 96px;
-    max-width: 220px;
+    max-width: 320px;
     height: var(--or3-workspace-tab-height, 32px);
     margin-inline-end: 0;
     transition: transform var(--app-motion-duration-fast, 0.14s)

@@ -12,8 +12,8 @@
   },
   "coverage": {
     "moduleCount": 39,
-    "exportCount": 596,
-    "callableExportCount": 273,
+    "exportCount": 599,
+    "callableExportCount": 276,
     "nuxtAutoImportCount": 309
   },
   "behaviorProfiles": [
@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "c3842175d741656b92b3a6227a4e493b9134c1c3346295946fe3e56c915cef1e",
+      "apiSha256": "181bbe76df2553fc427443f0e36813a52115f46b5e3dc309772d87050bf008b2",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -3153,7 +3153,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectsCrud.ts",
-              "line": 10,
+              "line": 11,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface CreateProjectInput {\n    name: string;\n    description?: string | null;\n    id?: string;\n}"
             }
@@ -3319,7 +3319,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectsCrud.ts",
-              "line": 16,
+              "line": 17,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DeleteProjectOptions {\n    soft?: boolean;\n}"
             }
@@ -3970,7 +3970,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 192,
+                "line": 215,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function hasPane(paneId: string);"
               }
@@ -3979,7 +3979,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 192,
+              "line": 215,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function hasPane(paneId: string);"
             }
@@ -4796,6 +4796,58 @@
           ]
         },
         {
+          "name": "programmaticAttachFile",
+          "kind": "value",
+          "nuxtAutoImport": false,
+          "signatures": [
+            {
+              "signature": "(paneId: string, file: File): Promise<{ status: \"ready\"; } | { status: \"unavailable\"; }>",
+              "declaredReturnType": "Promise<{ status: 'ready' } | { status: 'unavailable' }>",
+              "resolvedReturnType": "Promise<{ status: \"ready\"; } | { status: \"unavailable\"; }>",
+              "declaration": {
+                "source": "app/composables/chat/useChatInputBridge.ts",
+                "line": 201,
+                "syntaxKind": "FunctionDeclaration",
+                "text": "export async function programmaticAttachFile(paneId: string, file: File): Promise<{ status: 'ready' } | { status: 'unavailable' }>;"
+              }
+            }
+          ],
+          "declarations": [
+            {
+              "source": "app/composables/chat/useChatInputBridge.ts",
+              "line": 201,
+              "syntaxKind": "FunctionDeclaration",
+              "text": "export async function programmaticAttachFile(paneId: string, file: File): Promise<{ status: 'ready' } | { status: 'unavailable' }>;"
+            }
+          ]
+        },
+        {
+          "name": "programmaticInsertReference",
+          "kind": "value",
+          "nuxtAutoImport": false,
+          "signatures": [
+            {
+              "signature": "(paneId: string, reference: { id: string; source: \"document\" | \"chat\" | \"file\"; label: string; }, afterText?: string): { status: \"ready\"; } | { status: \"unavailable\"; }",
+              "declaredReturnType": "{ status: 'ready' } | { status: 'unavailable' }",
+              "resolvedReturnType": "{ status: \"ready\"; } | { status: \"unavailable\"; }",
+              "declaration": {
+                "source": "app/composables/chat/useChatInputBridge.ts",
+                "line": 189,
+                "syntaxKind": "FunctionDeclaration",
+                "text": "export function programmaticInsertReference(paneId: string,\n    reference: { id: string; source: 'document' | 'chat' | 'file'; label: string }, afterText?: string):\n    { status: 'ready' } | { status: 'unavailable' };"
+              }
+            }
+          ],
+          "declarations": [
+            {
+              "source": "app/composables/chat/useChatInputBridge.ts",
+              "line": 189,
+              "syntaxKind": "FunctionDeclaration",
+              "text": "export function programmaticInsertReference(paneId: string,\n    reference: { id: string; source: 'document' | 'chat' | 'file'; label: string }, afterText?: string):\n    { status: 'ready' } | { status: 'unavailable' };"
+            }
+          ]
+        },
+        {
           "name": "programmaticPrefill",
           "kind": "value",
           "nuxtAutoImport": false,
@@ -4806,7 +4858,7 @@
               "resolvedReturnType": "{ status: \"ready\"; } | { status: \"unavailable\"; }",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 175,
+                "line": 177,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function programmaticPrefill(\n    paneId: string,\n    text: string\n): { status: 'ready' } | { status: 'unavailable' };"
               }
@@ -4815,7 +4867,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 175,
+              "line": 177,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function programmaticPrefill(\n    paneId: string,\n    text: string\n): { status: 'ready' } | { status: 'unavailable' };"
             }
@@ -4832,7 +4884,7 @@
               "resolvedReturnType": "Promise<SendResult>",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 148,
+                "line": 150,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function programmaticSend(\n    paneId: string,\n    text: string\n): Promise<SendResult>;"
               }
@@ -4841,7 +4893,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 148,
+              "line": 150,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function programmaticSend(\n    paneId: string,\n    text: string\n): Promise<SendResult>;"
             }
@@ -4899,7 +4951,7 @@
               "source": "app/composables/projects/useProjectTreeActions.ts",
               "line": 10,
               "syntaxKind": "TypeAliasDeclaration",
-              "text": "export type ProjectTreeKind = 'chat' | 'doc';"
+              "text": "export type ProjectTreeKind = 'chat' | 'doc' | 'file';"
             }
           ]
         },
@@ -5317,7 +5369,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 111,
+                "line": 113,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerPaneInput(paneId: string, api: ChatInputImperativeApi);"
               }
@@ -5326,7 +5378,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 111,
+              "line": 113,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerPaneInput(paneId: string, api: ChatInputImperativeApi);"
             }
@@ -5786,7 +5838,7 @@
               "source": "app/composables/projects/useProjectTreeActions.ts",
               "line": 11,
               "syntaxKind": "TypeAliasDeclaration",
-              "text": "export type ShowOnKind = 'root' | 'all' | 'chat' | 'doc';"
+              "text": "export type ShowOnKind = 'root' | 'all' | ProjectTreeKind;"
             }
           ]
         },
@@ -6305,7 +6357,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 127,
+                "line": 129,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterPaneInput(paneId: string);"
               }
@@ -6314,7 +6366,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 127,
+              "line": 129,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterPaneInput(paneId: string);"
             }
@@ -6704,14 +6756,14 @@
           "nuxtAutoImport": false,
           "signatures": [
             {
-              "signature": "export function useDocumentAiAgent(options: {\n    editor: Ref<Editor | null>;\n    documentId: Ref<string>;\n    title: Ref<string>;\n    contentVersion: Ref<number>;\n    persistCurrent: () => Promise<void>;\n});",
+              "signature": "export function useDocumentAiAgent(options: {\n    editor: Ref<Editor | null>;\n    documentId: Ref<string>;\n    title: Ref<string>;\n    contentVersion: Ref<number>;\n    persistCurrent: () => Promise<void>;\n    readOnly?: Readonly<Ref<boolean>>;\n});",
               "declaredReturnType": null,
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentAiAgent.ts",
                 "line": 295,
                 "syntaxKind": "FunctionDeclaration",
-                "text": "export function useDocumentAiAgent(options: {\n    editor: Ref<Editor | null>;\n    documentId: Ref<string>;\n    title: Ref<string>;\n    contentVersion: Ref<number>;\n    persistCurrent: () => Promise<void>;\n});"
+                "text": "export function useDocumentAiAgent(options: {\n    editor: Ref<Editor | null>;\n    documentId: Ref<string>;\n    title: Ref<string>;\n    contentVersion: Ref<number>;\n    persistCurrent: () => Promise<void>;\n    readOnly?: Readonly<Ref<boolean>>;\n});"
               }
             }
           ],
@@ -6720,7 +6772,7 @@
               "source": "app/composables/documents/useDocumentAiAgent.ts",
               "line": 295,
               "syntaxKind": "FunctionDeclaration",
-              "text": "export function useDocumentAiAgent(options: {\n    editor: Ref<Editor | null>;\n    documentId: Ref<string>;\n    title: Ref<string>;\n    contentVersion: Ref<number>;\n    persistCurrent: () => Promise<void>;\n});"
+              "text": "export function useDocumentAiAgent(options: {\n    editor: Ref<Editor | null>;\n    documentId: Ref<string>;\n    title: Ref<string>;\n    contentVersion: Ref<number>;\n    persistCurrent: () => Promise<void>;\n    readOnly?: Readonly<Ref<boolean>>;\n});"
             }
           ]
         },
@@ -7273,7 +7325,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/projects/useProjectsCrud.ts",
-                "line": 20,
+                "line": 21,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useProjectsCrud();"
               }
@@ -7282,7 +7334,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectsCrud.ts",
-              "line": 20,
+              "line": 21,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useProjectsCrud();"
             }
@@ -7597,6 +7649,32 @@
               "line": 159,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function waitForDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup,\n    timeoutMs = 1_500\n): Promise<ActiveDocumentEditorSession | undefined>;"
+            }
+          ]
+        },
+        {
+          "name": "waitForPaneInput",
+          "kind": "value",
+          "nuxtAutoImport": false,
+          "signatures": [
+            {
+              "signature": "(paneId: string, signal: AbortSignal): Promise<boolean>",
+              "declaredReturnType": "Promise<boolean>",
+              "resolvedReturnType": "Promise<boolean>",
+              "declaration": {
+                "source": "app/composables/chat/useChatInputBridge.ts",
+                "line": 220,
+                "syntaxKind": "FunctionDeclaration",
+                "text": "export function waitForPaneInput(paneId: string, signal: AbortSignal): Promise<boolean>;"
+              }
+            }
+          ],
+          "declarations": [
+            {
+              "source": "app/composables/chat/useChatInputBridge.ts",
+              "line": 220,
+              "syntaxKind": "FunctionDeclaration",
+              "text": "export function waitForPaneInput(paneId: string, signal: AbortSignal): Promise<boolean>;"
             }
           ]
         },
@@ -7958,7 +8036,7 @@
     },
     {
       "source": "app/composables/projects/useProjectTreeActions.ts",
-      "apiSha256": "fd0cab856b55e4bc78effdbb68d83b3d6a56deddc83c6036a2f4d74432dd76cd",
+      "apiSha256": "dbcd5fa0af84df6e83500904830b9a7d4e1bc52ad18dc4ba28ba0a5b2b5268af",
       "runtime": "client",
       "publicPaths": [
         "~/composables/projects/useProjectTreeActions"
@@ -8049,7 +8127,7 @@
               "source": "app/composables/projects/useProjectTreeActions.ts",
               "line": 10,
               "syntaxKind": "TypeAliasDeclaration",
-              "text": "export type ProjectTreeKind = 'chat' | 'doc';"
+              "text": "export type ProjectTreeKind = 'chat' | 'doc' | 'file';"
             }
           ]
         },
@@ -8117,7 +8195,7 @@
               "source": "app/composables/projects/useProjectTreeActions.ts",
               "line": 11,
               "syntaxKind": "TypeAliasDeclaration",
-              "text": "export type ShowOnKind = 'root' | 'all' | 'chat' | 'doc';"
+              "text": "export type ShowOnKind = 'root' | 'all' | ProjectTreeKind;"
             }
           ]
         },
@@ -9261,7 +9339,7 @@
     },
     {
       "source": "app/composables/sidebar/useSidebarPages.ts",
-      "apiSha256": "2d21fd3ecaccfb84960798b09caaf3e8fd88b36bf5c955b4066c8de835f86516",
+      "apiSha256": "17b5c90881a3a6e6fb2634f25b613fe8094b6c74188c5aaa4d0f014438b316bb",
       "runtime": "client",
       "publicPaths": [
         "~/composables/sidebar",
@@ -9327,7 +9405,7 @@
               "source": "app/composables/sidebar/useSidebarPages.ts",
               "line": 47,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface SidebarPageDef {\n    /** Unique identifier for the sidebar page */\n    id: string;\n    /** Display label shown in UI (e.g., tooltips) */\n    label: string;\n    /** Optional description in mobile navigation. */\n    description?: string;\n    /** Iconify icon name */\n    icon: string;\n    /** Optional validated app image URL. The Iconify icon remains the fallback. */\n    image?: string;\n    /** Optional ordering (lower = earlier in sorted lists). Defaults to 200 */\n    order?: number;\n    /** Vue component or async component factory */\n    component: Component | (() => Promise<Component>);\n    /** Opt-in caching for the component */\n    keepAlive?: boolean;\n    /** Whether this page uses the default header. Defaults to true for home page */\n    usesDefaultHeader?: boolean;\n    /** Optional context provider for the page */\n    provideContext?: (ctx: SidebarPageContext) => void;\n    /** Optional activation guard - return false to prevent activation */\n    canActivate?: (ctx: SidebarActivateContext) => boolean | Promise<boolean>;\n    /** Optional activation hook called when page becomes active */\n    onActivate?: (ctx: SidebarActivateContext) => void | Promise<void>;\n    /** Optional deactivation hook called when page becomes inactive */\n    onDeactivate?: (ctx: SidebarActivateContext) => void | Promise<void>;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this page. */\n    access?: PluginGatePolicy;\n}"
+              "text": "export interface SidebarPageDef {\n    /** Unique identifier for the sidebar page */\n    id: string;\n    /** Display label shown in UI (e.g., tooltips) */\n    label: string;\n    /** Optional description in mobile navigation. */\n    description?: string;\n    /** Iconify icon name */\n    icon: string;\n    /** Optional validated app image URL. The Iconify icon remains the fallback. */\n    image?: string;\n    /** Optional ordering (lower = earlier in sorted lists). Defaults to 200 */\n    order?: number;\n    /** Vue component or async component factory */\n    component: Component | (() => Promise<Component>);\n    /** Opt-in caching for the component */\n    keepAlive?: boolean;\n    /** Whether this page uses the default header. Defaults to true for home page */\n    usesDefaultHeader?: boolean;\n    /** Optional context provider for the page */\n    provideContext?: (ctx: SidebarPageContext) => void;\n    /** False denies activation; handled completes navigation elsewhere without replacing the sidebar. */\n    canActivate?: (ctx: SidebarActivateContext) => boolean | 'handled' | Promise<boolean | 'handled'>;\n    /** Optional activation hook called when page becomes active */\n    onActivate?: (ctx: SidebarActivateContext) => void | Promise<void>;\n    /** Optional deactivation hook called when page becomes inactive */\n    onDeactivate?: (ctx: SidebarActivateContext) => void | Promise<void>;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this page. */\n    access?: PluginGatePolicy;\n}"
             }
           ]
         },

@@ -101,16 +101,37 @@ images and PDFs may be served inline. Direct S3 responses cannot add
 `X-Content-Type-Options`, so the attachment/octet-stream policy is applied in
 the signed request itself.
 `POST /api/storage/delete` derives the object key from the authorized workspace
-and hash, rejects a mismatched `storage_id`, and idempotently removes the blob
-and commit marker.
+and hash, rejects a mismatched `storage_id`, and fails with 503 while the object or marker exists because deletion requires provider-owned coordination. An already absent pair succeeds.
 
 ## Garbage Collection Safety
 
-Destructive S3 blob GC runs only when the active sync provider supplies
-canonical, workspace-scoped materialized reference state. Without that
-capability it returns `deleted_count: 0`, `status: "disabled"`, and
-`reason: "canonical_reference_state_required"`. Candidate scans, canonical
-queries, and immediate pre-delete reference checks are bounded and fail closed.
+Like filesystem storage, S3 cannot atomically coordinate physical object deletion
+with metadata restores and reference writes in a separate sync database. Canonical
+reference queries alone do not prevent this race. Destructive deletion and GC stay
+disabled until the provider owns a deletion barrier honored by those writes.
+
+GC validates its request and returns without listing or deleting objects:
+
+```json
+{ "deleted_count": 0, "status": "disabled", "reason": "deletion_coordination_required" }
+```
+
+The admin storage card exposes non-secret configuration diagnostics and a
+**Check Storage GC Status** action. It reports the same disabled reason, including
+when canonical reference queries are available. Files and Trash use the selected
+sync provider's canonical metadata; selecting S3 changes where bytes live.
+
+## Compatibility verification
+
+The provider requires SHA-256 upload enforcement, checksum retrieval via HEAD
+(`ChecksumMode: ENABLED`), and conditional commit-marker writes
+(`If-None-Match: *`). AWS requires checksum mode for checksum retrieval; encrypted
+buckets can also need KMS permissions ([AWS HeadObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html)).
+
+The provider CI runs real upload/commit/download tests against disposable MinIO
+and saves a JSON report. To qualify another S3 host, run the provider's opt-in
+integration suite against a disposable bucket as described in its README. Endpoint
+configuration alone is not proof that a host implements every required operation.
 
 ## Related
 

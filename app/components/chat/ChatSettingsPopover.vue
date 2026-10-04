@@ -1,6 +1,5 @@
 <template>
     <div
-        ref="popoverElement"
         :class="[
             'chat-settings-popover flex w-[360px] max-w-[calc(100vw-1.5rem)] flex-col',
             containerProps?.class || '',
@@ -10,11 +9,11 @@
     >
         <header class="chat-settings-header">
             <button
-                v-if="activeGroup"
+                v-if="toolsView"
                 ref="backButton"
                 type="button"
                 class="chat-settings-back"
-                aria-label="Back to chat settings"
+                :aria-label="activeGroup ? 'Back to tools' : 'Back to chat settings'"
                 @click="backToSettings"
             >
                 <UIcon :name="iconChevronLeft" class="size-4" />
@@ -24,14 +23,14 @@
                     {{
                         activeGroup
                             ? getCategoryLabel(activeGroup.category)
-                            : 'Chat settings'
+                            : toolsView ? 'Tools' : 'Chat settings'
                     }}
                 </h2>
                 <p class="chat-settings-subtitle">
                     {{
                         activeGroup
                             ? `${activeGroup.tools.length} tools`
-                            : 'Customize how your chats work.'
+                            : toolsView ? 'Choose a tool category.' : 'Customize how your chats work.'
                     }}
                 </p>
             </div>
@@ -47,7 +46,7 @@
         </header>
 
         <div
-            v-show="!activeGroup"
+            v-show="!toolsView"
             class="chat-settings-body"
             :class="{ 'chat-settings-view-enter is-back': hasNavigated && !activeGroup }"
         >
@@ -208,46 +207,13 @@
                         </template>
                     </USelectMenu>
                 </div>
+                <button v-if="registeredTools.length" ref="toolsButton" type="button" class="chat-settings-row-trigger" @click="openTools">
+                    <span class="chat-settings-icon" aria-hidden="true"><UIcon :name="iconToolWrench" class="size-4" /></span>
+                    <span class="chat-settings-row-title">Tools</span>
+                    <span class="chat-settings-option-value">{{ registeredTools.length }}</span>
+                    <UIcon :name="iconChevronRight" class="size-4 shrink-0" aria-hidden="true" />
+                </button>
             </div>
-
-            <!-- Tool categories open a dedicated view with one scroll area. -->
-            <section
-                v-if="registeredTools.length > 0"
-                class="chat-settings-tools"
-                aria-labelledby="chat-settings-tools-label"
-            >
-                <div class="chat-settings-section-heading">
-                    <span id="chat-settings-tools-label" class="chat-settings-section-label">Tools</span>
-                    <span class="chat-settings-section-count">{{ registeredTools.length }}</span>
-                </div>
-                <div
-                    v-for="group in groupedToolCategories"
-                    :key="group.category"
-                    class="chat-settings-tool-group"
-                >
-                    <button
-                        type="button"
-                        class="chat-settings-tool-category"
-                        @click="openToolCategory(group.category, $event)"
-                    >
-                        <span class="min-w-0">
-                            <span class="chat-settings-row-title truncate">
-                                {{ getCategoryLabel(group.category) }}
-                            </span>
-                            <span
-                                v-if="getCategorySubtitle(group.category)"
-                                class="chat-settings-row-description truncate"
-                            >
-                                {{ getCategorySubtitle(group.category) }}
-                            </span>
-                        </span>
-                        <span class="flex shrink-0 items-center gap-2 self-center">
-                            <span class="chat-settings-section-count">{{ group.tools.length }}</span>
-                            <UIcon :name="iconChevronRight" class="size-4 shrink-0" />
-                        </span>
-                    </button>
-                </div>
-            </section>
 
             <p class="chat-settings-heading" aria-hidden="true">More</p>
 
@@ -297,6 +263,47 @@
                     />
                 </UButton>
             </nav>
+        </div>
+        <div v-if="toolsView && !activeGroup" class="chat-settings-body chat-settings-view-enter" :class="{ 'is-back': hasNavigated }">
+            <!-- Tool categories open a dedicated view with one scroll area. -->
+            <section
+                v-if="registeredTools.length > 0"
+                class="chat-settings-tools"
+                aria-labelledby="chat-settings-tools-label"
+            >
+                <div class="chat-settings-section-heading">
+                    <span id="chat-settings-tools-label" class="chat-settings-section-label">Tools</span>
+                    <span class="chat-settings-section-count">{{ registeredTools.length }}</span>
+                </div>
+                <div
+                    v-for="group in groupedToolCategories"
+                    :key="group.category"
+                    class="chat-settings-tool-group"
+                >
+                    <button
+                        type="button"
+                        class="chat-settings-tool-category"
+                        @click="openToolCategory(group.category, $event)"
+                    >
+                        <span class="min-w-0">
+                            <span class="chat-settings-row-title truncate">
+                                {{ getCategoryLabel(group.category) }}
+                            </span>
+                            <span
+                                v-if="getCategorySubtitle(group.category)"
+                                class="chat-settings-row-description truncate"
+                            >
+                                {{ getCategorySubtitle(group.category) }}
+                            </span>
+                        </span>
+                        <span class="flex shrink-0 items-center gap-2 self-center">
+                            <span class="chat-settings-section-count">{{ group.tools.length }}</span>
+                            <UIcon :name="iconChevronRight" class="size-4 shrink-0" />
+                        </span>
+                    </button>
+                </div>
+            </section>
+
         </div>
         <div v-if="activeGroup" class="chat-settings-body chat-settings-view-enter">
             <div class="chat-settings-bulk-row">
@@ -492,9 +499,10 @@ const groupedToolCategories = computed(() => {
     }));
 });
 
+const toolsView = ref(false);
+const toolsButton = ref<HTMLButtonElement | null>(null);
 const activeCategory = ref<string | null>(null);
 const hasNavigated = ref(false);
-const popoverElement = ref<HTMLElement | null>(null);
 const activeGroup = computed(() =>
     groupedToolCategories.value.find(
         (group) => group.category === activeCategory.value
@@ -519,7 +527,6 @@ function setGroupToolsEnabled(enabled: boolean) {
 
 const backButton = ref<HTMLButtonElement | null>(null);
 let categoryTrigger: HTMLButtonElement | null = null;
-let resizeAnimation: Animation | null = null;
 
 watch(groupedToolCategories, (groups) => {
     if (
@@ -530,26 +537,11 @@ watch(groupedToolCategories, (groups) => {
     }
 });
 
-async function navigateToCategory(category: string | null) {
-    const element = popoverElement.value;
-    const previousHeight = element?.getBoundingClientRect().height ?? 0;
-    resizeAnimation?.cancel();
+async function navigateToCategory(category: string | null, showTools = true) {
+    toolsView.value = showTools;
     activeCategory.value = category;
     hasNavigated.value = true;
     await nextTick();
-
-    if (
-        !element ||
-        typeof element.animate !== 'function' ||
-        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    ) return;
-
-    const nextHeight = element.getBoundingClientRect().height;
-    if (Math.abs(nextHeight - previousHeight) < 1) return;
-    resizeAnimation = element.animate(
-        [{ height: `${previousHeight}px` }, { height: `${nextHeight}px` }],
-        { duration: 190, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
-    );
 }
 
 async function openToolCategory(category: string, event: MouseEvent) {
@@ -558,9 +550,16 @@ async function openToolCategory(category: string, event: MouseEvent) {
     backButton.value?.focus();
 }
 
-async function backToSettings() {
+async function openTools() {
     await navigateToCategory(null);
-    categoryTrigger?.focus();
+    backButton.value?.focus();
+}
+
+async function backToSettings() {
+    const fromCategory = !!activeGroup.value;
+    await navigateToCategory(null, fromCategory);
+    if (fromCategory) categoryTrigger?.focus();
+    else toolsButton.value?.focus();
 }
 
 function getCategoryLabel(category: string) {
@@ -914,6 +913,7 @@ const modelCatalogButtonProps = computed(() => {
 .chat-settings-popover {
     --chat-settings-divider-width: var(--md-border-width-subtle, var(--md-border-width));
 
+    height: 600px;
     max-height: min(
         calc(100dvh - 2rem),
         calc(var(--reka-popover-content-available-height, 100dvh) - 0.5rem)
@@ -977,12 +977,14 @@ const modelCatalogButtonProps = computed(() => {
 
 .chat-settings-body {
     display: flex;
+    flex: 1;
     flex-direction: column;
     gap: 0.75rem;
     min-height: 0;
     overflow-y: auto;
     padding: 0.75rem;
 }
+.chat-settings-body > * { flex-shrink: 0; }
 
 .chat-settings-body > * {
     flex-shrink: 0;

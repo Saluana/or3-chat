@@ -21,7 +21,8 @@ import { groupHitsByResource } from '../group-hits';
 import { writePerformanceReport } from '~~/scripts/performance/report';
 import type { PaletteResource } from '../types';
 
-const RESOURCE_COUNT = 10_000;
+const workspaceFiles = process.env.OR3_WORKSPACE_FILES_BENCHMARK === 'true';
+const RESOURCE_COUNT = workspaceFiles ? 1_000 : 10_000;
 const CHUNKS_PER_RESOURCE = 5;
 
 function percentile(values: number[], p: number): number {
@@ -37,15 +38,18 @@ function percentile(values: number[], p: number): number {
 function makeResources(): PaletteResource[] {
     const resources: PaletteResource[] = [];
     for (let i = 0; i < RESOURCE_COUNT; i++) {
-        const body = Array.from({ length: CHUNKS_PER_RESOURCE }, (_, chunk) =>
+        const ordinaryBody = Array.from({ length: CHUNKS_PER_RESOURCE }, (_, chunk) =>
             `resource-${i} chunk-${chunk} lorem ipsum dolor sit amet consectetur adipiscing elit `.repeat(
                 40
             )
         ).join('\n');
+        // ASCII makes the 10 MiB indexed-text fixture exact and repeatable.
+        const bytes = Math.floor(10 * 1024 * 1024 / RESOURCE_COUNT) + (i < (10 * 1024 * 1024) % RESOURCE_COUNT ? 1 : 0);
+        const body = workspaceFiles ? ordinaryBody.slice(0, bytes).padEnd(bytes, ' ') : ordinaryBody;
         resources.push({
             key: `bench:${i}`,
             sourceId: 'bench',
-            categoryId: 'chat',
+            categoryId: workspaceFiles ? ['chat', 'document', 'project', 'file'][i % 4]! : 'chat',
             recordId: String(i),
             title: `Bench resource ${i}`,
             content: body,
@@ -137,6 +141,8 @@ async function main(): Promise<void> {
 
     const report = {
         resources: RESOURCE_COUNT,
+        indexedTextBytes: resources.reduce((total, resource) => total + new TextEncoder().encode(resource.content ?? '').byteLength, 0),
+        profile: workspaceFiles ? 'workspace-files-1000-10MiB' : 'command-palette-10000',
         approxChunks: RESOURCE_COUNT * CHUNKS_PER_RESOURCE,
         buildMs: Number(buildMs.toFixed(2)),
         maxBatchMs: Number(maxBatchMs.toFixed(2)),
@@ -145,21 +151,21 @@ async function main(): Promise<void> {
         groupMs: Number(groupMs.toFixed(2)),
         disposeMs: Number(disposeMs.toFixed(2)),
         budgets: {
-            warmQueryP95Ms: 75,
-            warmQueryP95Passed: warmP95 <= 75,
+            warmQueryP95Ms: workspaceFiles ? 300 : 75,
+            warmQueryP95Passed: warmP95 <= (workspaceFiles ? 300 : 75),
             maxBatchMs: 50,
             maxBatchPassed: maxBatchMs <= 50,
         },
     };
 
     const outputPath = writePerformanceReport(
-        'command-palette-search',
+        workspaceFiles ? 'workspace-files-search' : 'command-palette-search',
         report
     );
     console.log(JSON.stringify({ ...report, outputPath }, null, 2));
     if (!report.budgets.warmQueryP95Passed) {
         console.error(
-            `[benchmark] warm query p95 ${report.warmQueryP95Ms}ms exceeded 75ms budget`
+            `[benchmark] warm query p95 ${report.warmQueryP95Ms}ms exceeded ${report.budgets.warmQueryP95Ms}ms budget`
         );
         process.exitCode = 1;
     }

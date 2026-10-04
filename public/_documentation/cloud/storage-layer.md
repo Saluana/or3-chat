@@ -6,6 +6,12 @@ checks the exact origin against its effective request origin or
 `OR3_ALLOWED_ORIGINS` before parsing the body. Originless API requests require
 bearer authorization and no cookie.
 
+Physical deletion requires a storage adapter with deletion coordination version 1 matching the active sync backend. Canonical preflight reads alone do not authorize unlinking bytes. Uncoordinated adapters return 503 for deletion and report GC disabled with reason `deletion_coordination_required`.
+
+The updated Convex scaffold records a private `storage_deletion_claims` barrier in the same transaction as physical deletion. Sync reference creation and metadata restoration honor that barrier. Only a hash-verified upload commit releases it; stale storage IDs remain invalid. These barriers are retained until verified re-upload or workspace purge, rather than expiring with sync history. The runtime probes `storage.deletionCapability` before cleanup, so older scaffolds fail closed. Deploy the matching schema, storage, sync and helper templates before enabling cleanup.
+
+Filesystem physical cleanup is disabled until it can coordinate with canonical sync writes across instances. Files Trash and logical item removal remain available; operators should expect retained disk bytes.
+
 The OR3 Storage Layer handles large binary assets (images, PDFs) separately from the main database sync. It uses a **local-first, hash-addressed** architecture to ensure assets are always available offline once downloaded.
 
 ---
@@ -212,9 +218,8 @@ Quota is the sum of canonical live metadata plus active reservations. If the act
 sync provider does not implement this query, quota enforcement fails closed instead
 of undercounting from incomplete history.
 
-Filesystem and S3 GC are available only with the same canonical query capability. They scan
-a bounded number of retained objects, keeps an object when either live metadata or a
-live reference edge exists, and rechecks both immediately before deleting the blob
-and its commit sidecar/marker. Providers without canonical queries continue to report GC as
-disabled. SQLite and Convex implement the same bounded canonical query contract;
-there is no fallback to `pull()`.
+Filesystem and S3 destructive GC remain disabled until they own deletion coordination
+with the canonical backend. Canonical queries and pre-delete rechecks alone cannot
+prevent concurrent restores or new reference writes. They return
+`deletion_coordination_required` without scanning or deleting objects. SQLite and
+Convex implement the bounded canonical query contract; there is no fallback to `pull()`.

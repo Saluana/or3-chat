@@ -92,6 +92,19 @@ async function mountedWorkspaces() {
 }
 
 describe('mounted document editor workspace lifecycle', () => {
+    it('makes retained trashed documents read-only and restores editing without deleting content', async () => {
+        const { dbA, editor } = await mountedWorkspaces();
+        const { updateWorkspaceFile } = await import('~/db/workspace-files');
+        const { workspaceRevision } = await import('~/utils/chat/workspace-items');
+        const scope = { db: dbA, workspaceId: 'local', signal: new AbortController().signal,
+            writable: true, assertCurrent() {} } as never;
+        const before = (await dbA.posts.get(documentId))!;
+        const trashed = await updateWorkspaceFile(scope, documentId, await workspaceRevision(before), { trashed: true });
+        await vi.waitFor(() => expect(editor.isEditable).toBe(false));
+        expect((await dbA.posts.get(documentId))?.content).toBe(before.content);
+        await updateWorkspaceFile(scope, documentId, await workspaceRevision(trashed), { trashed: false });
+        await vi.waitFor(() => expect(editor.isEditable).toBe(true));
+    });
     it('accepts committed Apply without another storage reload that can revive the old buffer', async () => {
         vi.stubGlobal('Blob', NodeBlob);
         const originalAuth = testRuntimeConfig.value.public.ssrAuthEnabled;

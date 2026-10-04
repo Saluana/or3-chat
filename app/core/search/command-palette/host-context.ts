@@ -135,10 +135,10 @@ export function createPaletteHostContext(
                     }
                     const index = api.panes.value.length;
                     api.addPane();
-                    await api.setPaneThread(index, threadId);
+                    await api.setPaneThread(index, threadId ?? '');
                     return { ok: true };
                 }
-                await api.setPaneThread(api.activePaneIndex.value, threadId);
+                await api.setPaneThread(api.activePaneIndex.value, threadId ?? '');
                 return { ok: true };
             } catch (error) {
                 return failure(

@@ -21,6 +21,7 @@ import {
 } from '../../utils/sync/rate-limiter';
 import { getClientIp, normalizeProxyTrustConfig } from '../../utils/net/request-identity';
 import { enforceRateLimit } from '../../utils/rate-limit/enforce';
+import { getActiveSyncGatewayAdapter } from '../../sync/gateway/registry';
 
 /**
  * GET /api/auth/session
@@ -79,14 +80,14 @@ export default defineEventHandler(async (event) => {
           }
         : null;
 
+    const appAccessAllowed = session.authenticated && can(session, 'workspace.read', {
+        kind: 'workspace', id: session.workspace?.id,
+    }).allowed;
+    const workspaceItemCapability = appAccessAllowed && getActiveSyncGatewayAdapter()?.capabilities?.workspaceItems === 'v1' ? 'v1' : undefined;
     return {
         session: clientSession,
-        appAccessAllowed: session.authenticated
-            ? can(session, 'workspace.read', {
-                  kind: 'workspace',
-                  id: session.workspace?.id,
-              }).allowed
-            : false,
+        appAccessAllowed,
+        ...(workspaceItemCapability ? { workspaceItemCapability } : {}),
     };
 });
 

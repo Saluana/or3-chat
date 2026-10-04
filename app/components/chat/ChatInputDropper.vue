@@ -392,7 +392,7 @@ import {
     getCurrentInstance,
     defineAsyncComponent,
 } from 'vue';
-import { useOr3Config } from '~/composables/useOr3Config';
+import { isMentionSourceEnabled, useOr3Config } from '~/composables/useOr3Config';
 import { useSystemPromptsModal } from '~/composables/chat/useSystemPromptsModal';
 import { getPrompt } from '~/db/prompts';
 import { getThreadSystemPrompt } from '~/db/threads';
@@ -420,6 +420,9 @@ import {
     type ComposerActionContext,
 } from '#imports';
 import { useHooks } from '~/core/hooks/useHooks';
+import { captureWorkspaceOperation, workspaceFilesAvailable } from '~/utils/chat/workspace-access';
+import { getActiveWorkspaceId } from '~/db/client';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { trustedEditorRevision } from '~/composables/plugins/trusted-editor';
 import { useIcon } from '~/composables/useIcon';
 import {
@@ -625,6 +628,7 @@ async function initializeEditor(replaceExisting = false) {
         const wasFocused = previous?.isFocused ?? false;
         previous?.destroy();
         editor.value = nextEditor;
+        nextEditor.storage.or3MentionAttachments = { attachImage: attachMentionImage };
         if (replaceExisting && previous) {
             nextEditor.commands.setContent(
                 previousJson ? contentForEditor(previousJson, nextEditor) : text,
@@ -646,7 +650,7 @@ async function initializeEditor(replaceExisting = false) {
 onMounted(async () => {
     await initializeEditor();
     if (props.paneId && !componentDisposed) {
-        registerPaneInput(props.paneId, { setText, focus, triggerSend });
+        registerPaneInput(props.paneId, { setText, focus, triggerSend, insertReference, attachFile });
     }
 });
 watch(trustedEditorRevision, () => {
@@ -841,10 +845,25 @@ const {
     replaceDraft,
     handlePaste,
     openFileDialog,
+    processAttachment,
 } = useChatInputAttachments({
     maxFiles: MAX_IMAGES,
     onImageAdd: (attachment) => emit('image-add', attachment),
     onImageRemove: (index) => emit('image-remove', index),
+    onTextFile: async (file: File) => {
+        if (!workspaceFilesAvailable()) throw new Error('Files is unavailable with the current cloud provider. Update the provider and refresh.');
+        const initiatingTab = props.tabId;
+        const scope = captureWorkspaceOperation({ subject: null, workspaceId: getActiveWorkspaceId() ?? 'local',
+            threadId: 'chat-upload', messageId: null, requestId: createRuntimeUuid(), callId: createRuntimeUuid(),
+            abortSignal: new AbortController().signal });
+        const { importWorkspaceFile } = await import('~/db/workspace-files');
+        const result = await importWorkspaceFile(scope, file, file.name);
+        scope.assertCurrent();
+        if (componentDisposed || props.tabId !== initiatingTab) throw new Error('File saved in Files; the originating chat is no longer open.');
+        if (!insertReference({ id: result.post.id, source: 'file', label: result.post.title })) {
+            throw new Error('File saved in Files. Enable mentions to insert a chat reference.');
+        }
+    },
 });
 const imageSettings = ref<ImageSettings>({
     quality: 'medium',
@@ -1276,7 +1295,51 @@ function focus() {
 function triggerSend(): Promise<SendResult> {
     return handleSend();
 }
-defineExpose({ setText, focus, triggerSend });
+function insertReference(reference: { id: string; source: 'document' | 'chat' | 'file'; label: string }, afterText = ''): boolean {
+    if (!isMentionSourceEnabled(reference.source === 'chat' ? 'conversations' : 'documents')) return false;
+    const current = editor.value;
+    if (!current?.schema.nodes.mention) return false;
+    const inserted = current.chain().focus('end').insertContent([
+        { type: 'mention', attrs: reference }, { type: 'text', text: ` ${afterText}` },
+    ]).run();
+    if (inserted) captureDraft();
+    return inserted;
+}
+async function attachFile(file: File): Promise<boolean> {
+    const initiatingTab = props.tabId;
+    const attachment = await processAttachment(file);
+    if (componentDisposed || props.tabId !== initiatingTab || attachment?.status !== 'ready') return false;
+    captureDraft();
+    return true;
+}
+async function attachMentionImage(id: string): Promise<void> {
+    const initiatingTab = props.tabId;
+    const initiatingEditor = editor.value;
+    try {
+        const origin = captureWorkspaceOperation({ subject: null, workspaceId: getActiveWorkspaceId() ?? 'local',
+            threadId: 'mention-image', messageId: null, requestId: id, callId: id, abortSignal: new AbortController().signal });
+        const { readWorkspaceItem } = await import('~/utils/chat/workspace-items');
+        const { parseFileHashes } = await import('~/db/files-util');
+        const { getFileBlob } = await import('~/db/files');
+        await readWorkspaceItem(origin, { kind: 'file', id });
+        const row = await origin.db.posts.get(id);
+        const hash = parseFileHashes(row?.file_hashes)[0];
+        const meta = hash ? await origin.db.file_meta.get(hash) : undefined;
+        origin.assertCurrent();
+        if (!meta || meta.deleted || !meta.mime_type.startsWith('image/')) throw new Error('This image is unavailable.');
+        const blob = await getFileBlob(meta.hash, origin.db);
+        await readWorkspaceItem(origin, { kind: 'file', id });
+        origin.assertCurrent();
+        if (componentDisposed || props.tabId !== initiatingTab || editor.value !== initiatingEditor) return;
+        if (!blob) throw new Error('Image unavailable offline. Connect and retry.');
+        await attachFile(new File([blob], meta.name, { type: meta.mime_type }));
+    } catch (error) {
+        if (!componentDisposed && props.tabId === initiatingTab) {
+            toast.add({ title: 'Could not attach image', description: error instanceof Error ? error.message : 'Try again.', color: 'error' });
+        }
+    }
+}
+defineExpose({ setText, focus, triggerSend, insertReference, attachFile });
 
 onBeforeUnmount(() => {
     if (props.paneId) unregisterPaneInput(props.paneId);

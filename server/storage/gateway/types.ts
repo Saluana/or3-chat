@@ -132,6 +132,11 @@ export interface DeleteObjectRequest {
  */
 export interface StorageGatewayAdapter {
     id: string;
+    /** Canonical backend owns an atomic deletion barrier honored by writes/restores.
+     * Query-only liveness checks do not qualify. The barrier can be released only
+     * after a verified re-upload; host dispatch also binds it to the sync backend.
+     */
+    deletionCoordination?: { version: 1; syncProviderId: string };
 
     /**
      * Generate presigned upload URL.

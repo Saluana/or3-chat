@@ -75,10 +75,11 @@ describe('ordinary forks after compaction', () => {
 });
 
 describe('root index upgrade', () => {
-    it('adds queryable lineage indexes without rewriting legacy rows or producing startup outbox records', async () => {
+    it.each([20, 21, 24])('adds lineage and Files indexes from v%s without rewriting rows or producing startup outbox records', async sourceVersion => {
         const name = `root-index-upgrade-${crypto.randomUUID()}`;
         const legacy = new Dexie(name);
-        legacy.version(20).stores({ threads: 'id, parent_thread_id', pending_ops: 'id, status, [status+readyAt+createdAt+id]' });
+        legacy.version(sourceVersion).stores({ threads: sourceVersion === 24 ? 'id, parent_thread_id, root_thread_id' : 'id, parent_thread_id',
+            pending_ops: 'id, status, [status+readyAt+createdAt+id]' + (sourceVersion === 21 ? ', [tableName+pk]' : '') });
         await legacy.open();
         const row = { id: 'old-root', created_at: 1, updated_at: 1, clock: 9, status: 'ready', deleted: false, pinned: false, forked: false };
         const child = { ...row, id: 'old-child', parent_thread_id: 'old-root', root_thread_id: 'old-root' };
@@ -88,6 +89,7 @@ describe('root index upgrade', () => {
             await upgraded.open();
             expect(await upgraded.threads.get('old-root')).toEqual(row);
             expect(await upgraded.threads.where('root_thread_id').equals('old-root').primaryKeys()).toEqual(['old-child']);
+            expect(await upgraded.pending_ops.where('[tableName+pk]').equals(['messages', 'absent']).count()).toBe(0);
             expect(await upgraded.pending_ops.count()).toBe(0);
         } finally { upgraded.close(); await Dexie.delete(name); }
     });

@@ -71,13 +71,15 @@
  * The ChatInputDropper exposes a minimal imperative API (setText, send). We attach it via ref binding.
  */
 
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import type { SendResult } from '~/utils/chat/types';
 
 interface ChatInputImperativeApi {
     setText(t: string): void;
     focus(): void;
     triggerSend(): Promise<SendResult>; // send current text/attachments
+    insertReference?: (reference: { id: string; source: 'document' | 'chat' | 'file'; label: string }, afterText?: string) => boolean;
+    attachFile?: (file: File) => Promise<boolean>;
 }
 
 interface RegisteredPaneInput {
@@ -183,6 +185,27 @@ export function programmaticPrefill(
     return { status: 'ready' };
 }
 
+/** Insert a removable mention without replacing the user's current draft. */
+export function programmaticInsertReference(paneId: string,
+    reference: { id: string; source: 'document' | 'chat' | 'file'; label: string }, afterText?: string):
+    { status: 'ready' } | { status: 'unavailable' } {
+    const registered = find(paneId);
+    const inserted = afterText === undefined ? registered?.api.insertReference?.(reference)
+        : registered?.api.insertReference?.(reference, afterText);
+    if (!inserted || !registered) return { status: 'unavailable' };
+    registered.api.focus();
+    return { status: 'ready' };
+}
+
+/** Reuse native validation, policy, persistence and model attachment handling. */
+export async function programmaticAttachFile(paneId: string, file: File): Promise<{ status: 'ready' } | { status: 'unavailable' }> {
+    const registered = find(paneId);
+    if (!registered?.api.attachFile) return { status: 'unavailable' };
+    if (!await registered.api.attachFile(file) || find(paneId) !== registered) return { status: 'unavailable' };
+    registered.api.focus();
+    return { status: 'ready' };
+}
+
 /**
  * Checks if a pane is registered.
  *
@@ -191,4 +214,20 @@ export function programmaticPrefill(
  */
 export function hasPane(paneId: string) {
     return !!find(paneId);
+}
+
+/** Tab navigation finishes before a lazily mounted composer may register. */
+export function waitForPaneInput(paneId: string, signal: AbortSignal): Promise<boolean> {
+    if (signal.aborted) return Promise.resolve(false);
+    if (find(paneId)) return Promise.resolve(true);
+    return new Promise(resolve => {
+        const finish = (ready: boolean) => {
+            stop(); clearTimeout(timer); signal.removeEventListener('abort', cancelled); resolve(ready);
+        };
+        const cancelled = () => finish(false);
+        const stop = watch(() => find(paneId), registered => { if (registered) finish(true); }, { flush: 'sync' });
+        const timer = setTimeout(() => finish(false), 2000);
+        signal.addEventListener('abort', cancelled, { once: true });
+        if (signal.aborted) finish(false);
+    });
 }

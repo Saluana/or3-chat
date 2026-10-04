@@ -61,6 +61,8 @@ describe('createPaletteHostContext', () => {
             { kind: 'chat', threadId: 'chat-1' },
             { target: 'active' }
         );
+        await expect(host.openChat(null, 'active')).resolves.toEqual({ ok: true });
+        expect(openWorkspaceResource).toHaveBeenLastCalledWith({ kind: 'chat', threadId: null }, { target: 'active' });
         expect(openWorkspaceResource).toHaveBeenNthCalledWith(
             2,
             { kind: 'document', documentId: 'doc-1' },

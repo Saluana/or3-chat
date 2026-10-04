@@ -1046,44 +1046,18 @@ function onWorkspaceTabClose(tabId: string): void {
         if (!closed) return;
         clearPanePendingPromptAfter(tabId, 6000);
         workspaceTabDrafts.discardAfter(tabId, 6000);
-        toast.add({
-            id: 'workspace-tab-closed',
-            title: 'Tab closed',
-            duration: 6000,
-            actions: [
-                {
-                    label: 'Undo',
-                    size: 'sm',
-                    onClick: () => void workspaceTabs.reopenClosedTab(),
-                },
-            ],
-        });
+
     });
 }
 
 async function closeWorkspaceTabs(tabIds: readonly string[]): Promise<void> {
-    let closedCount = 0;
     for (const tabId of tabIds) {
         if (await workspaceTabs.closeTab(tabId)) {
             clearPanePendingPromptAfter(tabId, 6000);
             workspaceTabDrafts.discardAfter(tabId, 6000);
-            closedCount++;
         }
     }
-    if (closedCount) {
-        toast.add({
-            id: 'workspace-tabs-closed',
-            title: closedCount === 1 ? 'Tab closed' : `${closedCount} tabs closed`,
-            duration: 6000,
-            actions: [
-                {
-                    label: 'Undo',
-                    size: 'sm',
-                    onClick: () => void workspaceTabs.reopenClosedTab(),
-                },
-            ],
-        });
-    }
+
 }
 
 function closeOtherWorkspaceTabs(tabId: string): void {
@@ -1155,8 +1129,7 @@ function activateRelativeWorkspaceTab(direction: 1 | -1): void {
 }
 
 function openWorkspaceTabInSplit(tabId: string): void {
-    const tab = workspaceTabs.state.value.tabs.find((entry) => entry.id === tabId);
-    if (tab) void workspaceTabs.openInSplit(tab.resource, { allowDuplicate: true });
+    void workspaceTabs.openTabInSplit(tabId);
 }
 
 const workspaceCopyableTabIds = computed(
@@ -1772,7 +1745,7 @@ async function openWorkspaceResource(
     if (workspaceTabsEnabled.value) {
         return !!(await workspaceTabs.openResource(resource, {
             target: 'split',
-            allowDuplicate: true,
+            allowDuplicate: false,
         }));
     }
 
@@ -1970,7 +1943,12 @@ onMounted(() => {
             ...(workspaceTabsEnabled.value
                 ? {
                       openWorkspaceResource: (resource: WorkspaceResource, options: { target: 'active' | 'split' }) =>
-                          workspaceTabs.openResource(resource, options),
+                          workspaceTabs.openResource(resource, {
+                              ...options,
+                              // An app must leave an unsent chat available for
+                              // returning with a reference or attachment.
+                              ...(resource.kind === 'app' ? { reuseActiveBlank: false } : {}),
+                          }),
                       activateWorkspaceTab: (tabId: string) =>
                           workspaceTabs.activateTab(tabId, 'command'),
                   }

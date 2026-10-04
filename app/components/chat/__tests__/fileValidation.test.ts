@@ -2,8 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import '~/../tests/setup';
 import { validateFile, persistAttachment } from '../file-upload-utils';
 
+const runtime = vi.hoisted(() => ({ public: { ssrAuthEnabled: false } }));
+vi.mock('~/composables/auth/useSessionContext', () => ({ getCachedSessionContext: () => null, getCachedSessionPayload: () => null }));
 vi.mock('#imports', () => ({
     useToast: () => ({ add: vi.fn() }),
+    useRuntimeConfig: () => runtime,
 }));
 
 // Mock file persistence to control failures
@@ -52,7 +55,18 @@ function makeFile(name: string, type: string, size = 1000): File {
 
 describe('file validation & persistence', () => {
     beforeEach(() => {
+        runtime.public.ssrAuthEnabled = false;
         (createOrRefFile as any).mockClear();
+    });
+
+    it.each(['image/png', 'application/pdf'])('persists SSR guest %s attachments without catalog authorization', async mime => {
+        runtime.public.ssrAuthEnabled = true;
+        const file = makeFile('guest-attachment', mime);
+        const att: any = { file, name: file.name, status: 'pending', kind: mime === 'application/pdf' ? 'pdf' : 'image' };
+        await persistAttachment(att);
+        expect(att.status).toBe('ready');
+        expect(createOrRefFile).toHaveBeenCalledOnce();
+        expect(att.hash).toBe('h');
     });
 
     it('rejects unsupported mime', async () => {
@@ -80,6 +94,7 @@ describe('file validation & persistence', () => {
         expect(v.ok).toBe(true);
         const att: any = { file: img, name: 'x.png', status: 'pending' };
         await persistAttachment(att);
+        expect(createOrRefFile).toHaveBeenCalledOnce();
         expect(att.status).toBe('error');
         expect(att.error).toBe('The attachment could not be saved. Please try attaching it again.');
     });

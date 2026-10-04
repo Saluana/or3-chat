@@ -52,6 +52,8 @@ export default defineAppConfig({
                 },
                 // Override size variant so padding wins over defaults
                 size: {
+                    workspace: { base: 'h-9! min-h-9! px-3! py-1.5! text-[13px]! leading-5! gap-2! max-md:h-11! max-md:min-h-11!', label: 'tracking-normal!', leadingIcon: 'size-[18px]! shrink-0!', trailingIcon: 'size-4! shrink-0!' },
+                    touch: { base: 'min-h-[44px]! h-auto! px-3! py-2! justify-center' },
                     modal: { base: 'h-10! min-h-10! px-4! py-0! text-sm! justify-center rounded-[var(--md-border-radius-small,var(--md-border-radius))]' },
                     xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
                     sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
@@ -77,6 +79,9 @@ export default defineAppConfig({
                 variant: {
                     modal: 'bg-[var(--md-surface-variant)]! border-[color:var(--md-border-color)]! hover:border-[color:var(--md-outline)]! focus:border-[color:var(--md-primary)]! focus-visible:ring-[length:var(--app-focus-ring-width,2px)]! focus-visible:ring-[color:var(--md-focus-ring,var(--md-primary))]! h-10 min-h-10',
                 },
+                size: {
+                    workspace: { base: 'h-10! min-h-10! px-3! py-2! text-[14px]! leading-5! max-md:h-11! max-md:min-h-11! max-md:text-[16px]!', leading: 'ps-3!', trailing: 'pe-3!', leadingIcon: 'size-[18px]!', trailingIcon: 'size-4!' },
+                },
                 // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
                 leading: { true: 'ps-10!' },
                 trailing: { true: 'pe-10!' },
@@ -88,6 +93,7 @@ export default defineAppConfig({
             },
         },
         select: {
+            variants: { size: { workspace: { base: 'h-10! min-h-10! ps-3! pe-9! py-2! gap-2! text-[13px]! leading-5! max-md:h-11! max-md:min-h-11! max-md:text-[16px]!', leading: 'ps-3!', trailing: 'pe-3!', leadingIcon: 'size-4!', trailingIcon: 'size-4!', item: 'px-3! py-2! text-[13px]! min-h-9! gap-2! max-md:min-h-11!', itemLeadingIcon: 'size-4!', itemTrailingIcon: 'size-4!', itemLabel: 'whitespace-normal! break-words! text-clip!', label: 'px-3 py-2 text-xs', empty: 'p-3 text-sm', content: 'min-w-[180px]' } } },
             slots: {
                 base: 'rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)]',
                 content: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! theme-shadow',

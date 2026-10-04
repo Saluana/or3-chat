@@ -83,6 +83,7 @@ export function useDocumentsList(limit = 200) {
         useHookEffect('db.documents.delete:action:*:after', () => refresh(), {
             kind: 'action',
         });
+        useHookEffect('db.posts.upsert:action:after', () => refresh(), { kind: 'action' });
     }
 
     return { docs, loading, error, refresh };

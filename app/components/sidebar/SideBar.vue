@@ -88,6 +88,7 @@
         :thread-has-descendants="threadHasDescendants"
         :delete-document-modal-props="deleteDocumentModalProps"
         :show-delete-document-modal="showDeleteDocumentModal"
+        :document-trash-enabled="documentTrashEnabled"
         :delete-project-modal-props="deleteProjectModalProps"
         :show-delete-project-modal="showDeleteProjectModal"
         @update:show-rename-modal="showRenameModal = $event"
@@ -167,6 +168,7 @@
 </template>
 
 <script setup lang="ts">
+import { useSessionContext } from '~/composables/auth/useSessionContext';
 import {
     onMounted,
     onUnmounted,
@@ -180,6 +182,13 @@ import { useHooks } from '~/core/hooks/useHooks';
 import { liveQuery } from 'dexie';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { ThreadHasDescendantsError } from '~/db/threads';
+import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
+import { parseFileHashes } from '~/db/files-util';
+import { useRuntimeConfig } from '#imports';
+import { captureWorkspaceOperation } from '~/utils/chat/workspace-access';
+import { workspaceRevision } from '~/utils/chat/workspace-items';
+import { getActiveWorkspaceId } from '~/db/client';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 import {
     db,
     upsert,
@@ -215,6 +224,9 @@ import { useSidebarThemeProps } from '~/composables/sidebar/useSidebarThemeProps
 import { isMobile } from '~/state/global';
 
 const iconEdit = useIcon('ui.edit');
+const { data: workspaceSession } = useSessionContext();
+const documentTrashEnabled = computed(() => !useRuntimeConfig().public.ssrAuthEnabled
+    || (workspaceSession.value?.appAccessAllowed === true && workspaceSession.value.workspaceItemCapability === 'v1'));
 const iconFolder = useIcon('sidebar.folder');
 const iconNote = useIcon('sidebar.note');
 const iconLoading = useIcon('ui.loading');
@@ -420,13 +432,30 @@ function bindWorkspaceQueries() {
         error: (err) => console.error('liveQuery error', err),
     });
     // Projects subscription (most recently updated first)
-    subProjects = liveQuery(() =>
-        workspaceDb.projects
+    subProjects = liveQuery(async () => {
+        const currentProjects = await workspaceDb.projects
             .orderBy('updated_at')
             .reverse()
             .filter((p: any) => !p.deleted)
-            .toArray()
-    ).subscribe({
+            .toArray();
+        return Promise.all(currentProjects.map(async project => {
+            const entries = normalizeProjectData(project.data);
+            const visible = await Promise.all(entries.map(async entry => {
+                const row = entry.kind === 'chat' ? await workspaceDb.threads.get(entry.id) : await workspaceDb.posts.get(entry.id);
+                if (!row || !isVisibleWorkspaceItem(row)) return null;
+                if (entry.kind !== 'chat') {
+                    if (!('postType' in row) || row.postType !== (entry.kind === 'file' ? 'or3:file' : 'doc')) return null;
+                    if (entry.kind === 'file') {
+                        const hashes = parseFileHashes(row.file_hashes);
+                        const meta = hashes.length === 1 ? await workspaceDb.file_meta.get(hashes[0]!) : undefined;
+                        if (!meta || meta.deleted) return null;
+                    }
+                }
+                return { ...entry, name: entry.name ?? row.title };
+            }));
+            return { ...project, data: visible.filter(entry => entry !== null) };
+        }));
+    }).subscribe({
         next: (res) => {
             if (generation !== getWorkspaceGeneration()) return;
             projects.value = res.map((p: Project) => ({
@@ -442,7 +471,7 @@ function bindWorkspaceQueries() {
             workspaceDb.posts
                 .where('postType')
                 .equals('doc')
-                .and((r) => !r.deleted)
+                .and(isVisibleWorkspaceItem)
                 .toArray()
         ).subscribe({
             next: (res) => {
@@ -740,7 +769,16 @@ function confirmDeleteDocument(doc: DocumentItem) {
 }
 async function deleteDocument() {
     if (!deleteDocumentId.value) return;
-    await dbDel.hard.document(deleteDocumentId.value);
+    if (documentTrashEnabled.value) {
+        const scope = captureWorkspaceOperation({ subject: null, workspaceId: getActiveWorkspaceId() ?? 'local',
+            threadId: 'sidebar-documents', messageId: null, callId: createRuntimeUuid(), requestId: createRuntimeUuid(), abortSignal: new AbortController().signal });
+        const id = deleteDocumentId.value;
+        const { updateWorkspaceFile } = await import('~/db/workspace-files');
+        const row = await scope.db.posts.get(id);
+        scope.assertCurrent('write');
+        if (!row) throw new Error('This document is unavailable.');
+        await updateWorkspaceFile(scope, row.id, await workspaceRevision(row), { trashed: true });
+    } else await dbDel.hard.document(deleteDocumentId.value);
     showDeleteDocumentModal.value = false;
     deleteDocumentId.value = null;
 }

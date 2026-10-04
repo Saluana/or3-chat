@@ -4,6 +4,8 @@ import { getWriteTxTableNames, nextClock, nowSec } from '~/db/util';
 import { captureWorkspaceOperation, type WorkspaceOperationScope } from './workspace-access';
 import { readWorkspaceItem, workspaceRevision, type WorkspaceItemRef } from './workspace-items';
 import type { ToolExecutionContext } from './types';
+import { FILE_CATALOG_POST_TYPE, isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
+import { parseFileHashes } from '~/db/files-util';
 
 /** Keep unrecognized extension entries verbatim when editing known memberships. */
 export function preservedProjectEntries(data: unknown): unknown[] {
@@ -58,9 +60,18 @@ export async function readVisibleWorkspaceProjectEntries(scope: WorkspaceOperati
             const separator = identity.indexOf(':');
             const kind = identity.slice(0, separator) as WorkspaceItemRef['kind'];
             const id = identity.slice(separator + 1);
-            const row = kind === 'chat' ? await scope.db.threads.get(id) : kind === 'document' ? await scope.db.posts.get(id) : undefined;
+            const row = kind === 'chat' ? await scope.db.threads.get(id) : kind === 'document' || kind === 'file' ? await scope.db.posts.get(id) : undefined;
             scope.assertCurrent();
-            if (row && !row.deleted && (kind !== 'document' || 'postType' in row && row.postType === 'doc')) visible.push({ kind, id });
+            if (row && isVisibleWorkspaceItem(row)
+                && (kind === 'chat' || 'postType' in row && row.postType === (kind === 'file' ? FILE_CATALOG_POST_TYPE : 'doc'))) {
+                if (kind === 'file') {
+                    const hashes = parseFileHashes('file_hashes' in row ? row.file_hashes : undefined);
+                    const meta = hashes.length === 1 ? await scope.db.file_meta.get(hashes[0]!) : undefined;
+                    scope.assertCurrent();
+                    if (!meta || meta.deleted) continue;
+                }
+                visible.push({ kind, id });
+            }
         }
         return visible;
     });
@@ -129,7 +140,7 @@ export async function updateWorkspaceProject(args: Record<string, unknown>, cont
     if (prepared.row.id !== proposed.id || prepared.row.deleted) throw new Error('A project hook changed the operation target.');
     scope.assertCurrent('write');
     let saved = prepared.row;
-    await scope.db.transaction('rw', getWriteTxTableNames(scope.db, 'projects', { include: ['posts', 'threads'] }), async () => {
+    await scope.db.transaction('rw', getWriteTxTableNames(scope.db, 'projects', { include: ['posts', 'threads', 'file_meta'] }), async () => {
         scope.assertCurrent('write');
         const current = await scope.db.projects.get(proposed.id);
         scope.assertCurrent('write');
@@ -138,7 +149,14 @@ export async function updateWorkspaceProject(args: Record<string, unknown>, cont
         if (item) {
             const currentItem = item.kind === 'chat' ? await scope.db.threads.get(item.id) : await scope.db.posts.get(item.id);
             scope.assertCurrent('write');
-            if (!currentItem || currentItem.deleted) throw new Error('That item is unavailable.');
+            if (!currentItem || !isVisibleWorkspaceItem(currentItem)
+                || item.kind !== 'chat' && (!('postType' in currentItem) || currentItem.postType !== (item.kind === 'file' ? FILE_CATALOG_POST_TYPE : 'doc'))) throw new Error('That item is unavailable.');
+            if (item.kind === 'file') {
+                const hashes = parseFileHashes('file_hashes' in currentItem ? currentItem.file_hashes : undefined);
+                const meta = hashes.length === 1 ? await scope.db.file_meta.get(hashes[0]!) : undefined;
+                scope.assertCurrent('write');
+                if (!meta || meta.deleted) throw new Error('That file is unavailable.');
+            }
             // Remove the supported legacy pointer as well, so filtering doesn't resurrect the association.
             if (item.kind === 'chat' && operation === 'remove_item') {
                 const chat = await scope.db.threads.get(item.id);

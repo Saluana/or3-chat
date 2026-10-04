@@ -3,6 +3,7 @@ import { getDb } from '~/db/client';
 import { nowSec, newId, getWriteTxTableNames } from '~/db/util';
 import {
     normalizeProjectData,
+    mergeProjectEntries,
     type ProjectEntry,
     type ProjectEntryKind,
 } from '~/utils/projects/normalizeProjectData';
@@ -83,7 +84,7 @@ export function useProjectsCrud() {
         entries.push({ id: threadId, name: title, kind: 'chat' });
         await upsert.project({
             ...project,
-            data: entries,
+            data: mergeProjectEntries(project.data, entries),
             updated_at: now,
         });
         return { id: threadId, name: title };
@@ -104,7 +105,7 @@ export function useProjectsCrud() {
         });
         await upsert.project({
             ...project,
-            data: entries,
+            data: mergeProjectEntries(project.data, entries),
             updated_at: nowSec(),
         });
         return { id: doc.id, title: doc.title };
@@ -120,7 +121,7 @@ export function useProjectsCrud() {
         const normalized = entries.map((entry) => ({ ...entry }));
         await upsert.project({
             ...existing,
-            data: normalized,
+            data: mergeProjectEntries(existing.data, normalized),
             updated_at: nowSec(),
         });
     }
@@ -158,7 +159,7 @@ export function useProjectsCrud() {
                 });
                 updates.push({
                     ...project,
-                    data: nextEntries,
+                    data: mergeProjectEntries(project.data, nextEntries),
                     updated_at: now,
                 });
             }
