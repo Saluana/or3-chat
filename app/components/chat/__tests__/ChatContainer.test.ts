@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import * as nuxtImports from '#imports';
 import { kv } from '~/db';
+import { getWorkspaceGeneration } from '~/db/client';
 import { defineComponent, nextTick, reactive, ref, toRaw } from 'vue';
 import ChatContainer from '../ChatContainer.vue';
 
@@ -170,6 +171,61 @@ describe('ChatContainer', () => {
             },
         });
     }
+
+    it('routes a compaction link through its originating container and scrolls the exact anchor only after history is loaded', async () => {
+        const instance = makeChatInstance(); instance.threadId.value = 'child';
+        instance.messages.value = [{ id: 'summary', role: 'system', text: 'Historical reference', compaction: {
+            compaction_id: 'operation', source_thread_id: 'source', anchor_message_id: 'anchor', landmarks: [],
+        } }];
+        const wrapper = mountChatInstance(instance, { threadId: 'child' });
+        try {
+            await nextTick(); await flushPromises();
+            const row = wrapper.findComponent(LazyChatMessage);
+            const scroller = wrapper.findComponent({ name: 'Or3Scroll' });
+            const exposed = scroller.vm.$.exposed as { scrollToItemKey: (key: string, options?: unknown) => void };
+            expect(typeof exposed.scrollToItemKey).toBe('function');
+            const scroll = vi.spyOn(exposed, 'scrollToItemKey');
+            row.vm.$emit('view-compaction-source', { threadId: 'unrelated', messageId: 'anchor', originThreadId: 'child' });
+            expect(wrapper.emitted('thread-selected')).toBeUndefined();
+            row.vm.$emit('view-compaction-source', { threadId: 'source', messageId: 'anchor', originThreadId: 'child' });
+            expect(wrapper.emitted('thread-selected')).toBeUndefined();
+            expect(wrapper.emitted('view-compaction-source')).toMatchObject([[{ threadId: 'source', messageId: 'anchor', originThreadId: 'child' }]]);
+            await wrapper.setProps({ threadId: 'source' }); await flushPromises();
+            const destination = wrapper.vm.$.exposed as { scrollToMessage: (target: { threadId: string; messageId: string; generation: number }) => void };
+            destination.scrollToMessage({ threadId: 'source', messageId: 'anchor', generation: getWorkspaceGeneration() });
+            expect(scroll).not.toHaveBeenCalled();
+            instance.messages.value = [{ id: 'earlier', role: 'user', text: 'Earlier' }, { id: 'anchor', role: 'assistant', text: 'Exact original' }];
+            await vi.waitFor(() => expect(scroll).toHaveBeenCalledWith('anchor', { align: 'center', smooth: false }));
+            scroll.mockRestore();
+        } finally { wrapper.unmount(); }
+    });
+
+    it('rejects a late source-link event while the new thread still shows the previous summary', async () => {
+        const instance = makeChatInstance(); instance.threadId.value = 'child';
+        instance.messages.value = [{ id: 'summary', role: 'system', text: 'Historical reference', compaction: {
+            compaction_id: 'operation', source_thread_id: 'source', anchor_message_id: 'anchor', landmarks: [],
+        } }];
+        const wrapper = mountChatInstance(instance, { threadId: 'child' });
+        try {
+            await nextTick(); await flushPromises();
+            await wrapper.setProps({ threadId: 'new-child' }); await flushPromises();
+            expect(instance.threadId.value).toBe('new-child');
+            wrapper.findComponent(LazyChatMessage).vm.$emit('view-compaction-source', { threadId: 'source', messageId: 'anchor', originThreadId: 'child' });
+            expect(wrapper.emitted('thread-selected')).toBeUndefined();
+            expect(wrapper.emitted('view-compaction-source')).toBeUndefined();
+        } finally { wrapper.unmount(); }
+    });
+
+    it('keeps internally created blank-chat threads on the existing creation event', async () => {
+        const instance = makeChatInstance(); instance.threadId.value = undefined;
+        const wrapper = mountChatInstance(instance);
+        try {
+            await flushPromises();
+            instance.threadId.value = 'newly-created'; await nextTick();
+            expect(wrapper.emitted('thread-selected')).toEqual([['newly-created']]);
+            expect(wrapper.emitted('view-compaction-source')).toBeUndefined();
+        } finally { wrapper.unmount(); }
+    });
 
     it('reopens welcome for an explicit preview and dismisses without saving preferences', async () => {
         const runtimeConfig = nuxtImports.useRuntimeConfig();

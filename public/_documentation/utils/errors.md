@@ -73,11 +73,18 @@ name. Common groups include:
 | Browser persistence | `ERR_DB_READ_FAILED`, `ERR_DB_WRITE_FAILED`, `ERR_DB_QUOTA_EXCEEDED`, `ERR_FILE_VALIDATION`, `ERR_FILE_PERSIST` |
 | Cloud storage | `ERR_STORAGE_UPLOAD_FAILED`, `ERR_STORAGE_DOWNLOAD_FAILED`, `ERR_STORAGE_QUOTA_EXCEEDED`, `ERR_STORAGE_FILE_NOT_FOUND`, `ERR_STORAGE_PROVIDER_ERROR`, `ERR_FILE_TOO_LARGE` |
 | Chat and tools | `ERR_STREAM_ABORTED`, `ERR_STREAM_FAILURE`, `ERR_ABORTED`, `ERR_UNSUPPORTED_MODEL`, `ERR_TOOL_OUTCOME_UNKNOWN` |
+| Context admission | `ERR_CONTEXT_FULL`, `ERR_MODEL_METADATA_UNAVAILABLE`, `ERR_CONTEXT_LIMIT_INVALID`, `ERR_OUTPUT_LIMIT_INVALID` |
 | Extensions and sync | `ERR_HOOK_FAILURE`, `ERR_SYNC_PAYLOAD_TOO_LARGE` |
 
 The code alone does not authorize retry. Preserve normalized retryability,
 credential ownership, and retry delay; uncertain tool outcomes require
 reconciliation before any repeated side effect.
+
+Context admission failures are permanent for that candidate. Explicit provider
+context-length/window machine codes map to `ERR_CONTEXT_FULL` with app-owned
+recovery copy; arbitrary upstream text and generic HTTP 400 responses do not
+establish context overflow. Stored background error strings retain these codes
+through the shared serializer and presenter.
 
 Reporter tags are small, flat string/number/boolean values. Use `domain`
 (chat, db, files, auth), `stage` or `op`, and the relevant record ID where

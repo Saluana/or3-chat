@@ -28,6 +28,7 @@ import type {
 } from '../types';
 import { AdmissionCancelledError, getChatJobExecution } from '../types';
 import { getJobConfig } from '../store';
+import { readRequestUsage } from '~~/shared/chat/compaction';
 
 /**
  * Internal job record that includes an AbortController.
@@ -203,6 +204,9 @@ function claimJobRecord(
     if (recovering) {
         job.content = execution.contentBase ?? '';
         job.reasoning = execution.reasoningBase ?? '';
+        // A new attempt replays only the committed checkpoint. Measurements
+        // from the discarded partial attempt must not outlive that reset.
+        job.usage = readRequestUsage(execution.normalizedToolState?.requestUsage);
         job.chunksReceived = 0;
     }
     return toPublicJob(job);
@@ -385,6 +389,8 @@ export const memoryJobProvider: BackgroundJobProvider = {
         if (update.workflow_state !== undefined) {
             job.workflow_state = update.workflow_state;
         }
+        const usage = readRequestUsage(update.usage);
+        if (usage) job.usage = usage;
         job.lastActivityAt = Date.now();
     },
 
@@ -580,6 +586,8 @@ export const memoryJobProvider: BackgroundJobProvider = {
         if (snapshot.toolCalls !== undefined) {
             job.tool_calls = snapshot.toolCalls;
         }
+        const usage = readRequestUsage(snapshot.usage);
+        if (usage) job.usage = usage;
         job.error = snapshot.error;
         job.completedAt = snapshot.completedAt;
         job.historyPhase = 'finalization_pending';

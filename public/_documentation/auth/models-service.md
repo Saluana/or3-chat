@@ -29,6 +29,7 @@ Filtering metadata does not guarantee that a particular account can use a model,
 | Function | Contract |
 | --- | --- |
 | `fetchModels({ force?, ttlMs? })` | Returns `OpenRouterModel[]`; defaults to a one-hour cache TTL. |
+| `fetchModelCatalog({ force?, ttlMs? })` | Uses the same path and returns `{ data, source, fetchedAt }`. Source is live only after an SDK catalog response; cache fallback retains its original fetch time. |
 | `filterByText(models, query)` | Case-insensitive substring match over ID, name, and description. Empty query returns the input list. |
 | `filterByModalities(models, { input?, output? })` | Requires every requested input/output modality in the advertised arrays. |
 | `filterByContextLength(models, min)` | Uses top-provider context length, then model context length, then zero. |
@@ -40,7 +41,15 @@ The `modelsService` namespace/default export groups fetch and filter functions. 
 
 ## Cache and errors
 
-The service stores `{ data, fetchedAt }` under `openrouter_model_catalog_v1` in localStorage. A fresh nonempty cache is returned without a request. `force: true` bypasses that initial cache check, but a failed network request can still return a stale nonempty cache. With no usable cache, fetching rejects with a normalized error. Cache writes are best effort when browser storage is unavailable.
+The service stores `{ data, fetchedAt }` under `openrouter_model_catalog_v1` in localStorage. A fresh nonempty validated cache is returned without a request. `force: true` bypasses that initial cache check, but a failed network request can still return a stale nonempty cache. With no usable cache, fetching rejects with a normalized error. Cache writes are best effort when browser storage is unavailable. A missing legacy fetch timestamp is returned as `null`; loading or rewriting cached data does not make it a live response. The existing `fetchModels` list API and `ModelCatalogCache` type remain compatible.
+
+The existing model store retains the fetch timestamp when saving its `MODELS_CATALOG` KV cache as `{ version: 1, data, fetchedAt }`. It also reads legacy lists, whose actual fetch time is unknown. These are the same existing caches, not another catalog. Forced store refreshes wait for an ordinary in-flight network load and then coalesce a genuinely forced request. A delayed KV hydration cannot publish over a newer network request; it returns the currently owned catalog/request instead.
+
+## Capacity readiness foundation
+
+`useModelStore().resolveContextModel(selectedModelId, { signal? })` returns a captured metadata result or `{ ok: false, code: 'model_metadata_unavailable' }`. It validates capacity through the shared policy, keeps the original selected ID, prefers exact IDs across catalog/favorites before canonical-slug fallback after removing recognized routing/thinking suffixes for lookup, and freezes copied capacity facts. Valid catalog/favorite metadata can be used without transport. A missing or invalid record tries the normal cache path and one coalesced forced refresh; a later explicit call can recover. Favorite or legacy-cache records have cache provenance and an unknown fetch time.
+
+Cancellation rejects the waiting caller promptly and leaves a shared refresh available to other callers. Unvalidated `per_request_limits` are not treated as selected-route authority. This is metadata preparation only: ordinary native send/loop admission, draft preservation on budget rejection and independent server capacity resolution remain pending. The host's existing native fallback/reserve/trimming behavior has not been replaced by this foundation.
 
 Fetching uses the shared SDK client and collects its paginated model results, then converts them to OR3's snake_case model shape. The configured API URL is `runtimeConfig.public.openRouter.baseUrl`.
 

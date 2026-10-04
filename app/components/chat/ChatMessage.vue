@@ -14,6 +14,11 @@
             :is="customMessageRenderer"
             v-if="customMessageRenderer"
             :message="props.message"
+            :thread-id="props.threadId"
+            :retrieval-available="props.historyRetrievalAvailable"
+            @view-compaction-source="emit('view-compaction-source', $event)"
+            @content-resize="emit('content-resize')"
+            @view-related-thread="emit('view-related-thread', $event)"
         />
 
         <section v-else-if="props.message.isWorkflow" class="space-y-2" aria-label="Workflow run">
@@ -397,13 +402,14 @@
                     <template v-for="action in extraActions" :key="action.id">
                         <UTooltip
                             :delay-duration="500"
-                            :text="action.tooltip"
+                            :text="action.disabledReason?.(messageActionContext()) || action.tooltip"
                             :teleport="true"
                         >
                             <UButton
                                 v-bind="pluginActionButtonProps"
                                 :icon="action.icon"
                                 :aria-label="action.tooltip || action.id"
+                                :disabled="action.disabled?.(messageActionContext())"
                                 @click="() => runExtraAction(action)"
                             ></UButton>
                         </UTooltip>
@@ -411,10 +417,13 @@
                 </UFieldGroup>
             </div>
         </template>
+        <ThreadChildLinks v-if="props.message.id && !props.message.pending" :thread-id="props.threadId" :message-id="props.message.id" :tool-result-message-ids="props.message.toolResultMessageIds"
+            @navigate="emit('view-related-thread', $event)" />
     </div>
 </template>
 
 <script setup lang="ts">
+import ThreadChildLinks from './ThreadChildLinks.vue';
 import {
     computed,
     ref,
@@ -455,6 +464,8 @@ const props = withDefaults(
         threadId?: string;
         interactive?: boolean;
         retryDisabled?: boolean;
+        compactionAction?: { start: (anchorMessageId?: string) => Promise<void>; blockedReason?: string };
+        historyRetrievalAvailable?: boolean;
     }>(),
     { interactive: true },
 );
@@ -474,6 +485,8 @@ const emit = defineEmits<{
     (e: 'cancel-edit', id: string): void;
     (e: 'save-edit', id: string): void;
     (e: 'content-resize'): void;
+    (e: 'view-compaction-source', target: { threadId: string; messageId: string; originThreadId: string; scrollMessageId?: string }): void;
+    (e: 'view-related-thread', target: { threadId: string; originThreadId: string; anchorMessageId: string; generation: number }): void;
 }>();
 
 const copyIcon = useIcon('chat.message.copy');
@@ -1037,16 +1050,16 @@ async function onBranch() {
 // Narrow to expected role subset (exclude potential 'system' etc.)
 const actionRole: 'user' | 'assistant' =
     props.message.role === 'assistant' ? 'assistant' : 'user';
-const extraActions = useMessageActions({
+const registeredActions = useMessageActions({
     role: actionRole,
 });
+const messageActionContext = () => ({ message: props.message, threadId: props.threadId, compaction: props.compactionAction });
+const extraActions = computed(() => registeredActions.value.filter((action) => !action.visible || action.visible(messageActionContext())));
 
 async function runExtraAction(action: ChatMessageAction) {
     try {
-        await action.handler({
-            message: props.message,
-            threadId: props.threadId,
-        });
+        if (action.disabled?.(messageActionContext())) return;
+        await action.handler(messageActionContext());
     } catch (e: unknown) {
         const description =
             e instanceof Error ? e.message : 'Error running action';

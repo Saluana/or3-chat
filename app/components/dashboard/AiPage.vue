@@ -225,6 +225,42 @@
             </div>
         </section>
 
+        <!-- Native generations capture this workspace preference at admission. -->
+        <section
+            id="dashboard-ai-context-section"
+            class="section-card space-y-3"
+            role="group"
+            aria-labelledby="ai-section-context"
+        >
+            <h2 id="ai-section-context" class="dashboard-section-title">Context</h2>
+            <label class="text-xs font-medium" for="dashboard-ai-max-context-input">Maximum context tokens</label>
+            <p id="ai-max-context-help" class="supporting-text">
+                Leave blank to use the model limit. A saved maximum can be larger
+                than one model's window; each model still has its own capacity.
+            </p>
+            <div class="flex flex-wrap items-center gap-3">
+                <UInput
+                    id="dashboard-ai-max-context-input"
+                    v-bind="contextInputProps"
+                    v-model="contextInput"
+                    type="text"
+                    inputmode="numeric"
+                    placeholder="Use model limit"
+                    :disabled="savingContext"
+                    :aria-invalid="contextError ? 'true' : undefined"
+                    :aria-describedby="contextError ? 'ai-max-context-help ai-max-context-error' : 'ai-max-context-help'"
+                    @update:model-value="contextError = ''"
+                />
+                <UButton
+                    id="dashboard-ai-save-context-btn"
+                    v-bind="saveContextButtonProps"
+                    :disabled="savingContext || !contextDirty"
+                    @click="saveContextMaximum"
+                >{{ savingContext ? 'Saving…' : 'Save changes' }}</UButton>
+            </div>
+            <p v-if="contextError" id="ai-max-context-error" class="text-sm text-error" role="alert">{{ contextError }}</p>
+        </section>
+
         <section
             id="dashboard-ai-reset-section"
             class="section-card flex flex-wrap items-center justify-between gap-4"
@@ -254,8 +290,10 @@
                 id="dashboard-ai-reset-btn"
                 v-bind="resetButtonProps"
                 @click="onReset"
+                :disabled="savingContext"
                 >Reset to defaults</UButton
             >
+            <p v-if="resetError" id="ai-reset-error" class="basis-full text-sm text-error" role="alert">{{ resetError }}</p>
         </section>
 
         <p class="ai-settings-note">
@@ -267,16 +305,57 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useIcon } from '#imports';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
 import { sanitizeModelVariant } from '~~/shared/openrouter/model-variants';import { useModelStore } from '~/composables/chat/useModelStore';
 import { useModelSearch } from '~/core/search/useModelSearch';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 
 const liveStatus = ref<HTMLElement | null>(null);
-const { settings: settingsRef, set, reset } = useAiSettings();
+const { settings: settingsRef, set, reset, ensureLoaded } = useAiSettings();
 const settings = computed(() => settingsRef.value!);
+
+const contextInput = ref(settings.value.maxContextTokens?.toString() ?? '');
+const contextError = ref('');
+const resetError = ref('');
+const savingContext = ref(false);
+const contextDirty = computed(() => contextInput.value.trim() !== (settings.value.maxContextTokens?.toString() ?? ''));
+watch(() => settings.value.maxContextTokens, (value) => {
+    contextInput.value = value?.toString() ?? '';
+    contextError.value = '';
+});
+const stopWorkspace = subscribeActiveWorkspaceDb(() => {
+    resetError.value = '';
+    contextInput.value = '';
+    contextError.value = '';
+    savingContext.value = false;
+    void ensureLoaded();
+});
+onUnmounted(stopWorkspace);
+
+async function saveContextMaximum() {
+    const text = contextInput.value.trim();
+    const value = text === '' ? null : Number(text);
+    if (value !== null && (!/^\d+$/.test(text) || !Number.isSafeInteger(value) || value <= 0)) {
+        contextError.value = 'Enter a positive whole integer, or leave blank to use the model limit.';
+        return;
+    }
+    const generation = getWorkspaceGeneration();
+    savingContext.value = true;
+    contextError.value = '';
+    try {
+        await set({ maxContextTokens: value });
+        if (generation !== getWorkspaceGeneration()) return;
+        contextInput.value = value?.toString() ?? '';
+        if (liveStatus.value) liveStatus.value.textContent = 'Context maximum saved';
+    } catch {
+        if (generation === getWorkspaceGeneration()) contextError.value = 'Could not save the context maximum. Retry.';
+    } finally {
+        if (generation === getWorkspaceGeneration()) savingContext.value = false;
+    }
+}
 
 // Master prompt
 const local = ref({ masterPrompt: settings.value.masterSystemPrompt });
@@ -336,16 +415,37 @@ onMounted(async () => {
     }
 });
 
-function onReset() {
-    reset();
-    local.value.masterPrompt = '';
-    promptDirty.value = false;
-    promptSaved.value = true;
-    if (liveStatus.value)
-        liveStatus.value.textContent = 'AI settings reset to defaults';
+async function onReset() {
+    const generation = getWorkspaceGeneration();
+    savingContext.value = true;
+    contextError.value = '';
+    resetError.value = '';
+    try {
+        await reset();
+        if (generation !== getWorkspaceGeneration()) return;
+        contextInput.value = '';
+        local.value.masterPrompt = '';
+        promptDirty.value = false;
+        promptSaved.value = true;
+        if (liveStatus.value) liveStatus.value.textContent = 'AI settings reset to defaults';
+    } catch {
+        if (generation === getWorkspaceGeneration()) resetError.value = 'Could not reset AI preferences. Retry.';
+    } finally {
+        if (generation === getWorkspaceGeneration()) savingContext.value = false;
+    }
 }
 
 // Theme overrides for buttons
+const contextInputProps = computed(() => ({
+    ...useThemeOverrides({
+        component: 'input', context: 'dashboard', identifier: 'dashboard.ai.max-context', isNuxtUI: true,
+    }).value,
+}));
+const saveContextButtonProps = computed(() => ({
+    size: 'sm' as const, variant: 'solid' as const, color: 'primary' as const,
+    ...useThemeOverrides({ component: 'button', context: 'dashboard', identifier: 'dashboard.ai.save-context', isNuxtUI: true }).value,
+}));
+
 const savePromptButtonProps = computed(() => {
     const overrides = useThemeOverrides({
         component: 'button',

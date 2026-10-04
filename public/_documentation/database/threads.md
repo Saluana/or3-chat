@@ -20,7 +20,7 @@ Thread CRUD and query helpers with hook integration, branching support, and syst
 | ------------------------------------ | ------------------------------------------------------- |
 | `parent_thread_id`                   | Links branches back to their source thread.             |
 | `anchor_message_id` / `anchor_index` | Track branching anchor points.                          |
-| `branch_mode`                        | `'reference'` or `'copy'`; controls fork behavior.      |
+| `branch_mode`                        | `'reference'`, `'copy'` or `'compacted'`; compacted creation is owned by the atomic writer.      |
 | `forked`                             | Boolean flag marking branched threads.                  |
 | `system_prompt_id`                   | Optional prompt reference stored with helper functions. |
 
@@ -38,7 +38,7 @@ Thread CRUD and query helpers with hook integration, branching support, and syst
 | `getThread(id)`                                | Fetches a thread by id with output filters.                  |
 | `childThreads(parentThreadId)`                 | Lists direct branch children.                                |
 | `softDeleteThread(id)`                         | Marks deleted flag and updates timestamp inside transaction. |
-| `hardDeleteThread(id)`                         | Deletes thread and cascades delete to messages.              |
+| `hardDeleteThread(id)`                         | Deletes thread/messages only when no known descendant remains.              |
 | `forkThread(sourceId, overrides?, options?)`   | Clones thread metadata, optionally copies messages.          |
 | `updateThreadSystemPrompt(threadId, promptId)` | Stores/clears prompt reference.                              |
 | `getThreadSystemPrompt(threadId)`              | Reads stored prompt id (hook-filtered).                      |
@@ -69,3 +69,5 @@ Thread CRUD and query helpers with hook integration, branching support, and syst
 -   Use `forkThread` (from this module) for quick clones, or the richer branching utilities in `app/db/branching.ts` when you need anchor-aware forks.
 -   Always go through `updateThreadSystemPrompt` to change prompts so hooks and timestamps stay aligned.
 -   When cleaning up, call `softDeleteThread` first so UI consumers can offer undo before executing destructive `hardDeleteThread`.
+
+Central hard deletion checks retained descendants before hooks and again inside the deletion transaction. A newly inserted descendant blocks deletion and rolls back that transaction. Offer soft deletion when descendants remain: compacted summaries stay usable, and historical tools report unavailable content rather than silently reparenting. Family expansion is retired only after the last member is gone. See [manual context compaction](/documentation/utils/manual-context-compaction).

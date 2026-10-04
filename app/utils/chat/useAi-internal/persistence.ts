@@ -1,3 +1,4 @@
+import { readRequestUsage } from '~~/shared/chat/compaction';
 /**
  * @module app/utils/chat/useAi-internal/persistence
  *
@@ -81,6 +82,7 @@ export function makeAssistantPersister(
 
     return async function persist({
         content,
+        usage,
         reasoning,
         toolCalls,
         finalize = false, // When true, clears pending flag to trigger sync
@@ -92,6 +94,7 @@ export function makeAssistantPersister(
         // plugin metadata, synced edits, or file references cannot be
         // overwritten by a stale read. `undefined` means "not supplied";
         // `null` explicitly clears reasoning/tool calls.
+        const acceptedUsage = readRequestUsage(usage);
         const hasContent = content !== undefined;
         const hasReasoning = reasoning !== undefined;
         const hasToolCalls = toolCalls !== undefined;
@@ -102,6 +105,7 @@ export function makeAssistantPersister(
             ownedSerialized !== undefined &&
             ownedSerialized !== lastSerialized;
         if (
+            !acceptedUsage &&
             !hasContent &&
             !hasReasoning &&
             !hasToolCalls &&
@@ -112,6 +116,7 @@ export function makeAssistantPersister(
         }
         const dataPatch: Record<string, unknown> = {
             ...(hasContent ? { content } : {}),
+            ...(acceptedUsage ? { usage: acceptedUsage } : {}),
             ...(hasReasoning ? { reasoning_text: reasoning } : {}),
             ...(hasToolCalls
                 ? { tool_calls: (toolCalls ?? []).map((t) => ({ ...t })) }

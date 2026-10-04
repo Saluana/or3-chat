@@ -5,6 +5,8 @@
  * Shared chat type definitions used across UI and streaming utilities.
  */
 
+import type { CompactionData, RequestUsage } from '~~/shared/chat/compaction';
+
 export type TextPart = { type: 'text'; text: string };
 
 export type ImagePart = {
@@ -37,7 +39,7 @@ export interface ChatMessage {
     reasoning_text?: string | null;
     error?: string | null;
     pending?: boolean;
-    data?: Record<string, unknown> | null;
+    data?: (Record<string, unknown> & { compaction?: CompactionData; usage?: RequestUsage }) | null;
     index?: number | null;
     order_key?: string | null;
     created_at?: number | null;
@@ -47,6 +49,9 @@ export interface ChatMessage {
 }
 
 export interface SendMessageParams {
+    /** Explicit read-only omission inspection, followed by a one-use confirmation. */
+    inspectLossyRequest?: boolean;
+    lossyConfirmation?: import('./lossy-request').LossyRequestPreview;
     files?: { type: string; url: string }[];
     model?: string;
     file_hashes?: string[];
@@ -61,10 +66,15 @@ export interface SendMessageParams {
     modelVariant?: import('~~/shared/openrouter/model-variants').OpenRouterModelVariant;
     thinking?: boolean;
     reasoningEffort?: string | null;
+    maxCompletionTokens?: number;
+    /** Detached editor document for request-scoped plugin preparation. */
+    editorDoc?: Record<string, unknown>;
     // Optional hashes to include for model context without reattaching to the new UI message.
     context_hashes?: string[];
-    /** Visible transcript used for retry; the new user turn is appended to it. */
+    /** Explicit caller-provided history; native Retry instead uses validated exclusions. */
     historyOverride?: ChatMessage[];
+    /** Native Retry's local turn IDs, excluded from a fresh validated recursive projection. */
+    retryExcludedMessageIds?: readonly string[];
     /** Runs after the new user row is durable, before response generation. */
     onUserPersisted?: (userMessageId: string) => void | Promise<void>;
 }
@@ -79,6 +89,10 @@ export type SendFailureReason =
     | 'filtered'
     | 'client_limit'
     | 'unavailable'
+    | 'context_full'
+    | 'model_metadata_unavailable'
+    | 'invalid_output_limit'
+    | 'invalid_context_limit'
     | 'empty_context'
     | 'tool_iteration_limit'
     | 'stream_error'
@@ -87,7 +101,7 @@ export type SendFailureReason =
 
 export type SendResult =
     | { status: 'accepted'; requestId: string; userMessageId?: string; assistantMessageId?: string }
-    | { status: 'rejected'; requestId?: string; reason: SendFailureReason; error?: string }
+    | { status: 'rejected'; requestId?: string; reason: SendFailureReason; error?: string; lossyPreview?: import('./lossy-request').LossyRequestPreview }
     | { status: 'failed'; requestId: string; reason: SendFailureReason; error: string; userMessageId?: string; assistantMessageId?: string }
     | { status: 'aborted'; requestId: string; reason: 'aborted'; userMessageId?: string; assistantMessageId?: string }
     | { status: 'complete'; requestId: string; userMessageId: string; assistantMessageId: string }
@@ -97,7 +111,7 @@ export type ChatRequestState =
     | { status: 'idle' }
     | { status: 'admitted'; requestId: string }
     | { status: 'persisted'; requestId: string; userMessageId: string }
-    | { status: 'streaming'; requestId: string; userMessageId: string; assistantMessageId: string }
+    | { status: 'streaming'; requestId: string; userMessageId: string; assistantMessageId: string; providerAccepted?: true }
     | { status: 'terminal'; requestId: string; result: SendResult };
 
 export type RegisterSendResult = (

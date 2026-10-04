@@ -20,6 +20,7 @@
  */
 
 import type { BackgroundJob } from './types';
+import { readRequestUsage, type RequestUsage } from '../../../shared/chat/compaction';
 
 function logBgStream(
     _stage: string,
@@ -38,6 +39,7 @@ type LiveJobState = {
     error?: string;
     tool_calls?: BackgroundJob['tool_calls'];
     workflow_state?: BackgroundJob['workflow_state'];
+    usage?: RequestUsage;
     attempt?: number;
     cleanupTimer?: ReturnType<typeof setTimeout> | null;
     listeners: Set<(event: LiveJobEvent) => void>;
@@ -53,6 +55,7 @@ type LiveJobEvent =
           chunksReceived: number;
           tool_calls?: BackgroundJob['tool_calls'];
           workflow_state?: BackgroundJob['workflow_state'];
+          usage?: RequestUsage;
           attempt?: number;
       }
     | {
@@ -67,6 +70,7 @@ type LiveJobEvent =
           error?: string;
           tool_calls?: BackgroundJob['tool_calls'];
           workflow_state?: BackgroundJob['workflow_state'];
+          usage?: RequestUsage;
           attempt?: number;
           content_reset?: boolean;
       };
@@ -256,9 +260,17 @@ export function registerJobStream(
  */
 export function initJobLiveState(
     jobId: string,
-    options?: { contentBase?: string; reasoningBase?: string }
+    options?: {
+        contentBase?: string;
+        reasoningBase?: string;
+        attempt?: number;
+        usage?: RequestUsage;
+    }
 ): void {
     const state = ensureJobLiveState(jobId);
+    if (isStaleAttempt(state, options?.attempt)) return;
+    updateLiveUsage(state, options?.usage, options?.attempt);
+    if (options?.attempt !== undefined) state.attempt = options.attempt;
     if (options?.contentBase !== undefined) {
         state.content = options.contentBase;
     }
@@ -290,11 +302,14 @@ export function emitJobDelta(
         reasoningLength?: number;
         tool_calls?: BackgroundJob['tool_calls'];
         workflow_state?: BackgroundJob['workflow_state'];
+        usage?: RequestUsage;
         attempt?: number;
     }
 ): void {
     if (!delta) return;
     const state = ensureJobLiveState(jobId);
+    if (isStaleAttempt(state, meta.attempt)) return;
+    updateLiveUsage(state, meta.usage, meta.attempt);
     state.content += delta;
     state.chunksReceived = meta.chunksReceived;
     state.status = 'streaming';
@@ -313,6 +328,7 @@ export function emitJobDelta(
         chunksReceived: meta.chunksReceived,
         tool_calls: meta.tool_calls,
         workflow_state: meta.workflow_state,
+        usage: state.usage,
         attempt: meta.attempt ?? state.attempt,
     };
     for (const listener of state.listeners) {
@@ -336,6 +352,8 @@ export function emitJobReasoningDelta(
 ): void {
     if (!delta) return;
     const state = ensureJobLiveState(jobId);
+    if (isStaleAttempt(state, meta.attempt)) return;
+    updateLiveUsage(state, undefined, meta.attempt);
     state.reasoning += delta;
     state.chunksReceived = meta.chunksReceived;
     state.status = 'streaming';
@@ -347,6 +365,7 @@ export function emitJobReasoningDelta(
         reasoning_delta: delta,
         reasoning_length: meta.reasoningLength,
         chunksReceived: meta.chunksReceived,
+        usage: state.usage,
         attempt: meta.attempt ?? state.attempt,
     };
     for (const listener of state.listeners) {
@@ -371,11 +390,14 @@ export function emitJobStatus(
         error?: string;
         tool_calls?: BackgroundJob['tool_calls'];
         workflow_state?: BackgroundJob['workflow_state'];
+        usage?: RequestUsage;
         attempt?: number;
         content_reset?: boolean;
     }
 ): void {
     const state = ensureJobLiveState(jobId);
+    if (isStaleAttempt(state, meta.attempt)) return;
+    updateLiveUsage(state, meta.usage, meta.attempt, meta.content_reset);
     state.content = meta.content;
     if (meta.reasoning !== undefined) {
         state.reasoning = meta.reasoning;
@@ -399,6 +421,7 @@ export function emitJobStatus(
         error: meta.error,
         tool_calls: meta.tool_calls,
         workflow_state: meta.workflow_state,
+        usage: state.usage,
         attempt: meta.attempt ?? state.attempt,
         content_reset: meta.content_reset,
     };
@@ -416,6 +439,26 @@ export function emitJobStatus(
     if (status !== 'streaming') {
         scheduleCleanup(jobId, state);
     }
+}
+
+function isStaleAttempt(state: LiveJobState, attempt?: number): boolean {
+    return attempt !== undefined && state.attempt !== undefined && attempt < state.attempt;
+}
+
+function updateLiveUsage(
+    state: LiveJobState,
+    usage: unknown,
+    attempt?: number,
+    reset = false
+): void {
+    const attemptChanged = attempt !== undefined && attempt !== state.attempt;
+    // An unmeasured iteration preserves the last measurement, but an execution
+    // reset may retain only usage explicitly restored from its checkpoint.
+    const measured = readRequestUsage(usage);
+    const previous = reset || attemptChanged ? undefined : state.usage;
+    state.usage = measured && (!previous || measured.iteration >= previous.iteration)
+        ? measured
+        : previous;
 }
 
 function ensureJobLiveState(jobId: string): LiveJobState {

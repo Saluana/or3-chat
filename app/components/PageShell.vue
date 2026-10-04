@@ -350,6 +350,9 @@
                                 ? (id: string) => onInternalThreadCreated(id, i)
                                 : undefined
                         "
+                        @compaction-committed="onCompactionCommitted($event, i)"
+                        @view-compaction-source="onCompactionSourceSelected($event, i)"
+                        @view-related-thread="onCompactionSourceSelected({ ...$event, messageId: '' }, i)"
                         @tab-status="
                             (status: WorkspaceTabStatus) => onPaneTabStatus(pane.id, status)
                         "
@@ -405,6 +408,7 @@ import type { WorkspaceNewTabCreateKind } from '~/components/workspace-tabs/Work
 import { usePaneApps } from '~/composables/core/usePaneApps';
 import {
     getActiveWorkspaceId,
+    getWorkspaceGeneration,
     getDb,
     subscribeActiveWorkspaceDb,
 } from '~/db/client';
@@ -1642,6 +1646,51 @@ function onSidebarSelected(id: string) {
     if (target === activePaneIndex.value) updateUrl();
     closeSidebarIfMobile();
 }
+async function onCompactionSourceSelected(target: { threadId: string; messageId: string; originThreadId: string; scrollMessageId?: string; generation: number }, paneIndex: number) {
+    const pane = panes.value[paneIndex];
+    if (!pane || pane.mode !== 'chat' || pane.threadId !== target.originThreadId || getWorkspaceGeneration() !== target.generation) return;
+    if (workspaceTabsEnabled.value) {
+        const originTab = workspaceTabs.state.value.paneBindings.get(pane.id);
+        if (!originTab || !await workspaceTabs.activateTab(originTab, 'pointer')) return;
+        if (getWorkspaceGeneration() !== target.generation || panes.value[paneIndex]?.id !== pane.id
+            || pane.threadId !== target.originThreadId || activePaneIndex.value !== paneIndex) return;
+        if (!await workspaceTabs.openResource({ kind: 'chat', threadId: target.threadId })) return;
+    } else {
+        setActive(paneIndex);
+        await setPaneThread(paneIndex, target.threadId);
+    }
+    await nextTick();
+    const destination = panes.value[activePaneIndex.value];
+    if (getWorkspaceGeneration() !== target.generation || destination?.mode !== 'chat' || destination.threadId !== target.threadId) return;
+    if (target.messageId) paneComponentRefs.get(destination.id)?.scrollToMessage?.({ threadId: target.threadId,
+        messageId: target.scrollMessageId ?? target.messageId, generation: target.generation });
+    closeSidebarIfMobile();
+}
+async function onCompactionCommitted(target: { threadId: string; messageId: string; originThreadId: string; generation: number }, paneIndex: number) {
+    const pane = panes.value[paneIndex];
+    // Completion must not activate a pane the user has since left.
+    if (activePaneIndex.value !== paneIndex || !pane || pane.mode !== 'chat'
+        || pane.threadId !== target.originThreadId || getWorkspaceGeneration() !== target.generation) return;
+    if (workspaceTabsEnabled.value) {
+        const originTab = workspaceTabs.state.value.paneBindings.get(pane.id);
+        const draft = workspaceTabDrafts.read(originTab);
+        if (draft) {
+            const childTab = await workspaceTabs.openResource({ kind: 'chat', threadId: target.threadId }, { target: 'background' });
+            if (childTab) workspaceTabDrafts.write(childTab, { ...draft,
+                editorJson: draft.editorJson ? structuredClone(draft.editorJson) : undefined,
+                attachments: draft.attachments.map(file => ({ ...file, url: file.url.startsWith('blob:') ? URL.createObjectURL(file.file) : file.url })),
+                largeTextBlocks: draft.largeTextBlocks.map(block => ({ ...block })),
+                composer: draft.composer ? { ...draft.composer, imageSettings: { ...draft.composer.imageSettings } } : undefined,
+            });
+        }
+    }
+    try { await onCompactionSourceSelected(target, paneIndex); }
+    catch { /* The durable child remains available even if navigation fails. */ }
+    if (getWorkspaceGeneration() === target.generation && activePaneIndex.value === paneIndex
+        && panes.value[paneIndex]?.id === pane.id && pane.threadId === target.originThreadId) {
+        toast.add({ title: 'Compacted conversation saved', description: 'The continuation could not be opened. It remains available in conversation history.', color: 'warning' });
+    }
+}
 function onInternalThreadCreated(id: string, paneIndex?: number) {
     if (!id) return;
     const idx =
@@ -2248,5 +2297,33 @@ function handleDocumentShortcut(e: KeyboardEvent) {
 
 // Use VueUse's useEventListener for automatic cleanup and HMR safety
 useEventListener(window, 'keydown', handleDocumentShortcut);
+let compactionRequestRevision = 0;
+useEventListener(window, 'or3:compact-thread', async (event: Event) => {
+    const target = (event as CustomEvent<{ threadId?: unknown; generation?: unknown }>).detail;
+    if (!target || typeof target.threadId !== 'string' || target.generation !== getWorkspaceGeneration()) return;
+    const request = ++compactionRequestRevision;
+    try {
+        if (workspaceTabsEnabled.value) {
+            if (!await workspaceTabs.openResource({ kind: 'chat', threadId: target.threadId })) throw new Error('Conversation could not be opened.');
+        } else {
+            const index = activePaneIndex.value;
+            await setPaneThread(index, target.threadId);
+            const pane = panes.value[index]; if (pane) { pane.mode = 'chat'; pane.documentId = undefined; }
+            updateUrl();
+        }
+        await nextTick();
+        const destination = panes.value[activePaneIndex.value];
+        if (request !== compactionRequestRevision || getWorkspaceGeneration() !== target.generation
+            || destination?.mode !== 'chat' || destination.threadId !== target.threadId) return;
+        const instance = paneComponentRefs.get(destination.id) as { compactThread?: () => Promise<void> } | undefined;
+        if (!instance?.compactThread) throw new Error('Conversation is still opening. Use Compact when it is ready.');
+        await instance.compactThread();
+        closeSidebarIfMobile();
+    } catch {
+        if (request === compactionRequestRevision && getWorkspaceGeneration() === target.generation) toast.add({
+            title: 'Unable to compact', description: 'Open the conversation and use Compact when its source and model are ready.', color: 'warning',
+        });
+    }
+});
 </script>
 <style scoped src="./PageShell.css"></style>

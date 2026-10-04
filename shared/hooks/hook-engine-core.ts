@@ -119,6 +119,8 @@ export interface HookEngine {
     doActionSync: (name: string, ...args: unknown[]) => void;
 
     hasFilter: (name?: string, fn?: HookFn) => boolean | number;
+    /** Read-only ownership receipt; dispatching a filter is never part of validation. */
+    captureFilterChain: (names: readonly string[]) => () => boolean;
     hasAction: (name?: string, fn?: HookFn) => boolean | number;
     removeAllCallbacks: (priority?: number) => void;
     currentPriority: () => number | false;
@@ -665,6 +667,13 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
         },
         hasFilter(name?: string, fn?: HookFn) {
             return has(filters, filterWildcards, name, fn);
+        },
+        captureFilterChain(names) {
+            const captured = names.map((name) => ({ name, entries: [...getMatching(filters, filterWildcards, name)] }));
+            return () => captured.every(({ name, entries }) => {
+                const current = getMatching(filters, filterWildcards, name);
+                return current.length === entries.length && current.every((entry, index) => entry === entries[index]);
+            });
         },
         hasAction(name?: string, fn?: HookFn) {
             return has(actions, actionWildcards, name, fn);

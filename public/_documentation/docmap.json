@@ -110,7 +110,7 @@
                     "category": "Reference",
                     "categoryOrder": 2,
                     "order": 3,
-                    "summary": "This reference covers the host application engine. useHooks() returns a TypedHookEngine; you normally do not create another engine. Installable packages use the SDK, whose permissions and runtime limits are separate."
+                    "summary": "Host hook types, filter ownership, pure native preparation and acknowledged delegated commit; SDK permissions and runtime limits remain separate."
                 },
                 {
                     "name": "hook-catalog.md",
@@ -383,6 +383,15 @@
                     "summary": "Register trusted client and server tools with owned lifecycle, runtime admission, and request authorization."
                 },
                 {
+                    "name": "manual-context-compaction.md",
+                    "path": "/utils/manual-context-compaction",
+                    "title": "Manual context compaction",
+                    "category": "Using tools",
+                    "categoryOrder": 0,
+                    "order": 1,
+                    "summary": "Use reported context usage and image estimates, compact manually or automatically at 80%, and keep links to the original conversation."
+                },
+                {
                     "name": "openrouterStream.md",
                     "path": "/utils/openrouterStream",
                     "title": "Chat streaming",
@@ -407,7 +416,7 @@
                     "category": "Source integration",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "Use centralized errors, secret scrubbing, reporting hooks, and deliberate retries."
+                    "summary": "Use centralized errors, secret scrubbing, reporting hooks, context admission recovery, and deliberate retries."
                 },
                 {
                     "name": "workspace-backup-stream.md",
@@ -806,7 +815,16 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Preserve durable sends, streaming ownership, tool authority, tab sessions, and composer drafts."
+                    "summary": "Preserve durable sends, full-context native admission, captured tool-loop policy, tab sessions and composer drafts."
+                },
+                {
+                    "name": "ai-preferences.md",
+                    "path": "/architecture/ai-preferences",
+                    "title": "AI preferences and context maximum",
+                    "category": "Architecture",
+                    "categoryOrder": 0,
+                    "order": 2,
+                    "summary": "Use model limit, custom context maximum, validation and workspace persistence; current admission boundaries."
                 }
             ]
         },

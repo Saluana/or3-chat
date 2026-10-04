@@ -6,6 +6,7 @@ import type {
     ChatRequestState,
     ChatMessage,
     SendResult,
+    SendFailureReason,
 } from '~/utils/chat/types';
 import type { UiChatMessage, ToolCallInfo } from '~/utils/chat/uiMessages';
 import type { ToolLedgerEntry } from '~~/shared/chat/tool-ledger';
@@ -27,6 +28,7 @@ export type RequestTerminal = {
     reasoning?: string | null;
     toolCalls?: ToolCallInfo[] | null;
     error?: Error;
+    failureReason?: SendFailureReason;
     messageError?: string | null;
     generationState?:
         | 'complete'
@@ -436,7 +438,7 @@ export function finalizeRequest(
                       ? {
                             ...identity,
                             status: 'failed',
-                            reason: 'stream_error',
+                            reason: terminal.failureReason ?? 'stream_error',
                             error:
                                 terminal.error?.message ??
                                 String(

@@ -26,6 +26,7 @@ The client plugin installs a cache for utilities outside setup. `useHooks` prefe
 | `applyFilters(name, value, ...args)` | Sequential async transforms; returns the final value |
 | `doActionSync / applyFiltersSync` | Synchronous dispatch; callbacks must be synchronous |
 | `hasAction / hasFilter(name?, fn?)` | Inspect registrations |
+| `captureFilterChain(names)` | Capture a pure registration receipt; calling the returned predicate checks that those filter chains still match |
 | `currentPriority()` | Current callback priority, or false |
 | `removeAllCallbacks(priority?)` | Broad teardown; avoid removing other extensions' listeners |
 
@@ -104,6 +105,34 @@ const offFilter = on('ui.chat.message:filter:outgoing', (text) => text.trimEnd()
 ### Outgoing chat cancellation boundary
 
 The outgoing chat type map currently infers a string return, although `ChatOutgoingFilterReturn` also declares `false` and the chat caller recognizes false at runtime. Those types are not interchangeable. Use a string transformer in typed examples. The caller also suppresses empty plain-text sends, but attached/generated content can change that decision; this is not a general cancellation API.
+
+### Native chat preparation and delegated commit
+
+Hosts advertising `chat.send.prepare-commit-v1` implement two additive filters.
+`ai.chat.send:filter:prepare` receives detached candidate messages, model,
+editor document, request/workspace generation and an AbortSignal before turn
+writes. It must be pure: no inference, tools, writes, navigation or handled
+marking. It may return transformed messages, a structured error, or one opaque
+plugin-generation/request-scoped delegation intent. An intent is never a saved
+message or thread ID. The host checks the complete native provider body and
+captured ownership before creating durable rows; cancelled or changed
+preparation cannot be reused.
+
+`ai.chat.send:filter:commit` runs after real assistant/thread/stream IDs exist.
+The owner consumes and revalidates its intent before starting execution, then
+returns `handled` or `rejected`. The host awaits an acknowledgement matching
+the request, workspace, signal, intent and real IDs; an absent or foreign
+acknowledgement never falls through to native inference or automatic replay.
+The acknowledgement handles only its own request. Updated delegates must not
+set the legacy global handled marker, which can affect another pane.
+
+The existing real-ID `ai.chat.send:action:before` action and side-effecting
+`ai.chat.messages:filter:before_send` remain post-write and run once. Old hosts
+and old plugins retain that ordering. Such legacy final filters cannot provide
+universal zero-write final-payload admission. Updated Workflows source selects
+the paired contract only when the host advertises full support. Source tests
+and a private package build do not qualify installed artifact rollout or
+graph-wide workflow budgets.
 
 ## Construct an engine and inspect diagnostics
 

@@ -33,6 +33,7 @@
  */
 
 import { nowSec } from '~/db/util';
+import { readRequestUsage } from '~~/shared/chat/compaction';
 import { getActiveWorkspaceId, getDb } from '~/db/client';
 import { redactDiagnosticDetails } from '~~/shared/logging/sensitive-metadata';
 import {
@@ -61,6 +62,7 @@ import {
 } from './backgroundJobNotifications';
 import {
     normalizeTerminalWorkflowState,
+    isBackgroundUsageReset,
     persistBackgroundJobUpdate,
     persistBackgroundTrackingInterruption,
 } from './backgroundJobPersistence';
@@ -578,7 +580,17 @@ async function ensureFullBackgroundStatus(
                     ? refetched.content.length
                     : 0,
         });
-        return refetched;
+        // Content recovery must not discard a valid measurement carried by the
+        // original terminal event when an older/mixed-version route omits it.
+        const usage = readRequestUsage(refetched.usage) ??
+            (isBackgroundUsageReset(refetched, status.attempt ?? -1)
+                ? undefined : readRequestUsage(status.usage));
+        return {
+            ...refetched,
+            usage,
+            ...(status.content_reset ? { content_reset: true } : {}),
+            ...(status.reasoning_reset ? { reasoning_reset: true } : {}),
+        };
     } catch {
         bgStreamWarn('ensure-full-status-refetch-failed', {
             jobId: tracker.jobId,
@@ -618,6 +630,19 @@ async function handleBackgroundStatus(
     if (nextStatus.status !== 'streaming') {
         nextStatus = await ensureFullBackgroundStatus(tracker, nextStatus);
     }
+    if (
+        typeof nextStatus.attempt === 'number' &&
+        ((typeof tracker.lastAttempt === 'number' &&
+            nextStatus.attempt < tracker.lastAttempt) ||
+            (typeof status.attempt === 'number' && nextStatus.attempt < status.attempt))
+    ) return true;
+    const resetUsage = isBackgroundUsageReset(nextStatus, tracker.lastAttempt) ||
+        tracker.usageResetPending === true;
+    const incomingUsage = readRequestUsage(nextStatus.usage);
+    let usage = !resetUsage && tracker.lastUsage &&
+        (!incomingUsage || incomingUsage.iteration < tracker.lastUsage.iteration)
+        ? tracker.lastUsage : incomingUsage;
+    nextStatus = { ...nextStatus, usage };
     if (
         (!nextStatus.workflow_state || typeof nextStatus.workflow_state !== 'object') &&
         nextStatus.status !== 'streaming' && tracker.lastWorkflowState
@@ -683,9 +708,15 @@ async function handleBackgroundStatus(
         });
         return false;
     }
+    if (persistence.persisted && 'usage' in persistence) {
+        usage = persistence.usage;
+        nextStatus = { ...nextStatus, usage };
+    }
     dispatchPendingClientTools(tracker, nextStatus);
     tracker.lastContent = safeContent;
     tracker.lastReasoning = safeReasoning;
+    tracker.lastUsage = usage;
+    tracker.usageResetPending = resetUsage && !usage && !persistence.persisted;
     if (nextStatus.workflow_state && typeof nextStatus.workflow_state === 'object') {
         tracker.lastWorkflowState = nextStatus.workflow_state;
     }

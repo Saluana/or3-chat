@@ -59,6 +59,8 @@ creating a job or contacting the model.
    - `_backgroundAdmissionId` (stable per user-initiated send; transport retries reuse it)
    - `_history` (version 1 immutable thread/message admission envelope)
    - optional `_toolRuntime` map (`toolName -> runtime`)
+   - native `_context` version 1 (captured nullable user maximum and explicit
+     reply allowance; advertised capacity is resolved independently by the server)
 3. `POST /api/openrouter/stream` validates auth/session and background params.
 4. The selected sync gateway atomically writes the admission rows, contiguous
    change-log versions, and an idempotent generation receipt. Only then can the
@@ -72,6 +74,15 @@ creating a job or contacting the model.
      moves the job's durable `history_phase` to `finalization_pending`
 6. Viewers receive live updates through SSE (`/api/jobs/:id/stream`) and/or polling (`/api/jobs/:id/status?offset=N`).
 7. On terminal state (`complete|error|aborted`), status is persisted and notifications are emitted when no viewers are attached.
+
+Native context metadata remains in the existing durable execution body through
+tool checkpoints and worker recovery. Every native tool-loop provider request
+checks the full payload against independently resolved capacity and the captured
+maximum. An accepted oversized tool result stays durable, and the next request
+stops with `context_full` before another fetch. Recovery retains completed tool
+receipts and cannot replay the accepted tool. OR3 internal fields never enter
+OpenRouter parameters or request-usage fingerprints. Legacy admissions without
+the native envelope retain their existing compatibility boundary.
 
 Admission is one provider transaction: an existing job with the same
 user/admission id is returned, otherwise both the global and per-user concurrency

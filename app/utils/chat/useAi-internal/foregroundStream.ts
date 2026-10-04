@@ -35,6 +35,7 @@
  */
 
 import { createOrRefFile } from '~/db/files';
+import type { ContextRequestPolicy } from '~~/shared/chat/context-budget';
 import type { Or3DB } from '~/db/client';
 import type { ChatMessage, ToolCall, ToolDefinition } from '~/utils/chat/types';
 import { dataUrlToBlob, fetchImageBlob } from '~/utils/chat/files';
@@ -200,6 +201,8 @@ export type ForegroundStreamContext = {
     orMessages: OpenRouterMessage[];
     modalities: string[];
     reasoning?: OpenRouterReasoningConfig;
+    contextPolicy?: ContextRequestPolicy;
+    onProviderAccepted?: () => void;
     tools?: ToolDefinition[];
     abortSignal: AbortSignal;
     assistantId: string;
@@ -327,10 +330,13 @@ export async function runForegroundStreamLoop(
             >[0]['orMessages'],
             modalities: ctx.modalities,
             reasoning: ctx.reasoning,
+            contextPolicy: ctx.contextPolicy ? { ...ctx.contextPolicy,
+                measuredUsage: normalizedState.requestUsage ?? ctx.contextPolicy.measuredUsage } : undefined,
             threadId: ctx.threadId,
             messageId: ctx.assistantId,
             tools: admittedTools,
             signal: ctx.abortSignal,
+            onProviderAccepted: ctx.onProviderAccepted,
         });
 
         const rawAssistant: ChatMessage = {
@@ -360,6 +366,7 @@ export async function runForegroundStreamLoop(
             await writeCoalescer.flush(async () => {
                 await ctx.persistAssistant({
                     content: current.text,
+                    usage: normalizedState.requestUsage,
                     reasoning: current.reasoning_text ?? null,
                     toolCalls: current.toolCalls ?? undefined,
                 });
@@ -372,7 +379,9 @@ export async function runForegroundStreamLoop(
         try {
             for await (const ev of stream) {
                 normalizedState = reduceNormalizedStreamEvent(normalizedState, ev);
-                if (ev.type === 'tool_call') {
+                if (ev.type === 'usage') {
+                    if (normalizedState.requestUsage) writeCoalescer.markDirty();
+                } else if (ev.type === 'tool_call') {
                     // Tool call detected - enqueue for execution after stream closes
                     if (current.pending) current.pending = false;
 
@@ -705,7 +714,8 @@ export async function runForegroundStreamLoop(
             }
             throw streamError;
         } finally {
-            await writeCoalescer.dispose();
+            try { if (normalizedState.requestUsage) await flushProgress(); }
+            finally { await writeCoalescer.dispose(); }
         }
     }
 }

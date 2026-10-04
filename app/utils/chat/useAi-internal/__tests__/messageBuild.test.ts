@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatMessage } from '~/utils/chat/types';
+import { reactive } from 'vue';
+import { admitChatContext, estimateChatRequest, type CountableChatMessage } from '~~/shared/chat/context-budget';
 
 const getMaxMessageFileHashesSpy = vi.fn();
 const hashToContentPartSpy = vi.fn();
@@ -91,6 +93,132 @@ describe('buildOpenRouterMessagesForSend', () => {
         buildOpenRouterMessagesSpy.mockImplementation(async (messages) =>
             messages as unknown[]
         );
+    });
+
+    // Preparation risks: caller-owned arrays mutated by context injection;
+    // edits crossing hydration awaits; shared tool-call records; binary views
+    // losing offsets; and full histories being shortened to guessed budgets.
+    describe('production payload ownership and capacity controls', () => {
+        let countText: typeof import('~/utils/chat/tokens').countTokensApprox;
+        beforeEach(async () => {
+            const production = await vi.importActual<typeof import('~/core/auth/openrouter-build')>('~/core/auth/openrouter-build');
+            countText = (await vi.importActual<typeof import('~/utils/chat/tokens')>('~/utils/chat/tokens')).countTokensApprox;
+            buildOpenRouterMessagesSpy.mockImplementation(production.buildOpenRouterMessages);
+        });
+
+        it('does not append hydrated context into caller-owned content parts', async () => {
+            const effectiveMessages = reactive<ChatMessage[]>([
+                { role: 'user', content: [{ type: 'text', text: 'original' }] },
+            ]);
+            const original = JSON.parse(JSON.stringify(effectiveMessages));
+            hashToContentPartSpy.mockResolvedValue({ type: 'text', text: 'hydrated context' });
+            const result = await buildOpenRouterMessagesForSend({
+                effectiveMessages, assistantHashes: [], contextHashes: ['context'],
+            });
+            expect(result[0]?.content).toEqual([
+                { type: 'text', text: 'original' },
+                { type: 'text', text: 'hydrated context' },
+            ]);
+            expect(effectiveMessages).toEqual(original);
+        });
+
+        it('captures nested content and canonical tool calls before awaiting hydration', async () => {
+            let resolveContext!: (part: { type: 'text'; text: string }) => void;
+            hashToContentPartSpy.mockImplementation(() => new Promise((resolve) => { resolveContext = resolve; }));
+            const effectiveMessages = reactive<ChatMessage[]>([
+                { role: 'assistant', content: 'calling', data: { tool_calls: [
+                    { id: 'call', type: 'function', function: { name: 'lookup', arguments: '{"q":"captured"}' } },
+                ] } },
+                { role: 'tool', name: 'lookup', tool_call_id: 'call', content: 'retained result' },
+                { role: 'user', content: [{ type: 'text', text: 'captured user' }] },
+            ]);
+            const running = buildOpenRouterMessagesForSend({ effectiveMessages, assistantHashes: [], contextHashes: ['context'] });
+            expect(hashToContentPartSpy).toHaveBeenCalledOnce();
+            const user = effectiveMessages[2]!;
+            if (!Array.isArray(user.content) || user.content[0]?.type !== 'text') throw new Error('Invalid fixture');
+            user.content[0].text = 'later user';
+            const calls = effectiveMessages[0]!.data!.tool_calls as ChatMessage['tool_calls'];
+            calls![0]!.function.arguments = '{"q":"later"}';
+            calls!.push({ id: 'later-call', type: 'function', function: { name: 'lookup', arguments: '{}' } });
+            resolveContext({ type: 'text', text: 'resolved' });
+            const result = await running;
+            expect(result[0]?.tool_calls).toEqual([
+                { id: 'call', type: 'function', function: { name: 'lookup', arguments: '{"q":"captured"}' } },
+            ]);
+            expect(result[1]).toMatchObject({ role: 'tool', tool_call_id: 'call', content: [{ type: 'text', text: 'retained result' }] });
+            expect(result[2]?.content).toEqual([{ type: 'text', text: 'captured user' }, { type: 'text', text: 'resolved' }]);
+            expect(user.content).toEqual([{ type: 'text', text: 'later user' }]);
+            const returnedCalls = result[0]!.tool_calls as NonNullable<ChatMessage['tool_calls']>;
+            returnedCalls[0]!.function.arguments = 'changed returned payload';
+            expect(calls![0]!.function.arguments).toBe('{"q":"later"}');
+        });
+
+        it('captures the selected binary view bytes before delayed hydration', async () => {
+            let resolveContext!: (part: { type: 'text'; text: string }) => void;
+            hashToContentPartSpy.mockImplementation(() => new Promise((resolve) => { resolveContext = resolve; }));
+            const bytes = new Uint8Array([99, 7, 8, 88]);
+            const effectiveMessages: ChatMessage[] = [{ role: 'user', content: [
+                { type: 'file', data: bytes.subarray(1, 3), mediaType: 'application/octet-stream', name: 'view.bin' },
+            ] }];
+            const running = buildOpenRouterMessagesForSend({ effectiveMessages, assistantHashes: [], contextHashes: ['context'] });
+            bytes[1] = 77;
+            resolveContext({ type: 'text', text: 'context' });
+            const result = await running;
+            expect(result[0]?.content).toEqual(expect.arrayContaining([
+                expect.objectContaining({ type: 'file', file: expect.objectContaining({ file_data: 'data:application/octet-stream;base64,Bwg=' }) }),
+            ]));
+            expect(effectiveMessages[0]!.content).toHaveLength(1);
+        });
+
+        it('captures media policy before the context await', async () => {
+            let resolveContext!: (part: { type: 'text'; text: string }) => void;
+            hashToContentPartSpy.mockImplementation(() => new Promise((resolve) => { resolveContext = resolve; }));
+            const image = 'data:image/png;base64,iVBORw0KGgo=';
+            const params = {
+                effectiveMessages: [{ role: 'user', content: [{ type: 'image', image }] }] as ChatMessage[],
+                assistantHashes: [], contextHashes: ['context'], maxImageInputs: 1,
+            };
+            const running = buildOpenRouterMessagesForSend(params);
+            params.maxImageInputs = 0;
+            resolveContext({ type: 'text', text: 'context' });
+            const result = await running;
+            expect(result[0]?.content).toEqual(expect.arrayContaining([
+                { type: 'image_url', image_url: { url: image } },
+            ]));
+        });
+
+        // Positive controls, not a claim that the already-removed 128k clamp
+        // currently fails. No mocked trimming/counter participates in them.
+        it.each([225_000, 999_800, 1_000_010])('retains the full %s-token text candidate for production policy admission', async (textTokens) => {
+            const toolCalls = [{ id: 'call', type: 'function' as const, function: { name: 'lookup', arguments: '{}' } }];
+            const effectiveMessages: ChatMessage[] = [
+                { role: 'system', content: 'system sentinel' },
+                { role: 'assistant', content: 'calling sentinel', tool_calls: toolCalls },
+                { role: 'tool', tool_call_id: 'call', name: 'lookup', content: 'result sentinel' },
+                { role: 'user', content: `start sentinel ${'x'.repeat(textTokens * 4)} end sentinel` },
+            ];
+            const result = await buildOpenRouterMessagesForSend({ effectiveMessages, assistantHashes: [] });
+            expect(result).toHaveLength(4);
+            expect(result[0]?.content).toEqual([{ type: 'text', text: 'system sentinel' }]);
+            expect(result[2]).toMatchObject({ tool_call_id: 'call', content: [{ type: 'text', text: 'result sentinel' }] });
+            expect(result[3]?.content).toEqual([{ type: 'text', text: effectiveMessages[3]!.content }]);
+            const tools = [{ type: 'function', function: { name: 'lookup', description: 'Look up data', parameters: { type: 'object' } } }];
+            // Count the serialized provider candidate, as the real transport
+            // does; the builder's public tool-row union is intentionally wider.
+            const candidate = JSON.parse(JSON.stringify(result)) as CountableChatMessage[];
+            const estimate = await estimateChatRequest({ messages: candidate, tools, countText });
+            const admission = admitChatContext({ model: { context_length: 1_000_000 }, inputTokens: estimate.input_tokens, estimate });
+            if (textTokens < 1_000_000) {
+                expect(admission.ok).toBe(true);
+                if (!admission.ok) throw new Error('Unexpected rejection');
+                expect(admission.budget.effective_context_tokens).toBe(1_000_000);
+                expect(admission.budget.available_completion_tokens).toBe(1_000_000 - estimate.input_tokens);
+                expect(admission.budget.available_completion_tokens).toBeGreaterThan(0);
+                const explicit = admitChatContext({ model: { context_length: 1_000_000 }, inputTokens: estimate.input_tokens, requestedCompletionTokens: 1, estimate });
+                expect(explicit).toMatchObject({ ok: true, budget: { requested_completion_tokens: 1 } });
+            } else expect(admission).toMatchObject({ ok: false, code: 'context_full' });
+            expect(effectiveMessages[3]!.content).toBe(`start sentinel ${'x'.repeat(textTokens * 4)} end sentinel`);
+        });
     });
 
     it('dedupes context hashes and appends resolved parts to the last user message', async () => {

@@ -1,31 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Mock KV storage
-const mockKvStore = new Map<string, string>();
+import { getDb, getWorkspaceGeneration, setActiveWorkspaceDb, evictWorkspaceDb, Or3DB } from '~/db/client';
+import { getKvByName, setKvByName } from '~/db/kv';
+import { useHooks, setHookEngine } from '~/core/hooks/useHooks';
+import { createHookEngine } from '~/core/hooks/hooks';
+import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
+import Dexie from 'dexie';
+import { afterEach } from 'vitest';
 
-vi.mock('~/db/kv', () => ({
-    getKvByName: vi.fn(async (name: string) => {
-        const value = mockKvStore.get(name);
-        return value ? { id: `kv:${name}`, name, value } : undefined;
-    }),
-    setKvByName: vi.fn(async (name: string, value: string) => {
-        mockKvStore.set(name, value);
-        return { id: `kv:${name}`, name, value };
-    }),
-}));
-
-// Mock db for getKvByName fallback
-vi.mock('~/db', () => ({
-    db: {
-        kv: {
-            where: () => ({
-                equals: () => ({
-                    first: async () => undefined,
-                }),
-            }),
-        },
-    },
-}));
+let workspace: string;
+let dispose: (() => void) | undefined;
 
 import {
     DEFAULT_AI_SETTINGS,
@@ -35,10 +19,20 @@ import {
 } from '../chat/useAiSettings';
 
 describe('useAiSettings', () => {
-    beforeEach(() => {
-        // Clear the mock store between tests
-        mockKvStore.clear();
+    beforeEach(async () => {
+        workspace = `settings-${crypto.randomUUID()}`;
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        await setActiveWorkspaceDb(workspace).open();
         vi.clearAllMocks();
+    });
+
+    afterEach(async () => {
+        dispose?.(); dispose = undefined;
+        const name = getDb().name;
+        setActiveWorkspaceDb(null);
+        evictWorkspaceDb(workspace);
+        await Dexie.delete(name);
+        setHookEngine(null);
     });
 
     it('sanitizes invalid input and fills defaults (minimal schema)', () => {
@@ -88,4 +82,255 @@ describe('useAiSettings', () => {
         // Should return defaults, not throw
         expect(after.version).toBe(1);
     });
+    it('keeps the context maximum optional and preserves valid large preferences through KV/reset', async () => {
+        const api = useAiSettings();
+        await api.ensureLoaded();
+        expect(api.load()).toMatchObject({ maxContextTokens: null });
+        await api.set({ maxContextTokens: 2_000_000 });
+        expect(JSON.parse((await getKvByName('ai_settings'))!.value!)).toMatchObject({ maxContextTokens: 2_000_000 });
+        for (const invalid of [0, -1, 1.5, Infinity, NaN]) {
+            await expect(api.set({ maxContextTokens: invalid })).rejects.toThrow(/positive.*integer/i);
+            expect(api.load()).toMatchObject({ maxContextTokens: 2_000_000 });
+        }
+        await api.reset();
+        expect(JSON.parse((await getKvByName('ai_settings'))!.value!)).toMatchObject({ maxContextTokens: null });
+        expect(sanitizeAiSettings({ version: 1 })).toMatchObject({ maxContextTokens: null });
+    });
+
+    it('rejects a stale preference write when workspace changes during its load', async () => {
+        const dbA = getDb();
+        await setKvByName('ai_settings', JSON.stringify({ ...DEFAULT_AI_SETTINGS, masterSystemPrompt: 'A', maxContextTokens: 1_000_000 }), dbA);
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        let entered!: () => void;
+        const pending = new Promise<void>((resolve) => { entered = resolve; });
+        const hooks = useHooks();
+        const hold: Parameters<typeof hooks.addFilter<'db.kv.getByName:filter:output'>>[1] = async (row) => {
+            if (row?.value?.includes('"masterSystemPrompt":"A"')) { entered(); await gate; }
+            return row;
+        };
+        hooks.addFilter('db.kv.getByName:filter:output', hold);
+        dispose = () => hooks.removeFilter('db.kv.getByName:filter:output', hold);
+        const api = useAiSettings();
+        const staleSet = api.set({ masterSystemPrompt: 'Must stay in A' });
+        const staleOutcome = staleSet.then(() => null, (error: unknown) => error);
+        await pending;
+        const otherId = `settings-other-${crypto.randomUUID()}`;
+        const dbB = setActiveWorkspaceDb(otherId);
+        try {
+            await setKvByName('ai_settings', JSON.stringify({ ...DEFAULT_AI_SETTINGS, masterSystemPrompt: 'B', maxContextTokens: 64_000 }), dbB);
+            await api.ensureLoaded();
+            release();
+            expect(await staleOutcome).toBeInstanceOf(Error);
+            expect(api.load()).toMatchObject({ masterSystemPrompt: 'B', maxContextTokens: 64_000 });
+            expect(JSON.parse((await getKvByName('ai_settings', dbB))!.value!)).toMatchObject({ masterSystemPrompt: 'B' });
+            dispose?.(); dispose = undefined;
+            expect(JSON.parse((await getKvByName('ai_settings', dbA))!.value!)).toMatchObject({ masterSystemPrompt: 'A' });
+        } finally { release(); setActiveWorkspaceDb(workspace); evictWorkspaceDb(otherId); await Dexie.delete(dbB.name); }
+    });
+
+    it('keeps different-field concurrent saves and resumes the queue after a failed save', async () => {
+        const api = useAiSettings();
+        await api.ensureLoaded();
+        await api.set({ masterSystemPrompt: 'initial', maxContextTokens: 100_000 });
+        const hooks = useHooks();
+        let entered!: () => void; let release!: () => void;
+        const pending = new Promise<void>((resolve) => { entered = resolve; });
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        const hold: Parameters<typeof hooks.addFilter<'db.kv.upsertByName:filter:input'>>[1] = async (row) => {
+            if (typeof row.value === 'string' && row.value.includes('"masterSystemPrompt":"first"')) { entered(); await gate; }
+            return row;
+        };
+        hooks.addFilter('db.kv.upsertByName:filter:input', hold);
+        dispose = () => hooks.removeFilter('db.kv.upsertByName:filter:input', hold);
+        const first = api.set({ masterSystemPrompt: 'first' });
+        await pending;
+        const second = api.set({ maxContextTokens: 2_000_000 });
+        release();
+        await Promise.all([first, second]);
+        expect(api.load()).toMatchObject({ masterSystemPrompt: 'first', maxContextTokens: 2_000_000 });
+        expect(JSON.parse((await getKvByName('ai_settings'))!.value!)).toMatchObject({ masterSystemPrompt: 'first', maxContextTokens: 2_000_000 });
+        dispose(); dispose = undefined;
+        const failedPut = vi.spyOn(getDb().kv, 'put').mockImplementationOnce(() => {
+            throw new Error('Injected preference save failure');
+        });
+        const failed = api.set({ masterSystemPrompt: 'failed' }).then(() => null, (error: unknown) => error);
+        const following = api.set({ defaultModelVariant: 'nitro' });
+        const [failure] = await Promise.all([failed, following]);
+        failedPut.mockRestore();
+        expect(failure).toBeInstanceOf(Error);
+        expect(api.load()).toMatchObject({ masterSystemPrompt: 'first', defaultModelVariant: 'nitro', maxContextTokens: 2_000_000 });
+        expect(JSON.parse((await getKvByName('ai_settings'))!.value!)).toMatchObject({ masterSystemPrompt: 'first', defaultModelVariant: 'nitro' });
+    });
+
+    it.each(['set', 'reset'] as const)('rejects an old %s after A→B→A while preserving a newer A preference', async (mode) => {
+        const api = useAiSettings();
+        await api.ensureLoaded();
+        await api.set({ masterSystemPrompt: 'initial A', maxContextTokens: 1_000_000 });
+        const dbA = getDb();
+        let entered!: () => void; let release!: () => void; let held = false;
+        const pending = new Promise<void>((resolve) => { entered = resolve; });
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        const hooks = useHooks();
+        const hold: Parameters<typeof hooks.addFilter<'db.kv.upsertByName:filter:input'>>[1] = async (row) => {
+            if (!held) { held = true; entered(); await gate; }
+            return row;
+        };
+        hooks.addFilter('db.kv.upsertByName:filter:input', hold);
+        dispose = () => hooks.removeFilter('db.kv.upsertByName:filter:input', hold);
+        const stale = (mode === 'set' ? api.set({ masterSystemPrompt: 'stale A' }) : api.reset())
+            .then(() => null, (error: unknown) => error);
+        await pending;
+        const otherId = `settings-other-${crypto.randomUUID()}`;
+        const dbB = setActiveWorkspaceDb(otherId);
+        try {
+            await api.ensureLoaded();
+            await api.set({ masterSystemPrompt: 'B', maxContextTokens: 64_000 });
+            expect(setActiveWorkspaceDb(workspace)).toBe(dbA);
+            await api.ensureLoaded();
+            await api.set({ masterSystemPrompt: 'new A', maxContextTokens: 2_000_000 });
+            release();
+            expect(await stale).toBeInstanceOf(Error);
+            expect(api.load()).toMatchObject({ masterSystemPrompt: 'new A', maxContextTokens: 2_000_000 });
+            expect(JSON.parse((await getKvByName('ai_settings', dbA))!.value!)).toMatchObject({ masterSystemPrompt: 'new A', maxContextTokens: 2_000_000 });
+            expect(JSON.parse((await getKvByName('ai_settings', dbB))!.value!)).toMatchObject({ masterSystemPrompt: 'B', maxContextTokens: 64_000 });
+        } finally { release(); setActiveWorkspaceDb(workspace); evictWorkspaceDb(otherId); await Dexie.delete(dbB.name); }
+    });
+
+    it('refuses to overwrite a separate handle preference changed while its save hook was delayed', async () => {
+        const api = useAiSettings();
+        await api.ensureLoaded();
+        await api.set({ masterSystemPrompt: 'initial', maxContextTokens: 100_000 });
+        const externalDb = new Or3DB(getDb().name);
+        await externalDb.open();
+        let entered!: () => void; let release!: () => void;
+        const pending = new Promise<void>((resolve) => { entered = resolve; });
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        const hooks = useHooks();
+        const hold: Parameters<typeof hooks.addFilter<'db.kv.upsertByName:filter:input'>>[1] = async (row) => {
+            if (typeof row.value === 'string' && row.value.includes('"masterSystemPrompt":"delayed"')) { entered(); await gate; }
+            return row;
+        };
+        hooks.addFilter('db.kv.upsertByName:filter:input', hold);
+        dispose = () => hooks.removeFilter('db.kv.upsertByName:filter:input', hold);
+        const delayed = api.set({ masterSystemPrompt: 'delayed' }).then(() => null, (error: unknown) => error);
+        try {
+            await pending;
+            await setKvByName('ai_settings', JSON.stringify({ ...DEFAULT_AI_SETTINGS, masterSystemPrompt: 'other tab', maxContextTokens: 2_000_000 }), externalDb);
+            release();
+            expect(await delayed).toBeInstanceOf(Error);
+            expect(JSON.parse((await getKvByName('ai_settings', externalDb))!.value!)).toMatchObject({ masterSystemPrompt: 'other tab', maxContextTokens: 2_000_000 });
+            await api.set({ defaultModelVariant: 'nitro' });
+            expect(api.load()).toMatchObject({ masterSystemPrompt: 'other tab', maxContextTokens: 2_000_000, defaultModelVariant: 'nitro' });
+        } finally { release(); externalDb.close(); }
+    });
+
+    // Capture risks: using defaults before the actual KV read settles, later
+    // settings changing an admitted scalar, A→B→A reusing a database handle,
+    // and a failed read silently removing the user's chosen constraint.
+    it('captures the durable maximum once without changing with later settings', async () => {
+        await setKvByName('ai_settings', JSON.stringify({ ...DEFAULT_AI_SETTINGS, maxContextTokens: 100_000 }));
+        const api = useAiSettings();
+        const origin = { db: getDb(), workspaceGeneration: getWorkspaceGeneration() };
+        const captured = await api.captureContextPreference();
+        expect(captured.db).toBe(origin.db);
+        expect(captured.workspaceGeneration).toBe(origin.workspaceGeneration);
+        expect(captured.maxContextTokens).toBe(100_000);
+        expect(Object.isFrozen(captured)).toBe(true);
+        await api.set({ maxContextTokens: 2_000_000 });
+        expect(captured.maxContextTokens).toBe(100_000);
+        expect((await api.captureContextPreference()).maxContextTokens).toBe(2_000_000);
+    });
+
+    it('awaits the real maximum read before returning a capture', async () => {
+        await setKvByName('ai_settings', JSON.stringify({ ...DEFAULT_AI_SETTINGS, maxContextTokens: 125_000 }));
+        let entered!: () => void; let release!: () => void;
+        const pending = new Promise<void>((resolve) => { entered = resolve; });
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        const hooks = useHooks();
+        const hold: Parameters<typeof hooks.addFilter<'db.kv.getByName:filter:output'>>[1] = async (row) => {
+            if (row?.value?.includes('125000')) { entered(); await gate; }
+            return row;
+        };
+        hooks.addFilter('db.kv.getByName:filter:output', hold);
+        dispose = () => hooks.removeFilter('db.kv.getByName:filter:output', hold);
+        try {
+            const api = useAiSettings();
+            let settled = false;
+            const capturing = api.captureContextPreference().then((value) => { settled = true; return value; });
+            await pending;
+            expect(settled).toBe(false);
+            release();
+            expect((await capturing).maxContextTokens).toBe(125_000);
+        } finally { release(); }
+    });
+
+    it('captures the current durable preference after a separate handle updates it', async () => {
+        const api = useAiSettings();
+        await api.ensureLoaded();
+        await api.set({ maxContextTokens: 100_000 });
+        const otherHandle = new Or3DB(getDb().name);
+        await otherHandle.open();
+        try {
+            await setKvByName('ai_settings', JSON.stringify({ ...DEFAULT_AI_SETTINGS, maxContextTokens: 250_000 }), otherHandle);
+            const captured = await api.captureContextPreference();
+            expect(captured.db).toBe(getDb());
+            expect(captured.maxContextTokens).toBe(250_000);
+        } finally { otherHandle.close(); }
+    });
+
+    it('rejects a delayed capture after A→B→A and captures the new A generation', async () => {
+        const dbA = getDb();
+        await setKvByName('ai_settings', JSON.stringify({ ...DEFAULT_AI_SETTINGS, maxContextTokens: 150_000 }), dbA);
+        const generationA = getWorkspaceGeneration();
+        let entered!: () => void; let release!: () => void; let held = false;
+        const pending = new Promise<void>((resolve) => { entered = resolve; });
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        const hooks = useHooks();
+        const hold: Parameters<typeof hooks.addFilter<'db.kv.getByName:filter:output'>>[1] = async (row) => {
+            if (!held && row?.value?.includes('150000')) { held = true; entered(); await gate; }
+            return row;
+        };
+        hooks.addFilter('db.kv.getByName:filter:output', hold);
+        dispose = () => hooks.removeFilter('db.kv.getByName:filter:output', hold);
+        const otherId = `settings-capture-${crypto.randomUUID()}`;
+        let dbB: Or3DB | undefined;
+        try {
+            const api = useAiSettings();
+            const oldCapture = api.captureContextPreference().then(() => null, (error: unknown) => error);
+            await pending;
+            dbB = setActiveWorkspaceDb(otherId);
+            await setKvByName('ai_settings', JSON.stringify({ ...DEFAULT_AI_SETTINGS, maxContextTokens: 64_000 }), dbB);
+            expect((await api.captureContextPreference()).maxContextTokens).toBe(64_000);
+            expect(setActiveWorkspaceDb(workspace)).toBe(dbA);
+            await api.set({ maxContextTokens: 900_000 });
+            const newCapture = await api.captureContextPreference();
+            expect(newCapture.db).toBe(dbA);
+            expect(newCapture.maxContextTokens).toBe(900_000);
+            expect(newCapture.workspaceGeneration).not.toBe(generationA);
+            release();
+            expect(await oldCapture).toBeInstanceOf(Error);
+            expect(newCapture.maxContextTokens).toBe(900_000);
+        } finally {
+            release(); setActiveWorkspaceDb(workspace);
+            if (dbB) { evictWorkspaceDb(otherId); await Dexie.delete(dbB.name); }
+        }
+    });
+
+    it('refuses a maximum capture after a failed read and allows an explicit retry', async () => {
+        await setKvByName('ai_settings', JSON.stringify({ ...DEFAULT_AI_SETTINGS, maxContextTokens: 175_000 }));
+        const api = useAiSettings();
+        await api.ensureLoaded();
+        // Hook exceptions deliberately fall back to the original row. Inject
+        // an actual DB transaction failure at the strict persisted-read owner.
+        const readFailure = vi.spyOn(getDb(), 'transaction').mockImplementationOnce(() => {
+            throw new Error('Injected maximum read failure');
+        });
+        try {
+            await expect(api.captureContextPreference()).rejects.toThrow(/read|unavailable/i);
+            expect(readFailure).toHaveBeenCalledOnce();
+        } finally { readFailure.mockRestore(); }
+        expect((await api.captureContextPreference()).maxContextTokens).toBe(175_000);
+    });
+
 });

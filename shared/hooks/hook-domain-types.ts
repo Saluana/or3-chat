@@ -8,6 +8,29 @@
 
 import type { FileKind } from '../files/file-kind';
 
+export interface ChatSendDelegation {
+    pluginId: string;
+    generation: number;
+    intent: string;
+}
+export interface ChatSendPreparation {
+    requestId: string;
+    workspaceId: string;
+    workspaceGeneration: number;
+    model: string;
+    messages: Array<{ role: string; content?: unknown; [key: string]: unknown }>;
+    editorDoc?: Record<string, unknown>;
+    signal: AbortSignal;
+    delegation?: ChatSendDelegation;
+    error?: { code: string; message: string };
+}
+/** Acknowledgement is mandatory: native dispatch must never follow a refused delegation. */
+export interface ChatSendCommit extends Pick<ChatSendPreparation, 'requestId' | 'workspaceId' | 'workspaceGeneration' | 'signal' | 'delegation'> {
+    assistant: { id: string; threadId: string; streamId: string };
+    status: 'pending' | 'handled' | 'rejected';
+    error?: { code: string; message: string };
+}
+
 export interface MessageEntity {
     id: string;
     thread_id: string;
@@ -44,7 +67,10 @@ export interface ThreadEntity {
     parent_thread_id?: string | null;
     anchor_message_id?: string | null;
     anchor_index?: number | null;
-    branch_mode?: 'reference' | 'copy' | null;
+    branch_mode?: 'reference' | 'copy' | 'compacted' | null;
+    root_thread_id?: string | null;
+    summary_message_id?: string | null;
+    fork_reason?: 'manual' | 'retry' | 'compaction';
     status: string;
     deleted: boolean;
     pinned: boolean;
@@ -63,7 +89,10 @@ export interface ThreadCreateEntity {
     parent_thread_id?: string | null;
     anchor_message_id?: string | null;
     anchor_index?: number | null;
-    branch_mode?: 'reference' | 'copy' | null;
+    branch_mode?: 'reference' | 'copy' | 'compacted' | null;
+    root_thread_id?: string | null;
+    summary_message_id?: string | null;
+    fork_reason?: 'manual' | 'retry' | 'compaction';
     status?: string;
     deleted?: boolean;
     pinned?: boolean;

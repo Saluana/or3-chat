@@ -57,6 +57,8 @@ async function getOpenRouterBuildModule(): Promise<OpenRouterBuildModule> {
 export type ResolveSystemPromptParams = {
     threadId: string | null | undefined;
     activePromptContent: unknown | null | undefined;
+    /** Saved selection for a new conversation, before a thread row exists. */
+    promptSelection?: string | null;
 };
 
 /**
@@ -68,16 +70,16 @@ export type ResolveSystemPromptParams = {
 export async function resolveSystemPromptText(
     params: ResolveSystemPromptParams
 ): Promise<string | null> {
-    return (await resolveThreadPrompt(params.threadId)).text;
+    return (await resolveThreadPrompt(params.threadId, params.promptSelection)).text;
 }
 
-async function resolveThreadPrompt(threadId: string | null | undefined): Promise<{
+async function resolveThreadPrompt(threadId: string | null | undefined, promptSelection?: string | null): Promise<{
     disabled: boolean;
     text: string | null;
 }> {
-    if (!threadId) return { disabled: false, text: null };
+    if (!threadId && promptSelection === undefined) return { disabled: false, text: null };
     try {
-        const selection = await getThreadSystemPrompt(threadId);
+        const selection = threadId ? await getThreadSystemPrompt(threadId) : promptSelection;
         if (selection === DISABLED_PROMPT_SELECTION)
             return { disabled: true, text: null };
         const promptId =
@@ -117,7 +119,7 @@ export type BuildSystemPromptParams = ResolveSystemPromptParams & {
 export async function buildSystemPromptMessage(
     params: BuildSystemPromptParams
 ): Promise<ChatMessage | null> {
-    const resolved = await resolveThreadPrompt(params.threadId);
+    const resolved = await resolveThreadPrompt(params.threadId, params.promptSelection);
     if (resolved.disabled) return null;
     const threadSystemText = resolved.text;
     let finalSystem: string | null = null;
@@ -191,11 +193,34 @@ export async function enforceOpenRouterMessageTokenBudget(
 export async function buildOpenRouterMessagesForSend(
     params: BuildOpenRouterMessagesParams
 ): Promise<OpenRouterMessage[]> {
-    const modelInputMessages: ModelInputMessage[] = params.effectiveMessages
-        .map(
-            (m): ModelInputMessage => ({
+    // Capture caller-owned content and policy before context/file resolution
+    // awaits. A reactive message array is not a request snapshot by itself.
+    const maxImageInputs = params.maxImageInputs ?? 5;
+    const imageInclusionPolicy = params.imageInclusionPolicy ?? 'all';
+    const { maxInputTokens } = params;
+    const modelInputMessages: ModelInputMessage[] = params.effectiveMessages.map(
+        (m): ModelInputMessage => {
+            const calls = m.tool_calls ??
+                (Array.isArray(m.data?.tool_calls)
+                    ? (m.data.tool_calls as ModelInputMessage['tool_calls'])
+                    : undefined);
+            return {
                 role: m.role,
-                content: m.content,
+                content: Array.isArray(m.content)
+                    ? m.content.map((part): ContentPart => {
+                        if (part.type === 'text') return { ...part };
+                        if (part.type === 'image') return {
+                            ...part,
+                            image: typeof part.image === 'string'
+                                ? part.image : new Uint8Array(part.image),
+                        };
+                        return {
+                            ...part,
+                            data: typeof part.data === 'string'
+                                ? part.data : new Uint8Array(part.data),
+                        };
+                    })
+                    : m.content,
                 id: m.id,
                 file_hashes: m.file_hashes,
                 name:
@@ -208,13 +233,13 @@ export async function buildOpenRouterMessagesForSend(
                     (typeof m.data?.tool_call_id === 'string'
                         ? m.data.tool_call_id
                         : undefined),
-                tool_calls:
-                    m.tool_calls ??
-                    (Array.isArray(m.data?.tool_calls)
-                        ? (m.data.tool_calls as ModelInputMessage['tool_calls'])
-                        : undefined),
-            })
-        );
+                // Canonical calls are JSON wire records. JSON serialization
+                // also detaches Vue proxies without changing their wire shape.
+                tool_calls: calls === undefined ? undefined
+                    : JSON.parse(JSON.stringify(calls)) as ModelInputMessage['tool_calls'],
+            };
+        }
+    );
 
     let lastUserIdx = -1;
     for (let i = modelInputMessages.length - 1; i >= 0; i -= 1) {
@@ -275,16 +300,16 @@ export async function buildOpenRouterMessagesForSend(
     let orMessages: OpenRouterMessage[] = await buildOpenRouterMessages(
         modelInputMessages,
         {
-            maxImageInputs: params.maxImageInputs ?? 5,
-            imageInclusionPolicy: params.imageInclusionPolicy ?? 'all',
+            maxImageInputs,
+            imageInclusionPolicy,
             debug: false,
         }
     );
 
-    if (params.maxInputTokens && params.maxInputTokens > 0) {
+    if (maxInputTokens && maxInputTokens > 0) {
         orMessages = await enforceOpenRouterMessageTokenBudget(
             orMessages,
-            params.maxInputTokens
+            maxInputTokens
         );
     }
 

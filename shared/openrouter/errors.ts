@@ -1,4 +1,4 @@
-import { normalizeError, presentError, type ErrorSource, type CredentialSource } from '../errors';
+import { normalizeError, presentError, type ErrorSource, type CredentialSource, type ErrorContext } from '../errors';
 // shared/openrouter/errors.ts
 // Centralized error handling for OpenRouter SDK
 // Maps SDK errors to user-friendly normalized errors
@@ -123,7 +123,18 @@ export class OpenRouterProviderError extends OpenRouterStreamError {
             finishReason: options.finishReason,
         });
         this.name = 'OpenRouterProviderError';
+        const metadata = normalizeError(this);
+        if (metadata.code === 'ERR_CONTEXT_FULL') {
+            this.code = metadata.code; this.retryable = false; this.message = presentError(metadata).message;
+        }
     }
+}
+
+/** Recognize explicit provider machine codes; upstream text is never UI copy. */
+export function normalizeProviderResponseError(text: string, status: number, context: ErrorContext = {}) {
+    let data: unknown;
+    try { data = JSON.parse(text); } catch { data = undefined; }
+    return normalizeError({ data, status, providerCode: status }, { ...context, source: 'provider' });
 }
 
 /**

@@ -120,7 +120,10 @@ export const ThreadSchema = z.object({
     // Branching (minimal): anchor + mode (reference|copy). Optional for root threads.
     anchor_message_id: z.string().nullable().optional(),
     anchor_index: z.number().int().nullable().optional(),
-    branch_mode: z.enum(['reference', 'copy']).nullable().optional(),
+    branch_mode: z.enum(['reference', 'copy', 'compacted']).nullable().optional(),
+    root_thread_id: z.string().nullable().optional(),
+    summary_message_id: z.string().nullable().optional(),
+    fork_reason: z.enum(['manual', 'retry', 'compaction']).optional(),
     status: z.string().default('ready'),
     deleted: z.boolean().default(false),
     pinned: z.boolean().default(false),

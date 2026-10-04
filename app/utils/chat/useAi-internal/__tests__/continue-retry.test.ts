@@ -23,11 +23,14 @@ const dbState = vi.hoisted(() => {
     return {
         db: {
             tables,
+            threads: { get: vi.fn(async (id: string) => ({ id })) },
             transaction,
             messages: {
                 get: messagesGet,
                 delete: messagesDelete,
-                where,
+                where: (index: string, ...args: unknown[]) => index === 'thread_id'
+                    ? { equals: () => ({ toArray: () => messagesByThreadSpy() }) }
+                    : where(index, ...args),
             },
         },
         messagesGet,
@@ -48,6 +51,7 @@ vi.mock('~/utils/errors', () => ({
 
 vi.mock('~/db/client', () => ({
     getDb: () => dbState.db,
+    getWorkspaceGeneration: () => 0,
 }));
 
 vi.mock('~/db/messages', () => ({
@@ -82,7 +86,8 @@ vi.mock('~/utils/chat/uiMessages', () => ({
     }),
 }));
 
-vi.mock('~/utils/chat/openrouterStream', () => ({
+vi.mock('~/utils/chat/openrouterStream', async (original) => ({
+    ...(await original<typeof import('~/utils/chat/openrouterStream')>()),
     openRouterStream: (...args: unknown[]) => openRouterStreamSpy(...args),
     openRouterStreamWithRetry: async function* (...args: unknown[]) {
         yield* openRouterStreamSpy(...args);
@@ -163,6 +168,8 @@ async function continueMessageImpl(
     await executeContinuation(
         {
             ...ctx,
+            resolveContextPolicy: ctx.resolveContextPolicy ?? (async () => ({ model: { context_length: 1_000_000 },
+                userMaxContextTokens: null, source: 'openrouter-live' as const })),
             request,
             loading: computed(() => request.phase.value !== 'terminal'),
         },
@@ -627,7 +634,7 @@ describe('continue/retry regressions', () => {
         dbState.where.mockReturnValue(assistantChain);
         dbState.transaction.mockImplementation(
             async (_mode: string, _tables: string[], cb: () => Promise<void>) => {
-                await cb();
+                return await cb();
             }
         );
 
@@ -658,7 +665,7 @@ describe('continue/retry regressions', () => {
             'override-model'
         );
 
-        expect(dbState.transaction).not.toHaveBeenCalled();
+        expect(dbState.transaction.mock.calls.every(([mode]) => mode === "r")).toBe(true);
         expect(dbState.messagesDelete).not.toHaveBeenCalled();
         expect(sendMessageSpy).toHaveBeenCalledWith('retry this', expect.objectContaining({
             model: 'override-model',
@@ -699,7 +706,7 @@ describe('continue/retry regressions', () => {
         dbState.where.mockReturnValue(assistantChain);
         dbState.transaction.mockImplementation(
             async (_mode: string, _tables: string[], cb: () => Promise<void>) => {
-                await cb();
+                return await cb();
             }
         );
         messagesByThreadSpy.mockResolvedValue([userMsg]);
@@ -726,7 +733,7 @@ describe('continue/retry regressions', () => {
             'u2'
         );
 
-        expect(dbState.transaction).not.toHaveBeenCalled();
+        expect(dbState.transaction.mock.calls.every(([mode]) => mode === "r")).toBe(true);
         expect(dbState.messagesDelete).not.toHaveBeenCalled();
         expect(sendMessageSpy).toHaveBeenCalledWith('retry solo', expect.objectContaining({
             model: 'default-model',
@@ -758,7 +765,7 @@ describe('continue/retry regressions', () => {
         dbState.where.mockReturnValue(assistantChain);
         dbState.transaction.mockImplementation(
             async (_mode: string, _tables: string[], cb: () => Promise<void>) => {
-                await cb();
+                return await cb();
             }
         );
         messagesByThreadSpy.mockResolvedValue([userMsg]);

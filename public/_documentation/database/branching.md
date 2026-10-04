@@ -1,6 +1,6 @@
 # Branch conversations
 
-Utilities for forking threads, retry-branching assistant replies, and building merged conversation contexts across Dexie tables.
+Utilities for forking threads, retry-branching assistant replies, and building canonical conversation contexts across Dexie tables.
 
 ---
 
@@ -17,7 +17,7 @@ Utilities for forking threads, retry-branching assistant replies, and building m
 
 | Type                             | Description                                                                 |
 | -------------------------------- | --------------------------------------------------------------------------- |
-| `ForkMode`                       | Alias of `BranchMode` (either `'reference'` or `'copy'`).                   |
+| `ForkMode`                       | `Exclude<BranchMode, 'compacted'>`: `'reference'` or `'copy'`.                   |
 | `ForkThreadParams`               | Required `sourceThreadId`, `anchorMessageId`, optional mode/title override. |
 | `RetryBranchParams`              | Assistant message to branch from plus optional mode/title.                  |
 | `BranchForkBeforePayload`        | Hook payload describing source thread, anchor message, and options.         |
@@ -47,10 +47,10 @@ Utilities for forking threads, retry-branching assistant replies, and building m
 
 ## Implementation notes
 
-1. **Transactions** — `forkThread` runs inside a Dexie transaction touching `threads` and `messages` to avoid race conditions; `buildContext` uses parallel reads and is not transactional.
+1. **Transactions** — `forkThread` runs inside a Dexie transaction touching `threads` and `messages` to avoid race conditions; `buildContext` resolves recursive canonical history and is not a write transaction.
 2. **Indexing** — Copied messages normalize indexes starting at `0` to keep order stable in fresh forks.
-3. **Role normalization** — Any non-assistant/system role becomes `user` so AI context stays predictable.
-4. **Perf** — `buildContext` batches ancestor and local queries in parallel and dedupes via `Map` before merging.
+3. **Role normalization** — Canonical `user`, `assistant`, `system` and `tool` roles are preserved; unknown legacy roles normalize to `user`.
+4. **Perf** — `buildContext` follows reference ancestors through canonical anchor boundaries. A compacted boundary contributes its saved summary and local messages, without rehydrating raw ancestors. Missing or cyclic lineage fails explicitly.
 
 ---
 
@@ -59,3 +59,5 @@ Utilities for forking threads, retry-branching assistant replies, and building m
 -   Use `mode: 'copy'` when you need historical messages physically duplicated for offline tweaks; otherwise the cheaper reference mode keeps storage down.
 -   Customize `branch.fork:filter:options` to auto-name forks (e.g., prepend emoji or include anchor timestamp).
 -   Import these anchor-aware helpers from `~/db/branching`. The same-named `forkThread` in `~/db/threads` is a different metadata/optional-copy API.
+
+Compacted forks use the validated atomic compaction writer; neither public fork helper accepts `compacted` as an ordinary mode. The writer preserves the source and commits the child, summary, captured history recipe and lineage together after rechecking the captured source. See [manual context compaction](/documentation/utils/manual-context-compaction) for retrieval and navigation across that boundary.

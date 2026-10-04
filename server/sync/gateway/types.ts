@@ -18,6 +18,7 @@
  * 5. Endpoint returns PushResult to client
  */
 import type { H3Event } from 'h3';
+import type { CanonicalChatReader } from '~~/shared/chat/history-reader';
 import type {
     PullRequest,
     PullResponse,
@@ -158,9 +159,12 @@ export interface SyncGatewayAdapter {
         historyRetention?: 'snapshot-v1';
         /** Atomic canonical chat admission/finalization and durable receipts. */
         backgroundGenerationHistory?: 'v1';
+        /** Bounded current materialized history, independently workspace authorized. */
+        canonicalChatHistory?: 'v1';
         /** Transactional preservation/admission for catalog, Trash and file memberships. */
         workspaceItems?: 'v1';
     };
+    readChatHistory?: CanonicalChatReader['readChatHistory'];
 
     /**
      * Atomically materialize the thread/turn placeholder and record the

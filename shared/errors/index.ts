@@ -34,7 +34,11 @@ export type ErrorCode =
     | 'ERR_UNSUPPORTED_MODEL'
     | 'ERR_HOOK_FAILURE'
     | 'ERR_TOOL_OUTCOME_UNKNOWN'
-    | 'ERR_SYNC_PAYLOAD_TOO_LARGE';
+    | 'ERR_SYNC_PAYLOAD_TOO_LARGE'
+    | 'ERR_CONTEXT_FULL'
+    | 'ERR_MODEL_METADATA_UNAVAILABLE'
+    | 'ERR_CONTEXT_LIMIT_INVALID'
+    | 'ERR_OUTPUT_LIMIT_INVALID';
 export type ErrorSource =
     | 'provider'
     | 'session'
@@ -229,6 +233,15 @@ export function normalizeError(
     }
     if (e.name === 'SyncPayloadTooLargeError')
         code = 'ERR_SYNC_PAYLOAD_TOO_LARGE';
+    const contextCodes: Record<string, ErrorCode> = {
+        context_full: 'ERR_CONTEXT_FULL', model_metadata_unavailable: 'ERR_MODEL_METADATA_UNAVAILABLE',
+        invalid_context_limit: 'ERR_CONTEXT_LIMIT_INVALID', invalid_output_limit: 'ERR_OUTPUT_LIMIT_INVALID',
+    };
+    const domainCode = data.code ?? e.code;
+    if (typeof domainCode === 'string' && Object.hasOwn(contextCodes, domainCode)) code = contextCodes[domainCode]!;
+    const reportedProviderCode = (!knownCode(envelope.code) ? envelope.code : undefined)
+        ?? structured.providerCode ?? e.providerCode;
+    if (reportedProviderCode === 'context_length_exceeded' || reportedProviderCode === 'context_window_exceeded') code = 'ERR_CONTEXT_FULL';
     const normallyRetryable = [
         'ERR_NETWORK',
         'ERR_TIMEOUT',
@@ -254,6 +267,7 @@ export function normalizeError(
             'ERR_FILE_TOO_LARGE',
             'ERR_TOOL_OUTCOME_UNKNOWN',
             'ERR_SYNC_PAYLOAD_TOO_LARGE',
+            'ERR_CONTEXT_FULL', 'ERR_MODEL_METADATA_UNAVAILABLE', 'ERR_CONTEXT_LIMIT_INVALID', 'ERR_OUTPUT_LIMIT_INVALID',
         ].includes(code) ||
         (status !== undefined &&
             status >= 400 &&
@@ -262,7 +276,7 @@ export function normalizeError(
     const retryable =
         !permanent &&
         (typeof declared === 'boolean' ? declared : normallyRetryable);
-    const rawProviderCode = structured.providerCode ?? e.providerCode;
+    const rawProviderCode = reportedProviderCode;
     const providerCode =
         typeof rawProviderCode === 'number' && Number.isFinite(rawProviderCode)
             ? rawProviderCode
@@ -276,6 +290,7 @@ export function normalizeError(
                     'content_filter',
                     'overloaded',
                     'bad_request',
+                    'context_length_exceeded', 'context_window_exceeded',
                 ].includes(rawProviderCode)
               ? rawProviderCode
               : undefined;
@@ -300,6 +315,10 @@ export function normalizeError(
 }
 
 const copy: Record<ErrorCode, [string, string]> = {
+    ERR_CONTEXT_FULL: ['Context full', 'Context full — compact, edit the request, or choose a larger supported model.'],
+    ERR_MODEL_METADATA_UNAVAILABLE: ['Model capacity unavailable', 'Model capacity is unavailable. Refresh models or choose a model with known capacity.'],
+    ERR_CONTEXT_LIMIT_INVALID: ['Invalid context maximum', 'Choose a positive maximum context value or use the model limit.'],
+    ERR_OUTPUT_LIMIT_INVALID: ['Invalid reply allowance', 'The requested reply allowance exceeds this model’s output limit or is invalid.'],
     ERR_TOOL_OUTCOME_UNKNOWN: [
         'Tool outcome unknown',
         'A tool may have already run. Check its result before retrying to avoid repeating a side effect.',
@@ -465,6 +484,7 @@ export function presentError(
             'ERR_SERVER',
             'ERR_PROVIDER',
             'ERR_OVERLOADED',
+            'ERR_CONTEXT_FULL', 'ERR_MODEL_METADATA_UNAVAILABLE', 'ERR_CONTEXT_LIMIT_INVALID', 'ERR_OUTPUT_LIMIT_INVALID',
         ].includes(e.code)
     ) {
         message = redactErrorText(context.fallbackMessage);
