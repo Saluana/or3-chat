@@ -636,3 +636,8 @@ WHEN preferences are reloaded or the workspace changes THEN the maximum SHALL fo
 - Owner: AiPage.context-maximum; useAiSettings KV owners; native admission/budget; adopted background owners.
 - Evidence scope: Unset/custom/reset, invalid input/workspace persistence, model intersections and captured maximums; deployed reconnect remains independently gated.
 
+
+
+## October4 release/adoption evidence update
+
+[Released companions and exact source/package/pin boundaries](./RELEASED_COMPANION_PACKAGES.md) supersede earlier unpublished-provider notes: SQLite0.0.14/Convex0.0.11 exist, match qualified CI archives/provenance and installed files, and pass current-host119/57 artifact cases plus host types/145 focused/25 policy cases. Host adoption is prepared for draft review; deployed Convex/second-client/background reconnect, pure Workflows adoption/publication authority and live scorecards remain unqualified. No authoritative criterion text/status is silently closed by publication. Current67 local/12 partial or external criteria and49/5/1 tasks remain pending review of those actual remaining gates.
