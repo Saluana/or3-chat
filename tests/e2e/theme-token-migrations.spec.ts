@@ -812,14 +812,39 @@ test.describe('chat responsive layout', () => {
                 await openResponsiveChat(page, theme, 'light');
                 const controls = page.locator('.chat-input-main')
                     .getByRole('button', { name: /^(Add attachments|Settings|Send message)$/ });
+                await expect(controls).toHaveCount(3);
                 for (const button of await controls.all()) {
-                    const bounds = await button.boundingBox();
-                    expect(bounds!.width).toBeGreaterThanOrEqual(44);
-                    expect(bounds!.height).toBeGreaterThanOrEqual(44);
+                    const touch = await button.evaluate(element => {
+                        const bounds = element.getBoundingClientRect();
+                        const before = getComputedStyle(element, '::before');
+                        const expanded = before.content !== 'none' && before.content !== 'normal';
+                        const width = Math.max(bounds.width, expanded ? parseFloat(before.width) : 0);
+                        const height = Math.max(bounds.height, expanded ? parseFloat(before.height) : 0);
+                        const x = bounds.left + bounds.width / 2;
+                        const y = bounds.top + bounds.height / 2;
+                        const disabled = (element as HTMLButtonElement).disabled;
+                        return { paintedWidth: bounds.width, paintedHeight: bounds.height, width, height, disabled,
+                            // Native round buttons have clipped corners; measure
+                            // the full target diameter along both axes.
+                            extentsHitButton: [[-21, 0], [21, 0], [0, -21], [0, 21]].every(([dx, dy]) =>
+                                element.contains(document.elementFromPoint(x + dx!, y + dy!))) };
+                    });
+                    expect(touch.paintedWidth).toBe(theme === 'blank' ? 44 : 32);
+                    expect(touch.paintedHeight).toBe(theme === 'blank' ? 44 : 32);
+                    expect(touch.width).toBeGreaterThanOrEqual(44);
+                    expect(touch.height).toBeGreaterThanOrEqual(44);
+                    if (!touch.disabled) {
+                        expect(touch.extentsHitButton).toBe(true);
+                        await button.focus();
+                        await expect(button).toBeFocused();
+                    }
                 }
 
                 const chooser = page.waitForEvent('filechooser');
-                await page.getByRole('button', { name: 'Add attachments' }).click();
+                const attachmentBounds = (await page.getByRole('button', { name: 'Add attachments' }).boundingBox())!;
+                // Click inside the 44px native hit region, outside a 32px paint box.
+                await page.mouse.click(attachmentBounds.x + attachmentBounds.width / 2 - 21,
+                    attachmentBounds.y + attachmentBounds.height / 2);
                 await (await chooser).setFiles(Array.from({ length: 8 }, (_, index) => ({
                     name: `attachment-${index}.png`, mimeType: 'image/png',
                     // Distinct source bytes keep attachment identities independent.
