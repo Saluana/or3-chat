@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { flushPromises, mount } from '@vue/test-utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { flushPromises, mount as mountComponent } from '@vue/test-utils';
 import * as nuxtImports from '#imports';
 import { kv } from '~/db';
 import { getWorkspaceGeneration } from '~/db/client';
@@ -10,6 +10,25 @@ import ChatContainer from '../ChatContainer.vue';
 // contract is exercised end to end. `tests/setup.ts` mocks `or3-scroll` for
 // the rest of the suite; this file opts back into the installed package.
 vi.unmock('or3-scroll');
+
+// Keep the real scroller's async ref updates inside the test DOM lifetime.
+// Every mount is tracked, including tests that mount directly or throw.
+const mountedWrappers = new Set<ReturnType<typeof mountComponent>>();
+const mount = ((...args: Parameters<typeof mountComponent>) => {
+    const wrapper = mountComponent(...args);
+    mountedWrappers.add(wrapper);
+    return wrapper;
+}) as typeof mountComponent;
+
+afterEach(async () => {
+    await flushPromises();
+    for (const wrapper of mountedWrappers) {
+        if (!wrapper.vm.$.isUnmounted) wrapper.unmount();
+        expect(wrapper.vm.$.isUnmounted).toBe(true);
+    }
+    mountedWrappers.clear();
+    await flushPromises();
+});
 
 vi.mock('~/composables/useThemeResolver', () => ({
     useThemeOverrides: () => ({ value: {} }),
