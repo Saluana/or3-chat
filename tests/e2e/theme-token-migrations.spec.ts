@@ -1042,3 +1042,39 @@ for (const theme of themes) {
         }
     }
 }
+
+for (const initialTheme of ['blank', 'cyberpunk'] as const) {
+    test(`theme icons survive hydration and switches from ${initialTheme}`, async ({ page }, info) => {
+        await openResponsiveChat(page, initialTheme, 'light');
+        const expected = {
+            blank: { send: 'tabler:arrow-up', toggle: 'tabler:layout-sidebar-left-collapse' },
+            retro: { send: 'pixelarticons:arrow-up', toggle: 'pixelarticons:arrow-bar-left' },
+            cyberpunk: { send: 'carbon:send-alt', toggle: 'carbon:side-panel-close' },
+        };
+        const expectIcons = async (theme: ThemeName) => {
+            await expect(page.getByRole('button', { name: 'Send message', exact: true })
+                .locator('.iconify')).toHaveClass(new RegExp(`i-${expected[theme].send}`));
+            await expect(page.getByRole('button', { name: 'Collapse sidebar', exact: true })
+                .locator('.iconify')).toHaveClass(new RegExp(`i-${expected[theme].toggle}`));
+        };
+        await expectIcons(initialTheme);
+        await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+        const dashboard = page.getByRole('dialog', { name: 'Dashboard' });
+        await dashboard.getByRole('button', { name: 'Settings', exact: true }).click();
+        await dashboard.getByRole('button', { name: /Theme Settings/i }).click();
+        for (const theme of ['retro', 'cyberpunk', 'blank'] as const) {
+            await selectThemeAndMode(page, theme, 'light');
+            await page.getByRole('dialog', { name: 'Dashboard' })
+                .getByRole('button', { name: 'Close', exact: true }).click();
+            await expect(page.getByRole('dialog', { name: 'Dashboard' })).toBeHidden();
+            await expectIcons(theme);
+            await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+        }
+        await selectThemeAndMode(page, 'cyberpunk', 'dark');
+        await page.reload();
+        await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'cyberpunk');
+        await expectIcons('cyberpunk');
+        await page.screenshot({ path: info.outputPath('cyberpunk-icons-after-reload.png') });
+    });
+}
