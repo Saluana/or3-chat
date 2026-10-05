@@ -25,6 +25,10 @@ export const sidebarOverrides = {
     'button#sidebar.unified-item.trigger': {
         class: 'flex items-center justify-center shadow-none!',
     },
+    'button#sidebar.family-toggle': {
+        icon: 'pixelarticons:chevron-right',
+        ui: { leadingIcon: 'size-6' },
+    },
     // Note: border for chat containers is applied via CSS selector below to avoid duplicate class merges
 
     /* --- Sidebar header --- */

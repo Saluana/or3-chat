@@ -1202,6 +1202,112 @@
 	z-index: 2;
 }
 
+/* Chat families: one aligned header, with a separate pixel timeline gutter. */
+[data-theme='retro'] {
+	.sidebar-family-header {
+		position: relative;
+	}
+
+	.sidebar-family-header > .unified-sb-item {
+		padding-left: 38px;
+	}
+
+	.sidebar-family-header .sb-btn-icon {
+		display: none;
+	}
+
+	.sidebar-family-toggle {
+		position: absolute;
+		left: 4px;
+		top: 5px;
+		z-index: 1;
+		width: 32px;
+		height: 32px;
+		min-width: 32px;
+		min-height: 32px;
+		padding: 0 !important;
+		border: 0 !important;
+		box-shadow: none !important;
+		background: transparent;
+		transform: none !important;
+	}
+
+	.sidebar-family-toggle:hover {
+		background: var(--md-surface-hover);
+	}
+
+	.sidebar-family-toggle[aria-expanded='true'] .iconify {
+		transform: rotate(90deg);
+	}
+
+	.sidebar-family-member {
+		padding-left: 32px;
+	}
+
+	/* Keep the gutter and disclosure stationary when a card is selected. */
+	[data-family-kind] .unified-sb-item {
+		transform: none;
+	}
+
+	.sidebar-family-member .family-timeline-marker {
+		position: absolute;
+		left: calc(-20px - var(--md-border-width));
+		top: calc(0px - var(--md-border-width));
+		bottom: calc(-14px - var(--md-border-width));
+		width: 18px;
+		pointer-events: none;
+	}
+
+	.sidebar-family-member .family-timeline-line {
+		left: 8px;
+		top: 0;
+		bottom: 0;
+		width: var(--md-border-width-subtle);
+		background: color-mix(in srgb, var(--md-outline) 45%, transparent);
+	}
+
+	.sidebar-family-member .family-timeline-line.is-first {
+		top: 20px;
+	}
+
+	.sidebar-family-member .family-timeline-line.is-last {
+		bottom: calc(100% - 20px);
+	}
+
+	.sidebar-family-member .family-timeline-dot {
+		left: 4px;
+		top: 16px;
+		width: 8px;
+		height: 8px;
+		border-radius: 0;
+		background: var(--md-outline);
+	}
+
+	.sidebar-family-member .family-timeline-dot.is-latest {
+		background: var(--md-primary);
+	}
+
+	.sidebar-family-member .sidebar-family-subtitle {
+		margin-right: 0;
+		margin-top: 4px;
+		line-height: 1.4;
+	}
+}
+
+@media (pointer: coarse) {
+	[data-theme='retro'] .sidebar-family-toggle {
+		left: 0;
+		top: 0;
+		width: 44px;
+		height: 44px;
+	}
+
+	[data-theme='retro'] .sidebar-family-header > .unified-sb-item {
+		min-height: 44px;
+		padding-left: 44px;
+	}
+}
+
 /*
  * Document formatting toolbar — retro polish only.
  * Quieter idle chrome, consistent control sizing, pane-aware spacing.

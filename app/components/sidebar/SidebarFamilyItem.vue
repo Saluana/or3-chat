@@ -5,7 +5,8 @@
         :data-thread-family="item.family?.rootId" :data-family-kind="item.family?.kind">
         <div class="flex min-w-0 items-center" :class="item.family?.kind === 'group-header' ? 'sidebar-family-header' : ''">
             <UButton v-if="item.family?.kind === 'group-header'" color="neutral" variant="ghost" size="sm" square
-                class="shrink-0" :icon="item.family.expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+                class="shrink-0 sidebar-family-toggle" :icon="item.family.expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+                v-bind="toggleOverrides"
                 :aria-expanded="item.family.expanded" :aria-label="`${item.family.expanded ? 'Collapse' : 'Expand'} ${item.title}`"
                 :disabled="item.family.searchExpanded" :title="item.family.searchExpanded ? 'Search reveals matching branches without changing saved expansion.' : undefined"
                 @click="emit('toggleFamily', item.family.rootId)" />
@@ -35,7 +36,14 @@
 <script setup lang="ts">
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import SidebarUnifiedItem from './SidebarUnifiedItem.vue';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 defineProps<{ item: UnifiedSidebarItem; active: boolean; timeDisplay: string }>();
+const toggleOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'sidebar.family-toggle',
+    isNuxtUI: true,
+});
 function mutationTarget(item: UnifiedSidebarItem): UnifiedSidebarItem {
     return item.family?.kind === 'group-header' && item.family.originalId
         ? { ...item, id: item.family.originalId } : item;
