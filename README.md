@@ -80,7 +80,7 @@ sets up the supported cloud profile for you.
 
 - **Local-first storage** — Dexie (IndexedDB) keeps everything on your machine
 - **No telemetry** — OR3 does not phone home
-- **Your API key** — connect via OpenRouter OAuth (PKCE) or paste a key. It never leaves your browser in static mode
+- **Your API key** — connect via OpenRouter OAuth (PKCE) or paste a key. Your personal key is stored in your browser and excluded from workspace sync. When used for a model request, your key is sent to the configured model endpoint, directly or through your OR3 host, depending on the request route
 - **Open source** — GPL-3.0 licensed. Read every line, fork it, make it yours
 
 ![Documents editor](public/screenshots/editor-screenshot.png)
@@ -200,7 +200,7 @@ Opens a local server at **http://localhost:4173**.
 ### How Static Mode Works
 
 - All data is stored in your browser using **IndexedDB** (via Dexie)
-- Your OpenRouter API key is stored locally — never sent to a server
+- Your OpenRouter API key is stored in your browser and sent to the configured model endpoint to authenticate AI requests
 - There is no backend, no database, and no authentication
 - You connect to OpenRouter using **OAuth PKCE** (secure browser-only flow) or by pasting an API key
 - Conversations, documents, prompts, files, and settings all live in your browser

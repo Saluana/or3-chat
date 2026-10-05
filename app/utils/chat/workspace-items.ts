@@ -70,7 +70,8 @@ export async function readWorkspaceItem(scope: WorkspaceOperationScope, item: Wo
         return { source: { ...item, title: project.name, revision },
             content: JSON.stringify({ description: project.description ?? '', entries }), row: project };
     }
-    if (item.kind === 'chat') {
+    // Retain the rejection boundary for untyped callers with an unknown kind.
+    if ((item as { kind?: string }).kind === 'chat') {
         const thread = await scope.db.threads.get(item.id);
         if (!thread || thread.deleted) throw new Error('That chat is unavailable.');
         const threads = new Map<string, Thread>();

@@ -57,7 +57,7 @@ export default defineEventHandler(async (event) => {
     if (!current || !workspaceId) {
         throw createError({ statusCode: 404, statusMessage: 'Job not found' });
     }
-    if (execution?.body._clientDeviceId !== deviceId) {
+    if (execution.body._clientDeviceId !== deviceId) {
         throw createError({
             statusCode: 409,
             statusMessage: 'Tool call belongs to another browser device',

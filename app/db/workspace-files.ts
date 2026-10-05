@@ -102,7 +102,7 @@ export async function importWorkspaceFile(scope: WorkspaceOperationScope, blob: 
     if (!name.trim()) throw new Error('Enter a filename.');
     const text = await extractWorkspaceFileText(blob, name);
     scope.assertCurrent('write');
-    const meta = await createOrRefFile(blob, name);
+    const meta = await createOrRefFile(blob, name, { assertCurrent: () => scope.assertCurrent('write') });
     // createOrRefFile holds an intake reference. Transfer it to catalog ownership
     // without removing immutable bytes, including on failed/cancelled intake.
     try {

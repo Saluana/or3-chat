@@ -26,13 +26,13 @@ export function workspaceItemMetadata(meta: unknown): WorkspaceItemMetadata | nu
         let value = metadataObject(meta)[WORKSPACE_ITEM_META_KEY];
         if (typeof value === 'string') value = JSON.parse(value);
         if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-        const candidate = value as WorkspaceItemMetadata;
+        const candidate = value as Omit<WorkspaceItemMetadata, 'version'> & { version?: unknown };
         if (candidate.version !== 1 || !(candidate.trashed_at === null || (typeof candidate.trashed_at === 'number' && Number.isFinite(candidate.trashed_at) && candidate.trashed_at >= 0))) return null;
         if (candidate.text && (!['full', 'prefix', 'none'].includes(candidate.text.coverage)
             || !Number.isSafeInteger(candidate.text.indexed_bytes) || candidate.text.indexed_bytes < 0 || candidate.text.indexed_bytes > 65536)) {
             return { version: 1, trashed_at: candidate.trashed_at };
         }
-        return candidate;
+        return candidate as WorkspaceItemMetadata;
     } catch { return null; }
 }
 

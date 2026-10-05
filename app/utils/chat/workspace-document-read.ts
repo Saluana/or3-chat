@@ -68,10 +68,11 @@ export async function readWorkspaceDocumentPage(
     const snapshot = freezeDocumentContentForAi(JSON.parse(loaded.row.content) as JSONContent);
     let index = 0; let offset = 0;
     if (continuation) {
-        let cursor: Record<string, unknown>;
-        try { cursor = JSON.parse(continuation) as Record<string, unknown>; }
-        catch { throw new Error('Invalid read continuation.'); }
-        if (!cursor || cursor.id !== loaded.row.id || cursor.kind !== 'document' || cursor.revision !== loaded.source.revision
+        let value: unknown;
+        try { value = JSON.parse(continuation); } catch { throw new Error('Invalid read continuation.'); }
+        if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid read continuation.');
+        const cursor = value as Record<string, unknown>;
+        if (cursor.id !== loaded.row.id || cursor.kind !== 'document' || cursor.revision !== loaded.source.revision
             || !Number.isSafeInteger(cursor.block) || Number(cursor.block) < 0 || Number(cursor.block) >= snapshot.blocks.length
             || !Number.isSafeInteger(cursor.offset) || Number(cursor.offset) < 0
             || Number(cursor.offset) > snapshot.blocks[Number(cursor.block)]!.text.length) {

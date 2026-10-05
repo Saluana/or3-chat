@@ -305,7 +305,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 3,
-                    "summary": "Export, inspect, append or replace, and verify active-workspace recovery."
+                    "summary": "Export, inspect, append or replace with duplicate-source rejection and atomic rollback, and verify active-workspace recovery."
                 }
             ]
         },

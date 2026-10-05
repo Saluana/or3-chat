@@ -390,6 +390,39 @@ describe('workspace backup export reliability', () => {
 });
 
 describe('workspace backup replace safety', () => {
+    it.each([false, true])('rejects duplicate source IDs across batches=%s and restores every cleared table', async (split) => {
+        const db = createDb();
+        await seed(db);
+        const rows = [{ id: 'duplicate', value: 'first' }, { id: 'duplicate', value: 'second' }];
+        const file = backupBlob([
+            header(db, [{ name: 'messages', rowCount: 2, inbound: true }, { name: 'projects', rowCount: 0, inbound: true }]),
+            { type: 'table-start', table: 'messages' },
+            ...(split ? rows.map(row => ({ type: 'rows', table: 'messages', rows: [row] })) : [{ type: 'rows', table: 'messages', rows }]),
+            { type: 'table-end', table: 'messages' },
+            { type: 'table-start', table: 'projects' }, { type: 'table-end', table: 'projects' }, { type: 'end' },
+        ]);
+        await expect(importWorkspaceStream({ db: db as unknown as Or3DB, file, clearTables: true, overwriteValues: true })).rejects.toThrow(/duplicate.*key/i);
+        await expectSeedRowsPreserved(db);
+    });
+
+    it('rejects duplicate blob hashes with the actual workspace schema without losing existing rows', async () => {
+        const db = new Or3DB(`duplicate-blobs-${crypto.randomUUID()}`);
+        databases.push(db); await db.open();
+        await db.kv.put({ id: 'sentinel', name: 'Synthetic sentinel', value: 'keep', deleted: false, clock: 1, created_at: 1, updated_at: 1 });
+        const lines: unknown[] = [{ type: 'meta', format: WORKSPACE_BACKUP_FORMAT, version: WORKSPACE_BACKUP_VERSION,
+            databaseName: db.name, databaseVersion: db.verno, createdAt: new Date(0).toISOString(),
+            tables: db.tables.map(t => ({ name: t.name, rowCount: t.name === 'file_blobs' ? 2 : 0, inbound: true })) }];
+        for (const table of db.tables) {
+            lines.push({ type: 'table-start', table: table.name });
+            if (table.name === 'file_blobs') for (let i = 0; i < 2; i++) lines.push({ type: 'rows', table: table.name,
+                rows: [{ hash: 'duplicate-hash', blob: { data: 'QQ==', type: 'text/plain' } }] });
+            lines.push({ type: 'table-end', table: table.name });
+        }
+        lines.push({ type: 'end' });
+        await expect(importWorkspaceStream({ db, file: backupBlob(lines), clearTables: true, overwriteValues: true })).rejects.toThrow(/duplicate.*key/i);
+        expect(await db.kv.get('sentinel')).toMatchObject({ value: 'keep' });
+        expect(await db.file_blobs.count()).toBe(0);
+    });
     it('rejects an empty table manifest without clearing existing rows', async () => {
         const db = createDb();
         await seed(db);

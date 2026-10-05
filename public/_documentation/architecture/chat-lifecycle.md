@@ -31,6 +31,14 @@ updating stream projections or restoring a tab. Do not recreate the removed
 
 `abort()` requests cancellation. `dispose()` releases view listeners/subscriptions and can leave admitted generation tracking detached. It does not delete saved messages. `clearConversation({ persistence: 'preserve' })` clears in-memory projections and preserves durable rows. Do not use teardown as a destructive conversation operation or report it as a completed cancellation.
 
+Foreground intake checks cancellation before buffered events and after awaited
+processing. Cancellation during the final incoming filter preserves accepted
+partial output and produces an aborted result without success completion hooks.
+The successful terminal claim is synchronous; later cancellation cannot rewrite
+that claimed outcome. Tool-result insertion validates the captured thread, parent
+assistant and generation under the same write transaction as its append, so a
+hard deletion cannot leave a later orphan result.
+
 Each terminal write must retain request/generation identity so late results from an older retry or workspace cannot overwrite current work. Preparation hooks run before final persistence; a callback or notification finishing is not proof that the database write succeeded. Use the existing tracker and persister recovery paths.
 
 ## Context and tools

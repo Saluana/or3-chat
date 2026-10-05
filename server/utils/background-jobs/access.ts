@@ -18,7 +18,7 @@ export async function requireJobWorkspaceAccess(
     if (!workspaceId) {
         throw createError({ statusCode: 403, statusMessage: 'Forbidden' });
     }
-    const config = useRuntimeConfig(event);
+    const config = useRuntimeConfig(event) as { sync?: { provider?: string }; public?: { sync?: { provider?: string } } };
     const storeId = config.sync?.provider || config.public?.sync?.provider || 'convex';
     const store = getAuthWorkspaceStore(storeId);
     if (!store) {

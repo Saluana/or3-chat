@@ -71,13 +71,19 @@ export interface AttachmentLike {
     error?: string;
 }
 
-export async function persistAttachment(att: AttachmentLike) {
+export interface AttachmentIntakeOwner {
+    signal: AbortSignal;
+    assertCurrent(): void;
+}
+
+export async function persistAttachment(att: AttachmentLike, owner?: AttachmentIntakeOwner) {
     let scope: WorkspaceOperationScope | undefined;
     const catalogEnabled = workspaceFilesAvailable();
     const originDb = getDb();
     const originGeneration = getWorkspaceGeneration();
     const originWorkspace = getActiveWorkspaceId();
     const assertLocalOrigin = () => {
+        owner?.assertCurrent();
         if (getDb() !== originDb || getWorkspaceGeneration() !== originGeneration || getActiveWorkspaceId() !== originWorkspace) {
             throw new Error('The originating workspace is no longer available.');
         }
@@ -86,7 +92,7 @@ export async function persistAttachment(att: AttachmentLike) {
         assertLocalOrigin();
         if (catalogEnabled) scope ??= captureWorkspaceOperation({ subject: null, workspaceId: getActiveWorkspaceId() ?? 'local',
             threadId: 'chat-upload', messageId: null, requestId: createRuntimeUuid(), callId: createRuntimeUuid(),
-            abortSignal: new AbortController().signal });
+            abortSignal: owner?.signal ?? new AbortController().signal });
         // Apply files.attach:filter:input hook before creating/referencing file
         const hooks = useHooks();
         const payload: FilesAttachInputPayload = {
@@ -116,7 +122,7 @@ export async function persistAttachment(att: AttachmentLike) {
         }
 
         // Use filtered values (in case hook transformed them)
-        const meta = await createOrRefFile(filtered.file, filtered.name);
+        const meta = await createOrRefFile(filtered.file, filtered.name, { assertCurrent: assertLocalOrigin });
         assertLocalOrigin();
         scope?.assertCurrent('write');
         if (catalogEnabled) {
@@ -134,6 +140,7 @@ export async function persistAttachment(att: AttachmentLike) {
         await persist();
     } catch (e: unknown) {
         att.status = 'error';
+        if (owner?.signal.aborted) return;
         att.error = presentError(e, { code: 'ERR_FILE_PERSIST' }).message;
         reportError(e, {
             code: 'ERR_FILE_PERSIST',

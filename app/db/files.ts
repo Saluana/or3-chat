@@ -208,14 +208,17 @@ async function changeRefCount(
  */
 export async function createOrRefFile(
     file: Blob,
-    name: string
+    name: string,
+    owner?: { assertCurrent(): void }
 ): Promise<FileMeta> {
     const db = getDb();
     const assertCurrentDb = () => {
+        owner?.assertCurrent();
         if (getDb() !== db) {
             throw new Error('workspace changed while creating file');
         }
     };
+    assertCurrentDb();
     const dev = import.meta.dev;
     const hasPerf = typeof performance !== 'undefined';
     const markId =

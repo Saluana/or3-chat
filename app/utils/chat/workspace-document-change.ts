@@ -22,6 +22,9 @@ export type WorkspaceDocumentChange = ChangeIdentity & (
 );
 export interface WorkspaceDocumentChangeRef { workspaceId: string; messageId: string; changeId: string; documentId: string }
 
+// Stored receipts are untrusted until their version has been checked.
+type StoredReceipt<T> = T extends unknown ? Omit<T, 'version'> & { version?: unknown } : never;
+
 async function readManifest(scope: WorkspaceOperationScope, readId: string, threadId: string): Promise<WorkspaceDocumentRead> {
     const identity = readIdentity(readId);
     const message = await scope.db.messages.get(identity.messageId);
@@ -29,12 +32,12 @@ async function readManifest(scope: WorkspaceOperationScope, readId: string, thre
     if (!message || message.deleted || message.role !== 'assistant' || message.thread_id !== threadId) {
         throw new Error('The document read receipt is unavailable in this chat.');
     }
-    const value = messageData(message)[identity.key] as WorkspaceDocumentRead | undefined;
+    const value = messageData(message)[identity.key] as StoredReceipt<WorkspaceDocumentRead> | undefined;
     if (!value || value.version !== 1 || typeof value.documentId !== 'string' || typeof value.revision !== 'string'
         || !Array.isArray(value.refs) || !value.refs.every((ref) => typeof ref === 'string')) {
         throw new Error('A host document read receipt is required. Read this document first.');
     }
-    return value;
+    return value as WorkspaceDocumentRead;
 }
 
 /** Reconstruct only the matching source; no second complete snapshot is stored in chat. */
@@ -90,9 +93,10 @@ export async function proposeWorkspaceDocumentEdit(args: Record<string, unknown>
         throw new Error('The originating message is unavailable.');
     }
     const key = WORKSPACE_CHANGE_KEY + changeId;
-    const previous = messageData(message)[key] as WorkspaceDocumentChange | undefined;
+    const stored = messageData(message)[key] as StoredReceipt<WorkspaceDocumentChange> | undefined;
+    const previous = stored as WorkspaceDocumentChange | undefined;
     if (previous) {
-        if (previous.version !== 1 || previous.inputDigest !== inputDigest || previous.documentId !== args.documentId) {
+        if (stored?.version !== 1 || previous.inputDigest !== inputDigest || previous.documentId !== args.documentId) {
             throw new Error('This execution already staged a different change.');
         }
         const loaded = await readWorkspaceItem(scope, { kind: 'document', id: previous.documentId });
@@ -115,12 +119,12 @@ export async function proposeWorkspaceDocumentEdit(args: Record<string, unknown>
 }
 
 function changeValue(message: Message, ref: WorkspaceDocumentChangeRef): WorkspaceDocumentChange {
-    const value = messageData(message)[WORKSPACE_CHANGE_KEY + ref.changeId] as WorkspaceDocumentChange | undefined;
+    const value = messageData(message)[WORKSPACE_CHANGE_KEY + ref.changeId] as StoredReceipt<WorkspaceDocumentChange> | undefined;
     if (message.deleted || message.role !== 'assistant' || !value || value.version !== 1 || value.documentId !== ref.documentId
         || typeof value.inputDigest !== 'string' || !['pending', 'applied', 'discarded', 'stale', 'undone'].includes(value.status)) {
         throw new Error('This document change is unavailable.');
     }
-    return value;
+    return value as WorkspaceDocumentChange;
 }
 
 export async function loadWorkspaceDocumentChange(ref: WorkspaceDocumentChangeRef) {

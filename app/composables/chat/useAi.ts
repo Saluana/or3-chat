@@ -3208,15 +3208,18 @@ export function useChat(
             });
             stopForegroundHeartbeat();
 
+            requestScope.abortController.signal.throwIfAborted();
             const current = tailAssistant.value!;
+            requestScope.message = current;
             const fullText = current.text;
             const hookName = 'ui.chat.message:filter:incoming';
             const errorsBefore = hooks._diagnostics.errors[hookName] ?? 0;
             const incoming = await hooks.applyFilters(
                 hookName,
                 fullText,
-                threadIdRef.value
+                requestThreadId
             );
+            requestScope.abortController.signal.throwIfAborted();
             const errorsAfter = hooks._diagnostics.errors[hookName] ?? 0;
             if (errorsAfter > errorsBefore) {
                 throw new Error('Incoming filter threw an exception');

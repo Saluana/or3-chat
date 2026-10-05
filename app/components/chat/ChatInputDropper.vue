@@ -659,6 +659,7 @@ watch(trustedEditorRevision, () => {
 
 onBeforeUnmount(() => {
     componentDisposed = true;
+    disposeAttachmentIntake();
     editorBuild++;
     draftRestoreRevision++;
     clearDraftCaptureTimer();
@@ -842,21 +843,25 @@ const {
     removeTextBlock,
     clearAll,
     releaseAll,
+    dispose: disposeAttachmentIntake,
     replaceDraft,
     handlePaste,
     openFileDialog,
     processAttachment,
 } = useChatInputAttachments({
     maxFiles: MAX_IMAGES,
+    ownerKey: () => props.tabId ?? props.threadId,
     onImageAdd: (attachment) => emit('image-add', attachment),
     onImageRemove: (index) => emit('image-remove', index),
-    onTextFile: async (file: File) => {
+    onTextFile: async (file: File, owner) => {
+        owner.assertCurrent();
         if (!workspaceFilesAvailable()) throw new Error('Files is unavailable with the current cloud provider. Update the provider and refresh.');
         const initiatingTab = props.tabId;
         const scope = captureWorkspaceOperation({ subject: null, workspaceId: getActiveWorkspaceId() ?? 'local',
             threadId: 'chat-upload', messageId: null, requestId: createRuntimeUuid(), callId: createRuntimeUuid(),
-            abortSignal: new AbortController().signal });
+            abortSignal: owner.signal });
         const { importWorkspaceFile } = await import('~/db/workspace-files');
+        owner.assertCurrent();
         const result = await importWorkspaceFile(scope, file, file.name);
         scope.assertCurrent();
         if (componentDisposed || props.tabId !== initiatingTab) throw new Error('File saved in Files; the originating chat is no longer open.');

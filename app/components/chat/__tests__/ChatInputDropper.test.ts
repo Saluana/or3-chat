@@ -1,6 +1,11 @@
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import Dexie from 'dexie';
+import { File as NativeFile } from 'node:buffer';
+import { getDb, setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
+import { persistAttachment } from '../file-upload-utils';
+import { mount, enableAutoUnmount, flushPromises } from '@vue/test-utils';
+enableAutoUnmount(afterEach);
 import ChatInputDropper from '../ChatInputDropper.vue';
 import { ref } from 'vue';
 import type { SendResult } from '~/utils/chat/types';
@@ -86,10 +91,11 @@ vi.mock('~/utils/errors', () => ({
     err: vi.fn()
 }));
 
+const attachmentFilter = vi.hoisted(() => ({ apply: undefined as undefined | ((value: unknown) => Promise<unknown>) }));
 vi.mock('~/core/hooks/useHooks', () => ({
     useHooks: () => ({
         doAction: vi.fn().mockResolvedValue(undefined),
-        applyFilters: vi.fn(async (_name: string, value: unknown) => value),
+        applyFilters: vi.fn(async (name: string, value: unknown) => name === 'files.attach:filter:input' && attachmentFilter.apply ? attachmentFilter.apply(value) : value),
     }),
 }));
 
@@ -129,8 +135,57 @@ function deferred<T>() {
 }
 
 describe('ChatInputDropper', () => {
+    it.each(['workspace', 'unmount', 'draft-discard', 'tab'] as const)('stops selected-file intake on %s while the first filter is pending', async (transition) => {
+        const workspace = `attachment-source-${crypto.randomUUID()}`;
+        const other = `attachment-destination-${crypto.randomUUID()}`;
+        const source = setActiveWorkspaceDb(workspace); await source.open();
+        const actual = await vi.importActual<typeof import('../file-upload-utils')>('../file-upload-utils');
+        const persisted = deferred<void>();
+        vi.mocked(persistAttachment).mockImplementation(async (...args) => {
+            await actual.persistAttachment(...args); persisted.resolve();
+        });
+        const entered = deferred<void>(); const gate = deferred<void>();
+        attachmentFilter.apply = async value => { entered.resolve(); await gate.promise; return value; };
+        const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:owned-preview');
+        const revoke = vi.spyOn(URL, 'revokeObjectURL');
+        const wrapper = mount(ChatInputDropper, {
+            props: { loading: false, ...(transition === 'draft-discard' || transition === 'tab' ? { tabId: 'source-tab' } : {}) },
+            global: { mocks: { $theme: createThemeMock() } },
+        });
+        try {
+            await wrapper.vm.$nextTick();
+            const files = [new NativeFile(['%PDF-1.4 first'], 'first.pdf', { type: 'application/pdf' }),
+                new NativeFile(['%PDF-1.4 second'], 'second.pdf', { type: 'application/pdf' })];
+            mockFiles.value = files as unknown as FileList;
+            await entered.promise;
+            expect(create).toHaveBeenCalledTimes(1);
+            expect(wrapper.emitted('image-add')).toHaveLength(1);
+            if (transition === 'workspace') setActiveWorkspaceDb(other);
+            else if (transition === 'tab') await wrapper.setProps({ tabId: 'destination-tab' });
+            else {
+                wrapper.unmount();
+                if (transition === 'draft-discard') {
+                    expect(useWorkspaceTabDrafts().read('source-tab')?.attachments).toHaveLength(1);
+                    useWorkspaceTabDrafts().discard('source-tab');
+                }
+            }
+            gate.resolve(); await persisted.promise; await flushPromises();
+            expect(create).toHaveBeenCalledTimes(1);
+            expect(persistAttachment).toHaveBeenCalledTimes(1);
+            expect(await getDb().file_meta.count()).toBe(0);
+            expect(await getDb().posts.count()).toBe(0);
+            if (transition === 'unmount' || transition === 'draft-discard') expect(revoke).toHaveBeenCalledWith('blob:owned-preview');
+        } finally {
+            gate.resolve(); wrapper.unmount(); await flushPromises();
+            create.mockRestore(); revoke.mockRestore();
+            setActiveWorkspaceDb(null);
+            for (const id of [workspace, other]) { evictWorkspaceDb(id); await Dexie.delete(`or3-db-${id}`); }
+        }
+    });
     beforeEach(() => {
         vi.clearAllMocks();
+        attachmentFilter.apply = undefined;
+        vi.mocked(persistAttachment).mockResolvedValue(undefined);
         mockFiles.value = null;
         mockIsOverDropZone.value = false;
         mockEnsureAiSettingsLoaded.mockResolvedValue(undefined);
