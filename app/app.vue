@@ -38,8 +38,6 @@ useHead({
     title: appName,
     link: [
         { rel: 'icon', type: 'image/webp', href: '/butthole-logo.webp' },
-        // Provide an Apple touch icon to avoid 404s in Safari/iOS
-        { rel: 'apple-touch-icon', href: '/logos/logo-192.png' },
     ],
     meta: [
         // Dynamic browser/UI theme color (Chrome, Android, iOS 15+ Safari)
