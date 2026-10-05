@@ -500,7 +500,7 @@
                     "category": "Building themes",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Use tokens, props, CSS, icons, fonts, backgrounds, and dialog styling."
+                    "summary": "Use tokens, props, CSS, icons, fonts, backgrounds, dialog styling, and accessible mobile chat controls."
                 },
                 {
                     "name": "package-install.md",
@@ -545,7 +545,7 @@
                     "category": "Advanced",
                     "categoryOrder": 3,
                     "order": 1,
-                    "summary": "Understand discovery, compilation, activation, hydration, and persistence."
+                    "summary": "Understand discovery, compilation, activation, icon hydration, and persistence."
                 }
             ]
         },

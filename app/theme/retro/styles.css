@@ -1095,6 +1095,84 @@
 	@apply shadow-[2px_2px_0_var(--md-border-color)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] px-5 py-6!;
 }
 
+/* Message actions share a quiet footer inside each card. Shared message CSS
+ * still owns wrapping and 44px hit regions. */
+@media (width < 768px), (pointer: coarse) {
+	[data-theme='retro'] .cm-user {
+		padding: 16px !important;
+	}
+
+	[data-theme='retro'] :is(.cm-user, .cm-assistant) .cm-actions {
+		justify-content: flex-end;
+		margin-top: 10px;
+		border-top: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+	}
+
+	[data-theme='retro'] :is(.cm-user, .cm-assistant) .cm-action-group {
+		background: transparent !important;
+		border: 0 !important;
+		box-shadow: none !important;
+	}
+
+	[data-theme='retro'] :is(.cm-user, .cm-assistant) .cm-action-group button {
+		background: transparent !important;
+		border-color: transparent !important;
+		box-shadow: none !important;
+		color: inherit !important;
+	}
+
+	[data-theme='retro'] :is(.cm-user, .cm-assistant) .cm-action-group button:hover:not(:disabled) {
+		background: color-mix(in srgb, currentColor 12%, transparent) !important;
+	}
+
+	[data-theme='retro'] :is(.cm-user, .cm-assistant) .cm-action-group button:active:not(:disabled) {
+		background: color-mix(in srgb, currentColor 20%, transparent) !important;
+	}
+
+	[data-theme='retro'] :is(.cm-user, .cm-assistant) .cm-action-group button:focus-visible {
+		outline: 2px solid currentColor;
+		outline-offset: 1px;
+	}
+}
+
+@container chat-pane (width < 768px) {
+	[data-theme='retro'] .cm-user {
+		padding: 16px !important;
+	}
+
+	[data-theme='retro'] :is(.cm-user, .cm-assistant) .cm-actions {
+		justify-content: flex-end;
+		margin-top: 10px;
+		border-top: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+	}
+
+	[data-theme='retro'] :is(.cm-user, .cm-assistant) .cm-action-group {
+		background: transparent !important;
+		border: 0 !important;
+		box-shadow: none !important;
+	}
+
+	[data-theme='retro'] :is(.cm-user, .cm-assistant) .cm-action-group button {
+		background: transparent !important;
+		border-color: transparent !important;
+		box-shadow: none !important;
+		color: inherit !important;
+	}
+
+	[data-theme='retro'] :is(.cm-user, .cm-assistant) .cm-action-group button:hover:not(:disabled) {
+		background: color-mix(in srgb, currentColor 12%, transparent) !important;
+	}
+
+	[data-theme='retro'] :is(.cm-user, .cm-assistant) .cm-action-group button:active:not(:disabled) {
+		background: color-mix(in srgb, currentColor 20%, transparent) !important;
+	}
+
+	[data-theme='retro'] :is(.cm-user, .cm-assistant) .cm-action-group button:focus-visible {
+		outline: 2px solid currentColor;
+		outline-offset: 1px;
+	}
+}
+
 .sb-bottom-border {
 	@apply mt-2 mb-1.5;
 }

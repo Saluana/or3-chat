@@ -812,14 +812,39 @@ test.describe('chat responsive layout', () => {
                 await openResponsiveChat(page, theme, 'light');
                 const controls = page.locator('.chat-input-main')
                     .getByRole('button', { name: /^(Add attachments|Settings|Send message)$/ });
+                await expect(controls).toHaveCount(3);
                 for (const button of await controls.all()) {
-                    const bounds = await button.boundingBox();
-                    expect(bounds!.width).toBeGreaterThanOrEqual(44);
-                    expect(bounds!.height).toBeGreaterThanOrEqual(44);
+                    const touch = await button.evaluate(element => {
+                        const bounds = element.getBoundingClientRect();
+                        const before = getComputedStyle(element, '::before');
+                        const expanded = before.content !== 'none' && before.content !== 'normal';
+                        const width = Math.max(bounds.width, expanded ? parseFloat(before.width) : 0);
+                        const height = Math.max(bounds.height, expanded ? parseFloat(before.height) : 0);
+                        const x = bounds.left + bounds.width / 2;
+                        const y = bounds.top + bounds.height / 2;
+                        const disabled = (element as HTMLButtonElement).disabled;
+                        return { paintedWidth: bounds.width, paintedHeight: bounds.height, width, height, disabled,
+                            // Native round buttons have clipped corners; measure
+                            // the full target diameter along both axes.
+                            extentsHitButton: [[-21, 0], [21, 0], [0, -21], [0, 21]].every(([dx, dy]) =>
+                                element.contains(document.elementFromPoint(x + dx!, y + dy!))) };
+                    });
+                    expect(touch.paintedWidth).toBe(theme === 'blank' ? 44 : 32);
+                    expect(touch.paintedHeight).toBe(theme === 'blank' ? 44 : 32);
+                    expect(touch.width).toBeGreaterThanOrEqual(44);
+                    expect(touch.height).toBeGreaterThanOrEqual(44);
+                    if (!touch.disabled) {
+                        expect(touch.extentsHitButton).toBe(true);
+                        await button.focus();
+                        await expect(button).toBeFocused();
+                    }
                 }
 
                 const chooser = page.waitForEvent('filechooser');
-                await page.getByRole('button', { name: 'Add attachments' }).click();
+                const attachmentBounds = (await page.getByRole('button', { name: 'Add attachments' }).boundingBox())!;
+                // Click inside the 44px native hit region, outside a 32px paint box.
+                await page.mouse.click(attachmentBounds.x + attachmentBounds.width / 2 - 21,
+                    attachmentBounds.y + attachmentBounds.height / 2);
                 await (await chooser).setFiles(Array.from({ length: 8 }, (_, index) => ({
                     name: `attachment-${index}.png`, mimeType: 'image/png',
                     // Distinct source bytes keep attachment identities independent.
@@ -1041,4 +1066,40 @@ for (const theme of themes) {
             });
         }
     }
+}
+
+for (const initialTheme of ['blank', 'cyberpunk'] as const) {
+    test(`theme icons survive hydration and switches from ${initialTheme}`, async ({ page }, info) => {
+        await openResponsiveChat(page, initialTheme, 'light');
+        const expected = {
+            blank: { send: 'tabler:arrow-up', toggle: 'tabler:layout-sidebar-left-collapse' },
+            retro: { send: 'pixelarticons:arrow-up', toggle: 'pixelarticons:arrow-bar-left' },
+            cyberpunk: { send: 'carbon:send-alt', toggle: 'carbon:side-panel-close' },
+        };
+        const expectIcons = async (theme: ThemeName) => {
+            await expect(page.getByRole('button', { name: 'Send message', exact: true })
+                .locator('.iconify')).toHaveClass(new RegExp(`i-${expected[theme].send}`));
+            await expect(page.getByRole('button', { name: 'Collapse sidebar', exact: true })
+                .locator('.iconify')).toHaveClass(new RegExp(`i-${expected[theme].toggle}`));
+        };
+        await expectIcons(initialTheme);
+        await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+        const dashboard = page.getByRole('dialog', { name: 'Dashboard' });
+        await dashboard.getByRole('button', { name: 'Settings', exact: true }).click();
+        await dashboard.getByRole('button', { name: /Theme Settings/i }).click();
+        for (const theme of ['retro', 'cyberpunk', 'blank'] as const) {
+            await selectThemeAndMode(page, theme, 'light');
+            await page.getByRole('dialog', { name: 'Dashboard' })
+                .getByRole('button', { name: 'Close', exact: true }).click();
+            await expect(page.getByRole('dialog', { name: 'Dashboard' })).toBeHidden();
+            await expectIcons(theme);
+            await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+        }
+        await selectThemeAndMode(page, 'cyberpunk', 'dark');
+        await page.reload();
+        await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'cyberpunk');
+        await expectIcons('cyberpunk');
+        await page.screenshot({ path: info.outputPath('cyberpunk-icons-after-reload.png') });
+    });
 }

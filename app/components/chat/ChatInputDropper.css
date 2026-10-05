@@ -88,15 +88,43 @@ textarea::-webkit-scrollbar-thumb:hover {
 }
 
 @media (width < 768px), (pointer: coarse) {
+    /* Reserve the full touch target so adjacent expanded hits cannot overlap. */
+    .chat-input-attachment-btn,
+    .chat-input-settings-btn,
+    .chat-input-bottom-controls-right {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        min-width: 44px;
+        min-height: 44px;
+    }
+
     .chat-input-attachment-btn :deep(button),
     .chat-input-settings-btn :deep(button),
     .chat-input-send-btn,
     .chat-input-stop-btn {
-        min-width: 44px !important;
-        min-height: 44px !important;
-        width: 44px !important;
-        height: 44px !important;
+        position: relative;
+        min-width: 32px !important;
+        min-height: 32px !important;
+        width: 32px !important;
+        height: 32px !important;
         padding: 0 !important;
+    }
+
+    /* The transparent hit area belongs to the native button, preserving its
+       focus, tooltip, click and disabled behavior without enlarging its paint. */
+    .chat-input-attachment-btn :deep(button::before),
+    .chat-input-settings-btn :deep(button::before),
+    .chat-input-send-btn::before,
+    .chat-input-stop-btn::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 44px;
+        height: 44px;
+        transform: translate(-50%, -50%);
     }
 
     .chat-input-attachment-remove-btn {
@@ -208,5 +236,9 @@ textarea::-webkit-scrollbar-thumb:hover {
         height: 44px !important;
         min-width: 44px !important;
         min-height: 44px !important;
+    }
+
+    .chat-input-main .chat-input-bottom-controls :deep(button::before) {
+        content: none;
     }
 }

@@ -23,7 +23,7 @@ import {
     type ThemeManifestEntry,
 } from '~/theme/_shared/theme-manifest';
 import { prepareThemeEntry } from '~/theme/_shared/prepare-theme';
-import { iconRegistry } from '~/theme/_shared/icon-registry';
+import { iconRegistry, type IconRegistryState } from '~/theme/_shared/icon-registry';
 import { useThemeSelection } from '~/composables/useThemeSelection';
 import { pickDefaultTheme } from '~/theme/_shared/default-theme';
 import { FALLBACK_THEME_NAME } from '~/theme/_shared/constants';
@@ -50,6 +50,12 @@ import {
 export type { ThemePlugin } from '~/theme/_shared/types';
 
 export default defineNuxtPlugin(async (nuxtApp) => {
+    // Restore SSR icons before loading themes. Hydrating later would discard
+    // maps registered by client theme loading and workspace-profile preloading.
+    if (nuxtApp.payload.iconRegistry) {
+        iconRegistry.hydrate(nuxtApp.payload.iconRegistry as IconRegistryState);
+    }
+
     const THEME_CLASSES = [
         'light',
         'dark',
