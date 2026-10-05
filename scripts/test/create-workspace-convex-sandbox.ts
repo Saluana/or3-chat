@@ -9,7 +9,7 @@ if (!binary.startsWith(join(process.env.HOME!, '.cache/convex/binaries/')) || !b
 if (!await Bun.file(join(source, 'public/_documentation/docmap.json')).exists())
     throw Error('Run from the OR3 source root.');
 const root = await mkdtemp('/private/tmp/or3-files-convex-');
-const pack = JSON.parse(gunzipSync(await Bun.file(resolve(source, '../or3-provider-convex/templates/convex.pack.json.gz')).arrayBuffer()).toString());
+const pack = JSON.parse(gunzipSync(await Bun.file(resolve(process.env.OR3_PROJECT_CONVEX_SOURCE ?? resolve(source, '../or3-provider-convex'), 'templates/convex.pack.json.gz')).arrayBuffer()).toString());
 for (const [name, text] of Object.entries(pack.files)) {
     if (name.includes('..') || name.startsWith('/'))
         throw Error('Invalid template path');

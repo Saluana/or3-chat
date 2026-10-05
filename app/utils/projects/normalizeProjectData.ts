@@ -107,3 +107,21 @@ export function mergeProjectEntries(raw: unknown, entries: ProjectEntry[]): unkn
     }
     return [...merged, ...remaining.values()];
 }
+
+/** Keep unrecognized extension entries verbatim when editing known memberships. */
+export function preservedProjectEntries(data: unknown): unknown[] {
+    if (data === null || data === undefined) return [];
+    const entries: unknown = typeof data === 'string' ? JSON.parse(data) : data;
+    if (!Array.isArray(entries)) throw new Error('This project has an unsupported membership format.');
+    return entries as unknown[];
+}
+
+export function projectEntryIdentity(value: unknown): string | null {
+    if (typeof value === 'string') return `chat:${value}`;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const entry = value as Record<string, unknown>;
+    if (typeof entry.id !== 'string') return null;
+    const kind = entry.kind === 'doc' || entry.kind === 'document' ? 'document'
+        : entry.kind === 'chat' || entry.kind === undefined ? 'chat' : entry.kind === 'file' ? 'file' : null;
+    return kind ? `${kind}:${entry.id}` : null;
+}

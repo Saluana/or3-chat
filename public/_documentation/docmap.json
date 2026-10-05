@@ -35,6 +35,15 @@
                     "summary": "Search workspace sources and saved-file excerpts with keyboard navigation, previews, and coverage."
                 },
                 {
+                    "name": "projects.md",
+                    "path": "/start/projects",
+                    "title": "Work in a project",
+                    "category": "Start here",
+                    "categoryOrder": 0,
+                    "order": 3,
+                    "summary": "Project knowledge, explicit memory, continuity, tools, and inspectable context."
+                },
+                {
                     "name": "development-setup.md",
                     "path": "/start/development-setup",
                     "title": "Develop from source",

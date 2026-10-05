@@ -131,6 +131,10 @@ advertise this transactional capability.
 
 ## Operational Notes
 
+Persistent Projects stores version-1 settings, explicit memories, and source bindings as opaque internal posts with the existing workspace-item marker. Preserve their content, metadata, and all `file_hashes`, including original/extraction history; no separate project database is needed. Workspace capability checks still apply to viewers, old clients, and revoked members.
+
+The project-aware canonical reader returns `project_ownership: resolved | conflict` with explicit or legacy ownership resolved in the authorized SQLite snapshot. The host refuses server-owned execution when this field is absent, ambiguous, or project-bound. This reader change is in the Projects review branch and must be released before enabling that server boundary with a registry provider; normal browser project chat can be tested independently.
+
 - `:memory:` mode is for tests/dev only; production local-file setups should use persistent disk.
 - Back up the SQLite file before schema or provider upgrades; use managed
   database backup/export tooling for Turso and D1.

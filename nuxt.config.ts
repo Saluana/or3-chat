@@ -201,6 +201,7 @@ export default defineNuxtConfig({
         ...(isProductionJourneyTestHarnessEnabled
             ? {
                   '/__or3-chat-journey-test': { ssr: false },
+                  '/__or3-projects-journey': { ssr: false },
                   '/__or3-document-journey-test': { ssr: false },
                   '/__or3-mobile-auth-test': { ssr: false },
               }
@@ -716,6 +717,7 @@ export default defineNuxtConfig({
             }
             if (isProductionJourneyTestHarnessEnabled) {
                 pages.push(
+                    { name: 'or3-projects-journey', path: '/__or3-projects-journey', file: resolve(__dirname, 'tests/e2e/fixtures/ProjectsJourney.vue') },
                     {
                         name: 'or3-chat-journey-test-harness',
                         path: '/__or3-chat-journey-test',

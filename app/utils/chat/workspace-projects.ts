@@ -7,23 +7,8 @@ import type { ToolExecutionContext } from './types';
 import { FILE_CATALOG_POST_TYPE, isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 import { parseFileHashes } from '~/db/files-util';
 
-/** Keep unrecognized extension entries verbatim when editing known memberships. */
-export function preservedProjectEntries(data: unknown): unknown[] {
-    if (data === null || data === undefined) return [];
-    const entries: unknown = typeof data === 'string' ? JSON.parse(data) : data;
-    if (!Array.isArray(entries)) throw new Error('This project has an unsupported membership format.');
-    return entries as unknown[];
-}
-
-export function projectEntryIdentity(value: unknown): string | null {
-    if (typeof value === 'string') return `chat:${value}`;
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-    const entry = value as Record<string, unknown>;
-    if (typeof entry.id !== 'string') return null;
-    const kind = entry.kind === 'doc' || entry.kind === 'document' ? 'document'
-        : entry.kind === 'chat' || entry.kind === undefined ? 'chat' : entry.kind === 'file' ? 'file' : null;
-    return kind ? `${kind}:${entry.id}` : null;
-}
+import { preservedProjectEntries, projectEntryIdentity } from '~/utils/projects/normalizeProjectData';
+export { preservedProjectEntries, projectEntryIdentity } from '~/utils/projects/normalizeProjectData';
 
 export async function prepareWorkspaceProjectAssociation(scope: WorkspaceOperationScope,
     target: { id: string; revision: string }, item: WorkspaceItemRef & { title: string }, remove = false) {
@@ -62,6 +47,7 @@ export async function readVisibleWorkspaceProjectEntries(scope: WorkspaceOperati
             const id = identity.slice(separator + 1);
             const row = kind === 'chat' ? await scope.db.threads.get(id) : kind === 'document' || kind === 'file' ? await scope.db.posts.get(id) : undefined;
             scope.assertCurrent();
+            if (kind === 'chat' && row && 'project_id' in row && row.project_id && row.project_id !== base.id) continue;
             if (row && isVisibleWorkspaceItem(row)
                 && (kind === 'chat' || 'postType' in row && row.postType === (kind === 'file' ? FILE_CATALOG_POST_TYPE : 'doc'))) {
                 if (kind === 'file') {
@@ -156,6 +142,18 @@ export async function updateWorkspaceProject(args: Record<string, unknown>, cont
                 const meta = hashes.length === 1 ? await scope.db.file_meta.get(hashes[0]!) : undefined;
                 scope.assertCurrent('write');
                 if (!meta || meta.deleted) throw new Error('That file is unavailable.');
+            }
+            if (item.kind === 'chat' && operation === 'add_item') {
+                const chat = await scope.db.threads.get(item.id);
+                if (chat) {
+                    for (const other of await scope.db.projects.toArray()) {
+                        if (other.deleted || other.id === proposed.id) continue;
+                        const entries = preservedProjectEntries(other.data);
+                        const next = entries.filter(entry => projectEntryIdentity(entry) !== `chat:${item!.id}`);
+                        if (next.length !== entries.length) await scope.db.projects.put({ ...other, data: next, updated_at: nowSec(), clock: nextClock(other.clock) });
+                    }
+                    await scope.db.threads.put({ ...chat, project_id: proposed.id, clock: nextClock(chat.clock), updated_at: nowSec() });
+                }
             }
             // Remove the supported legacy pointer as well, so filtering doesn't resurrect the association.
             if (item.kind === 'chat' && operation === 'remove_item') {

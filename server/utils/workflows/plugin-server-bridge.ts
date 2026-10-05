@@ -64,6 +64,8 @@ export function createWorkflowServerBridge(requestEvent: H3Event) {
                         throw createError({ statusCode: 403, statusMessage: 'Invalid workflow job scope' });
                     }
                     await requireJobWorkspaceAccess(requestEvent, session, workspaceId, 'workspace.write');
+                    const { assertServerProjectExecutionSupported } = await import('../chat/project-policy');
+                    await assertServerProjectExecutionSupported({ subject: userId, workspaceId, threadId: input.threadId, abortSignal: AbortSignal.timeout(10_000) });
                     return provider.createJob({
                         ...input,
                         execution: { version: 1, kind: 'workflow', workspaceId },

@@ -991,6 +991,7 @@ type UploadedImage = {
 };
 
 type ChatInputSendPayload = {
+    knowledge_project_id?: string;
     editorDoc?: Record<string, unknown>;
     text: string;
     images: UploadedImage[];
@@ -1116,6 +1117,7 @@ function onSend(payload: ChatInputSendPayload) {
     const activeChat = chat.value;
     if (!activeChat) return;
     const result = activeChat.send({
+        knowledge_project_id: payload.knowledge_project_id,
         editorDoc: payload.editorDoc,
         content: payload.text,
         model: payload.model || model.value,
@@ -1151,10 +1153,10 @@ async function onRetry(messageId: string) {
         await nextTick();
         scroller.value?.scrollToBottom?.({ smooth: false });
         const result = await activeChat.retryMessage(messageId, model.value);
-        if (!result || result.status === 'rejected') {
+        if (!result || result.status === 'rejected' || result.status === 'failed' && result.reason === 'unavailable') {
             toast.add({
                 title: 'Retry did not start',
-                description: 'Your conversation is unchanged. Please try again.',
+                description: result && 'error' in result && result.error || 'Your conversation is unchanged. Please try again.',
                 color: 'warning',
                 duration: 3500,
             });

@@ -518,6 +518,9 @@ function clearRevealHighlight() {
 
 async function revealProject(projectId: string) {
     if (!projectId) return;
+    const { getPaletteHostContext } = await import('~/composables/search/useCommandPalette');
+    const host = getPaletteHostContext();
+    if (host) { const result = await host.openPaneApp('or3-projects', projectId, 'active'); if (result.ok) return; }
     if (!activeSections.value.projects) activeSections.value.projects = true;
     if (!expandedProjects.value.includes(projectId)) {
         expandedProjects.value = [...expandedProjects.value, projectId];

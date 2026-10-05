@@ -196,6 +196,7 @@ function createStreamHookDispatcher(hooks: HooksLike): StreamHookDispatcher {
  * - activeToolCalls is mutated during tool execution
  */
 export type ForegroundStreamContext = {
+    projectContext?: import('~/utils/projects/context').ProjectContextSnapshot | null;
     apiKey: string | null;
     modelId: string;
     orMessages: OpenRouterMessage[];
@@ -335,6 +336,12 @@ export async function runForegroundStreamLoop(
                 measuredUsage: normalizedState.requestUsage ?? ctx.contextPolicy.measuredUsage } : undefined,
             threadId: ctx.threadId,
             messageId: ctx.assistantId,
+            projectContext: ctx.projectContext,
+            onProjectContext: (receipt, iterations) => {
+                if (ctx.tailAssistant.value?.id === ctx.assistantId) ctx.tailAssistant.value.data = { ...ctx.tailAssistant.value.data, project_context: receipt, project_context_iterations: iterations };
+                const row = ctx.rawMessages.value.find(row => row.id === ctx.assistantId);
+                if (row) row.data = { ...row.data, project_context: receipt, project_context_iterations: iterations };
+            },
             tools: admittedTools,
             signal: ctx.abortSignal,
             onProviderAccepted: ctx.onProviderAccepted,
@@ -594,6 +601,7 @@ export async function runForegroundStreamLoop(
                             toolCall.function.name,
                             toolCall.function.arguments,
                             {
+                                projectId: ctx.projectContext?.projectId ?? null,
                                 subject: null,
                                 workspaceId: ctx.workspaceId ?? null,
                                 threadId: ctx.threadId,

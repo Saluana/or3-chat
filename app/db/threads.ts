@@ -13,6 +13,7 @@
  * - Rendering or formatting thread content
  * - Server-side sync logic
  */
+import { preservedProjectEntries, projectEntryIdentity } from '~/utils/projects/normalizeProjectData';
 import { useRuntimeConfig } from '#imports';
 import { getDb, type Or3DB } from './client';
 import { dbTry } from './dbTry';
@@ -37,6 +38,7 @@ import {
 import type { TypedHookEngine } from '../core/hooks/typed-hooks';
 
 export interface CreateThreadContext {
+    assertCurrent?: () => void;
     hooks?: TypedHookEngine;
     limits?: {
         enabled?: boolean;
@@ -72,6 +74,7 @@ export async function createThreadInDb(
     input: ThreadCreate,
     context: CreateThreadContext = {}
 ): Promise<Thread> {
+    context.assertCurrent?.();
     const hooks = context.hooks ?? useHooks();
 
     // Check maxConversations limit (client-side enforcement)
@@ -107,7 +110,15 @@ export async function createThreadInDb(
         entity: value,
         tableName: 'threads',
     });
-    await db.transaction('rw', getWriteTxTableNames(db, 'threads'), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, value.project_id ? ['threads', 'projects'] : ['threads']), async () => {
+        context.assertCurrent?.();
+        if (value.project_id) {
+            const project = await db.projects.get(value.project_id);
+            if (!project || project.deleted) throw new Error('Owning project unavailable.');
+            const entries = preservedProjectEntries(project.data);
+            if (!entries.some(entry => projectEntryIdentity(entry) === `chat:${value.id}`)) await db.projects.put({ ...project,
+                data: [...entries, { kind: 'chat', id: value.id, name: value.title || 'Chat' }], clock: nextClock(project.clock), updated_at: nowSec() });
+        }
         rejectGenericCompactionTransition(value);
         rejectGenericCompactionTransition(value, await db.threads.get(value.id));
         await dbTry(
@@ -115,6 +126,7 @@ export async function createThreadInDb(
             { op: 'write', entity: 'threads', action: 'create' },
             { rethrow: true }
         );
+        context.assertCurrent?.();
     });
     await hooks.doAction('db.threads.create:action:after', {
         entity: value,

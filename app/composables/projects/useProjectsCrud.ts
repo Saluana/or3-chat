@@ -1,5 +1,7 @@
 import { create, del, upsert, type Project } from '~/db';
 import { getDb } from '~/db/client';
+import { moveChatToProject } from '~/db/project-workspace';
+import { captureProjectOperation } from '~/utils/projects/context';
 import { nowSec, newId, getWriteTxTableNames } from '~/db/util';
 import {
     normalizeProjectData,
@@ -74,18 +76,12 @@ export function useProjectsCrud() {
         await create.thread({
             id: threadId,
             title,
+            project_id: projectId,
             forked: false,
             created_at: now,
             updated_at: now,
             deleted: false,
             clock: 0,
-        });
-        const entries = normalizeProjectData(project.data);
-        entries.push({ id: threadId, name: title, kind: 'chat' });
-        await upsert.project({
-            ...project,
-            data: mergeProjectEntries(project.data, entries),
-            updated_at: now,
         });
         return { id: threadId, name: title };
     }
@@ -119,9 +115,18 @@ export function useProjectsCrud() {
         const existing = await db.projects.get(id);
         if (!existing) throw new Error('Project not found');
         const normalized = entries.map((entry) => ({ ...entry }));
+        const previous = normalizeProjectData(existing.data);
+        const scope = captureProjectOperation();
+        for (const entry of normalized.filter(entry => entry.kind === 'chat')) await moveChatToProject(scope, entry.id, id);
+        for (const entry of previous.filter(entry => entry.kind === 'chat' && !normalized.some(next => next.kind === 'chat' && next.id === entry.id))) {
+            const chat = await db.threads.get(entry.id);
+            if (chat?.project_id === id) await moveChatToProject(scope, entry.id, null);
+        }
+        const current = await db.projects.get(id);
+        if (!current || current.deleted) throw new Error('Project unavailable.');
         await upsert.project({
-            ...existing,
-            data: mergeProjectEntries(existing.data, normalized),
+            ...current,
+            data: mergeProjectEntries(current.data, normalized),
             updated_at: nowSec(),
         });
     }

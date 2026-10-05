@@ -446,6 +446,31 @@ export function useToolRegistry() {
             };
         }
 
+        let projectScope: import('./workspace-access').WorkspaceOperationScope | undefined;
+        let projectOwner: string | null = null;
+        let projectPolicy: string | undefined;
+        if (context?.threadId) {
+            try {
+                const { captureWorkspaceOperation } = await import('./workspace-access');
+                const { assertProjectToolAllowed, requestProjectToolApproval } = await import('~/utils/projects/context');
+                const { getDb } = await import('~/db/client');
+                const { resolveChatProject } = await import('~/db/project-workspace');
+                const db = getDb(); const thread = await db.threads.get(context.threadId);
+                const owner = thread ? await resolveChatProject(db, thread.id) : null;
+                if (owner || context.projectId) {
+                    if (!owner || context.projectId !== undefined && context.projectId !== owner) throw new Error('The chat’s owning project changed before execution.');
+                    projectScope = captureWorkspaceOperation(context); projectOwner = owner;
+                    const { readProjectWorkspace } = await import('~/db/project-workspace');
+                    projectPolicy = JSON.stringify((await readProjectWorkspace(db,owner)).settings.tools[toolName]);
+                    await assertProjectToolAllowed(projectScope, context.threadId, toolName,
+                        parsed.value as Record<string, unknown>, () => requestProjectToolApproval(toolName, parsed.value, context.abortSignal), context.projectId);
+                    if (JSON.stringify((await readProjectWorkspace(db,owner)).settings.tools[toolName]) !== projectPolicy) throw new Error('Project tool policy changed before execution.');
+                }
+            } catch (error) {
+                return { result: null, toolName, error: error instanceof Error ? error.message : 'Project policy refused execution.', timedOut: false };
+            }
+        }
+
         // Execute with timeout
         const baseContext = context ?? {
             subject: null,
@@ -464,6 +489,18 @@ export function useToolRegistry() {
             baseContext.abortSignal,
             DEFAULT_TIMEOUT_MS
         );
+
+        if (!execution.error && execution.result && projectScope && projectOwner && context?.threadId) {
+            try {
+                const { assertProjectToolAllowed, filterProjectToolResult } = await import('~/utils/projects/context');
+                const { readProjectWorkspace } = await import('~/db/project-workspace');
+                if (JSON.stringify((await readProjectWorkspace(projectScope.db,projectOwner)).settings.tools[toolName]) !== projectPolicy) throw new Error('Project tool policy changed during execution.');
+                await assertProjectToolAllowed(projectScope, context.threadId, toolName, parsed.value as Record<string, unknown>, async () => true, projectOwner);
+                execution.result = await filterProjectToolResult(projectScope, context.threadId, projectOwner, toolName, execution.result);
+            } catch (error) {
+                return { result: null, toolName, error: error instanceof Error ? error.message : 'Project context changed during execution.', timedOut: false };
+            }
+        }
 
         if (execution.error) {
             tool.lastError.value = execution.error;

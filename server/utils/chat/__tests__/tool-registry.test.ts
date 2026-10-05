@@ -26,6 +26,20 @@ import { historyToolDefinitions } from '~~/shared/chat/history-tools';
 import type { ToolDefinition, ToolExecutionContext } from '~/utils/chat/types';
 
 describe('server tool registry', () => {
+    // These execution tests use an authorized unowned canonical chat. The
+    // project policy itself is production code, not a mocked permission check.
+    beforeEach(() => {
+        vi.mocked(useRuntimeConfig).mockReturnValue({ public: { sync: { provider: 'unowned-tools-fixture' } } } as ReturnType<typeof useRuntimeConfig>);
+        registerSyncGatewayAdapter({ id: 'unowned-tools-fixture', create: () => ({
+            capabilities: { canonicalChatHistory: 'v1' },
+            readChatHistory: async (_actor, query) => ({ status: 'ok', project_ownership: 'resolved',
+                thread: query.kind === 'thread' ? { id: query.thread_id, project_id: null, clock: 1 } : undefined }),
+        }) as SyncGatewayAdapter });
+        registerAuthWorkspaceStore({ id: 'unowned-tools-fixture', create: () => ({
+            listUserWorkspaces: async subject => subject === 'user-1' ? [{ id: 'ws-1', name: 'Fixture', role: 'owner' }] : [],
+        }) as AuthWorkspaceStore });
+    });
+
     afterEach(() => vi.useRealTimers());
     it('executes a hybrid tool', async () => {
         const def: ToolDefinition = {
@@ -236,7 +250,7 @@ describe('registered canonical history authorization', () => {
                 if (revokeOnOriginal && query.message_ids.includes('original')) allowed = false;
                 return { status: 'ok', messages };
             }
-            return query.kind === 'thread' ? { status: 'ok', thread: records.get(query.thread_id), revision: '1' } : { status: 'ok', messages: [] };
+            return query.kind === 'thread' ? { status: 'ok', project_ownership: 'resolved', thread: records.get(query.thread_id), revision: '1' } : { status: 'ok', messages: [] };
         } } as SyncGatewayAdapter;
         registerSyncGatewayAdapter({ id: 'history-owner', create: () => adapter });
         registerAuthWorkspaceStore({ id: 'history-owner', create: () => ({ listUserWorkspaces: async (subject: string) =>
@@ -250,6 +264,22 @@ describe('registered canonical history authorization', () => {
         dispose = registerServerHistoryTools();
     });
     afterEach(() => { dispose?.(); clearAllJobs(); resetJobProvider(); _resetSharedSessionCache(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+    it.each(['project', 'conflict', 'unresolved'] as const)('refuses %s ownership before executing a server tool', async ownership => {
+        const originalRead = adapter.readChatHistory!;
+        adapter.readChatHistory = async (actor, query, signal) => {
+            const result = await originalRead(actor, query, signal);
+            return query.kind !== 'thread' ? result : { ...result,
+                project_ownership: ownership === 'unresolved' ? undefined : ownership === 'conflict' ? 'conflict' : 'resolved',
+                thread: result.thread ? { ...result.thread, project_id: ownership === 'project' ? 'project-a' : null } : undefined };
+        };
+        const handler = vi.fn(() => 'must not execute');
+        const remove = registerServerTool({ type: 'function', runtime: 'server', function: {
+            name: 'project_boundary_fixture', description: 'Boundary fixture', parameters: { type: 'object', properties: {} } } }, handler);
+        try {
+            const result = await executeServerTool('project_boundary_fixture', '{}', context);
+            expect(result.error).toMatch(/project|Project/); expect(handler).not.toHaveBeenCalled();
+        } finally { remove(); }
+    });
     async function lookup(messageId = 'original', extra: Partial<ToolExecutionContext> = {}) {
         const result = await executeServerTool('get_message', JSON.stringify({ message_id: messageId, include_after_compaction: true }), { ...context, ...extra });
         expect(result.error).toBeUndefined(); return JSON.parse(result.result!);
@@ -264,16 +294,21 @@ describe('registered canonical history authorization', () => {
         expect(JSON.stringify(await lookup('private'))).not.toContain('NEVER_DISCLOSE_SIBLING');
     });
     it.each(['subject', 'workspaceId', 'threadId', 'messageId', 'requestId'] as const)('rejects forged %s before a canonical content read', async field => {
-        expect(await lookup('original', { [field]: 'forged' })).toMatchObject({ status: 'scope_incomplete' }); expect(reads).toEqual([]);
+        const result = await executeServerTool('get_message', JSON.stringify({ message_id: 'original', include_after_compaction: true }), { ...context, [field]: 'forged' });
+        if (result.error) expect(result.result).toBeNull();
+        else expect(JSON.parse(result.result!)).toMatchObject({ status: 'scope_incomplete' });
+        expect(reads.every(read => read.query.kind === 'thread')).toBe(true);
     });
     it('rechecks membership before and after materialized original reads', async () => {
-        allowed = false; expect(await lookup()).toMatchObject({ status: 'scope_incomplete' }); expect(reads).toEqual([]);
+        allowed = false; const refused = await executeServerTool('get_message', JSON.stringify({message_id: 'original'}), context);
+        expect(refused.error).toContain('Workspace access'); expect(refused.result).toBeNull(); expect(reads).toEqual([]);
         allowed = true; revokeOnOriginal = true; const result = await lookup();
         expect(result).toMatchObject({ status: 'scope_incomplete' }); expect(JSON.stringify(result)).not.toContain('EXACT_AUTHORIZED_EVIDENCE');
         expect(reads.some(read => read.query.kind === 'messages' && read.query.message_ids.includes('original'))).toBe(true);
     });
     it('reports missing canonical capability and missing summary as incomplete', async () => {
-        adapter.capabilities = {}; expect(await lookup()).toMatchObject({ status: 'scope_incomplete' }); expect(reads).toEqual([]);
+        adapter.capabilities = {}; const refused = await executeServerTool('get_message', JSON.stringify({message_id: 'original'}), context);
+        expect(refused.error).toContain('unavailable'); expect(refused.result).toBeNull(); expect(reads).toEqual([]);
         adapter.capabilities = { canonicalChatHistory: 'v1' }; records.delete('summary');
         expect(await lookup()).toMatchObject({ status: 'scope_incomplete' });
     });
@@ -317,7 +352,7 @@ describe('registered canonical history authorization', () => {
         const fetch = vi.fn(async () => new Response('data: {"choices":[{"delta":{"content":"Done"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } }));
         vi.stubGlobal('fetch', fetch); reads.length = 0;
         const accepted = await startBackgroundStream({ ...params, body: { ...params.body, _toolRuntime: { get_message: 'client', search_parent: 'client' } } });
-        expect(create).toHaveBeenCalledTimes(1); expect(reads).toEqual([]);
+        expect(create).toHaveBeenCalledTimes(1); expect(reads.every(read => read.query.kind === 'thread')).toBe(true);
         await vi.waitFor(async () => expect(await memoryJobProvider.getJob(accepted.jobId, 'owner')).toMatchObject({ status: 'complete', content: 'Done' }));
         expect(fetch).toHaveBeenCalledTimes(1);
         const saved = await memoryJobProvider.getJob(accepted.jobId, 'owner');

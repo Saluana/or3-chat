@@ -177,6 +177,8 @@ export function createWorkflowHostBridge(signal?: AbortSignal) {
             }) {
                 assertOriginWorkspace();
                 const db = activationDb;
+                const { resolveChatProject } = await import('~/db/project-workspace');
+                if (await resolveChatProject(db, input.threadId)) throw new Error('This workflow cannot capture project context. Use a normal project chat.');
                 await db.transaction('rw', getWriteTxTableNames(db, 'messages'), async () => {
                     assertOriginWorkspace();
                     const previous = await db.messages.get(input.id);
@@ -300,7 +302,11 @@ export function createWorkflowHostBridge(signal?: AbortSignal) {
         },
         executionPorts: {
             listWorkflowsWithMeta: legacyRecords.listWorkflowsWithMeta,
-            loadConversationHistory: legacyRecords.loadConversationHistory,
+            loadConversationHistory: async (...args: Parameters<typeof legacyRecords.loadConversationHistory>) => {
+                const { resolveChatProject } = await import('~/db/project-workspace');
+                if (await resolveChatProject(activationDb, args[0])) throw new Error('This workflow cannot capture project context.');
+                return legacyRecords.loadConversationHistory(...args);
+            },
             toolRegistry: useToolRegistry,
             createOpenRouterClient: (apiKey: string) => ({
                 client: createOpenRouterClient({ apiKey }),

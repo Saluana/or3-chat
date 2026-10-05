@@ -226,6 +226,10 @@ export async function executeServerTool(
         };
     }
 
+    if (context) {
+        try { const { assertServerProjectExecutionSupported } = await import('./project-policy'); await assertServerProjectExecutionSupported(context); }
+        catch (error) { return { result: null, toolName, error: error instanceof Error ? error.message : 'Project policy unavailable.', timedOut: false }; }
+    }
     const baseContext = context ?? {
         subject: null,
         workspaceId: null,

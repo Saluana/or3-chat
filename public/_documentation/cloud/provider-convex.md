@@ -292,4 +292,6 @@ If `AUTH_PROVIDER=clerk` and Convex is active, install `or3-provider-clerk` so t
 
 ## Provider template development
 
+Persistent Projects reuses opaque internal posts and workspace-scoped original/extraction references. The project-aware `readChatHistory` scaffold resolves explicit and legacy folder membership inside its authorized transaction and returns `project_ownership: resolved | conflict`. The host refuses server-owned execution for unresolved ownership or project chats. Deploy the updated scaffold when upgrading the provider; changing only the host cannot add the server ownership check. This change is in the Projects review branch and is not a published provider version yet.
+
 In the provider repository, `bun run type-check` checks every bundled Convex template against its schema-derived generated declarations, as well as the provider source. Development checks use the sibling `or3-chat` checkout for host contracts. After editing templates or their declarations, run `bun run build:templates` to refresh the distributable pack. The installed project's Convex codegen regenerates its own `_generated` files.

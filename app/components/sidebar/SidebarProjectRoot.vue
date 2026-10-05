@@ -7,15 +7,15 @@
             role="button"
             tabindex="0"
             class="project-root-toggle relative group w-full flex items-center hover:bg-[var(--md-surface-hover)] px-3 gap-2 h-10 rounded-[var(--md-border-radius-small,var(--md-border-radius))] transition-colors duration-[var(--app-motion-duration-medium,200ms)] ease-[var(--app-motion-easing-standard,ease)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]"
-            @click="emit('toggle-expand')"
-            @keydown.enter="emit('toggle-expand')"
-            @keydown.space="emit('toggle-expand')"
+            @click="openHome"
+            @keydown.enter.self="openHome"
+            @keydown.space.self.prevent="openHome"
         >
-            <UIcon
+            <button type="button" aria-label="Expand project shortcuts" @click.stop="emit('toggle-expand')"><UIcon
                 :name="expanded ? iconExpand : iconCollapse"
                 class="project-icon shrink-0 w-[18px] h-[18px] text-[color:var(--md-on-surface-variant)]/70 group-hover:text-[color:var(--md-on-surface)]/80 transition-colors"
                 active-class="text-[color:var(--md-primary)]"
-            />
+            /></button>
             <span class="project-label truncate text-start flex-1 min-w-0 text-sm font-normal text-[color:var(--md-on-surface)] group-hover:text-[color:var(--md-on-surface)]">{{
                 project.name
             }}</span>
@@ -87,6 +87,11 @@
 </template>
 
 <script setup lang="ts">
+async function openHome() {
+    const { getPaletteHostContext } = await import('~/composables/search/useCommandPalette');
+    const result = await getPaletteHostContext()?.openPaneApp('or3-projects', props.project.id, 'active');
+    if (result && !result.ok) useToast().add({ title: 'Project unavailable', description: result.error.message, color: 'error' });
+}
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import { useIcon } from '~/composables/useIcon';
 import { useSidebarProjectActionButtonProps } from '~/composables/sidebar/useSidebarProjectActionButtonProps';
@@ -105,7 +110,7 @@ interface Project {
     data?: ProjectEntry[];
 }
 
-defineProps<{
+const props = defineProps<{
     project: Project;
     expanded: boolean;
 }>();

@@ -197,7 +197,7 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     const childSummaryId = await summaryRow.getAttribute('data-msg-id');
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]').at(-1)?.model)).toBe('scripted-compaction-model:floor');
     await page.locator('.unified-sb-item-active').getByRole('button', { name: 'Open actions', exact: true }).last().click();
-    const historyCompact = page.getByRole('button', { name: 'Compact conversation', exact: true }).filter({ hasText: 'Compact conversation' });
+    const historyCompact = page.getByRole('button', { name: 'Continue in new chat', exact: true }).filter({ hasText: 'Continue in new chat' });
     await expect(historyCompact).toBeDisabled();
     await expect(historyCompact).toHaveAttribute('title', /at least two settled/);
     await page.keyboard.press('Escape');
@@ -356,7 +356,7 @@ test('compaction history and families use production scope and deletion policies
     expect(result.expandedPages.at(-1).scan_complete).toBe(true); expect(result.canceled).toBe(true);
     expect(result.missingSummary.status).toBe('scope_incomplete'); expect(result.missingCaptured.status).toBe('scope_incomplete');
     expect(result.missingAnchor.status).toBe('scope_incomplete');
-    expect(result.switched.status).toBe('scope_incomplete'); expect(result.switched.message).toBeUndefined();
+    expect(result.switched.status).toBe('refused'); expect(result.switched.error).toContain('workspace'); expect(result.switched.result).toBeNull(); expect(result.switched.message).toBeUndefined();
     expect(result.crossConnectionContinuation.status).toBe('scope_incomplete');
     expect(result.filtered.items.map((item: { id: string }) => item.id)).toEqual(['qualification-family-match']);
     expect(result.filtered.items[0].family.rootId).toBe('qualification-family-root');

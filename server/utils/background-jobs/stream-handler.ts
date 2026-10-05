@@ -416,6 +416,8 @@ export async function startBackgroundStream(
         throw new Error('Invalid background history scope');
     }
     assertBackgroundHistoryProvider(syncProviderId);
+    const { assertServerProjectExecutionSupported } = await import('../chat/project-policy');
+    await assertServerProjectExecutionSupported({ subject: params.userId, workspaceId: params.workspaceId, threadId: params.threadId, abortSignal: AbortSignal.timeout(10_000) });
     const hints = params.body._toolRuntime && typeof params.body._toolRuntime === 'object'
         ? params.body._toolRuntime as Record<string, unknown> : {};
     const definitions = Array.isArray(params.body.tools) ? params.body.tools as ToolDefinition[] : [];

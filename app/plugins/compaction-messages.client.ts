@@ -17,11 +17,11 @@ export default defineNuxtPlugin(() => {
         component: ContextCompactionCard,
     });
     const composer = registerComposerAction({ id: 'or3:compact-thread', icon: 'i-lucide-fold-vertical',
-        tooltip: 'Summarize this chat', label: 'Compact', order: 190,
+        tooltip: 'Continue in a new chat with a clean handoff', label: 'Continue in new chat', order: 190,
         visible: (ctx) => Boolean(ctx.threadId && ctx.compactThread),
         disabled: (ctx) => Boolean(ctx.isLoading || ctx.isStreaming || ctx.compactionBlockedReason),
         handler: async (ctx) => { await ctx.compactThread?.(); } });
-    registerThreadHistoryAction({ id: 'or3:compact-thread-history', icon: 'i-lucide-fold-vertical', label: 'Compact conversation', order: 190,
+    registerThreadHistoryAction({ id: 'or3:compact-thread-history', icon: 'i-lucide-fold-vertical', label: 'Continue in new chat', order: 190,
         disabledReason: ({ threadId }) => isThreadCompactionActive(threadId) ? 'A compaction is already active for this conversation.' : undefined,
         inspectDisabledReason: async ({ document }) => {
             try { await inspectCompactionSource(document.id); return undefined; }

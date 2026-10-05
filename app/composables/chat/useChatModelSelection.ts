@@ -88,6 +88,20 @@ export function useChatModelSelection(options: {
         selectedModel.value = modelId;
     }
 
+    let selectionRevision = 0;
+    async function applyProjectDefault() {
+        const revision = ++selectionRevision; const id = options.threadId(); const initialModel = selectedModel.value; if (!id) return;
+        const { getDb } = await import('~/db/client'); const db = getDb();
+        const { resolveChatProject, readProjectWorkspace } = await import('~/db/project-workspace');
+        try {
+            const owner = await resolveChatProject(db, id);
+            if (!owner || await db.messages.where('thread_id').equals(id).count()) return;
+            const state = await readProjectWorkspace(db, owner);
+            if (!disposed && revision === selectionRevision && id === options.threadId() && selectedModel.value === initialModel && db === getDb() && state.settings.default_model) {
+                suppressNextPersist.value = true; selectedModel.value = state.settings.default_model;
+            }
+        } catch { /* Invalid project state is surfaced by request admission. */ }
+    }
     let disposed = false;
     onMounted(async () => {
         const catalogHydration = fetchModels().catch(() => undefined);
@@ -97,6 +111,7 @@ export function useChatModelSelection(options: {
             selectedModel.value = persistedModel.value;
         }
         applyNewChatDefault();
+        await applyProjectDefault();
         window.addEventListener('or3:model-selected', onCatalogModelSelected);
         await catalogHydration;
     });
@@ -119,7 +134,7 @@ export function useChatModelSelection(options: {
         }
     }
 
-    watch(options.threadId, applyNewChatDefault);
+    watch(options.threadId, () => { applyNewChatDefault(); void applyProjectDefault(); });
     watch(
         [selectedModelMeta, modelReasoningEfforts],
         ([model, efforts]) => {

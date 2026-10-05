@@ -5,6 +5,8 @@ import { join, resolve } from 'node:path';
 // A disposable source overlay qualifies rebuilt provider source without
 // changing installed packages, operator environment files, or live databases.
 const sourceRoot = process.cwd();
+const sqliteSource = resolve(process.env.OR3_PROJECT_SQLITE_SOURCE ?? resolve(sourceRoot, '../or3-provider-sqlite'));
+const convexSource = resolve(process.env.OR3_PROJECT_CONVEX_SOURCE ?? resolve(sourceRoot, '../or3-provider-convex'));
 const convexIndex = process.argv.indexOf('--convex-local');
 const convex = convexIndex < 0 ? null : await Bun.file(join(process.argv[convexIndex + 1]!, 'sandbox.json')).json() as { root: string; url: string; adminKey: string };
 if (convex && (!convex.root.startsWith('/private/tmp/or3-files-convex-') || new URL(convex.url).hostname !== '127.0.0.1')) {
@@ -47,7 +49,8 @@ try {
         // Vite writes transformed modules here. Sharing this symlink between
         // disposable servers lets one optimizer invalidate another's chunks.
         if (name === '.cache' || name === '.vite') continue;
-        const path = ['or3-provider-sqlite', 'or3-provider-fs', ...(convex ? ['or3-provider-convex'] : [])].includes(name) ? resolve(sourceRoot, '..', name) : join(sourceRoot, 'node_modules', name);
+        const path = name === 'or3-provider-sqlite' ? sqliteSource : name === 'or3-provider-convex' && convex ? convexSource
+            : name === 'or3-provider-fs' ? resolve(sourceRoot, '..', name) : join(sourceRoot, 'node_modules', name);
         await symlink(path, join(root, 'node_modules', name));
     }
     const probe = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response('port probe') });
@@ -91,7 +94,7 @@ try {
     await removeOverlay();
     await writeFile(join(output, 'profile.json'), JSON.stringify({
         profile: `Basic Auth + ${convex ? 'rebuilt Convex' : 'rebuilt native SQLite'} + ${storageProvider} storage`,
-        sourceRoot, sqliteSource: resolve(sourceRoot, '../or3-provider-sqlite'), port,
+        sourceRoot, sqliteSource, convexSource: convex ? convexSource : null, port,
         temporaryDataRemoved: true, exitCode: process.exitCode,
     }, null, 2) + '\n');
 } finally {

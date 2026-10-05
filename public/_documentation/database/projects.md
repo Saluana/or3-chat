@@ -1,6 +1,6 @@
 # Projects
 
-CRUD helpers for project metadata stored in the `projects` Dexie table.
+Project metadata stays in the `projects` Dexie table. Persistent workspace policy reuses versioned internal `posts`; see [Work in a project](/documentation/start/projects).
 
 ---
 
@@ -50,7 +50,17 @@ CRUD helpers for project metadata stored in the `projects` Dexie table.
 ## Usage tips
 
 -   Store structured per-project state inside `data`; use hooks to enforce schema or migrate old versions.
--   Soft delete keeps history for undo flows—run hard deletes during cleanup tasks only.
+-   Project deletion removes policy/bindings and detaches chats atomically while retaining the underlying work. Hard deletion also purges internal project records.
+
+## Persistent workspace records
+
+`or3:project-settings`, `or3:project-memory`, and `or3:project-source` are hidden from ordinary document/search surfaces. Their title is the project ID; `[postType+title]` selects the project records. The singleton settings ID is `project-settings-<id>`. Content is strict version-1 JSON, with a 128 KiB record bound. The existing `or3.workspace-item` metadata capability marker protects these records from older sync clients.
+
+`readProjectWorkspace(db, id)` validates settings, memories, and bindings. `saveProjectSettings`, `saveProjectMemory`, and `saveProjectSource` accept a captured `WorkspaceOperationScope` and expected clock. Stale writes, revoked access, invalid source identity, and foreign memory provenance refuse. Source `file_hashes` retains every original/extraction revision using existing reference accounting.
+
+`resolveChatProject(db, threadId)` prefers `threads.project_id`, otherwise resolves a single legacy membership. Ambiguous ownership refuses. `moveChatToProject(scope, threadId, projectId | null)` updates the pointer and memberships atomically, retaining extension entries. `createThreadInDb` accepts an optional `assertCurrent` guard for captured callers.
+
+The shared Project Context Builder captures ownership and project state before native admission. Tool execution and result delivery recheck scope; context receipts reside in assistant message metadata. `validateCompactionSummary` accepts an optional validated project receipt, which the fork writer preserves alongside the handoff.
 
 Core membership entries support `chat`, `doc`, and `file`; legacy string entries
 remain chat references. Known-entry edits preserve unrelated extension entries

@@ -199,6 +199,8 @@ function stripUiMetadata(tool: ToolDefinition): ToolDefinition {
  * Streams OpenRouter responses as SSE events.
  */
 export type OpenRouterStreamParams = {
+    onProjectContext?: (receipt: import('~~/shared/projects/workspace').ProjectContextReceipt, iterations: unknown[]) => void;
+    projectContext?: import('~/utils/projects/types').ProjectContextSnapshot | null;
     apiKey?: string | null;
     model: string;
     orMessages: ORMessage[];
@@ -238,19 +240,42 @@ export function buildOpenRouterRequestBody(params: OpenRouterStreamParams): Open
 /** Validate the detached, complete provider body; preserve every selected message. */
 export async function prepareOpenRouterRequest(params: OpenRouterStreamParams): Promise<OpenRouterRequestBody> {
     const body = buildOpenRouterRequestBody(params);
+    if (params.projectContext) {
+        const { assertProjectContextIncluded } = await import('~/utils/projects/context');
+        assertProjectContextIncluded(params.projectContext, body.messages);
+    }
     if (!params.contextPolicy) {
         if (body.max_tokens !== undefined && (!Number.isSafeInteger(body.max_tokens) || body.max_tokens <= 0))
             throw new Error('Reply maximum must be a positive integer.');
         return body;
     }
-    return admitProviderRequest(body, { ...params.contextPolicy,
-        requestedCompletionTokens: params.contextPolicy.requestedCompletionTokens ?? params.maxCompletionTokens },
+    const policy = params.contextPolicy;
+    const admit = () => admitProviderRequest(body, { ...policy,
+        requestedCompletionTokens: policy.requestedCompletionTokens ?? params.maxCompletionTokens },
         countTokensApprox, params.signal, async (request) => {
             const { messages, ...configuration } = request;
             return estimateMeasuredChatRequest({ model: params.model, messages, tools: request.tools,
                 modalities: request.modalities, configuration, usage: params.contextPolicy?.measuredUsage,
                 countText: countTokensApprox });
         });
+    while (true) {
+        try { return await admit(); }
+        catch (error) {
+            if (!(error instanceof ChatContextAdmissionError) || error.code !== 'context_full' || !params.projectContext) throw error;
+            const optional = [...(params.projectContext.receipt.chats ?? []).map(chat => chat.message_id),
+                ...params.projectContext.receipt.sources.filter(source => !params.projectContext!.requiredSourceIds.includes(source.id)).map(source => source.id)];
+            const index = body.messages.findLastIndex(message => {
+                const text = typeof message.content === 'string' ? message.content : Array.isArray(message.content)
+                    ? message.content.map(part => 'text' in part ? part.text : '').filter(Boolean).join(' ') : '';
+                return message.role === 'user' && params.projectContext!.messages.some(context => (typeof context.content === 'string' ? context.content === text
+                    : Array.isArray(context.content) && context.content.some(part => part.type === 'text' && part.text === text)
+                        && context.content.every(part => part.type !== 'image' || JSON.stringify(message.content).includes(String(part.image)))) && optional.some(id => text.startsWith(`${params.projectContext!.marker} Source ${id}:`) || text.startsWith(`${params.projectContext!.marker} Source ${id} `)
+                        || text.startsWith(`${params.projectContext!.marker} Previous chat `) && text.includes(`summary ${id}:`)));
+            });
+            if (index < 0) throw error;
+            body.messages.splice(index, 1);
+        }
+    }
 }
 
 export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGenerator<ORStreamEvent, void, unknown> {
@@ -287,6 +312,50 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
     // before asynchronous provenance work so later view/tool mutations cannot
     // change the sent prefix after its fingerprint was captured.
     const requestSnapshot = JSON.parse(JSON.stringify(body)) as OpenRouterRequestBody;
+    if (params.projectContext && params.threadId && !params.messageId) {
+        const { captureProjectOperation, finalizeProjectReceipt } = await import('~/utils/projects/context');
+        const { resolveChatProject } = await import('~/db/project-workspace');
+        const scope = captureProjectOperation(signal, params.threadId);
+        if (scope.workspaceId !== params.projectContext.workspaceId || await resolveChatProject(scope.db, params.threadId) !== params.projectContext.projectId) throw new Error('Project changed while preparing the handoff.');
+        scope.assertCurrent();
+        params.onProjectContext?.(finalizeProjectReceipt(params.projectContext, requestSnapshot.messages), []);
+    }
+    if (params.projectContext && params.threadId && params.messageId) {
+        const { captureProjectOperation, finalizeProjectReceipt } = await import('~/utils/projects/context');
+        const { resolveChatProject } = await import('~/db/project-workspace');
+        const { patchMessageInDb } = await import('~/db/messages');
+        const scope = captureProjectOperation(signal, params.threadId);
+        if (scope.workspaceId !== params.projectContext.workspaceId || await resolveChatProject(scope.db, params.threadId) !== params.projectContext.projectId)
+            throw new Error('This chat changed workspace or project. Start a new turn.');
+        const receipt = finalizeProjectReceipt(params.projectContext, requestSnapshot.messages);
+        const previous = await scope.db.messages.get(params.messageId);
+        const prior = (previous?.data as Record<string, unknown> | undefined)?.project_context_iterations;
+        const iterations = Array.isArray(prior) ? prior : [];
+        if (iterations.length >= 32) throw new Error('Project request iteration limit reached. Continue in a new chat.');
+        const { ProjectContextIterationSchema } = await import('~~/shared/projects/workspace');
+        const previousSources = new Map<string, { revision: string; state: string }>();
+        const previousChats = new Map<string, string>();
+        for (const iteration of iterations) {
+            const parsed = ProjectContextIterationSchema.safeParse(iteration);
+            if (!parsed.success) continue;
+            for (const source of parsed.data.source_changes) previousSources.set(source.id, source);
+            for (const chat of parsed.data.chat_changes) previousChats.set(chat.id, chat.state);
+        }
+        const iteration = { project_id: receipt.project_id, instructions: Boolean(receipt.instructions), brief: Boolean(receipt.brief), memory_count: receipt.memories.length,
+            source_changes: receipt.sources.filter(source => {
+                const previous = previousSources.get(source.id);
+                return previous ? previous.revision !== source.revision || previous.state !== source.state : source.state !== 'available';
+            }).map(source => ({ id: source.id, revision: source.revision, state: source.state })),
+            chat_changes: (receipt.chats ?? []).filter(chat => previousChats.get(chat.message_id) !== chat.state).map(chat => ({ id: chat.message_id, state: chat.state })) };
+        const metadata = { project_context: receipt, project_context_iterations: [...iterations, iteration] };
+        if (new TextEncoder().encode(JSON.stringify(metadata)).byteLength > 128 * 1024)
+            throw new Error('Project context receipts reached their storage limit. Continue in a new chat.');
+        await patchMessageInDb(scope.db, params.messageId, { data: metadata }, undefined, message => {
+            scope.assertCurrent('write'); return Boolean(message && !message.deleted && message.thread_id === params.threadId);
+        });
+        scope.assertCurrent();
+        params.onProjectContext?.(receipt, metadata.project_context_iterations);
+    }
     const { messages: _messages, _threadId: _thread, _messageId: _message, _background: _background, _context: _context, ...providerConfiguration } = requestSnapshot;
     const usagePrefix = await captureUsagePrefix({ model, messages: requestSnapshot.messages,
         tools: requestSnapshot.tools, modalities: requestSnapshot.modalities, configuration: providerConfiguration,
@@ -747,6 +816,7 @@ function setBackgroundStreamingAvailable(available: boolean): void {
  * Starts a background streaming job and returns its job ID.
  */
 export async function startBackgroundStream(params: {
+    projectContext?: import('~/utils/projects/types').ProjectContextSnapshot | null;
     apiKey?: string | null;
     model: string;
     orMessages: ORMessage[];

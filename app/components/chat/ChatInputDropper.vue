@@ -36,6 +36,9 @@
                     </div>
                 </details>
             </div>
+            <label v-if="attachments.length && attachmentProject" class="flex items-center gap-2 text-xs">Attachment destination
+                <select v-model="attachmentDestination" aria-label="Attachment destination" class="rounded border border-current/20 p-1 bg-transparent"><option value="chat">This chat</option><option value="project">Add to project knowledge</option></select>
+            </label>
             <!-- Main Input Area -->
             <div class="relative">
                 <div
@@ -754,6 +757,7 @@ const emit = defineEmits<{
             modelVariant: OpenRouterModelVariant;
             thinkingEnabled: boolean;
             reasoningEffort: string | null;
+            knowledge_project_id?: string;
             editorDoc?: Record<string, unknown>;
             registerResult: RegisterSendResult;
             inspectLossyRequest?: boolean;
@@ -785,6 +789,17 @@ const {
     onChange: (modelId) => emit('model-change', modelId),
 });
 
+const attachmentDestination = ref<'chat'|'project'>('chat');
+const attachmentProject = ref<string | null>(null);
+let attachmentProjectRevision = 0;
+watch(() => props.threadId, async id => {
+    const revision = ++attachmentProjectRevision; attachmentProject.value = null; attachmentDestination.value = 'chat';
+    if (!id) return;
+    const { getDb } = await import('~/db/client'); const db = getDb();
+    const { resolveChatProject } = await import('~/db/project-workspace');
+    const owner = await resolveChatProject(db, id).catch(() => null);
+    if (revision === attachmentProjectRevision && props.threadId === id && db === getDb()) attachmentProject.value = owner;
+}, { immediate: true });
 const promptText = ref('');
 // Fallback textarea ref (used while TipTap not yet integrated / or fallback active)
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
@@ -1018,6 +1033,7 @@ watch(
     }
 );
 
+watch(() => attachments.value.length, length => { if (!length) attachmentDestination.value = 'chat'; });
 watch([attachments, largeTextBlocks], () => scheduleDraftCapture(props.tabId), {
     deep: true,
 });
@@ -1204,6 +1220,7 @@ const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfi
         const submission: { result: Promise<SendResult> | null; acceptance: Promise<SendResult> | null } = { result: null, acceptance: null };
         emit('send', {
             ...decision,
+            knowledge_project_id: attachmentDestination.value === 'project' ? attachmentProject.value ?? undefined : undefined,
             editorDoc: submittedEditorDoc,
             text: promptText.value,
             images: attachments.value, // backward compatibility

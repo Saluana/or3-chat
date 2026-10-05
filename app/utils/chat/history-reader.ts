@@ -29,7 +29,16 @@ export function capturedHistoryContext(execution: ToolExecutionContext, revision
     return { subject: execution.subject ?? 'local-browser', workspaceId, threadId: execution.threadId!,
         signal: execution.abortSignal, authorize, revision,
         read: async (query) => {
-            authorize(); const result = await readCapturedHistory(db, query); authorize(); return result;
+            authorize();
+            const { resolveChatProject, readProjectWorkspace } = await import('~/db/project-workspace');
+            const owner = await resolveChatProject(db, execution.threadId!);
+            const checkProject = async () => { if (await resolveChatProject(db, execution.threadId!) !== owner) throw new Error('Chat project changed during history retrieval.'); if (owner) {
+                const { settings } = await readProjectWorkspace(db, owner);
+                const targets = query.kind === 'messages' ? (await db.messages.bulkGet(query.message_ids)).filter(Boolean).map(row => row!.thread_id) : [query.thread_id];
+                for (const target of targets) if (await resolveChatProject(db, target) !== owner || settings.excluded_chat_ids.includes(target)) throw new Error('Original history is outside permitted project memory.');
+            } };
+            await checkProject();
+            const result = await readCapturedHistory(db, query); await checkProject(); authorize(); return result;
         } };
 }
 

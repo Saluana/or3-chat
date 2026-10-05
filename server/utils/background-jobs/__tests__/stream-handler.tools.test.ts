@@ -1,3 +1,6 @@
+import { useRuntimeConfig } from '#imports';
+import { registerAuthWorkspaceStore } from '../../../auth/store/registry';
+import type { AuthWorkspaceStore } from '../../../auth/store/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BackgroundJobProvider, BackgroundJob, JobUpdate } from '../types';
 import {
@@ -9,7 +12,7 @@ import { clearAllJobs, memoryJobProvider } from '../providers/memory';
 import { reconcileBackgroundJobHistory } from '../history';
 import { registerSyncGatewayAdapter } from '../../../sync/gateway/registry';
 import type { SyncGatewayAdapter } from '../../../sync/gateway/types';
-import type { CanonicalGenerationSnapshot, ChatGenerationAdmissionEnvelope } from '~~/shared/chat/background-history';
+import type { CanonicalGenerationSnapshot, ChatGenerationAdmissionEnvelope, CanonicalHistoryActor } from '~~/shared/chat/background-history';
 import { captureUsagePrefix } from '~~/shared/chat/request-usage';
 import { readRequestUsage } from '~~/shared/chat/compaction';
 import { countTokensApprox } from '~/utils/chat/tokens';
@@ -175,6 +178,20 @@ const clientToolDef: ToolDefinition = {
 };
 
 describe('consumeBackgroundStreamWithTools', () => {
+    // These execution tests use an authorized unowned canonical chat. The
+    // project policy itself is production code, not a mocked permission check.
+    beforeEach(() => {
+        vi.mocked(useRuntimeConfig).mockReturnValue({ public: { sync: { provider: 'unowned-tools-fixture' } } } as ReturnType<typeof useRuntimeConfig>);
+        registerSyncGatewayAdapter({ id: 'unowned-tools-fixture', create: () => ({
+            capabilities: { canonicalChatHistory: 'v1' },
+            readChatHistory: async (_actor: CanonicalHistoryActor, query: import('~~/shared/chat/history-reader').CanonicalChatQuery) => ({ status: 'ok', project_ownership: 'resolved',
+                thread: query.kind === 'thread' ? { id: query.thread_id, project_id: null, clock: 1 } : undefined }),
+        }) as SyncGatewayAdapter });
+        registerAuthWorkspaceStore({ id: 'unowned-tools-fixture', create: () => ({
+            listUserWorkspaces: async subject => subject === 'user-1' ? [{ id: 'ws-1', name: 'Fixture', role: 'owner' }] : [],
+        }) as AuthWorkspaceStore });
+    });
+
     beforeEach(() => {
         registerServerTool(
             toolDef,
@@ -817,11 +834,14 @@ describe('background usage through terminal history', () => {
         contextCatalog.capacity = 1_000_000; contextCatalog.calls = 0;
         delivered.length = 0;
         finalize.mockClear();
-        vi.stubGlobal('useRuntimeConfig', () => ({ backgroundJobs: {} }));
+        vi.stubGlobal('useRuntimeConfig', () => ({ backgroundJobs: {}, public: { sync: { provider: 'usage-boundary' } } }));
+        vi.mocked(useRuntimeConfig).mockImplementation(() => (globalThis as any).useRuntimeConfig());
+        registerAuthWorkspaceStore({ id: 'usage-boundary', create: () => ({ listUserWorkspaces: async (subject: string) => subject === 'owner' ? [{ id: 'workspace', name: 'Fixture', role: 'owner' }] : [] }) as AuthWorkspaceStore });
         registerSyncGatewayAdapter({
             id: 'usage-boundary',
             create: () => ({
-                capabilities: { backgroundGenerationHistory: 'v1' },
+                capabilities: { backgroundGenerationHistory: 'v1', canonicalChatHistory: 'v1' },
+                readChatHistory: async (_actor: CanonicalHistoryActor, query: import('~~/shared/chat/history-reader').CanonicalChatQuery) => ({ status: 'ok', project_ownership: 'resolved', thread: query.kind === 'thread' ? { id: query.thread_id, clock: 1, project_id: null } : undefined }),
                 admitChatGeneration: async () => ({ status: 'admitted', replayed: false, serverVersion: 1 }),
                 finalizeChatGeneration: finalize,
             }) as unknown as SyncGatewayAdapter,

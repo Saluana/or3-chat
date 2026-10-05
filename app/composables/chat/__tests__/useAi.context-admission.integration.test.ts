@@ -32,7 +32,7 @@ vi.mock('#imports', async (original) => ({
     useHooks: () => useHooks(),
 }));
 vi.mock('~/core/auth/useOpenrouter', () => ({ useOpenRouterAuth: () => ({ startLogin() {} }) }));
-vi.mock('~/composables/auth/useSessionContext', () => ({ useSessionContext: () => ({ data: ref(external.background
+vi.mock('~/composables/auth/useSessionContext', () => ({ getCachedSessionContext: () => null, getCachedSessionPayload: () => null, useSessionContext: () => ({ data: ref(external.background
     ? { session: { authenticated: true, workspace: { id: 'scripted-workspace' } } } : null) }) }));
 vi.mock('~~/shared/openrouter', async (original) => ({
     ...await original<typeof import('~~/shared/openrouter')>(),

@@ -216,3 +216,16 @@ export async function admitProviderRequest<T extends {
         body.max_tokens = replyMaximum;
     }
 }
+
+/** Read-only inspection contract; browser execution owns confirmation. */
+export interface LossyRequestPreview {
+    readonly input_tokens: number;
+    readonly effective_context_tokens: number;
+    readonly reply_tokens: number;
+    readonly omitted_message_count: number;
+    readonly omitted_turn_count: number;
+    readonly omitted_messages: readonly { position: number; role: string; excerpt: string }[];
+    readonly original_digest: string;
+    readonly candidate_digest: string;
+    readonly protected_digest: string;
+}

@@ -61,6 +61,7 @@ export type ChatRequest = {
     readonly workspaceId: string;
     readonly accumulator: Accumulator;
     readonly kind: 'send' | 'continue' | 'reattach' | 'recovery';
+    projectContext?: import('~/utils/projects/context').ProjectContextSnapshot | null;
     threadId?: string;
     userMessageId?: string;
     assistantMessageId?: string;
@@ -96,6 +97,7 @@ export function createChatRequest(options: {
     requestId: string;
     originDb: Or3DB;
     workspaceId: string;
+    projectContext?: import('~/utils/projects/context').ProjectContextSnapshot | null;
     threadId?: string;
     accumulator: Accumulator;
     kind?: ChatRequest['kind'];

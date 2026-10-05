@@ -240,6 +240,8 @@ export async function continueMessageImpl(
     ctx.abortController.value = continuationAbortController;
 
     try {
+        const { resolveChatProject } = await import('~/db/project-workspace');
+        const initialProjectId = await resolveChatProject(originDb, originThreadId);
         const target = (await originDb.messages.get(messageId)) as StoredMessage | undefined;
         if (!ownsThread()) return;
         if (
@@ -419,6 +421,15 @@ export async function continueMessageImpl(
             modelOverride ||
             ctx.defaultModelId;
         if (!ownsThread()) return;
+        const { buildProjectContext, captureProjectOperation } = await import('~/utils/projects/context');
+        const { useModelStore } = await import('~/composables/chat/useModelStore');
+        const meta = useModelStore().catalog.value.find(model => model.id === modelId);
+        const projectContext = initialProjectId ? await buildProjectContext(captureProjectOperation(continuationAbortController.signal, originThreadId), originThreadId,
+            typeof target.content === 'string' ? target.content : '', meta?.architecture?.input_modalities?.includes('image') === true, initialProjectId) : null;
+        if (projectContext) {
+            const projectMessages = await buildOpenRouterMessagesForSend({ effectiveMessages: projectContext.messages, assistantHashes: [], contextHashes: [], fileHashes: [], maxImageInputs: 5, imageInclusionPolicy: 'all' });
+            orMessages = [...orMessages.slice(0, -1), ...projectMessages, ...orMessages.slice(-1)];
+        }
         const resolvedPolicy = await ctx.resolveContextPolicy?.(modelId, continuationAbortController.signal);
         if (!resolvedPolicy) throw new ChatContextAdmissionError({ ok: false, code: 'model_metadata_unavailable' });
         const contextPolicy = { ...resolvedPolicy, measuredUsage: target.data && typeof target.data === 'object'
@@ -432,7 +443,7 @@ export async function continueMessageImpl(
         // modalities controls OUTPUT format, not input capability
         const modalities = getChatModalities(modelId);
         const useBackground =
-            ctx.backgroundStreamingAllowed === true &&
+            !projectContext && ctx.backgroundStreamingAllowed === true &&
             modalities.length === 1 &&
             modalities[0] === 'text' &&
             Boolean(ctx.workspaceId && ctx.userId && ctx.attachBackgroundJob);
@@ -645,6 +656,13 @@ export async function continueMessageImpl(
         );
         const stream = openRouterStreamWithRetry({
             apiKey: ctx.effectiveApiKey.value,
+            projectContext,
+            onProjectContext: (receipt, iterations) => {
+                if (ctx.tailAssistant.value?.id === target.id) ctx.tailAssistant.value.data = { ...ctx.tailAssistant.value.data,
+                    project_context: receipt, project_context_iterations: iterations };
+                const row = ctx.rawMessages.value.find(row => row.id === target.id);
+                if (row) row.data = { ...row.data, project_context: receipt, project_context_iterations: iterations };
+            },
             model: modelId,
             orMessages: orMessages as Parameters<typeof openRouterStreamWithRetry>[0]['orMessages'],
             modalities,

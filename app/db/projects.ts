@@ -11,7 +11,7 @@
  * Non-responsibilities:
  * - Workspace management or authorization
  */
-import { getDb, type Or3DB } from './client';
+import { getDb, getActiveWorkspaceId, type Or3DB } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import { parseOrThrow, nowSec, nextClock, getWriteTxTableNames } from './util';
@@ -99,37 +99,15 @@ export async function upsertProjectInDb(db: Or3DB, value: Project): Promise<void
  * - Does not delete related threads.
  */
 export async function softDeleteProject(id: string): Promise<void> {
-    const hooks = useHooks();
-    const db = getDb();
-    await db.transaction(
-        'rw',
-        getWriteTxTableNames(db, 'projects', { includeTombstones: true }),
-        async () => {
-        const p = await dbTry(() => db.projects.get(id), {
-            op: 'read',
-            entity: 'projects',
-            action: 'get',
-        });
-        if (!p) return;
-        if (p.deleted) return;
-        await hooks.doAction('db.projects.delete:action:soft:before', {
-            entity: p,
-            id: p.id,
-            tableName: 'projects',
-        });
-        await db.projects.put({
-            ...p,
-            deleted: true,
-            updated_at: nowSec(),
-            clock: nextClock(p.clock),
-        });
-        await hooks.doAction('db.projects.delete:action:soft:after', {
-            entity: p,
-            id: p.id,
-            tableName: 'projects',
-        });
-        }
-    );
+    const db = getDb(); const project = await db.projects.get(id);
+    if (!project || project.deleted) return;
+    const [{ captureWorkspaceOperation }, { deleteProjectWorkspace }] = await Promise.all([
+        import('~/utils/chat/workspace-access'), import('./project-workspace'),
+    ]);
+    const scope = captureWorkspaceOperation({ subject: null, workspaceId: getActiveWorkspaceId() ?? 'local', threadId: 'project-delete',
+        messageId: null, requestId: id, callId: id, abortSignal: new AbortController().signal });
+    if (scope.db !== db) throw new Error('Workspace changed before project deletion.');
+    await deleteProjectWorkspace(scope, id, project.clock);
 }
 
 /**
@@ -146,32 +124,16 @@ export async function softDeleteProject(id: string): Promise<void> {
  * - Does not cascade deletion to threads or messages.
  */
 export async function hardDeleteProject(id: string): Promise<void> {
-    const hooks = useHooks();
     const db = getDb();
-    await db.transaction(
-        'rw',
-        getWriteTxTableNames(db, 'projects', { includeTombstones: true }),
-        async () => {
-        const existing = await dbTry(() => db.projects.get(id), {
-            op: 'read',
-            entity: 'projects',
-            action: 'get',
-        });
-        if (!existing) return;
-
-        await hooks.doAction('db.projects.delete:action:hard:before', {
-            entity: existing,
-            id,
-            tableName: 'projects',
-        });
-        await db.projects.delete(id);
-        await hooks.doAction('db.projects.delete:action:hard:after', {
-            entity: existing,
-            id,
-            tableName: 'projects',
-        });
-        }
-    );
+    const project = await db.projects.get(id);
+    if (!project) return;
+    const [{ captureWorkspaceOperation }, { deleteProjectWorkspace }] = await Promise.all([
+        import('~/utils/chat/workspace-access'), import('./project-workspace'),
+    ]);
+    const scope = captureWorkspaceOperation({ subject: null, workspaceId: getActiveWorkspaceId() ?? 'local', threadId: 'project-delete',
+        messageId: null, requestId: id, callId: id, abortSignal: new AbortController().signal });
+    if (scope.db !== db) throw new Error('Workspace changed before project deletion.');
+    await deleteProjectWorkspace(scope, id, project.clock, true);
 }
 
 /**
