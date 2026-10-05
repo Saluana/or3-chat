@@ -2,7 +2,6 @@ import { defineNuxtPlugin } from '#app';
 import {
     IconRegistry,
     iconRegistry,
-    type IconRegistryState,
 } from '~/theme/_shared/icon-registry';
 
 export default defineNuxtPlugin((nuxtApp) => {
@@ -11,15 +10,11 @@ export default defineNuxtPlugin((nuxtApp) => {
               .$iconRegistry ?? new IconRegistry())
         : iconRegistry;
 
-    // Hydrate icon registry state from server to client to prevent hydration mismatches
+    // Client hydration runs before theme loading in 90.theme.client.ts.
     if (import.meta.server) {
         nuxtApp.hook('app:rendered', () => {
             nuxtApp.payload.iconRegistry = requestRegistry.state;
         });
-    } else if (import.meta.client && nuxtApp.payload.iconRegistry) {
-        requestRegistry.hydrate(
-            nuxtApp.payload.iconRegistry as IconRegistryState
-        );
     }
 
     if (

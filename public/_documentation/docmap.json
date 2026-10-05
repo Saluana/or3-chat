@@ -545,7 +545,7 @@
                     "category": "Advanced",
                     "categoryOrder": 3,
                     "order": 1,
-                    "summary": "Understand discovery, compilation, activation, hydration, and persistence."
+                    "summary": "Understand discovery, compilation, activation, icon hydration, and persistence."
                 }
             ]
         },
