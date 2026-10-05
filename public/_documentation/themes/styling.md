@@ -198,3 +198,14 @@ page zoom and reduced-motion behavior. Test narrow split panes as well as narrow
 browser windows; container queries suit pane content. Give scrolling flex children
 `min-height: 0`, bound canvas heights, and keep footer actions reachable. A composer
 replacement must retain the host's viewport, draft, attachment, and touch behavior.
+
+The shared chat composer reserves separate 44px touch regions around its 32px
+icon buttons on phones. Keep any expanded hit area inside that reserved space;
+do not let neighboring targets overlap. Blank's composer replacement uses native
+44px buttons. Message actions keep a centered, joined 32px-tall strip with separate
+44px touch regions, wrapping in normal flow on touch screens and in narrow chat
+panes. Keep desktop positioning in the component stylesheet rather than
+adding translation utilities that remain active when mobile resets `transform`.
+Retro integrates user and assistant message actions into a right-aligned footer
+with inherited text color and a subtle divider; shared CSS retains the touch
+regions and wrapping.

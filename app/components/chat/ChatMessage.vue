@@ -328,11 +328,11 @@
                 @collapse="toggleExpanded"
             />
 
-            <!-- Action buttons: overlap bubble border half outside -->
+            <!-- Desktop actions overlap the border; narrow panes keep them in flow. -->
             <div
                 v-if="!editing && interactive"
                 :class="[
-                    'absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap',
+                    'cm-actions flex z-10',
                     `cm-actions-${roleVariant}`,
                 ]"
             >
@@ -1126,29 +1126,105 @@ const streamMdClasses = [
     min-height: 44px;
 }
 
-/* Touch users need visible actions, and wrapped rows keep short bubbles and
-   plugin actions inside the pane instead of hanging past its right edge. */
+/* Use one transform for desktop positioning. Individual translate utilities
+   can survive a mobile transform reset after CSS optimization. */
+.cm-actions {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translate(-50%, 50%);
+    min-width: 0;
+    max-width: 100%;
+}
+
+.cm-action-group {
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: wrap;
+}
+
 @media (width < 768px), (pointer: coarse) {
-    .cm-actions-user,
-    .cm-actions-assistant {
+    .cm-actions {
         position: static;
         transform: none;
-        translate: none;
+        justify-content: center;
+        align-items: center;
+        padding-block: 6px;
         margin-top: 0.75rem;
-        max-width: 100%;
     }
 
     .cm-action-group {
-        flex-wrap: wrap;
-        gap: 0.25rem;
-        max-width: 100%;
+        justify-content: center;
+        column-gap: 0;
+        row-gap: 12px;
         opacity: 1 !important;
     }
 
-    .cm-action-group :deep(button) {
-        min-width: 44px;
-        min-height: 44px;
-        margin-inline-start: 0;
+    /* Match the layer of theme size utilities; the 44px floor is provided by
+       the hit region rather than the painted strip. */
+    @layer utilities {
+        .cm-action-group :deep(button) {
+            position: relative;
+            width: 44px;
+            min-width: 44px;
+            height: 32px !important;
+            min-height: 32px !important;
+            padding: 0 !important;
+            flex-shrink: 0;
+            margin-inline: 0 !important;
+        }
+    }
+
+    .cm-action-group :deep(button::before) {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 44px;
+        height: 44px;
+        transform: translate(-50%, -50%);
+    }
+}
+
+/* A split pane can be phone-sized even in a desktop browser. */
+@container chat-pane (width < 768px) {
+    .cm-actions {
+        position: static;
+        transform: none;
+        justify-content: center;
+        align-items: center;
+        padding-block: 6px;
+        margin-top: 0.75rem;
+    }
+
+    .cm-action-group {
+        justify-content: center;
+        column-gap: 0;
+        row-gap: 12px;
+        opacity: 1 !important;
+    }
+
+    @layer utilities {
+        .cm-action-group :deep(button) {
+            position: relative;
+            width: 44px;
+            min-width: 44px;
+            height: 32px !important;
+            min-height: 32px !important;
+            padding: 0 !important;
+            flex-shrink: 0;
+            margin-inline: 0 !important;
+        }
+    }
+
+    .cm-action-group :deep(button::before) {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 44px;
+        height: 44px;
+        transform: translate(-50%, -50%);
     }
 }
 </style>
