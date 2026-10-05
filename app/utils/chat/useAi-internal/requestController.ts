@@ -223,6 +223,10 @@ export function finalizeRequest(
         });
     }
     if (request.finalization) return request.finalization;
+    if (input.outcome === 'completed' && input.persistence !== 'tracker' && input.persistence !== 'canonical'
+        && (request.cancelled || request.abortController?.signal.aborted)) {
+        return Promise.reject(new DOMException('Chat request cancelled', 'AbortError'));
+    }
     if (typeof input.attempt === 'number') request.lastAttempt = input.attempt;
     const terminal: RequestTerminal = {
         ...input,

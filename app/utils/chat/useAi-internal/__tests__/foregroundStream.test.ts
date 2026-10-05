@@ -43,6 +43,36 @@ vi.mock('~/utils/chat/uiMessages', () => ({
 }));
 
 describe('runForegroundStreamLoop', () => {
+    it('rejects buffered late text when Stop occurs during progress persistence', async () => {
+        const entered = deferred<void>(); const release = deferred<void>();
+        const controller = new AbortController();
+        openRouterStreamMock.mockImplementation(async function* () {
+            // Fifty events reach the existing progress-flush boundary. The
+            // generator deliberately ignores abort, like an already-read buffer.
+            for (let i = 0; i < 50; i++) yield { type: 'text', text: 'x' };
+            yield { type: 'text', text: 'late' };
+        });
+        const { runForegroundStreamLoop } = await import('~/utils/chat/useAi-internal/foregroundStream');
+        const persistAssistant = vi.fn(async (_patch: Record<string, unknown>) => {
+            entered.resolve(); await release.promise; return null;
+        });
+        const ctx = {
+            apiKey: 'key', modelId: 'model',
+            orMessages: [{ role: 'user' as const, content: [{ type: 'text' as const, text: 'go' }] }],
+            modalities: ['text'], abortSignal: controller.signal,
+            assistantId: 'assistant-buffered', streamId: 'stream-buffered', threadId: 'thread-1',
+            streamAcc: { append: vi.fn() }, hooks: { doAction: vi.fn(async () => {}) },
+            toolRegistry: { executeTool: vi.fn() }, persistAssistant,
+            assistantFileHashes: [], activeToolCalls: new Map(),
+            tailAssistant: { value: null as any }, rawMessages: { value: [] as any[] },
+        };
+        const run = runForegroundStreamLoop(ctx);
+        const rejected = expect(run).rejects.toMatchObject({ name: 'AbortError' });
+        await entered.promise; controller.abort(); release.resolve(); await rejected;
+        expect(ctx.tailAssistant.value?.text).toBe('x'.repeat(50));
+        expect(ctx.streamAcc.append).toHaveBeenCalledTimes(50);
+        expect(persistAssistant.mock.calls.every(([patch]) => patch.content === 'x'.repeat(50))).toBe(true);
+    });
     it.each(['text', 'reasoning'] as const)('durably flushes quiet %s and serializes progress arriving during a slow write', async (type) => {
         vi.useFakeTimers();
         const nextChunk = deferred<void>();

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 
 async function upload(page: Page, file: { name: string; mimeType: string; buffer: Buffer }): Promise<void> {
     await page.getByTestId('upload-input').setInputFiles(file);
@@ -15,13 +16,14 @@ test.describe('Storage Layer', () => {
         const item = files.getByRole('listitem').filter({ hasText: 'catalog-acceptance.md' });
         await expect(item).toBeVisible();
         await item.getByRole('button', { name: 'Open catalog-acceptance.md', exact: true }).click();
-        const preview = page.getByRole('dialog', { name: 'File preview' });
+        const preview = page.getByRole('complementary', { name: 'File preview', exact: true });
         await expect(preview).toContainText('Catalog saffron acceptance marker.');
         const downloaded = page.waitForEvent('download');
         await preview.getByRole('button', { name: 'Download', exact: true }).click();
         const download = await downloaded;
         const path = info.outputPath('catalog-original.md');
         await download.saveAs(path);
+        expect(await readFile(path, 'utf8')).toBe('Catalog saffron acceptance marker.');
         await info.attach('catalog-original', { path, contentType: 'text/markdown' });
         await preview.getByRole('button', { name: 'Close', exact: true }).click();
         await item.getByRole('button', { name: /^More actions for/ }).click();
@@ -36,6 +38,8 @@ test.describe('Storage Layer', () => {
         await expect(item).toBeVisible();
         await page.reload();
         await expect(item).toBeVisible();
+        await item.getByRole('button', { name: 'Open catalog-acceptance.md', exact: true }).click();
+        await expect(preview).toContainText('Catalog saffron acceptance marker.');
         const screenshot = info.outputPath('catalog-restored.png');
         await page.screenshot({ path: screenshot, animations: 'disabled' });
         await info.attach('catalog-restored', { path: screenshot, contentType: 'image/png' });

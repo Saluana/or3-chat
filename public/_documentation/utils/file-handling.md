@@ -75,6 +75,11 @@ associations without moving or copying content.
 
 In cloud mode, Files is available when the selected sync provider advertises workspace-item `v1`. Read-only members can inspect and download permitted items; upload and management actions require write access. The inspector reports local, queued, uploading, failed, or synced state separately from successful local intake.
 
+Composer file selections, drops and pastes retain one originating workspace and
+composer lifetime across the whole batch. Workspace/tab changes and disposal
+cancel pending intake before later files or preview URLs are allocated. Draft
+transfer preserves existing previews; draft discard owns their revocation.
+
 New regular chat uploads also create a catalog entry. Supported UTF-8 `.txt`,
 `.md`, and `.csv` uploads insert a removable chat reference. Images and PDFs use
 the existing attachment/model compatibility flow. **Ask in chat** returns to a

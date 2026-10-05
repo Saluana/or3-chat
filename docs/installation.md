@@ -220,7 +220,10 @@ password database: keep it owner-only and copy it to encrypted,
 access-controlled off-host storage (for example an encrypted backup volume or
 an access-controlled object store). A same-host snapshot does not protect
 against disk loss. Restore and rollback first journal a verified pre-mutation
-snapshot; an error restores that snapshot instead of accepting partial data.
+snapshot. If replacement fails after mutation, the CLI attempts to restore that
+snapshot. Automatic recovery can also fail and may require manual action. Preserve
+the journal, backups and error details, and verify recovery status and restored
+data before resuming normal service.
 Restore requires explicit confirmation:
 
 ```bash
@@ -232,6 +235,15 @@ The archive deliberately does not contain the deployment's authentication key.
 Keep an owner-only copy of `.or3-cloud/backup-auth.key` in an encrypted secret
 store separate from the archive, then restore that key into the recovered
 deployment before using an off-host backup.
+
+Before a restore drill or host replacement, confirm a supported isolated managed
+deployment that satisfies the archive's authentication and compatibility checks,
+including mode, Compose project, volume identities, port, domain and applicable
+deployment ID. The separate authentication key alone is insufficient. Keep the
+target isolated from production traffic, resource collisions and external side
+effects even where identity values must match. Do not edit authenticated archives
+or managed state to bypass a mismatch; resolve the supported reconstruction
+procedure before retiring the source.
 
 Rollback restores the data snapshot associated with the previous version and
 can discard writes made after that update. After either operation, verify
@@ -253,12 +265,11 @@ purge. A same-filesystem copy is useful but cannot authorize data deletion.
 npx @or3/cloud remove --purge-data --yes
 ```
 
-Normal retention never removes a rollback or recovery backup. If you truly
-need to override that protection, name the force explicitly:
-
-```bash
-npx @or3/cloud backup prune --keep 1 --force --yes
-```
+Protected rollback and pending-recovery backups cannot be removed by pruning,
+including with `--force`. Force bypasses suspect-entry deferral so pruning can
+remove eligible verified backups; suspect entries and protected recovery sources
+remain excluded. Inspect the complete inventory and approve the exact deletions
+before pruning.
 
 To rotate the owner and admin passwords, run
 `npx @or3/cloud credentials reset --yes`. The operation is journaled before

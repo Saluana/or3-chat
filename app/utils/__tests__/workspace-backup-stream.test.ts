@@ -203,6 +203,7 @@ describe('workspace backup import stream integrity', () => {
         const rows: TableRow[] = [{ id: 'existing' }];
         const table = {
             name: 'messages',
+            schema: { primKey: { keyPath: 'id' } },
             clear: vi.fn(async () => {
                 rows.length = 0;
             }),

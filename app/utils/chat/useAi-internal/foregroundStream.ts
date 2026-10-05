@@ -319,6 +319,7 @@ export async function runForegroundStreamLoop(
     const toolLedger = ctx.toolLedger ?? new Map<string, ToolLedgerEntry>();
 
     while (normalizedState.terminal === 'active') {
+        ctx.abortSignal.throwIfAborted();
         normalizedState = beginNormalizedIteration(normalizedState);
         const streamHooks = createStreamHookDispatcher(ctx.hooks);
 
@@ -378,6 +379,7 @@ export async function runForegroundStreamLoop(
 
         try {
             for await (const ev of stream) {
+                ctx.abortSignal.throwIfAborted();
                 normalizedState = reduceNormalizedStreamEvent(normalizedState, ev);
                 if (ev.type === 'usage') {
                     if (normalizedState.requestUsage) writeCoalescer.markDirty();
@@ -451,12 +453,14 @@ export async function runForegroundStreamLoop(
                         else if (/^https?:/.test(ev.url)) {
                             blob = await fetchImageBlob(ev.url);
                         }
+                        ctx.abortSignal.throwIfAborted();
                         if (blob) {
                             try {
                                 const meta = await createOrRefFile(
                                     blob,
                                     'gen-image'
                                 );
+                                ctx.abortSignal.throwIfAborted();
                                 ctx.assistantFileHashes.push(meta.hash);
                                 // Use valid 1x1 transparent pixel and store hash in alt text to eliminate console errors
                                 const placeholder = `![file-hash:${meta.hash}](${TRANSPARENT_PIXEL_GIF_DATA_URI})`;
@@ -476,7 +480,7 @@ export async function runForegroundStreamLoop(
                                 current.file_hashes = ctx.assistantFileHashes;
                                 writeCoalescer.markDirty(placeholder.length);
                             } catch {
-                                /* intentionally empty */
+                                ctx.abortSignal.throwIfAborted();
                             }
                         } else {
                             // Fallback: couldn't convert to blob, use URL directly
@@ -501,18 +505,24 @@ export async function runForegroundStreamLoop(
 
                 // Batch writes: persist every 500ms OR every 50 chunks (whichever comes first)
                 // to reduce DB pressure while maintaining progress safety
+                ctx.abortSignal.throwIfAborted();
                 if (writeCoalescer.shouldFlush()) await flushProgress();
+                ctx.abortSignal.throwIfAborted();
             }
 
             // A short or non-text-only stream still reaches durable storage.
+            ctx.abortSignal.throwIfAborted();
             await flushProgress();
+            ctx.abortSignal.throwIfAborted();
 
             await streamHooks.flush();
+            ctx.abortSignal.throwIfAborted();
 
             if (pendingToolCalls.length > 0) {
                 const toolResultsForNextLoop: ToolResultPayload[] = [];
 
                 for (const toolCall of pendingToolCalls) {
+                    ctx.abortSignal.throwIfAborted();
                     const admittedDefinition = admittedByName.get(toolCall.function.name);
                     if (!admittedDefinition) {
                         const error = `Tool "${toolCall.function.name}" was not advertised for this request.`;
@@ -535,6 +545,7 @@ export async function runForegroundStreamLoop(
                             threadId: ctx.threadId,
                             turnId: ctx.parentTurnId ?? ctx.assistantId,
                             parentAssistantId: ctx.assistantId,
+                            generationId: ctx.streamId,
                             call: toolCall,
                             fingerprint,
                             status: 'error',
@@ -643,6 +654,7 @@ export async function runForegroundStreamLoop(
                         threadId: ctx.threadId,
                         turnId: ctx.parentTurnId ?? ctx.assistantId,
                         parentAssistantId: ctx.assistantId,
+                        generationId: ctx.streamId,
                         call: toolCall,
                         fingerprint: decision.fingerprint,
                         status: toolStatus,

@@ -271,7 +271,7 @@ async function streamWorkspaceExportCore({
     ) => {
         const { sha256 } = await hashModule;
         const digestBytes = async (bytes: Uint8Array) => {
-            const subtle = globalThis.crypto?.subtle;
+            const subtle = (globalThis as { crypto?: { subtle?: SubtleCrypto } }).crypto?.subtle;
             return subtle
                 ? new Uint8Array(
                       await Dexie.waitFor(
@@ -597,6 +597,12 @@ export async function importWorkspaceStream({
         );
     }
 
+    for (const table of tableByName.values()) {
+        if (expectedRowsByTable.has(table.name) && !table.schema.primKey.keyPath) {
+            throw new Error(`Backup table "${table.name}" requires an inline primary key.`);
+        }
+    }
+
     const progress: WorkspaceBackupProgress = {
         completedRows: 0,
         completedTables: 0,
@@ -645,6 +651,7 @@ export async function importWorkspaceStream({
         let sawEnd = false;
         const completedTables = new Set<string>();
         const importedRowsByTable = new Map<string, number>();
+        let sourceKeys = new Set<string>();
 
         try {
             for (;;) {
@@ -673,6 +680,7 @@ export async function importWorkspaceStream({
                     }
                     currentTable = entry.table;
                     importedRowsByTable.set(entry.table, 0);
+                    sourceKeys = new Set();
                     continue;
                 }
                 if (entry.type === 'table-end') {
@@ -721,6 +729,20 @@ export async function importWorkspaceStream({
                         throw new Error(
                             `Backup table "${currentTable}" contains more rows than declared.`
                         );
+                    }
+                    // Use the actual table key path, never the header's claim.
+                    // JSONL keys are numbers, strings, or arrays of those values.
+                    // IndexedDB validation rejects missing/invalid identities; the
+                    // serialized key distinguishes types and compound boundaries.
+                    for (const rawRow of entry.rows) {
+                        const row = inbound ? rawRow : (rawRow as { value: unknown }).value;
+                        if (!row || typeof row !== 'object') throw new Error(`Invalid row in table "${currentTable}".`);
+                        const key: unknown = Dexie.getByKeyPath(row, table.schema.primKey.keyPath!);
+                        try { indexedDB.cmp(key as IDBValidKey, key as IDBValidKey); }
+                        catch { throw new Error(`Invalid primary key in backup table "${currentTable}".`); }
+                        const identity = JSON.stringify(key);
+                        if (sourceKeys.has(identity)) throw new Error(`Duplicate primary key in backup table "${currentTable}".`);
+                        sourceKeys.add(identity);
                     }
                     importedRowsByTable.set(currentTable, nextRowCount);
 

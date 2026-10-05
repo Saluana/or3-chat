@@ -29,7 +29,7 @@ Choose the destination workspace before importing and keep it selected for the o
 | Append / merge | Adds backup records without clearing current tables. Conflicting records depend on the overwrite option. |
 | Overwrite records on key conflict | Allows append mode to replace conflicting values; this is not a field-by-field merge. |
 
-Streaming replace validates that every current table is declared before clearing data. Its import transaction rolls back when the stream is truncated, has unknown record types, lacks a terminal marker, or contains trailing records. Do not generalize those guarantees to every historical format or invent a recovery policy from a partial backup; inspect the actual error and format.
+Streaming replace validates that every current table is declared before clearing data. Duplicate source primary keys, including file hashes across separate batches, are rejected inside the import transaction; all changes roll back. The overwrite option only permits a source record to replace a destination record, not duplicate source identities. Its import transaction rolls back when the stream is truncated, has unknown record types, lacks a terminal marker, or contains trailing records. Do not generalize those guarantees to every historical format or invent a recovery policy from a partial backup; inspect the actual error and format.
 
 After completion, reopen representative chats and documents and check attachments. If restoring on Cloud, check sync/transfer behavior separately. Restoring a local backup is not equivalent to restoring the server's canonical store or remote objects.
 

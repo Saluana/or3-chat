@@ -10,8 +10,9 @@ export async function validateDocumentContent(schema: Schema, value: unknown, db
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected native document content.');
     const content = value as JSONContent;
     if (content.type !== 'doc' || !Array.isArray(content.content)) throw new Error('Expected a native document.');
-    const visit = (node: JSONContent): void => {
-        if (!node || typeof node !== 'object' || typeof node.type !== 'string') throw new Error('Invalid document node.');
+    const visit = (value: unknown): void => {
+        if (!value || typeof value !== 'object' || !('type' in value) || typeof value.type !== 'string') throw new Error('Invalid document node.');
+        const node = value as JSONContent & { type: string };
         const nodeType = schema.nodes[node.type];
         if (!nodeType) throw new Error(`Unsupported document node: ${node.type}`);
         for (const key of Object.keys(node.attrs ?? {})) {

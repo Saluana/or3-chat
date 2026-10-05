@@ -22,9 +22,11 @@ export async function readWorkspaceFilePage(scope: WorkspaceOperationScope,
     const text = workspaceItemMetadata(post.meta)?.text;
     let offset = 0;
     if (continuation) {
-        let cursor: Record<string, unknown>;
-        try { cursor = JSON.parse(continuation); } catch { throw new Error('Invalid file continuation.'); }
-        if (!cursor || cursor.id !== post.id || cursor.kind !== 'file' || cursor.revision !== source.revision
+        let value: unknown;
+        try { value = JSON.parse(continuation); } catch { throw new Error('Invalid file continuation.'); }
+        if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid file continuation.');
+        const cursor = value as Record<string, unknown>;
+        if (cursor.id !== post.id || cursor.kind !== 'file' || cursor.revision !== source.revision
             || !Number.isSafeInteger(cursor.offset) || Number(cursor.offset) < 0 || Number(cursor.offset) > meta.size_bytes) {
             throw new Error('This source changed. Read it again from the beginning.');
         }

@@ -120,7 +120,7 @@ test('client error recovery remains visible and dismissible after shell sizing',
     const chooserPromise = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
     const chooser = await chooserPromise;
-    await chooser.setFiles({ name: 'rejected-fixture.txt', mimeType: 'text/plain', buffer: Buffer.from('Disposable unsupported attachment') });
+    await chooser.setFiles({ name: 'rejected-fixture.zip', mimeType: 'application/zip', buffer: Buffer.from('Disposable unsupported attachment') });
     await expect(page.getByText('Attachment not accepted', { exact: true }).first()).toBeVisible();
     await page.getByRole('button', { name: 'Details', exact: true }).first().click();
     const details = page.getByRole('dialog', { name: 'Error details', exact: true });

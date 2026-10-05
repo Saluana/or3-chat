@@ -82,6 +82,35 @@ function chat(threadId?: string) { scope = effectScope(); return scope.run(() =>
 // hooks and actual foreground transport remain production code; external
 // catalog/network inference and credential UI alone are scripted.
 describe('native context admission at the actual durable boundary', () => {
+    it.each(['complete', 'stop', 'switch'] as const)('keeps incoming-filter settlement consistent with %s at the public and durable boundary', async (action) => {
+        let release!: (text: string) => void; let entered!: () => void;
+        const gate = new Promise<string>(resolve => { release = resolve; });
+        const arrival = new Promise<void>(resolve => { entered = resolve; });
+        const hooks = useHooks();
+        const after: Array<{ aborted?: boolean }> = []; const complete = vi.fn();
+        hooks.addFilter('ui.chat.message:filter:incoming', async () => { entered(); return gate; });
+        hooks.addAction('ai.chat.send:action:after', payload => { after.push(payload); });
+        hooks.addAction('ai.chat.stream:action:complete', complete);
+        const owner = chat(); const db = getDb();
+        const destination = action === 'switch' ? await createThreadInDb(db, { title: 'Other thread' }) : undefined;
+        const run = owner.sendMessage('Synthetic cancellation', { model: 'fixture/model' });
+        await arrival;
+        const partial = (await db.messages.toArray()).find(row => row.role === 'assistant')!;
+        expect(partial.data).toMatchObject({ content: 'Scripted answer' });
+        let switching: Promise<unknown> | undefined;
+        if (action === 'stop') owner.abort();
+        if (destination) switching = owner.switchThread(destination.id);
+        release('Filtered answer');
+        const result = await run; await switching;
+        expect(result.status).toBe(action === 'complete' ? 'complete' : 'aborted');
+        expect(await db.messages.get(partial.id)).toMatchObject({ data: {
+            content: action === 'complete' ? 'Filtered answer' : 'Scripted answer',
+            generation_state: action === 'complete' ? 'complete' : 'aborted',
+        } });
+        expect(after).toHaveLength(1); expect(after[0]?.aborted).toBe(action !== 'complete');
+        expect(complete).toHaveBeenCalledTimes(action === 'complete' ? 1 : 0);
+        if (destination) expect(await db.messages.where('thread_id').equals(destination.id).count()).toBe(0);
+    });
     it.runIf(Boolean(process.env.OR3_WORKFLOWS_SOURCE))('integrates the separately owned Workflows pure source with real host admission and durable commit', async () => {
         const source = process.env.OR3_WORKFLOWS_SOURCE!;
         const { registerWorkflowSendHooks } = await import(/* @vite-ignore */ source);

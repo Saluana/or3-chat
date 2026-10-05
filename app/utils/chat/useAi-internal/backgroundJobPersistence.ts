@@ -316,8 +316,7 @@ export async function persistBackgroundJobUpdate(
           }))
         : undefined;
     const currentDb = tracker.originDb ?? getDb();
-    let staleAttempt = false;
-    let superseded = false;
+    const disposition = { staleAttempt: false, superseded: false };
     const persistedResult = await currentDb.transaction(
         'rw',
         getWriteTxTableNames(currentDb, 'messages'),
@@ -340,7 +339,7 @@ export async function persistBackgroundJobUpdate(
                 tracker.messageId
             )) as StoredMessage | undefined;
             if (!existing) {
-                superseded = true;
+                disposition.superseded = true;
                 return null;
             }
 
@@ -360,7 +359,7 @@ export async function persistBackgroundJobUpdate(
                 (tracker.canonicalHistory && tracker.generationId &&
                     baseData.generation_id !== tracker.generationId)
             ) {
-                superseded = true;
+                disposition.superseded = true;
                 return null;
             }
             if (
@@ -368,7 +367,7 @@ export async function persistBackgroundJobUpdate(
                 typeof status.attempt === 'number' &&
                 baseData.background_job_attempt > status.attempt
             ) {
-                staleAttempt = true;
+                disposition.staleAttempt = true;
                 return null;
             }
             if (tracker.canonicalHistory && existing.pending !== true) return null;
@@ -447,9 +446,9 @@ export async function persistBackgroundJobUpdate(
             };
         }
     );
-    if (!persistedResult) return staleAttempt
+    if (!persistedResult) return disposition.staleAttempt
         ? { persisted: false, staleAttempt: true }
-        : { persisted: false, missing: true, superseded };
+        : { persisted: false, missing: true, superseded: disposition.superseded };
 
     tracker.status = status.status;
     tracker.lastPersistAt = now;

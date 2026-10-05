@@ -16,9 +16,8 @@ default batch size is 500 rows. `file_blobs` batches contain at most 20 rows
 and flush at about 256 KiB of serialized blob data; a single large blob can
 make a line exceed that threshold. Blob bytes are encoded as base64 with their
 MIME type. Tables without inline keys are exported as explicit key/value
-tuples. The importer writes only each tuple's value and ignores its explicit
-key, so this stream does not round-trip custom tables with out-of-line primary
-keys. Current OR3 workspace tables use inline key paths.
+tuples, but import rejects these unsupported custom tables before clearing data.
+Current OR3 workspace tables use inline key paths.
 
 Before writing the terminal marker or committing the destination, export checks
 its SHA-256 fingerprint against a second read in one database transaction.
@@ -47,7 +46,10 @@ table before clearing any rows.
 Import runs in one Dexie read/write transaction. It requires every declared
 table to finish with the declared row count and a terminal marker; it rejects
 truncated streams, unsupported line types, and records after the terminal
-marker. A transaction failure rolls back its table changes. In append mode,
+marker. A transaction failure rolls back its table changes. Duplicate source primary keys fail across batches in every mode. The importer
+uses the actual table key path, including compound keys, and tracks source
+identities for the current table. Missing or invalid primary keys also fail;
+transaction rollback preserves destination rows. In append mode, destination
 key conflicts fail unless overwrite is enabled. Overwrite uses record-level
 `bulkPut`; it is not a field-by-field merge.
 

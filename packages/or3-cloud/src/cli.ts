@@ -3329,7 +3329,7 @@ Options:
   --verification-password-file <path>  Read the current owner password for this verification
   --port <port>                  Local OR3 port (default: 3000)
   --keep <n>                     Backups to retain when pruning (default: 5)
-  --force                        Prune backups even when referenced by the rollback point
+  --force                        Bypass suspect-entry deferral; protected recovery backups remain protected
   --tail <n>                     Log lines to show (default: 200)
   --public                       Require verification through the public HTTPS origin
   --read-only                    Verify without the lease, login, storage, or database writes
