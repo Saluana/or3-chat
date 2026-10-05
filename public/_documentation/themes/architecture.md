@@ -59,6 +59,10 @@ is not proof a package's requested replacement worked. User style overrides are
 client-applied; their browser-local values are not a complete SSR appearance
 snapshot. See [Replace app components](/documentation/themes/component-overrides).
 
+The client restores the server icon registry before loading theme definitions
+or preloading workspace profiles. Later registry injection must not hydrate it
+again: that would discard the newly registered icon maps for cached themes.
+
 ## Persistence
 
 | State | Owner / key |
