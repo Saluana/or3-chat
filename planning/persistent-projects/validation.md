@@ -8,7 +8,7 @@ Implementation remains isolated and unmerged. No embeddings, release, or product
 - SQLite: `/Users/brendon/Documents/or3/or3-provider-sqlite-projects`, branch `codex/persistent-projects`, base `328887a052aa59951f973378aa8077c31db7abfa`.
 - Convex: `/Users/brendon/Documents/or3/or3-provider-convex-projects`, branch `codex/persistent-projects`, base `8e7797f5ad6e9823f6bab3fefc0d80804d1a5038`.
 
-Local preview: <http://127.0.0.1:3120/>. Open Projects in the sidebar. This preview uses local persistence; its deterministic journey routes are test-only. A normal chat still uses the user's OpenRouter connection.
+Local preview: <http://127.0.0.1:3120/>. Open Projects in the sidebar. This preview uses local persistence and is built with `OR3_PRODUCTION_JOURNEY_TEST_HARNESS=false`, using the real OpenRouter endpoint. The initial preview incorrectly retained the journey harness URL on port 3000, which caused refused connections during manual login/model loading. It has been rebuilt for manual testing; reload and start a fresh connection attempt.
 
 ## Verification
 
@@ -18,14 +18,21 @@ Local preview: <http://127.0.0.1:3120/>. Open Projects in the sidebar. This prev
 - Authenticated SQLite and Convex sync with filesystem storage each passed both browser tests, including complete settings/memory/source revision round trips to a second session.
 - Full Nuxt typecheck, documentation check (including mapped examples), registry-clean lock check, static generation, fixed Basic Auth + SQLite + filesystem cloud build, and final local preview build passed. Cloud qualification used disposable paths, generated secrets, and invite-only registration. Its first attempt lacked required filesystem configuration; it passed after configuring the disposable profile.
 - Final diffs inspected; whitespace checks passed in all three repositories. Simplification reused internal posts, existing file reference accounting/backups, lexical search, and compaction rather than adding a new index or memory service.
+- Manual-preview repair: four OpenRouter callback browser checks passed against the non-harness build (synthetic success persisted across reload, failed exchanges with fresh PKCE restart on desktop/light and mobile/dark, and missing-code recovery). The pre-fix success-action and button-contrast regressions were reproduced before correction. Chrome's live model refresh returned HTTP 200 from `https://openrouter.ai/api/v1/models`; no real key was created or model inference submitted by the agent. The final build, Nuxt typecheck, and documentation check passed. Screenshots and receipts are in `output/persistent-projects/openrouter-fixed/`.
 
-Reports, screenshots, submitted-request captures, exported backup bytes, and logs are under `output/persistent-projects/`. Reproduce browser checks against the preview:
+Reports, screenshots, submitted-request captures, exported backup bytes, and logs are under `output/persistent-projects/`. Reproduce project browser journeys with a separate harness server (do not use that server for a real account connection):
 
 ```sh
-OR3_PRODUCTION_JOURNEY_TEST_HARNESS=true PW_SKIP_WEB_SERVER=true PW_PORT=3120 bun x playwright test tests/e2e/persistent-projects.spec.ts --reporter=line
+OR3_PRODUCTION_JOURNEY_TEST_HARNESS=true SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false PW_PORT=3121 bun x playwright test tests/e2e/persistent-projects.spec.ts --workers=1 --reporter=line
 ```
 
 Provider cloud qualification uses the existing `test:e2e:workspace-cloud` launcher with `OR3_PROJECT_SQLITE_SOURCE` and `OR3_PROJECT_CONVEX_SOURCE` pointing at the isolated provider checkouts. Deploy the rebuilt Convex scaffold to a disposable backend for that lane.
+
+The callback checks use the normal preview and intercept OpenRouter responses without live credentials:
+
+```sh
+OR3_PRODUCTION_JOURNEY_TEST_HARNESS=false PW_SKIP_WEB_SERVER=true PW_PORT=3120 bun x playwright test tests/e2e/openrouter-connection.spec.ts --workers=1 --reporter=line
+```
 
 ## Known limits and follow-up
 

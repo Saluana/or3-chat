@@ -33,12 +33,14 @@ Use the sidebar's **Disconnect** control to clear the personal key from OR3's pe
 | --- | --- |
 | OR3 asks you to sign in | The Cloud instance requires an authenticated session before linking OpenRouter. |
 | Callback says the verifier is missing | Start a fresh Connect flow from the same browser and origin; do not reuse an old callback URL. |
-| State check fails | Restart Connect; do not reuse a callback from another attempt. |
+| State check fails | Select **Try again** to start a fresh connection; do not reuse a callback from another attempt. |
 | Code exchange fails or times out | Start a fresh flow. Authorization codes are single use, and OR3 deliberately does not retry the exchange automatically. |
 | A request reports invalid credentials or insufficient access | Check the provider account/key, then reconnect or replace the personal key as appropriate. |
 | Redirect reaches the wrong host or port | Return to the correct OR3 URL. Source developers should check the runtime redirect configuration and the URL printed by the dev wrapper. |
 | Connection vanishes after reload | Stay on the same browser profile and origin. Check that storage is available and saving the key succeeded. |
 
 Localhost is suitable for source development. Public deployments should use HTTPS so browser cryptography and redirects work reliably. If the app reports a network or content-security-policy error, fix that cause before beginning another authorization flow; repeatedly reusing a failed code will not repair it.
+
+The failure page offers **Try again** and **Back to OR3**. **Continue** appears only after a successful connection. Source developers preparing a manual preview must build with `OR3_PRODUCTION_JOURNEY_TEST_HARNESS=false`; that harness replaces OpenRouter with a local test endpoint for automated journeys and is unsuitable for real account connections. If network requests go to `/api/__or3-e2e`, rebuild with the harness disabled and reload the preview.
 
 See [connection API details](/documentation/auth/reference) for the implementation and [Cloud troubleshooting](/documentation/cloud/troubleshooting) for instance-side problems.

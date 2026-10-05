@@ -338,7 +338,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Connect or paste a personal key, disconnect, and recover from callback errors."
+                    "summary": "Connect or paste a personal key, disconnect, recover from callback errors, and prepare a real OpenRouter preview."
                 },
                 {
                     "name": "reference.md",
