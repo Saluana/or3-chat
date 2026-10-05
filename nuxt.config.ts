@@ -178,8 +178,8 @@ export default defineNuxtConfig({
                 },
                 {
                     rel: 'apple-touch-icon',
-                    sizes: '192x192',
-                    href: '/logos/logo-192.png',
+                    sizes: '180x180',
+                    href: '/logos/apple-touch-icon.png',
                 },
             ],
         },
@@ -536,21 +536,34 @@ export default defineNuxtConfig({
             theme_color: '#0b0f1a',
             icons: [
                 {
-                    src: '/logos/logo-192.png',
+                    src: '/logos/app-icon-192.png',
                     sizes: '192x192',
                     type: 'image/png',
+                    purpose: 'any',
                 },
                 {
-                    src: '/logos/logo-512.png',
+                    src: '/logos/app-icon-512.png',
                     sizes: '512x512',
                     type: 'image/png',
+                    purpose: 'any',
                 },
-                // WebP is fine in many browsers; PNGs above cover platforms requiring PNG
                 {
-                    src: '/logos/logo-1024.webp',
+                    src: '/logos/app-icon-1024.png',
                     sizes: '1024x1024',
-                    type: 'image/webp',
-                    purpose: 'any maskable',
+                    type: 'image/png',
+                    purpose: 'any',
+                },
+                {
+                    src: '/logos/app-icon-maskable-192.png',
+                    sizes: '192x192',
+                    type: 'image/png',
+                    purpose: 'maskable',
+                },
+                {
+                    src: '/logos/app-icon-maskable-512.png',
+                    sizes: '512x512',
+                    type: 'image/png',
+                    purpose: 'maskable',
                 },
             ],
         },

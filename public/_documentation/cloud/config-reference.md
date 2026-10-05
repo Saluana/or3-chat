@@ -94,6 +94,12 @@ Defined by `defineOr3Config()` in `utils/or3-config.ts`.
 
 Controls branding and basic identity.
 
+#### Built-in app and PWA icons
+
+Install icons use the authentic `public/logos/icon-logo-svg.svg` artwork on an opaque navy square with balanced padding. The OS applies its corner mask. Separate `app-icon-maskable-*.png` assets keep the complete logo inside the manifest's 40% radius safe circle; regular icons use `purpose: 'any'`. Safari uses the 180px `apple-touch-icon.png` configured in `nuxt.config.ts`.
+
+Regenerate the PNGs and composed SVGs with `bun scripts/generate-app-icons.ts` after installing the project's Playwright Chromium browser. This leaves favicon and original logo assets unchanged. The canonical SVG currently embeds raster artwork, so larger exports do not add vector detail. Installed apps can retain cached icons; after an update reaches the browser, removing and re-adding its shortcut may be needed.
+
 #### `site.name`
 
 - Type: `string`
