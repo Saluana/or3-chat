@@ -21,11 +21,16 @@ procedure. Restart or redeploy through that workflow when build-time config chan
 | `OR3_PLUGIN_MODULE_LOADER_V2_WORKSPACE_IDS` | Optional workspace allowlist for package loading |
 | `OR3_PLUGIN_ISOLATION_ENABLED` | Enables contained client execution; off by default and required for portable packages |
 | `OR3_HOOK_ENGINE_V2_ENABLED` | Selects the current hook engine at process start; off by default |
-| `OR3_PLUGIN_RUNTIME_V2_ENABLED` | Browser/compatibility manager, on by default; does not itself enable package loading |
-| `OR3_PLUGIN_RUNTIME_V2_WORKSPACE_IDS` | Optional manager workspace selection |
+| `OR3_PLUGIN_RUNTIME_V2_ENABLED` | Trusted-host package clients, on by default; does not itself enable package loading |
+| `OR3_PLUGIN_RUNTIME_V2_WORKSPACE_IDS` | Deprecated; accepted but ignored |
 | `OR3_DISABLE_NON_CORE_PLUGINS` | Startup safe mode that prevents non-core discovery/execution |
 | `OR3_PLUGIN_CONNECTION_SECRET` | Encryption key for plugin connections |
 | `OR3_LIBRARY_LINK_SECRET` | Separate encryption key for personal Library links |
+
+Bundled plugins use one lifecycle manager in every workspace. Existing
+`register(api)` plugins keep their API and sequential startup order. Cleanup
+finishes before new plugins or replacements start; failed cleanup blocks new
+activation. Manifest/API version numbers still describe compatibility formats.
 
 A release-key entry has this shape; replace the placeholders with the actual
 trusted public key, never a private signing key:

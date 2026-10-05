@@ -1,7 +1,6 @@
 import type { BundledV1PluginDescriptor, Sha256 } from './runtime-descriptor';
 import type { LegacyCleanupReport } from './legacy-plugin-scope';
 import {
-    PerPluginLifecycleMutex,
     PluginGenerationClock,
     SerializedReconcileCoordinator,
     StalePluginGenerationError,
@@ -74,7 +73,7 @@ function serializeError(
     });
 }
 
-/** Manager-canary kernel for bundled V1 plugins. It is inert until selected by a startup flag. */
+/** Owns the ordered lifecycle of bundled plugins, including the register(api) contract. */
 export class BundledV1PluginManager {
     readonly #options: Required<
         Pick<
@@ -84,7 +83,6 @@ export class BundledV1PluginManager {
     > & BundledV1PluginManagerOptions;
     readonly #now: () => number;
     readonly #generationClock = new PluginGenerationClock();
-    readonly #mutex = new PerPluginLifecycleMutex();
     readonly #coordinator: SerializedReconcileCoordinator<ReconcileWork>;
     readonly #active = new Map<string, ActiveGeneration>();
     readonly #records = new Map<string, BundledV1ManagerRecord>();
@@ -192,12 +190,8 @@ export class BundledV1PluginManager {
                 return;
             }
         }
-        if (
-            desiredState.revision === this.#lastManifestRevision &&
-            this.#lastDesired.size === desiredState.descriptors.length
-        ) {
-            return;
-        }
+        // Retry/backoff state can change without a new manifest revision.
+        // Descriptor diffs keep healthy generations unchanged on these passes.
         const desired = new Map(
             desiredState.descriptors.map((descriptor) => [descriptor.id, descriptor])
         );
@@ -205,13 +199,33 @@ export class BundledV1PluginManager {
         const ids = Array.from(
             new Set([...this.#active.keys(), ...this.#records.keys(), ...desired.keys()])
         ).sort();
-        await Promise.allSettled(
-            ids.map((pluginId) =>
-                this.#mutex.runExclusive(pluginId, () =>
-                    this.#reconcilePlugin(work.lease, pluginId, desired.get(pluginId))
-                )
-            )
-        );
+        try {
+            // Older plugins can depend on each other's global resources. Finish
+            // every removal/replacement before importing any new generation.
+            let cleanupFailed = false;
+            // Preserve the original loader's activation order during teardown.
+            for (const [pluginId, active] of this.#active) {
+                work.lease.assertCurrent('validation');
+                const diff = diffBundledV1Descriptors({
+                    active: active.descriptor,
+                    desired: desired.get(pluginId),
+                });
+                if (diff.action !== 'stop' && diff.action !== 'replace') continue;
+                const pluginLease = this.#generationClock.supersede(pluginId, diff.action);
+                if (!(await this.#stopActive(work.lease, pluginLease, active, diff))) {
+                    cleanupFailed = true;
+                }
+            }
+            if (cleanupFailed) return;
+
+            // Match the original loader's server-sorted, sequential startup.
+            for (const pluginId of ids) {
+                await this.#reconcilePlugin(work.lease, pluginId, desired.get(pluginId));
+            }
+        } catch (error) {
+            if (error instanceof StalePluginGenerationError) return;
+            throw error;
+        }
         if (work.lease.isCurrent()) this.#lastManifestRevision = desiredState.revision;
     }
 
@@ -250,15 +264,6 @@ export class BundledV1PluginManager {
         }
 
         const pluginLease = this.#generationClock.supersede(pluginId, diff.action);
-        if (active) {
-            const stopped = await this.#stopActive(
-                reconcileLease,
-                pluginLease,
-                active,
-                diff
-            );
-            if (!stopped || !desired) return;
-        }
         if (!desired) return;
 
         const previousFailures = this.#failures.get(desired.descriptorKey) ?? 0;
@@ -381,7 +386,7 @@ export class BundledV1PluginManager {
             });
             return false;
         }
-        if (diff.action === 'stop' && (report.timedOut || report.errors.length)) {
+        if (report.errors.length || (diff.action === 'stop' && report.timedOut)) {
             this.#records.set(active.descriptor.id, {
                 ...this.#records.get(active.descriptor.id)!,
                 status: 'failed',
@@ -389,7 +394,6 @@ export class BundledV1PluginManager {
             });
             return false;
         }
-        this.#active.delete(active.descriptor.id);
         if (report.timedOut && diff.action !== 'stop') {
             this.#records.set(active.descriptor.id, {
                 descriptor: active.descriptor,
@@ -399,7 +403,7 @@ export class BundledV1PluginManager {
                 lifecycleCoverage: 'legacy-global-possible',
                 failureCount: 1,
                 lastError: serializeError(
-                    'V1 cleanup timed out; reload is required before unsafe replacement',
+                    'Bundled plugin cleanup timed out; reload is required before replacement',
                     'stop',
                     false,
                     'unsafe-v1-replacement'
@@ -409,6 +413,7 @@ export class BundledV1PluginManager {
             });
             return false;
         }
+        this.#active.delete(active.descriptor.id);
         if (diff.action === 'stop') this.#records.delete(active.descriptor.id);
         return true;
     }

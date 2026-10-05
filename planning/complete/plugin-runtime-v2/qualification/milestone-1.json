@@ -8,16 +8,16 @@
     "shared/plugins/descriptor-resolver.ts",
     "shared/plugins/bundled-plugin-catalog.ts",
     "shared/plugins/safe-mode.ts",
-    "app/composables/plugins/shadow-plugin-manager.ts",
-    "app/composables/plugins/workspace-plugin-shadow-observer.ts",
     "app/plugins/workspace-plugins.client.ts",
-    "planning/plugin-runtime-v2/qualification/shadow-rollback.md"
+    "shared/plugins/bundled-v1-manager.ts",
+    "app/composables/plugins/bundled-v1-manager-runtime.ts",
+    "public/_documentation/plugins/runtime-and-security.md"
   ],
   "gates": [
     {
-      "id": "contracts-and-shadow",
+      "id": "contracts-and-bundled-lifecycle",
       "commands": [
-        ["bun", "run", "plugin-runtime:contracts:check"],
+        ["bun","run","plugin-runtime:contracts:check"],
         [
           "bun",
           "x",
@@ -25,38 +25,39 @@
           "run",
           "shared/plugins/__tests__/runtime-state.test.ts",
           "shared/plugins/__tests__/descriptor-resolver.test.ts",
-          "app/composables/plugins/__tests__/shadow-plugin-manager.test.ts",
+          "shared/plugins/__tests__/bundled-v1-manager.test.ts",
           "shared/plugins/__tests__/safe-mode.test.ts"
         ]
       ]
     },
     {
-      "id": "observer-rollback-drill",
+      "id": "bundled-workspace-lifecycle",
       "commands": [
         [
           "bun",
           "x",
           "vitest",
           "run",
-          "app/composables/plugins/__tests__/shadow-rollback.test.ts",
+          "app/composables/plugins/__tests__/manager-canary-rollback.test.ts",
           "app/composables/plugins/__tests__/workspace-runtime.test.ts"
         ]
       ]
     },
     {
       "id": "frozen-v1-qualification",
-      "commands": [["bun", "run", "plugin-runtime:milestone-0:qualify"]]
+      "commands": [
+        ["bun","run","plugin-runtime:milestone-0:qualify"]
+      ]
     }
   ],
   "rollback": {
-    "scope": "Disable only the read-only Milestone 1 observer; keep the authoritative V1 loader and all installed plugin data unchanged.",
+    "scope": "Bundled plugins use one lifecycle manager. Recover through startup safe mode or a previously reviewed host build; retain plugin packages and settings.",
     "procedure": [
-      "Set OR3_PLUGIN_RUNTIME_SHADOW_ENABLED=false outside the plugin admin UI.",
-      "Restart the OR3 process before any non-core plugin executes.",
-      "Verify the Runtime Inspector reports V1 only and run the maintained V1 corpus.",
-      "Keep the observer disabled if the complete Milestone 0 qualification is not green."
+      "Set OR3_DISABLE_NON_CORE_PLUGINS=true outside the plugin UI and restart before discovery.",
+      "Use the documented deployment rollback workflow if the host build must be restored.",
+      "Exercise the maintained plugin corpus before turning safe mode off and restarting.",
+      "Package pointer rollback still requires server promotion preflight and does not restore incompatible migrated state."
     ],
-    "drill": "The observer-rollback-drill gate proves the V1 import/register trace remains exact and observer dependencies are never constructed; the frozen-v1-qualification gate then re-runs all Milestone 0 exit gates."
+    "drill": "The bundled workspace entry-point tests exercise unchanged register(api) modules, sequential startup, async cleanup, workspace transitions, logout, and startup safe mode. Former manager selection flags do not switch the bundled lifecycle."
   }
 }
-

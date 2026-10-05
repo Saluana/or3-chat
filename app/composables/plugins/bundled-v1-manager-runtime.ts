@@ -142,30 +142,3 @@ export function createBundledV1WorkspaceManager(
     (globalThis as ManagerRuntimeGlobals).__or3BundledV1WorkspaceManager = manager;
     return manager;
 }
-
-export function isWorkspaceManagerCanary(input: {
-    readonly enabled: boolean;
-    readonly workspaceIds: readonly string[];
-    readonly workspaceId: string | null | undefined;
-}): boolean {
-    if (!input.enabled || !input.workspaceId) return false;
-    return input.workspaceIds.length === 0 || input.workspaceIds.includes(input.workspaceId);
-}
-
-/** Captures an immutable boot decision; later config mutations cannot switch kernels. */
-export function createWorkspaceManagerCanarySelector(flags: {
-    readonly enabled: boolean;
-    readonly workspaceIds: readonly string[];
-}): (workspaceId: string | null | undefined) => boolean {
-    const enabled = flags.enabled;
-    const workspaceIds = Object.freeze([...flags.workspaceIds]);
-    return (workspaceId) =>
-        isWorkspaceManagerCanary({ enabled, workspaceIds, workspaceId });
-}
-
-export function createStartupSelectedWorkspaceManager<T>(
-    enabled: boolean,
-    createManager: () => T
-): T | null {
-    return enabled ? createManager() : null;
-}

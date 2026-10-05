@@ -1,7 +1,7 @@
 import type { Sha256 } from './runtime-descriptor';
 
 /**
- * Operator controls for Plugin Runtime V2 admin surfaces.
+ * Operator controls for plugin runtime admin surfaces.
  * Each control either invokes a real manager/package operation or explains
  * why it is unavailable for the current scope/flags.
  */
@@ -62,7 +62,6 @@ export interface RuntimePackagePromotionSurface {
 }
 
 export interface RuntimeControlContext {
-    readonly managerV2Enabled: boolean;
     readonly safeModeEnabled: boolean;
     readonly manager?: RuntimeManagerControlSurface | null;
     readonly packageLifecycle?: RuntimePackageLifecycleSurface | null;
@@ -125,7 +124,7 @@ function findRecord(
 export function listRuntimeControls(
     context: RuntimeControlContext
 ): readonly RuntimeControlDescriptor[] {
-    const hasManager = context.managerV2Enabled && !!context.manager;
+    const hasManager = !!context.manager;
     const hasDescriptor = typeof context.descriptorKey === 'string';
     const hasLifecycle = !!context.packageLifecycle && !!context.workspaceId && !!context.pluginId;
     const hasPromotion =
@@ -147,7 +146,7 @@ export function listRuntimeControls(
                     ? hasDescriptor
                         ? 'Calls BundledV1PluginManager.retry then schedule.'
                         : 'Select a descriptor key to retry.'
-                    : 'Unavailable until OR3_PLUGIN_RUNTIME_V2_ENABLED selects the manager and this client owns records.'
+                    : 'Unavailable without a bundled plugin manager on this client.'
             ),
         },
         {
@@ -162,7 +161,7 @@ export function listRuntimeControls(
                     ? hasDescriptor
                         ? 'Calls BundledV1PluginManager.retry (quarantine clears by descriptor key).'
                         : 'Select a quarantined descriptor key.'
-                    : 'Unavailable without the V2 manager on this client.'
+                    : 'Unavailable without a bundled plugin manager on this client.'
             ),
         },
         {
@@ -175,7 +174,7 @@ export function listRuntimeControls(
                 hasLifecycle,
                 hasLifecycle
                     ? 'Calls PluginPackageLifecycleService.disable (retains digests and data).'
-                    : 'Requires server package lifecycle + workspaceId + pluginId. Client shadow mode cannot persist disable.'
+                    : 'Requires server package lifecycle + workspaceId + pluginId. This client cannot persist disable.'
             ),
         },
         {
@@ -187,8 +186,8 @@ export function listRuntimeControls(
             availability: availability(
                 true,
                 hasManager
-                    ? 'Reads manager/shadow records for this client only (not fleet-wide).'
-                    : 'Inspector remains available; manager records require V2 startup selection.'
+                    ? 'Reads bundled plugin manager records for this client only (not fleet-wide).'
+                    : 'Inspector remains available; this client has no bundled plugin manager.'
             ),
         },
         {
@@ -201,7 +200,7 @@ export function listRuntimeControls(
                 hasPromotion,
                 hasPromotion
                     ? 'Calls PluginPackagePromotionService.rollback with state preflight.'
-                    : 'Requires server promotion service, pluginId, and snapshot/restore adapters. Not available from client-only shadow mode.'
+                    : 'Requires server promotion service, pluginId, and snapshot/restore adapters. Not available from this client.'
             ),
         },
         {
@@ -300,7 +299,7 @@ export async function executeRuntimeControl(
                     scope: 'this-client' as const,
                     fleetWide: false,
                     safeModeEnabled: context.safeModeEnabled,
-                    managerV2Enabled: context.managerV2Enabled,
+                    managerAvailable: !!context.manager,
                     records: selected.map((record) =>
                         Object.freeze({
                             pluginId: record.descriptor.id,
