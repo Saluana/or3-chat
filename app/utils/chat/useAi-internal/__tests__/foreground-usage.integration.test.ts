@@ -3,7 +3,7 @@ import { beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { getDb, setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { makeAssistantPersister } from '../persistence';
 import { runForegroundStreamLoop, type ForegroundStreamContext } from '../foregroundStream';
-import { storedMessagesToCanonicalTranscript } from '~/utils/chat/transcript';
+import { assistantTranscriptData, storedMessagesToCanonicalTranscript } from '~/utils/chat/transcript';
 import { captureUsagePrefix, attachRequestUsage } from '~~/shared/chat/request-usage';
 import { countTokensApprox } from '~/utils/chat/tokens';
 import { createHookEngine } from '~/core/hooks/hooks';
@@ -19,12 +19,15 @@ beforeEach(async () => {
     workspace = `foreground-usage-${crypto.randomUUID()}`; await setActiveWorkspaceDb(workspace).open();
     setHookEngine(createTypedHookEngine(createHookEngine())); provider.mockReset();
     await getDb().threads.put({ id: 'thread', status: 'ready', clock: 1, created_at: 1, updated_at: 1, deleted: false, pinned: false, forked: false });
-    await getDb().messages.put({ id: 'assistant', thread_id: 'thread', role: 'assistant', index: 1, clock: 1, created_at: 1, updated_at: 1, pending: true, deleted: false,
-        data: { content: '', plugin_owned: 'preserve', generation_lease_id: 'generation', generation_state: 'streaming' } });
+    // Match foreground admission: stream/generation identity differs from the
+    // request lease used by the persister. A lease alone cannot authorize tools.
+    await getDb().messages.put({ id: 'assistant', thread_id: 'thread', role: 'assistant', stream_id: 'generation', index: 1, clock: 1, created_at: 1, updated_at: 1, pending: true, deleted: false,
+        data: { ...assistantTranscriptData({ turnId: 'turn', requestId: 'request-lease', generationId: 'generation', mode: 'foreground' }),
+            content: '', plugin_owned: 'preserve', generation_lease_id: 'request-lease', generation_state: 'streaming' } });
 });
 afterEach(async () => { const db = getDb(); setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name); setHookEngine(null); });
 it.each([true, false])('persists the last measured request across the actual tool-loop and canonical reload (final usage %s)', async (finalUsage) => {
-    const db = getDb(); const initial = (await db.messages.get('assistant'))! as StoredMessage; const persist = makeAssistantPersister(db, initial, [], 'generation');
+    const db = getDb(); const initial = (await db.messages.get('assistant'))! as StoredMessage; const persist = makeAssistantPersister(db, initial, [], 'request-lease');
     let requestNumber = 0;
     provider.mockImplementation(async function* (request: Parameters<typeof openRouterStream>[0]): AsyncGenerator<ORStreamEvent> {
         requestNumber += 1;
@@ -48,12 +51,13 @@ it.each([true, false])('persists the last measured request across the actual too
     const row = (await db.messages.get('assistant'))!; const canonical = storedMessagesToCanonicalTranscript([row])[0]!;
     expect(canonical.usage).toMatchObject({ prompt_tokens: finalUsage ? 150 : 100, completion_tokens: 20, iteration: finalUsage ? 2 : 1,
         request_id: finalUsage ? 'provider-2' : 'provider-1', prefix_message_count: finalUsage ? 3 : 1 });
-    expect(canonical.content).toBe('Completed answer'); expect(row.data).toMatchObject({ plugin_owned: 'preserve' });
+    expect(canonical.content).toBe('Completed answer'); expect(row.data).toMatchObject({ plugin_owned: 'preserve', generation_id: 'generation', generation_lease_id: 'request-lease' });
+    expect(row.stream_id).toBe('generation');
     expect(executeTool).toHaveBeenCalledOnce(); expect(provider).toHaveBeenCalledTimes(2);
     expect((await db.messages.where('thread_id').equals('thread').toArray()).filter((item) => item.role === 'tool')).toHaveLength(1);
 });
 it('flushes measured usage before a provider interruption without bypassing the generation lease', async () => {
-    const db = getDb(); const initial = (await db.messages.get('assistant'))! as StoredMessage; const persist = makeAssistantPersister(db, initial, [], 'generation');
+    const db = getDb(); const initial = (await db.messages.get('assistant'))! as StoredMessage; const persist = makeAssistantPersister(db, initial, [], 'request-lease');
     provider.mockImplementation(async function* (request: Parameters<typeof openRouterStream>[0]): AsyncGenerator<ORStreamEvent> {
         const prefix = await captureUsagePrefix({ model: request.model, messages: request.orMessages, countText: countTokensApprox });
         const usage = { prompt_tokens: 77, completion_tokens: 0, response_id: 'interrupted' };
@@ -67,6 +71,6 @@ it('flushes measured usage before a provider interruption without bypassing the 
     await expect(runForegroundStreamLoop(ctx)).rejects.toThrow('Scripted interruption after measurement');
     const row = (await db.messages.get('assistant'))!;
     expect(storedMessagesToCanonicalTranscript([row])[0]?.usage).toMatchObject({ prompt_tokens: 77, completion_tokens: 0, request_id: 'interrupted' });
-    expect(row.data).toMatchObject({ plugin_owned: 'preserve', generation_lease_id: 'generation' });
+    expect(row.data).toMatchObject({ plugin_owned: 'preserve', generation_id: 'generation', generation_lease_id: 'request-lease' });
     expect(ctx.toolRegistry.executeTool).not.toHaveBeenCalled();
 });
