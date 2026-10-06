@@ -143,7 +143,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         callback: (existing: unknown[]) => unknown[],
         options: { kind: 'filter' }
     ) => () => void;
-    onEditorFilter(
+    const offEditorFilter = onEditorFilter(
         'ui.chat.editor:filter:extensions',
         (existing) => applyTrustedEditorExtensions(existing as object[]),
         { kind: 'filter' }
@@ -230,5 +230,8 @@ export default defineNuxtPlugin((nuxtApp) => {
         stop: () => manager.stopAll(),
         reconcile: (manifest) => manager.reconcile(manifest, manifest.workspaceId!),
     });
-    if (import.meta.hot) import.meta.hot.dispose(() => { void unregister(); });
+    if (import.meta.hot) import.meta.hot.dispose(() => {
+        offEditorFilter();
+        void unregister();
+    });
 });
