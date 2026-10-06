@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch, onBeforeUnmount } from 'vue';
+import { liveQuery, type Subscription } from 'dexie';
+import {
+    getDb,
+    getWorkspaceGeneration,
+    subscribeActiveWorkspaceDb,
+} from '~/db/client';
 import {
     ProjectContextReceiptSchema,
     ProjectContextIterationSchema,
@@ -77,6 +83,43 @@ let memoryTarget:
       }
     | undefined;
 const busy = ref(false);
+const projectId = ref<string | null>(null);
+const canRemember = computed(() =>
+    Boolean(projectId.value && props.messageId && props.text),
+);
+let ownerSubscription: Subscription | undefined;
+let ownerRevision = 0;
+function bindOwner() {
+    ownerSubscription?.unsubscribe();
+    projectId.value = null;
+    remember.value = false;
+    memoryTarget = undefined;
+    saved.value = false;
+    error.value = '';
+    const revision = ++ownerRevision;
+    const db = getDb();
+    const generation = getWorkspaceGeneration();
+    const threadId = props.threadId;
+    if (!threadId) return;
+    ownerSubscription = liveQuery(() =>
+        resolveChatProject(db, threadId).catch(() => null),
+    ).subscribe((owner) => {
+        if (
+            revision === ownerRevision &&
+            db === getDb() &&
+            generation === getWorkspaceGeneration()
+        )
+            projectId.value = owner;
+    });
+}
+watch(() => props.threadId, bindOwner, { immediate: true });
+const stopWorkspace = subscribeActiveWorkspaceDb(bindOwner);
+onBeforeUnmount(() => {
+    ownerRevision++;
+    ownerSubscription?.unsubscribe();
+    stopWorkspace();
+});
+defineExpose({ canRemember, startRemember });
 async function owningProject(
     scope: ReturnType<typeof captureProjectOperation>,
     threadId?: string,
@@ -118,6 +161,13 @@ async function save() {
         )
             throw new Error('The message changed. Review it again.');
         target.scope.assertCurrent('write');
+        if (
+            (await owningProject(target.scope, target.threadId)) !==
+            target.projectId
+        )
+            throw new Error(
+                'This chat changed projects. Review the memory again.',
+            );
         await saveProjectMemory(target.scope, target.projectId, {
             text: memory.value,
             kind: kind.value,
@@ -162,7 +212,16 @@ async function promote() {
 }
 </script>
 <template>
-    <div class="mt-2 text-xs space-y-2">
+    <div
+        v-if="
+            receipt ||
+            (projectId && hashes?.length) ||
+            remember ||
+            saved ||
+            error
+        "
+        class="mt-2 text-xs space-y-2"
+    >
         <button
             v-if="receipt"
             class="opacity-70 underline underline-offset-4"
@@ -237,15 +296,11 @@ async function promote() {
                 >
             </div>
         </details>
-        <div v-if="threadId && messageId" class="flex gap-2">
+        <div
+            v-if="projectId && threadId && messageId && hashes?.length"
+            class="flex gap-2"
+        >
             <UButton
-                v-if="text"
-                size="xs"
-                color="neutral"
-                variant="ghost"
-                label="Remember for this project"
-                @click="startRemember"
-            /><UButton
                 v-if="hashes?.length"
                 size="xs"
                 color="neutral"
@@ -255,30 +310,43 @@ async function promote() {
                 @click="promote"
             />
         </div>
-        <form v-if="remember" class="space-y-2" @submit.prevent="save">
-            <label
-                >Review memory<textarea
-                    v-model="memory"
-                    maxlength="4000"
-                    required
-                    class="block w-full rounded border border-current/20 p-2 bg-transparent"
-                    rows="4"
-                /></label
-            ><select v-model="kind" aria-label="Save as">
-                <option value="fact">Fact</option>
-                <option value="decision">Decision</option></select
-            ><UButton
-                type="submit"
-                label="Save memory"
-                :disabled="busy"
-            /><UButton
-                label="Cancel"
-                color="neutral"
-                variant="ghost"
-                @click="remember = false"
-            />
-        </form>
+        <UModal
+            v-model:open="remember"
+            title="Save project memory"
+            description="Review the text before saving it to this chat’s project."
+        >
+            <template #body>
+                <form class="space-y-2" @submit.prevent="save">
+                    <label
+                        >Review memory<textarea
+                            v-model="memory"
+                            maxlength="4000"
+                            required
+                            class="block w-full rounded border border-current/20 p-2 bg-transparent"
+                            rows="4"
+                        /></label
+                    ><select v-model="kind" aria-label="Save as">
+                        <option value="fact">Fact</option>
+                        <option value="decision">Decision</option></select
+                    ><UButton
+                        type="submit"
+                        label="Save memory"
+                        :disabled="busy"
+                    /><UButton
+                        label="Cancel"
+                        color="neutral"
+                        variant="ghost"
+                        @click="remember = false"
+                    />
+                    <p v-if="error" role="alert" class="text-red-500">
+                        {{ error }}
+                    </p>
+                </form>
+            </template>
+        </UModal>
         <p v-if="saved" role="status">Saved to project.</p>
-        <p v-if="error" role="alert" class="text-red-500">{{ error }}</p>
+        <p v-if="error && !remember" role="alert" class="text-red-500">
+            {{ error }}
+        </p>
     </div>
 </template>

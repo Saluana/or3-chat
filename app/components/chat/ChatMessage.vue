@@ -331,6 +331,8 @@
             <!-- Desktop actions overlap the border; narrow panes keep them in flow. -->
             <div
                 v-if="!editing && interactive"
+                role="group"
+                aria-label="Message actions"
                 :class="[
                     'cm-actions flex z-10',
                     `cm-actions-${roleVariant}`,
@@ -398,6 +400,19 @@
                             @click="wrappedBeginEdit"
                         ></UButton>
                     </UTooltip>
+                    <UTooltip
+                        v-if="projectMessageContext?.canRemember && !props.message.pending"
+                        :delay-duration="500"
+                        text="Remember for this project"
+                        :teleport="true"
+                    >
+                        <UButton
+                            v-bind="pluginActionButtonProps"
+                            icon="i-lucide-bookmark-plus"
+                            aria-label="Remember for this project"
+                            @click="projectMessageContext?.startRemember()"
+                        />
+                    </UTooltip>
                     <!-- Dynamically registered plugin actions -->
                     <template v-for="action in extraActions" :key="action.id">
                         <UTooltip
@@ -417,7 +432,7 @@
                 </UFieldGroup>
             </div>
         </template>
-        <ProjectMessageContext :receipt="(props.message.data as Record<string, unknown> | undefined)?.project_context" :iterations="(props.message.data as Record<string, unknown> | undefined)?.project_context_iterations" :thread-id="props.threadId" :message-id="props.message.id" :text="props.message.text" :hashes="hashList" />
+        <ProjectMessageContext ref="projectMessageContext" :receipt="(props.message.data as Record<string, unknown> | undefined)?.project_context" :iterations="(props.message.data as Record<string, unknown> | undefined)?.project_context_iterations" :thread-id="props.threadId" :message-id="props.message.id" :text="props.message.text" :hashes="hashList" />
         <ThreadChildLinks v-if="props.message.id && !props.message.pending" :thread-id="props.threadId" :message-id="props.message.id" :tool-result-message-ids="props.message.toolResultMessageIds"
             @navigate="emit('view-related-thread', $event)" />
     </div>
@@ -471,6 +486,7 @@ const props = withDefaults(
     }>(),
     { interactive: true },
 );
+const projectMessageContext = ref<InstanceType<typeof ProjectMessageContext>>();
 const customMessageRenderer = computed(
     () => resolveMessageRenderer(props.message)?.component ?? null
 );

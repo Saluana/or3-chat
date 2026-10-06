@@ -43,6 +43,7 @@ async function projectState(page: Page) {
         const messages: any[] = [];
         const checkpoints: any[] = [];
         const sources: any[] = [];
+        const memories: any[] = [];
         for (const entry of await indexedDB.databases()) {
             if (!entry.name) continue;
             const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -64,7 +65,7 @@ async function projectState(page: Page) {
                     request.onsuccess = () => resolve(request.result);
                     request.onerror = () => reject(request.error);
                 });
-                if (table === 'posts')
+                if (table === 'posts') {
                     sources.push(
                         ...rows.filter(
                             (row) =>
@@ -72,7 +73,14 @@ async function projectState(page: Page) {
                                 !row.deleted,
                         ),
                     );
-                else
+                    memories.push(
+                        ...rows.filter(
+                            (row) =>
+                                row.postType === 'or3:project-memory' &&
+                                !row.deleted,
+                        ),
+                    );
+                } else
                     (table === 'messages' ? messages : checkpoints).push(
                         ...rows.filter(
                             (row) => row.thread_id === 'saffron-project-chat',
@@ -85,6 +93,7 @@ async function projectState(page: Page) {
             messages,
             checkpoints,
             sources,
+            memories,
             requests: JSON.parse(
                 localStorage.getItem('or3:e2e:compaction-requests') ?? '[]',
             ),
@@ -854,9 +863,20 @@ test('project chat submits only its captured context and persists the inspector'
     });
     // Saving a response is an explicit, reviewed operation with real message provenance.
     await page
-        .getByRole('button', { name: 'Remember for this project', exact: true })
+        .getByRole('button', { name: 'Projects', exact: true })
+        .first()
+        .click();
+    await page
+        .getByRole('button', { name: /Basil isolation project/ })
         .last()
         .click();
+    const rememberAction = page
+        .getByRole('group', { name: 'Message actions', exact: true })
+        .getByRole('button', { name: 'Remember for this project', exact: true })
+        .last();
+    await expect(rememberAction).toBeVisible();
+    await expect(rememberAction).toHaveText('');
+    await rememberAction.click();
     await expect(page.getByLabel('Review memory', { exact: true })).toHaveValue(
         'Hello from deterministic stream.',
     );
@@ -866,10 +886,68 @@ test('project chat submits only its captured context and persists the inspector'
     await expect(
         page.getByRole('status').filter({ hasText: 'Saved to project.' }),
     ).toBeVisible();
+    const savedMemory = (await projectState(page)).memories.find(
+        (row) =>
+            JSON.parse(row.content).text === 'Hello from deterministic stream.',
+    );
+    expect(savedMemory.title).toBe('workspace-journey-project');
+    expect(JSON.parse(savedMemory.content)).toMatchObject({
+        source_thread_id: 'saffron-project-chat',
+        source_message_id: recovered.messages.find(
+            (row) => row.role === 'assistant',
+        ).id,
+    });
     const path = info.outputPath('project-context-inspector.png');
     await page.screenshot({ path });
     await info.attach('project-context-inspector', {
         path,
+        contentType: 'image/png',
+    });
+    // Ownership changes update actions without reloading or following sidebar state.
+    await page
+        .getByRole('button', { name: 'Projects', exact: true })
+        .first()
+        .click();
+    await page
+        .getByRole('button', { name: /Workspace fixture project/ })
+        .last()
+        .click();
+    await openProjectSection(page, 'Settings');
+    await page
+        .getByRole('group', { name: 'Saffron project chat', exact: true })
+        .getByRole('button', { name: 'Remove', exact: true })
+        .click();
+    await expect(
+        page.getByRole('button', {
+            name: 'Remember for this project',
+            exact: true,
+        }),
+    ).toHaveCount(0);
+    await page
+        .getByLabel('Move existing chat', { exact: true })
+        .selectOption('saffron-project-chat');
+    await page
+        .getByRole('button', { name: 'Move into project', exact: true })
+        .click();
+    await expect(rememberAction).toBeVisible();
+    await openAllProjects(page);
+    await page
+        .getByRole('button', { name: /Basil isolation project/ })
+        .last()
+        .click();
+    await expect(rememberAction).toBeVisible();
+    await rememberAction.click();
+    await expect(page.getByLabel('Review memory', { exact: true })).toHaveValue(
+        'Hello from deterministic stream.',
+    );
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Save project memory' })).not.toBeVisible();
+    await indicator.click();
+    await rememberAction.scrollIntoViewIfNeeded();
+    const actionPath = info.outputPath('project-memory-message-action.png');
+    await page.screenshot({ path: actionPath });
+    await info.attach('project-memory-message-action', {
+        path: actionPath,
         contentType: 'image/png',
     });
 });
