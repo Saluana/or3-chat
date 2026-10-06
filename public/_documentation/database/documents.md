@@ -69,6 +69,7 @@ Document storage built on the shared `posts` table (`postType: 'doc'`) with TipT
 3. **Update payloads** — Build `DbUpdatePayload` objects so hooks receive full `existing`, `updated`, and `patch` context.
 4. **File hashes** — `file_hashes` is derived from embedded file nodes in the content via `serializeDocumentFileHashes` on create and update.
 5. **Reference index** — Active document rows receive a sparse `[file_hashes, id]` key at the Dexie write boundary; soft deletion removes it and restore recomputes it. `listDocumentFileHashes` enumerates only those keys and deduplicates with `parseDocumentFileHashes`.
+6. **Concurrent writes** — Updates recheck the captured row inside the write transaction after asynchronous hooks. A concurrent edit or deletion rejects the stale write, including sidebar renames without an editor snapshot; it does not recreate a deleted document or overwrite newer content.
 
 ---
 

@@ -553,13 +553,18 @@ export async function updateDocumentInDb(
         throw new Error('This document changed in another tab. Your draft is retained; reconcile it before saving.');
     }
     const prepared = await prepareDocumentUpdate(existing, patch);
+    const commit = async () => {
+        // Even callers without an editor snapshot (for example sidebar rename)
+        // must not overwrite a newer row or recreate one deleted during hooks.
+        if (JSON.stringify(await db.posts.get(id)) !== JSON.stringify(existing)) {
+            throw new Error('This document changed while saving. Your draft is retained; reconcile it before saving.');
+        }
+        await db.posts.put(prepared.row);
+    };
     await dbTry(
-        () => expected ? db.transaction('rw', getWriteTxTableNames(db, 'posts'), async () => {
-            if (JSON.stringify(await db.posts.get(id)) !== JSON.stringify(existing)) {
-                throw new Error('This document changed while saving. Your draft is retained; reconcile it before saving.');
-            }
-            await db.posts.put(prepared.row);
-        }) : putDocumentPostRow(db, prepared.row),
+        () => typeof (db as { transaction?: unknown }).transaction === 'function'
+            ? db.transaction('rw', getWriteTxTableNames(db, 'posts'), commit)
+            : commit(),
         { op: 'write', entity: 'posts', action: 'updateDocument' },
         { rethrow: true }
     );

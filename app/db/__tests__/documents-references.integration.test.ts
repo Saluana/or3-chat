@@ -7,7 +7,10 @@ import {
     type Or3DB,
 } from '~/db/client';
 import type { Post } from '../schema';
-import { listDocumentFileHashes } from '../documents';
+import { listDocumentFileHashes, updateDocument } from '../documents';
+import { createHookEngine } from '~/core/hooks/hooks';
+import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
+import { setHookEngine } from '~/core/hooks/useHooks';
 
 function doc(
     id: string,
@@ -28,12 +31,15 @@ function doc(
     } as Post;
 }
 
-describe('reference-only document reads', () => {
+describe('document storage integrity and reference reads', () => {
     let db: Or3DB;
     let workspaceId: string;
     let postReads = 0;
+    let hooks: ReturnType<typeof createTypedHookEngine>;
 
     beforeEach(async () => {
+        hooks = createTypedHookEngine(createHookEngine());
+        setHookEngine(hooks);
         workspaceId = `doc-refs-${crypto.randomUUID()}`;
         db = setActiveWorkspaceDb(workspaceId);
         await db.open();
@@ -44,9 +50,36 @@ describe('reference-only document reads', () => {
     });
 
     afterEach(async () => {
+        hooks.removeAllCallbacks();
+        setHookEngine(null);
         setActiveWorkspaceDb(null);
         evictWorkspaceDb(workspaceId);
         await Dexie.delete(db.name);
+    });
+
+    // A sidebar rename calls updateDocument without an expected editor snapshot.
+    // Another writer can delete or edit the row while its async hooks prepare it.
+    // Exercise the real public helper, hook barrier, and Dexie write boundary.
+    it.each(['delete', 'edit'] as const)('does not overwrite a concurrent %s during document preparation', async (change) => {
+        await db.posts.put(doc('racing-doc'));
+        let resume!: () => void;
+        let entered!: () => void;
+        const reached = new Promise<void>((resolve) => { entered = resolve; });
+        const gate = new Promise<void>((resolve) => { resume = resolve; });
+        hooks.addAction('db.documents.update:action:before', async () => {
+            entered();
+            await gate;
+        });
+        const pending = updateDocument('racing-doc', { title: 'Late rename' });
+        const outcome = pending.then(value => ({ value, error: undefined as unknown }), error => ({ value: undefined, error }));
+        await reached;
+        if (change === 'delete') await db.posts.delete('racing-doc');
+        else await db.posts.update('racing-doc', { content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Newer work' }] }] }), clock: 2 });
+        const beforeResume = await db.posts.get('racing-doc');
+        resume();
+        const result = await outcome;
+        expect(result.error).toBeInstanceOf(Error);
+        expect(await db.posts.get('racing-doc')).toEqual(beforeResume);
     });
 
     it('deduplicates active document references with zero post value reads', async () => {
