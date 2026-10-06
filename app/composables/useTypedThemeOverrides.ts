@@ -6,34 +6,18 @@
  */
 
 import { computed, type ComputedRef } from 'vue';
+import type { ButtonProps, InputProps } from '@nuxt/ui';
 import { useThemeOverrides } from './useThemeResolver';
 import type { ResolveParams } from '../theme/_shared/runtime-resolver';
 
 /**
  * Common Nuxt UI Button props that can be overridden by themes.
- * Uses string literals for known values with fallback to string for custom values.
+ * Derives recipe keys from installed Nuxt UI props and the generated host config.
  */
 export interface NuxtUIButtonOverrides {
-    variant?:
-        | 'solid'
-        | 'outline'
-        | 'ghost'
-        | 'soft'
-        | 'subtle'
-        | 'basic'
-        | 'light'
-        | 'link'
-        | 'popover';
-    color?:
-        | 'primary'
-        | 'secondary'
-        | 'error'
-        | 'warning'
-        | 'success'
-        | 'info'
-        | 'neutral'
-        | 'inverse-primary';
-    size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+    variant?: ButtonProps['variant'];
+    color?: ButtonProps['color'];
+    size?: ButtonProps['size'];
     class?: string;
     ui?: Record<string, unknown>;
     icon?: string;
@@ -49,9 +33,9 @@ export interface NuxtUIButtonOverrides {
  * Common Nuxt UI Input props that can be overridden by themes.
  */
 export interface NuxtUIInputOverrides {
-    variant?: 'outline' | 'none';
+    variant?: InputProps['variant'];
     color?: string;
-    size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+    size?: InputProps['size'];
     class?: string;
     ui?: Record<string, unknown>;
     type?: 'text' | 'password' | 'email' | 'number' | 'tel' | 'url' | 'search';

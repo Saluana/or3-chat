@@ -58,14 +58,16 @@ For deeper guidance and inspiration, read:
 
 These docs are indexed in `public/_documentation/docmap.json` under the "Themes" section:
 
-- Architecture: `public/_documentation/themes/architecture.md` (route: `/themes/architecture`)
-- Quick start: `public/_documentation/themes/quick-start.md` (route: `/themes/quick-start`)
-- API reference: `public/_documentation/themes/api-reference.md` (route: `/themes/api-reference`)
-- Best practices: `public/_documentation/themes/best-practices.md` (route: `/themes/best-practices`)
-- CSS selectors: `public/_documentation/themes/css-selectors.md` (route: `/themes/css-selectors`)
-- Theme icons: `public/_documentation/themes/theme-icons.md` (route: `/themes/theme-icons`)
-- Troubleshooting: `public/_documentation/themes/troubleshooting.md` (route: `/themes/troubleshooting`)
-- Migration guide: `public/_documentation/themes/migration-guide.md` (route: `/themes/migration-guide`)
+- [Build your first theme](../../../public/_documentation/themes/first-theme.md)
+- [Style your theme](../../../public/_documentation/themes/styling.md)
+- [Theme reference](../../../public/_documentation/themes/api-reference.md)
+- [Runtime and architecture](../../../public/_documentation/themes/architecture.md)
+- [Customize your appearance](../../../public/_documentation/themes/customize.md)
+- [Package and install](../../../public/_documentation/themes/package-install.md)
+- [Troubleshooting](../../../public/_documentation/themes/troubleshooting.md)
+
+Their public routes are `/documentation/themes/<page>`; `docmap.json` lists
+the source route keys without the `/documentation` prefix.
 
 Use them to avoid re-deriving selector rules, CLI commands, and resolver behavior.
 
@@ -137,7 +139,7 @@ Themes are discovered via `import.meta.glob` from `app/theme/*/theme.ts` (exclud
 
 ## 2. Creating a Theme
 
-Follow the internal quick start first: `public/_documentation/themes/quick-start.md`.
+Follow [Build your first theme](../../../public/_documentation/themes/first-theme.md) first.
 
 ### Minimal Example (for reference)
 
@@ -206,13 +208,16 @@ Selectors are CSS-like, normalized to `data-*` attributes:
 
 ### Known Contexts
 Defined in `app/theme/_shared/contexts.ts`:
-- `global`, `chat`, `sidebar`, `dashboard`, `header`, `settings`, `prompt`, `modal`, `editor`
+The source list is authoritative. Automatic directive detection recognizes only
+`chat`, `sidebar`, `dashboard`, and `header`, then falls back to `global`. Pass
+all other known contexts explicitly to both `useThemeOverrides()` and
+`v-theme`; arbitrary `data-context` wrapper attributes do not enable detection.
 
 ---
 
 ## 4. Component Integration
 
-### Option 1: `v-theme` Directive (Recommended)
+### Option 1: `v-theme` Directive (DOM decoration)
 
 ```vue
 <template>
@@ -228,6 +233,11 @@ Defined in `app/theme/_shared/contexts.ts`:
     </UButton>
 </template>
 ```
+
+The directive applies owned classes, styles, and annotations; it cannot change
+Vue props such as `variant`, `size`, `color`, or `ui`. It supplies
+`state: 'default'`; use CSS for native hover/focus or resolve explicit state
+manually. Use the composable with `v-bind` for reactive component props.
 
 ### Option 2: `useThemeOverrides` Composable
 
@@ -312,7 +322,7 @@ const icon = useIcon('chat.send');
 Access theme from Nuxt plugins:
 
 ```typescript
-export default defineNuxtPlugin((nuxtApp) => {
+export default defineNuxtPlugin(async (nuxtApp) => {
     const theme = nuxtApp.$theme;
 
     // Switch theme
@@ -358,14 +368,21 @@ bun run theme:switch
 Users can customize themes at runtime:
 
 ```typescript
-// app/core/theme/useUserThemeOverrides.ts
-const { overrides, setOverride, resetOverride } = useUserThemeOverrides();
+import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 
-// Set custom color
-setOverride({ key: 'colors.primary', value: '#ff0000' });
+const { overrides, set, reset, resetAll } = useUserThemeOverrides();
+set({ colors: { enabled: true, primary: '#ff0000' } });
+reset(); // Current light/dark mode
+resetAll(); // Both modes
 ```
 
-Overrides are persisted in the `kv` table for cross-device sync.
+Personal styles persist in browser localStorage under
+`or3:user-theme-overrides:light` and `:dark`; accessibility uses
+`or3:user-theme-accessibility`. They are not signed-in account preferences or
+cross-device KV. Theme selection is separate: active workspace Dexie KV
+`theme_selection`, SSR cookie `or3_active_theme`, and localStorage `activeTheme`
+as compatibility/cache state. Light/dark mode uses localStorage `theme`.
+See the [persistence reference](../../../public/_documentation/themes/architecture.md#persistence).
 
 ---
 
@@ -410,7 +427,7 @@ export default defineNuxtPlugin((nuxtApp) => {
 | Issue | Debug Approach |
 |-------|----------------|
 | Overrides not applying | Check `data-v-theme`, `data-theme-target` attributes |
-| Wrong context | Add `data-context="<name>"` to wrapper element |
+| Wrong context | Pass `context` explicitly to the resolver and directive outside the four detected contexts |
 | CSS not loading | Run `bun run theme:build-css` |
 | Icon not found | Check `icons.config.ts` and `useIcon()` token |
 
@@ -420,6 +437,6 @@ export default defineNuxtPlugin((nuxtApp) => {
 
 - **Nuxt UI First** - Use `<UButton>`, `<UInput>`, etc.
 - **Theme Tokens** - Use CSS variables, not hardcoded colors
-- **Context Markers** - Add `data-context` for override resolution
+- **Context** - Use the four detected contexts or pass a known context explicitly
 - **HMR Cleanup** - Always clean up in `import.meta.hot.dispose`
 - **Type Safety** - Use `defineTheme()` for full typing
