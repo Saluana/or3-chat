@@ -217,6 +217,7 @@ import {
 } from '~/composables/sidebar/useSidebarSections';
 import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
+import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import SideBottomNav from './SideBottomNav.vue';
 import AppIcon from '~/components/ui/AppIcon.vue';
@@ -469,6 +470,7 @@ async function handleSidebarFooterAction(entry: SidebarFooterActionEntry) {
 }
 
 const toast = useToast();
+const { openProjectsSidebar } = useProjectSidebar();
 
 async function handlePageSelect(pageId: string) {
     // If selecting home, ensure we navigate to root if not already there
@@ -476,10 +478,10 @@ async function handlePageSelect(pageId: string) {
         await navigateTo('/');
     }
 
-    if (pageId === activePageId.value) return;
+    if (pageId === activePageId.value && pageId !== 'sidebar-projects-home') return;
 
     try {
-        const ok = await setActivePage(pageId);
+        const ok = pageId === 'sidebar-projects-home' ? await openProjectsSidebar() : await setActivePage(pageId);
         if (!ok) {
             // Show toast if activation was vetoed
             const page = listSidebarPages.value.find((p) => p.id === pageId);

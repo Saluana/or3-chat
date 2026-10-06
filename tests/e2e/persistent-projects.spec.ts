@@ -18,6 +18,26 @@ async function openProjectSection(page: Page, section: string) {
     if (await overview.isVisible()) await overview.click();
     await projects.getByRole('button', { name: section, exact: true }).click();
 }
+async function openAllProjects(page: Page) {
+    const projects = page.getByRole('region', {
+        name: 'Projects',
+        exact: true,
+    });
+    const overview = projects.getByRole('button', {
+        name: 'Overview',
+        exact: true,
+    });
+    if (await overview.isVisible()) await overview.click();
+    await projects
+        .getByRole('button', { name: 'All projects', exact: true })
+        .click();
+}
+async function openNoteComposer(page: Page) {
+    await page.getByRole('button', { name: 'Add source', exact: true }).click();
+    await page
+        .getByRole('button', { name: 'Write a note', exact: true })
+        .click();
+}
 async function projectState(page: Page) {
     return page.evaluate(async () => {
         const messages: any[] = [];
@@ -94,13 +114,10 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     await welcome.click();
     const navigation = page.getByRole('complementary', { name: 'Navigation' });
     const tabs = page.getByRole('tablist', { name: 'Open workspace tabs' });
-    await expect(
-        navigation.getByRole('button', { name: 'Projects', exact: true }),
-    ).toBeVisible();
+    const projectsRail = navigation.locator('#btn-page-sidebar-projects-home');
+    await expect(projectsRail).toBeVisible();
     const originalTabs = await tabs.getByRole('tab').allTextContents();
-    await navigation
-        .getByRole('button', { name: 'Projects', exact: true })
-        .click();
+    await projectsRail.click();
     const projects = navigation.getByRole('region', {
         name: 'Projects',
         exact: true,
@@ -133,6 +150,9 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
         .fill('Sidebar instructions remain editable.');
     await projects
         .getByRole('button', { name: 'Save settings', exact: true })
+        .click();
+    await projects
+        .getByRole('button', { name: 'Overview', exact: true })
         .click();
     await projects
         .getByRole('button', { name: 'All projects', exact: true })
@@ -175,9 +195,35 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
         contentType: 'image/png',
     });
     await projects.getByRole('button', { name: 'Home', exact: true }).click();
+    await navigation.screenshot({
+        path: info.outputPath('home-projects-navigation.png'),
+        animations: 'disabled',
+    });
     await navigation.getByText('Sidebar project', { exact: true }).click();
     await expect(
         projects.getByRole('heading', { name: 'Sidebar project', exact: true }),
+    ).toBeVisible();
+    // Direct Home shortcuts return to Home; the full project list is a separate destination.
+    await expect(
+        projects.getByRole('button', { name: 'Home', exact: true }),
+    ).toBeVisible();
+    await projects.getByRole('button', { name: 'Home', exact: true }).click();
+    const projectsLink = navigation
+        .getByRole('button', { name: 'Projects', exact: true })
+        .filter({ hasText: 'View your projects' });
+    await expect(projectsLink).toBeVisible();
+    const projectLinkBounds = await projectsLink.boundingBox();
+    const documentLinkBounds = await navigation
+        .getByRole('button', { name: 'Documents', exact: true })
+        .boundingBox();
+    expect(projectLinkBounds!.y).toBeGreaterThan(documentLinkBounds!.y);
+    await projectsLink.click();
+    await expect(
+        projects.getByRole('heading', { name: 'Projects', exact: true }),
+    ).toBeVisible();
+    await projects.getByRole('button', { name: /Sidebar project/ }).click();
+    await expect(
+        projects.getByRole('button', { name: 'All projects', exact: true }),
     ).toBeVisible();
     expect(await tabs.getByRole('tab').allTextContents()).toEqual(originalTabs);
     await expect(
@@ -203,6 +249,22 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     await expect(
         projects.getByRole('heading', { name: 'Knowledge', exact: true }),
     ).toBeVisible();
+    await expect(
+        projects.getByRole('button', { name: 'All projects', exact: true }),
+    ).toHaveCount(0);
+    await expect(
+        projects.getByRole('button', { name: 'Overview', exact: true }),
+    ).toHaveCount(1);
+    await expect(
+        projects.getByRole('textbox', { name: 'Note title' }),
+    ).toHaveCount(0);
+    await projects
+        .getByRole('button', { name: 'Add source', exact: true })
+        .click();
+    await page
+        .getByRole('dialog', { name: 'Add source', exact: true })
+        .getByRole('button', { name: 'Write a note', exact: true })
+        .click();
     await projects
         .getByRole('textbox', { name: 'Note title' })
         .fill('Project note');
@@ -216,6 +278,50 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     await expect(
         projects.getByRole('heading', { name: 'Memory', exact: true }),
     ).toBeVisible();
+    await expect(
+        projects.getByRole('textbox', { name: 'New project memory' }),
+    ).toHaveCount(0);
+    await projects
+        .getByRole('button', { name: 'Add memory', exact: true })
+        .click();
+    await projects
+        .getByRole('textbox', { name: 'New project memory' })
+        .fill('A saved memory remains editable.');
+    await projects
+        .getByRole('button', { name: 'Save memory', exact: true })
+        .click();
+    await expect(
+        projects.getByText('A saved memory remains editable.', { exact: true }),
+    ).toBeVisible();
+    await projects
+        .getByRole('button', { name: 'Edit memory', exact: true })
+        .click();
+    await projects
+        .getByLabel('Edit saved fact')
+        .fill('An edited memory persists.');
+    await projects
+        .getByRole('button', { name: 'Save changes', exact: true })
+        .click();
+    await expect(
+        projects.getByText('An edited memory persists.', { exact: true }),
+    ).toBeVisible();
+    await page.screenshot({
+        path: info.outputPath('project-memory-sidebar.png'),
+        animations: 'disabled',
+    });
+    await navigation.screenshot({
+        path: info.outputPath('project-memory-sidebar-detail.png'),
+        animations: 'disabled',
+    });
+    await openProjectSection(page, 'Knowledge');
+    await page.screenshot({
+        path: info.outputPath('project-knowledge-sidebar.png'),
+        animations: 'disabled',
+    });
+    await navigation.screenshot({
+        path: info.outputPath('project-knowledge-sidebar-detail.png'),
+        animations: 'disabled',
+    });
     await projects
         .getByRole('button', { name: 'Overview', exact: true })
         .click();
@@ -253,6 +359,16 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
         .click();
     await page.screenshot({
         path: info.outputPath('project-home-sidebar-dark.png'),
+        animations: 'disabled',
+    });
+    await openProjectSection(page, 'Memory');
+    await page.screenshot({
+        path: info.outputPath('project-memory-sidebar-dark.png'),
+        animations: 'disabled',
+    });
+    await openProjectSection(page, 'Knowledge');
+    await page.screenshot({
+        path: info.outputPath('project-knowledge-sidebar-dark.png'),
         animations: 'disabled',
     });
 });
@@ -312,6 +428,7 @@ test('persistent projects retain settings, extract files, preserve failed replac
         .getByRole('button', { name: 'Save settings', exact: true })
         .click();
     await openProjectSection(page, 'Memory');
+    await page.getByRole('button', { name: 'Add memory', exact: true }).click();
     await page
         .getByRole('textbox', { name: 'New project memory' })
         .fill('Use saffron deployment.');
@@ -336,6 +453,7 @@ test('persistent projects retain settings, extract files, preserve failed replac
             .getByRole('region', { name: 'Projects', exact: true })
             .locator('pre'),
     ).toContainText('Saffron PDF acceptance marker');
+    await source.getByText(/History and actions/).click();
     await source.getByRole('button', { name: 'Replace', exact: true }).click();
     await upload.setInputFiles({
         name: 'broken.pdf',
@@ -395,6 +513,7 @@ test('persistent projects retain settings, extract files, preserve failed replac
     await expect(
         page.locator('article').filter({ hasText: 'oversized.txt' }),
     ).toHaveCount(0);
+    await openNoteComposer(page);
     await page
         .getByRole('textbox', { name: 'Note title', exact: true })
         .fill('Saffron working note');
@@ -411,16 +530,14 @@ test('persistent projects retain settings, extract files, preserve failed replac
         .first()
         .click();
     await openProjectSection(page, 'Memory');
-    await expect(page.getByLabel('Edit saved decision')).toHaveValue(
-        'Use saffron deployment.',
-    );
+    await expect(
+        page.getByText('Use saffron deployment.', { exact: true }),
+    ).toBeVisible();
     await openProjectSection(page, 'Settings');
     await expect(page.getByLabel('Instructions', { exact: true })).toHaveValue(
         'Prefer concise source-backed answers.',
     );
-    await page
-        .getByRole('button', { name: 'All projects', exact: true })
-        .click();
+    await openAllProjects(page);
     await page
         .getByRole('button', { name: 'New project', exact: true })
         .click();
@@ -479,6 +596,7 @@ test('project backup restores memories and extracted revision bytes', async ({
         .getByRole('button', { name: 'Create project', exact: true })
         .click();
     await openProjectSection(page, 'Memory');
+    await page.getByRole('button', { name: 'Add memory', exact: true }).click();
     await page
         .getByRole('textbox', { name: 'New project memory' })
         .fill('Backup retained decision');
@@ -514,9 +632,7 @@ test('project backup restores memories and extracted revision bytes', async ({
     await page
         .getByRole('button', { name: 'Project workspace', exact: true })
         .click();
-    await page
-        .getByRole('button', { name: 'All projects', exact: true })
-        .click();
+    await openAllProjects(page);
     await page
         .getByRole('button', { name: 'Backup project', exact: false })
         .first()
@@ -540,17 +656,15 @@ test('project backup restores memories and extracted revision bytes', async ({
     await page
         .getByRole('button', { name: 'Project workspace', exact: true })
         .click();
-    await page
-        .getByRole('button', { name: 'All projects', exact: true })
-        .click();
+    await openAllProjects(page);
     await page
         .getByRole('button', { name: 'Backup project', exact: false })
         .first()
         .click();
     await openProjectSection(page, 'Memory');
-    await expect(page.getByLabel('Edit saved fact')).toHaveValue(
-        'Backup retained decision',
-    );
+    await expect(
+        page.getByText('Backup retained decision', { exact: true }),
+    ).toBeVisible();
     await openProjectSection(page, 'Knowledge');
     await page
         .locator('article')
@@ -795,6 +909,9 @@ test('project handoff keeps ownership and offers a reviewed brief before evidenc
         .click();
     await openProjectSection(page, 'Memory');
     await page
+        .getByRole('button', { name: 'Edit project brief', exact: true })
+        .click();
+    await page
         .getByRole('button', {
             name: 'Review handoff suggestions',
             exact: true,
@@ -805,17 +922,19 @@ test('project handoff keeps ownership and offers a reviewed brief before evidenc
             exact: false,
         }),
     ).toBeVisible();
-    await expect(page.getByLabel('Project brief', { exact: true })).toHaveValue(
-        'Saffron brief marker: current implementation.',
-    );
+    await expect(
+        page.getByRole('textbox', { name: 'Project brief', exact: true }),
+    ).toHaveValue('Saffron brief marker: current implementation.');
     await page
         .getByRole('button', { name: 'Review as brief', exact: true })
         .click();
-    await expect(page.getByLabel('Project brief', { exact: true })).toHaveValue(
-        /Preserve app\/example.ts exactly/,
-    );
+    await expect(
+        page.getByRole('textbox', { name: 'Project brief', exact: true }),
+    ).toHaveValue(/Preserve app\/example.ts exactly/);
     await page.getByRole('button', { name: 'Save brief', exact: true }).click();
-    await expect(page.getByLabel('Edit saved decision')).toHaveCount(1);
+    await expect(
+        page.getByText(/Saffron saved decision marker/).first(),
+    ).toBeVisible();
     await openProjectSection(page, 'Settings');
     const row = page.getByRole('group', {
         name: 'Compaction original evidence',

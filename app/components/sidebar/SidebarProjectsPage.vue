@@ -60,7 +60,7 @@ const emit = defineEmits<{
         item: UnifiedSidebarItem,
     ): void;
 }>();
-const { projectId: id } = useProjectSidebar();
+const { projectId: id, returnTo } = useProjectSidebar();
 const { setActivePage } = useActiveSidebarPage();
 const backIcon = useIcon('ui.chevron.left');
 const projectIcon = useIcon('sidebar.folder');
@@ -70,11 +70,24 @@ const knowledgeIcon = useIcon('sidebar.note');
 const settingsIcon = useIcon('ui.settings');
 const editIcon = useIcon('ui.edit');
 const chevronIcon = useIcon('ui.chevron.right');
+const plusIcon = useIcon('ui.plus');
+const trashIcon = useIcon('ui.trash');
+const sourceInput = ref<'' | 'note' | 'document' | 'file'>('');
+const sourceMenuOpen = ref(false);
+const briefEditing = ref(false);
+const creatingMemory = ref(false);
+const editingMemory = ref<{
+    record: NonNullable<
+        Awaited<ReturnType<typeof readProjectWorkspace>>
+    >['memories'][number];
+    text: string;
+} | null>(null);
+const suggestionsReviewed = ref(false);
 const creating = ref(false);
 const tab = ref('Overview');
 const sectionDescriptions: Record<string, string> = {
-    Knowledge: 'Files, documents, and notes for project context.',
-    Memory: 'Your brief, saved facts, and decisions.',
+    Knowledge: 'Sources for this project.',
+    Memory: 'What matters for this project.',
     Settings: 'Instructions and tools for this project.',
 };
 const query = ref('');
@@ -156,6 +169,16 @@ function connect() {
     memory.value = '';
     memoryEvidence.value = null;
     briefEvidence.value = null;
+    sourceInput.value = '';
+    noteTitle.value = '';
+    noteText.value = '';
+    documentId.value = '';
+    fileId.value = '';
+    sourceMenuOpen.value = false;
+    briefEditing.value = false;
+    creatingMemory.value = false;
+    editingMemory.value = null;
+    suggestionsReviewed.value = false;
     releasePreview();
     const captured = scope;
     subscription = liveQuery(async () => {
@@ -261,7 +284,38 @@ async function run(action: () => Promise<unknown>) {
 }
 async function openProject(projectId: string) {
     id.value = projectId;
+    returnTo.value = 'projects';
     creating.value = false;
+}
+function goBack() {
+    if (id.value && tab.value !== 'Overview') {
+        tab.value = 'Overview';
+    } else if (id.value && returnTo.value === 'projects') {
+        id.value = '';
+    } else {
+        id.value = '';
+        void setActivePage('sidebar-home');
+    }
+}
+function chooseSource(kind: 'note' | 'document' | 'file') {
+    sourceInput.value = kind;
+    sourceMenuOpen.value = false;
+}
+function currentRevision(source: ProjectRecord<ProjectSource>) {
+    return (
+        source.value.revisions.find(
+            (revision) => revision.id === source.value.current_revision_id,
+        ) ?? source.value.revisions.at(-1)
+    );
+}
+function cancelBriefEdit() {
+    if (!state.value) return;
+    settings.value.brief = state.value.settings.brief;
+    briefEvidence.value = null;
+    briefEditing.value = false;
+    dirty.value =
+        JSON.stringify(settings.value) !== JSON.stringify(state.value.settings);
+    if (!dirty.value) editClock.value = state.value.settingsRow?.clock ?? null;
 }
 async function createProject() {
     const title = name.value.trim();
@@ -365,6 +419,7 @@ async function reviewMemory(
         source_message_id: landmark.message_id,
     };
     reviewedDecisions.value = false;
+    creatingMemory.value = true;
 }
 async function addNote() {
     const captured = scope;
@@ -394,12 +449,14 @@ async function addNote() {
     await addProjectDocument(captured, projectId, prepared.row.id);
     noteTitle.value = '';
     noteText.value = '';
+    sourceInput.value = '';
 }
 async function reviewBrief(suggestion: (typeof suggestions.value)[number]) {
     await verifySuggestion(suggestion.row.id);
     settings.value.brief = suggestion.data.summary_markdown.slice(0, 8000);
     briefEvidence.value = suggestion.row.id;
     dirty.value = true;
+    briefEditing.value = true;
 }
 async function saveSettings() {
     if (briefEvidence.value) await verifySuggestion(briefEvidence.value);
@@ -495,18 +552,20 @@ async function addMemory() {
     });
     memory.value = '';
     memoryEvidence.value = null;
+    creatingMemory.value = false;
 }
-async function editMemory(
-    record: NonNullable<typeof state.value>['memories'][number],
-    event: Event,
-) {
+async function saveMemoryEdit() {
+    const edit = editingMemory.value;
+    if (!edit) return;
+    const record = edit.record;
     await saveProjectMemory(
         scope,
         id.value,
-        { ...record.value, text: (event.target as HTMLTextAreaElement).value },
+        { ...record.value, text: edit.text },
         record.row.id,
         record.row.clock,
     );
+    editingMemory.value = null;
 }
 async function exclude(thread: Thread) {
     const current = await readProjectWorkspace(scope.db, id.value);
@@ -557,11 +616,23 @@ function toolCannotScope(name: string) {
                 color="neutral"
                 size="sm"
                 :icon="backIcon"
-                class="whitespace-nowrap hover:bg-[var(--md-surface-hover)] theme-btn"
-                :aria-label="id ? 'All projects' : 'Home'"
-                @click="id ? (id = '') : setActivePage('sidebar-home')"
+                class="min-w-0 hover:bg-[var(--md-surface-hover)] theme-btn"
+                :aria-label="
+                    id && tab !== 'Overview'
+                        ? 'Overview'
+                        : id && returnTo === 'projects'
+                          ? 'All projects'
+                          : 'Home'
+                "
+                @click="goBack"
             >
-                {{ id ? 'Projects' : 'Home' }}
+                <span class="truncate">{{
+                    id && tab !== 'Overview'
+                        ? state?.project.name
+                        : id && returnTo === 'projects'
+                          ? 'Projects'
+                          : 'Home'
+                }}</span>
             </UButton>
             <UButton
                 v-if="!id"
@@ -574,7 +645,7 @@ function toolCannotScope(name: string) {
                 >New project</UButton
             >
             <UButton
-                v-else
+                v-else-if="tab !== 'Settings'"
                 variant="ghost"
                 color="neutral"
                 size="sm"
@@ -635,7 +706,10 @@ function toolCannotScope(name: string) {
                     >
                 </div>
             </form>
-            <div v-if="filtered.length" class="flex-1 min-h-0 overflow-y-auto sidebar-scroll">
+            <div
+                v-if="filtered.length"
+                class="flex-1 min-h-0 overflow-y-auto sidebar-scroll"
+            >
                 <ul class="px-2 pb-3">
                     <li
                         v-for="(entry, index) in filtered"
@@ -812,7 +886,10 @@ function toolCannotScope(name: string) {
                                     size="xs"
                                     color="neutral"
                                     variant="ghost"
-                                    @click="tab = 'Memory'"
+                                    @click="
+                                        tab = 'Memory';
+                                        briefEditing = true;
+                                    "
                                 />
                             </div>
                             <p
@@ -836,7 +913,10 @@ function toolCannotScope(name: string) {
                                 <button
                                     class="project-brief-action mt-2"
                                     aria-label="Add project brief"
-                                    @click="tab = 'Memory'"
+                                    @click="
+                                        tab = 'Memory';
+                                        briefEditing = true;
+                                    "
                                 >
                                     Add a brief
                                     <UIcon
@@ -876,26 +956,12 @@ function toolCannotScope(name: string) {
                         v-if="tab !== 'Overview'"
                         class="project-section-heading"
                     >
-                        <UButton
-                            variant="ghost"
-                            color="neutral"
-                            size="sm"
-                            :icon="backIcon"
-                            aria-label="Overview"
-                            class="project-back min-w-0 max-w-full"
-                            @click="tab = 'Overview'"
-                            >{{ state.project.name }}</UButton
-                        >
                         <h1 class="text-lg font-semibold">{{ tab }}</h1>
                         <p class="project-muted text-xs leading-relaxed">
                             {{ sectionDescriptions[tab] }}
                         </p>
                     </div>
                     <div v-if="tab === 'Knowledge'" class="space-y-4">
-                        <p class="text-sm opacity-70">
-                            Only sources added here become project knowledge.
-                            Chat attachments stay in that chat.
-                        </p>
                         <input
                             ref="upload"
                             type="file"
@@ -905,43 +971,115 @@ function toolCannotScope(name: string) {
                             aria-label="Upload project knowledge"
                             @change="uploadFiles"
                         />
-                        <UButton
-                            label="Upload knowledge"
-                            :disabled="busy"
-                            @click="
-                                replace = undefined;
-                                upload?.click();
-                            "
-                        />
-                        <form class="space-y-2" @submit.prevent="run(addNote)">
+                        <UPopover
+                            v-model:open="sourceMenuOpen"
+                            :content="{
+                                align: 'start',
+                                side: 'bottom',
+                                sideOffset: 6,
+                            }"
+                        >
+                            <UButton
+                                :icon="plusIcon"
+                                label="Add source"
+                                class="project-start theme-btn"
+                                color="neutral"
+                                :disabled="busy"
+                            />
+                            <template #content>
+                                <div class="p-1 w-56 space-y-1">
+                                    <UButton
+                                        icon="i-lucide-upload"
+                                        label="Upload files"
+                                        color="neutral"
+                                        variant="ghost"
+                                        class="w-full justify-start"
+                                        @click="
+                                            sourceMenuOpen = false;
+                                            replace = undefined;
+                                            upload?.click();
+                                        "
+                                    />
+                                    <UButton
+                                        :icon="knowledgeIcon"
+                                        label="Write a note"
+                                        color="neutral"
+                                        variant="ghost"
+                                        class="w-full justify-start"
+                                        @click="chooseSource('note')"
+                                    />
+                                    <UButton
+                                        icon="i-lucide-file-text"
+                                        label="OR3 document"
+                                        color="neutral"
+                                        variant="ghost"
+                                        class="w-full justify-start"
+                                        @click="chooseSource('document')"
+                                    />
+                                    <UButton
+                                        icon="i-lucide-paperclip"
+                                        label="Saved file"
+                                        color="neutral"
+                                        variant="ghost"
+                                        class="w-full justify-start"
+                                        @click="chooseSource('file')"
+                                    />
+                                </div>
+                            </template>
+                        </UPopover>
+                        <form
+                            v-if="sourceInput === 'note'"
+                            class="project-editor space-y-3"
+                            @submit.prevent="run(addNote)"
+                        >
+                            <h2 class="font-semibold text-xs">Write a note</h2>
                             <input
                                 v-model="noteTitle"
                                 aria-label="Note title"
                                 placeholder="Note title"
                                 class="project-input"
+                                autofocus
                                 maxlength="500"
                                 required
                             /><textarea
                                 v-model="noteText"
                                 aria-label="Note text"
+                                placeholder="Write your note…"
                                 class="project-input"
                                 rows="3"
                                 maxlength="16000"
                                 required
-                            /><UButton
-                                type="submit"
-                                label="Add note"
-                                :disabled="busy"
                             />
+                            <div class="flex justify-end gap-2">
+                                <UButton
+                                    label="Cancel"
+                                    color="neutral"
+                                    variant="ghost"
+                                    @click="sourceInput = ''"
+                                /><UButton
+                                    type="submit"
+                                    label="Add note"
+                                    :disabled="busy"
+                                />
+                            </div>
                         </form>
                         <form
-                            class="flex flex-col gap-2"
+                            v-if="sourceInput === 'document'"
+                            class="project-editor space-y-3"
                             @submit.prevent="
-                                run(() =>
-                                    addProjectDocument(scope, id, documentId),
-                                )
+                                run(async () => {
+                                    await addProjectDocument(
+                                        scope,
+                                        id,
+                                        documentId,
+                                    );
+                                    sourceInput = '';
+                                })
                             "
                         >
+                            <h2 class="font-semibold text-xs">
+                                Add an OR3 document
+                            </h2>
                             <select
                                 v-model="documentId"
                                 aria-label="Existing OR3 document"
@@ -955,21 +1093,38 @@ function toolCannotScope(name: string) {
                                     :value="doc.id"
                                 >
                                     {{ doc.title }}
-                                </option></select
-                            ><UButton
-                                type="submit"
-                                label="Add document"
-                                :disabled="busy"
-                            />
+                                </option>
+                            </select>
+                            <div class="flex justify-end gap-2">
+                                <UButton
+                                    label="Cancel"
+                                    color="neutral"
+                                    variant="ghost"
+                                    @click="sourceInput = ''"
+                                /><UButton
+                                    type="submit"
+                                    label="Add document"
+                                    :disabled="busy"
+                                />
+                            </div>
                         </form>
                         <form
-                            class="flex flex-col gap-2"
+                            v-if="sourceInput === 'file'"
+                            class="project-editor space-y-3"
                             @submit.prevent="
-                                run(() =>
-                                    addExistingProjectFile(scope, id, fileId),
-                                )
+                                run(async () => {
+                                    await addExistingProjectFile(
+                                        scope,
+                                        id,
+                                        fileId,
+                                    );
+                                    sourceInput = '';
+                                })
                             "
                         >
+                            <h2 class="font-semibold text-xs">
+                                Add a saved file
+                            </h2>
                             <select
                                 v-model="fileId"
                                 aria-label="Existing workspace file"
@@ -983,25 +1138,110 @@ function toolCannotScope(name: string) {
                                     :value="file.id"
                                 >
                                     {{ file.title }}
-                                </option></select
-                            ><UButton
-                                type="submit"
-                                label="Add saved file"
-                                :disabled="busy"
-                            />
+                                </option>
+                            </select>
+                            <div class="flex justify-end gap-2">
+                                <UButton
+                                    label="Cancel"
+                                    color="neutral"
+                                    variant="ghost"
+                                    @click="sourceInput = ''"
+                                /><UButton
+                                    type="submit"
+                                    label="Add saved file"
+                                    :disabled="busy"
+                                />
+                            </div>
                         </form>
+                        <div class="flex items-center justify-between gap-2">
+                            <h2 class="project-section-label">Sources</h2>
+                            <span class="project-muted text-xs">{{
+                                state.sources.length
+                            }}</span>
+                        </div>
+                        <div v-if="!state.sources.length" class="project-empty">
+                            <UIcon
+                                :name="knowledgeIcon"
+                                class="size-6 project-muted"
+                            />
+                            <p class="font-medium text-sm mt-2">
+                                No sources yet
+                            </p>
+                            <p
+                                class="project-muted text-xs mt-1 leading-relaxed"
+                            >
+                                Add files, documents, or notes to use in project
+                                chats.
+                            </p>
+                        </div>
                         <article
                             v-for="source in state.sources"
                             :key="source.row.id"
-                            class="rounded border border-current/15 p-4 space-y-2"
+                            class="project-source space-y-3"
                         >
-                            <h2 class="font-medium">
-                                {{ source.value.title }}
-                            </h2>
-                            <label class="block"
+                            <div class="flex items-start gap-2.5 min-w-0">
+                                <span class="project-source-icon shrink-0"
+                                    ><UIcon
+                                        :name="
+                                            source.value.kind === 'document'
+                                                ? knowledgeIcon
+                                                : 'i-lucide-file'
+                                        "
+                                        class="size-4"
+                                /></span>
+                                <div class="min-w-0 flex-1">
+                                    <h2 class="font-medium text-sm break-words">
+                                        {{ source.value.title }}
+                                    </h2>
+                                    <p
+                                        class="project-muted text-xs mt-1 capitalize"
+                                    >
+                                        {{
+                                            currentRevision(source)?.status ===
+                                            'partial'
+                                                ? 'Partially readable'
+                                                : currentRevision(source)
+                                                      ?.status
+                                        }}
+                                    </p>
+                                </div>
+                                <UButton
+                                    v-if="source.value.current_revision_id"
+                                    label="Preview"
+                                    color="neutral"
+                                    variant="ghost"
+                                    size="xs"
+                                    @click="
+                                        run(() =>
+                                            showRevision(
+                                                source,
+                                                source.value
+                                                    .current_revision_id!,
+                                            ),
+                                        )
+                                    "
+                                />
+                            </div>
+                            <p
+                                v-if="
+                                    source.value.revisions.at(-1)?.status ===
+                                    'failed'
+                                "
+                                class="text-xs text-[var(--md-error)] leading-relaxed"
+                                role="status"
+                            >
+                                {{
+                                    source.value.current_revision_id
+                                        ? 'Last update failed. The current version is still available.'
+                                        : 'Processing failed.'
+                                }}
+                                {{ source.value.revisions.at(-1)?.error }}
+                            </p>
+                            <label
+                                class="flex items-center gap-2 text-xs project-muted"
                                 >Context<select
                                     :value="source.value.mode"
-                                    class="project-input"
+                                    class="project-input flex-1!"
                                     @change="
                                         run(() =>
                                             saveProjectSource(
@@ -1028,99 +1268,120 @@ function toolCannotScope(name: string) {
                                     <option value="off">Do not use</option>
                                 </select></label
                             >
-                            <div
-                                v-for="revision in [
-                                    ...source.value.revisions,
-                                ].reverse()"
-                                :key="revision.id"
-                                class="flex flex-wrap gap-2 items-center text-sm"
-                            >
-                                <span
-                                    >{{
-                                        revision.id ===
-                                        source.value.current_revision_id
-                                            ? 'Current · '
-                                            : 'Revision · '
-                                    }}{{
-                                        revision.status === 'partial'
-                                            ? 'Partially readable'
-                                            : revision.status
-                                    }}
-                                    ·
-                                    {{
-                                        new Date(
-                                            revision.created_at * 1000,
-                                        ).toLocaleDateString()
-                                    }}</span
-                                ><UButton
-                                    color="neutral"
-                                    variant="ghost"
-                                    label="Preview"
-                                    @click="
-                                        run(() =>
-                                            showRevision(source, revision.id),
-                                        )
-                                    "
-                                /><UButton
-                                    v-if="revision.original_hash"
-                                    color="neutral"
-                                    variant="ghost"
-                                    label="Download original"
-                                    @click="
-                                        run(() =>
-                                            download(revision.original_hash!),
-                                        )
-                                    "
-                                /><UButton
-                                    v-if="
-                                        ['failed', 'processing'].includes(
-                                            revision.status,
-                                        )
-                                    "
-                                    label="Retry"
-                                    color="neutral"
-                                    variant="ghost"
-                                    @click="
-                                        run(() =>
-                                            processProjectSource(
-                                                scope,
-                                                id,
-                                                source,
-                                                revision.id,
-                                            ),
-                                        )
-                                    "
-                                />
-                                <p
-                                    v-if="revision.error"
-                                    class="w-full text-red-500"
+                            <details class="project-source-details">
+                                <summary
+                                    class="project-muted text-xs cursor-pointer"
                                 >
-                                    {{ revision.error }}
-                                </p>
-                            </div>
-                            <UButton
-                                v-if="source.value.kind === 'file'"
-                                label="Replace"
-                                color="neutral"
-                                variant="outline"
-                                @click="
-                                    replace = source;
-                                    upload?.click();
-                                "
-                            /><UButton
-                                label="Remove knowledge"
-                                color="neutral"
-                                variant="ghost"
-                                @click="
-                                    run(() =>
-                                        deleteProjectRecord(
-                                            scope,
-                                            id,
-                                            source.row,
-                                        ),
-                                    )
-                                "
-                            />
+                                    History and actions ·
+                                    {{ source.value.revisions.length }}
+                                    {{
+                                        source.value.revisions.length === 1
+                                            ? 'revision'
+                                            : 'revisions'
+                                    }}
+                                </summary>
+                                <div class="space-y-3 pt-3">
+                                    <div
+                                        v-for="revision in [
+                                            ...source.value.revisions,
+                                        ].reverse()"
+                                        :key="revision.id"
+                                        class="flex flex-wrap gap-2 items-center text-sm"
+                                    >
+                                        <span
+                                            >{{
+                                                revision.id ===
+                                                source.value.current_revision_id
+                                                    ? 'Current · '
+                                                    : 'Revision · '
+                                            }}{{
+                                                revision.status === 'partial'
+                                                    ? 'Partially readable'
+                                                    : revision.status
+                                            }}
+                                            ·
+                                            {{
+                                                new Date(
+                                                    revision.created_at * 1000,
+                                                ).toLocaleDateString()
+                                            }}</span
+                                        ><UButton
+                                            color="neutral"
+                                            variant="ghost"
+                                            label="Preview revision"
+                                            @click="
+                                                run(() =>
+                                                    showRevision(
+                                                        source,
+                                                        revision.id,
+                                                    ),
+                                                )
+                                            "
+                                        /><UButton
+                                            v-if="revision.original_hash"
+                                            color="neutral"
+                                            variant="ghost"
+                                            label="Download original"
+                                            @click="
+                                                run(() =>
+                                                    download(
+                                                        revision.original_hash!,
+                                                    ),
+                                                )
+                                            "
+                                        /><UButton
+                                            v-if="
+                                                [
+                                                    'failed',
+                                                    'processing',
+                                                ].includes(revision.status)
+                                            "
+                                            label="Retry"
+                                            color="neutral"
+                                            variant="ghost"
+                                            @click="
+                                                run(() =>
+                                                    processProjectSource(
+                                                        scope,
+                                                        id,
+                                                        source,
+                                                        revision.id,
+                                                    ),
+                                                )
+                                            "
+                                        />
+                                        <p
+                                            v-if="revision.error"
+                                            class="w-full text-red-500"
+                                        >
+                                            {{ revision.error }}
+                                        </p>
+                                    </div>
+                                    <UButton
+                                        v-if="source.value.kind === 'file'"
+                                        label="Replace"
+                                        color="neutral"
+                                        variant="outline"
+                                        @click="
+                                            replace = source;
+                                            upload?.click();
+                                        "
+                                    /><UButton
+                                        label="Remove knowledge"
+                                        color="neutral"
+                                        variant="ghost"
+                                        @click="
+                                            run(() =>
+                                                deleteProjectRecord(
+                                                    scope,
+                                                    id,
+                                                    source.row,
+                                                ),
+                                            )
+                                        "
+                                    />
+                                </div>
+                            </details>
                         </article>
                         <div
                             v-if="previewText || previewImage"
@@ -1149,199 +1410,427 @@ function toolCannotScope(name: string) {
                             >
                         </div>
                     </div>
-                    <div v-if="tab === 'Memory'" class="space-y-4">
-                        <UButton
-                            label="Review handoff suggestions"
-                            color="neutral"
-                            variant="outline"
-                            @click="
-                                run(async () => {
-                                    const { projectContinuity } =
-                                        await import('~/utils/projects/continuity');
-                                    suggestions = await projectContinuity(
-                                        scope,
-                                        id,
-                                    );
-                                })
-                            "
-                        />
-                        <p class="text-sm opacity-70">
-                            Use Continue in new chat to generate a handoff.
-                            Review suggestions against saved decisions before
-                            saving; no decision is accepted automatically.
-                        </p>
-                        <article
-                            v-for="suggestion in suggestions"
-                            :key="suggestion.row.id"
-                            class="rounded border border-current/15 p-3 space-y-2"
+                    <div v-if="tab === 'Memory'" class="space-y-5">
+                        <section
+                            class="project-brief space-y-3"
+                            aria-label="Project brief"
                         >
-                            <h2>Handoff from {{ suggestion.thread.title }}</h2>
-                            <UButton
-                                label="Review as brief"
-                                color="neutral"
-                                variant="ghost"
-                                @click="run(() => reviewBrief(suggestion))"
-                            /><UButton
-                                label="Open source chat"
-                                color="neutral"
-                                variant="ghost"
-                                @click="
-                                    run(() =>
-                                        openChat(
-                                            suggestion.data.source_thread_id,
-                                        ),
-                                    )
-                                "
-                            />
                             <div
-                                v-for="landmark in suggestion.data.landmarks.filter(
-                                    (l) =>
-                                        ['decision', 'constraint'].includes(
-                                            l.kind,
-                                        ),
-                                )"
-                                :key="landmark.message_id"
+                                class="flex items-center justify-between gap-2"
                             >
-                                <p>{{ landmark.summary }}</p>
+                                <h2 class="font-semibold text-xs">
+                                    Project brief
+                                </h2>
                                 <UButton
-                                    label="Review as memory"
+                                    v-if="!briefEditing"
+                                    :icon="editIcon"
+                                    aria-label="Edit project brief"
+                                    title="Edit project brief"
+                                    square
+                                    size="xs"
                                     color="neutral"
                                     variant="ghost"
-                                    @click="
-                                        run(() =>
-                                            reviewMemory(suggestion, landmark),
-                                        )
-                                    "
+                                    @click="briefEditing = true"
                                 />
                             </div>
-                        </article>
-                        <label class="block"
-                            >Project brief<textarea
-                                v-model="settings.brief"
-                                class="project-input"
-                                rows="5"
-                                maxlength="8000"
-                                @input="dirty = true"
-                            /></label
-                        ><UButton
-                            label="Save brief"
-                            :disabled="busy"
-                            @click="run(saveSettings)"
-                        />
-                        <p class="text-sm opacity-70">
-                            Save facts and decisions explicitly. Suggestions do
-                            not become memories until you save them.
-                        </p>
-                        <form
-                            class="space-y-2"
-                            @submit.prevent="run(addMemory)"
-                        >
-                            <textarea
-                                v-model="memory"
-                                class="project-input"
-                                rows="3"
-                                maxlength="4000"
-                                aria-label="New project memory"
-                                required
-                            /><select
-                                v-model="memoryKind"
-                                class="project-input"
-                                aria-label="Memory kind"
-                            >
-                                <option value="fact">Fact</option>
-                                <option value="decision">Decision</option>
-                            </select>
-                            <div
-                                v-if="
-                                    memoryEvidence &&
-                                    memoryKind === 'decision' &&
-                                    state.memories.some(
-                                        (record) =>
-                                            record.value.kind === 'decision',
-                                    )
-                                "
-                                class="space-y-2"
-                            >
-                                <p>
-                                    Compare this suggestion with your saved
-                                    decisions. Keep conflicting alternatives
-                                    separate until you decide.
-                                </p>
-                                <blockquote
-                                    v-for="decision in state.memories.filter(
-                                        (record) =>
-                                            record.value.kind === 'decision',
-                                    )"
-                                    :key="decision.row.id"
-                                    class="border-l-2 pl-3"
-                                >
-                                    {{ decision.value.text }}
-                                </blockquote>
+                            <template v-if="briefEditing">
                                 <label
-                                    ><input
-                                        v-model="reviewedDecisions"
-                                        type="checkbox"
-                                    />
-                                    I reviewed this against saved
-                                    decisions</label
+                                    class="sr-only"
+                                    for="project-brief-editor"
+                                    >Project brief</label
                                 >
+                                <textarea
+                                    id="project-brief-editor"
+                                    v-model="settings.brief"
+                                    class="project-input"
+                                    rows="4"
+                                    maxlength="8000"
+                                    placeholder="Describe the current state and next steps…"
+                                    @input="dirty = true"
+                                />
+                                <div class="flex justify-end gap-2">
+                                    <UButton
+                                        label="Cancel"
+                                        color="neutral"
+                                        variant="ghost"
+                                        @click="cancelBriefEdit"
+                                    />
+                                    <UButton
+                                        label="Save brief"
+                                        :disabled="busy"
+                                        @click="
+                                            run(async () => {
+                                                await saveSettings();
+                                                briefEditing = false;
+                                            })
+                                        "
+                                    />
+                                </div>
+                            </template>
+                            <template v-else>
+                                <p
+                                    v-if="state.settings.brief"
+                                    class="project-muted text-xs leading-relaxed whitespace-pre-wrap"
+                                >
+                                    {{ state.settings.brief }}
+                                </p>
+                                <template v-else>
+                                    <p
+                                        class="project-muted text-xs leading-relaxed"
+                                    >
+                                        Keep the current state and next steps
+                                        here.
+                                    </p>
+                                    <button
+                                        class="project-brief-action"
+                                        @click="briefEditing = true"
+                                    >
+                                        Add a brief
+                                        <UIcon
+                                            :name="chevronIcon"
+                                            class="size-3.5"
+                                        />
+                                    </button>
+                                </template>
+                            </template>
+                        </section>
+                        <section class="space-y-3" aria-label="Saved memories">
+                            <div
+                                class="flex items-center justify-between gap-2"
+                            >
+                                <h2 class="project-section-label">
+                                    Saved memories
+                                    <span class="ml-1">{{
+                                        state.memories.length
+                                    }}</span>
+                                </h2>
+                                <UButton
+                                    :icon="plusIcon"
+                                    label="Add"
+                                    aria-label="Add memory"
+                                    size="xs"
+                                    variant="ghost"
+                                    color="neutral"
+                                    :disabled="busy"
+                                    @click="creatingMemory = true"
+                                />
                             </div>
-                            <UButton
-                                type="submit"
-                                label="Save memory"
-                                :disabled="
-                                    busy ||
-                                    (!!memoryEvidence &&
+                            <form
+                                v-if="creatingMemory"
+                                class="project-editor space-y-3"
+                                @submit.prevent="run(addMemory)"
+                            >
+                                <h3 class="font-semibold text-xs">
+                                    New memory
+                                </h3>
+                                <select
+                                    v-model="memoryKind"
+                                    class="project-input"
+                                    aria-label="Memory kind"
+                                >
+                                    <option value="fact">Fact</option>
+                                    <option value="decision">Decision</option>
+                                </select>
+                                <textarea
+                                    v-model="memory"
+                                    class="project-input"
+                                    rows="4"
+                                    maxlength="4000"
+                                    aria-label="New project memory"
+                                    placeholder="Save a fact or decision…"
+                                    required
+                                />
+                                <div
+                                    v-if="
+                                        memoryEvidence &&
                                         memoryKind === 'decision' &&
                                         state.memories.some(
                                             (record) =>
                                                 record.value.kind ===
                                                 'decision',
-                                        ) &&
-                                        !reviewedDecisions)
-                                "
-                            />
-                        </form>
-                        <article
-                            v-for="record in state.memories"
-                            :key="record.row.id"
-                            class="space-y-2"
+                                        )
+                                    "
+                                    class="space-y-2 text-xs"
+                                >
+                                    <p>
+                                        Compare this suggestion with your saved
+                                        decisions. Keep conflicting alternatives
+                                        separate until you decide.
+                                    </p>
+                                    <blockquote
+                                        v-for="decision in state.memories.filter(
+                                            (record) =>
+                                                record.value.kind ===
+                                                'decision',
+                                        )"
+                                        :key="decision.row.id"
+                                        class="border-l-2 pl-3"
+                                    >
+                                        {{ decision.value.text }}
+                                    </blockquote>
+                                    <label
+                                        ><input
+                                            v-model="reviewedDecisions"
+                                            type="checkbox"
+                                        />
+                                        I reviewed this against saved
+                                        decisions</label
+                                    >
+                                </div>
+                                <div class="flex justify-end gap-2">
+                                    <UButton
+                                        label="Cancel"
+                                        color="neutral"
+                                        variant="ghost"
+                                        @click="
+                                            creatingMemory = false;
+                                            memory = '';
+                                            memoryEvidence = null;
+                                        "
+                                    />
+                                    <UButton
+                                        type="submit"
+                                        label="Save memory"
+                                        :disabled="
+                                            busy ||
+                                            (!!memoryEvidence &&
+                                                memoryKind === 'decision' &&
+                                                state.memories.some(
+                                                    (record) =>
+                                                        record.value.kind ===
+                                                        'decision',
+                                                ) &&
+                                                !reviewedDecisions)
+                                        "
+                                    />
+                                </div>
+                            </form>
+                            <div
+                                v-if="!state.memories.length && !creatingMemory"
+                                class="project-empty"
+                            >
+                                <UIcon
+                                    name="i-lucide-bookmark"
+                                    class="size-6 project-muted"
+                                />
+                                <p class="font-medium text-sm mt-2">
+                                    No saved memories yet
+                                </p>
+                                <p
+                                    class="project-muted text-xs mt-1 leading-relaxed"
+                                >
+                                    Save facts and decisions you want OR3 to
+                                    remember.
+                                </p>
+                            </div>
+                            <article
+                                v-for="record in state.memories"
+                                :key="record.row.id"
+                                class="project-memory space-y-2"
+                            >
+                                <div
+                                    class="flex items-center justify-between gap-2"
+                                >
+                                    <span
+                                        class="project-memory-kind"
+                                        :class="
+                                            record.value.kind === 'decision'
+                                                ? 'text-[var(--md-primary)]'
+                                                : 'text-[var(--md-success)]'
+                                        "
+                                        >{{ record.value.kind }}</span
+                                    >
+                                    <div class="flex items-center gap-1">
+                                        <UButton
+                                            v-if="
+                                                editingMemory?.record.row.id !==
+                                                record.row.id
+                                            "
+                                            :icon="editIcon"
+                                            aria-label="Edit memory"
+                                            title="Edit memory"
+                                            square
+                                            size="xs"
+                                            color="neutral"
+                                            variant="ghost"
+                                            @click="
+                                                editingMemory = {
+                                                    record,
+                                                    text: record.value.text,
+                                                }
+                                            "
+                                        />
+                                        <UButton
+                                            :icon="trashIcon"
+                                            aria-label="Delete memory"
+                                            title="Delete memory"
+                                            square
+                                            size="xs"
+                                            color="neutral"
+                                            variant="ghost"
+                                            :disabled="busy"
+                                            @click="
+                                                run(() =>
+                                                    deleteProjectRecord(
+                                                        scope,
+                                                        id,
+                                                        record.row,
+                                                    ),
+                                                )
+                                            "
+                                        />
+                                    </div>
+                                </div>
+                                <form
+                                    v-if="
+                                        editingMemory?.record.row.id ===
+                                        record.row.id
+                                    "
+                                    class="space-y-3"
+                                    @submit.prevent="run(saveMemoryEdit)"
+                                >
+                                    <textarea
+                                        v-model="editingMemory.text"
+                                        :aria-label="
+                                            'Edit saved ' + record.value.kind
+                                        "
+                                        class="project-input"
+                                        rows="4"
+                                        maxlength="4000"
+                                        required
+                                    />
+                                    <div class="flex justify-end gap-2">
+                                        <UButton
+                                            label="Cancel"
+                                            color="neutral"
+                                            variant="ghost"
+                                            @click="editingMemory = null"
+                                        />
+                                        <UButton
+                                            type="submit"
+                                            label="Save changes"
+                                            :disabled="busy"
+                                        />
+                                    </div>
+                                </form>
+                                <p
+                                    v-else
+                                    class="text-xs leading-relaxed whitespace-pre-wrap break-words"
+                                >
+                                    {{ record.value.text }}
+                                </p>
+                                <UButton
+                                    v-if="record.value.source_thread_id"
+                                    label="Open evidence"
+                                    size="xs"
+                                    variant="ghost"
+                                    color="neutral"
+                                    @click="
+                                        run(() =>
+                                            openChat(
+                                                record.value.source_thread_id!,
+                                            ),
+                                        )
+                                    "
+                                />
+                            </article>
+                        </section>
+                        <section
+                            class="border-t border-[var(--md-outline-variant)] pt-3 space-y-3"
+                            aria-label="Memory suggestions"
                         >
-                            <span class="text-sm opacity-70"
-                                >Saved {{ record.value.kind }}</span
-                            ><textarea
-                                :value="record.value.text"
-                                :aria-label="'Edit saved ' + record.value.kind"
-                                class="project-input"
-                                maxlength="4000"
-                                @change="run(() => editMemory(record, $event))"
-                            /><UButton
-                                v-if="record.value.source_thread_id"
-                                label="Open evidence"
-                                variant="ghost"
+                            <UButton
+                                icon="i-lucide-sparkles"
+                                label="Review suggestions"
+                                aria-label="Review handoff suggestions"
                                 color="neutral"
-                                @click="
-                                    run(() =>
-                                        openChat(
-                                            record.value.source_thread_id!,
-                                        ),
-                                    )
-                                "
-                            /><UButton
-                                label="Delete memory"
                                 variant="ghost"
-                                color="neutral"
+                                class="w-full justify-start"
+                                :disabled="busy"
                                 @click="
-                                    run(() =>
-                                        deleteProjectRecord(
+                                    run(async () => {
+                                        const { projectContinuity } =
+                                            await import('~/utils/projects/continuity');
+                                        suggestions = await projectContinuity(
                                             scope,
                                             id,
-                                            record.row,
-                                        ),
-                                    )
+                                        );
+                                        suggestionsReviewed = true;
+                                    })
                                 "
                             />
-                        </article>
+                            <p
+                                v-if="
+                                    suggestionsReviewed && !suggestions.length
+                                "
+                                class="project-muted text-xs leading-relaxed"
+                            >
+                                No current suggestions. Continue in new chat to
+                                create a handoff.
+                            </p>
+                            <article
+                                v-for="suggestion in suggestions"
+                                :key="suggestion.row.id"
+                                class="project-memory space-y-3"
+                            >
+                                <h2 class="font-medium text-xs">
+                                    Handoff from {{ suggestion.thread.title }}
+                                </h2>
+                                <div class="flex flex-wrap gap-1">
+                                    <UButton
+                                        label="Review as brief"
+                                        size="xs"
+                                        color="neutral"
+                                        variant="outline"
+                                        @click="
+                                            run(() => reviewBrief(suggestion))
+                                        "
+                                    />
+                                    <UButton
+                                        label="Open source chat"
+                                        size="xs"
+                                        color="neutral"
+                                        variant="ghost"
+                                        @click="
+                                            run(() =>
+                                                openChat(
+                                                    suggestion.data
+                                                        .source_thread_id,
+                                                ),
+                                            )
+                                        "
+                                    />
+                                </div>
+                                <div
+                                    v-for="landmark in suggestion.data.landmarks.filter(
+                                        (l) =>
+                                            ['decision', 'constraint'].includes(
+                                                l.kind,
+                                            ),
+                                    )"
+                                    :key="landmark.message_id"
+                                    class="space-y-2"
+                                >
+                                    <p class="text-xs leading-relaxed">
+                                        {{ landmark.summary }}
+                                    </p>
+                                    <UButton
+                                        label="Review as memory"
+                                        size="xs"
+                                        color="neutral"
+                                        variant="ghost"
+                                        @click="
+                                            run(() =>
+                                                reviewMemory(
+                                                    suggestion,
+                                                    landmark,
+                                                ),
+                                            )
+                                        "
+                                    />
+                                </div>
+                            </article>
+                        </section>
                     </div>
                     <form
                         v-if="tab === 'Settings'"
@@ -1621,13 +2110,54 @@ function toolCannotScope(name: string) {
 .project-section-heading {
     display: grid;
     gap: 5px;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 }
-.project-back {
-    justify-self: start;
-    margin-left: -6px;
-    margin-bottom: 7px;
-    color: var(--md-on-surface-variant);
+.project-editor,
+.project-memory {
+    padding: 12px;
+    border: 1px solid var(--md-outline-variant);
+    border-radius: var(--md-border-radius-medium, 12px);
+}
+.project-editor {
+    background: var(--md-surface-container-low);
+}
+.project-empty {
+    padding: 24px 12px;
+    text-align: center;
+    border-radius: var(--md-border-radius-medium, 12px);
+    background: var(--md-surface-container-low);
+}
+.project-source {
+    padding: 12px 0 16px;
+    border-bottom: 1px solid var(--md-outline-variant);
+}
+.project-source-icon {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--md-border-radius-small, 8px);
+    background: color-mix(in srgb, var(--md-success) 10%, transparent);
+    color: var(--md-success);
+}
+.project-memory-kind {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.project-source-details :deep(button) {
+    font-size: 11px;
+}
+.project-source-details :deep(summary) {
+    min-height: 24px;
+}
+.project-editor :deep(button),
+.project-memory :deep(button) {
+    font-size: 12px;
+}
+.project-content :deep(.project-input) {
+    font-size: 12px;
 }
 .project-input {
     display: block;

@@ -28,7 +28,7 @@ Nested projects, graph databases, autonomous memory agents, new vector infrastru
 **Acceptance Criteria:**
 
 - R1.AC1: WHEN opening Projects THEN it SHALL offer search, pinned/recent projects, creation, and navigation to Home.
-- R1.AC2: WHEN Home opens THEN it SHALL provide Overview, Chats, Knowledge, Memory, and Settings: brief, resume, recent/pinned work, instructions, model defaults, and tools, accessible on keyboard/mobile.
+- R1.AC2: WHEN Project Home opens THEN it SHALL provide a brief, mixed time-grouped chat/document activity, Knowledge, Memory, and Settings, accessible on keyboard/mobile. Home SHALL link to the standalone Projects list; one back button SHALL return to the project from its sections, then to the entry view (Home shortcut or Projects list).
 
 ### R2: Trustworthy knowledge — Phase 1
 
@@ -36,7 +36,7 @@ Nested projects, graph databases, autonomous memory agents, new vector infrastru
 
 **Acceptance Criteria:**
 
-- R2.AC1: WHEN adding files/images/documents/notes/saved responses THEN Knowledge SHALL reuse Files and expose Processing, Ready, Partially readable, or Failed, with extraction preview/retry.
+- R2.AC1: WHEN adding files/images/documents/notes/saved responses THEN Knowledge SHALL reuse Files and expose Processing, Ready, Partially readable, or Failed, with extraction preview/retry. Add forms SHALL open through Add source; source history/actions SHALL be expandable.
 - R2.AC2: WHEN choosing “Use when relevant,” “Always include,” or “Do not use” THEN context SHALL honor that project-specific mode; images SHALL retain vision inputs.
 - R2.AC3: WHEN replacing sources THEN history SHALL remain accessible; WHEN attaching THEN “This chat” SHALL default, with explicit promotion to project knowledge.
 
@@ -46,7 +46,7 @@ Nested projects, graph databases, autonomous memory agents, new vector infrastru
 
 **Acceptance Criteria:**
 
-- R3.AC1: WHEN editing the brief or choosing “Remember for this project” THEN memories SHALL expose text/provenance and edit/delete actions; unaccepted ideas SHALL NOT become decisions.
+- R3.AC1: WHEN editing the brief or choosing “Remember for this project” THEN memories SHALL expose text/provenance and edit/delete actions; unaccepted ideas SHALL NOT become decisions. Memory SHALL show readable cards, with add/edit forms opened explicitly and Save/Cancel controls.
 
 ### R4: Consistent and inspectable context — Phase 1
 

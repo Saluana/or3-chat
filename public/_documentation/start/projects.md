@@ -2,11 +2,11 @@
 
 Open **Projects** in the sidebar to search, pin, create, or return to a workspace. Project Home has recent activity and links to Knowledge, Memory, and Settings. Each chat has one owning project; opening another project does not change a turn already in progress.
 
-The project list and Project Home stay in the sidebar, using the same navigation rows and empty-state styling as Chats and Documents. Project Home brings together the brief, links to **Knowledge** and **Memory**, and a time-grouped activity list mixing project chats and documents. The list includes OR3 documents added through Knowledge and uses the same rows, conversation families, search, and pagination as the normal sidebar. Each section link opens a focused sidebar page; use the project-name back button to return home. The settings icon opens **Settings**, including controls to move chats into the project or exclude them from memory. Use the sidebar search to filter projects, **New project** to create one, and **Projects** in a project's header to return to the list. Browsing a project does not open a pane or workspace tab. Opening or creating a chat from the project uses the chat pane as usual.
+The Home sidebar has a **Projects** navigation row below Chats and Documents. It opens the full project list; the Projects rail button also opens that list. Project Home brings together the brief, links to **Knowledge** and **Memory**, and a time-grouped activity list mixing project chats and documents. The list includes OR3 documents added through Knowledge and uses the same rows, conversation families, search, and pagination as the normal sidebar. The single top back button returns to the project from a section, then to **Home** when you entered through a Home shortcut or **Projects** when you entered through the list. The settings icon opens **Settings**, including controls to move chats into the project or exclude them from memory. Use the sidebar search to filter projects and **New project** to create one. Browsing a project preserves the active pane and workspace tabs; opening or creating a chat uses the chat pane as usual.
 
 ## Knowledge
 
-Upload a PDF, DOCX, UTF-8 text/Markdown/CSV, or image, or add an existing saved file or OR3 document. Notes and saved answers can be saved as OR3 documents and added here. Files uses the same catalog and original bytes as the rest of OR3.
+Use **Add source** to upload a PDF, DOCX, UTF-8 text/Markdown/CSV, or image, write a note, or add an existing saved file or OR3 document. Only the selected add form opens. Notes and saved answers can be saved as OR3 documents and added here. Files uses the same catalog and original bytes as the rest of OR3. Source rows show status, context mode, and current preview; expand **History and actions** for revisions, downloads, retry, replacement, or removal.
 
 Processing produces a plain-text preview with page or paragraph locations. **Ready** means the supported extraction finished; **Partially readable** means only part could be read; **Failed** offers retry. PDF extraction does not perform OCR. Uploads for extraction are limited to 20 MiB, PDFs to 200 pages, extracted text to 2 MiB, DOCX archive expansion to 40 MiB, and processing to 30 seconds. Images remain image inputs for vision models.
 
@@ -22,11 +22,11 @@ Chat attachments default to **This chat**. Choose **Add to project knowledge** e
 
 ## Memory and continuity
 
-Edit the project brief and save facts or decisions in Memory. A message's **Remember for this project** action opens editable text before saving. Delete or edit saved memories at any time. Only explicit saves become durable memory.
+Memory shows the project brief and saved facts or decisions as readable cards. Use the brief's edit icon or **Add**, then save explicitly; editing a saved memory opens its form with **Save changes** and **Cancel**. A message's **Remember for this project** action opens editable text before saving. Delete or edit saved memories at any time. Only explicit saves become durable memory.
 
 **Continue in new chat** generates a compact handoff with links to original evidence. The new chat stays in the same project. Handoff generation uses the project's brief, instructions, and saved memories as quoted reference; it does not load every knowledge file. Review handoff suggestions to update the brief or add a memory. Compare proposed decisions with existing saved decisions before accepting them; rejected ideas never become decisions automatically.
 
-Relevant valid handoff summaries may be retrieved in later turns. Project search/read tools can search previous project chats when useful. Exclude a chat in Chats to remove it from future retrieval. Moving or excluding evidence, deleting it, or editing its captured revision invalidates dependent handoff suggestions.
+Relevant valid handoff summaries may be retrieved in later turns. Project search/read tools can search previous project chats when useful. Exclude a chat under **Settings → Project chats** to remove it from future retrieval. Moving or excluding evidence, deleting it, or editing its captured revision invalidates dependent handoff suggestions.
 
 ## Settings and context
 

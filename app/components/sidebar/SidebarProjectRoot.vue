@@ -11,7 +11,7 @@
             @keydown.enter.self="openHome"
             @keydown.space.self.prevent="openHome"
         >
-            <button type="button" aria-label="Expand project shortcuts" @click.stop="emit('toggle-expand')"><UIcon
+            <button type="button" class="inline-flex items-center justify-center shrink-0 size-[18px]" aria-label="Expand project shortcuts" @click.stop="emit('toggle-expand')"><UIcon
                 :name="expanded ? iconExpand : iconCollapse"
                 class="project-icon shrink-0 w-[18px] h-[18px] text-[color:var(--md-on-surface-variant)]/70 group-hover:text-[color:var(--md-on-surface)]/80 transition-colors"
                 active-class="text-[color:var(--md-primary)]"

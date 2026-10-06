@@ -40,7 +40,7 @@
                         :icon="item.icon"
                         :accent="item.accent"
                         :class="item.class"
-                        @select="setActivePage(item.pageId)"
+                        @select="item.pageId === 'sidebar-projects-home' ? openProjectsSidebar() : setActivePage(item.pageId)"
                     />
 
                     <!-- Projects Section -->
@@ -244,6 +244,7 @@ import SidebarEmptyState from './SidebarEmptyState.vue';
 import SidebarGroupHeader from './SidebarGroupHeader.vue';
 import SidebarFamilyItem from './SidebarFamilyItem.vue';
 import { useIcon } from '~/composables/useIcon';
+import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import type { SidebarFooterActionEntry } from '~/composables/sidebar/useSidebarSections';
 import { useOr3Config } from '~/composables/useOr3Config';
@@ -385,6 +386,8 @@ async function goToLatestCompaction(rootId: string) {
 
 const iconChats = useIcon('sidebar.page.messages');
 const iconDocs = useIcon('sidebar.note');
+const iconProjects = useIcon('sidebar.folder');
+const { openProjectsSidebar } = useProjectSidebar();
 
 // All active IDs for highlighting
 const allActiveIds = computed(() => [
@@ -461,6 +464,16 @@ const combinedItems = computed(() => {
                   },
               ]
             : []),
+        {
+            key: 'page-link-projects',
+            type: 'page-link',
+            label: 'Projects',
+            description: 'View your projects',
+            icon: iconProjects.value,
+            pageId: 'sidebar-projects-home',
+            class: 'mb-1.5',
+            accent: 'projects',
+        },
     ];
     const navigationOrder = isMobile.value
         ? resolvedWorkspaceProfile.value.mobile.bottomNavigation
